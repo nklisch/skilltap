@@ -1,0 +1,17 @@
+{
+  "name": "@skilltap/core",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "anti-trojan-source": "^1.8.1",
+    "out-of-character": "^2.1.0",
+    "smol-toml": "*",
+    "zod": "*"
+  },
+  "devDependencies": {
+    "@skilltap/test-utils": "workspace:*"
+  }
+}

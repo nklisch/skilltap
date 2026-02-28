@@ -1,0 +1,16 @@
+{
+  "name": "skilltap",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "skilltap": "./src/index.ts"
+  },
+  "dependencies": {
+    "@skilltap/core": "workspace:*",
+    "@clack/prompts": "*",
+    "citty": "*"
+  },
+  "devDependencies": {
+    "@skilltap/test-utils": "workspace:*"
+  }
+}
