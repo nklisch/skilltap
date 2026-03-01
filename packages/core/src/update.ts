@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
@@ -153,8 +153,10 @@ export async function updateSkill(
 
     // For multi-skill, verify cache exists
     if (isMulti) {
-      const cacheGitDir = Bun.file(join(workDir, ".git"));
-      if (!(await cacheGitDir.exists())) {
+      const cacheGitExists = await lstat(join(workDir, ".git"))
+        .then(() => true)
+        .catch(() => false);
+      if (!cacheGitExists) {
         result.skipped.push(record.name);
         options.onProgress?.(record.name, "skipped");
         continue;

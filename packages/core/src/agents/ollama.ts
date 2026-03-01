@@ -10,8 +10,9 @@ export function createOllamaAdapter(model: string): AgentAdapter {
 
     async detect() {
       try {
-        await $`which ollama`.quiet();
-        const result = await $`ollama list`.quiet();
+        const whichResult = await $`which ollama`.quiet();
+        const ollamaPath = whichResult.stdout.toString().trim();
+        const result = await $`${ollamaPath} list`.quiet();
         // Check that at least one model is available
         const lines = result.stdout.toString().trim().split("\n");
         return lines.length > 1; // First line is header
@@ -23,7 +24,9 @@ export function createOllamaAdapter(model: string): AgentAdapter {
     async invoke(prompt) {
       try {
         const effectiveModel = model || "llama3";
-        const result = await $`ollama run ${effectiveModel} ${prompt}`.quiet();
+        const whichResult = await $`which ollama`.quiet();
+        const ollamaPath = whichResult.stdout.toString().trim();
+        const result = await $`${ollamaPath} run ${effectiveModel} ${prompt}`.quiet();
         const raw = result.stdout.toString().trim();
         const parsed = extractAgentResponse(raw);
         if (!parsed)
