@@ -1,6 +1,7 @@
-import { loadInstalled, removeSkill } from "@skilltap/core";
+import { removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
+import { getInstalledSkillOrExit } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -15,23 +16,11 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const installedResult = await loadInstalled();
-    if (!installedResult.ok) {
-      errorLine(installedResult.error.message);
-      process.exit(1);
-    }
-
-    const skill = installedResult.value.skills.find(
-      (s) => s.name === args.name && s.scope === "linked",
-    );
-
-    if (!skill) {
-      errorLine(
-        `Skill '${args.name}' is not linked`,
-        "Use 'skilltap remove' for non-linked skills.",
-      );
-      process.exit(1);
-    }
+    await getInstalledSkillOrExit(args.name, {
+      filter: (s) => s.scope === "linked",
+      notFoundMessage: `Skill '${args.name}' is not linked`,
+      notFoundHint: "Use 'skilltap remove' for non-linked skills.",
+    });
 
     const result = await removeSkill(args.name, { scope: "linked" });
     if (!result.ok) {

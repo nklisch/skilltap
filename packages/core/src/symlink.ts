@@ -4,7 +4,7 @@ import { globalBase } from "./fs";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
 
-const AGENT_PATHS: Record<string, string> = {
+export const AGENT_PATHS: Record<string, string> = {
   "claude-code": ".claude/skills",
   cursor: ".cursor/skills",
   codex: ".codex/skills",

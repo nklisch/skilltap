@@ -1,3 +1,5 @@
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { loadInstalled } from "@skilltap/core";
 import {
@@ -142,6 +144,93 @@ describe("install — security scanning", () => {
       );
       expect(exitCode).toBe(1);
       expect(stderr).toContain("aborting");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+// ── Agent Mode Tests ──
+
+async function writeAgentModeConfig(
+  configDir: string,
+  extra = "",
+): Promise<void> {
+  const dir = join(configDir, "skilltap");
+  await mkdir(dir, { recursive: true });
+  await Bun.write(
+    join(dir, "config.toml"),
+    `["agent-mode"]\nenabled = true\nscope = "global"\n\n[security]\nscan = "static"\n${extra}`,
+  );
+}
+
+describe("install — agent mode", () => {
+  test("clean skill installs with plain text output", async () => {
+    await writeAgentModeConfig(configDir);
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode, stdout, stderr } = await runInstall(
+        [repo.path],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("OK: Installed standalone-skill");
+      // No ANSI escape codes
+      expect(stdout).not.toMatch(/\x1b\[/);
+      expect(stderr).not.toMatch(/\x1b\[/);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("malicious skill blocked with security directive", async () => {
+    await writeAgentModeConfig(configDir);
+    const repo = await createMaliciousSkillRepo();
+    try {
+      const { exitCode, stderr } = await runInstall(
+        [repo.path],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain("SECURITY ISSUE FOUND");
+      expect(stderr).toContain("DO NOT install");
+      expect(stderr).toContain("User action required");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("--skip-scan blocked in agent mode", async () => {
+    await writeAgentModeConfig(configDir);
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode, stderr } = await runInstall(
+        [repo.path, "--skip-scan"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain("Agent mode");
+      expect(stderr).toContain("--skip-scan");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("auto-selects all skills from multi-skill repo", async () => {
+    await writeAgentModeConfig(configDir);
+    const repo = await createMultiSkillRepo();
+    try {
+      const { exitCode, stdout } = await runInstall(
+        [repo.path],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("OK: Installed skill-a");
+      expect(stdout).toContain("OK: Installed skill-b");
     } finally {
       await repo.cleanup();
     }

@@ -1,8 +1,9 @@
 import { isCancel, spinner } from "@clack/prompts";
-import { loadInstalled, removeSkill } from "@skilltap/core";
+import { removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
 import { confirmRemove } from "../ui/prompts";
+import { getInstalledSkillOrExit } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -28,22 +29,9 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const installedResult = await loadInstalled();
-    if (!installedResult.ok) {
-      errorLine(installedResult.error.message);
-      process.exit(1);
-    }
-
-    const skill = installedResult.value.skills.find(
-      (s) => s.name === args.name,
-    );
-    if (!skill) {
-      errorLine(
-        `Skill '${args.name}' is not installed`,
-        "Run 'skilltap list' to see installed skills.",
-      );
-      process.exit(1);
-    }
+    const skill = await getInstalledSkillOrExit(args.name, {
+      notFoundHint: "Run 'skilltap list' to see installed skills.",
+    });
 
     const scope = args.project
       ? "project"

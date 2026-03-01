@@ -1,12 +1,14 @@
 import type { Config } from "../schemas/config";
 import type { Result } from "../types";
 import { err, ok, ScanError } from "../types";
-import { claudeAdapter } from "./claude";
-import { codexAdapter } from "./codex";
+import {
+  claudeAdapter,
+  codexAdapter,
+  geminiAdapter,
+  opencodeAdapter,
+} from "./adapters";
 import { createCustomAdapter } from "./custom";
-import { geminiAdapter } from "./gemini";
 import { createOllamaAdapter } from "./ollama";
-import { opencodeAdapter } from "./opencode";
 import type { AgentAdapter } from "./types";
 
 /** All known adapters. Ollama uses empty model — resolved at invocation time. */

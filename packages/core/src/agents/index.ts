@@ -1,9 +1,12 @@
-export { claudeAdapter } from "./claude";
-export { codexAdapter } from "./codex";
+export {
+  claudeAdapter,
+  codexAdapter,
+  geminiAdapter,
+  opencodeAdapter,
+} from "./adapters";
 export { createCustomAdapter } from "./custom";
 export { detectAgents, resolveAgent } from "./detect";
 export { extractAgentResponse } from "./extract";
-export { geminiAdapter } from "./gemini";
+export { createCliAdapter } from "./factory";
 export { createOllamaAdapter } from "./ollama";
-export { opencodeAdapter } from "./opencode";
 export type { AgentAdapter } from "./types";

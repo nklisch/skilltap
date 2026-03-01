@@ -1,7 +1,17 @@
-import { isCancel } from "@clack/prompts";
-import { type Config, findProjectRoot, VALID_AGENT_IDS } from "@skilltap/core";
+import { isCancel, log } from "@clack/prompts";
+import {
+  type AgentAdapter,
+  type Config,
+  type InstalledSkill,
+  findProjectRoot,
+  loadInstalled,
+  resolveAgent,
+  saveConfig,
+  VALID_AGENT_IDS,
+} from "@skilltap/core";
+import { agentError } from "./agent-out";
 import { errorLine } from "./format";
-import { selectScope } from "./prompts";
+import { selectAgent, selectScope } from "./prompts";
 
 export type ScopeArgs = {
   project?: boolean;
@@ -57,4 +67,68 @@ export function parseAlsoFlag(
     also.push(agent);
   }
   return also;
+}
+
+/** Resolve agent for interactive mode: prompt user if needed, save choice to config. */
+export async function resolveAgentInteractive(
+  config: Config,
+): Promise<AgentAdapter | undefined> {
+  const agentResult = await resolveAgent(config, async (detected) => {
+    const chosen = await selectAgent(detected);
+    if (isCancel(chosen)) return null;
+    config.security.agent = (chosen as AgentAdapter).cliName;
+    await saveConfig(config);
+    return chosen as AgentAdapter;
+  });
+
+  if (agentResult.ok) {
+    return agentResult.value ?? undefined;
+  }
+  log.warn(agentResult.error.message);
+  return undefined;
+}
+
+/** Resolve agent for agent mode: exit if semantic scan requires agent but none configured. */
+export async function resolveAgentForAgentMode(
+  config: Config,
+): Promise<AgentAdapter> {
+  const agentResult = await resolveAgent(config);
+  if (!agentResult.ok || !agentResult.value) {
+    agentError(
+      "Agent mode requires security.agent to be set for semantic scanning. Run 'skilltap config' to configure.",
+    );
+    process.exit(1);
+  }
+  return agentResult.value;
+}
+
+/** Load installed skills and find by name, or exit with a contextual error. */
+export async function getInstalledSkillOrExit(
+  name: string,
+  opts?: {
+    filter?: (skill: InstalledSkill) => boolean;
+    notFoundMessage?: string;
+    notFoundHint?: string;
+  },
+): Promise<InstalledSkill> {
+  const result = await loadInstalled();
+  if (!result.ok) {
+    errorLine(result.error.message);
+    process.exit(1);
+  }
+
+  const predicate = opts?.filter
+    ? (s: InstalledSkill) => s.name === name && opts.filter!(s)
+    : (s: InstalledSkill) => s.name === name;
+
+  const skill = result.value.skills.find(predicate);
+  if (!skill) {
+    errorLine(
+      opts?.notFoundMessage ?? `Skill '${name}' is not installed`,
+      opts?.notFoundHint,
+    );
+    process.exit(1);
+  }
+
+  return skill;
 }

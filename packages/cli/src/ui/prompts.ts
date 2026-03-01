@@ -1,5 +1,13 @@
-import { cancel, confirm, isCancel, multiselect, select } from "@clack/prompts";
+import {
+  cancel,
+  confirm,
+  isCancel,
+  multiselect,
+  select,
+  text,
+} from "@clack/prompts";
 import type { AgentAdapter, ScannedSkill, TapEntry } from "@skilltap/core";
+import { detectAgents } from "@skilltap/core";
 
 export async function selectSkills(
   skills: ScannedSkill[],
@@ -113,4 +121,50 @@ export async function offerSemanticScan(): Promise<boolean | symbol> {
     return result;
   }
   return result as boolean;
+}
+
+/**
+ * Config wizard helper: detect agents and let user pick one for semantic scanning.
+ * Includes "Other — enter path" option. Returns cliName or absolute path.
+ */
+export async function selectAgentForConfig(
+  currentAgent: string,
+): Promise<string> {
+  const detected = await detectAgents();
+  const options: { value: string; label: string; hint?: string }[] =
+    detected.map((a) => ({
+      value: a.cliName,
+      label: a.name,
+      hint: a.cliName,
+    }));
+  options.push({
+    value: "__custom",
+    label: "Other — enter path",
+  });
+
+  const chosen = await select({
+    message: "Which agent CLI for scanning?",
+    options,
+    initialValue: currentAgent || undefined,
+  });
+  if (isCancel(chosen)) {
+    cancel("Setup cancelled.");
+    process.exit(2);
+  }
+
+  if (chosen === "__custom") {
+    const path = await text({
+      message: "Enter path to agent CLI binary:",
+      validate(v) {
+        if (!v.startsWith("/")) return "Must be an absolute path";
+      },
+    });
+    if (isCancel(path)) {
+      cancel("Setup cancelled.");
+      process.exit(2);
+    }
+    return path as string;
+  }
+
+  return chosen as string;
 }

@@ -1,16 +1,9 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { globalBase, loadInstalled } from "@skilltap/core";
+import { AGENT_PATHS, globalBase } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine } from "../ui/format";
-
-const AGENT_DIRS: Record<string, string> = {
-  "claude-code": ".claude/skills",
-  cursor: ".cursor/skills",
-  codex: ".codex/skills",
-  gemini: ".gemini/skills",
-  windsurf: ".windsurf/skills",
-};
+import { ansi } from "../ui/format";
+import { getInstalledSkillOrExit } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -25,26 +18,15 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const result = await loadInstalled();
-    if (!result.ok) {
-      errorLine(result.error.message);
-      process.exit(1);
-    }
-
-    const skill = result.value.skills.find((s) => s.name === args.name);
-    if (!skill) {
-      errorLine(
-        `Skill '${args.name}' is not installed`,
-        `Run 'skilltap find ${args.name}' to search`,
-      );
-      process.exit(1);
-    }
+    const skill = await getInstalledSkillOrExit(args.name, {
+      notFoundHint: `Run 'skilltap find ${args.name}' to search`,
+    });
 
     const base = skill.scope === "project" ? process.cwd() : globalBase();
     const skillPath = join(base, ".agents", "skills", skill.name);
 
     const agentStatus = await Promise.all(
-      Object.entries(AGENT_DIRS).map(async ([agent, dir]) => {
+      Object.entries(AGENT_PATHS).map(async ([agent, dir]) => {
         const path = join(base, dir, skill.name);
         const exists = await lstat(path)
           .then(() => true)
