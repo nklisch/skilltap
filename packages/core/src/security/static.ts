@@ -11,6 +11,16 @@ import {
   detectTagInjection,
 } from "./patterns";
 
+const DETECTORS = [
+  detectInvisibleUnicode,
+  detectHiddenHtmlCss,
+  detectMarkdownHiding,
+  detectObfuscation,
+  detectSuspiciousUrls,
+  detectDangerousPatterns,
+  detectTagInjection,
+];
+
 export type StaticWarning = {
   file: string;
   line: number | [number, number];
@@ -174,17 +184,7 @@ export async function scanStatic(
       }
 
       // Run all pattern detectors
-      const detectors = [
-        detectInvisibleUnicode,
-        detectHiddenHtmlCss,
-        detectMarkdownHiding,
-        detectObfuscation,
-        detectSuspiciousUrls,
-        detectDangerousPatterns,
-        detectTagInjection,
-      ];
-
-      for (const detect of detectors) {
+      for (const detect of DETECTORS) {
         const matches = detect(content);
         for (const m of matches) {
           warnings.push({ file: relPath, ...m });
@@ -200,4 +200,68 @@ export async function scanStatic(
       ),
     );
   }
+}
+
+/**
+ * Scan a unified diff for security issues in added lines only.
+ * Parses `+` lines from each file hunk and runs all pattern detectors.
+ */
+export function scanDiff(diffOutput: string): StaticWarning[] {
+  if (!diffOutput.trim()) return [];
+
+  const warnings: StaticWarning[] = [];
+
+  // Per-file: list of { lineNum (in new file), content }
+  type AddedLine = { lineNum: number; content: string };
+  const fileAdditions = new Map<string, AddedLine[]>();
+
+  let currentFile = "";
+  let currentLineNum = 0;
+
+  for (const line of diffOutput.split("\n")) {
+    // Track current file from +++ b/ header
+    if (line.startsWith("+++ b/")) {
+      currentFile = line.slice(6);
+      if (!fileAdditions.has(currentFile)) fileAdditions.set(currentFile, []);
+      continue;
+    }
+    // Hunk header: @@ -old +new_start[,count] @@
+    if (line.startsWith("@@ ")) {
+      const m = /\+(\d+)/.exec(line);
+      currentLineNum = m ? parseInt(m[1]!, 10) : 1;
+      continue;
+    }
+    if (!currentFile) continue;
+
+    if (line.startsWith("+") && !line.startsWith("+++")) {
+      // biome-ignore lint/style/noNonNullAssertion: currentFile is set, map entry exists
+      fileAdditions.get(currentFile)!.push({
+        lineNum: currentLineNum,
+        content: line.slice(1),
+      });
+      currentLineNum++;
+    } else if (!line.startsWith("-")) {
+      // Context line — advance new-file line counter
+      currentLineNum++;
+    }
+  }
+
+  for (const [file, addedLines] of fileAdditions) {
+    if (addedLines.length === 0) continue;
+    const lineOffset = addedLines[0]?.lineNum ?? 1;
+    const content = addedLines.map((l) => l.content).join("\n");
+
+    for (const detect of DETECTORS) {
+      for (const m of detect(content)) {
+        const adjustLine = (n: number) => lineOffset + n - 1;
+        const adjustedLine: number | [number, number] =
+          typeof m.line === "number"
+            ? adjustLine(m.line)
+            : [adjustLine(m.line[0]), adjustLine(m.line[1])];
+        warnings.push({ file, ...m, line: adjustedLine });
+      }
+    }
+  }
+
+  return warnings;
 }

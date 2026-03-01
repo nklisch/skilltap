@@ -68,20 +68,99 @@ export async function diff(
   dir: string,
   from: string,
   to: string,
+  pathSpec?: string,
 ): Promise<Result<string, GitError>> {
+  const extra = pathSpec ? ["--", pathSpec] : [];
   return wrapGit(
     () =>
-      $`git -C ${dir} diff ${from}..${to}`
+      $`git -C ${dir} diff ${from}..${to} ${extra}`
         .quiet()
         .then((r) => r.stdout.toString()),
     "git diff failed",
   );
 }
 
-export async function revParse(dir: string): Promise<Result<string, GitError>> {
+export type DiffFileStat = {
+  status: "M" | "A" | "D" | "R";
+  path: string;
+  insertions: number;
+  deletions: number;
+};
+
+export type DiffStat = {
+  filesChanged: number;
+  insertions: number;
+  deletions: number;
+  files: DiffFileStat[];
+};
+
+export async function diffStat(
+  dir: string,
+  from: string,
+  to: string,
+  pathSpec?: string,
+): Promise<Result<DiffStat, GitError>> {
+  const extra = pathSpec ? ["--", pathSpec] : [];
+  return wrapGit(async () => {
+    const numstatOut = await $`git -C ${dir} diff --numstat ${from}..${to} ${extra}`
+      .quiet()
+      .then((r) => r.stdout.toString().trim());
+    const nameStatusOut = await $`git -C ${dir} diff --name-status ${from}..${to} ${extra}`
+      .quiet()
+      .then((r) => r.stdout.toString().trim());
+
+    // Parse --numstat: "<ins>\t<del>\tfilename" per line
+    const numstatMap = new Map<string, { ins: number; del: number }>();
+    if (numstatOut) {
+      for (const line of numstatOut.split("\n")) {
+        const parts = line.split("\t");
+        if (parts.length >= 3) {
+          const ins = parseInt(parts[0] ?? "0", 10);
+          const del = parseInt(parts[1] ?? "0", 10);
+          const file = parts[2] ?? "";
+          numstatMap.set(file, {
+            ins: Number.isNaN(ins) ? 0 : ins,
+            del: Number.isNaN(del) ? 0 : del,
+          });
+        }
+      }
+    }
+
+    // Parse --name-status: "<STATUS>\tfilename" per line
+    const files: DiffFileStat[] = [];
+    if (nameStatusOut) {
+      for (const line of nameStatusOut.split("\n")) {
+        const parts = line.split("\t");
+        if (parts.length >= 2) {
+          const statusChar = (parts[0] ?? "M")[0] ?? "M";
+          const filePath = parts[parts.length - 1] ?? "";
+          const status = (["M", "A", "D", "R"].includes(statusChar)
+            ? statusChar
+            : "M") as "M" | "A" | "D" | "R";
+          const counts = numstatMap.get(filePath) ?? { ins: 0, del: 0 };
+          files.push({
+            status,
+            path: filePath,
+            insertions: counts.ins,
+            deletions: counts.del,
+          });
+        }
+      }
+    }
+
+    const insertions = files.reduce((s, f) => s + f.insertions, 0);
+    const deletions = files.reduce((s, f) => s + f.deletions, 0);
+    return { filesChanged: files.length, insertions, deletions, files };
+  }, "git diff stat failed");
+}
+
+export async function revParse(
+  dir: string,
+  ref = "HEAD",
+): Promise<Result<string, GitError>> {
   return wrapGit(
     () =>
-      $`git -C ${dir} rev-parse HEAD`
+      $`git -C ${dir} rev-parse ${ref}`
         .quiet()
         .then((r) => r.stdout.toString().trim()),
     "git rev-parse failed",

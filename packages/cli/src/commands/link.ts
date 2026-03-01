@@ -1,11 +1,7 @@
-import { defineCommand } from "citty";
 import { resolve } from "node:path";
 import { isCancel } from "@clack/prompts";
-import {
-  findProjectRoot,
-  linkSkill,
-  VALID_AGENT_IDS,
-} from "@skilltap/core";
+import { findProjectRoot, linkSkill, VALID_AGENT_IDS } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
 import { selectScope } from "../ui/prompts";
 

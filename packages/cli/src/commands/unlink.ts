@@ -1,5 +1,5 @@
-import { defineCommand } from "citty";
 import { loadInstalled, removeSkill } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
 
 export default defineCommand({

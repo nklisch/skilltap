@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
+import { linkSkill, loadInstalled } from "@skilltap/core";
 import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { linkSkill, loadInstalled } from "@skilltap/core";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
@@ -75,7 +75,11 @@ describe("unlink — linked skill", () => {
         "skills",
         "standalone-skill",
       );
-      expect(await lstat(symlinkPath).then(() => true).catch(() => false)).toBe(true);
+      expect(
+        await lstat(symlinkPath)
+          .then(() => true)
+          .catch(() => false),
+      ).toBe(true);
 
       const { exitCode, stdout } = await runUnlink(
         ["standalone-skill"],

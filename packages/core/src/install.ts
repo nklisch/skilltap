@@ -4,13 +4,14 @@ import { $ } from "bun";
 import { resolveSource } from "./adapters";
 import { getConfigDir, loadInstalled, saveInstalled } from "./config";
 import { globalBase, makeTmpDir, removeTmpDir } from "./fs";
-import { clone, revParse } from "./git";
+import { clone, diff, diffStat, fetch, pull, revParse } from "./git";
+import type { DiffStat } from "./git";
 import type { ScannedSkill } from "./scanner";
 import { scan } from "./scanner";
 import type { ResolvedSource } from "./schemas/agent";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
-import { scanStatic } from "./security";
+import { scanDiff, scanStatic } from "./security";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { TapEntry } from "./taps";
 import { loadTaps } from "./taps";
@@ -435,6 +436,213 @@ export async function removeSkill(
   if (!saveResult.ok) return saveResult;
 
   return ok(undefined);
+}
+
+export type UpdateOptions = {
+  /** Specific skill to update; undefined = update all */
+  name?: string;
+  /** Auto-accept clean updates without prompting */
+  yes?: boolean;
+  /** Skip skills that have security warnings in their diff */
+  strict?: boolean;
+  /** Project root for project-scoped symlink re-creation */
+  projectRoot?: string;
+  onProgress?: (
+    skillName: string,
+    status: "checking" | "upToDate" | "updated" | "skipped" | "linked",
+  ) => void;
+  onDiff?: (
+    skillName: string,
+    stat: DiffStat,
+    fromSha: string,
+    toSha: string,
+  ) => void;
+  /** Called when warnings are found. Return value only matters in non-strict mode: true = proceed. */
+  onShowWarnings?: (warnings: StaticWarning[], skillName: string) => void;
+  /** Called when user confirmation is needed. true = apply. */
+  onConfirm?: (skillName: string, hasWarnings: boolean) => Promise<boolean>;
+};
+
+export type UpdateResult = {
+  updated: string[];
+  skipped: string[];
+  upToDate: string[];
+};
+
+export async function updateSkill(
+  options: UpdateOptions = {},
+): Promise<Result<UpdateResult, UserError | GitError | ScanError>> {
+  const installedResult = await loadInstalled();
+  if (!installedResult.ok) return installedResult;
+  const installed = installedResult.value;
+
+  let skills = installed.skills;
+  if (options.name) {
+    const found = skills.filter((s) => s.name === options.name);
+    if (found.length === 0) {
+      return err(
+        new UserError(
+          `Skill '${options.name}' is not installed.`,
+          "Run 'skilltap list' to see installed skills.",
+        ),
+      );
+    }
+    skills = found;
+  }
+
+  const result: UpdateResult = { updated: [], skipped: [], upToDate: [] };
+
+  for (const record of skills) {
+    if (record.scope === "linked") {
+      options.onProgress?.(record.name, "linked");
+      continue;
+    }
+
+    options.onProgress?.(record.name, "checking");
+
+    // Standalone: work dir is the install path. Multi-skill: work dir is the cache.
+    const isMulti = record.path !== null;
+    const workDir = isMulti
+      ? skillCacheDir(record.repo!)
+      : skillInstallDir(
+          record.name,
+          record.scope as "global" | "project",
+          options.projectRoot,
+        );
+
+    // For multi-skill, verify cache exists
+    if (isMulti) {
+      const cacheGitDir = Bun.file(join(workDir, ".git"));
+      if (!(await cacheGitDir.exists())) {
+        // Cache missing — skip with a skipped status (user should reinstall)
+        result.skipped.push(record.name);
+        options.onProgress?.(record.name, "skipped");
+        continue;
+      }
+    }
+
+    const fetchResult = await fetch(workDir);
+    if (!fetchResult.ok) return fetchResult;
+
+    const localShaResult = await revParse(workDir, "HEAD");
+    if (!localShaResult.ok) return localShaResult;
+    const remoteShaResult = await revParse(workDir, "FETCH_HEAD");
+    if (!remoteShaResult.ok) return remoteShaResult;
+
+    const localSha = localShaResult.value;
+    const remoteSha = remoteShaResult.value;
+
+    if (localSha === remoteSha) {
+      result.upToDate.push(record.name);
+      options.onProgress?.(record.name, "upToDate");
+      continue;
+    }
+
+    // Get diff (path-filtered for multi-skill)
+    const pathSpec = record.path ?? undefined;
+    const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+    if (!diffResult.ok) return diffResult;
+    const diffOutput = diffResult.value;
+
+    const statResult = await diffStat(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+    if (!statResult.ok) return statResult;
+    const stat = statResult.value;
+
+    // If skill-specific path has no changes, mark as up to date
+    if (stat.filesChanged === 0) {
+      result.upToDate.push(record.name);
+      options.onProgress?.(record.name, "upToDate");
+      continue;
+    }
+
+    options.onDiff?.(record.name, stat, localSha, remoteSha);
+
+    // Security scan on diff
+    const warnings = scanDiff(diffOutput);
+
+    if (warnings.length > 0) {
+      options.onShowWarnings?.(warnings, record.name);
+      if (options.strict) {
+        result.skipped.push(record.name);
+        options.onProgress?.(record.name, "skipped");
+        continue;
+      }
+      const confirmed = await options.onConfirm?.(record.name, true);
+      if (confirmed === false) {
+        result.skipped.push(record.name);
+        options.onProgress?.(record.name, "skipped");
+        continue;
+      }
+    } else if (!options.yes) {
+      const confirmed = await options.onConfirm?.(record.name, false);
+      if (confirmed === false) {
+        result.skipped.push(record.name);
+        options.onProgress?.(record.name, "skipped");
+        continue;
+      }
+    }
+
+    // Apply update
+    const pullResult = await pull(workDir);
+    if (!pullResult.ok) return pullResult;
+
+    // For multi-skill: re-copy skill dir to install path
+    if (isMulti && record.path !== null) {
+      const skillSrc = join(workDir, record.path);
+      const destDir = skillInstallDir(
+        record.name,
+        record.scope as "global" | "project",
+        options.projectRoot,
+      );
+      await $`rm -rf ${destDir}`.quiet();
+      await mkdir(dirname(destDir), { recursive: true });
+      await $`cp -r ${skillSrc} ${destDir}`.quiet();
+    }
+
+    // Get new SHA
+    const newShaResult = await revParse(workDir, "HEAD");
+    if (!newShaResult.ok) return newShaResult;
+
+    // Update the record in place
+    const idx = installed.skills.indexOf(record);
+    if (idx !== -1) {
+      installed.skills[idx] = {
+        ...record,
+        sha: newShaResult.value,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    // Re-create agent symlinks (remove old then recreate — idempotent)
+    if (record.also.length > 0) {
+      await removeAgentSymlinks(
+        record.name,
+        record.also,
+        record.scope as "global" | "project",
+        options.projectRoot,
+      );
+      const installDir = skillInstallDir(
+        record.name,
+        record.scope as "global" | "project",
+        options.projectRoot,
+      );
+      await createAgentSymlinks(
+        record.name,
+        installDir,
+        record.also,
+        record.scope as "global" | "project",
+        options.projectRoot,
+      );
+    }
+
+    result.updated.push(record.name);
+    options.onProgress?.(record.name, "updated");
+  }
+
+  const saveResult = await saveInstalled(installed);
+  if (!saveResult.ok) return saveResult;
+
+  return ok(result);
 }
 
 export async function linkSkill(

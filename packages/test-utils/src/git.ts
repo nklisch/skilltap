@@ -15,3 +15,16 @@ export async function commitAll(
   const result = await $`git -C ${dir} rev-parse HEAD`.quiet();
   return result.stdout.toString().trim();
 }
+
+export async function addFileAndCommit(
+  dir: string,
+  filename: string,
+  content: string,
+  message = "add file",
+): Promise<string> {
+  await Bun.write(`${dir}/${filename}`, content);
+  await $`git -C ${dir} add ${filename}`.quiet();
+  await $`git -C ${dir} commit -m ${message}`.quiet();
+  const result = await $`git -C ${dir} rev-parse HEAD`.quiet();
+  return result.stdout.toString().trim();
+}

@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, readlink } from "node:fs/promises";
 import { join } from "node:path";
+import { loadInstalled } from "@skilltap/core";
 import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { loadInstalled } from "@skilltap/core";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 

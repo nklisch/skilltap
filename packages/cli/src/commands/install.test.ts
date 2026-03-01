@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { loadInstalled } from "@skilltap/core";
 import {
   createMaliciousSkillRepo,
   createMultiSkillRepo,
@@ -6,7 +7,6 @@ import {
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { loadInstalled } from "@skilltap/core";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 

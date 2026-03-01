@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { installSkill } from "@skilltap/core";
 import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { installSkill } from "@skilltap/core";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
@@ -76,7 +76,11 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList(["--json"], homeDir, configDir);
+      const { exitCode, stdout } = await runList(
+        ["--json"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       const parsed = JSON.parse(stdout);
       expect(Array.isArray(parsed)).toBe(true);
@@ -90,7 +94,11 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList(["--global"], homeDir, configDir);
+      const { exitCode, stdout } = await runList(
+        ["--global"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("standalone-skill");
     } finally {
@@ -102,7 +110,11 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList(["--project"], homeDir, configDir);
+      const { exitCode, stdout } = await runList(
+        ["--project"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("No skills installed");
     } finally {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { table, truncate, termWidth } from "./format";
+import { table, termWidth, truncate } from "./format";
 
 describe("termWidth", () => {
   test("returns a number", () => {
@@ -61,7 +61,9 @@ describe("table", () => {
       ],
       { header: ["H1", "H2"] },
     );
-    const lines = result.split("\n").filter((l) => l.trim() && !l.includes("─"));
+    const lines = result
+      .split("\n")
+      .filter((l) => l.trim() && !l.includes("─"));
     // Strip ANSI codes for comparison
     const stripped = lines.map((l) => l.replace(/\x1b\[[0-9;]*m/g, ""));
     // All content lines should have the same length (padded to max column widths)

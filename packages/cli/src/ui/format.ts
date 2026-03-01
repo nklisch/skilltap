@@ -1,3 +1,7 @@
+import type { DiffFileStat, DiffStat } from "@skilltap/core";
+
+export type { DiffFileStat, DiffStat };
+
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
 const DIM = "\x1b[2m";
@@ -22,10 +26,7 @@ export function truncate(s: string, max: number): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
-export function table(
-  rows: string[][],
-  opts?: { header?: string[] },
-): string {
+export function table(rows: string[][], opts?: { header?: string[] }): string {
   const allRows = opts?.header ? [opts.header, ...rows] : rows;
   if (allRows.length === 0) return "";
 
@@ -36,9 +37,8 @@ export function table(
 
   const lines: string[] = [];
   allRows.forEach((row, rowIdx) => {
-    const cells = Array.from(
-      { length: numCols },
-      (_, i) => (row[i] ?? "").padEnd(colWidths[i] ?? 0),
+    const cells = Array.from({ length: numCols }, (_, i) =>
+      (row[i] ?? "").padEnd(colWidths[i] ?? 0),
     );
     lines.push(`  ${cells.join("  ")}`);
     if (rowIdx === 0 && opts?.header) {
@@ -57,4 +57,28 @@ export function errorLine(msg: string, hint?: string): void {
 
 export function successLine(msg: string): void {
   process.stdout.write(`${ansi.green("✓")} ${msg}\n`);
+}
+
+/** "abc1234 → def5678" using 7-char short SHAs */
+export function formatShaChange(from: string, to: string): string {
+  return `${from.slice(0, 7)} → ${to.slice(0, 7)}`;
+}
+
+/** "(2 files changed, +5 -2)" */
+export function formatDiffStatSummary(stat: DiffStat): string {
+  const files =
+    stat.filesChanged === 1 ? "1 file changed" : `${stat.filesChanged} files changed`;
+  const parts = [files];
+  if (stat.insertions > 0) parts.push(`+${stat.insertions}`);
+  if (stat.deletions > 0) parts.push(`-${stat.deletions}`);
+  return `(${parts.join(", ")})`;
+}
+
+/** "  M SKILL.md (+5 -2)" or "  A scripts/setup.sh (+18)" or "  D old.sh" */
+export function formatDiffFileLine(file: DiffFileStat): string {
+  const counts: string[] = [];
+  if (file.insertions > 0) counts.push(`+${file.insertions}`);
+  if (file.deletions > 0) counts.push(`-${file.deletions}`);
+  const countStr = counts.length > 0 ? ` (${counts.join(" ")})` : "";
+  return `  ${ansi.dim(file.status)} ${file.path}${countStr}`;
 }

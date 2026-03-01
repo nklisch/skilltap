@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
-import { loadInstalled } from "@skilltap/core";
 import type { InstalledSkill } from "@skilltap/core";
+import { loadInstalled } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { ansi, errorLine, table, termWidth, truncate } from "../ui/format";
 
 export default defineCommand({

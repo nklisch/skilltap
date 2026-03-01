@@ -5,7 +5,12 @@ import { formatWarnings } from "./scan";
 describe("formatWarnings", () => {
   test("includes skill name in header", () => {
     const warnings: StaticWarning[] = [
-      { file: "SKILL.md", line: 1, category: "HTML comment", raw: "<!-- hi -->" },
+      {
+        file: "SKILL.md",
+        line: 1,
+        category: "HTML comment",
+        raw: "<!-- hi -->",
+      },
     ];
     const result = formatWarnings(warnings, "my-skill");
     expect(result).toContain("⚠ Static warnings in my-skill:");
@@ -13,7 +18,12 @@ describe("formatWarnings", () => {
 
   test("shows line number prefix for positive line", () => {
     const warnings: StaticWarning[] = [
-      { file: "SKILL.md", line: 14, category: "HTML comment", raw: "<!-- evil -->" },
+      {
+        file: "SKILL.md",
+        line: 14,
+        category: "HTML comment",
+        raw: "<!-- evil -->",
+      },
     ];
     const result = formatWarnings(warnings, "skill");
     expect(result).toContain("L14: HTML comment");
@@ -34,7 +44,12 @@ describe("formatWarnings", () => {
 
   test("uses file path when line is 0", () => {
     const warnings: StaticWarning[] = [
-      { file: "binary.bin", line: 0, category: "Binary file", raw: "ELF binary" },
+      {
+        file: "binary.bin",
+        line: 0,
+        category: "Binary file",
+        raw: "ELF binary",
+      },
     ];
     const result = formatWarnings(warnings, "skill");
     expect(result).toContain("binary.bin: Binary file");
@@ -57,7 +72,12 @@ describe("formatWarnings", () => {
 
   test("shows only raw when visible is absent", () => {
     const warnings: StaticWarning[] = [
-      { file: "SKILL.md", line: 8, category: "HTML comment", raw: "<!-- evil -->" },
+      {
+        file: "SKILL.md",
+        line: 8,
+        category: "HTML comment",
+        raw: "<!-- evil -->",
+      },
     ];
     const result = formatWarnings(warnings, "skill");
     expect(result).toContain("│ <!-- evil -->");

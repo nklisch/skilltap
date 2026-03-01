@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
 import { isCancel, spinner } from "@clack/prompts";
 import { loadInstalled, removeSkill } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
 import { confirmRemove } from "../ui/prompts";
 

@@ -1,7 +1,7 @@
-import { defineCommand } from "citty";
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { globalBase, loadInstalled } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { ansi, errorLine } from "../ui/format";
 
 const AGENT_DIRS: Record<string, string> = {
@@ -40,8 +40,7 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const base =
-      skill.scope === "project" ? process.cwd() : globalBase();
+    const base = skill.scope === "project" ? process.cwd() : globalBase();
     const skillPath = join(base, ".agents", "skills", skill.name);
 
     const agentStatus = await Promise.all(

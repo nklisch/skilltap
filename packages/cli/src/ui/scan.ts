@@ -4,10 +4,7 @@ export function formatWarnings(
   warnings: StaticWarning[],
   skillName: string,
 ): string {
-  const lines: string[] = [
-    `⚠ Static warnings in ${skillName}:`,
-    "",
-  ];
+  const lines: string[] = [`⚠ Static warnings in ${skillName}:`, ""];
 
   for (const w of warnings) {
     const lineRef = Array.isArray(w.line)
