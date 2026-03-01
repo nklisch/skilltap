@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "name": "commit-helper",
+      "repo": "https://github.com/example/commit-helper.git",
+      "ref": "v1.0.0",
+      "sha": "abc123def456",
+      "scope": "global",
+      "path": null,
+      "tap": null,
+      "also": [],
+      "installedAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ]
+}

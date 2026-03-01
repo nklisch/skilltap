@@ -5,13 +5,13 @@ export const InstalledSkillSchema = z.object({
   description: z.string().default(""),
   repo: z.string().nullable(),
   ref: z.string().nullable(),
-  sha: z.string().nullable(),
+  sha: z.string().nullable().default(null),
   scope: z.enum(["global", "project", "linked"]),
   path: z.string().nullable(),
-  tap: z.string().nullable(),
-  also: z.array(z.string()),
+  tap: z.string().nullable().default(null),
+  also: z.array(z.string()).default([]),
   installedAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime().default("1970-01-01T00:00:00.000Z"),
 });
 
 export const InstalledJsonSchema = z.object({

@@ -1,5 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { loadConfig, saveConfig } from "@skilltap/core";
 import { parse, stringify } from "smol-toml";
+import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { AgentModeSchema, ConfigSchema, SecurityConfigSchema } from "./config";
 
 describe("SecurityConfigSchema", () => {
@@ -134,5 +138,76 @@ describe("ConfigSchema", () => {
     expect(result.security.threshold).toBe(7);
     expect(result.taps[0].name).toBe("home");
     expect(result.taps[0].url).toBe("https://example.com/tap.git");
+  });
+
+  test("unknown keys silently ignored", () => {
+    const result = ConfigSchema.safeParse({
+      defaults: { also: [], yes: true, scope: "global", unknownDefault: "x" },
+      security: { scan: "static", unknownSecurity: 99 },
+      unknownTopLevel: "ignored",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.defaults.yes).toBe(true);
+    expect(result.data.security.scan).toBe("static");
+    expect((result.data as Record<string, unknown>).unknownTopLevel).toBeUndefined();
+  });
+
+  test("partial config with only [security] block uses defaults elsewhere", () => {
+    const result = ConfigSchema.parse({ security: { scan: "semantic", on_warn: "fail" } });
+    expect(result.security.scan).toBe("semantic");
+    expect(result.security.on_warn).toBe("fail");
+    expect(result.defaults.also).toEqual([]);
+    expect(result.defaults.yes).toBe(false);
+    expect(result["agent-mode"].enabled).toBe(false);
+    expect(result.taps).toEqual([]);
+  });
+});
+
+describe("Config I/O round-trip", () => {
+  let configDir: string;
+
+  beforeEach(async () => {
+    configDir = await makeTmpDir();
+    process.env.XDG_CONFIG_HOME = configDir;
+  });
+
+  afterEach(async () => {
+    delete process.env.XDG_CONFIG_HOME;
+    await removeTmpDir(configDir);
+  });
+
+  test("save config with all optional fields and reload produces same values", async () => {
+    const firstLoad = await loadConfig();
+    expect(firstLoad.ok).toBe(true);
+    if (!firstLoad.ok) return;
+
+    const config = {
+      ...firstLoad.value,
+      defaults: { also: ["claude-code", "cursor"], yes: true, scope: "global" as const },
+      security: {
+        ...firstLoad.value.security,
+        scan: "semantic" as const,
+        on_warn: "fail" as const,
+        threshold: 8,
+        agent: "claude",
+      },
+      "agent-mode": { enabled: true, scope: "project" as const },
+    };
+
+    const saveResult = await saveConfig(config);
+    expect(saveResult.ok).toBe(true);
+
+    const reloadResult = await loadConfig();
+    expect(reloadResult.ok).toBe(true);
+    if (!reloadResult.ok) return;
+
+    expect(reloadResult.value.defaults.also).toEqual(["claude-code", "cursor"]);
+    expect(reloadResult.value.defaults.yes).toBe(true);
+    expect(reloadResult.value.defaults.scope).toBe("global");
+    expect(reloadResult.value.security.scan).toBe("semantic");
+    expect(reloadResult.value.security.on_warn).toBe("fail");
+    expect(reloadResult.value.security.threshold).toBe(8);
+    expect(reloadResult.value["agent-mode"].enabled).toBe(true);
   });
 });

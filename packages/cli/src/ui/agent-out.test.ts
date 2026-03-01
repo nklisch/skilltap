@@ -88,6 +88,51 @@ describe("agentUpToDate", () => {
   });
 });
 
+describe("agent-out — snapshot stability", () => {
+  test("agentSuccess full output", async () => {
+    const { stdout } = await run(
+      'agentSuccess("my-skill", "~/.agents/skills/my-skill/", "v1.0.0")',
+    );
+    expect(stdout).toMatchSnapshot();
+  });
+
+  test("agentUpdated full output", async () => {
+    const { stdout } = await run(
+      'agentUpdated("my-skill", "abc1234", "def5678")',
+    );
+    expect(stdout).toMatchSnapshot();
+  });
+
+  test("agentSkip full output", async () => {
+    const { stdout } = await run('agentSkip("my-skill", "is already installed.")');
+    expect(stdout).toMatchSnapshot();
+  });
+
+  test("agentError full output", async () => {
+    const { stderr } = await run('agentError("something went wrong")');
+    expect(stderr).toMatchSnapshot();
+    expect(stderr.endsWith("\n")).toBe(true);
+  });
+
+  test("agentUpToDate full output", async () => {
+    const { stdout } = await run('agentUpToDate("my-skill")');
+    expect(stdout).toMatchSnapshot();
+  });
+
+  test("agentSecurityBlock full output", async () => {
+    const { stderr } = await run(`
+      agentSecurityBlock(
+        [{ file: "SKILL.md", line: 5, category: "Invisible Unicode", raw: "x" }],
+        []
+      )
+    `);
+    expect(stderr).toMatchSnapshot();
+    expect(stderr).toContain("SECURITY ISSUE FOUND");
+    expect(stderr).toContain("DO NOT install");
+    expect(stderr).not.toMatch(/\x1b\[/);
+  });
+});
+
 describe("agentSecurityBlock", () => {
   test("formats static warnings", async () => {
     const { stderr } = await run(`
