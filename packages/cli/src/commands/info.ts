@@ -1,4 +1,16 @@
 import { defineCommand } from "citty";
+import { lstat } from "node:fs/promises";
+import { join } from "node:path";
+import { globalBase, loadInstalled } from "@skilltap/core";
+import { ansi, errorLine } from "../ui/format";
+
+const AGENT_DIRS: Record<string, string> = {
+  "claude-code": ".claude/skills",
+  cursor: ".cursor/skills",
+  codex: ".codex/skills",
+  gemini: ".gemini/skills",
+  windsurf: ".windsurf/skills",
+};
 
 export default defineCommand({
   meta: {
@@ -12,5 +24,55 @@ export default defineCommand({
       required: true,
     },
   },
-  async run(_ctx) {},
+  async run({ args }) {
+    const result = await loadInstalled();
+    if (!result.ok) {
+      errorLine(result.error.message);
+      process.exit(1);
+    }
+
+    const skill = result.value.skills.find((s) => s.name === args.name);
+    if (!skill) {
+      errorLine(
+        `Skill '${args.name}' is not installed`,
+        `Run 'skilltap find ${args.name}' to search`,
+      );
+      process.exit(1);
+    }
+
+    const base =
+      skill.scope === "project" ? process.cwd() : globalBase();
+    const skillPath = join(base, ".agents", "skills", skill.name);
+
+    const agentStatus = await Promise.all(
+      Object.entries(AGENT_DIRS).map(async ([agent, dir]) => {
+        const path = join(base, dir, skill.name);
+        const exists = await lstat(path)
+          .then(() => true)
+          .catch(() => false);
+        return { agent, exists };
+      }),
+    );
+
+    const activeAgents = agentStatus
+      .filter((a) => a.exists)
+      .map((a) => a.agent);
+
+    const rows = [
+      ["name:", ansi.bold(skill.name)],
+      ["description:", skill.description || "—"],
+      ["scope:", skill.scope],
+      ["source:", skill.repo ?? "local"],
+      ["ref:", skill.ref ?? "—"],
+      ["sha:", skill.sha ? skill.sha.slice(0, 7) : "—"],
+      ["path:", skillPath],
+      ["agents:", activeAgents.length > 0 ? activeAgents.join(", ") : "none"],
+      ["installed:", skill.installedAt],
+      ["updated:", skill.updatedAt],
+    ];
+
+    for (const [key, val] of rows) {
+      process.stdout.write(`${ansi.dim(key.padEnd(13))} ${val}\n`);
+    }
+  },
 });

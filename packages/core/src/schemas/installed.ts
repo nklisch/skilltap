@@ -2,6 +2,7 @@ import { z } from "zod/v4";
 
 export const InstalledSkillSchema = z.object({
   name: z.string(),
+  description: z.string().default(""),
   repo: z.string().nullable(),
   ref: z.string().nullable(),
   sha: z.string().nullable(),

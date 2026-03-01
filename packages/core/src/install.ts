@@ -1,4 +1,4 @@
-import { lstat, mkdir } from "node:fs/promises";
+import { lstat, mkdir, symlink } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
@@ -28,6 +28,14 @@ export type InstallOptions = {
     warnings: StaticWarning[],
     skillName: string,
   ) => Promise<boolean>;
+  /** Called after scan, before placement. Returns skill names to install. If omitted, installs all. */
+  onSelectSkills?: (skills: ScannedSkill[]) => Promise<string[]>;
+};
+
+export type LinkOptions = {
+  scope: "global" | "project";
+  projectRoot?: string;
+  also?: string[];
 };
 
 export type InstallResult = {
@@ -96,6 +104,7 @@ function makeRecord(
 ): InstalledSkill {
   return {
     name: skill.name,
+    description: skill.description,
     repo: resolved.url,
     ref: options.ref ?? null,
     sha,
@@ -154,8 +163,12 @@ export async function installSkill(
     }
 
     // 6. Select skills to install
-    const selected: ScannedSkill[] = options.skillNames
-      ? options.skillNames.map((name) => {
+    let selectedNames: string[] | undefined = options.skillNames;
+    if (!selectedNames && options.onSelectSkills) {
+      selectedNames = await options.onSelectSkills(scanned);
+    }
+    const selected: ScannedSkill[] = selectedNames
+      ? selectedNames.map((name) => {
           const found = scanned.find((s) => s.name === name);
           if (!found)
             throw new UserError(
@@ -300,12 +313,15 @@ export async function removeSkill(
     options.projectRoot,
   );
 
-  // Remove skill directory
-  const installPath = skillInstallDir(
-    record.name,
-    record.scope === "linked" ? "global" : record.scope,
-    options.projectRoot,
-  );
+  // Remove skill directory (for linked skills, record.path is the symlink location)
+  const installPath =
+    record.scope === "linked" && record.path !== null
+      ? record.path
+      : skillInstallDir(
+          record.name,
+          record.scope === "linked" ? "global" : record.scope,
+          options.projectRoot,
+        );
   await $`rm -rf ${installPath}`.quiet();
 
   // Remove cache if this was the last skill from the repo
@@ -324,4 +340,95 @@ export async function removeSkill(
   if (!saveResult.ok) return saveResult;
 
   return ok(undefined);
+}
+
+export async function linkSkill(
+  localPath: string,
+  options: LinkOptions,
+): Promise<Result<InstalledSkill, UserError>> {
+  // 1. Validate localPath has SKILL.md
+  const skillMdFile = Bun.file(join(localPath, "SKILL.md"));
+  if (!(await skillMdFile.exists())) {
+    return err(
+      new UserError(
+        `"${localPath}" does not contain SKILL.md`,
+        "The path must be a valid skill directory.",
+      ),
+    );
+  }
+
+  // 2. Get skill name via scan
+  const scanned = await scan(localPath);
+  if (scanned.length === 0) {
+    return err(new UserError(`No skill found in "${localPath}"`));
+  }
+  // biome-ignore lint/style/noNonNullAssertion: scanned.length > 0
+  const skill = scanned[0]!;
+
+  // 3. Load installed to check for conflicts
+  const installedResult = await loadInstalled();
+  if (!installedResult.ok) return installedResult;
+  const installed = installedResult.value;
+
+  // 4. Check already-installed
+  const conflict = installed.skills.find((s) => s.name === skill.name);
+  if (conflict) {
+    return err(
+      new UserError(
+        `Skill '${skill.name}' is already installed.`,
+        `Run 'skilltap remove ${skill.name}' first.`,
+      ),
+    );
+  }
+
+  // 5. Compute install path and create symlink
+  const installPath = skillInstallDir(
+    skill.name,
+    options.scope,
+    options.projectRoot,
+  );
+  await mkdir(dirname(installPath), { recursive: true });
+
+  try {
+    await symlink(localPath, installPath, "dir");
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return err(new UserError(`Failed to create symlink: ${msg}`));
+  }
+
+  // 6. Create agent symlinks if requested
+  const also = options.also ?? [];
+  if (also.length > 0) {
+    const symlinkResult = await createAgentSymlinks(
+      skill.name,
+      installPath,
+      also,
+      options.scope,
+      options.projectRoot,
+    );
+    if (!symlinkResult.ok) return symlinkResult;
+  }
+
+  // 7. Build record (path = installPath = the symlink location)
+  const now = new Date().toISOString();
+  const record: InstalledSkill = {
+    name: skill.name,
+    description: skill.description,
+    repo: null,
+    ref: null,
+    sha: null,
+    scope: "linked",
+    path: installPath,
+    tap: null,
+    also,
+    installedAt: now,
+    updatedAt: now,
+  };
+
+  // 8. Save installed.json
+  installed.skills.push(record);
+  const saveResult = await saveInstalled(installed);
+  if (!saveResult.ok) return saveResult;
+
+  return ok(record);
 }
