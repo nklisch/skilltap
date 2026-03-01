@@ -7,13 +7,13 @@ import { ok, err, UserError, type Result } from "./types"
 import { ConfigSchema, type Config } from "./schemas/config"
 import { InstalledJsonSchema, type InstalledJson } from "./schemas/installed"
 
-function configDir(): string {
+export function getConfigDir(): string {
   const xdg = process.env.XDG_CONFIG_HOME
   return xdg ? join(xdg, "skilltap") : join(homedir(), ".config", "skilltap")
 }
 
 export async function ensureDirs(): Promise<Result<void>> {
-  const dir = configDir()
+  const dir = getConfigDir()
   try {
     await mkdir(join(dir, "taps"), { recursive: true })
     await mkdir(join(dir, "cache"), { recursive: true })
@@ -85,7 +85,7 @@ scope = "project"
 `
 
 export async function loadConfig(): Promise<Result<Config>> {
-  const dir = configDir()
+  const dir = getConfigDir()
   const file = join(dir, "config.toml")
 
   const dirsResult = await ensureDirs()
@@ -126,7 +126,7 @@ export async function loadConfig(): Promise<Result<Config>> {
 }
 
 export async function saveConfig(config: Config): Promise<Result<void>> {
-  const dir = configDir()
+  const dir = getConfigDir()
   const file = join(dir, "config.toml")
 
   const dirsResult = await ensureDirs()
@@ -145,14 +145,14 @@ export async function saveConfig(config: Config): Promise<Result<void>> {
 const DEFAULT_INSTALLED: InstalledJson = { version: 1, skills: [] }
 
 export async function loadInstalled(): Promise<Result<InstalledJson>> {
-  const dir = configDir()
+  const dir = getConfigDir()
   const file = join(dir, "installed.json")
 
   const f = Bun.file(file)
   const exists = await f.exists()
 
   if (!exists) {
-    return ok(DEFAULT_INSTALLED)
+    return ok({ version: 1 as const, skills: [] })
   }
 
   let raw: unknown
@@ -171,7 +171,7 @@ export async function loadInstalled(): Promise<Result<InstalledJson>> {
 }
 
 export async function saveInstalled(installed: InstalledJson): Promise<Result<void>> {
-  const dir = configDir()
+  const dir = getConfigDir()
   const file = join(dir, "installed.json")
 
   const dirsResult = await ensureDirs()
