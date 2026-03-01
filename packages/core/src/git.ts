@@ -23,24 +23,6 @@ function extractStderr(e: unknown): string {
   return String(e)
 }
 
-export async function makeTmpDir(): Promise<Result<string, GitError>> {
-  const dir = `/tmp/skilltap-${crypto.randomUUID()}`
-  try {
-    await $`mkdir -p ${dir}`.quiet()
-    return ok(dir)
-  } catch (e) {
-    return err(new GitError(`failed to create temp dir: ${extractStderr(e)}`))
-  }
-}
-
-export async function removeTmpDir(dir: string): Promise<void> {
-  try {
-    await $`rm -rf ${dir}`.quiet()
-  } catch {
-    // ignore
-  }
-}
-
 export async function clone(
   url: string,
   dest: string,

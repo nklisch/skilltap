@@ -1,38 +1,7 @@
 import { describe, test, expect, afterEach } from "bun:test"
-import { clone, pull, fetch, diff, revParse, log, makeTmpDir, removeTmpDir } from "./git"
+import { clone, pull, fetch, diff, revParse, log } from "./git"
+import { makeTmpDir, removeTmpDir } from "./fs"
 import { createStandaloneSkillRepo } from "@skilltap/test-utils"
-
-describe("makeTmpDir / removeTmpDir", () => {
-  test("creates a directory that exists", async () => {
-    const result = await makeTmpDir()
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    const dir = result.value
-    expect(dir).toMatch(/^\/tmp\/skilltap-/)
-    const stat = await Bun.file(dir + "/.keep").exists().catch(() => false)
-    // Directory existence — write a file to verify
-    await Bun.write(dir + "/.keep", "")
-    expect(await Bun.file(dir + "/.keep").exists()).toBe(true)
-    await removeTmpDir(dir)
-  })
-
-  test("removeTmpDir removes the directory", async () => {
-    const result = await makeTmpDir()
-    expect(result.ok).toBe(true)
-    if (!result.ok) return
-    const dir = result.value
-    await Bun.write(dir + "/file.txt", "hello")
-    await removeTmpDir(dir)
-    // After removal, writing should fail or the dir should not exist
-    const { $ } = await import("bun")
-    const check = await $`test -d ${dir}`.quiet().catch(() => null)
-    expect(check).toBeNull()
-  })
-
-  test("removeTmpDir is a no-op for nonexistent path", async () => {
-    await expect(removeTmpDir("/tmp/skilltap-does-not-exist-xyz")).resolves.toBeUndefined()
-  })
-})
 
 describe("clone", () => {
   let repo: { path: string; cleanup: () => Promise<void> } | null = null
