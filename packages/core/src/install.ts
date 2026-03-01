@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
+import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import { clone, revParse } from "./git";
@@ -12,6 +13,8 @@ import type { ResolvedSource } from "./schemas/agent";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanStatic } from "./security";
+import type { SemanticWarning } from "./security/semantic";
+import { scanSemantic } from "./security/semantic";
 import { createAgentSymlinks } from "./symlink";
 import type { TapEntry } from "./taps";
 import { loadTaps } from "./taps";
@@ -35,11 +38,27 @@ export type InstallOptions = {
   onSelectSkills?: (skills: ScannedSkill[]) => Promise<string[]>;
   /** Called when source resolves to multiple taps. Return chosen entry or null to cancel. */
   onSelectTap?: (matches: TapEntry[]) => Promise<TapEntry | null>;
+  /** Pre-resolved agent adapter for semantic scanning (or undefined to skip). */
+  agent?: AgentAdapter;
+  /** Whether to run semantic scan (--semantic flag or config). */
+  semantic?: boolean;
+  /** Score threshold for semantic warnings (default 5). */
+  threshold?: number;
+  /** Called when semantic warnings are found. Return true to proceed, false to abort. */
+  onSemanticWarnings?: (
+    warnings: SemanticWarning[],
+    skillName: string,
+  ) => Promise<boolean>;
+  /** Called after static scan finds warnings — "Run semantic scan?" prompt. */
+  onOfferSemantic?: () => Promise<boolean>;
+  /** Called with progress during semantic scan. */
+  onSemanticProgress?: (completed: number, total: number) => void;
 };
 
 export type InstallResult = {
   records: InstalledSkill[];
   warnings: StaticWarning[];
+  semanticWarnings: SemanticWarning[];
 };
 
 function looksLikeTapName(source: string): boolean {
@@ -169,6 +188,7 @@ export async function installSkill(
 ): Promise<Result<InstallResult, UserError | GitError | ScanError>> {
   const also = options.also ?? [];
   const allWarnings: StaticWarning[] = [];
+  const allSemanticWarnings: SemanticWarning[] = [];
 
   // 1. Check already-installed
   const installedResult = await loadInstalled();
@@ -240,6 +260,32 @@ export async function installSkill(
       const scanResult = await runSecurityScan(selected, options.onWarnings);
       if (!scanResult.ok) return scanResult;
       allWarnings.push(...scanResult.value);
+    }
+
+    // 6.6. Semantic scan
+    const shouldRunSemantic =
+      options.semantic ||
+      (allWarnings.length > 0 &&
+        options.onOfferSemantic &&
+        (await options.onOfferSemantic()));
+
+    if (shouldRunSemantic && !options.skipScan && options.agent) {
+      for (const skill of selected) {
+        const semResult = await scanSemantic(skill.path, options.agent, {
+          threshold: options.threshold,
+          onProgress: options.onSemanticProgress,
+        });
+        if (semResult.ok && semResult.value.length > 0) {
+          allSemanticWarnings.push(...semResult.value);
+          if (options.onSemanticWarnings) {
+            const proceed = await options.onSemanticWarnings(
+              semResult.value,
+              skill.name,
+            );
+            if (!proceed) return err(new UserError("Install cancelled."));
+          }
+        }
+      }
     }
 
     // 7. Check for already-installed conflicts
@@ -344,7 +390,11 @@ export async function installSkill(
     const saveResult = await saveInstalled(installed);
     if (!saveResult.ok) return saveResult;
 
-    return ok({ records: newRecords, warnings: allWarnings });
+    return ok({
+      records: newRecords,
+      warnings: allWarnings,
+      semanticWarnings: allSemanticWarnings,
+    });
   } catch (e) {
     if (e instanceof UserError) return err(e);
     if (e instanceof GitError) return err(e);

@@ -1,11 +1,28 @@
-import { intro, isCancel, outro, spinner } from "@clack/prompts";
-import type { ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
-import { installSkill, loadConfig } from "@skilltap/core";
+import { intro, isCancel, log, outro, spinner } from "@clack/prompts";
+import type {
+  AgentAdapter,
+  ScannedSkill,
+  SemanticWarning,
+  StaticWarning,
+  TapEntry,
+} from "@skilltap/core";
+import {
+  installSkill,
+  loadConfig,
+  resolveAgent,
+  saveConfig,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
-import { confirmInstall, selectSkills, selectTap } from "../ui/prompts";
+import {
+  confirmInstall,
+  offerSemanticScan,
+  selectAgent,
+  selectSkills,
+  selectTap,
+} from "../ui/prompts";
 import { parseAlsoFlag, resolveScope } from "../ui/resolve";
-import { printWarnings } from "../ui/scan";
+import { printSemanticWarnings, printWarnings } from "../ui/scan";
 
 export default defineCommand({
   meta: {
@@ -89,6 +106,30 @@ export default defineCommand({
 
     const also = parseAlsoFlag(args.also, config);
 
+    // 3. Determine semantic trigger
+    const runSemantic = args.semantic || config.security.scan === "semantic";
+
+    // 4. Resolve agent if semantic scanning is possible
+    let agent: AgentAdapter | undefined;
+    if (runSemantic || config.security.scan === "semantic") {
+      const agentResult = await resolveAgent(config, async (detected) => {
+        const chosen = await selectAgent(detected);
+        if (isCancel(chosen)) return null;
+        // Save chosen agent to config for future use
+        config.security.agent = (chosen as AgentAdapter).cliName;
+        await saveConfig(config);
+        return chosen as AgentAdapter;
+      });
+      if (agentResult.ok) {
+        agent = agentResult.value ?? undefined;
+        if (!agent && runSemantic) {
+          log.warn("No agent CLI found on PATH. Skipping semantic scan.");
+        }
+      } else {
+        log.warn(agentResult.error.message);
+      }
+    }
+
     intro("skilltap");
 
     const { scope, projectRoot } = await resolveScope(args, config);
@@ -146,6 +187,43 @@ export default defineCommand({
       return chosen as TapEntry;
     };
 
+    // 7d. onSemanticWarnings callback
+    const semanticWarningsCallback = async (
+      warnings: SemanticWarning[],
+      skillName: string,
+    ): Promise<boolean> => {
+      s.stop();
+      printSemanticWarnings(warnings, skillName);
+      if (onWarn === "fail") {
+        errorLine(
+          `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
+        );
+        process.exit(1);
+      }
+      const proceed = await confirmInstall(skillName);
+      if (isCancel(proceed) || proceed === false) process.exit(2);
+      s.start("Installing...");
+      return true;
+    };
+
+    // 7e. onOfferSemantic callback — offer scan when static warnings found
+    const offerSemanticCallback = async (): Promise<boolean> => {
+      if (!agent) return false;
+      s.stop();
+      const answer = await offerSemanticScan();
+      if (isCancel(answer)) return false;
+      s.start("Running semantic scan...");
+      return answer as boolean;
+    };
+
+    // 7f. onSemanticProgress callback
+    const semanticProgressCallback = (
+      completed: number,
+      total: number,
+    ): void => {
+      s.message(`Scanning chunk ${completed}/${total}...`);
+    };
+
     // 8. Run install
     const result = await installSkill(args.source, {
       scope,
@@ -156,6 +234,12 @@ export default defineCommand({
       onWarnings: skipScan ? undefined : warningsCallback,
       onSelectSkills: selectSkillsCallback,
       onSelectTap: selectTapCallback,
+      agent,
+      semantic: runSemantic,
+      threshold: config.security.threshold,
+      onSemanticWarnings: agent ? semanticWarningsCallback : undefined,
+      onOfferSemantic: agent ? offerSemanticCallback : undefined,
+      onSemanticProgress: agent ? semanticProgressCallback : undefined,
     });
 
     if (!result.ok) {

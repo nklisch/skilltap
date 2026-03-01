@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
+import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import type { DiffStat } from "./git";
 import { diff, diffStat, fetch, pull, revParse } from "./git";
@@ -8,6 +9,8 @@ import { skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanDiff } from "./security";
+import type { SemanticWarning } from "./security/semantic";
+import { scanSemantic } from "./security/semantic";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, type GitError, ok, type ScanError, UserError } from "./types";
@@ -35,6 +38,16 @@ export type UpdateOptions = {
   onShowWarnings?: (warnings: StaticWarning[], skillName: string) => void;
   /** Called when user confirmation is needed. true = apply. */
   onConfirm?: (skillName: string, hasWarnings: boolean) => Promise<boolean>;
+  /** Pre-resolved agent adapter for semantic scanning. */
+  agent?: AgentAdapter;
+  /** Whether to run semantic scan. */
+  semantic?: boolean;
+  /** Score threshold for semantic warnings (default 5). */
+  threshold?: number;
+  /** Called when semantic warnings are found. */
+  onSemanticWarnings?: (warnings: SemanticWarning[], skillName: string) => void;
+  /** Called with progress during semantic scan. */
+  onSemanticProgress?: (completed: number, total: number) => void;
 };
 
 export type UpdateResult = {
@@ -197,6 +210,27 @@ export async function updateSkill(
     if (!pullResult.ok) return pullResult;
 
     if (isMulti) await recopyMultiSkill(workDir, record, options.projectRoot);
+
+    // Semantic scan on updated skill directory
+    if (options.semantic && options.agent) {
+      const installDir = skillInstallDir(
+        record.name,
+        record.scope as "global" | "project",
+        options.projectRoot,
+      );
+      const semResult = await scanSemantic(installDir, options.agent, {
+        threshold: options.threshold,
+        onProgress: options.onSemanticProgress,
+      });
+      if (semResult.ok && semResult.value.length > 0) {
+        options.onSemanticWarnings?.(semResult.value, record.name);
+        if (options.strict) {
+          result.skipped.push(record.name);
+          options.onProgress?.(record.name, "skipped");
+          continue;
+        }
+      }
+    }
 
     // Get new SHA
     const newShaResult = await revParse(workDir, "HEAD");

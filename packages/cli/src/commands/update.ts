@@ -1,5 +1,13 @@
 import { confirm, isCancel, log } from "@clack/prompts";
-import { type StaticWarning, updateSkill } from "@skilltap/core";
+import {
+  type AgentAdapter,
+  loadConfig,
+  resolveAgent,
+  type SemanticWarning,
+  type StaticWarning,
+  saveConfig,
+  updateSkill,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
   ansi,
@@ -9,7 +17,8 @@ import {
   formatShaChange,
   successLine,
 } from "../ui/format";
-import { printWarnings } from "../ui/scan";
+import { selectAgent } from "../ui/prompts";
+import { printSemanticWarnings, printWarnings } from "../ui/scan";
 
 export default defineCommand({
   meta: {
@@ -32,14 +41,48 @@ export default defineCommand({
       type: "boolean",
       description: "Skip skills with security warnings in diff",
     },
+    semantic: {
+      type: "boolean",
+      description: "Run semantic scan on updated skills",
+      default: false,
+    },
   },
   async run({ args }) {
     const name = args.name as string | undefined;
+
+    // Load config for semantic scan settings
+    const configResult = await loadConfig();
+    const config = configResult.ok ? configResult.value : undefined;
+
+    const runSemantic = args.semantic || config?.security.scan === "semantic";
+
+    // Resolve agent if semantic scanning is enabled
+    let agent: AgentAdapter | undefined;
+    if (runSemantic && config) {
+      const agentResult = await resolveAgent(config, async (detected) => {
+        const chosen = await selectAgent(detected);
+        if (isCancel(chosen)) return null;
+        config.security.agent = (chosen as AgentAdapter).cliName;
+        await saveConfig(config);
+        return chosen as AgentAdapter;
+      });
+      if (agentResult.ok) {
+        agent = agentResult.value ?? undefined;
+        if (!agent) {
+          log.warn("No agent CLI found on PATH. Skipping semantic scan.");
+        }
+      } else {
+        log.warn(agentResult.error.message);
+      }
+    }
 
     const result = await updateSkill({
       name,
       yes: args.yes,
       strict: args.strict,
+      agent,
+      semantic: runSemantic,
+      threshold: config?.security.threshold,
 
       onProgress(skillName, status) {
         if (status === "checking") {
@@ -52,7 +95,7 @@ export default defineCommand({
         // "updated" and "skipped" are logged after the fact with context
       },
 
-      onDiff(skillName, stat, fromSha, toSha) {
+      onDiff(_skillName, stat, fromSha, toSha) {
         const shaChange = formatShaChange(fromSha, toSha);
         const statSummary = formatDiffStatSummary(stat);
         log.info(`${shaChange} ${ansi.dim(statSummary)}`);
@@ -77,6 +120,15 @@ export default defineCommand({
         const answer = await confirm({ message, initialValue: false });
         if (isCancel(answer)) return false;
         return answer as boolean;
+      },
+
+      onSemanticWarnings(warnings: SemanticWarning[], skillName: string) {
+        printSemanticWarnings(warnings, skillName);
+        if (args.strict) {
+          log.warn(
+            `Semantic warnings in ${ansi.bold(skillName)} (strict mode). Skipping.`,
+          );
+        }
       },
     });
 

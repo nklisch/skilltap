@@ -1,6 +1,7 @@
 export const VERSION = "0.1.0";
 
 export * from "./adapters";
+export * from "./agents";
 export * from "./config";
 export * from "./fs";
 export * from "./git";
