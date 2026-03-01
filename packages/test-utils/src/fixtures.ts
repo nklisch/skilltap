@@ -19,34 +19,15 @@ async function copyFixtureDir(fixtureName: string, destDir: string): Promise<voi
   }
 }
 
-export async function createStandaloneSkillRepo(): Promise<FixtureRepo> {
+async function createFixtureRepo(fixtureName: string): Promise<FixtureRepo> {
   const path = await makeTmpDir()
-  await copyFixtureDir("standalone-skill", path)
+  await copyFixtureDir(fixtureName, path)
   await initRepo(path)
   await commitAll(path)
   return { path, cleanup: () => removeTmpDir(path) }
 }
 
-export async function createMultiSkillRepo(): Promise<FixtureRepo> {
-  const path = await makeTmpDir()
-  await copyFixtureDir("multi-skill-repo", path)
-  await initRepo(path)
-  await commitAll(path)
-  return { path, cleanup: () => removeTmpDir(path) }
-}
-
-export async function createSampleTap(): Promise<FixtureRepo> {
-  const path = await makeTmpDir()
-  await copyFixtureDir("sample-tap", path)
-  await initRepo(path)
-  await commitAll(path)
-  return { path, cleanup: () => removeTmpDir(path) }
-}
-
-export async function createMaliciousSkillRepo(): Promise<FixtureRepo> {
-  const path = await makeTmpDir()
-  await copyFixtureDir("malicious-skill", path)
-  await initRepo(path)
-  await commitAll(path)
-  return { path, cleanup: () => removeTmpDir(path) }
-}
+export const createStandaloneSkillRepo = () => createFixtureRepo("standalone-skill")
+export const createMultiSkillRepo = () => createFixtureRepo("multi-skill-repo")
+export const createSampleTap = () => createFixtureRepo("sample-tap")
+export const createMaliciousSkillRepo = () => createFixtureRepo("malicious-skill")

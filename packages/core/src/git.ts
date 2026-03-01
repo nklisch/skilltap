@@ -23,6 +23,18 @@ function extractStderr(e: unknown): string {
   return String(e)
 }
 
+async function wrapGit<T>(
+  fn: () => Promise<T>,
+  msg: string,
+  hint?: string,
+): Promise<Result<T, GitError>> {
+  try {
+    return ok(await fn())
+  } catch (e) {
+    return err(new GitError(`${msg}: ${extractStderr(e)}`, hint ? { hint } : undefined))
+  }
+}
+
 export async function clone(
   url: string,
   dest: string,
@@ -30,30 +42,25 @@ export async function clone(
 ): Promise<Result<void, GitError>> {
   const flags: string[] = ["--depth", String(opts?.depth ?? 1)]
   if (opts?.branch) flags.push("--branch", opts.branch)
-  try {
-    await $`git clone ${flags} -- ${url} ${dest}`.quiet()
-    return ok(undefined)
-  } catch (e) {
-    return err(new GitError(`git clone failed: ${extractStderr(e)}`, { hint: "Check that the URL is correct and you have access." }))
-  }
+  return wrapGit(
+    () => $`git clone ${flags} -- ${url} ${dest}`.quiet().then(() => undefined),
+    "git clone failed",
+    "Check that the URL is correct and you have access.",
+  )
 }
 
 export async function pull(dir: string): Promise<Result<void, GitError>> {
-  try {
-    await $`git -C ${dir} pull`.quiet()
-    return ok(undefined)
-  } catch (e) {
-    return err(new GitError(`git pull failed: ${extractStderr(e)}`))
-  }
+  return wrapGit(
+    () => $`git -C ${dir} pull`.quiet().then(() => undefined),
+    "git pull failed",
+  )
 }
 
 export async function fetch(dir: string): Promise<Result<void, GitError>> {
-  try {
-    await $`git -C ${dir} fetch`.quiet()
-    return ok(undefined)
-  } catch (e) {
-    return err(new GitError(`git fetch failed: ${extractStderr(e)}`))
-  }
+  return wrapGit(
+    () => $`git -C ${dir} fetch`.quiet().then(() => undefined),
+    "git fetch failed",
+  )
 }
 
 export async function diff(
@@ -61,21 +68,17 @@ export async function diff(
   from: string,
   to: string,
 ): Promise<Result<string, GitError>> {
-  try {
-    const result = await $`git -C ${dir} diff ${from}..${to}`.quiet()
-    return ok(result.stdout.toString())
-  } catch (e) {
-    return err(new GitError(`git diff failed: ${extractStderr(e)}`))
-  }
+  return wrapGit(
+    () => $`git -C ${dir} diff ${from}..${to}`.quiet().then((r) => r.stdout.toString()),
+    "git diff failed",
+  )
 }
 
 export async function revParse(dir: string): Promise<Result<string, GitError>> {
-  try {
-    const result = await $`git -C ${dir} rev-parse HEAD`.quiet()
-    return ok(result.stdout.toString().trim())
-  } catch (e) {
-    return err(new GitError(`git rev-parse failed: ${extractStderr(e)}`))
-  }
+  return wrapGit(
+    () => $`git -C ${dir} rev-parse HEAD`.quiet().then((r) => r.stdout.toString().trim()),
+    "git rev-parse failed",
+  )
 }
 
 export async function log(
@@ -85,16 +88,13 @@ export async function log(
   // Use unit separator (\x1f) to avoid conflicts with message content
   const SEP = "\x1f"
   const FORMAT = `%H${SEP}%s${SEP}%ai`
-  try {
+  return wrapGit(async () => {
     const result = await $`git -C ${dir} log -${n} --format=${FORMAT}`.quiet()
     const output = result.stdout.toString().trim()
-    if (!output) return ok([])
-    const entries: LogEntry[] = output.split("\n").map((line) => {
+    if (!output) return []
+    return output.split("\n").map((line) => {
       const [sha, message, date] = line.split(SEP)
       return { sha: sha ?? "", message: message ?? "", date: date ?? "" }
     })
-    return ok(entries)
-  } catch (e) {
-    return err(new GitError(`git log failed: ${extractStderr(e)}`))
-  }
+  }, "git log failed")
 }

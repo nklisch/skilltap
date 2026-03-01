@@ -1,8 +1,8 @@
 import { join } from "node:path"
-import { homedir } from "node:os"
 import { mkdir, symlink, unlink } from "node:fs/promises"
 import { ok, err, UserError } from "./types"
 import type { Result } from "./types"
+import { globalBase } from "./fs"
 
 const AGENT_PATHS: Record<string, string> = {
   "claude-code": ".claude/skills",
@@ -13,10 +13,6 @@ const AGENT_PATHS: Record<string, string> = {
 }
 
 export const VALID_AGENT_IDS: string[] = Object.keys(AGENT_PATHS)
-
-function globalBase(): string {
-  return process.env.SKILLTAP_HOME ?? homedir()
-}
 
 function symlinkPath(
   skillName: string,

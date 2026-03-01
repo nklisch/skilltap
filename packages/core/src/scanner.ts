@@ -77,13 +77,9 @@ function deduplicate(skills: ScannedSkill[]): ScannedSkill[] {
   const byName = new Map<string, ScannedSkill>()
   for (const skill of skills) {
     const existing = byName.get(skill.name)
-    if (!existing) {
-      byName.set(skill.name, skill)
-    } else if (isAgentsSkillsPath(skill.path) && !isAgentsSkillsPath(existing.path)) {
-      // Prefer .agents/skills/ path
+    if (!existing || (isAgentsSkillsPath(skill.path) && !isAgentsSkillsPath(existing.path))) {
       byName.set(skill.name, skill)
     }
-    // else keep existing
   }
   return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))
 }

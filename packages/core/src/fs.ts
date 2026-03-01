@@ -1,6 +1,11 @@
+import { homedir } from "node:os"
 import { $ } from "bun"
 import { ok, err, UserError } from "./types"
 import type { Result } from "./types"
+
+export function globalBase(): string {
+  return process.env.SKILLTAP_HOME ?? homedir()
+}
 
 export async function makeTmpDir(): Promise<Result<string, UserError>> {
   const dir = `/tmp/skilltap-${crypto.randomUUID()}`

@@ -1,10 +1,9 @@
 import { join, dirname, relative } from "node:path"
-import { homedir } from "node:os"
 import { lstat, mkdir } from "node:fs/promises"
 import { $ } from "bun"
 import { ok, err, UserError, GitError, ScanError } from "./types"
 import type { Result } from "./types"
-import { makeTmpDir, removeTmpDir } from "./fs"
+import { makeTmpDir, removeTmpDir, globalBase } from "./fs"
 import { clone, revParse } from "./git"
 import { scan } from "./scanner"
 import { resolveSource } from "./adapters"
@@ -13,6 +12,7 @@ import { createAgentSymlinks, removeAgentSymlinks } from "./symlink"
 import { scanStatic } from "./security"
 import type { StaticWarning } from "./security"
 import type { InstalledSkill } from "./schemas/installed"
+import type { ResolvedSource } from "./schemas/agent"
 import type { ScannedSkill } from "./scanner"
 
 export type InstallOptions = {
@@ -37,10 +37,6 @@ export type RemoveOptions = {
   projectRoot?: string
 }
 
-function globalBase(): string {
-  return process.env.SKILLTAP_HOME ?? homedir()
-}
-
 export async function findProjectRoot(startDir?: string): Promise<string> {
   let dir = startDir ?? process.cwd()
   while (true) {
@@ -60,6 +56,48 @@ function skillInstallDir(name: string, scope: "global" | "project", projectRoot?
 function skillCacheDir(repoUrl: string): string {
   const hash = Bun.hash(repoUrl).toString(16)
   return join(getConfigDir(), "cache", hash)
+}
+
+async function runSecurityScan(
+  selected: ScannedSkill[],
+  onWarnings?: InstallOptions["onWarnings"],
+): Promise<Result<StaticWarning[], ScanError | UserError>> {
+  const allWarnings: StaticWarning[] = []
+  for (const skill of selected) {
+    const scanResult = await scanStatic(skill.path)
+    if (!scanResult.ok) return scanResult
+    if (scanResult.value.length > 0) {
+      allWarnings.push(...scanResult.value)
+      if (onWarnings) {
+        const proceed = await onWarnings(scanResult.value, skill.name)
+        if (!proceed) return err(new UserError("Install cancelled."))
+      }
+    }
+  }
+  return ok(allWarnings)
+}
+
+function makeRecord(
+  skill: ScannedSkill,
+  resolved: ResolvedSource,
+  sha: string,
+  path: string | null,
+  options: InstallOptions,
+  also: string[],
+  now: string,
+): InstalledSkill {
+  return {
+    name: skill.name,
+    repo: resolved.url,
+    ref: options.ref ?? null,
+    sha,
+    scope: options.scope,
+    path,
+    tap: options.tap ?? null,
+    also,
+    installedAt: now,
+    updatedAt: now,
+  }
 }
 
 export async function installSkill(
@@ -111,17 +149,9 @@ export async function installSkill(
 
     // 6.5. Security scan (unless skipped)
     if (!options.skipScan) {
-      for (const skill of selected) {
-        const scanResult = await scanStatic(skill.path)
-        if (!scanResult.ok) return scanResult
-        if (scanResult.value.length > 0) {
-          allWarnings.push(...scanResult.value)
-          if (options.onWarnings) {
-            const proceed = await options.onWarnings(scanResult.value, skill.name)
-            if (!proceed) return err(new UserError("Install cancelled."))
-          }
-        }
-      }
+      const scanResult = await runSecurityScan(selected, options.onWarnings)
+      if (!scanResult.ok) return scanResult
+      allWarnings.push(...scanResult.value)
     }
 
     // 7. Check for already-installed conflicts
@@ -150,19 +180,7 @@ export async function installSkill(
       await $`mv ${tmpDir} ${destDir}`.quiet()
 
       await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot)
-
-      newRecords.push({
-        name: skill.name,
-        repo: resolved.url,
-        ref: ref ?? null,
-        sha,
-        scope: options.scope,
-        path: null,
-        tap: options.tap ?? null,
-        also,
-        installedAt: now,
-        updatedAt: now,
-      })
+      newRecords.push(makeRecord(skill, resolved, sha, null, options, also, now))
     } else {
       // Multi-skill: move clone to cache, copy selected skills to install dirs
       const cacheRoot = skillCacheDir(resolved.url)
@@ -177,19 +195,7 @@ export async function installSkill(
         await $`cp -r ${skillSrcInCache} ${destDir}`.quiet()
 
         await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot)
-
-        newRecords.push({
-          name: skill.name,
-          repo: resolved.url,
-          ref: ref ?? null,
-          sha,
-          scope: options.scope,
-          path: relPath,
-          tap: options.tap ?? null,
-          also,
-          installedAt: now,
-          updatedAt: now,
-        })
+        newRecords.push(makeRecord(skill, resolved, sha, relPath, options, also, now))
       }
     }
 
@@ -216,11 +222,9 @@ export async function removeSkill(
   if (!installedResult.ok) return installedResult
   const installed = installedResult.value
 
-  const idx = installed.skills.findIndex((s) => {
-    if (s.name !== name) return false
-    if (options.scope && s.scope !== options.scope) return false
-    return true
-  })
+  const idx = installed.skills.findIndex(
+    (s) => s.name === name && (!options.scope || s.scope === options.scope),
+  )
 
   if (idx === -1) {
     return err(new UserError(`Skill '${name}' is not installed.`, `Run 'skilltap list' to see installed skills.`))
