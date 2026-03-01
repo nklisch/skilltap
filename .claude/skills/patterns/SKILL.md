@@ -18,13 +18,27 @@ The dense index at `.claude/rules/patterns.md` loads automatically and provides 
 
 ## Available Patterns
 
+### Core Architecture
 - **result-type.md** — `Result<T,E>` discriminated union with `ok()`/`err()` constructors for railway-oriented error handling across all core functions
 - **error-hierarchy.md** — `SkilltapError` base class with typed subclasses (`UserError`, `GitError`, `ScanError`, `NetworkError`) and optional `hint` field
 - **zod-boundary.md** — Zod schema as single source of truth for types + validation; `safeParse` + `z.prettifyError` at every data boundary; `.prefault({})` for nested defaults
-- **source-adapter.md** — `SourceAdapter` strategy pattern: plain object literals with `canHandle()` + `resolve()`, iterated by a priority-ordered resolver
 - **config-io.md** — Config/state load-save algorithm: ensureDirs → exists check → read → parse → Zod validate → Result
-- **bun-shell-git.md** — All git operations via Bun's `` $`git ...`.quiet() `` with `extractStderr()` helper for consistent error extraction
+
+### Adapter Patterns
+- **source-adapter.md** — `SourceAdapter` strategy pattern: plain object literals with `canHandle()` + `resolve()`, iterated by a priority-ordered resolver
+- **agent-adapter-strategy.md** — `AgentAdapter` interface with `detect()`/`invoke()`, factory functions for CLI/custom/Ollama adapters, three-priority resolution via `resolveAgent()`
+
+### Command Patterns
+- **callback-driven-options.md** — Core functions accept typed option objects with async callbacks for decision points; omitting callback = auto-proceed; 10+ callback fields across `InstallOptions`/`UpdateOptions`
+- **policy-composition.md** — `composePolicy(config, flags)` pure function centralizes all config + CLI flag precedence into `EffectivePolicy`; used for early command branching
+- **agent-mode-branching.md** — CLI commands fork into `runAgentMode()` (plain text, auto-accept, hard-fail) vs `runInteractiveMode()` (spinners, prompts, ANSI) based on policy
+
+### Git & Security
+- **bun-shell-git.md** — All git operations via `wrapGit<T>()` wrapper + Bun's `$` template tag with `.quiet()`; `extractStderr()` for consistent error extraction
+- **security-detector-composition.md** — 7 independent detector functions composed in a for-loop inside `scanStatic()`; `StaticWarning` extends `PatternMatch` with a `file` field
+- **install-result-with-warnings.md** — `installSkill()` returns `InstallResult { records, warnings, semanticWarnings }`; optional callbacks for per-skill interception; `skipScan: true` in tests
+
+### Testing
 - **test-fixtures.md** — Fixture repo factories: `createX()` returns `{ path, cleanup }`; copies static fixtures, initializes git repo, commits; always `dot:true` in Bun.Glob.scan
 - **test-result-assertions.md** — Result assertion pattern: `expect(result.ok).toBe(true)` + discriminated union guard; `VALID_*` constants with spread for schema test variants
-- **security-detector-composition.md** — 7 independent `(content: string) => PatternMatch[]` detector functions composed in a for-loop inside `scanStatic()`; `StaticWarning` extends `PatternMatch` with a `file` field
-- **install-result-with-warnings.md** — `installSkill()` returns `InstallResult { records, warnings }`; optional `onWarnings` callback for per-skill interception; `skipScan: true` in tests
+- **cli-subprocess-testing.md** — CLI integration tests use `Bun.spawn` with `SKILLTAP_HOME`/`XDG_CONFIG_HOME` env vars for isolation; `stdin: "pipe"` for non-TTY detection tests
