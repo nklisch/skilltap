@@ -1,4 +1,4 @@
-import { defineCommand } from "citty"
+import { defineCommand } from "citty";
 
 export default defineCommand({
   meta: {
@@ -21,7 +21,5 @@ export default defineCommand({
       description: "Skip skills with security warnings in diff",
     },
   },
-  async run({ args }) {
-    console.log("skilltap update: not yet implemented")
-  },
-})
+  async run(_ctx) {},
+});

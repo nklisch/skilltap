@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { defineCommand, runMain } from "citty"
+import { defineCommand, runMain } from "citty";
 
 const main = defineCommand({
   meta: {
@@ -31,6 +31,6 @@ const main = defineCommand({
       },
     }),
   },
-})
+});
 
-runMain(main)
+runMain(main);

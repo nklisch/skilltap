@@ -1,2 +1,2 @@
-export * from "./patterns"
-export * from "./static"
+export * from "./patterns";
+export * from "./static";

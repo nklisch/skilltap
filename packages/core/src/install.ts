@@ -1,80 +1,88 @@
-import { join, dirname, relative } from "node:path"
-import { lstat, mkdir } from "node:fs/promises"
-import { $ } from "bun"
-import { ok, err, UserError, GitError, ScanError } from "./types"
-import type { Result } from "./types"
-import { makeTmpDir, removeTmpDir, globalBase } from "./fs"
-import { clone, revParse } from "./git"
-import { scan } from "./scanner"
-import { resolveSource } from "./adapters"
-import { loadInstalled, saveInstalled, getConfigDir } from "./config"
-import { createAgentSymlinks, removeAgentSymlinks } from "./symlink"
-import { scanStatic } from "./security"
-import type { StaticWarning } from "./security"
-import type { InstalledSkill } from "./schemas/installed"
-import type { ResolvedSource } from "./schemas/agent"
-import type { ScannedSkill } from "./scanner"
+import { lstat, mkdir } from "node:fs/promises";
+import { dirname, join, relative } from "node:path";
+import { $ } from "bun";
+import { resolveSource } from "./adapters";
+import { getConfigDir, loadInstalled, saveInstalled } from "./config";
+import { globalBase, makeTmpDir, removeTmpDir } from "./fs";
+import { clone, revParse } from "./git";
+import type { ScannedSkill } from "./scanner";
+import { scan } from "./scanner";
+import type { ResolvedSource } from "./schemas/agent";
+import type { InstalledSkill } from "./schemas/installed";
+import type { StaticWarning } from "./security";
+import { scanStatic } from "./security";
+import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
+import type { Result } from "./types";
+import { err, GitError, ok, type ScanError, UserError } from "./types";
 
 export type InstallOptions = {
-  scope: "global" | "project"
-  projectRoot?: string
-  skillNames?: string[]
-  also?: string[]
-  ref?: string
-  tap?: string | null
-  skipScan?: boolean
+  scope: "global" | "project";
+  projectRoot?: string;
+  skillNames?: string[];
+  also?: string[];
+  ref?: string;
+  tap?: string | null;
+  skipScan?: boolean;
   /** Called before placement if warnings are found. Return true to proceed, false to abort. */
-  onWarnings?: (warnings: StaticWarning[], skillName: string) => Promise<boolean>
-}
+  onWarnings?: (
+    warnings: StaticWarning[],
+    skillName: string,
+  ) => Promise<boolean>;
+};
 
 export type InstallResult = {
-  records: InstalledSkill[]
-  warnings: StaticWarning[]
-}
+  records: InstalledSkill[];
+  warnings: StaticWarning[];
+};
 
 export type RemoveOptions = {
-  scope?: "global" | "project" | "linked"
-  projectRoot?: string
-}
+  scope?: "global" | "project" | "linked";
+  projectRoot?: string;
+};
 
 export async function findProjectRoot(startDir?: string): Promise<string> {
-  let dir = startDir ?? process.cwd()
+  let dir = startDir ?? process.cwd();
   while (true) {
-    const stat = await lstat(join(dir, ".git")).catch(() => null)
-    if (stat) return dir
-    const parent = dirname(dir)
-    if (parent === dir) return startDir ?? process.cwd()
-    dir = parent
+    const stat = await lstat(join(dir, ".git")).catch(() => null);
+    if (stat) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return startDir ?? process.cwd();
+    dir = parent;
   }
 }
 
-function skillInstallDir(name: string, scope: "global" | "project", projectRoot?: string): string {
-  const base = scope === "global" ? globalBase() : (projectRoot ?? process.cwd())
-  return join(base, ".agents", "skills", name)
+function skillInstallDir(
+  name: string,
+  scope: "global" | "project",
+  projectRoot?: string,
+): string {
+  const base =
+    scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
+  return join(base, ".agents", "skills", name);
 }
 
 function skillCacheDir(repoUrl: string): string {
-  const hash = Bun.hash(repoUrl).toString(16)
-  return join(getConfigDir(), "cache", hash)
+  const hash = Bun.hash(repoUrl).toString(16);
+  return join(getConfigDir(), "cache", hash);
 }
 
 async function runSecurityScan(
   selected: ScannedSkill[],
   onWarnings?: InstallOptions["onWarnings"],
 ): Promise<Result<StaticWarning[], ScanError | UserError>> {
-  const allWarnings: StaticWarning[] = []
+  const allWarnings: StaticWarning[] = [];
   for (const skill of selected) {
-    const scanResult = await scanStatic(skill.path)
-    if (!scanResult.ok) return scanResult
+    const scanResult = await scanStatic(skill.path);
+    if (!scanResult.ok) return scanResult;
     if (scanResult.value.length > 0) {
-      allWarnings.push(...scanResult.value)
+      allWarnings.push(...scanResult.value);
       if (onWarnings) {
-        const proceed = await onWarnings(scanResult.value, skill.name)
-        if (!proceed) return err(new UserError("Install cancelled."))
+        const proceed = await onWarnings(scanResult.value, skill.name);
+        if (!proceed) return err(new UserError("Install cancelled."));
       }
     }
   }
-  return ok(allWarnings)
+  return ok(allWarnings);
 }
 
 function makeRecord(
@@ -97,120 +105,166 @@ function makeRecord(
     also,
     installedAt: now,
     updatedAt: now,
-  }
+  };
 }
 
 export async function installSkill(
   source: string,
   options: InstallOptions,
 ): Promise<Result<InstallResult, UserError | GitError | ScanError>> {
-  const also = options.also ?? []
-  const ref = options.ref
-  const allWarnings: StaticWarning[] = []
+  const also = options.also ?? [];
+  const ref = options.ref;
+  const allWarnings: StaticWarning[] = [];
 
   // 1. Check already-installed
-  const installedResult = await loadInstalled()
-  if (!installedResult.ok) return installedResult
-  const installed = installedResult.value
+  const installedResult = await loadInstalled();
+  if (!installedResult.ok) return installedResult;
+  const installed = installedResult.value;
 
   // 2. Resolve source
-  const resolvedResult = await resolveSource(source)
-  if (!resolvedResult.ok) return resolvedResult
-  const resolved = resolvedResult.value
+  const resolvedResult = await resolveSource(source);
+  if (!resolvedResult.ok) return resolvedResult;
+  const resolved = resolvedResult.value;
 
   // 3. Create temp dir and clone
-  const tmpResult = await makeTmpDir()
-  if (!tmpResult.ok) return tmpResult
-  const tmpDir = tmpResult.value
+  const tmpResult = await makeTmpDir();
+  if (!tmpResult.ok) return tmpResult;
+  const tmpDir = tmpResult.value;
 
   try {
-    const cloneResult = await clone(resolved.url, tmpDir, { branch: ref, depth: 1 })
-    if (!cloneResult.ok) return cloneResult
+    const cloneResult = await clone(resolved.url, tmpDir, {
+      branch: ref,
+      depth: 1,
+    });
+    if (!cloneResult.ok) return cloneResult;
 
     // 4. Get SHA
-    const shaResult = await revParse(tmpDir)
-    if (!shaResult.ok) return shaResult
-    const sha = shaResult.value
+    const shaResult = await revParse(tmpDir);
+    if (!shaResult.ok) return shaResult;
+    const sha = shaResult.value;
 
     // 5. Scan for skills
-    const scanned = await scan(tmpDir)
+    const scanned = await scan(tmpDir);
     if (scanned.length === 0) {
-      return err(new UserError(`No SKILL.md found in "${source}". This repo doesn't contain any skills.`))
+      return err(
+        new UserError(
+          `No SKILL.md found in "${source}". This repo doesn't contain any skills.`,
+        ),
+      );
     }
 
     // 6. Select skills to install
     const selected: ScannedSkill[] = options.skillNames
       ? options.skillNames.map((name) => {
-          const found = scanned.find((s) => s.name === name)
-          if (!found) throw new UserError(`Skill "${name}" not found in repo. Available: ${scanned.map((s) => s.name).join(", ")}`)
-          return found
+          const found = scanned.find((s) => s.name === name);
+          if (!found)
+            throw new UserError(
+              `Skill "${name}" not found in repo. Available: ${scanned.map((s) => s.name).join(", ")}`,
+            );
+          return found;
         })
-      : scanned
+      : scanned;
 
     // 6.5. Security scan (unless skipped)
     if (!options.skipScan) {
-      const scanResult = await runSecurityScan(selected, options.onWarnings)
-      if (!scanResult.ok) return scanResult
-      allWarnings.push(...scanResult.value)
+      const scanResult = await runSecurityScan(selected, options.onWarnings);
+      if (!scanResult.ok) return scanResult;
+      allWarnings.push(...scanResult.value);
     }
 
     // 7. Check for already-installed conflicts
     for (const skill of selected) {
-      const conflict = installed.skills.find((s) => s.name === skill.name && s.scope === options.scope)
+      const conflict = installed.skills.find(
+        (s) => s.name === skill.name && s.scope === options.scope,
+      );
       if (conflict) {
-        return err(new UserError(
-          `Skill '${skill.name}' is already installed.`,
-          `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
-        ))
+        return err(
+          new UserError(
+            `Skill '${skill.name}' is already installed.`,
+            `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
+          ),
+        );
       }
     }
 
     // 8. Determine standalone vs multi-skill
     // Standalone: single skill at repo root (skill.path === tmpDir)
-    const isStandalone = scanned.length === 1 && scanned[0]!.path === tmpDir
+    const isStandalone = scanned.length === 1 && scanned[0]?.path === tmpDir;
 
     // 9. Place skills
-    const now = new Date().toISOString()
-    const newRecords: InstalledSkill[] = []
+    const now = new Date().toISOString();
+    const newRecords: InstalledSkill[] = [];
 
     if (isStandalone) {
-      const skill = selected[0]!
-      const destDir = skillInstallDir(skill.name, options.scope, options.projectRoot)
-      await mkdir(dirname(destDir), { recursive: true })
-      await $`mv ${tmpDir} ${destDir}`.quiet()
+      // biome-ignore lint/style/noNonNullAssertion: isStandalone guarantees exactly one selected skill
+      const skill = selected[0]!;
+      const destDir = skillInstallDir(
+        skill.name,
+        options.scope,
+        options.projectRoot,
+      );
+      await mkdir(dirname(destDir), { recursive: true });
+      await $`mv ${tmpDir} ${destDir}`.quiet();
 
-      await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot)
-      newRecords.push(makeRecord(skill, resolved, sha, null, options, also, now))
+      await createAgentSymlinks(
+        skill.name,
+        destDir,
+        also,
+        options.scope,
+        options.projectRoot,
+      );
+      newRecords.push(
+        makeRecord(skill, resolved, sha, null, options, also, now),
+      );
     } else {
       // Multi-skill: move clone to cache, copy selected skills to install dirs
-      const cacheRoot = skillCacheDir(resolved.url)
-      await mkdir(dirname(cacheRoot), { recursive: true })
-      await $`mv ${tmpDir} ${cacheRoot}`.quiet()
+      const cacheRoot = skillCacheDir(resolved.url);
+      await mkdir(dirname(cacheRoot), { recursive: true });
+      await $`mv ${tmpDir} ${cacheRoot}`.quiet();
 
       for (const skill of selected) {
-        const relPath = relative(cacheRoot, skill.path.replace(tmpDir, cacheRoot))
-        const skillSrcInCache = skill.path.replace(tmpDir, cacheRoot)
-        const destDir = skillInstallDir(skill.name, options.scope, options.projectRoot)
-        await mkdir(dirname(destDir), { recursive: true })
-        await $`cp -r ${skillSrcInCache} ${destDir}`.quiet()
+        const relPath = relative(
+          cacheRoot,
+          skill.path.replace(tmpDir, cacheRoot),
+        );
+        const skillSrcInCache = skill.path.replace(tmpDir, cacheRoot);
+        const destDir = skillInstallDir(
+          skill.name,
+          options.scope,
+          options.projectRoot,
+        );
+        await mkdir(dirname(destDir), { recursive: true });
+        await $`cp -r ${skillSrcInCache} ${destDir}`.quiet();
 
-        await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot)
-        newRecords.push(makeRecord(skill, resolved, sha, relPath, options, also, now))
+        await createAgentSymlinks(
+          skill.name,
+          destDir,
+          also,
+          options.scope,
+          options.projectRoot,
+        );
+        newRecords.push(
+          makeRecord(skill, resolved, sha, relPath, options, also, now),
+        );
       }
     }
 
     // 10. Save installed.json
-    installed.skills.push(...newRecords)
-    const saveResult = await saveInstalled(installed)
-    if (!saveResult.ok) return saveResult
+    installed.skills.push(...newRecords);
+    const saveResult = await saveInstalled(installed);
+    if (!saveResult.ok) return saveResult;
 
-    return ok({ records: newRecords, warnings: allWarnings })
+    return ok({ records: newRecords, warnings: allWarnings });
   } catch (e) {
-    if (e instanceof UserError) return err(e)
-    if (e instanceof GitError) return err(e)
-    return err(new UserError(`Install failed: ${e instanceof Error ? e.message : String(e)}`))
+    if (e instanceof UserError) return err(e);
+    if (e instanceof GitError) return err(e);
+    return err(
+      new UserError(
+        `Install failed: ${e instanceof Error ? e.message : String(e)}`,
+      ),
+    );
   } finally {
-    await removeTmpDir(tmpDir)
+    await removeTmpDir(tmpDir);
   }
 }
 
@@ -218,41 +272,56 @@ export async function removeSkill(
   name: string,
   options: RemoveOptions = {},
 ): Promise<Result<void, UserError>> {
-  const installedResult = await loadInstalled()
-  if (!installedResult.ok) return installedResult
-  const installed = installedResult.value
+  const installedResult = await loadInstalled();
+  if (!installedResult.ok) return installedResult;
+  const installed = installedResult.value;
 
   const idx = installed.skills.findIndex(
     (s) => s.name === name && (!options.scope || s.scope === options.scope),
-  )
+  );
 
   if (idx === -1) {
-    return err(new UserError(`Skill '${name}' is not installed.`, `Run 'skilltap list' to see installed skills.`))
+    return err(
+      new UserError(
+        `Skill '${name}' is not installed.`,
+        `Run 'skilltap list' to see installed skills.`,
+      ),
+    );
   }
 
-  const record = installed.skills[idx]!
+  // biome-ignore lint/style/noNonNullAssertion: idx was found via findIndex, guaranteed in range
+  const record = installed.skills[idx]!;
 
   // Remove agent symlinks
-  await removeAgentSymlinks(record.name, record.also, record.scope, options.projectRoot)
+  await removeAgentSymlinks(
+    record.name,
+    record.also,
+    record.scope,
+    options.projectRoot,
+  );
 
   // Remove skill directory
-  const installPath = skillInstallDir(record.name, record.scope === "linked" ? "global" : record.scope, options.projectRoot)
-  await $`rm -rf ${installPath}`.quiet()
+  const installPath = skillInstallDir(
+    record.name,
+    record.scope === "linked" ? "global" : record.scope,
+    options.projectRoot,
+  );
+  await $`rm -rf ${installPath}`.quiet();
 
   // Remove cache if this was the last skill from the repo
   if (record.path !== null && record.repo) {
     const remainingFromSameRepo = installed.skills.filter(
       (s, i) => i !== idx && s.repo === record.repo,
-    )
+    );
     if (remainingFromSameRepo.length === 0) {
-      const cacheRoot = skillCacheDir(record.repo)
-      await $`rm -rf ${cacheRoot}`.quiet()
+      const cacheRoot = skillCacheDir(record.repo);
+      await $`rm -rf ${cacheRoot}`.quiet();
     }
   }
 
-  installed.skills.splice(idx, 1)
-  const saveResult = await saveInstalled(installed)
-  if (!saveResult.ok) return saveResult
+  installed.skills.splice(idx, 1);
+  const saveResult = await saveInstalled(installed);
+  if (!saveResult.ok) return saveResult;
 
-  return ok(undefined)
+  return ok(undefined);
 }

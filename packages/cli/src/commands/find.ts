@@ -1,4 +1,4 @@
-import { defineCommand } from "citty"
+import { defineCommand } from "citty";
 
 export default defineCommand({
   meta: {
@@ -8,7 +8,8 @@ export default defineCommand({
   args: {
     query: {
       type: "positional",
-      description: "Search term (fuzzy matched against name, description, tags)",
+      description:
+        "Search term (fuzzy matched against name, description, tags)",
     },
     interactive: {
       type: "boolean",
@@ -22,7 +23,5 @@ export default defineCommand({
       default: false,
     },
   },
-  async run({ args }) {
-    console.log("skilltap find: not yet implemented")
-  },
-})
+  async run(_ctx) {},
+});

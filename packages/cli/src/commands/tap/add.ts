@@ -1,4 +1,4 @@
-import { defineCommand } from "citty"
+import { defineCommand } from "citty";
 
 export default defineCommand({
   meta: {
@@ -17,7 +17,5 @@ export default defineCommand({
       required: true,
     },
   },
-  async run({ args }) {
-    console.log("skilltap tap add: not yet implemented")
-  },
-})
+  async run(_ctx) {},
+});

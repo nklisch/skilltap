@@ -1,4 +1,4 @@
-import { defineCommand } from "citty"
+import { defineCommand } from "citty";
 
 export default defineCommand({
   meta: {
@@ -13,10 +13,7 @@ export default defineCommand({
     },
   },
   subCommands: {
-    "agent-mode": () =>
-      import("./config/agent-mode").then((m) => m.default),
+    "agent-mode": () => import("./config/agent-mode").then((m) => m.default),
   },
-  async run({ args }) {
-    console.log("skilltap config: not yet implemented")
-  },
-})
+  async run(_ctx) {},
+});

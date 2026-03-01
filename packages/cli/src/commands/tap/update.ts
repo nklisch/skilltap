@@ -1,4 +1,4 @@
-import { defineCommand } from "citty"
+import { defineCommand } from "citty";
 
 export default defineCommand({
   meta: {
@@ -11,7 +11,5 @@ export default defineCommand({
       description: "Specific tap to update (omit to update all)",
     },
   },
-  async run({ args }) {
-    console.log("skilltap tap update: not yet implemented")
-  },
-})
+  async run(_ctx) {},
+});

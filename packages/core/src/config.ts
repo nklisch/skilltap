@@ -1,25 +1,25 @@
-import { parse, stringify } from "smol-toml"
-import { mkdir } from "node:fs/promises"
-import { join } from "node:path"
-import { homedir } from "node:os"
-import { z } from "zod/v4"
-import { ok, err, UserError, type Result } from "./types"
-import { ConfigSchema, type Config } from "./schemas/config"
-import { InstalledJsonSchema, type InstalledJson } from "./schemas/installed"
+import { mkdir } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { parse, stringify } from "smol-toml";
+import { z } from "zod/v4";
+import { type Config, ConfigSchema } from "./schemas/config";
+import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
+import { err, ok, type Result, UserError } from "./types";
 
 export function getConfigDir(): string {
-  const xdg = process.env.XDG_CONFIG_HOME
-  return xdg ? join(xdg, "skilltap") : join(homedir(), ".config", "skilltap")
+  const xdg = process.env.XDG_CONFIG_HOME;
+  return xdg ? join(xdg, "skilltap") : join(homedir(), ".config", "skilltap");
 }
 
 export async function ensureDirs(): Promise<Result<void>> {
-  const dir = getConfigDir()
+  const dir = getConfigDir();
   try {
-    await mkdir(join(dir, "taps"), { recursive: true })
-    await mkdir(join(dir, "cache"), { recursive: true })
-    return ok(undefined)
+    await mkdir(join(dir, "taps"), { recursive: true });
+    await mkdir(join(dir, "cache"), { recursive: true });
+    return ok(undefined);
   } catch (e) {
-    return err(new UserError(`Failed to create config directories: ${e}`))
+    return err(new UserError(`Failed to create config directories: ${e}`));
   }
 }
 
@@ -82,105 +82,111 @@ scope = "project"
 # [[taps]]
 # name = "home"
 # url = "https://gitea.example.com/nathan/my-skills-tap"
-`
+`;
 
 export async function loadConfig(): Promise<Result<Config>> {
-  const dir = getConfigDir()
-  const file = join(dir, "config.toml")
+  const dir = getConfigDir();
+  const file = join(dir, "config.toml");
 
-  const dirsResult = await ensureDirs()
-  if (!dirsResult.ok) return dirsResult
+  const dirsResult = await ensureDirs();
+  if (!dirsResult.ok) return dirsResult;
 
-  const f = Bun.file(file)
-  const exists = await f.exists()
+  const f = Bun.file(file);
+  const exists = await f.exists();
 
   if (!exists) {
     try {
-      await Bun.write(file, DEFAULT_CONFIG_TEMPLATE)
+      await Bun.write(file, DEFAULT_CONFIG_TEMPLATE);
     } catch (e) {
-      return err(new UserError(`Failed to write default config: ${e}`))
+      return err(new UserError(`Failed to write default config: ${e}`));
     }
-    return ok(ConfigSchema.parse({}))
+    return ok(ConfigSchema.parse({}));
   }
 
-  let text: string
+  let text: string;
   try {
-    text = await f.text()
+    text = await f.text();
   } catch (e) {
-    return err(new UserError(`Failed to read config.toml: ${e}`))
+    return err(new UserError(`Failed to read config.toml: ${e}`));
   }
 
-  let raw: unknown
+  let raw: unknown;
   try {
-    raw = parse(text)
+    raw = parse(text);
   } catch (e) {
-    return err(new UserError(`Invalid TOML in config.toml: ${e}`))
+    return err(new UserError(`Invalid TOML in config.toml: ${e}`));
   }
 
-  const result = ConfigSchema.safeParse(raw)
+  const result = ConfigSchema.safeParse(raw);
   if (!result.success) {
-    return err(new UserError(`Invalid config.toml: ${z.prettifyError(result.error)}`))
+    return err(
+      new UserError(`Invalid config.toml: ${z.prettifyError(result.error)}`),
+    );
   }
 
-  return ok(result.data)
+  return ok(result.data);
 }
 
 export async function saveConfig(config: Config): Promise<Result<void>> {
-  const dir = getConfigDir()
-  const file = join(dir, "config.toml")
+  const dir = getConfigDir();
+  const file = join(dir, "config.toml");
 
-  const dirsResult = await ensureDirs()
-  if (!dirsResult.ok) return dirsResult
+  const dirsResult = await ensureDirs();
+  if (!dirsResult.ok) return dirsResult;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const text = stringify(config as any)
-    await Bun.write(file, text)
-    return ok(undefined)
+    // biome-ignore lint/suspicious/noExplicitAny: smol-toml stringify types don't accept Config directly
+    const text = stringify(config as any);
+    await Bun.write(file, text);
+    return ok(undefined);
   } catch (e) {
-    return err(new UserError(`Failed to save config: ${e}`))
+    return err(new UserError(`Failed to save config: ${e}`));
   }
 }
 
-const DEFAULT_INSTALLED: InstalledJson = { version: 1, skills: [] }
+const _DEFAULT_INSTALLED: InstalledJson = { version: 1, skills: [] };
 
 export async function loadInstalled(): Promise<Result<InstalledJson>> {
-  const dir = getConfigDir()
-  const file = join(dir, "installed.json")
+  const dir = getConfigDir();
+  const file = join(dir, "installed.json");
 
-  const f = Bun.file(file)
-  const exists = await f.exists()
+  const f = Bun.file(file);
+  const exists = await f.exists();
 
   if (!exists) {
-    return ok({ version: 1 as const, skills: [] })
+    return ok({ version: 1 as const, skills: [] });
   }
 
-  let raw: unknown
+  let raw: unknown;
   try {
-    raw = await f.json()
+    raw = await f.json();
   } catch (e) {
-    return err(new UserError(`Invalid JSON in installed.json: ${e}`))
+    return err(new UserError(`Invalid JSON in installed.json: ${e}`));
   }
 
-  const result = InstalledJsonSchema.safeParse(raw)
+  const result = InstalledJsonSchema.safeParse(raw);
   if (!result.success) {
-    return err(new UserError(`Invalid installed.json: ${z.prettifyError(result.error)}`))
+    return err(
+      new UserError(`Invalid installed.json: ${z.prettifyError(result.error)}`),
+    );
   }
 
-  return ok(result.data)
+  return ok(result.data);
 }
 
-export async function saveInstalled(installed: InstalledJson): Promise<Result<void>> {
-  const dir = getConfigDir()
-  const file = join(dir, "installed.json")
+export async function saveInstalled(
+  installed: InstalledJson,
+): Promise<Result<void>> {
+  const dir = getConfigDir();
+  const file = join(dir, "installed.json");
 
-  const dirsResult = await ensureDirs()
-  if (!dirsResult.ok) return dirsResult
+  const dirsResult = await ensureDirs();
+  if (!dirsResult.ok) return dirsResult;
 
   try {
-    await Bun.write(file, JSON.stringify(installed, null, 2))
-    return ok(undefined)
+    await Bun.write(file, JSON.stringify(installed, null, 2));
+    return ok(undefined);
   } catch (e) {
-    return err(new UserError(`Failed to save installed.json: ${e}`))
+    return err(new UserError(`Failed to save installed.json: ${e}`));
   }
 }
