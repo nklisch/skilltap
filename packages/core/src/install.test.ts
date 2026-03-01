@@ -9,7 +9,7 @@ import {
   removeTmpDir,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled } from "./config";
+import { loadInstalled, saveInstalled } from "./config";
 import { installSkill } from "./install";
 import { findProjectRoot } from "./paths";
 import { removeSkill } from "./remove";
@@ -366,6 +366,89 @@ describe("installSkill — security scanning", () => {
     } finally {
       await repo.cleanup();
     }
+  });
+});
+
+describe("idempotency", () => {
+  test("second install does not add duplicate record to installed.json", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      const installedResult = await loadInstalled();
+      expect(installedResult.ok).toBe(true);
+      if (!installedResult.ok) return;
+      expect(installedResult.value.skills).toHaveLength(1);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("reinstall after remove produces clean state with one record", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      await removeSkill("standalone-skill");
+      const result = await installSkill(repo.path, { scope: "global", skipScan: true });
+      expect(result.ok).toBe(true);
+
+      const installedResult = await loadInstalled();
+      expect(installedResult.ok).toBe(true);
+      if (!installedResult.ok) return;
+      expect(installedResult.value.skills).toHaveLength(1);
+      expect(installedResult.value.skills[0]?.name).toBe("standalone-skill");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("installed.json state integrity", () => {
+  test("truncated JSON returns error without crashing", async () => {
+    const { mkdir } = await import("node:fs/promises");
+    const dir = join(configDir, "skilltap");
+    await mkdir(dir, { recursive: true });
+    await Bun.write(
+      join(dir, "installed.json"),
+      '{"version": 1, "skills": [{"name"',
+    );
+
+    const result = await loadInstalled();
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toBeTruthy();
+  });
+
+  test("saveInstalled with 100-skill array succeeds and reloads correctly", async () => {
+    const baseSkill = {
+      name: "",
+      description: "A test skill",
+      repo: "https://github.com/example/skill.git",
+      ref: "main",
+      sha: "abc123def456",
+      scope: "global" as const,
+      path: null,
+      tap: null,
+      also: [],
+      installedAt: "2025-01-01T00:00:00.000Z",
+      updatedAt: "2025-01-01T00:00:00.000Z",
+    };
+
+    const skills = Array.from({ length: 100 }, (_, i) => ({
+      ...baseSkill,
+      name: `skill-${i.toString().padStart(3, "0")}`,
+    }));
+
+    const saveResult = await saveInstalled({ version: 1, skills });
+    expect(saveResult.ok).toBe(true);
+
+    const reloadResult = await loadInstalled();
+    expect(reloadResult.ok).toBe(true);
+    if (!reloadResult.ok) return;
+    expect(reloadResult.value.skills).toHaveLength(100);
+    expect(reloadResult.value.skills[0]?.name).toBe("skill-000");
+    expect(reloadResult.value.skills[99]?.name).toBe("skill-099");
   });
 });
 

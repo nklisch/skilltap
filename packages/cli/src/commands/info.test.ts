@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { installSkill } from "@skilltap/core";
+import { installSkill, linkSkill } from "@skilltap/core";
 import {
   commitAll,
   createStandaloneSkillRepo,
@@ -114,6 +114,25 @@ describe("info — installed skill", () => {
     } finally {
       await repo.cleanup();
     }
+  });
+});
+
+describe("info — linked skill with deleted source", () => {
+  test("shows skill info without crash when symlink target no longer exists", async () => {
+    const repo = await createStandaloneSkillRepo();
+    // Link the skill (scope: global, no also)
+    await linkSkill(repo.path, { scope: "global" });
+    // Delete the source — the install symlink becomes dangling
+    await removeTmpDir(repo.path);
+
+    const { exitCode, stdout } = await runInfo(
+      ["standalone-skill"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("standalone-skill");
+    expect(stdout).toContain("linked");
   });
 });
 

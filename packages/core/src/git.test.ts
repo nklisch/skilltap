@@ -1,5 +1,7 @@
+import { lstat } from "node:fs/promises";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStandaloneSkillRepo } from "@skilltap/test-utils";
+import { $ } from "bun";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import { checkGitInstalled, clone, diff, fetch, log, pull, revParse } from "./git";
 
@@ -39,19 +41,22 @@ describe("clone", () => {
     expect(await skillMd.exists()).toBe(true);
   });
 
-  test("returns GitError for invalid URL", async () => {
+  test("returns GitError for invalid URL and leaves no tmp dir behind", async () => {
     const destResult = await makeTmpDir();
     expect(destResult.ok).toBe(true);
     if (!destResult.ok) return;
     dest = destResult.value;
 
+    const clonePath = `${dest}/clone`;
     const result = await clone(
       "https://invalid.invalid/no/such/repo.git",
-      `${dest}/clone`,
+      clonePath,
     );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("git clone failed");
+    // git does not create the destination directory on network failure
+    expect(await lstat(clonePath).catch(() => null)).toBeNull();
   });
 });
 
@@ -158,6 +163,23 @@ describe("pull and fetch", () => {
     await clone(repo.path, `${dest}/clone`);
     const result = await fetch(`${dest}/clone`);
     expect(result.ok).toBe(true);
+  });
+
+  test("fetch returns GitError when remote is unreachable", async () => {
+    repo = await createStandaloneSkillRepo();
+    const destResult = await makeTmpDir();
+    expect(destResult.ok).toBe(true);
+    if (!destResult.ok) return;
+    dest = destResult.value;
+
+    await clone(repo.path, `${dest}/clone`);
+    // Point remote at an unreachable URL
+    await $`git -C ${dest}/clone remote set-url origin https://invalid.invalid/no-such.git`.quiet();
+
+    const result = await fetch(`${dest}/clone`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("git fetch failed");
   });
 });
 

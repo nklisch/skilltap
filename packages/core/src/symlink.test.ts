@@ -101,6 +101,27 @@ describe("createAgentSymlinks", () => {
     }
   });
 
+  test("returns UserError when symlink already exists at path", async () => {
+    const targetDir = await makeTmpDir();
+    const anotherTarget = await makeTmpDir();
+    try {
+      await createAgentSymlinks("my-skill", targetDir, ["claude-code"], "global");
+      // Second call with same agent — symlink already exists
+      const result = await createAgentSymlinks(
+        "my-skill",
+        anotherTarget,
+        ["claude-code"],
+        "global",
+      );
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("Failed to create symlink");
+    } finally {
+      await removeTmpDir(targetDir);
+      await removeTmpDir(anotherTarget);
+    }
+  });
+
   test("creates symlinks for multiple agents in one call", async () => {
     const targetDir = await makeTmpDir();
     try {
@@ -123,6 +144,22 @@ describe("createAgentSymlinks", () => {
 });
 
 describe("removeAgentSymlinks", () => {
+  test("succeeds with dangling symlink (target deleted, link exists)", async () => {
+    const targetDir = await makeTmpDir();
+    await createAgentSymlinks("my-skill", targetDir, ["claude-code"], "global");
+    // Delete the target — the symlink becomes dangling
+    await removeTmpDir(targetDir);
+
+    const claudePath = join(homeDir, ".claude", "skills", "my-skill");
+    // lstat on the symlink itself (not the target) should succeed — dangling link still has an inode
+    expect(await lstat(claudePath).catch(() => null)).not.toBeNull();
+
+    const result = await removeAgentSymlinks("my-skill", ["claude-code"], "global");
+    expect(result.ok).toBe(true);
+    // Link inode is gone
+    expect(await lstat(claudePath).catch(() => null)).toBeNull();
+  });
+
   test("removes existing symlinks and silently skips missing ones", async () => {
     const targetDir = await makeTmpDir();
     try {
