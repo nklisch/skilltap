@@ -172,6 +172,9 @@ export async function initTap(name: string): Promise<Result<void, UserError>> {
   try {
     await $`mkdir -p ${dir}`.quiet();
     await $`git -C ${dir} init`.quiet();
+    // Set local git config so commit works without global config (e.g. CI)
+    await $`git -C ${dir} config user.email "skilltap@localhost"`.quiet();
+    await $`git -C ${dir} config user.name "skilltap"`.quiet();
     const tapJson = JSON.stringify(
       { name, description: "", skills: [] },
       null,
