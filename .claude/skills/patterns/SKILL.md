@@ -26,3 +26,5 @@ The dense index at `.claude/rules/patterns.md` loads automatically and provides 
 - **bun-shell-git.md** — All git operations via Bun's `` $`git ...`.quiet() `` with `extractStderr()` helper for consistent error extraction
 - **test-fixtures.md** — Fixture repo factories: `createX()` returns `{ path, cleanup }`; copies static fixtures, initializes git repo, commits; always `dot:true` in Bun.Glob.scan
 - **test-result-assertions.md** — Result assertion pattern: `expect(result.ok).toBe(true)` + discriminated union guard; `VALID_*` constants with spread for schema test variants
+- **security-detector-composition.md** — 7 independent `(content: string) => PatternMatch[]` detector functions composed in a for-loop inside `scanStatic()`; `StaticWarning` extends `PatternMatch` with a `file` field
+- **install-result-with-warnings.md** — `installSkill()` returns `InstallResult { records, warnings }`; optional `onWarnings` callback for per-skill interception; `skipScan: true` in tests

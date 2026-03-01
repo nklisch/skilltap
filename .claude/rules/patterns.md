@@ -8,3 +8,5 @@
 - **Bun shell git**: All git via `` $`git ...`.quiet() `` + `extractStderr(e)` in catch; stdout captured via `result.stdout.toString().trim()` → [patterns/bun-shell-git.md]
 - **Fixture repo factory**: `createX()` returns `{ path, cleanup }` — copy static fixture dir, `initRepo`, `commitAll`; always `dot:true` in Bun.Glob.scan → [patterns/test-fixtures.md]
 - **Result test assertions**: `expect(result.ok).toBe(true)` then `if (!result.ok) return` guard; `VALID_*` constants with spread for schema variants → [patterns/test-result-assertions.md]
+- **Security detector composition**: 7 independent `(content: string) => PatternMatch[]` functions composed in a for-loop in `scanStatic()`; add new detectors by appending to the `detectors` array → [patterns/security-detector-composition.md]
+- **InstallResult with warnings**: `installSkill()` returns `{ records, warnings }`; `onWarnings` callback for per-skill interactive interception; `skipScan: true` for tests → [patterns/install-result-with-warnings.md]
