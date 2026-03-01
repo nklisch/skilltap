@@ -5,7 +5,7 @@ import { resolveSource } from "./adapters";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import { makeTmpDir, removeTmpDir } from "./fs";
-import { clone, revParse } from "./git";
+import { checkGitInstalled, clone, revParse } from "./git";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import type { ScannedSkill } from "./scanner";
 import { scan } from "./scanner";
@@ -211,6 +211,12 @@ export async function installSkill(
   const resolvedResult = await resolveSource(effectiveSource);
   if (!resolvedResult.ok) return resolvedResult;
   const resolved = resolvedResult.value;
+
+  // 2.5. Check git is installed (skip for local paths)
+  if (resolved.adapter !== "local") {
+    const gitCheck = await checkGitInstalled();
+    if (!gitCheck.ok) return gitCheck;
+  }
 
   // 3. Create temp dir and clone
   const tmpResult = await makeTmpDir();

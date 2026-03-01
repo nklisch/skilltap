@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { createStandaloneSkillRepo } from "@skilltap/test-utils";
 import { makeTmpDir, removeTmpDir } from "./fs";
-import { clone, diff, fetch, log, pull, revParse } from "./git";
+import { checkGitInstalled, clone, diff, fetch, log, pull, revParse } from "./git";
+
+describe("checkGitInstalled", () => {
+  test("returns ok when git is on PATH", async () => {
+    const result = await checkGitInstalled();
+    expect(result.ok).toBe(true);
+  });
+});
 
 describe("clone", () => {
   let repo: { path: string; cleanup: () => Promise<void> } | null = null;

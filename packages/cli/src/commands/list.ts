@@ -48,7 +48,7 @@ export default defineCommand({
     if (skills.length === 0) {
       process.stdout.write("No skills installed.\n");
       process.stdout.write(
-        "Run 'skilltap install <source>' to install a skill.\n",
+        "Run 'skilltap install <source>' to get started.\n",
       );
       return;
     }
@@ -67,9 +67,9 @@ export default defineCommand({
       );
 
       // Fixed column widths for Name, Ref, Source — description gets the rest
-      const NAME_W = 20;
-      const REF_W = 10;
-      const SRC_W = 24;
+      const NAME_W = width < 60 ? 15 : 20;
+      const REF_W = width < 60 ? 8 : 10;
+      const SRC_W = width < 60 ? 16 : 24;
       const PADDING = 2; // between each col
       const INDENT = 2; // leading indent added by table()
       const fixed = NAME_W + REF_W + SRC_W + PADDING * 3 + INDENT;

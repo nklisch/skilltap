@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { $ } from "bun";
 import { z } from "zod/v4";
 import { getConfigDir, loadConfig, saveConfig } from "./config";
-import { clone, pull } from "./git";
+import { checkGitInstalled, clone, pull } from "./git";
 import type { Tap, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
 import { err, type GitError, ok, type Result, UserError } from "./types";
@@ -14,21 +14,26 @@ function tapDir(name: string): string {
   return join(getConfigDir(), "taps", name);
 }
 
-async function loadTapJson(dir: string): Promise<Result<Tap, UserError>> {
+async function loadTapJson(
+  dir: string,
+  name?: string,
+): Promise<Result<Tap, UserError>> {
+  const label = name ? `tap '${name}'` : dir;
   const file = Bun.file(join(dir, "tap.json"));
   if (!(await file.exists())) {
-    return err(new UserError(`tap.json not found in ${dir}`));
+    return err(new UserError(`tap.json not found in ${label}`));
   }
   let raw: unknown;
   try {
     raw = await file.json();
   } catch (e) {
-    return err(new UserError(`Invalid JSON in tap.json: ${e}`));
+    return err(new UserError(`Invalid JSON in tap.json in ${label}: ${e}`));
   }
   const result = TapSchema.safeParse(raw);
   if (!result.success) {
+    const details = z.prettifyError(result.error);
     return err(
-      new UserError(`Invalid tap.json: ${z.prettifyError(result.error)}`),
+      new UserError(`Invalid tap.json in ${label}: ${details}`),
     );
   }
   return ok(result.data);
@@ -51,11 +56,14 @@ export async function addTap(
     );
   }
 
+  const gitCheck = await checkGitInstalled();
+  if (!gitCheck.ok) return gitCheck;
+
   const dest = tapDir(name);
   const cloneResult = await clone(url, dest, { depth: 1 });
   if (!cloneResult.ok) return cloneResult;
 
-  const tapResult = await loadTapJson(dest);
+  const tapResult = await loadTapJson(dest, name);
   if (!tapResult.ok) {
     await rm(dest, { recursive: true, force: true });
     return tapResult;
@@ -119,7 +127,7 @@ export async function updateTap(
     const pullResult = await pull(dir);
     if (!pullResult.ok) return pullResult;
 
-    const tapResult = await loadTapJson(dir);
+    const tapResult = await loadTapJson(dir, tap.name);
     counts[tap.name] = tapResult.ok ? tapResult.value.skills.length : 0;
   }
 
@@ -134,7 +142,7 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
   const entries: TapEntry[] = [];
   for (const tap of config.taps) {
     const dir = tapDir(tap.name);
-    const tapResult = await loadTapJson(dir);
+    const tapResult = await loadTapJson(dir, tap.name);
     if (!tapResult.ok) {
       // Graceful degradation: skip invalid taps
       continue;

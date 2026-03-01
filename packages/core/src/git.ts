@@ -36,6 +36,14 @@ async function wrapGit<T>(
   }
 }
 
+export async function checkGitInstalled(): Promise<Result<void, GitError>> {
+  return wrapGit(
+    () => $`git --version`.quiet().then(() => undefined),
+    "git is not installed or not on PATH",
+    "Install git: https://git-scm.com/downloads",
+  );
+}
+
 export async function clone(
   url: string,
   dest: string,
@@ -43,11 +51,28 @@ export async function clone(
 ): Promise<Result<void, GitError>> {
   const flags: string[] = ["--depth", String(opts?.depth ?? 1)];
   if (opts?.branch) flags.push("--branch", opts.branch);
-  return wrapGit(
-    () => $`git clone ${flags} -- ${url} ${dest}`.quiet().then(() => undefined),
-    "git clone failed",
-    "Check that the URL is correct and you have access.",
-  );
+  try {
+    await $`git clone ${flags} -- ${url} ${dest}`.quiet();
+    return ok(undefined);
+  } catch (e) {
+    const stderr = extractStderr(e);
+    if (stderr.includes("Authentication failed")) {
+      return err(
+        new GitError(
+          `Authentication failed for '${url}'. Check your git credentials or SSH keys.`,
+        ),
+      );
+    }
+    if (stderr.includes("not found") || stderr.includes("does not exist")) {
+      return err(new GitError(`Repository not found: '${url}'.`));
+    }
+    return err(
+      new GitError(
+        `git clone failed: ${stderr}`,
+        "Check that the URL is correct and you have access.",
+      ),
+    );
+  }
 }
 
 export async function pull(dir: string): Promise<Result<void, GitError>> {
