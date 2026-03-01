@@ -70,9 +70,19 @@ Skills are directories containing a `SKILL.md` file. skilltap installs them to `
 
 ## Security
 
-Every install runs a static scan checking for invisible Unicode, hidden HTML/CSS, markdown injection, obfuscated code, suspicious URLs, dangerous shell patterns, and tag injection. An optional semantic scan (powered by your local AI agent) provides deeper analysis of skill intent.
+Every install and update runs a two-layer security scan before anything lands on disk.
 
-Use `--skip-scan` to bypass scanning, `--strict` to block installation on any warning, or `--semantic` to enable the semantic scan.
+**Static scan** (always on by default): checks for invisible Unicode, hidden HTML/CSS, markdown injection, obfuscated code, suspicious URLs, dangerous shell patterns, and tag injection.
+
+**Semantic scan** (optional, `--semantic`): sends skill content to your local AI agent in bounded 2000-char chunks. The agent is invoked with tools disabled (`--no-tools`), so even a skill that tricks the reviewer can't cause it to take actions. Content is wrapped in a randomly-suffixed untrusted block so the agent can't be hijacked by the skill it's reviewing. Closing tags that could escape the wrapper are detected and escaped before the chunk is sent. Up to 4 chunks are evaluated in parallel; agent failures are fail-open (scan continues).
+
+```bash
+skilltap install my-skill --semantic   # enable semantic scan
+skilltap install my-skill --strict     # block on any warning
+skilltap install my-skill --skip-scan  # bypass scanning (trusted sources)
+```
+
+See [docs/SECURITY.md](docs/SECURITY.md) for the full threat model, detector reference, and configuration options.
 
 ## Agent mode
 

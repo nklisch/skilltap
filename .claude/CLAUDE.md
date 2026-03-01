@@ -7,11 +7,12 @@ skilltap — CLI tool for installing agent skills (SKILL.md) from any git host. 
 ## Key Docs
 
 Read these before making architectural decisions:
-- SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases
-- ARCH.md — module boundaries, tech decisions, data flow
-- UX.md — CLI reference, flag combos, prompt flows
-- ROADMAP.md — 11-phase implementation plan with dependency graph
-- VISION.md — motivation, design principles
+- docs/SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases
+- docs/ARCH.md — module boundaries, tech decisions, data flow
+- docs/UX.md — CLI reference, flag combos, prompt flows
+- docs/ROADMAP.md — 11-phase implementation plan with dependency graph
+- docs/VISION.md — motivation, design principles
+- docs/SECURITY.md — two-layer security model, threat model, chunking strategy
 
 ## Tech Stack
 
