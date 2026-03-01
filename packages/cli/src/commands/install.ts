@@ -1,19 +1,10 @@
 import { intro, isCancel, outro, spinner } from "@clack/prompts";
 import type { ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
-import {
-  findProjectRoot,
-  installSkill,
-  loadConfig,
-  VALID_AGENT_IDS,
-} from "@skilltap/core";
+import { installSkill, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
-import {
-  confirmInstall,
-  selectScope,
-  selectSkills,
-  selectTap,
-} from "../ui/prompts";
+import { confirmInstall, selectSkills, selectTap } from "../ui/prompts";
+import { parseAlsoFlag, resolveScope } from "../ui/resolve";
 import { printWarnings } from "../ui/scan";
 
 export default defineCommand({
@@ -96,52 +87,11 @@ export default defineCommand({
 
     const skipScan = args["skip-scan"];
 
-    // 3. Parse --also (CLI flag takes precedence over config default)
-    const also: string[] = [];
-    if (args.also) {
-      const agents = args.also
-        .split(",")
-        .map((a: string) => a.trim())
-        .filter(Boolean);
-      for (const agent of agents) {
-        if (!VALID_AGENT_IDS.includes(agent)) {
-          errorLine(
-            `Unknown agent: "${agent}"`,
-            `Valid agents: ${VALID_AGENT_IDS.join(", ")}`,
-          );
-          process.exit(1);
-        }
-        also.push(agent);
-      }
-    } else {
-      also.push(...config.defaults.also);
-    }
+    const also = parseAlsoFlag(args.also, config);
 
-    // 4. intro
     intro("skilltap");
 
-    // 5. Scope resolution
-    let scope: "global" | "project";
-    let projectRoot: string | undefined;
-
-    if (args.project) {
-      scope = "project";
-      projectRoot = await findProjectRoot();
-    } else if (args.global) {
-      scope = "global";
-    } else if (config.defaults.scope) {
-      scope = config.defaults.scope as "global" | "project";
-      if (scope === "project") {
-        projectRoot = await findProjectRoot();
-      }
-    } else {
-      const chosen = await selectScope();
-      if (isCancel(chosen)) process.exit(2);
-      scope = chosen as "global" | "project";
-      if (scope === "project") {
-        projectRoot = await findProjectRoot();
-      }
-    }
+    const { scope, projectRoot } = await resolveScope(args, config);
 
     // 6. Build spinner
     const s = spinner();

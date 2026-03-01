@@ -1,9 +1,8 @@
 import { resolve } from "node:path";
-import { isCancel } from "@clack/prompts";
-import { findProjectRoot, linkSkill, VALID_AGENT_IDS } from "@skilltap/core";
+import { linkSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
-import { selectScope } from "../ui/prompts";
+import { parseAlsoFlag, resolveScope } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -36,42 +35,8 @@ export default defineCommand({
     const rawPath = args.path.replace(/^~/, process.env.HOME ?? "~");
     const localPath = resolve(process.cwd(), rawPath);
 
-    // Determine scope
-    let scope: "global" | "project";
-    let projectRoot: string | undefined;
-
-    if (args.project) {
-      scope = "project";
-      projectRoot = await findProjectRoot();
-    } else if (args.global) {
-      scope = "global";
-    } else {
-      const chosen = await selectScope();
-      if (isCancel(chosen)) process.exit(2);
-      scope = chosen as "global" | "project";
-      if (scope === "project") {
-        projectRoot = await findProjectRoot();
-      }
-    }
-
-    // Parse --also
-    const also: string[] = [];
-    if (args.also) {
-      const agents = args.also
-        .split(",")
-        .map((a: string) => a.trim())
-        .filter(Boolean);
-      for (const agent of agents) {
-        if (!VALID_AGENT_IDS.includes(agent)) {
-          errorLine(
-            `Unknown agent: "${agent}"`,
-            `Valid agents: ${VALID_AGENT_IDS.join(", ")}`,
-          );
-          process.exit(1);
-        }
-        also.push(agent);
-      }
-    }
+    const { scope, projectRoot } = await resolveScope(args);
+    const also = parseAlsoFlag(args.also);
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
     if (!result.ok) {

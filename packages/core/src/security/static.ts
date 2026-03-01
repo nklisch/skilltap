@@ -71,6 +71,83 @@ function hasBinaryMagic(bytes: Uint8Array): string | null {
   return null;
 }
 
+/** Validate and scan a single file for security issues. */
+async function scanSingleFile(
+  relPath: string,
+  dir: string,
+  warnings: StaticWarning[],
+): Promise<void> {
+  const filePath = join(dir, relPath);
+  const ext = extname(relPath).toLowerCase();
+
+  if (FLAGGED_EXTENSIONS.has(ext)) {
+    warnings.push({
+      file: relPath,
+      line: 0,
+      category: "Unexpected file type",
+      raw: `File type ${ext} is unexpected in a skill`,
+    });
+    return;
+  }
+
+  const bunFile = Bun.file(filePath);
+  const fileSize = bunFile.size;
+
+  if (fileSize > MAX_FILE_SIZE) {
+    warnings.push({
+      file: relPath,
+      line: 0,
+      category: "Large file",
+      raw: `File size ${fileSize} bytes exceeds ${MAX_FILE_SIZE} bytes`,
+    });
+  }
+
+  const bytes = new Uint8Array(await bunFile.arrayBuffer());
+  const binaryType = hasBinaryMagic(bytes);
+  if (binaryType) {
+    warnings.push({
+      file: relPath,
+      line: 0,
+      category: "Binary file",
+      raw: `Detected ${binaryType} signature`,
+    });
+    return;
+  }
+
+  let content: string;
+  try {
+    content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    warnings.push({
+      file: relPath,
+      line: 0,
+      category: "Binary file",
+      raw: "File contains invalid UTF-8 sequences",
+    });
+    return;
+  }
+
+  if (ext === ".js" || ext === ".ts") {
+    const singleLongLine = content
+      .split("\n")
+      .some((line) => line.length > 500);
+    if (singleLongLine) {
+      warnings.push({
+        file: relPath,
+        line: 0,
+        category: "Minified code",
+        raw: "Single line exceeds 500 characters",
+      });
+    }
+  }
+
+  for (const detect of DETECTORS) {
+    for (const m of detect(content)) {
+      warnings.push({ file: relPath, ...m });
+    }
+  }
+}
+
 export async function scanStatic(
   dir: string,
   opts?: { maxSize?: number },
@@ -113,83 +190,7 @@ export async function scanStatic(
     }
 
     for (const relPath of relPaths) {
-      const filePath = join(dir, relPath);
-      const ext = extname(relPath).toLowerCase();
-
-      // Flag unexpected file types by extension
-      if (FLAGGED_EXTENSIONS.has(ext)) {
-        warnings.push({
-          file: relPath,
-          line: 0,
-          category: "Unexpected file type",
-          raw: `File type ${ext} is unexpected in a skill`,
-        });
-        continue;
-      }
-
-      const bunFile = Bun.file(filePath);
-      const fileSize = bunFile.size;
-
-      // File size check
-      if (fileSize > MAX_FILE_SIZE) {
-        warnings.push({
-          file: relPath,
-          line: 0,
-          category: "Large file",
-          raw: `File size ${fileSize} bytes exceeds ${MAX_FILE_SIZE} bytes`,
-        });
-      }
-
-      // Read file bytes for binary detection
-      const bytes = new Uint8Array(await bunFile.arrayBuffer());
-      const binaryType = hasBinaryMagic(bytes);
-      if (binaryType) {
-        warnings.push({
-          file: relPath,
-          line: 0,
-          category: "Binary file",
-          raw: `Detected ${binaryType} signature`,
-        });
-        continue;
-      }
-
-      // Decode as UTF-8 for text analysis
-      let content: string;
-      try {
-        content = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-      } catch {
-        // Not valid UTF-8 — treat as binary
-        warnings.push({
-          file: relPath,
-          line: 0,
-          category: "Binary file",
-          raw: "File contains invalid UTF-8 sequences",
-        });
-        continue;
-      }
-
-      // Minified JS/TS check
-      if (ext === ".js" || ext === ".ts") {
-        const singleLongLine = content
-          .split("\n")
-          .some((line) => line.length > 500);
-        if (singleLongLine) {
-          warnings.push({
-            file: relPath,
-            line: 0,
-            category: "Minified code",
-            raw: "Single line exceeds 500 characters",
-          });
-        }
-      }
-
-      // Run all pattern detectors
-      for (const detect of DETECTORS) {
-        const matches = detect(content);
-        for (const m of matches) {
-          warnings.push({ file: relPath, ...m });
-        }
-      }
+      await scanSingleFile(relPath, dir, warnings);
     }
 
     return ok(warnings);

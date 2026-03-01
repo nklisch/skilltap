@@ -1,12 +1,6 @@
 import { intro, isCancel, outro, spinner } from "@clack/prompts";
 import type { ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
-import {
-  findProjectRoot,
-  installSkill,
-  loadConfig,
-  loadTaps,
-  searchTaps,
-} from "@skilltap/core";
+import { installSkill, loadConfig, loadTaps, searchTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
   ansi,
@@ -16,12 +10,8 @@ import {
   termWidth,
   truncate,
 } from "../ui/format";
-import {
-  confirmInstall,
-  selectScope,
-  selectSkills,
-  selectTap,
-} from "../ui/prompts";
+import { confirmInstall, selectSkills, selectTap } from "../ui/prompts";
+import { resolveScope } from "../ui/resolve";
 import { printWarnings } from "../ui/scan";
 
 export default defineCommand({
@@ -139,19 +129,7 @@ async function runInteractive(skills: TapEntry[]): Promise<void> {
   }
   const config = configResult.value;
 
-  // Scope resolution
-  let scope: "global" | "project";
-  let projectRoot: string | undefined;
-
-  if (config.defaults.scope) {
-    scope = config.defaults.scope as "global" | "project";
-    if (scope === "project") projectRoot = await findProjectRoot();
-  } else {
-    const chosen_scope = await selectScope();
-    if (isCancel(chosen_scope)) process.exit(2);
-    scope = chosen_scope as "global" | "project";
-    if (scope === "project") projectRoot = await findProjectRoot();
-  }
+  const { scope, projectRoot } = await resolveScope({}, config);
 
   const also = config.defaults.also ?? [];
 

@@ -10,7 +10,9 @@ import {
 } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { loadInstalled } from "./config";
-import { findProjectRoot, installSkill, removeSkill } from "./install";
+import { installSkill } from "./install";
+import { findProjectRoot } from "./paths";
+import { removeSkill } from "./remove";
 
 type Env = {
   SKILLTAP_HOME?: string;
