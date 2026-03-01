@@ -16,9 +16,9 @@
         "skilltap": "./src/index.ts",
       },
       "dependencies": {
-        "@clack/prompts": "*",
+        "@clack/prompts": "^1.0.1",
         "@skilltap/core": "workspace:*",
-        "citty": "*",
+        "citty": "^0.2.1",
       },
       "devDependencies": {
         "@skilltap/test-utils": "workspace:*",
@@ -30,8 +30,8 @@
       "dependencies": {
         "anti-trojan-source": "^1.8.1",
         "out-of-character": "^2.1.0",
-        "smol-toml": "*",
-        "zod": "*",
+        "smol-toml": "^1.6.0",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@skilltap/test-utils": "workspace:*",

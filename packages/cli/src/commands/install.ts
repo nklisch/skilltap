@@ -315,7 +315,8 @@ async function runInteractiveMode(
   s.stop("Done.");
 
   for (const record of result.value.records) {
-    successLine(`Installed ${record.name}`);
+    const installDir = skillInstallDir(record.name, scope, projectRoot);
+    successLine(`Installed ${record.name} → ${installDir}`);
   }
 
   outro("Complete!");

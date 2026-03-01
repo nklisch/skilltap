@@ -15,6 +15,7 @@ skilltap
 ├── unlink <name>            Remove a linked skill
 ├── info <name>              Show skill details
 ├── config                   Interactive setup wizard
+│   └── agent-mode           Toggle agent mode (human-only)
 └── tap                      Manage taps
     ├── add <name> <url>     Add a tap
     ├── remove <name>        Remove a tap
@@ -364,6 +365,7 @@ skilltap update [name] [flags]
 ```
 --yes              Auto-accept clean updates (warnings still prompt)
 --strict           Skip skills with security warnings in diff
+--semantic         Force Layer 2 semantic scan on diff
 ```
 
 ### Examples
@@ -479,6 +481,7 @@ skilltap unlink <name>
 
 ```
 --project          Link to project scope instead of global
+--global           Link to global scope (default, explicit for scripts)
 --also <agent>     Also symlink to agent dir. Repeatable.
 ```
 
@@ -590,12 +593,19 @@ Cloning tap...
 ### tap remove
 
 ```
-skilltap tap remove <name>
+skilltap tap remove <name> [flags]
+```
+
+```
+--yes              Skip confirmation
 ```
 
 ```
 $ skilltap tap remove community
 Remove tap 'community'? Installed skills from this tap will not be affected. (y/N): y
+✓ Removed tap 'community'
+
+$ skilltap tap remove community --yes
 ✓ Removed tap 'community'
 ```
 
@@ -646,10 +656,7 @@ $ skilltap tap init my-tap
   ├── tap.json
   └── .git/
 
-Add skills with:
-  skilltap tap add-skill my-tap https://example.com/repo.git
-
-Then push:
+Edit tap.json to add skills, then push:
   cd my-tap && git remote add origin <url> && git push
 ```
 

@@ -1,14 +1,18 @@
 {
   "name": "skilltap",
   "version": "0.1.0",
+  "description": "Install agent skills from any git host",
   "type": "module",
+  "license": "MIT",
+  "keywords": ["cli", "agent", "skills", "llm", "ai", "git"],
+  "files": ["src/"],
   "bin": {
     "skilltap": "./src/index.ts"
   },
   "dependencies": {
     "@skilltap/core": "workspace:*",
-    "@clack/prompts": "*",
-    "citty": "*"
+    "@clack/prompts": "^1.0.1",
+    "citty": "^0.2.1"
   },
   "devDependencies": {
     "@skilltap/test-utils": "workspace:*"

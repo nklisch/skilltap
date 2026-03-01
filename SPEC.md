@@ -1010,6 +1010,7 @@ Validated at read/write with `InstalledJsonSchema` (Zod 4). If the file doesn't 
 ```typescript
 const InstalledSkillSchema = z.object({
   name: z.string(),
+  description: z.string().default(""),  // populated from SKILL.md frontmatter
   repo: z.string().nullable(),          // null for linked skills
   ref: z.string().nullable(),           // null for linked
   sha: z.string().nullable(),           // null for linked
@@ -1197,13 +1198,13 @@ Features:
 - Tap management (add, remove, list, update, init)
 - Fuzzy search across taps (`find`)
 - GitHub shorthand (`owner/repo`)
+- `bun build --compile` standalone binary
 
 ### v0.2 — Adapters + Polish
 
 - npm adapter (`npm:@scope/name`)
 - Local path adapter improvements
 - HTTP registry adapter
-- `bun build --compile` standalone binary
 - Shell completions (bash, zsh, fish)
 - `skilltap doctor` — check setup (git, agents, config)
 

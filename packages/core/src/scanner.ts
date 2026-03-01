@@ -140,8 +140,9 @@ export async function scan(dir: string): Promise<ScannedSkill[]> {
   const agentSpecificPatterns = [
     ".claude/skills/*/SKILL.md",
     ".cursor/skills/*/SKILL.md",
+    ".codex/skills/*/SKILL.md",
+    ".gemini/skills/*/SKILL.md",
     ".windsurf/skills/*/SKILL.md",
-    ".copilot/skills/*/SKILL.md",
   ];
   const agentSpecificPaths = (
     await Promise.all(

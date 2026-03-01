@@ -314,6 +314,6 @@ That's the gap skilltap fills.
 
 See [SPEC.md — Version Scope](./SPEC.md#version-scope) for the detailed roadmap. In brief:
 
-- **v0.1** — Core install/remove/update/link + taps + security scanning (static + semantic)
-- **v0.2** — npm adapter, HTTP registry, standalone binary, shell completions
+- **v0.1** — Core install/remove/update/link + taps + security scanning (static + semantic) + standalone binary
+- **v0.2** — npm adapter, HTTP registry, shell completions
 - **v0.3** — Community trust signals, `skilltap publish`, skill templates

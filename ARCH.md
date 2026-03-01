@@ -36,37 +36,48 @@ skilltap/
 ├── packages/
 │   ├── core/                   # Library — all business logic
 │   │   ├── src/
-│   │   │   ├── git.ts          # Git operations (clone, pull, fetch, diff)
+│   │   │   ├── types.ts        # Result<T,E>, ok(), err(), error hierarchy
+│   │   │   ├── fs.ts           # Global base path helpers, temp dir management
+│   │   │   ├── paths.ts        # skillInstallDir, skillCacheDir, findProjectRoot
+│   │   │   ├── git.ts          # Git operations (clone, pull, fetch, diff, diffStat)
 │   │   │   ├── scanner.ts      # Skill discovery (find SKILL.md in repos)
-│   │   │   ├── security/
-│   │   │   │   ├── static.ts   # Layer 1 — pattern matching
-│   │   │   │   ├── semantic.ts # Layer 2 — agent-based evaluation
-│   │   │   │   └── patterns.ts # Detection patterns (Unicode, URLs, etc.)
 │   │   │   ├── config.ts       # Config read/write (TOML)
-│   │   │   ├── install.ts      # Install/remove/update logic
-│   │   │   ├── taps.ts         # Tap management
+│   │   │   ├── install.ts      # Install orchestration
+│   │   │   ├── remove.ts       # Remove skill logic
+│   │   │   ├── update.ts       # Update skill logic (fetch, diff, pull)
+│   │   │   ├── link.ts         # Link/symlink local skill
+│   │   │   ├── taps.ts         # Tap management (add, remove, update, search)
 │   │   │   ├── symlink.ts      # Agent-specific symlink creation
+│   │   │   ├── policy.ts       # composePolicy() — config + CLI flag composition
 │   │   │   ├── schemas/
 │   │   │   │   ├── config.ts   # config.toml Zod schema
 │   │   │   │   ├── installed.ts # installed.json Zod schema
 │   │   │   │   ├── tap.ts      # tap.json Zod schema
 │   │   │   │   ├── skill.ts    # SKILL.md frontmatter Zod schema
-│   │   │   │   └── agent.ts    # Agent response Zod schema
+│   │   │   │   ├── agent.ts    # Agent response + ResolvedSource schemas
+│   │   │   │   └── index.ts    # Barrel export
 │   │   │   ├── adapters/
 │   │   │   │   ├── types.ts    # SourceAdapter interface
 │   │   │   │   ├── git.ts      # Git URL adapter
 │   │   │   │   ├── github.ts   # GitHub shorthand adapter
-│   │   │   │   ├── npm.ts      # npm tarball adapter (future)
-│   │   │   │   └── local.ts    # Local path adapter
+│   │   │   │   ├── local.ts    # Local path adapter
+│   │   │   │   ├── resolve.ts  # resolveSource() orchestrator
+│   │   │   │   └── index.ts    # Barrel export
 │   │   │   ├── agents/
 │   │   │   │   ├── types.ts    # AgentAdapter interface
-│   │   │   │   ├── detect.ts   # Auto-detect installed agents
-│   │   │   │   ├── claude.ts   # Claude Code adapter
-│   │   │   │   ├── gemini.ts   # Gemini CLI adapter
-│   │   │   │   ├── codex.ts    # Codex CLI adapter
-│   │   │   │   ├── opencode.ts # OpenCode adapter
-│   │   │   │   └── ollama.ts   # Ollama adapter (local models)
-│   │   │   └── types.ts        # Shared types
+│   │   │   │   ├── detect.ts   # Auto-detect installed agents, resolveAgent()
+│   │   │   │   ├── adapters.ts # All CLI adapters (claude, gemini, codex, opencode)
+│   │   │   │   ├── factory.ts  # createCliAdapter() shared factory
+│   │   │   │   ├── ollama.ts   # Ollama adapter (local models)
+│   │   │   │   ├── custom.ts   # Custom binary adapter
+│   │   │   │   ├── extract.ts  # extractAgentResponse() JSON pipeline
+│   │   │   │   └── index.ts    # Barrel export
+│   │   │   ├── security/
+│   │   │   │   ├── patterns.ts # 7 detection functions (Unicode, URLs, etc.)
+│   │   │   │   ├── static.ts   # Layer 1 — scanStatic(), scanDiff()
+│   │   │   │   ├── semantic.ts # Layer 2 — scanSemantic(), chunking
+│   │   │   │   └── index.ts    # Barrel export
+│   │   │   └── index.ts        # Package barrel export
 │   │   ├── package.json
 │   │   └── tsconfig.json
 │   ├── cli/                    # CLI entry point — commands and UI
@@ -81,8 +92,9 @@ skilltap/
 │   │   │   │   ├── link.ts
 │   │   │   │   ├── unlink.ts
 │   │   │   │   ├── info.ts
+│   │   │   │   ├── config.ts         # Routes to config/index.ts
 │   │   │   │   ├── config/
-│   │   │   │   │   ├── index.ts      # skilltap config wizard
+│   │   │   │   │   ├── index.ts      # skilltap config wizard (was config.ts)
 │   │   │   │   │   └── agent-mode.ts # skilltap config agent-mode wizard
 │   │   │   │   └── tap/
 │   │   │   │       ├── add.ts
@@ -91,10 +103,12 @@ skilltap/
 │   │   │   │       ├── update.ts
 │   │   │   │       └── init.ts
 │   │   │   └── ui/
-│   │   │       ├── format.ts   # Output formatting (tables, colors)
+│   │   │       ├── format.ts   # Output formatting (tables, colors, ansi)
 │   │   │       ├── agent-out.ts # Agent mode plain text output
 │   │   │       ├── prompts.ts  # @clack/prompts wrappers
-│   │   │       └── scan.ts     # Security scan result display
+│   │   │       ├── scan.ts     # Security scan result display
+│   │   │       ├── policy.ts   # loadPolicyOrExit() — CLI adapter for composePolicy
+│   │   │       └── resolve.ts  # resolveScope, parseAlsoFlag, resolveAgent helpers
 │   │   ├── package.json        # Published as "skilltap" on npm
 │   │   └── tsconfig.json
 │   └── test-utils/             # Shared test fixtures and helpers
@@ -120,7 +134,8 @@ skilltap/
 ├── tsconfig.json               # Base TypeScript config
 ├── VISION.md
 ├── ARCH.md
-└── SPEC.md
+├── SPEC.md
+└── UX.md
 ```
 
 ### Package Dependencies
@@ -161,7 +176,7 @@ core → test-utils (dev)
 
 **config.ts** — Reads/writes `~/.config/skilltap/config.toml` and `~/.config/skilltap/installed.json`. Ensures directories exist on first use.
 
-**install.ts** — Orchestrates the install/remove/update flows. Coordinates git, scanner, security, config, and symlink modules.
+**install.ts** — Orchestrates the install flow. Coordinates git, scanner, security, config, and symlink modules. **remove.ts**, **update.ts**, and **link.ts** handle their respective flows.
 
 **taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps.
 
@@ -236,7 +251,7 @@ Adapters use standard TypeScript interfaces (not Zod) since they define behavior
 interface SourceAdapter {
   name: string;
   canHandle(source: string): boolean;
-  resolve(source: string): Promise<ResolvedSource>;  // validated by Zod
+  resolve(source: string): Promise<Result<ResolvedSource, UserError>>;
 }
 
 // Agent adapter — invokes an LLM for semantic scanning
@@ -244,7 +259,7 @@ interface AgentAdapter {
   name: string;
   cliName: string;   // binary name on PATH
   detect(): Promise<boolean>;
-  invoke(prompt: string): Promise<AgentResponse>;    // validated by Zod
+  invoke(prompt: string): Promise<Result<AgentResponse, ScanError>>;
 }
 ```
 
@@ -261,8 +276,8 @@ interface AgentAdapter {
 | Agent | Binary | Invocation |
 |-------|--------|------------|
 | Claude Code | `claude` | `claude --print -p '<prompt>' --no-tools --output-format json` |
-| Gemini CLI | `gemini` | `gemini --prompt '<prompt>'` |
-| Codex CLI | `codex` | `codex --prompt '<prompt>'` |
+| Gemini CLI | `gemini` | `echo '<prompt>' \| gemini --non-interactive` |
+| Codex CLI | `codex` | `codex --prompt '<prompt>' --no-tools` |
 | OpenCode | `opencode` | `opencode --prompt '<prompt>'` |
 | Ollama | `ollama` | `ollama run <model> '<prompt>'` |
 
@@ -385,7 +400,7 @@ See [SPEC.md — Error Handling](./SPEC.md#error-handling) for exit codes, error
 
 **Integration tests** — Git operations with real repos (test fixtures initialized via `test-utils`). Tap resolution, multi-skill scanning, symlink creation.
 
-**CLI tests** — Snapshot tests for command output formatting. Mock core functions, verify terminal output.
+**CLI tests** — Full subprocess tests via `Bun.spawn` with `SKILLTAP_HOME`/`XDG_CONFIG_HOME` env vars. Tests run the actual CLI binary end-to-end.
 
 **Security scanner tests** — Known-malicious patterns from the SkillJect research and ClawHavoc incident. Regression suite to ensure detection of:
 - Invisible Unicode in SKILL.md

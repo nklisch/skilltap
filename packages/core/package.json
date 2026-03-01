@@ -1,15 +1,19 @@
 {
   "name": "@skilltap/core",
   "version": "0.1.0",
+  "description": "Core library for skilltap — agent skill management",
   "type": "module",
+  "license": "MIT",
+  "keywords": ["agent", "skills", "llm", "ai"],
+  "files": ["src/"],
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
     "anti-trojan-source": "^1.8.1",
     "out-of-character": "^2.1.0",
-    "smol-toml": "*",
-    "zod": "*"
+    "smol-toml": "^1.6.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@skilltap/test-utils": "workspace:*"
