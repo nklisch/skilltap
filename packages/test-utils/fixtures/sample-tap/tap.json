@@ -1,0 +1,12 @@
+{
+  "name": "test-tap",
+  "description": "A sample tap for integration tests.",
+  "skills": [
+    {
+      "name": "standalone-skill",
+      "description": "A standalone test skill.",
+      "repo": "https://github.com/example/standalone-skill",
+      "tags": ["test", "example"]
+    }
+  ]
+}
