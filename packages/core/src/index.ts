@@ -9,4 +9,5 @@ export * from "./scanner";
 export * from "./schemas";
 export * from "./security";
 export * from "./symlink";
+export * from "./taps";
 export * from "./types";

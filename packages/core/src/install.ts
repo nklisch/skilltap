@@ -12,6 +12,8 @@ import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanStatic } from "./security";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
+import type { TapEntry } from "./taps";
+import { loadTaps } from "./taps";
 import type { Result } from "./types";
 import { err, GitError, ok, type ScanError, UserError } from "./types";
 
@@ -30,6 +32,8 @@ export type InstallOptions = {
   ) => Promise<boolean>;
   /** Called after scan, before placement. Returns skill names to install. If omitted, installs all. */
   onSelectSkills?: (skills: ScannedSkill[]) => Promise<string[]>;
+  /** Called when source resolves to multiple taps. Return chosen entry or null to cancel. */
+  onSelectTap?: (matches: TapEntry[]) => Promise<TapEntry | null>;
 };
 
 export type LinkOptions = {
@@ -47,6 +51,23 @@ export type RemoveOptions = {
   scope?: "global" | "project" | "linked";
   projectRoot?: string;
 };
+
+function looksLikeTapName(source: string): boolean {
+  if (
+    source.startsWith("./") ||
+    source.startsWith("/") ||
+    source.startsWith("~/")
+  )
+    return false;
+  if (/^(https?:\/\/|git@|ssh:\/\/|github:)/.test(source)) return false;
+  // github shorthand: owner/repo — has a slash, handled by github adapter
+  // name@ref: may contain @, handled here; owner/repo@ref: has slash so not a tap name
+  const name = source.includes("@")
+    ? source.slice(0, source.lastIndexOf("@"))
+    : source;
+  if (name.includes("/")) return false;
+  return true;
+}
 
 export async function findProjectRoot(startDir?: string): Promise<string> {
   let dir = startDir ?? process.cwd();
@@ -101,16 +122,18 @@ function makeRecord(
   options: InstallOptions,
   also: string[],
   now: string,
+  effectiveTap: string | null,
+  effectiveRef: string | undefined,
 ): InstalledSkill {
   return {
     name: skill.name,
     description: skill.description,
     repo: resolved.url,
-    ref: options.ref ?? null,
+    ref: effectiveRef ?? null,
     sha,
     scope: options.scope,
     path,
-    tap: options.tap ?? null,
+    tap: effectiveTap,
     also,
     installedAt: now,
     updatedAt: now,
@@ -122,7 +145,6 @@ export async function installSkill(
   options: InstallOptions,
 ): Promise<Result<InstallResult, UserError | GitError | ScanError>> {
   const also = options.also ?? [];
-  const ref = options.ref;
   const allWarnings: StaticWarning[] = [];
 
   // 1. Check already-installed
@@ -130,8 +152,61 @@ export async function installSkill(
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
+  // 1.5. Tap pre-resolution: if source looks like a tap name (or name@ref), resolve via taps
+  let effectiveSource = source;
+  let effectiveTap = options.tap ?? null;
+  let effectiveRef = options.ref;
+
+  if (looksLikeTapName(source)) {
+    let tapName = source;
+    if (source.includes("@")) {
+      const atIdx = source.lastIndexOf("@");
+      tapName = source.slice(0, atIdx);
+      if (!effectiveRef) effectiveRef = source.slice(atIdx + 1);
+    }
+
+    const tapsResult = await loadTaps();
+    if (!tapsResult.ok) return tapsResult;
+    const allSkills = tapsResult.value;
+
+    if (allSkills.length === 0) {
+      return err(
+        new UserError(
+          `Skill '${tapName}' not found — no taps configured.`,
+          `Add a tap with 'skilltap tap add <name> <url>'`,
+        ),
+      );
+    }
+
+    const matches = allSkills.filter((e) => e.skill.name === tapName);
+    if (matches.length === 0) {
+      return err(
+        new UserError(
+          `Skill '${tapName}' not found in any configured tap.`,
+          `Run 'skilltap find ${tapName}' to search, or check tap names with 'skilltap tap list'`,
+        ),
+      );
+    }
+
+    let chosen: TapEntry;
+    if (matches.length === 1) {
+      // biome-ignore lint/style/noNonNullAssertion: matches.length === 1 guarantees index 0 exists
+      chosen = matches[0]!;
+    } else if (options.onSelectTap) {
+      const selected = await options.onSelectTap(matches);
+      if (!selected) return err(new UserError("Install cancelled."));
+      chosen = selected;
+    } else {
+      // biome-ignore lint/style/noNonNullAssertion: matches.length > 0 guaranteed (checked above)
+      chosen = matches[0]!;
+    }
+
+    effectiveSource = chosen.skill.repo;
+    effectiveTap = chosen.tapName;
+  }
+
   // 2. Resolve source
-  const resolvedResult = await resolveSource(source);
+  const resolvedResult = await resolveSource(effectiveSource);
   if (!resolvedResult.ok) return resolvedResult;
   const resolved = resolvedResult.value;
 
@@ -142,7 +217,7 @@ export async function installSkill(
 
   try {
     const cloneResult = await clone(resolved.url, tmpDir, {
-      branch: ref,
+      branch: effectiveRef,
       depth: 1,
     });
     if (!cloneResult.ok) return cloneResult;
@@ -227,7 +302,17 @@ export async function installSkill(
         options.projectRoot,
       );
       newRecords.push(
-        makeRecord(skill, resolved, sha, null, options, also, now),
+        makeRecord(
+          skill,
+          resolved,
+          sha,
+          null,
+          options,
+          also,
+          now,
+          effectiveTap,
+          effectiveRef,
+        ),
       );
     } else {
       // Multi-skill: move clone to cache, copy selected skills to install dirs
@@ -257,7 +342,17 @@ export async function installSkill(
           options.projectRoot,
         );
         newRecords.push(
-          makeRecord(skill, resolved, sha, relPath, options, also, now),
+          makeRecord(
+            skill,
+            resolved,
+            sha,
+            relPath,
+            options,
+            also,
+            now,
+            effectiveTap,
+            effectiveRef,
+          ),
         );
       }
     }

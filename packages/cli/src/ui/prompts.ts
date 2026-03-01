@@ -1,11 +1,5 @@
-import {
-  cancel,
-  confirm,
-  isCancel,
-  multiselect,
-  select,
-} from "@clack/prompts";
-import type { ScannedSkill } from "@skilltap/core";
+import { cancel, confirm, isCancel, multiselect, select } from "@clack/prompts";
+import type { ScannedSkill, TapEntry } from "@skilltap/core";
 
 export async function selectSkills(
   skills: ScannedSkill[],
@@ -59,9 +53,26 @@ export async function confirmInstall(
   return result as boolean;
 }
 
-export async function confirmRemove(
-  name: string,
-): Promise<boolean | symbol> {
+export async function selectTap(
+  matches: TapEntry[],
+): Promise<TapEntry | symbol> {
+  const result = await select({
+    message: "Multiple taps contain this skill. Which one?",
+    options: matches.map((entry, i) => ({
+      value: i,
+      label: `[${entry.tapName}] ${entry.skill.name}`,
+      hint: entry.skill.description,
+    })),
+  });
+  if (isCancel(result)) {
+    cancel("Operation cancelled.");
+    return result as symbol;
+  }
+  // biome-ignore lint/style/noNonNullAssertion: result is a valid index from the select options
+  return matches[result as number]!;
+}
+
+export async function confirmRemove(name: string): Promise<boolean | symbol> {
   const result = await confirm({
     message: `Remove ${name}?`,
     initialValue: false,

@@ -1,4 +1,7 @@
+import { intro, outro, spinner } from "@clack/prompts";
+import { updateTap } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { ansi, errorLine, successLine } from "../../ui/format";
 
 export default defineCommand({
   meta: {
@@ -11,5 +14,27 @@ export default defineCommand({
       description: "Specific tap to update (omit to update all)",
     },
   },
-  async run(_ctx) {},
+  async run({ args }) {
+    intro("skilltap");
+
+    const s = spinner();
+    const tapName = args.name as string | undefined;
+    s.start(tapName ? `Updating ${tapName}...` : "Updating all taps...");
+
+    const result = await updateTap(tapName);
+
+    if (!result.ok) {
+      s.stop("Failed.", 1);
+      errorLine(result.error.message, result.error.hint);
+      process.exit(1);
+    }
+
+    s.stop("Done.");
+
+    for (const [name, count] of Object.entries(result.value)) {
+      successLine(`${ansi.bold(name)} — ${count} skills`);
+    }
+
+    outro("Complete!");
+  },
 });

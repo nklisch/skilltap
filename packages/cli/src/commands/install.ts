@@ -1,14 +1,19 @@
-import { defineCommand } from "citty";
 import { intro, isCancel, outro, spinner } from "@clack/prompts";
-import type { ScannedSkill, StaticWarning } from "@skilltap/core";
+import type { ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
 import {
   findProjectRoot,
   installSkill,
   loadConfig,
   VALID_AGENT_IDS,
 } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { errorLine, successLine } from "../ui/format";
-import { confirmInstall, selectScope, selectSkills } from "../ui/prompts";
+import {
+  confirmInstall,
+  selectScope,
+  selectSkills,
+  selectTap,
+} from "../ui/prompts";
 import { printWarnings } from "../ui/scan";
 
 export default defineCommand({
@@ -19,8 +24,7 @@ export default defineCommand({
   args: {
     source: {
       type: "positional",
-      description:
-        "Git URL, github:owner/repo, tap skill name, or local path",
+      description: "Git URL, github:owner/repo, tap skill name, or local path",
       required: true,
     },
     project: {
@@ -77,9 +81,7 @@ export default defineCommand({
 
     // 2. Security policy composition
     if (args["skip-scan"] && config.security.require_scan) {
-      errorLine(
-        "--skip-scan is blocked by security.require_scan = true",
-      );
+      errorLine("--skip-scan is blocked by security.require_scan = true");
       process.exit(1);
     }
 
@@ -183,6 +185,17 @@ export default defineCommand({
       return selected as string[];
     };
 
+    // 7c. onSelectTap callback — when multiple taps have the same skill
+    const selectTapCallback = async (
+      matches: TapEntry[],
+    ): Promise<TapEntry | null> => {
+      s.stop();
+      const chosen = await selectTap(matches);
+      if (isCancel(chosen)) process.exit(2);
+      s.start("Installing...");
+      return chosen as TapEntry;
+    };
+
     // 8. Run install
     const result = await installSkill(args.source, {
       scope,
@@ -192,6 +205,7 @@ export default defineCommand({
       skipScan,
       onWarnings: skipScan ? undefined : warningsCallback,
       onSelectSkills: selectSkillsCallback,
+      onSelectTap: selectTapCallback,
     });
 
     if (!result.ok) {
