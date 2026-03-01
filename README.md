@@ -4,21 +4,24 @@
 
 ## Install
 
-**Standalone binary** (recommended):
 ```bash
-# Download the latest release binary for your platform
-chmod +x skilltap && mv skilltap /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/nklisch/skilltap/main/install.sh | sh
 ```
 
-**Via bunx** (requires [Bun](https://bun.sh)):
+Installs to `~/.local/bin/skilltap`. Override the install directory:
+
 ```bash
-bunx skilltap --help
+SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/nklisch/skilltap/main/install.sh | sh
 ```
 
-**Via npx** (requires Bun on PATH — the package uses `#!/usr/bin/env bun`):
+**Alternatives:**
+
 ```bash
-npx skilltap --help
+bunx skilltap --help   # requires Bun
+npx skilltap --help    # requires Bun on PATH
 ```
+
+Or download a binary directly from [GitHub Releases](https://github.com/nklisch/skilltap/releases).
 
 ## Quickstart
 
