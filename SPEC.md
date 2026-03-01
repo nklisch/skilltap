@@ -1017,8 +1017,8 @@ const InstalledSkillSchema = z.object({
   path: z.string().nullable(),          // path within repo for multi-skill
   tap: z.string().nullable(),           // tap name if resolved from tap
   also: z.array(z.string()),            // agent symlink targets
-  installedAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  installedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
 })
 
 const InstalledJsonSchema = z.object({

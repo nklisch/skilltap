@@ -202,9 +202,11 @@ export const ConfigSchema = z.object({
     also: z.array(z.string()).default([]),
     yes: z.boolean().default(false),
     scope: z.enum(['global', 'project', '']).default(''),
-  }).default({}),
-  security: SecurityConfigSchema.default({}),
-  'agent-mode': AgentModeSchema.default({}),
+  // .prefault({}) passes {} through the schema (applying nested defaults).
+  // Zod 4's .default({}) short-circuits without parsing, so nested defaults won't apply.
+  }).prefault({}),
+  security: SecurityConfigSchema.prefault({}),
+  'agent-mode': AgentModeSchema.prefault({}),
   taps: z.array(z.object({
     name: z.string(),
     url: z.string(),

@@ -1,8 +1,78 @@
 import { describe, expect, test } from "bun:test"
-import { VERSION } from "./index"
+import {
+  VERSION,
+  // types
+  ok,
+  err,
+  SkilltapError,
+  UserError,
+  GitError,
+  ScanError,
+  NetworkError,
+  EXIT_SUCCESS,
+  EXIT_ERROR,
+  EXIT_CANCELLED,
+  // schemas
+  ConfigSchema,
+  SecurityConfigSchema,
+  AgentModeSchema,
+  InstalledSkillSchema,
+  InstalledJsonSchema,
+  TapSchema,
+  TapSkillSchema,
+  SkillFrontmatterSchema,
+  AgentResponseSchema,
+  ResolvedSourceSchema,
+  // config functions
+  ensureDirs,
+  loadConfig,
+  saveConfig,
+  loadInstalled,
+  saveInstalled,
+} from "./index"
 
 describe("@skilltap/core", () => {
   test("exports VERSION", () => {
     expect(VERSION).toBe("0.1.0")
+  })
+
+  test("exports Result helpers", () => {
+    expect(ok("x").ok).toBe(true)
+    expect(err(new Error("x")).ok).toBe(false)
+  })
+
+  test("exports error classes", () => {
+    expect(new SkilltapError("x")).toBeInstanceOf(Error)
+    expect(new UserError("x")).toBeInstanceOf(SkilltapError)
+    expect(new GitError("x")).toBeInstanceOf(SkilltapError)
+    expect(new ScanError("x")).toBeInstanceOf(SkilltapError)
+    expect(new NetworkError("x")).toBeInstanceOf(SkilltapError)
+  })
+
+  test("exports exit codes", () => {
+    expect(EXIT_SUCCESS).toBe(0)
+    expect(EXIT_ERROR).toBe(1)
+    expect(EXIT_CANCELLED).toBe(2)
+  })
+
+  test("exports all schemas", () => {
+    expect(ConfigSchema).toBeDefined()
+    expect(SecurityConfigSchema).toBeDefined()
+    expect(AgentModeSchema).toBeDefined()
+    expect(InstalledSkillSchema).toBeDefined()
+    expect(InstalledJsonSchema).toBeDefined()
+    expect(TapSchema).toBeDefined()
+    expect(TapSkillSchema).toBeDefined()
+    expect(SkillFrontmatterSchema).toBeDefined()
+    expect(AgentResponseSchema).toBeDefined()
+    expect(ResolvedSourceSchema).toBeDefined()
+  })
+
+  test("exports config functions", () => {
+    expect(typeof ensureDirs).toBe("function")
+    expect(typeof loadConfig).toBe("function")
+    expect(typeof saveConfig).toBe("function")
+    expect(typeof loadInstalled).toBe("function")
+    expect(typeof saveInstalled).toBe("function")
   })
 })
