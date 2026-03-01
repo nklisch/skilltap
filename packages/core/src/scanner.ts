@@ -103,20 +103,24 @@ export async function scan(dir: string): Promise<ScannedSkill[]> {
     agentsPaths.push(join(dir, rel))
   }
 
-  // Step 3: Agent-specific paths
+  // Step 3: Agent-specific paths (scanned in parallel — independent directories)
   const agentSpecificPatterns = [
     ".claude/skills/*/SKILL.md",
     ".cursor/skills/*/SKILL.md",
     ".windsurf/skills/*/SKILL.md",
     ".copilot/skills/*/SKILL.md",
   ]
-  const agentSpecificPaths: string[] = []
-  for (const pattern of agentSpecificPatterns) {
-    const g = new Bun.Glob(pattern)
-    for await (const rel of g.scan({ cwd: dir, onlyFiles: true, dot: true })) {
-      agentSpecificPaths.push(join(dir, rel))
-    }
-  }
+  const agentSpecificPaths = (
+    await Promise.all(
+      agentSpecificPatterns.map(async (pattern) => {
+        const paths: string[] = []
+        for await (const rel of new Bun.Glob(pattern).scan({ cwd: dir, onlyFiles: true, dot: true })) {
+          paths.push(join(dir, rel))
+        }
+        return paths
+      }),
+    )
+  ).flat()
 
   const combined = [...agentsPaths, ...agentSpecificPaths]
 
