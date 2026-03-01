@@ -112,23 +112,67 @@ export function detectMarkdownHiding(content: string): PatternMatch[] {
   return results;
 }
 
+// Check if a string decodes from base64 to mostly printable ASCII
+function decodesToPrintable(s: string): boolean {
+  try {
+    const text = Buffer.from(s, "base64").toString("utf8");
+    let printable = 0;
+    for (const ch of text) {
+      const cp = ch.codePointAt(0) ?? 0;
+      if (
+        (cp >= 0x20 && cp <= 0x7e) ||
+        cp === 0x09 ||
+        cp === 0x0a ||
+        cp === 0x0d
+      )
+        printable++;
+    }
+    return printable / text.length > 0.7;
+  } catch {
+    return false;
+  }
+}
+
+// Heuristic: does a short string (10-19 chars) look like base64 vs an English word?
+function looksLikeBase64(s: string): boolean {
+  // + char doesn't appear in English words or paths (/ is too ambiguous)
+  if (/\+/.test(s)) return true;
+  // Digits are rare in 10+ char English words
+  if (/\d/.test(s)) return true;
+  // Non-CamelCase mixed case — base64 has random case transitions
+  // But only flag if the decoded content is plausible text (filters out
+  // brand names like PostgreSQL that decode to gibberish)
+  if (
+    /[a-z][A-Z]/.test(s) &&
+    !/^[a-zA-Z][a-z]+(?:[A-Z][a-z]+)*$/.test(s) &&
+    decodesToPrintable(s)
+  )
+    return true;
+  return false;
+}
+
 export function detectObfuscation(content: string): PatternMatch[] {
   const results: PatternMatch[] = [];
   const lines = content.split("\n");
 
-  // Base64 blocks: 60+ consecutive base64 chars not part of a URL
-  const base64Re = /[A-Za-z0-9+/]{60,}={0,3}/g;
+  // Base64 detection — two-tier approach:
+  //   20+ base chars: flag unconditionally
+  //   10-19 base chars: flag only if padded (=) or has base64-specific traits
+  const base64Re = /[A-Za-z0-9+/]{10,}={0,3}/g;
   for (const [i, line] of lines.entries()) {
     const lineRe = new RegExp(base64Re.source, "g");
     for (const m of line.matchAll(lineRe)) {
       // Skip if preceded by URL separators (likely part of a URL path)
       const before = line.slice(Math.max(0, m.index - 4), m.index);
       if (/[/.]/.test(before)) continue;
+      const base = m[0].replace(/=+$/, "");
+      const hasPadding = base.length < m[0].length;
+      // Short matches need extra confirmation to avoid flagging English words
+      if (base.length < 20 && !hasPadding && !looksLikeBase64(base)) continue;
       let decoded: string | undefined;
       try {
         const bytes = Buffer.from(m[0], "base64");
         const text = bytes.toString("utf8");
-        // Only treat as suspicious if it decodes to plausible text or binary
         decoded = text.length > 80 ? `${text.slice(0, 80)}...` : text;
       } catch {
         // not valid base64
