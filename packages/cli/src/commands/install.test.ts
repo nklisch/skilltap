@@ -235,4 +235,21 @@ describe("install — agent mode", () => {
       await repo.cleanup();
     }
   });
+
+  test("already installed returns error", async () => {
+    await writeAgentModeConfig(configDir);
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await runInstall([repo.path], homeDir, configDir);
+      const { exitCode, stderr } = await runInstall(
+        [repo.path],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain("already installed");
+    } finally {
+      await repo.cleanup();
+    }
+  });
 });
