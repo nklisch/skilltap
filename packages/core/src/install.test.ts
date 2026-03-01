@@ -7,6 +7,7 @@ import { loadInstalled } from "./config"
 import {
   createStandaloneSkillRepo,
   createMultiSkillRepo,
+  createMaliciousSkillRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils"
@@ -48,8 +49,8 @@ describe("installSkill — standalone", () => {
       expect(result.ok).toBe(true)
       if (!result.ok) return
 
-      expect(result.value).toHaveLength(1)
-      const record = result.value[0]!
+      expect(result.value.records).toHaveLength(1)
+      const record = result.value.records[0]!
       expect(record.name).toBe("standalone-skill")
       expect(record.scope).toBe("global")
       expect(record.sha).toBeString()
@@ -123,9 +124,9 @@ describe("installSkill — multi-skill", () => {
       expect(result.ok).toBe(true)
       if (!result.ok) return
 
-      expect(result.value).toHaveLength(1)
-      expect(result.value[0]!.name).toBe("skill-a")
-      expect(result.value[0]!.path).not.toBeNull()
+      expect(result.value.records).toHaveLength(1)
+      expect(result.value.records[0]!.name).toBe("skill-a")
+      expect(result.value.records[0]!.path).not.toBeNull()
 
       const skillADir = join(homeDir, ".agents", "skills", "skill-a")
       expect(await lstat(skillADir).then((s) => s.isDirectory())).toBe(true)
@@ -151,8 +152,8 @@ describe("installSkill — multi-skill", () => {
       expect(result.ok).toBe(true)
       if (!result.ok) return
 
-      expect(result.value).toHaveLength(2)
-      const names = result.value.map((r) => r.name).sort()
+      expect(result.value.records).toHaveLength(2)
+      const names = result.value.records.map((r) => r.name).sort()
       expect(names).toEqual(["skill-a", "skill-b"])
 
       expect(await lstat(join(homeDir, ".agents", "skills", "skill-a")).then((s) => s.isDirectory())).toBe(true)
@@ -258,6 +259,73 @@ describe("removeSkill", () => {
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.error.message).toContain("not installed")
+  })
+})
+
+describe("installSkill — security scanning", () => {
+  test("returns warnings when installing malicious skill", async () => {
+    const repo = await createMaliciousSkillRepo()
+    try {
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        onWarnings: async () => true,
+      })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.warnings.length).toBeGreaterThan(0)
+      expect(result.value.records).toHaveLength(1)
+    } finally {
+      await repo.cleanup()
+    }
+  })
+
+  test("aborts install when onWarnings returns false", async () => {
+    const repo = await createMaliciousSkillRepo()
+    try {
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        onWarnings: async () => false,
+      })
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error.message).toContain("cancelled")
+
+      // Skill should not be installed
+      const installedResult = await loadInstalled()
+      expect(installedResult.ok).toBe(true)
+      if (!installedResult.ok) return
+      expect(installedResult.value.skills).toHaveLength(0)
+    } finally {
+      await repo.cleanup()
+    }
+  })
+
+  test("skips scan when skipScan is true", async () => {
+    const repo = await createMaliciousSkillRepo()
+    try {
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        skipScan: true,
+      })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.warnings).toHaveLength(0)
+      expect(result.value.records).toHaveLength(1)
+    } finally {
+      await repo.cleanup()
+    }
+  })
+
+  test("clean skill installs with no warnings", async () => {
+    const repo = await createStandaloneSkillRepo()
+    try {
+      const result = await installSkill(repo.path, { scope: "global" })
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.value.warnings).toHaveLength(0)
+    } finally {
+      await repo.cleanup()
+    }
   })
 })
 

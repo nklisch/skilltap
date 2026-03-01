@@ -42,3 +42,11 @@ export async function createSampleTap(): Promise<FixtureRepo> {
   await commitAll(path)
   return { path, cleanup: () => removeTmpDir(path) }
 }
+
+export async function createMaliciousSkillRepo(): Promise<FixtureRepo> {
+  const path = await makeTmpDir()
+  await copyFixtureDir("malicious-skill", path)
+  await initRepo(path)
+  await commitAll(path)
+  return { path, cleanup: () => removeTmpDir(path) }
+}

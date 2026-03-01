@@ -2,7 +2,7 @@ import { join, dirname, relative } from "node:path"
 import { homedir } from "node:os"
 import { lstat, mkdir } from "node:fs/promises"
 import { $ } from "bun"
-import { ok, err, UserError, GitError } from "./types"
+import { ok, err, UserError, GitError, ScanError } from "./types"
 import type { Result } from "./types"
 import { makeTmpDir, removeTmpDir } from "./fs"
 import { clone, revParse } from "./git"
@@ -10,6 +10,8 @@ import { scan } from "./scanner"
 import { resolveSource } from "./adapters"
 import { loadInstalled, saveInstalled, getConfigDir } from "./config"
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink"
+import { scanStatic } from "./security"
+import type { StaticWarning } from "./security"
 import type { InstalledSkill } from "./schemas/installed"
 import type { ScannedSkill } from "./scanner"
 
@@ -20,6 +22,14 @@ export type InstallOptions = {
   also?: string[]
   ref?: string
   tap?: string | null
+  skipScan?: boolean
+  /** Called before placement if warnings are found. Return true to proceed, false to abort. */
+  onWarnings?: (warnings: StaticWarning[], skillName: string) => Promise<boolean>
+}
+
+export type InstallResult = {
+  records: InstalledSkill[]
+  warnings: StaticWarning[]
 }
 
 export type RemoveOptions = {
@@ -55,9 +65,10 @@ function skillCacheDir(repoUrl: string): string {
 export async function installSkill(
   source: string,
   options: InstallOptions,
-): Promise<Result<InstalledSkill[], UserError | GitError>> {
+): Promise<Result<InstallResult, UserError | GitError | ScanError>> {
   const also = options.also ?? []
   const ref = options.ref
+  const allWarnings: StaticWarning[] = []
 
   // 1. Check already-installed
   const installedResult = await loadInstalled()
@@ -97,6 +108,21 @@ export async function installSkill(
           return found
         })
       : scanned
+
+    // 6.5. Security scan (unless skipped)
+    if (!options.skipScan) {
+      for (const skill of selected) {
+        const scanResult = await scanStatic(skill.path)
+        if (!scanResult.ok) return scanResult
+        if (scanResult.value.length > 0) {
+          allWarnings.push(...scanResult.value)
+          if (options.onWarnings) {
+            const proceed = await options.onWarnings(scanResult.value, skill.name)
+            if (!proceed) return err(new UserError("Install cancelled."))
+          }
+        }
+      }
+    }
 
     // 7. Check for already-installed conflicts
     for (const skill of selected) {
@@ -172,7 +198,7 @@ export async function installSkill(
     const saveResult = await saveInstalled(installed)
     if (!saveResult.ok) return saveResult
 
-    return ok(newRecords)
+    return ok({ records: newRecords, warnings: allWarnings })
   } catch (e) {
     if (e instanceof UserError) return err(e)
     if (e instanceof GitError) return err(e)
