@@ -1,6 +1,7 @@
 <script setup>
 import { useData } from "vitepress";
 import TerminalDemo from "./TerminalDemo.vue";
+import SecurityScanDemo from "./SecurityScanDemo.vue";
 import FeatureCard from "./FeatureCard.vue";
 import FlowDiagram from "./FlowDiagram.vue";
 import InstallTabs from "./InstallTabs.vue";
@@ -152,6 +153,23 @@ const features = [
 <span class="c-comment"># That's it. Your agent can use it now.</span></code></pre>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- Security in action -->
+    <section class="security-section">
+      <div class="section-inner">
+        <h2 class="section-title">Security in action</h2>
+        <p class="section-subtitle">
+          Static patterns catch hidden Unicode, obfuscated URLs, and injection attempts. Semantic scan sends each chunk to your local agent for a second opinion.
+        </p>
+        <div class="security-demo">
+          <SecurityScanDemo />
+        </div>
+        <p class="security-note">
+          With <code>--strict</code>, any warning aborts immediately. In agent mode, security issues emit a machine-readable stop directive.
+          <a href="/guide/security">Learn more →</a>
+        </p>
       </div>
     </section>
 
@@ -436,6 +454,43 @@ const features = [
 .c-prompt { color: #fbbf24; }
 .c-dim { color: #a8a29e; }
 .c-success { color: #4ade80; }
+
+/* Security in action */
+.security-section {
+  padding: 80px 24px;
+  background: rgba(28, 25, 23, 0.5);
+}
+
+.security-demo {
+  display: flex;
+  justify-content: center;
+  margin-top: 40px;
+}
+
+.security-note {
+  text-align: center;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  color: #78716c;
+  margin-top: 24px;
+}
+
+.security-note code {
+  background: #292524;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: #d6d3d1;
+}
+
+.security-note a {
+  color: #a8a29e;
+  text-decoration: none;
+  margin-left: 8px;
+}
+
+.security-note a:hover {
+  color: #f5f5f4;
+}
 
 /* CTA */
 .cta-section {

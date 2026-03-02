@@ -2,19 +2,38 @@
 import { ref, onMounted } from "vue";
 
 const lines = [
-  { type: "cmd", text: "$ skilltap install user/commit-helper --also claude-code" },
-  { type: "out", text: "◆  Cloning user/commit-helper..." },
-  { type: "out", text: "◆  Scanning for skills..." },
-  { type: "out", text: "│" },
-  { type: "out", text: "│  Found 1 skill:" },
-  { type: "skill", text: "│  ● commit-helper — Generate conventional commit messages" },
-  { type: "out", text: "│" },
-  { type: "out", text: "◇  Security scan: 0 warnings" },
-  { type: "out", text: "│" },
-  { type: "success", text: "◆  Installed commit-helper" },
-  { type: "path", text: "   → ~/.agents/skills/commit-helper" },
-  { type: "path", text: "   → ~/.claude/skills/commit-helper" },
+  { type: "cmd",    text: "$ skilltap install user/code-reviewer --semantic" },
+  { type: "out",    text: "◆  Cloning user/code-reviewer..." },
+  { type: "out",    text: "◆  Scanning for skills..." },
+  { type: "out",    text: "│" },
+  { type: "out",    text: "│  Found 1 skill:" },
+  { type: "skill",  text: "│  ● code-reviewer — Review code for bugs and style" },
+  { type: "out",    text: "│" },
+  { type: "out",    text: "◇  Static scan: 0 warnings" },
+  { type: "out",    text: "│" },
+  { type: "prompt", text: "◇  Run semantic scan with claude-code?" },
+  { type: "answer", text: "│  › Yes" },
+  { type: "out",    text: "│" },
+  { type: "out",    text: "◆  Scanning 4 chunks..." },
+  { type: "check",  text: "│  ✓  chunk 1/4" },
+  { type: "check",  text: "│  ✓  chunk 2/4" },
+  { type: "check",  text: "│  ✓  chunk 3/4" },
+  { type: "check",  text: "│  ✓  chunk 4/4" },
+  { type: "out",    text: "│" },
+  { type: "out",    text: "◇  Semantic scan: clean" },
+  { type: "out",    text: "│" },
+  { type: "success", text: "◆  Installed code-reviewer" },
+  { type: "path",   text: "   → ~/.agents/skills/code-reviewer" },
+  { type: "path",   text: "   → ~/.claude/skills/code-reviewer" },
 ];
+
+function getDelay(line) {
+  if (line.type === "cmd") return 800;
+  if (line.type === "prompt") return 600;
+  if (line.type === "answer") return 900;
+  if (line.type === "check") return 280;
+  return 150;
+}
 
 const visibleLines = ref(0);
 const cursorVisible = ref(true);
@@ -24,10 +43,8 @@ onMounted(() => {
   let i = 0;
   const show = () => {
     if (i < lines.length) {
-      i++;
-      visibleLines.value = i;
-      const delay = lines[i - 1]?.type === "cmd" ? 800 : i <= 2 ? 400 : 150;
-      setTimeout(show, delay);
+      visibleLines.value = ++i;
+      setTimeout(show, getDelay(lines[i - 1]));
     } else {
       typingDone.value = true;
     }
@@ -106,7 +123,6 @@ onMounted(() => {
 
 .terminal-body {
   padding: 16px;
-  min-height: 260px;
 }
 
 .line {
@@ -130,6 +146,18 @@ onMounted(() => {
 
 .line.path {
   color: #a8a29e;
+}
+
+.line.prompt {
+  color: #e7e5e4;
+}
+
+.line.answer {
+  color: #fbbf24;
+}
+
+.line.check {
+  color: #4ade80;
 }
 
 .cursor {
