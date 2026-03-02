@@ -1,3 +1,7 @@
+---
+sitemap: false
+---
+
 # skilltap website
 
 VitePress site for [skilltap.dev](https://skilltap.dev).

@@ -1,3 +1,7 @@
+---
+description: Taps are curated skill registries — git repos or HTTP endpoints listing skills. Add, list, update, and search taps to discover skills across the ecosystem.
+---
+
 # Taps
 
 A **tap** is either a git repository with a `tap.json` file or an HTTP registry endpoint that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.

@@ -11,7 +11,7 @@
     },
     "packages/cli": {
       "name": "@skilltap/skilltap",
-      "version": "0.1.0",
+      "version": "0.3.1",
       "bin": {
         "skilltap": "./src/index.ts",
       },
@@ -26,7 +26,7 @@
     },
     "packages/core": {
       "name": "@skilltap/core",
-      "version": "0.1.0",
+      "version": "0.3.1",
       "dependencies": {
         "anti-trojan-source": "^1.8.1",
         "out-of-character": "^2.1.0",
@@ -44,6 +44,9 @@
     },
     "website": {
       "name": "skilltap-website",
+      "dependencies": {
+        "@fontsource/jetbrains-mono": "^5.2.8",
+      },
       "devDependencies": {
         "vitepress": "^1.6.4",
         "vue": "^3.5.29",
@@ -174,6 +177,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.21.5", "", { "os": "win32", "cpu": "ia32" }, "sha512-SWXFF1CL2RVNMaVs+BBClwtfZSvDgtL//G/smwAc5oVK/UPu2Gu9tIaRgFmYFFKrmg3SyAjSrElf0TiJ1v8fYA=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.21.5", "", { "os": "win32", "cpu": "x64" }, "sha512-tQd/1efJuzPC6rCFwEvLtci/xNFcTZknmXs98FYDfGE4wP9ClFV98nyKrzJKVPMhdDnjzLhdUyMX4PsQAPjwIw=="],
+
+    "@fontsource/jetbrains-mono": ["@fontsource/jetbrains-mono@5.2.8", "", {}, "sha512-6w8/SG4kqvIMu7xd7wt6x3idn1Qux3p9N62s6G3rfldOUYHpWcc2FKrqf+Vo44jRvqWj2oAtTHrZXEP23oSKwQ=="],
 
     "@gar/promise-retry": ["@gar/promise-retry@1.0.2", "", { "dependencies": { "retry": "^0.13.1" } }, "sha512-Lm/ZLhDZcBECta3TmCQSngiQykFdfw+QtI1/GYMsZd4l3nG+P8WLB16XuS7WaBGLQ+9E+cOcWQsth9cayuGt8g=="],
 

@@ -1,3 +1,7 @@
+---
+description: The tap.json schema for skill registries. Lists skills with names, descriptions, tags, source repositories, and trust metadata for distribution and discovery.
+---
+
 # tap.json Format
 
 A **tap** is a git repository that acts as a skill registry. It contains a `tap.json` file listing skills with their names, descriptions, source repositories, and tags. Taps are how users discover and share collections of skills -- like Homebrew taps, but for agent skills.

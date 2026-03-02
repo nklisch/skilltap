@@ -1,3 +1,7 @@
+---
+description: Install skilltap, install your first skill, set up a tap, and configure defaults. Get from zero to working AI agent skills in under five minutes.
+---
+
 # Getting Started
 
 This guide walks you through installing skilltap, installing your first skill, setting up a tap, and configuring defaults.

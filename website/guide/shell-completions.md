@@ -1,3 +1,7 @@
+---
+description: Enable tab-completion for skilltap in bash, zsh, or fish. Completes commands, flags, installed skill names, and tap names. One command to install.
+---
+
 # Shell Completions
 
 skilltap supports tab-completion for **bash**, **zsh**, and **fish**. Completions cover commands, subcommands, flags, and dynamic values — installed skill names, tap names, and available tap skills all complete at the cursor.

@@ -1,3 +1,7 @@
+---
+description: Install agent skills from GitHub, GitLab, Gitea, SSH, npm, or local paths. Covers scopes, flags, agent symlinks, multi-skill repos, and tap name resolution.
+---
+
 # Installing Skills
 
 skilltap can install skills from git URLs, GitHub shorthand, SSH, tap names, and local paths. This guide covers all the ways to install, the flags available, and how scope and agent symlinks work.

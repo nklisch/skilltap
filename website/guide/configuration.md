@@ -1,3 +1,7 @@
+---
+description: Configure skilltap via TOML file or interactive wizard. Set default scope, agent symlinks, scan policy, and agent mode for non-interactive CI use.
+---
+
 # Configuration
 
 ## Config file location

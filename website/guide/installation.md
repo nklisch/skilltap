@@ -1,3 +1,7 @@
+---
+description: Install skilltap via curl, Homebrew, bunx, npx, or direct binary download. Available on Linux and macOS (x64 and ARM64). No runtime dependencies required.
+---
+
 # Installation
 
 ## Recommended: curl installer

@@ -1,3 +1,7 @@
+---
+description: Complete reference for all skilltap CLI commands — install, update, remove, link, find, tap, create, verify, config, doctor, and completions.
+---
+
 # CLI Reference
 
 Complete reference for all skilltap commands, arguments, flags, and behavior.

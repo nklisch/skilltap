@@ -1,3 +1,7 @@
+---
+description: Create a SKILL.md skill with skilltap create. Choose from basic, npm, or multi-skill templates. Scaffold, validate, and publish agent skills in minutes.
+---
+
 # Creating Skills
 
 A skill is a directory with a `SKILL.md` file. There is no build step, no manifest, no special tooling. If it has a `SKILL.md`, it's a skill.

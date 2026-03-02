@@ -1,3 +1,7 @@
+---
+description: CLI tool for installing agent skills from any git host. Works with Claude Code, Cursor, Codex, Gemini, and 40+ agents. Git-native, agent-agnostic, and secure.
+---
+
 # What is skilltap?
 
 skilltap is a CLI tool for installing agent skills from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it.

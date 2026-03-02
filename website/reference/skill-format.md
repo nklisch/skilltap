@@ -1,3 +1,7 @@
+---
+description: The SKILL.md file format for agent skills. YAML frontmatter with name, description, license, and metadata fields, plus a Markdown body of agent instructions.
+---
+
 # SKILL.md Format
 
 SKILL.md is the file format for agent skills. It is a Markdown file with YAML frontmatter that provides structured metadata, followed by a body of instructions for the AI agent.

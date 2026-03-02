@@ -1,3 +1,7 @@
+---
+description: Static scan catches invisible Unicode, obfuscation, and injection. Optional AI semantic scan detects prompt injection. Every skill is untrusted by default.
+---
+
 # Security
 
 Skills run inside AI agents. A malicious skill can exfiltrate secrets from your codebase, hijack agent behavior, or inject instructions that persist across conversations. skilltap treats every skill as untrusted by default and scans it before installation.

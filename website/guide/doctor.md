@@ -1,3 +1,7 @@
+---
+description: Diagnose and auto-repair skilltap environment issues. Checks git, config file, disk space, and agent symlinks. Use --fix to auto-repair or --json for CI.
+---
+
 # Doctor
 
 `skilltap doctor` is a diagnostic command that checks your environment, configuration, and installed state. Run it when something isn't working — it surfaces problems before they become cryptic errors during install or update.

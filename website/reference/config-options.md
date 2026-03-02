@@ -1,3 +1,7 @@
+---
+description: Complete reference for ~/.config/skilltap/config.toml. All options, defaults, and policy composition rules for install, update, security, and agent mode.
+---
+
 # Configuration Reference
 
 Complete reference for `~/.config/skilltap/config.toml` -- all options, defaults, and policy composition rules.
