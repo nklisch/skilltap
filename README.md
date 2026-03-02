@@ -46,15 +46,20 @@ skilltap update
 
 | Command | Description |
 |---|---|
-| `install <source>` | Install a skill from a URL, GitHub shorthand, or tap name |
+| `install <source>` | Install a skill from a URL, GitHub shorthand, npm package, or tap name |
 | `remove <name>` | Remove an installed skill |
 | `update [name]` | Update one or all installed skills |
 | `list` | List installed skills |
 | `info <name>` | Show details about a skill (installed or available in taps) |
 | `find [query]` | Search skills across configured taps |
+| `find --npm <query>` | Search npm registry for skills |
 | `link <path>` | Link a local skill directory |
 | `unlink <name>` | Remove a linked skill |
-| `tap add <name> <url>` | Add a tap |
+| `create [name]` | Scaffold a new skill from a template |
+| `verify [path]` | Validate a skill before sharing (CI-friendly) |
+| `doctor` | Check environment, config, and installed state |
+| `completions <shell>` | Generate shell tab-completion script |
+| `tap add <name> <url>` | Add a tap (git repo or HTTP registry) |
 | `tap remove <name>` | Remove a tap |
 | `tap update [name]` | Update one or all taps |
 | `tap list` | List configured taps |
@@ -104,31 +109,71 @@ skilltap config
 
 Key settings: default scope (`global`/`project`), additional agent symlinks (`--also`), security scan mode (`static`/`semantic`/`off`), and `on_warn` behavior (`block`/`warn`/`allow`).
 
-## Creating skills
+## Authoring Skills
 
 ```bash
-mkdir my-skill
-cat > my-skill/SKILL.md << 'EOF'
----
-name: my-skill
-description: What this skill does
----
+# Scaffold a new skill interactively
+skilltap create my-skill
 
-# My Skill
+# Or non-interactively
+skilltap create my-skill --template basic
 
-Instructions for the AI agent...
-EOF
+# Edit SKILL.md, then test locally
+skilltap link ./my-skill --also claude-code
 
-# Test locally
-skilltap link ./my-skill --global
+# Validate before sharing
+skilltap verify my-skill/
 
-# Push and share
+# Push to git and share
 git init my-skill && cd my-skill && git add . && git commit -m "Initial skill"
 git remote add origin https://github.com/you/my-skill
 git push -u origin main
 ```
 
 Others can install with: `skilltap install you/my-skill`
+
+To publish to npm (with provenance), use `--template npm`. The generated GitHub Actions workflow handles publishing automatically on release.
+
+## Trust Signals
+
+Skills from npm show provenance status when installed:
+
+```
+$ skilltap list
+
+Global:
+  my-npm-skill   1.2.3   npm   Helpful skill   provenance
+  git-skill      main    home  Another skill   curated
+```
+
+Trust tiers: `provenance` (Sigstore/SLSA verified), `publisher` (npm identity verified), `curated` (tap-verified), `unverified`.
+
+## Shell Completions
+
+```bash
+# bash
+skilltap completions bash --install
+
+# zsh
+skilltap completions zsh --install
+# Add to ~/.zshrc: fpath=(~/.zfunc $fpath) && autoload -Uz compinit && compinit
+
+# fish
+skilltap completions fish --install
+```
+
+## Troubleshooting
+
+```bash
+# Check environment, config, and installed state
+skilltap doctor
+
+# Auto-repair common issues (broken symlinks, orphan records)
+skilltap doctor --fix
+
+# Machine-readable output for CI
+skilltap doctor --json
+```
 
 ## License
 

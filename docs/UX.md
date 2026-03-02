@@ -14,6 +14,10 @@ skilltap
 ├── link <path>              Symlink a local skill
 ├── unlink <name>            Remove a linked skill
 ├── info <name>              Show skill details
+├── create [name]            Scaffold a new skill from a template
+├── verify [path]            Validate a skill before sharing
+├── doctor                   Check environment and state
+├── completions <shell>      Generate shell completion script
 ├── config                   Interactive setup wizard
 │   └── agent-mode           Toggle agent mode (human-only)
 └── tap                      Manage taps
@@ -50,6 +54,8 @@ skilltap install github:user/repo                           # GitHub explicit
 skilltap install commit-helper                              # Tap name
 skilltap install commit-helper@v1.2.0                       # Tap name + version
 skilltap install ./my-skill                                 # Local path
+skilltap install npm:@scope/skill-name                     # npm registry
+skilltap install npm:@scope/skill-name@1.2.3               # npm pinned version
 ```
 
 Source resolution order is defined in [SPEC.md — Source resolution](./SPEC.md#skilltap-install-source).
@@ -428,6 +434,7 @@ skilltap find [query] [flags]
 ```
 -i                 Interactive fuzzy finder
 --json             Output as JSON
+--npm <query>      Search npm registry instead of taps
 ```
 
 ### Examples
@@ -452,6 +459,11 @@ $ skilltap find
 
 $ skilltap find --json
 [{"name":"commit-helper","description":"...","tap":"home","tags":["git"]}]
+
+$ skilltap find --npm review
+# Searches npm registry for packages with agent-skill keyword matching "review"
+  @acme/code-review    1.0.3    AI-powered code review skill    [npm]
+  @user/pr-review      2.1.0    Pull request review checklist   [npm]
 ```
 
 Empty state:
@@ -1144,3 +1156,362 @@ Prompts turned into hard failures by `--strict`: install#3, install#6, update (w
 Prompts that always appear regardless of flags: install#4, install#5 (first-use only).
 **Scope always prompts** unless `--project`/`--global`/config is set. `--yes` does NOT skip scope.
 **Agent mode** (config only, no flags): ALL prompts eliminated. #1 auto-selects, #2 from config (error if unset), #3/#6 hard fail with stop directive, #4/#5 error if not configured, #7 auto-accept. Toggle with `skilltap config agent-mode`.
+
+---
+
+## create
+
+```
+skilltap create [name] [flags]
+```
+
+### Flags
+
+```
+--template, -t   Template: basic, npm, multi
+--dir            Output directory (default: ./{name})
+```
+
+### Non-Interactive (name + --template provided)
+
+```
+skilltap create my-skill --template basic
+skilltap create my-api-tool --template npm
+skilltap create my-suite --template multi
+```
+
+Uses defaults: description = `{name} skill`, license = MIT. Multi template names sub-skills `{name}-a` and `{name}-b`.
+
+### Interactive
+
+```
+$ skilltap create
+
+◆ Create a new skill
+│
+◇ Skill name? › my-skill
+◇ Description? › A helpful development skill
+◇ Template?
+│  ● Basic — standalone git repo  (recommended)
+│  ○ npm — publishable to npm with provenance
+│  ○ Multi — multiple skills in one repo
+◇ License?
+│  ● MIT
+│  ○ Apache-2.0
+│  ○ None
+
+✓ Created my-skill/
+    ├── LICENSE
+    └── SKILL.md
+
+  Next steps:
+    cd my-skill
+    # Edit SKILL.md with your skill instructions
+    skilltap link . --also claude-code   # Test locally
+    skilltap verify                        # Validate before sharing
+    git init && git add -A && git commit -m "Initial skill"
+    git remote add origin <your-git-url> && git push -u origin main
+```
+
+With `--template npm`, also generates `package.json` and `.github/workflows/publish.yml`.
+
+With `--template multi`, also prompts for comma-separated skill names.
+
+---
+
+## verify
+
+```
+skilltap verify [path] [flags]
+```
+
+### Flags
+
+```
+--json           Output as JSON (for CI use)
+```
+
+### Examples
+
+Valid skill:
+
+```
+$ skilltap verify ./my-skill
+
+◆ Verifying my-skill
+
+✓ SKILL.md found
+✓ Frontmatter valid
+   name: my-skill
+   description: A helpful development skill
+✓ Name matches directory
+✓ Security scan: clean
+✓ Size: 1.2 KB (2 files)
+
+◇ ✓ Skill is valid and ready to share.
+
+  To make this discoverable via taps, add to your tap's tap.json:
+  { "name": "my-skill", "description": "A helpful development skill", "repo": "https://github.com/you/my-skill", "tags": [] }
+```
+
+Invalid skill (exit 1):
+
+```
+$ skilltap verify ./bad-skill
+
+◆ Verifying bad-skill
+
+✓ SKILL.md found
+✗ Frontmatter invalid
+   ✗ name mismatch: frontmatter says "wrong-name", directory is "bad-skill"
+
+◇ ✗ Fix 1 issue before sharing.
+```
+
+JSON output (for CI):
+
+```
+$ skilltap verify ./my-skill --json
+{
+  "name": "my-skill",
+  "valid": true,
+  "issues": [],
+  "frontmatter": { "name": "my-skill", "description": "A helpful development skill" },
+  "fileCount": 2,
+  "totalBytes": 1230
+}
+```
+
+Exit codes: 0 = valid, 1 = errors found
+
+### As pre-push hook
+
+```bash
+# .git/hooks/pre-push
+#!/bin/sh
+skilltap verify || exit 1
+```
+
+---
+
+## doctor
+
+```
+skilltap doctor [flags]
+```
+
+### Flags
+
+```
+--fix    Auto-fix where safe (recreate symlinks, remove orphan records, create missing dirs)
+--json   Machine-readable output
+```
+
+### Examples
+
+Clean environment:
+
+```
+$ skilltap doctor
+
+┌ skilltap doctor
+│
+◇ git: available ✓
+◇ config: readable ✓
+◇ dirs: all present ✓
+◇ installed.json: valid (3 skills) ✓
+◇ skill integrity: all present ✓
+◇ symlinks: all valid ✓
+◇ taps: 2 reachable ✓
+◇ agents: claude detected ✓
+◇ npm: available ✓
+│
+└ ✓ Everything looks good!
+```
+
+With issues (no --fix):
+
+```
+$ skilltap doctor
+
+┌ skilltap doctor
+│
+◇ git: available ✓
+◇ config: readable ✓
+◇ dirs: all present ✓
+⚠ installed.json: valid (2 skills)
+│  broken-skill: missing SKILL.md at ~/.agents/skills/broken-skill/
+⚠ skill integrity
+│  broken-skill: missing SKILL.md
+◇ symlinks: all valid ✓
+◇ taps: 2 reachable ✓
+◇ agents: claude detected ✓
+◇ npm: available ✓
+│
+└ ⚠ 2 issues found. Run 'skilltap doctor --fix' to auto-fix where possible.
+```
+
+With --fix:
+
+```
+$ skilltap doctor --fix
+
+┌ skilltap doctor
+│
+◇ git: available ✓
+◇ config: readable ✓
+◇ dirs: all present ✓
+⚠ skill integrity
+│  broken-skill: missing SKILL.md — orphan record removed ✓
+◇ symlinks: all valid ✓
+◇ taps: 2 reachable ✓
+◇ agents: claude detected ✓
+◇ npm: available ✓
+│
+└ ✓ Fixed 1 issue.
+```
+
+JSON output:
+
+```
+$ skilltap doctor --json
+{
+  "ok": true,
+  "checks": [
+    { "name": "git", "status": "pass" },
+    { "name": "config", "status": "pass" },
+    { "name": "dirs", "status": "pass" },
+    { "name": "installed.json", "status": "pass", "detail": "3 skills" },
+    { "name": "skill integrity", "status": "pass" },
+    { "name": "symlinks", "status": "pass" },
+    { "name": "taps", "status": "pass", "detail": "2 reachable" },
+    { "name": "agents", "status": "pass", "detail": "claude" },
+    { "name": "npm", "status": "pass" }
+  ]
+}
+```
+
+Exit codes: 0 = pass/warnings only, 1 = any failures
+
+---
+
+## completions
+
+```
+skilltap completions <shell> [--install]
+```
+
+### Without --install (print to stdout)
+
+Add to your shell profile for completions to load automatically:
+
+```bash
+# bash (~/.bashrc or ~/.bash_profile)
+eval "$(skilltap completions bash)"
+
+# zsh (~/.zshrc)
+eval "$(skilltap completions zsh)"
+
+# fish (~/.config/fish/config.fish)
+skilltap completions fish | source
+```
+
+### With --install (write to standard location)
+
+```
+$ skilltap completions bash --install
+✓ Wrote completions to ~/.local/share/bash-completion/completions/skilltap
+  Restart your shell or run:
+    source ~/.local/share/bash-completion/completions/skilltap
+
+$ skilltap completions zsh --install
+✓ Wrote completions to ~/.zfunc/_skilltap
+  Add to ~/.zshrc (if not already present):
+    fpath=(~/.zfunc $fpath)
+    autoload -Uz compinit && compinit
+  Then restart your shell.
+
+$ skilltap completions fish --install
+✓ Wrote completions to ~/.config/fish/completions/skilltap.fish
+  Completions are available immediately in new fish sessions.
+```
+
+### What's completed
+
+- All commands and subcommands
+- All flags (including `--also` values, `--template` values)
+- Dynamic: installed skill names for `remove`, `update`, `unlink`, `info`
+- Dynamic: tap names for `tap remove`, `tap update`
+
+---
+
+## Workflows (v0.3)
+
+### Creating and publishing a skill
+
+```bash
+# 1. Scaffold
+skilltap create my-skill --template basic
+cd my-skill
+
+# 2. Edit SKILL.md with your skill instructions
+
+# 3. Test locally
+skilltap link . --also claude-code
+
+# 4. Validate
+skilltap verify
+# → exit 0 and prints tap.json snippet
+
+# 5. Push and share
+git init && git add -A && git commit -m "Initial skill"
+git remote add origin https://github.com/you/my-skill
+git push -u origin main
+# → others can now: skilltap install you/my-skill
+```
+
+### npm package skill
+
+```bash
+# 1. Scaffold with npm template
+skilltap create my-npm-skill --template npm
+cd my-npm-skill
+
+# 2. Edit SKILL.md, update package.json (name, repository.url)
+
+# 3. Test locally
+skilltap link . --also claude-code
+skilltap verify
+
+# 4. Push and create a GitHub release
+# → .github/workflows/publish.yml publishes with --provenance
+# → users can then: skilltap install npm:@yourscope/my-npm-skill
+```
+
+### Checking environment health
+
+```bash
+# Quick check
+skilltap doctor
+
+# Auto-fix common issues
+skilltap doctor --fix
+
+# CI: check for failures
+skilltap doctor --json | jq '.ok'
+```
+
+### Setting up completions
+
+```bash
+# bash (one-time)
+skilltap completions bash --install
+# or: eval "$(skilltap completions bash)" in ~/.bashrc
+
+# zsh (one-time)
+skilltap completions zsh --install
+# Then add fpath=(~/.zfunc $fpath) and autoload to ~/.zshrc
+
+# fish (one-time)
+skilltap completions fish --install
+```

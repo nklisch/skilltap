@@ -317,15 +317,15 @@ Tab-completion for bash, zsh, and fish.
 
 ---
 
-### Phase 19 — v0.3 Polish
+### Phase 19 — v0.3 Polish ✓
 
 Finalize for v0.3 release.
 
-- [ ] **19.1** Update SPEC.md with npm adapter, HTTP registry, trust signals, create, verify, doctor, completions
-- [ ] **19.2** Update ARCH.md with new modules (trust/, registry/, templates/, doctor, completions)
-- [ ] **19.3** Update UX.md with new commands (create, verify, doctor, completions, find --npm)
-- [ ] **19.4** End-to-end test: create → verify → install npm: → doctor → completions
-- [ ] **19.5** README update with v0.3 features
+- [x] **19.1** Update SPEC.md with npm adapter, HTTP registry, trust signals, create, verify, doctor, completions
+- [x] **19.2** Update ARCH.md with new modules (trust/, registry/, templates/, doctor, completions)
+- [x] **19.3** Update UX.md with new commands (create, verify, doctor, completions, find --npm)
+- [x] **19.4** End-to-end test: create → verify → doctor → completions (`e2e-phase19.test.ts`, 15 tests)
+- [x] **19.5** README update with v0.3 features
 
 **Exit criteria:** All docs reflect the current state. End-to-end workflow works across all new features.
 

@@ -25,7 +25,10 @@ This document describes how skilltap is built internally — module boundaries, 
 1. `bunx skilltap` — for Bun users
 2. `npx skilltap` — for Node users (Bun packages work on npm)
 3. Standalone binary via `bun build --compile` — no runtime dependency
-4. Homebrew formula (future)
+4. Homebrew: `brew install skilltap/skilltap/skilltap`
+5. Install script: `curl -fsSL https://raw.githubusercontent.com/nklisch/skilltap/main/install.sh | sh`
+
+GitHub Actions release workflow (`.github/workflows/release.yml`) builds 4 platform binaries (linux-x64, linux-arm64, darwin-x64, darwin-arm64) on `v*` tag push, attests each binary with `actions/attest-build-provenance`, generates `checksums.txt`, and publishes `skilltap` and `@skilltap/core` to npm with `--provenance`. A `repository_dispatch` event then triggers the Homebrew formula update in `homebrew-skilltap/`.
 
 ## Monorepo Structure
 
@@ -77,6 +80,23 @@ skilltap/
 │   │   │   │   ├── static.ts   # Layer 1 — scanStatic(), scanDiff()
 │   │   │   │   ├── semantic.ts # Layer 2 — scanSemantic(), chunking
 │   │   │   │   └── index.ts    # Barrel export
+│   │   │   ├── npm-registry.ts # npm registry API client (fetch metadata, tarball, search)
+│   │   │   ├── validate.ts     # validateSkill() — SKILL.md validation for create/verify
+│   │   │   ├── doctor.ts       # runDoctor() — environment diagnostics, --fix support
+│   │   │   ├── trust/
+│   │   │   │   ├── types.ts    # TrustInfo schema (tier, npm, github, publisher, tap)
+│   │   │   │   ├── verify-npm.ts  # Sigstore/SLSA attestation verification
+│   │   │   │   ├── verify-github.ts # GitHub attestation via `gh attestation verify`
+│   │   │   │   ├── resolve.ts  # resolveTrust() — compute tier from available signals
+│   │   │   │   └── index.ts
+│   │   │   ├── registry/
+│   │   │   │   ├── types.ts    # RegistrySkillSchema, RegistryListResponseSchema
+│   │   │   │   └── client.ts   # HTTP registry client with bearer auth
+│   │   │   ├── templates/
+│   │   │   │   ├── basic.ts    # basicTemplate() — standalone git repo
+│   │   │   │   ├── npm.ts      # npmTemplate() — npm package with provenance
+│   │   │   │   ├── multi.ts    # multiTemplate() — multiple skills in one repo
+│   │   │   │   └── index.ts
 │   │   │   └── index.ts        # Package barrel export
 │   │   ├── package.json
 │   │   └── tsconfig.json
@@ -92,6 +112,10 @@ skilltap/
 │   │   │   │   ├── link.ts
 │   │   │   │   ├── unlink.ts
 │   │   │   │   ├── info.ts
+│   │   │   │   ├── create.ts         # skilltap create — scaffold new skills
+│   │   │   │   ├── verify.ts         # skilltap verify — validate skills before sharing
+│   │   │   │   ├── doctor.ts         # skilltap doctor — environment diagnostics
+│   │   │   │   ├── completions.ts    # skilltap completions — shell tab-completion
 │   │   │   │   ├── config.ts         # Routes to config/index.ts
 │   │   │   │   ├── config/
 │   │   │   │   │   ├── index.ts      # skilltap config wizard (was config.ts)
@@ -102,11 +126,14 @@ skilltap/
 │   │   │   │       ├── list.ts
 │   │   │   │       ├── update.ts
 │   │   │   │       └── init.ts
+│   │   │   ├── completions/
+│   │   │   │   └── generate.ts       # generateCompletions(shell) — bash/zsh/fish scripts
 │   │   │   └── ui/
 │   │   │       ├── format.ts   # Output formatting (tables, colors, ansi)
 │   │   │       ├── agent-out.ts # Agent mode plain text output
 │   │   │       ├── prompts.ts  # @clack/prompts wrappers
 │   │   │       ├── scan.ts     # Security scan result display
+│   │   │       ├── trust.ts    # Trust tier display helpers
 │   │   │       ├── policy.ts   # loadPolicyOrExit() — CLI adapter for composePolicy
 │   │   │       └── resolve.ts  # resolveScope, parseAlsoFlag, resolveAgent helpers
 │   │   ├── package.json        # Published as "skilltap" on npm
@@ -178,9 +205,21 @@ core → test-utils (dev)
 
 **install.ts** — Orchestrates the install flow. Coordinates git, scanner, security, config, and symlink modules. **remove.ts**, **update.ts**, and **link.ts** handle their respective flows.
 
-**taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps.
+**taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps. Supports both git-cloned taps and HTTP registry taps (fetched live).
 
 **symlink.ts** — Creates and removes symlinks for agent-specific directories. Knows the path conventions for each supported agent.
+
+**npm-registry.ts** — npm registry API client. `parseNpmSource()`, `fetchPackageMetadata()`, `resolveVersion()`, `searchPackages()`, `downloadAndExtract()`. Private registry support via `NPM_CONFIG_REGISTRY` env, `.npmrc`, or `~/.npmrc`.
+
+**validate.ts** — `validateSkill(dir)` → `Result<ValidationResult, UserError>`. Checks SKILL.md exists, frontmatter valid, name matches directory, static security scan, and size limit. Used by `skilltap verify` and as a post-scaffold check in `skilltap create`.
+
+**doctor.ts** — `runDoctor({ fix?, onCheck? })` → `DoctorResult`. Runs 9 check functions serially, streaming results via the `onCheck` callback. Supports `--fix` for safe auto-repairs (missing dirs, broken symlinks, orphan records, missing taps).
+
+**trust/** — Trust tier resolution pipeline. `resolveTrust()` computes tier from npm attestation (`verify-npm.ts` via `sigstore`), GitHub attestation (`verify-github.ts` via `gh` CLI), and tap metadata. Injectable verify functions for testing. Injected into install/update flows as an optional post-download step.
+
+**registry/** — HTTP registry client. `fetchRegistryList()`, `fetchRegistryDetail()`. Validates responses with Zod schemas (`RegistryListResponseSchema`, `RegistrySkillSchema`). Bearer auth via `Authorization: Bearer ${token}` header.
+
+**templates/** — TypeScript functions generating `Record<string, string>` (relPath → content). Embedded in the compiled binary (no runtime file reads). Three templates: `basicTemplate()`, `npmTemplate()`, `multiTemplate()`.
 
 ### Schemas (Zod 4)
 
@@ -263,11 +302,12 @@ interface AgentAdapter {
 }
 ```
 
-### Source Adapters (v0.1)
+### Source Adapters
 
 | Adapter | Handles | Resolution |
 |---------|---------|------------|
 | git | `https://`, `git@`, `ssh://` URLs | Pass-through (already a git URL) |
+| npm | `npm:@scope/name[@version]` | Fetch tarball from npm registry, verify SHA-512 integrity |
 | github | `github:owner/repo`, `owner/repo` shorthand | Resolve to `https://github.com/owner/repo.git` |
 | local | Filesystem paths (`./`, `/`, `~/`) | Validate path exists, has SKILL.md |
 
@@ -427,4 +467,8 @@ All tests run with `bun test`. CI runs on Linux and macOS.
 | Semantic scan | Shell out to agent CLI | Direct API calls | Zero API key requirement, works with user's existing setup |
 | Agent detection | Auto-detect on PATH | Manual config only | Zero-config experience, user can override |
 | Multi-skill install | Copy to install dir + cache repo | Symlink from cache | Cache is optimization not dependency; copy survives cache clean |
+| npm provenance | sigstore-js with bun patches | Direct Sigstore API | Reuse existing Sigstore ecosystem; two `bun patch` fixes for BoringSSL compat |
+| Trust tier storage | Optional field in installed.json | Separate trust file | Simplest structure; trust is per-install, not per-skill globally |
+| Template format | TypeScript functions returning Record<string,string> | File system templates | Binary embeddable; no runtime file reads; type-safe; easily testable |
+| Doctor checks | 9 sequential checks with onCheck callback | Parallel checks | Streaming output UX; failures in one check don't block others |
 | Platform | Linux + macOS | Cross-platform | Ship fast, add Windows when demand exists |

@@ -69,11 +69,12 @@ Auto-selecting all (--yes)
 **Source resolution order:**
 
 1. If `source` starts with `https://`, `http://`, `git@`, `ssh://` → git adapter
-2. If `source` starts with `github:` → github adapter (strip prefix, resolve to URL)
-3. If `source` starts with `./`, `/`, `~/` → local adapter
-4. If `source` contains `/` and no protocol → treat as `github:source` (shorthand)
-5. If `source` contains `@` (e.g., `name@v1.0`) → split into name + ref, resolve name from taps
-6. Otherwise → search taps for matching skill name
+2. If `source` starts with `npm:` → npm adapter (resolve package from npm registry)
+3. If `source` starts with `github:` → github adapter (strip prefix, resolve to URL)
+4. If `source` starts with `./`, `/`, `~/` → local adapter
+5. If `source` contains `/` and no protocol → treat as `github:source` (shorthand)
+6. If `source` contains `@` (e.g., `name@v1.0`) → split into name + ref, resolve name from taps
+7. Otherwise → search taps for matching skill name
 
 **Behavior:**
 
@@ -292,6 +293,7 @@ Search for skills across all configured taps.
 |------|------|---------|-------------|
 | `-i` | boolean | false | Interactive fuzzy finder mode |
 | `--json` | boolean | false | Output as JSON |
+| `--npm` | string | — | Search npm registry instead of taps (value: search query) |
 
 **Output:**
 
@@ -512,6 +514,223 @@ If stdin is not a TTY, the command exits with an error:
 error: 'skilltap config agent-mode' must be run interactively.
 Agent mode can only be enabled or disabled by a human.
 ```
+
+---
+
+### `skilltap create [name]`
+
+Scaffold a new skill from a template.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Skill name (kebab-case, lowercase alphanumeric + hyphens). Required in non-interactive mode. |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--template`, `-t` | string | (prompt) | Template: `basic`, `npm`, or `multi` |
+| `--dir` | string | `./{name}` | Output directory (absolute or relative) |
+
+**Templates:**
+
+| Template | Description | Generated files |
+|----------|-------------|-----------------|
+| `basic` | Standalone git repo | `SKILL.md`, `LICENSE` |
+| `npm` | npm package with provenance | `SKILL.md`, `package.json`, `LICENSE`, `.github/workflows/publish.yml` |
+| `multi` | Multiple skills in one repo | `.agents/skills/{skill-a}/SKILL.md`, `.agents/skills/{skill-b}/SKILL.md`, `LICENSE` |
+
+**Non-interactive mode:** triggered when both `name` and `--template` are provided. Uses defaults (description = `{name} skill`, license = MIT). For the multi template, auto-names skills `{name}-a` and `{name}-b`.
+
+**Interactive mode:** prompts for name (if missing), description, template (select menu), skill names (multi template only), and license.
+
+**Exit:** prints file list and next steps instructions (how to test locally with `skilltap link`, how to push). Exit 0.
+
+**Exit codes:** 0 success, 1 error (bad name, unknown template, directory exists), 2 cancelled
+
+---
+
+### `skilltap verify [path]`
+
+Validate a skill before sharing. Useful as a pre-push hook or CI step.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | No | Path to skill directory (default: `.`) |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output as JSON |
+
+**Checks run:**
+
+1. `SKILL.md` exists at `{path}/SKILL.md`
+2. Frontmatter is valid (required fields: `name`, `description`)
+3. `name` in frontmatter matches directory name
+4. Layer 1 static security scan (same detectors as install scan)
+5. Total size ≤ `security.max_size` (default 50 KB)
+
+**Exit codes:** 0 = valid (no errors; warnings are non-blocking), 1 = errors found
+
+**Default output:**
+
+```
+◆ Verifying my-skill
+
+✓ SKILL.md found
+✓ Frontmatter valid
+   name: my-skill
+   description: Does something useful
+✓ Name matches directory
+✓ Security scan: clean
+✓ Size: 1.2 KB (2 files)
+
+◇ ✓ Skill is valid and ready to share.
+
+  To make this discoverable via taps, add to your tap's tap.json:
+  { "name": "my-skill", "description": "...", "repo": "https://github.com/you/my-skill", "tags": [] }
+```
+
+**JSON output (`--json`):**
+
+```json
+{
+  "name": "my-skill",
+  "valid": true,
+  "issues": [],
+  "frontmatter": { "name": "my-skill", "description": "Does something useful" },
+  "fileCount": 2,
+  "totalBytes": 1230
+}
+```
+
+Issues array entries: `{ "severity": "error" | "warning", "message": "..." }`
+
+Prints the tap.json snippet on completion (even on error, if frontmatter was parseable) to guide tap authoring.
+
+---
+
+### `skilltap doctor`
+
+Diagnose the skilltap environment and state. Runs 9 checks and reports issues with optional auto-fix.
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--fix` | boolean | false | Auto-repair issues where safe |
+| `--json` | boolean | false | Output as JSON |
+
+**Checks:**
+
+| Check | What it verifies |
+|-------|-----------------|
+| git | `git` binary is available on PATH |
+| config | Config file is readable and parses without error |
+| dirs | Required directories exist (`~/.config/skilltap/`, `~/.agents/skills/`) |
+| installed.json | Installed record is valid and parseable |
+| skill integrity | Every skill in installed.json has a SKILL.md at its recorded path |
+| symlinks | Agent-specific symlinks are not broken |
+| taps | Tap directories exist and contain a valid `tap.json` |
+| agents | At least one agent CLI is detected on PATH |
+| npm | `npm` binary is available on PATH (for `npm:` sources) |
+
+**Check status values:** `pass`, `warn`, `fail`
+
+**`--fix` repairs where safe:**
+- `dirs`: create missing directories
+- `skill integrity`: remove orphan installed.json records (skill dir missing)
+- `symlinks`: recreate broken symlinks
+- `taps`: re-clone missing tap repos
+
+**Exit codes:** 0 = all checks pass or warn-only; 1 = any check fails
+
+**Default output** (streaming — each check printed as it completes):
+
+```
+┌ skilltap doctor
+│
+◇ git: available ✓
+◇ config: readable ✓
+◇ dirs: all present ✓
+◇ installed.json: valid (3 skills) ✓
+◇ skill integrity: all present ✓
+◇ symlinks: all valid ✓
+◇ taps: 2 reachable ✓
+◇ agents: claude detected ✓
+◇ npm: available ✓
+│
+└ ✓ Everything looks good!
+```
+
+With issues (no `--fix`):
+
+```
+⚠ symlinks
+│  my-skill → /home/user/.agents/skills/my-skill/: broken symlink
+└ ⚠ 1 issue found. Run 'skilltap doctor --fix' to auto-fix where possible.
+```
+
+**JSON output (`--json`):**
+
+```json
+{
+  "ok": true,
+  "checks": [
+    { "name": "git", "status": "pass" },
+    {
+      "name": "skill integrity",
+      "status": "warn",
+      "detail": "1 issue",
+      "issues": [
+        { "message": "broken-skill: missing SKILL.md", "fixable": true }
+      ]
+    }
+  ]
+}
+```
+
+---
+
+### `skilltap completions <shell>`
+
+Generate a shell completion script for tab-completion.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `shell` | Yes | Shell type: `bash`, `zsh`, or `fish` |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--install` | boolean | false | Write to shell-standard location instead of stdout |
+
+**Without `--install`:** prints the completion script to stdout. Pipe with `eval "$(skilltap completions bash)"` or source directly.
+
+**With `--install`** — writes to the shell-standard location and prints instructions:
+
+| Shell | Install path |
+|-------|-------------|
+| `bash` | `~/.local/share/bash-completion/completions/skilltap` |
+| `zsh` | `~/.zfunc/_skilltap` |
+| `fish` | `~/.config/fish/completions/skilltap.fish` |
+
+**Completions provided:**
+- Static: all commands, subcommands, flags, and flag values (`--also` agents, `--template` types)
+- Dynamic: skill names for `remove`, `update`, `unlink`, `info`; tap names for `tap remove`, `tap update`
+
+Dynamic values are fetched via a hidden `--get-completions <type>` endpoint that reads the local `installed.json` and tap config.
+
+**Exit codes:** 0 success, 1 error (unknown shell)
 
 ---
 
@@ -872,6 +1091,157 @@ Agent responses may include markdown formatting (e.g., ```json ... ```). The par
 
 ---
 
+## npm Source Adapter
+
+Install skills published as npm packages.
+
+### Source Format
+
+```bash
+skilltap install npm:@scope/name           # Latest version
+skilltap install npm:name                  # Unscoped package
+skilltap install npm:@scope/name@1.2.3    # Pinned version
+skilltap install npm:@scope/name@^1.0.0   # Semver range
+```
+
+### Resolution
+
+1. Parse `npm:` prefix, extract package name and optional version specifier
+2. Fetch package metadata from registry (`GET {registry}/{name}`)
+3. Resolve version: exact → semver range → `"latest"` dist-tag
+4. Download tarball from metadata URL
+5. Verify SHA-512 SRI hash against registry `dist.integrity` field
+6. Extract to temp directory (`package/` subdirectory per npm convention)
+7. Scan for SKILL.md (checks `skills/*/SKILL.md` priority path in addition to standard paths)
+
+### Private Registry
+
+Registry URL resolved in order:
+1. `NPM_CONFIG_REGISTRY` environment variable
+2. `.npmrc` in current directory
+3. `~/.npmrc`
+4. Default: `https://registry.npmjs.org`
+
+Authentication token resolved from `_authToken` field in `.npmrc` or environment variables.
+
+### Updates
+
+npm-sourced skills update via version comparison (not SHA). `skilltap update` fetches latest metadata and compares the installed version string to the latest resolved version.
+
+### find --npm
+
+```bash
+skilltap find --npm <query>
+```
+
+Searches the npm registry for packages with the `agent-skill` keyword. Returns name, version, description, and weekly downloads.
+
+---
+
+## Trust Signals
+
+Trust signals provide provenance and publisher information for installed skills, computed at install time and stored in `installed.json`.
+
+### Tiers
+
+| Tier | How it's established |
+|------|---------------------|
+| `provenance` | SLSA attestation verified via Sigstore (npm packages published with `--provenance`) |
+| `publisher` | npm publisher identity verified (author matches npm user record at time of publish) |
+| `curated` | Skill listed in a tap with `trust.verified = true` on the tap skill entry |
+| `unverified` | No provenance signals available |
+
+Tier resolution uses the highest tier for which evidence exists. Verification failures degrade gracefully — failure to verify provenance falls back to publisher identity, then curated, then unverified.
+
+### npm Provenance (Sigstore/SLSA)
+
+For npm-sourced skills, skilltap fetches attestations from the npm registry (`/-/npm/v1/attestations/{package}@{version}`) and verifies the Sigstore DSSE bundle against the downloaded tarball SHA. A verified bundle establishes that the package was published from a specific GitHub Actions workflow run.
+
+### GitHub Attestations
+
+For git-sourced skills, if `gh` is on PATH, skilltap runs `gh attestation verify {SKILL.md} --repo {owner}/{repo}` to check GitHub's artifact attestation service.
+
+### Tap Trust
+
+`tap.json` may include a `trust` field per skill to signal curator verification:
+
+```json
+{
+  "name": "commit-helper",
+  "repo": "https://github.com/user/commit-helper",
+  "trust": {
+    "verified": true,
+    "verifiedBy": "tap-maintainer",
+    "verifiedAt": "2026-01-15"
+  }
+}
+```
+
+### Display
+
+Trust tier appears in:
+- `list`: Trust column (`provenance`, `publisher`, `curated`, `unverified`)
+- `info`: Trust row with detail (publisher name, verification timestamp)
+- `find`: Trust column in results table
+
+---
+
+## HTTP Registry Taps
+
+In addition to git-cloned `tap.json` files, taps can be HTTP endpoints that serve skill metadata dynamically.
+
+### Auto-Detection
+
+When adding a tap, the type is detected automatically:
+
+```bash
+skilltap tap add name https://registry.example.com/skilltap/v1
+```
+
+1. Attempt `GET https://registry.example.com/skilltap/v1` and check for a valid JSON registry response
+2. If JSON response matches registry schema → HTTP tap
+3. Otherwise → fall back to git clone
+
+### Registry Response Schema
+
+HTTP registry endpoints must respond to `GET /` with:
+
+```json
+{
+  "name": "My Registry",
+  "description": "Optional description",
+  "skills": [
+    {
+      "name": "my-skill",
+      "description": "What this skill does",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/user/my-skill"
+      },
+      "tags": ["productivity"]
+    }
+  ]
+}
+```
+
+`source.type` values: `git`, `github`, `npm`, `url` (direct tarball download).
+
+### Auth
+
+```bash
+skilltap tap add name https://registry.example.com --auth-env MY_TOKEN_VAR
+```
+
+Sends `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. The token name is stored in the tap config; the token itself is never persisted.
+
+### Behavior
+
+- `tap list`: shows type column (`git`/`http`) and live skill count for HTTP taps
+- `tap update`: no-op for HTTP taps (always live, fetched fresh each time)
+- HTTP taps have no local clone; metadata is fetched on demand
+
+---
+
 ## Configuration
 
 ### File Location
@@ -1008,16 +1378,24 @@ Location: `~/.config/skilltap/installed.json`
 Validated at read/write with `InstalledJsonSchema` (Zod 4). If the file doesn't exist, the default is `{ version: 1, skills: [] }`.
 
 ```typescript
+const TrustInfoSchema = z.object({
+  tier: z.enum(['provenance', 'publisher', 'curated', 'unverified']),
+  npm: z.object({ publisher: z.string(), verifiedAt: z.string() }).optional(),
+  github: z.object({ verified: z.boolean(), repo: z.string() }).optional(),
+  tap: z.object({ verified: z.boolean(), verifiedBy: z.string().optional() }).optional(),
+}).optional()
+
 const InstalledSkillSchema = z.object({
   name: z.string(),
   description: z.string().default(""),  // populated from SKILL.md frontmatter
   repo: z.string().nullable(),          // null for linked skills
   ref: z.string().nullable(),           // null for linked
-  sha: z.string().nullable(),           // null for linked
+  sha: z.string().nullable(),           // null for linked and npm-sourced
   scope: z.enum(['global', 'project', 'linked']),
   path: z.string().nullable(),          // path within repo for multi-skill
   tap: z.string().nullable(),           // tap name if resolved from tap
   also: z.array(z.string()),            // agent symlink targets
+  trust: TrustInfoSchema,               // provenance/trust tier (optional)
   installedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 })
@@ -1055,11 +1433,18 @@ Example:
 Validated at clone/update with `TapSchema` (Zod 4). Invalid taps fail with a clear parse error.
 
 ```typescript
+const TapTrustSchema = z.object({
+  verified: z.boolean(),
+  verifiedBy: z.string().optional(),
+  verifiedAt: z.string().optional(),   // ISO date
+}).optional()
+
 const TapSkillSchema = z.object({
   name: z.string(),
   description: z.string(),
-  repo: z.string(),
+  repo: z.string(),                    // git URL or "npm:@scope/name"
   tags: z.array(z.string()).default([]),
+  trust: TapTrustSchema,               // curator verification (optional)
 })
 
 const TapSchema = z.object({
@@ -1200,17 +1585,25 @@ Features:
 - GitHub shorthand (`owner/repo`)
 - `bun build --compile` standalone binary
 
-### v0.2 — Adapters + Polish
+### v0.2 — Adapters + Ecosystem
 
-- npm adapter (`npm:@scope/name`)
-- Local path adapter improvements
-- HTTP registry adapter
-- Shell completions (bash, zsh, fish)
-- `skilltap doctor` — check setup (git, agents, config)
+Commands added: `find --npm`
 
-### v0.3 — Community + Ecosystem
+Features:
+- npm adapter (`npm:@scope/name[@version]`) with SHA-512 integrity verification
+- npm private registry support (env, `.npmrc`)
+- HTTP registry tap type (auto-detected, bearer auth)
+- Community trust signals (provenance via Sigstore/SLSA, publisher, curated, unverified tiers)
+- npm registry search (`find --npm`)
 
-- Community trust signals in taps (`verified`, `reviewedBy`)
-- `skilltap publish` — helper for publishing to taps
-- Skill templates (`skilltap create`)
-- Plugin for popular editors (VS Code extension, etc.)
+### v0.3 — Authoring + Polish
+
+Commands added: `create`, `verify`, `doctor`, `completions`
+
+Features:
+- `skilltap create` — scaffold skills from three templates (basic, npm, multi)
+- `skilltap verify` — validate skills before sharing; CI-friendly exit codes
+- `skilltap doctor` — environment diagnostics with `--fix` auto-repair and `--json` output
+- `skilltap completions` — bash, zsh, fish tab-completion with `--install`
+- GitHub Actions release workflow (4 platform binaries, npm provenance, Homebrew formula)
+- Install script (`scripts/install.sh`)
