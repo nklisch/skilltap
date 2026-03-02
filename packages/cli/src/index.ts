@@ -18,6 +18,7 @@ const main = defineCommand({
     info: () => import("./commands/info").then((m) => m.default),
     create: () => import("./commands/create").then((m) => m.default),
     verify: () => import("./commands/verify").then((m) => m.default),
+    doctor: () => import("./commands/doctor").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
     tap: defineCommand({
       meta: {

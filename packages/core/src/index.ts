@@ -1,4 +1,5 @@
 export const VERSION = "0.2.0";
+export * from "./doctor";
 
 export * from "./adapters";
 export * from "./agents";

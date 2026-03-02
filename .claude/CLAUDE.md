@@ -16,7 +16,7 @@ Read these before making architectural decisions:
 
 ## Tech Stack
 
-- **Runtime:** Bun (`~/.bun/bin/bun` — use `export PATH="$HOME/.bun/bin:$PATH"` in shell commands)
+- **Runtime:** Bun (already on PATH — do NOT use `export PATH=...` prefixes in shell commands)
 - **Language:** TypeScript (strict, ESNext, bundler module resolution)
 - **CLI framework:** citty (UnJS) — see `.claude/skills/citty/SKILL.md`
 - **Terminal UI:** @clack/prompts — see `.claude/skills/clack-prompts/SKILL.md`
@@ -41,6 +41,18 @@ Dependencies: `cli → core`, `cli → test-utils (dev)`, `core → test-utils (
 bun run dev          # Run CLI from source
 bun test             # Run all tests (recursive across packages)
 bun run build        # Compile to standalone binary
+```
+
+## Shell Command Rules
+
+**NEVER:**
+- Use `export PATH=...` prefixes — Bun is already on PATH
+- Run `bun test` in the background (`run_in_background: true`) — it spawns dozens of processes that stay running and starves the machine
+
+**Always run tests synchronously (foreground):**
+```bash
+bun test                                     # all tests — fine, run synchronously
+bun test packages/core/src/doctor.test.ts   # or scoped to a file
 ```
 
 ## Code Conventions

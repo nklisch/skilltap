@@ -153,15 +153,15 @@ Interactive setup and the agent-safety layer.
 
 Finalize for v0.1 release.
 
-- [ ] **11.1** Error messages and hints for all conditions in SPEC error table
-- [ ] **11.2** `--json` output for `list`, `find`, `info`
-- [ ] **11.3** Terminal width handling (truncate descriptions, responsive tables)
-- [ ] **11.4** Empty state messages for all commands
+- [x] **11.1** Error messages and hints for all conditions in SPEC error table
+- [x] **11.2** `--json` output for `list`, `find`, `info`
+- [x] **11.3** Terminal width handling (truncate descriptions, responsive tables)
+- [x] **11.4** Empty state messages for all commands
 - [x] **11.5** `bun build --compile` — produce standalone binary
-- [ ] **11.6** npm publish setup: `skilltap` (cli) and `@skilltap/core` packages
-- [ ] **11.7** `bunx skilltap` / `npx skilltap` verification
-- [ ] **11.8** End-to-end test: fresh config → add tap → find → install → list → update → remove
-- [ ] **11.9** README with quickstart
+- [x] **11.6** npm publish setup: `skilltap` (cli) and `@skilltap/core` packages
+- [ ] **11.7** `bunx skilltap` / `npx skilltap` verification (requires published package)
+- [x] **11.8** End-to-end test: fresh config → add tap → find → install → list → update → remove
+- [x] **11.9** README with quickstart
 
 **Exit criteria:** `skilltap` is installable via `bunx`, `npx`, or standalone binary. All v0.1 features from SPEC work end-to-end.
 
@@ -280,19 +280,19 @@ Skill authoring tools — scaffold new skills and validate them before sharing.
 
 ---
 
-### Phase 17 — Doctor
+### Phase 17 — Doctor ✓
 
 > Design doc: [DESIGN-DOCTOR.md](./DESIGN-DOCTOR.md)
 
 Diagnostic command that checks environment, config, and state integrity.
 
-- [ ] **17.1** Implement `core/src/doctor.ts` — check functions for git, config, dirs, installed.json, skill integrity, symlinks, taps, agent CLIs, npm
-- [ ] **17.2** `--fix` support — auto-repair where safe (recreate symlinks, remove orphan records, create missing dirs, re-clone missing taps)
-- [ ] **17.3** `skilltap doctor` command with streaming output (print each check as it completes)
-- [ ] **17.4** `--json` output for CI/scripting
-- [ ] **17.5** Exit code 0 for warnings-only, 1 for failures
-- [ ] **17.6** Unit tests: each check function with valid/invalid/missing state
-- [ ] **17.7** Integration tests: healthy env, broken state, --fix repairs, --json output
+- [x] **17.1** Implement `core/src/doctor.ts` — check functions for git, config, dirs, installed.json, skill integrity, symlinks, taps, agent CLIs, npm
+- [x] **17.2** `--fix` support — auto-repair where safe (recreate symlinks, remove orphan records, create missing dirs, re-clone missing taps)
+- [x] **17.3** `skilltap doctor` command with streaming output (print each check as it completes)
+- [x] **17.4** `--json` output for CI/scripting
+- [x] **17.5** Exit code 0 for warnings-only, 1 for failures
+- [x] **17.6** Unit tests: each check function with valid/invalid/missing state
+- [x] **17.7** Integration tests: healthy env, broken state, --fix repairs, --json output
 
 **Exit criteria:** `skilltap doctor` checks all 9 areas. `--fix` repairs fixable issues. `--json` provides machine-readable output. Exit codes are CI-friendly.
 
