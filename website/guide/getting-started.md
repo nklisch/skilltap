@@ -110,7 +110,7 @@ Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
 A tap is a curated index of skills -- a git repo containing a `tap.json` that lists skill names, descriptions, and URLs. Adding a tap lets you install skills by name instead of URL.
 
 ```bash
-skilltap tap add community https://github.com/example/awesome-skills-tap
+skilltap tap add nklisch https://github.com/nklisch/skills
 ```
 
 ```
@@ -125,18 +125,24 @@ You can add as many taps as you want -- your own, a friend's, a team's.
 Browse available skills:
 
 ```bash
-skilltap find review
+skilltap find
 ```
 
 ```
-  code-review        Thorough code review with security focus   [community]
-  pr-reviewer        Pull request review checklist              [community]
+  research           Research external libs, APIs, and patterns   [nklisch]
+  design             Create detailed DESIGN.md from a vision      [nklisch]
+  implement          Write code from a DESIGN.md                  [nklisch]
+  verify             Verify implementation against design          [nklisch]
+  fix                Fix gaps from VERIFICATION.md                [nklisch]
+  quality-gate       Final quality assessment for a phase         [nklisch]
+  extract-patterns   Discover and document reusable patterns      [nklisch]
+  refactor-plan      Plan refactoring work                        [nklisch]
 ```
 
 Install by name:
 
 ```bash
-skilltap install code-review --global
+skilltap install research --global
 ```
 
 skilltap resolves the name from your configured taps, finds the repo URL, and runs the normal clone-scan-install flow.
@@ -144,7 +150,7 @@ skilltap resolves the name from your configured taps, finds the repo URL, and ru
 You can also pin a version:
 
 ```bash
-skilltap install code-review@v2.0.0 --global
+skilltap install research@v1.0.0 --global
 ```
 
 ## List installed skills
@@ -155,10 +161,10 @@ skilltap list
 
 ```
 Global (2 skills)
-  Name            Ref     Source                                    Trust          Description
-  ──────────────────────────────────────────────────────────────────────────────────────────────
-  commit-helper   v1.2.0  https://github.com/user/commit-helper…   ○ unverified   Conventional commit messages
-  code-review     v2.0.0  https://github.com/user/code-review…     ○ unverified   Thorough code review
+  Name       Ref     Source                         Trust          Description
+  ────────────────────────────────────────────────────────────────────────────────────────
+  research   main    https://github.com/nklisch/…   ○ unverified   Research external libs
+  design     main    https://github.com/nklisch/…   ○ unverified   Create DESIGN.md
 ```
 
 Filter by scope:

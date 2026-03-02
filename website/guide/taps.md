@@ -23,7 +23,7 @@ skilltap tap add <name> <url>
 skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
 
 ```bash
-skilltap tap add community https://github.com/skilltap/community-tap
+skilltap tap add nklisch https://github.com/nklisch/skills
 ```
 
 ## Listing taps
@@ -79,7 +79,7 @@ skilltap find -i <query>
 Once you have taps registered, install a skill by name:
 
 ```bash
-skilltap install commit-helper
+skilltap install research
 ```
 
 If the name exists in multiple taps, skilltap prompts you to choose which one.
@@ -87,7 +87,7 @@ If the name exists in multiple taps, skilltap prompts you to choose which one.
 To install a specific git ref (branch, tag, or commit):
 
 ```bash
-skilltap install commit-helper@v2.0
+skilltap install research@v1.0.0
 ```
 
 ## Creating your own tap

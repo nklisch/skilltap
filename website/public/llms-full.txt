@@ -1,0 +1,3797 @@
+# skilltap — Complete Documentation
+
+> Source: https://skilltap.dev/llms-full.txt
+> Generated: 2026-03-02
+>
+> This file contains the complete skilltap documentation as a single Markdown document
+> for AI coding assistant ingestion. For a navigable index see https://skilltap.dev/llms.txt.
+
+
+---
+
+<!-- Source: https://skilltap.dev/guide/what-is-skilltap -->
+
+# What is skilltap?
+
+skilltap is a CLI tool for installing agent skills from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it.
+
+```bash
+skilltap install https://gitea.example.com/nathan/commit-helper
+```
+
+That's it. One command, any git host, any agent.
+
+## The problem
+
+The [SKILL.md format](https://agentskills.io/specification) is standardized across 40+ agents -- Claude Code, Cursor, Codex CLI, Gemini CLI, and many others. Writing skills is easy. Distributing them is not.
+
+- **skills.sh** only indexes GitHub. If your skills live on Gitea, GitLab, or a private instance, they don't exist.
+- **Agent-specific tools** like Claude Code's plugin marketplace only work within one agent. If you use multiple agents, you need multiple tools.
+- **No universal installer** exists. There's no agent-agnostic, git-native way to install a skill from any source and make it available to any agent.
+
+skilltap fills that gap.
+
+## How it works
+
+```
+Git host (any)          skilltap           Your machine
+┌──────────┐           ┌────────┐         ┌────────────────────┐
+│ Gitea    │──clone──▶ │ scan   │──────▶  │ ~/.agents/skills/  │
+│ GitHub   │           │ install│         │                    │
+│ GitLab   │           │ link   │         │ optional symlinks: │
+│ Your own │           └────────┘         │ ~/.claude/skills/  │
+└──────────┘                              │ ~/.cursor/skills/  │
+                                          └────────────────────┘
+```
+
+1. **Clone** the skill repo to a temp directory
+2. **Scan** all files for security issues (invisible Unicode, hidden instructions, suspicious URLs, and more)
+3. **Install** to `~/.agents/skills/` -- the universal path defined by the Agent Skills spec
+4. **Symlink** to agent-specific directories if you want (`.claude/skills/`, `.cursor/skills/`, etc.)
+
+Skills are never written to disk until they pass scanning. You always see what was found and decide whether to proceed.
+
+## Key features
+
+**Git-native.** Install from any git host -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. Point skilltap at any repo with a `SKILL.md` -- no special structure or manifest required. skilltap uses `git clone` under the hood, so your existing SSH keys and credential helpers just work.
+
+**Agent-agnostic.** Installs to the universal `.agents/skills/` directory. Opt in to symlinking to agent-specific directories (Claude Code, Cursor, Codex, Gemini, Windsurf) with a single flag.
+
+**Multi-source taps.** Configure multiple skill indexes (taps) -- your own, a friend's, a community collection. Search across all of them with `skilltap find`.
+
+**Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
+
+**Standalone binary.** One file, no runtime dependencies. Download and run.
+
+## What skilltap is NOT
+
+**Not a package manager.** No dependency trees, no build steps, no install scripts. Skills are static files -- skilltap just puts them in the right place.
+
+**Not a marketplace.** No centralized index. Taps are git repos anyone can create and host wherever they want.
+
+**Not a runtime.** Skills are Markdown files that agents read. skilltap doesn't execute anything -- it clones, scans, and places files.
+
+**Not an agent plugin system.** Some agents have their own distribution systems (Claude Code has a full plugin marketplace with commands, hooks, and MCP servers). skilltap is simpler -- it distributes SKILL.md files, and it works across all agents.
+
+## Quick example
+
+Install a skill from any git URL:
+
+```bash
+skilltap install https://gitea.example.com/nathan/commit-helper
+```
+
+Install with GitHub shorthand and symlink to Claude Code:
+
+```bash
+skilltap install user/commit-helper --global --also claude-code
+```
+
+Search across your configured taps:
+
+```bash
+skilltap find review
+```
+
+Install by name from a tap:
+
+```bash
+skilltap install code-reviewer
+```
+
+## Next steps
+
+- [Getting Started](./getting-started) -- install skilltap and your first skill
+- [Installing Skills](./installing-skills) -- all the ways to install, with flags and options
+- [Creating Skills](./creating-skills) -- write and publish your own skills
+
+---
+
+<!-- Source: https://skilltap.dev/guide/getting-started -->
+
+# Getting Started
+
+This guide walks you through installing skilltap, installing your first skill, setting up a tap, and configuring defaults.
+
+## Install skilltap
+
+Download the standalone binary:
+
+```bash
+curl -fsSL https://skilltap.dev/install.sh | sh
+```
+
+This puts the `skilltap` binary on your PATH. No runtime dependencies required.
+
+Alternatively, if you use Bun or Node:
+
+```bash
+bunx skilltap    # Bun
+npx skilltap     # Node
+```
+
+Verify the install:
+
+```bash
+skilltap --version
+```
+
+## Install your first skill
+
+Install a skill from a git URL:
+
+```bash
+skilltap install user/commit-helper
+```
+
+skilltap walks you through the process interactively:
+
+```
+◆ skilltap
+
+◆ Install to:
+│ ● Global (~/.agents/skills/)
+│ ○ Project (.agents/skills/)
+
+◆ Which agents should this skill be available to?
+│ ◼ Claude Code
+│ ◻ Cursor
+│ ◻ Codex
+│ ◻ Gemini
+│ ◻ Windsurf
+
+◆ Save agent selection as default?
+│ Yes
+
+◇ Cloning user/commit-helper...
+◇ Scanning commit-helper...
+│ ✓ No warnings
+
+◇ Install commit-helper?
+│ › Yes
+
+✓ Installed commit-helper → ~/.agents/skills/commit-helper/
+```
+
+Here's what happened:
+
+1. You chose where to install (global or project scope)
+2. You selected which agents should see the skill (symlinks are created automatically)
+3. skilltap cloned the repo
+4. A static security scan checked all files for suspicious content
+5. No warnings found — you confirmed the install
+6. The skill was placed at `~/.agents/skills/commit-helper/` with a symlink in `~/.claude/skills/commit-helper/`
+
+If the scan had found warnings, skilltap would show them and offer to run a deeper [semantic scan](./security) using your local AI agent before asking you to confirm.
+
+Skip all prompts with `--yes --global` for clean CI-style installs:
+
+```bash
+skilltap install user/commit-helper --global --yes
+```
+
+You can skip the scope prompt with `--global` or `--project`:
+
+```bash
+skilltap install user/commit-helper --global
+```
+
+### Agent symlinks
+
+During install, skilltap asks which agents the skill should be visible to. Your selection creates symlinks into agent-specific directories (e.g. `~/.claude/skills/`). You can save your choice as the default for future installs.
+
+To skip the prompt, pass `--also` explicitly:
+
+```bash
+skilltap install user/commit-helper --global --also claude-code
+```
+
+This creates:
+- `~/.agents/skills/commit-helper/` (the actual files)
+- `~/.claude/skills/commit-helper/` (symlink)
+
+Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
+
+## Add a tap
+
+A tap is a curated index of skills -- a git repo containing a `tap.json` that lists skill names, descriptions, and URLs. Adding a tap lets you install skills by name instead of URL.
+
+```bash
+skilltap tap add community https://github.com/example/awesome-skills-tap
+```
+
+```
+Cloning tap...
+✓ Added tap 'community' (12 skills)
+```
+
+You can add as many taps as you want -- your own, a friend's, a team's.
+
+## Search and install from a tap
+
+Browse available skills:
+
+```bash
+skilltap find review
+```
+
+```
+  code-review        Thorough code review with security focus   [community]
+  pr-reviewer        Pull request review checklist              [community]
+```
+
+Install by name:
+
+```bash
+skilltap install code-review --global
+```
+
+skilltap resolves the name from your configured taps, finds the repo URL, and runs the normal clone-scan-install flow.
+
+You can also pin a version:
+
+```bash
+skilltap install code-review@v2.0.0 --global
+```
+
+## List installed skills
+
+```bash
+skilltap list
+```
+
+```
+Global (2 skills)
+  Name            Ref     Source                                    Trust          Description
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  commit-helper   v1.2.0  https://github.com/user/commit-helper…   ○ unverified   Conventional commit messages
+  code-review     v2.0.0  https://github.com/user/code-review…     ○ unverified   Thorough code review
+```
+
+Filter by scope:
+
+```bash
+skilltap list --global     # only global skills
+skilltap list --project    # only project-scoped skills
+```
+
+## Update skills
+
+Update all installed skills:
+
+```bash
+skilltap update
+```
+
+```
+◆ Checking commit-helper...
+│ abc123 → def456 (2 files changed)
+  M SKILL.md (+5 -2)
+  A scripts/helper.sh (+18)
+
+◇ Apply update to commit-helper?
+│ › Yes
+✓ Updated commit-helper
+
+◆ Checking code-review...
+│ Already up to date.
+
+Updated: 1   Skipped: 0   Up to date: 1
+```
+
+Updates fetch the latest changes, show you a diff summary, scan the changed files for security issues, and ask before applying.
+
+Update a specific skill:
+
+```bash
+skilltap update commit-helper
+```
+
+## Configure defaults
+
+Run the interactive setup wizard:
+
+```bash
+skilltap config
+```
+
+This walks you through:
+
+- Default install scope (global, project, or ask each time)
+- Which agents to auto-symlink to on every install
+- Security scan level (static only, static + semantic, or off)
+- What to do when security warnings are found
+
+Your settings are saved to `~/.config/skilltap/config.toml`. See the [Configuration](/guide/configuration) guide for the full reference.
+
+## Next steps
+
+- [Installing Skills](./installing-skills) -- all source formats, flags, scopes, and multi-skill repos
+- [Creating Skills](./creating-skills) -- write and publish your own skills
+- [Taps](./taps) -- create and manage skill indexes
+- [Security](./security) -- how scanning works and how to configure it
+- [Configuration](./configuration) -- full config file reference
+
+---
+
+<!-- Source: https://skilltap.dev/guide/installation -->
+
+# Installation
+
+## Recommended: curl installer
+
+The fastest way to install skilltap:
+
+```bash
+curl -fsSL https://skilltap.dev/install.sh | sh
+```
+
+This downloads the latest binary for your platform and installs it to `~/.local/bin/skilltap`.
+
+To install to a different location, set `SKILLTAP_INSTALL`:
+
+```bash
+SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
+```
+
+## Via Homebrew
+
+On macOS and Linux with [Homebrew](https://brew.sh):
+
+```bash
+brew install skilltap/skilltap/skilltap
+```
+
+This installs a pre-built binary and keeps it up to date with `brew upgrade`.
+
+## Via bunx
+
+If you have [Bun](https://bun.sh) installed, you can run skilltap without installing it:
+
+```bash
+bunx skilltap --help
+```
+
+## Via npx
+
+If you have npm and Bun on your PATH:
+
+```bash
+npx skilltap --help
+```
+
+## Direct binary download
+
+Pre-built binaries are available on the [GitHub Releases](https://github.com/skilltap/skilltap/releases) page for every supported platform:
+
+| Platform     | Architecture |
+| ------------ | ------------ |
+| Linux        | x64          |
+| Linux        | ARM64        |
+| macOS        | x64          |
+| macOS        | ARM64        |
+
+Download the binary for your platform, make it executable, and move it to a directory on your PATH.
+
+Each release includes a `checksums.txt` file with SHA-256 hashes for all binaries. To verify your download:
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+```
+
+## Platform support
+
+skilltap supports **Linux** and **macOS** on both x64 and ARM64 architectures.
+
+Windows is not yet supported.
+
+## Verify installation
+
+After installing, confirm everything is working:
+
+```bash
+skilltap --help
+```
+
+You should see the list of available commands and global flags.
+
+## Shell completions (optional)
+
+Set up tab-completion for your shell:
+
+```bash
+skilltap completions bash --install   # bash
+skilltap completions zsh --install    # zsh
+skilltap completions fish --install   # fish
+```
+
+See [Shell Completions](/guide/shell-completions) for details and troubleshooting.
+
+---
+
+<!-- Source: https://skilltap.dev/guide/installing-skills -->
+
+# Installing Skills
+
+skilltap can install skills from git URLs, GitHub shorthand, SSH, tap names, and local paths. This guide covers all the ways to install, the flags available, and how scope and agent symlinks work.
+
+## Source formats
+
+### Git URL (any host)
+
+Install from any git-accessible URL:
+
+```bash
+skilltap install https://gitea.example.com/user/commit-helper
+skilltap install https://gitlab.com/team/code-review
+skilltap install https://github.com/user/my-skill
+```
+
+This works with any host that supports `git clone` -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. The repo just needs a `SKILL.md` somewhere in the tree. No `tap.json` or special structure required -- skilltap clones the repo and scans for `SKILL.md` files automatically.
+
+::: tip Want discoverability?
+Any repo with a `SKILL.md` is installable by URL, but adding your skills to a [tap](/guide/taps) gives them names, descriptions, and tags so others can find them with `skilltap find`.
+:::
+
+### SSH
+
+```bash
+skilltap install git@github.com:user/commit-helper.git
+skilltap install ssh://git@gitlab.com/team/code-review.git
+```
+
+Uses your existing SSH keys. No extra configuration needed.
+
+### GitHub shorthand
+
+If the source contains a `/` and no protocol, skilltap treats it as a GitHub repo:
+
+```bash
+skilltap install user/commit-helper
+```
+
+This is equivalent to `https://github.com/user/commit-helper`. You can also be explicit:
+
+```bash
+skilltap install github:user/commit-helper
+```
+
+### Tap name
+
+If you have taps configured, install by skill name:
+
+```bash
+skilltap install commit-helper
+```
+
+skilltap searches all your configured taps for a skill with that name, resolves the repo URL, and installs it.
+
+### Tap name with version
+
+Pin to a specific branch or tag:
+
+```bash
+skilltap install commit-helper@v1.2.0
+skilltap install commit-helper@main
+```
+
+### Local path
+
+Install from a directory on your filesystem:
+
+```bash
+skilltap install ./my-skill
+skilltap install /home/nathan/dev/my-skill
+skilltap install ~/skills/my-skill
+```
+
+The directory must contain a `SKILL.md` file.
+
+### npm package
+
+Install a skill published to the npm registry:
+
+```bash
+skilltap install npm:vibe-rules
+skilltap install npm:@scope/my-skills
+skilltap install npm:vibe-rules@1.0.0
+```
+
+The `npm:` prefix downloads the tarball from the npm registry and verifies its SHA-512 integrity before installing. This gives you access to any skill published as an npm package.
+
+**Version pinning:** Append `@version` or a dist-tag (e.g. `@latest`). Without a version, the `latest` dist-tag is used.
+
+**Private registries:** skilltap reads your `.npmrc` file or `NPM_CONFIG_REGISTRY` environment variable automatically.
+
+**Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
+
+::: tip Finding npm skills
+Search the npm registry with `skilltap find <query> --npm`. The `--npm` flag is a boolean switch; the search term is the positional argument. Omit the query to list all packages with the `agent-skill` keyword.
+:::
+
+## Scope: global vs project
+
+Every skill is installed to either a **global** or **project** scope.
+
+### Global scope
+
+```bash
+skilltap install commit-helper --global
+```
+
+Installs to `~/.agents/skills/commit-helper/`. Available everywhere on your machine.
+
+### Project scope
+
+```bash
+skilltap install commit-helper --project
+```
+
+Installs to `.agents/skills/commit-helper/` inside the current project (determined by the nearest `.git` directory). Only available when working in that project.
+
+### Prompted scope
+
+If you don't pass `--global` or `--project`, skilltap asks:
+
+```
+Install to:
+  ● Global (~/.agents/skills/)
+  ○ Project (.agents/skills/)
+```
+
+You can set a default scope in your config so you're never prompted. See [Configuration](/guide/configuration).
+
+::: tip
+The `--yes` flag does **not** skip the scope prompt. Use `--yes --global` or `--yes --project` for fully non-interactive installs.
+:::
+
+## Agent symlinks
+
+During interactive install, skilltap prompts you to choose which agents the skill should be visible to:
+
+```
+◆ Which agents should this skill be available to?
+│ ◼ Claude Code
+│ ◻ Cursor
+│ ◻ Codex
+│ ◻ Gemini
+│ ◻ Windsurf
+```
+
+If your selection differs from your saved default, you'll be asked whether to save it:
+
+```
+◆ Save agent selection as default?
+│ No
+```
+
+You can select none — the skill will only be installed to `.agents/skills/`.
+
+The agent prompt is **skipped** when:
+- `--also` is passed explicitly (e.g. `--also claude-code`)
+- `--yes` is set (uses config default or none)
+
+You can also specify agents directly via `--also`:
+
+```bash
+skilltap install commit-helper --global --also claude-code --also cursor
+```
+
+Supported agent identifiers:
+
+| Identifier | Global symlink path | Project symlink path |
+|---|---|---|
+| `claude-code` | `~/.claude/skills/` | `.claude/skills/` |
+| `cursor` | `~/.cursor/skills/` | `.cursor/skills/` |
+| `codex` | `~/.codex/skills/` | `.codex/skills/` |
+| `gemini` | `~/.gemini/skills/` | `.gemini/skills/` |
+| `windsurf` | `~/.windsurf/skills/` | `.windsurf/skills/` |
+
+### Default agent symlinks
+
+You can set a default agent selection in your config, either via the "Save as default?" prompt during install or manually:
+
+```toml
+# ~/.config/skilltap/config.toml
+[defaults]
+also = ["claude-code", "cursor"]
+```
+
+When defaults are set, the agent selection prompt pre-selects them. With `--yes`, the defaults are used without prompting.
+
+## Multi-skill repos
+
+Some repos contain multiple skills -- for example, a project with both a development workflow skill and a review checklist skill. There's no special manifest needed; skilltap discovers all `SKILL.md` files in the repo automatically.
+
+When skilltap finds multiple `SKILL.md` files, it prompts you to choose:
+
+```
+$ skilltap install https://gitea.example.com/user/termtube
+
+Found 2 skills in user/termtube:
+  [1] termtube-dev        Development workflow for termtube
+  [2] termtube-review     Code review checklist for termtube
+
+Install which? (1,2,all): 1
+```
+
+With `--yes`, all skills are auto-selected:
+
+```
+$ skilltap install https://gitea.example.com/user/termtube --yes --global
+
+Found 2 skills: termtube-dev, termtube-review
+Auto-selecting all (--yes)
+
+✓ Installed termtube-dev → ~/.agents/skills/termtube-dev/
+✓ Installed termtube-review → ~/.agents/skills/termtube-review/
+```
+
+## Security during install
+
+Every install runs a static security scan. For a clean skill (no warnings), you're asked to confirm before anything is written to disk:
+
+```
+◇  Static scan: 0 warnings
+│
+◇  Install code-reviewer?
+│  › Yes
+```
+
+With `--yes`, this final confirmation is skipped and the skill is installed automatically.
+
+If warnings are found, you'll see them and be asked how to proceed:
+
+```
+⚠ Static warnings in some-skill:
+  SKILL.md L14: Invisible Unicode (3 zero-width chars)
+
+? Run semantic scan?
+  ● Yes
+  ○ No
+```
+
+If you choose to run the semantic scan and haven't set up an agent yet, skilltap detects available agent CLIs on your machine and lets you pick one. Your choice is saved for future installs.
+
+After all scans complete, if there are still warnings you're asked to confirm:
+
+```
+? Install some-skill despite warnings?
+  ○ Yes
+  ● No
+```
+
+With `--strict`, any warning aborts immediately — no prompt. With `--skip-scan`, scanning is bypassed entirely (blocked if `require_scan = true` in config).
+
+For the full security model, see [Security](./security).
+
+## Flags reference
+
+| Flag | Description |
+|---|---|
+| `--global` | Install to `~/.agents/skills/` |
+| `--project` | Install to `.agents/skills/` in the current project |
+| `--ref <ref>` | Install a specific branch or tag (git sources only) |
+| `--also <agent>` | Also symlink to an agent's directory. Repeatable. Skips the agent selection prompt. |
+| `--yes` | Auto-select all skills, auto-accept clean installs, skip agent selection prompt |
+| `--strict` | Abort if any security warnings are found (exit 1) |
+| `--no-strict` | Override `on_warn = "fail"` in config for this invocation |
+| `--semantic` | Run Layer 2 semantic scan (auto-runs — no prompt shown) |
+| `--skip-scan` | Skip security scanning entirely (not recommended) |
+
+### Fully non-interactive install
+
+To install without any prompts (for scripts and CI):
+
+```bash
+skilltap install user/commit-helper --global --yes --strict
+```
+
+This auto-selects all skills, uses global scope, and aborts if any security issue is found.
+
+## Removing skills
+
+```bash
+skilltap remove commit-helper
+```
+
+```
+Remove commit-helper (global, v1.2.0)? (y/N): y
+✓ Removed commit-helper
+```
+
+This removes the skill directory and any agent symlinks. Use `--project` to remove from project scope:
+
+```bash
+skilltap remove termtube-dev --project
+```
+
+Skip the confirmation prompt:
+
+```bash
+skilltap remove commit-helper --yes
+```
+
+## Linking local skills
+
+For development, you can symlink a local skill directory into the install path instead of cloning:
+
+```bash
+skilltap link ./my-skill --also claude-code
+```
+
+```
+✓ Linked my-skill → ~/.agents/skills/my-skill/
+✓ Symlinked → ~/.claude/skills/my-skill/
+```
+
+This creates a symlink, not a copy. Changes to your local directory are immediately visible to the agent. Useful when developing and testing a skill.
+
+Link to project scope:
+
+```bash
+skilltap link ./my-skill --project --also claude-code
+```
+
+Remove the link (does not delete your original directory):
+
+```bash
+skilltap unlink my-skill
+```
+
+Linked skills are skipped during `skilltap update` since they're managed directly by you.
+
+---
+
+<!-- Source: https://skilltap.dev/guide/creating-skills -->
+
+# Creating Skills
+
+A skill is a directory with a `SKILL.md` file. There is no build step, no manifest, no special tooling. If it has a `SKILL.md`, it's a skill.
+
+## Scaffolding with `skilltap create`
+
+The fastest way to start is with the interactive scaffolding command:
+
+```bash
+skilltap create
+```
+
+This prompts for a name, template, author, and description, then generates all the starter files.
+
+For non-interactive use (scripts, CI):
+
+```bash
+skilltap create my-skill --template basic
+```
+
+### Templates
+
+| Template | Description |
+|----------|-------------|
+| `basic` | Single skill: `SKILL.md`, `.gitignore` |
+| `npm` | npm package: `SKILL.md`, `.gitignore`, `package.json` (with `agent-skill` keyword), `.github/workflows/publish.yml` with provenance attestation |
+| `multi` | Multi-skill repo: `.agents/skills/` structure with multiple skills, `.gitignore` |
+
+After scaffolding, the command prints next steps — how to test locally, verify the skill, and publish it.
+
+### The `npm` template
+
+The npm template is for publishing skills to the npm registry. It generates a `package.json` pre-configured with the `agent-skill` keyword so your skill is discoverable via `skilltap find --npm`, and a `.github/workflows/publish.yml` that publishes with npm provenance on every release tag:
+
+```bash
+skilltap create my-skill --template npm
+cd my-skill
+# edit SKILL.md, then:
+npm publish --provenance   # or push a tag to trigger the workflow
+```
+
+Skills published this way get a `✓ provenance` trust tier when installed.
+
+### The `multi` template
+
+The multi template generates a `.agents/skills/` layout for a repo that ships multiple skills. You'll be prompted for the skill names during create:
+
+```bash
+skilltap create my-project --template multi
+# creates:
+#   .agents/skills/my-skill-a/SKILL.md
+#   .agents/skills/my-skill-b/SKILL.md
+```
+
+## Verifying a skill
+
+Before publishing, run `skilltap verify` to validate your skill:
+
+```bash
+skilltap verify
+```
+
+Or point it at a specific path:
+
+```bash
+skilltap verify ./path/to/skill
+```
+
+This checks:
+- `SKILL.md` exists
+- Frontmatter is valid (required fields present, name format correct)
+- `name` field matches the directory name
+- No static security warnings (same checks as `skilltap install`)
+- Directory is within the size limit
+
+Output on success:
+
+```
+◆ Verifying commit-helper
+✓ SKILL.md found
+✓ Frontmatter valid
+   name: commit-helper
+   description: Generates conventional commit messages
+✓ Name matches directory
+✓ Security scan: clean
+✓ Size: 4.2 KB (3 files)
+
+◆ ✓ Skill is valid and ready to share.
+
+  To make this discoverable via taps, add to your tap's tap.json:
+  {
+    "name": "commit-helper",
+    "description": "Generates conventional commit messages",
+    "repo": "https://github.com/user/commit-helper",
+    "tags": []
+  }
+```
+
+Exit code `0` = valid, `1` = errors found.
+
+### Using verify in CI
+
+`skilltap verify --json` outputs machine-readable results:
+
+```bash
+skilltap verify --json
+```
+
+```json
+{
+  "name": "commit-helper",
+  "valid": true,
+  "issues": [],
+  "frontmatter": { "name": "commit-helper", "description": "Generates conventional commit messages" },
+  "fileCount": 3,
+  "totalBytes": 4301
+}
+```
+
+As a pre-push git hook (`.git/hooks/pre-push`):
+
+```bash
+#!/bin/sh
+skilltap verify
+```
+
+## SKILL.md format
+
+Every skill needs a `SKILL.md` file with YAML frontmatter:
+
+```markdown
+---
+name: commit-helper
+description: Generates conventional commit messages from staged changes.
+license: MIT
+---
+
+## Instructions
+
+When the user asks you to commit, analyze the staged changes with `git diff --cached`
+and generate a commit message following the Conventional Commits specification.
+
+Always use imperative mood in the subject line. Keep it under 72 characters.
+```
+
+### Required fields
+
+| Field | Description |
+|---|---|
+| `name` | Unique skill identifier. Lowercase alphanumeric and hyphens only, 1-64 characters. |
+| `description` | What the skill does. 1-1024 characters. |
+
+### Optional fields
+
+| Field | Description |
+|---|---|
+| `license` | License identifier (e.g. `MIT`, `Apache-2.0`). |
+| `compatibility` | Free-text compatibility notes (e.g. `Requires Python 3.8+`). Max 500 characters. |
+| `metadata` | Arbitrary key-value pairs for extra info. |
+
+Full example with all fields:
+
+```yaml
+---
+name: code-reviewer
+description: Thorough code review with security focus and performance analysis.
+license: MIT
+compatibility: Works best with TypeScript and JavaScript projects
+metadata:
+  author: nathan
+  version: "2.0"
+  tags: review, security
+---
+```
+
+### Name rules
+
+The `name` field must:
+
+- Be lowercase alphanumeric with hyphens (`a-z`, `0-9`, `-`)
+- Be 1-64 characters long
+- Not start or end with a hyphen
+- Not contain consecutive hyphens
+
+Valid: `commit-helper`, `code-review`, `my-skill-v2`
+
+Invalid: `Commit-Helper`, `commit_helper`, `-bad-name`, `name--oops`
+
+For multi-skill repos, the name must match the parent directory name (e.g., a skill at `.agents/skills/my-skill/SKILL.md` must have `name: my-skill`).
+
+## Skill content
+
+Everything after the frontmatter is the skill's instructions. Write whatever Markdown your target agents understand. Most skills include:
+
+- **Instructions** -- what the agent should do when the skill is active
+- **Rules** -- constraints, formatting requirements, conventions
+- **Reference material** -- API docs, schema definitions, examples
+
+You can include additional files alongside `SKILL.md`:
+
+```
+commit-helper/
+  SKILL.md              # required
+  REFERENCE.md          # optional supporting docs
+  scripts/              # optional helper scripts
+  templates/            # optional templates
+  examples/             # optional examples
+```
+
+Agents typically read `SKILL.md` as the entry point. Some agents also scan for additional Markdown files in the skill directory.
+
+## Standalone vs multi-skill repos
+
+### Standalone skill repo
+
+The simplest structure. `SKILL.md` at the repo root:
+
+```
+commit-helper/
+  SKILL.md
+  scripts/
+    generate.sh
+```
+
+When someone runs `skilltap install user/commit-helper`, the entire repo becomes the installed skill. Git history is preserved, and `skilltap update` runs `git pull` directly.
+
+### Multi-skill repo
+
+A repo can contain multiple skills inside `.agents/skills/`:
+
+```
+my-project/
+  src/
+  tests/
+  .agents/skills/
+    my-project-dev/
+      SKILL.md
+    my-project-review/
+      SKILL.md
+```
+
+This is useful for skills that live alongside the project they're designed for. When someone installs from this repo, skilltap finds both skills and prompts them to choose.
+
+skilltap also discovers skills at agent-specific paths (`.claude/skills/*/SKILL.md`, `.cursor/skills/*/SKILL.md`, etc.), but `.agents/skills/` is the preferred location.
+
+## Testing locally
+
+Use `skilltap link` to symlink your skill into the install path during development:
+
+```bash
+cd ~/dev/my-skill
+skilltap link . --also claude-code
+```
+
+```
+✓ Linked my-skill → ~/.agents/skills/my-skill/
+✓ Symlinked → ~/.claude/skills/my-skill/
+```
+
+This creates a symlink, not a copy. Any changes you make to your skill are immediately visible to the agent. Iterate on the `SKILL.md`, test with your agent, and repeat.
+
+For project-scoped testing:
+
+```bash
+skilltap link .agents/skills/my-project-dev --project --also claude-code
+```
+
+When you're done developing, remove the link:
+
+```bash
+skilltap unlink my-skill
+```
+
+## Publishing
+
+Push your skill to any git host:
+
+```bash
+cd ~/dev/my-skill
+git init
+git add -A
+git commit -m "Initial skill"
+git remote add origin https://gitea.example.com/user/my-skill
+git push -u origin main
+```
+
+Others can now install it:
+
+```bash
+skilltap install https://gitea.example.com/user/my-skill
+```
+
+If it's on GitHub, they can use shorthand:
+
+```bash
+skilltap install user/my-skill
+```
+
+That's all there is to it. No registration, no publishing step, no approval process. If it's in a git repo and has a `SKILL.md`, it's installable.
+
+## Adding to a tap
+
+A tap is a curated index that lets people discover and install your skill by name instead of URL. To add your skill to a tap:
+
+1. Create a tap (or use an existing one):
+
+```bash
+skilltap tap init my-tap
+cd my-tap
+```
+
+2. Edit `tap.json` to list your skill:
+
+```json
+{
+  "name": "my skills",
+  "description": "My curated skill collection",
+  "skills": [
+    {
+      "name": "commit-helper",
+      "description": "Generates conventional commit messages",
+      "repo": "https://gitea.example.com/user/commit-helper",
+      "tags": ["git", "productivity"]
+    }
+  ]
+}
+```
+
+3. Push the tap to a git host:
+
+```bash
+git add -A
+git commit -m "Add commit-helper"
+git remote add origin https://gitea.example.com/user/my-tap
+git push -u origin main
+```
+
+Anyone who adds your tap can now install by name:
+
+```bash
+skilltap tap add friend https://gitea.example.com/user/my-tap
+skilltap install commit-helper
+```
+
+For more on taps, see the [Taps](/guide/taps) guide.
+
+## Security considerations
+
+skilltap scans all files in your skill directory before anyone installs it. Keep these in mind to avoid false positives:
+
+- Avoid unnecessary base64 content, hidden HTML, or `<details>` blocks
+- Don't include binary files unless truly needed (they'll be flagged)
+- Keep skill directories small -- the default size warning threshold is 50KB
+- If you reference external URLs, prefer well-known domains
+
+See the [Security](/guide/security) guide for details on what the scanner checks.
+
+---
+
+<!-- Source: https://skilltap.dev/guide/taps -->
+
+# Taps
+
+A **tap** is either a git repository with a `tap.json` file or an HTTP registry endpoint that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+
+## Why taps?
+
+Taps solve discovery and curation:
+
+- **Team collections** -- your organization maintains a tap listing approved internal skills
+- **Community indexes** -- open-source tap repos that catalog useful skills across the ecosystem
+- **Personal curation** -- your own tap of skills you use and recommend
+
+## Adding a tap
+
+```bash
+skilltap tap add <name> <url>
+```
+
+skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
+
+```bash
+skilltap tap add community https://github.com/skilltap/community-tap
+```
+
+## Listing taps
+
+```bash
+skilltap tap list
+```
+
+Shows all registered taps with their names, URLs, type (`git`/`http`), and skill count.
+
+## Updating taps
+
+Pull the latest changes for all git taps:
+
+```bash
+skilltap tap update
+```
+
+Or update a specific tap:
+
+```bash
+skilltap tap update community
+```
+
+HTTP taps are always live — `tap update` is a no-op for them.
+
+## Removing a tap
+
+```bash
+skilltap tap remove community
+```
+
+This removes the tap index from your system. It does **not** uninstall any skills you installed from that tap -- those remain in place.
+
+## Searching across taps
+
+Find skills by name, description, or tag across all your registered taps:
+
+```bash
+skilltap find <query>
+```
+
+This prints a table of matching skills with their tap, name, description, and tags.
+
+For interactive selection (pick a result and install it directly):
+
+```bash
+skilltap find -i <query>
+```
+
+## Installing from a tap
+
+Once you have taps registered, install a skill by name:
+
+```bash
+skilltap install commit-helper
+```
+
+If the name exists in multiple taps, skilltap prompts you to choose which one.
+
+To install a specific git ref (branch, tag, or commit):
+
+```bash
+skilltap install commit-helper@v2.0
+```
+
+## Creating your own tap
+
+### Scaffold a new tap
+
+```bash
+skilltap tap init my-tap
+```
+
+This creates a `my-tap/` directory with an empty `tap.json`.
+
+### The tap.json format
+
+A tap is just a JSON file listing skills:
+
+```json
+{
+  "name": "my-tap",
+  "description": "My curated skills",
+  "skills": [
+    {
+      "name": "commit-helper",
+      "description": "Generate conventional commit messages",
+      "repo": "https://github.com/user/commit-helper",
+      "tags": ["git", "productivity"]
+    }
+  ]
+}
+```
+
+Each entry in `skills` has:
+
+| Field         | Required | Description                            |
+| ------------- | -------- | -------------------------------------- |
+| `name`        | Yes      | Unique skill name within this tap      |
+| `description` | Yes      | Short description shown in search      |
+| `repo`        | Yes      | Source URL — git URL, `github:owner/repo`, or `npm:package-name` |
+| `tags`        | No       | Array of strings for filtering/search  |
+
+### Publish your tap
+
+Push the repository to any git host — GitHub, GitLab, Bitbucket, a self-hosted server. Then share the URL:
+
+```bash
+skilltap tap add my-tap https://github.com/you/my-tap
+```
+
+Anyone with access to the repo can add it as a tap.
+
+## HTTP registry taps
+
+HTTP taps are live web services that serve skill indexes over an API. They're useful for enterprise registries, large or dynamic catalogs, or anything that doesn't fit cleanly into a git repo.
+
+### Adding an HTTP tap
+
+`skilltap tap add` probes the URL to auto-detect the type:
+
+```bash
+skilltap tap add enterprise https://skills.example.com/api/v1
+```
+
+If the URL returns a valid skill list response, it's registered as an HTTP tap. Otherwise skilltap falls back to treating it as a git repo.
+
+### HTTP vs git taps
+
+|  | Git tap | HTTP tap |
+|---|---|---|
+| Storage | Cloned locally | No local clone |
+| Updates | `tap update` to pull | Always live |
+| Discovery | Reads local `tap.json` | Queries the API |
+| Auth | Git credentials | Bearer token |
+
+### Authentication
+
+For private HTTP registries, add credentials in your config:
+
+```toml
+[[taps]]
+name = "enterprise"
+url = "https://skills.example.com/api/v1"
+type = "http"
+auth_env = "SKILLS_REGISTRY_TOKEN"
+```
+
+`auth_env` names an environment variable that holds the bearer token. Prefer it over `auth_token` (which embeds the token directly in config).
+
+See the [tap-format reference](/reference/tap-format#http-registry-api) for the full HTTP registry API spec.
+
+---
+
+<!-- Source: https://skilltap.dev/guide/security -->
+
+# Security
+
+Skills run inside AI agents. A malicious skill can exfiltrate secrets from your codebase, hijack agent behavior, or inject instructions that persist across conversations. skilltap treats every skill as untrusted by default and scans it before installation.
+
+## Two-layer scanning model
+
+skilltap uses two independent layers of security scanning. Layer 1 is fast and deterministic. Layer 2 is deeper and uses AI to catch attacks that pattern matching cannot.
+
+### Layer 1: Static scan
+
+The static scan runs automatically on every install and update. It uses pattern matching to detect known attack techniques.
+
+| Check                | What it catches                                              |
+| -------------------- | ------------------------------------------------------------ |
+| Invisible Unicode    | Zero-width characters, bidirectional overrides, homoglyphs   |
+| Hidden HTML/CSS      | Content hidden via `display:none`, tiny fonts, white-on-white |
+| Markdown hiding      | HTML comments, collapsed sections used to hide instructions  |
+| Obfuscation          | Base64-encoded payloads, hex-encoded strings                 |
+| Suspicious URLs      | Data URIs, IP-based URLs, known exfiltration patterns        |
+| Dangerous patterns   | Shell injection, environment variable access, eval constructs |
+| Tag injection        | Attempts to break out of agent prompt wrappers               |
+| File type/size       | Binary files and unusually large files flagged for review     |
+
+On updates, the static scan is **diff-aware** -- it only scans changed lines in modified files, not the entire skill directory.
+
+### Layer 2: Semantic scan
+
+The semantic scan is optional and uses a local AI agent to evaluate skill content for prompt injection and social engineering attacks that static patterns miss.
+
+How it works:
+
+1. Skill content is split into chunks of roughly 2000 characters (splitting at paragraph and sentence boundaries)
+2. Each chunk is sent to your local agent in sandboxed mode (no tools enabled)
+3. The agent scores each chunk from 0 (benign) to 10 (clearly malicious) with a reason
+4. Chunks scoring above the threshold (default: 6) are flagged as warnings
+
+The semantic scan includes defenses against meta-attacks -- skills that try to trick the scanning agent itself:
+
+- **Random-suffixed wrapper tags** prevent skills from injecting closing tags to escape the evaluation prompt
+- **Tag injection detection** auto-flags any chunk containing closing tag patterns at severity 10 before it reaches the agent
+- **Parallel evaluation** processes 4 chunks at a time for speed
+- **Fail-open on errors** -- if an agent call fails, that chunk scores 0 and scanning continues
+
+Enable semantic scanning with the `--semantic` flag. When passed, the scan runs automatically without a prompt:
+
+```bash
+skilltap install some-skill --semantic
+```
+
+The "Run semantic scan?" prompt only appears when **static warnings are found** and `--semantic` was not passed — offering you the option to do a deeper check before deciding.
+
+Or set it permanently in your config:
+
+```toml
+[security]
+scan = "semantic"
+```
+
+The semantic scan works with any supported agent: Claude Code, Gemini CLI, Codex, OpenCode, Ollama, or a custom binary.
+
+## What happens during install
+
+When you run `skilltap install`, the security flow is interactive. For a **clean skill** (no warnings), you see a final confirmation before anything is written to disk:
+
+```
+$ skilltap install some-skill --global
+
+Cloning some-skill...
+Scanning some-skill...  ✓ No warnings
+
+◇  Install some-skill?
+│  › Yes
+
+✓ Installed some-skill → ~/.agents/skills/some-skill/
+```
+
+Pass `--yes` to skip this confirmation for clean installs (warnings always prompt regardless).
+
+For a skill with **warnings**, the flow continues:
+
+```
+$ skilltap install some-skill --global
+
+Cloning some-skill...
+Scanning some-skill...
+
+⚠ Static warnings in some-skill:
+
+  SKILL.md L14: Invisible Unicode (3 zero-width chars)
+  SKILL.md L42-45: Suspicious URL
+    │ "https://192.168.1.1/exfil?data=..."
+
+? Run semantic scan? (uses your local agent)
+  ● Yes
+  ○ No
+```
+
+If you choose **Yes** and haven't configured an agent yet, skilltap detects available agent CLIs and asks you to pick one:
+
+```
+? Which agent CLI for semantic scanning?
+  ● Claude Code   [claude]
+  ○ Gemini CLI    [gemini]
+  ○ Codex         [codex]
+  ○ Other — enter path
+```
+
+Your choice is saved to `config.toml` so you're only asked once. Then the semantic scan runs:
+
+```
+Scanning chunk 1/8...
+Scanning chunk 2/8...
+
+⚠ Semantic warnings in some-skill:
+
+  SKILL.md L45-60 (chunk 2) — risk 8/10
+    │ Prompt injection detected: instructions attempt to override
+    │ agent safety constraints
+
+? Install some-skill despite warnings?
+  ○ Yes
+  ● No
+```
+
+With `--strict`, any warning skips the prompt and aborts immediately.
+
+## Configuring security behavior
+
+### Warning behavior
+
+Control what happens when a scan finds warnings:
+
+```toml
+[security]
+on_warn = "prompt"   # show warnings and ask (default)
+# on_warn = "fail"   # block installation immediately
+```
+
+Override per-command with flags:
+
+```bash
+skilltap install some-skill --strict      # treat warnings as errors
+skilltap install some-skill --no-strict   # override on_warn=fail for this run
+```
+
+### Requiring scans
+
+Prevent anyone from bypassing the security scan:
+
+```toml
+[security]
+require_scan = true
+```
+
+With this set, `--skip-scan` is rejected.
+
+### Skipping scans
+
+For sources you trust completely, bypass scanning:
+
+```bash
+skilltap install trusted-skill --skip-scan
+```
+
+This skips both static and semantic scans. Blocked if `require_scan` is enabled.
+
+## Trust signals
+
+In addition to scanning skill content for malicious patterns, skilltap verifies the provenance of skills — confirming they come from where they claim to come from.
+
+### Trust tiers
+
+| Tier | Symbol | Meaning |
+|------|--------|---------|
+| Provenance | `✓ provenance` | SLSA build attestation (npm) or GitHub Actions artifact attestation (git) |
+| Publisher | `● publisher` | Skill published under a known npm identity |
+| Curated | `◆ curated` | Listed in a tap that includes verification metadata |
+| Unverified | `○ unverified` | No verification signals available |
+
+`unverified` is the default for skills that have no provenance data. It's not a warning — just the baseline.
+
+### Provenance verification
+
+For **npm-sourced skills**, skilltap verifies SLSA Build Level 2 attestations via [Sigstore](https://sigstore.dev). This confirms that the tarball was built by a specific GitHub Actions workflow from a known source repository.
+
+For **git-sourced skills**, skilltap checks GitHub artifact attestations when the `gh` CLI is installed and available on your PATH.
+
+### Automatic and non-blocking
+
+Trust verification runs automatically at install time and is re-verified on every update. Verification failures always degrade gracefully — a failed Sigstore check returns `unverified`, not an error. No configuration is required.
+
+### Where trust is shown
+
+Trust tier appears as a column in `skilltap list`, a row in `skilltap info`, and a column in `skilltap find`:
+
+```
+$ skilltap list
+Global (2 skills)
+  Name             Ref     Source                                  Trust          Description
+  ───────────────────────────────────────────────────────────────────────────────────────────
+  commit-helper    v1.2.0  npm:@user/commit-helper                 ✓ provenance   Conventional commit messages
+  my-local-skill   main    local                                   ○ unverified   My development skill
+```
+
+```
+$ skilltap info commit-helper
+name:          commit-helper
+description:   Generates conventional commit messages
+scope:         global
+source:        npm:@user/commit-helper
+ref:           1.2.0
+sha:           —
+trust:         ✓ Provenance verified
+  source:      github.com/user/commit-helper
+  build:       .github/workflows/release.yml
+  log:         https://search.sigstore.dev/...
+path:          /home/user/.agents/skills/commit-helper
+agents:        claude-code
+installed:     2026-02-28T12:00:00.000Z
+updated:       2026-02-28T12:00:00.000Z
+```
+
+## Agent mode
+
+When [agent mode](./configuration.md) is enabled, security behavior is hardened automatically:
+
+- Warnings always cause installation to fail (no prompting)
+- Scan bypass (`--skip-scan`) is blocked
+- If `scan` is set to `"off"`, it is promoted to `"static"`
+- Output is machine-readable with a stop directive telling the calling agent not to proceed
+
+---
+
+<!-- Source: https://skilltap.dev/guide/configuration -->
+
+# Configuration
+
+## Config file location
+
+skilltap stores its configuration at:
+
+```
+~/.config/skilltap/config.toml
+```
+
+You can edit this file directly or use the interactive wizard.
+
+## Interactive wizard
+
+Run the configuration wizard:
+
+```bash
+skilltap config
+```
+
+This walks you through each setting with prompts and sensible defaults. Existing values are preserved -- the wizard only updates what you change.
+
+## Agent mode setup
+
+Agent mode configures skilltap for use by AI agents (non-interactive, strict security, machine-readable output). Set it up with:
+
+```bash
+skilltap config agent-mode
+```
+
+This command requires a TTY -- it must be run by a human, not by an agent. It prompts for agent-mode-specific settings like default scope, scan level, and which agent to use.
+
+## Config reference
+
+### `[defaults]`
+
+General defaults for install and update commands.
+
+| Key     | Type     | Default | Description                                                     |
+| ------- | -------- | ------- | --------------------------------------------------------------- |
+| `scope` | string   | `""`    | Default install scope: `"global"` or `"project"`                |
+| `also`  | string[] | `[]`    | Additional agent symlinks to create (e.g. `["cursor", "codex"]`) |
+| `yes`   | boolean  | `false` | Skip confirmation prompts                                       |
+
+### `[security]`
+
+Controls scanning and warning behavior.
+
+| Key             | Type    | Default    | Description                                          |
+| --------------- | ------- | ---------- | ---------------------------------------------------- |
+| `scan`          | string  | `"static"` | Scan mode: `"off"`, `"static"`, or `"semantic"`      |
+| `on_warn`       | string  | `"prompt"` | Warning behavior: `"prompt"` (ask) or `"fail"` (block) |
+| `require_scan`  | boolean | `false`    | Block `--skip-scan` flag                             |
+| `agent`         | string  | `""`       | Agent for semantic scan (e.g. `"claude"`)            |
+| `threshold`     | number  | `5`        | Semantic score threshold (0-10, chunks >= this flagged) |
+| `max_size`      | number  | `51200`    | Max total skill size in bytes before warning (default 50 KB) |
+
+### `[agent-mode]`
+
+Settings applied when an AI agent runs skilltap.
+
+| Key       | Type    | Default     | Description                                           |
+| --------- | ------- | ----------- | ----------------------------------------------------- |
+| `enabled` | boolean | `false`     | Enable agent mode                                     |
+| `scope`   | string  | `"project"` | Default scope for agent installs: `"global"` or `"project"` |
+
+Agent mode inherits `defaults.also` and `security.scan` from the corresponding sections — there are no separate agent-mode overrides for those fields.
+
+## How config and flags compose
+
+When a CLI flag and a config value conflict, the **most restrictive** option wins:
+
+- `--strict` overrides `on_warn` to `"fail"`
+- `--no-strict` overrides `on_warn` to `"prompt"`
+- `require_scan = true` blocks `--skip-scan` (returns an error)
+- Agent mode forces `on_warn = "fail"` and blocks `--skip-scan`
+- Agent mode promotes `scan = "off"` to `scan = "static"`
+
+Flags always override config for non-security settings like `scope` and `yes`.
+
+## Example config
+
+```toml
+[defaults]
+scope = "project"
+also = ["cursor"]
+yes = false
+
+[security]
+scan = "static"
+on_warn = "prompt"
+require_scan = false
+agent = "claude"
+threshold = 5
+
+[agent-mode]
+enabled = false
+scope = "project"
+```
+
+For the full list of options and their allowed values, see the [Config Options Reference](/reference/config-options).
+
+---
+
+<!-- Source: https://skilltap.dev/guide/doctor -->
+
+# Doctor
+
+`skilltap doctor` is a diagnostic command that checks your environment, configuration, and installed state. Run it when something isn't working — it surfaces problems before they become cryptic errors during install or update.
+
+```bash
+skilltap doctor
+```
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--fix` | Auto-repair issues where safe to do so |
+| `--json` | Machine-readable JSON output (for CI/scripting) |
+
+## What It Checks
+
+Doctor runs 9 independent checks sequentially. A failure in one doesn't skip the rest. Each check produces a **pass** (◇), **warning** (⚠), or **failure** (✗).
+
+### 1. Git
+
+Verifies `git` is on your PATH and is a recent enough version.
+
+- **Fail**: git not found → install it from [git-scm.com](https://git-scm.com)
+- **Warn**: git < 2.25 → shallow clone (`--filter`) may not work correctly
+
+### 2. Config File
+
+Checks that `~/.config/skilltap/config.toml` exists, is valid TOML, and passes schema validation.
+
+- **Fail**: parse error or invalid values
+- **Warn**: file doesn't exist → run `skilltap config` to create one
+- **Fix** (`--fix`): missing config → creates a default config file
+
+### 3. Directories
+
+Checks that all expected directories exist: `~/.config/skilltap/`, `cache/`, `taps/`, and `~/.agents/skills/`.
+
+- **Warn**: missing directory
+- **Fix** (`--fix`): creates missing directories
+
+### 4. installed.json
+
+Validates the state file that tracks installed skills.
+
+- **Fail**: file is corrupt (bad JSON or failed schema validation)
+- **Warn**: file doesn't exist (no skills installed yet — not an error)
+- **Fix** (`--fix`): backs up the corrupt file to `installed.json.bak` and creates a fresh empty state
+
+### 5. Skill Integrity
+
+For each entry in `installed.json`, verifies the skill directory actually exists on disk. Also checks for directories in `~/.agents/skills/` that aren't tracked.
+
+- **Warn — orphan record**: skill is in `installed.json` but directory is missing
+- **Warn — orphan directory**: directory exists on disk but isn't tracked in `installed.json`
+- **Warn — broken link**: a linked skill's target directory no longer exists
+- **Fix** (`--fix`): removes orphan records and broken link entries; does not delete orphan directories (they might be manually placed)
+
+### 6. Agent Symlinks
+
+For each skill with `also` entries, checks that symlinks exist at the agent-specific paths and point to the correct target.
+
+- **Warn**: missing or broken symlink
+- **Fix** (`--fix`): recreates missing or incorrect symlinks
+
+### 7. Taps
+
+For each configured tap, verifies the local clone is intact and `tap.json` is valid.
+
+- **Warn**: tap directory missing, `tap.json` invalid, or `.git/` missing
+- **Fix** (`--fix`): re-clones missing tap directories from the configured URL
+
+### 8. Agent CLIs
+
+Detects available agent CLIs (Claude Code, Gemini CLI, Codex, Ollama, etc.). If a specific agent is configured for semantic scanning, verifies it's available.
+
+- **Warn**: configured agent not found on PATH (semantic scan will fail at runtime)
+- **Warn**: no agents detected (informational only — not everyone uses semantic scan)
+
+### 9. npm (conditional)
+
+Only checked if any installed skills use an `npm:` source.
+
+- **Warn**: npm not found on PATH
+- Checks registry reachability and login status
+
+## Output
+
+### Default (interactive)
+
+```
+┌ skilltap doctor
+│
+◇ git: /usr/bin/git (2.44.0) ✓
+◇ config: ~/.config/skilltap/config.toml ✓
+◇ dirs: ~/.config/skilltap/ ✓
+◇ installed.json: 5 skills ✓
+◇ skills: 5 installed, 5 on disk ✓
+◇ symlinks: 8 symlinks, 8 valid ✓
+◇ taps: 2 configured, 2 valid ✓
+◇ agents: 3 detected (claude, gemini, ollama) ✓
+│
+└ ✓ Everything looks good!
+```
+
+When issues are found:
+
+```
+┌ skilltap doctor
+│
+◇ git: /usr/bin/git (2.44.0) ✓
+◇ config: ~/.config/skilltap/config.toml ✓
+◇ dirs: ~/.config/skilltap/ ✓
+◇ installed.json: 5 skills ✓
+⚠ skills: 5 installed, 4 on disk
+│  commit-helper: directory missing at ~/.agents/skills/commit-helper/
+⚠ symlinks: 8 symlinks, 6 valid
+│  commit-helper: missing symlink at ~/.claude/skills/commit-helper/
+│  code-review: symlink points to wrong target
+◇ taps: 2 configured, 2 valid ✓
+⚠ agents: configured agent 'codex' not found on PATH
+│
+└ ⚠ 3 issues found. Run 'skilltap doctor --fix' to auto-fix where possible.
+```
+
+### With `--fix`
+
+```
+┌ skilltap doctor
+│
+...
+⚠ skills: 5 installed, 4 on disk
+│  commit-helper: directory missing — removed from installed.json ✓
+⚠ symlinks: 8 symlinks, 6 valid
+│  commit-helper: removed (skill no longer installed) ✓
+│  code-review: recreated symlink ✓
+◇ taps: 2 configured, 2 valid ✓
+⚠ agents: configured agent 'codex' not found on PATH
+│  (cannot auto-fix — install codex or change security.agent in config)
+│
+└ ✓ Fixed 3 of 4 issues. 1 requires manual action.
+```
+
+### With `--json`
+
+```json
+{
+  "ok": false,
+  "checks": [
+    { "name": "git", "status": "pass", "detail": "/usr/bin/git (2.44.0)" },
+    { "name": "config", "status": "pass", "detail": "~/.config/skilltap/config.toml" },
+    { "name": "dirs", "status": "pass" },
+    { "name": "installed", "status": "pass", "detail": "5 skills" },
+    {
+      "name": "skills",
+      "status": "warn",
+      "issues": [
+        { "message": "commit-helper: directory missing", "fixable": true }
+      ]
+    },
+    {
+      "name": "symlinks",
+      "status": "warn",
+      "issues": [
+        { "message": "commit-helper: missing symlink", "fixable": true },
+        { "message": "code-review: wrong target", "fixable": true }
+      ]
+    },
+    { "name": "taps", "status": "pass", "detail": "2 configured, 2 valid" },
+    {
+      "name": "agents",
+      "status": "warn",
+      "issues": [
+        { "message": "configured agent 'codex' not found on PATH", "fixable": false }
+      ]
+    }
+  ]
+}
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks pass, or only warnings |
+| `1` | One or more failures (corrupt files, missing git) |
+
+Warnings alone produce exit code 0. Only hard failures trigger exit 1, so you can use `skilltap doctor` as a health check in CI without false positives from missing optional features.
+
+## When to Run
+
+- **Something's broken**: Run `skilltap doctor` to get a clear picture of what's wrong before digging into logs.
+- **After moving your home directory**: Symlinks and paths may need updating — `--fix` handles most of this.
+- **In CI setup scripts**: Use `--json` to parse results programmatically, or just check the exit code.
+- **After a system reinstall**: Verify git and agents are still on PATH and your config survived.
+
+---
+
+<!-- Source: https://skilltap.dev/guide/shell-completions -->
+
+# Shell Completions
+
+skilltap supports tab-completion for **bash**, **zsh**, and **fish**. Completions cover commands, subcommands, flags, and dynamic values — installed skill names, tap names, and available tap skills all complete at the cursor.
+
+## Quick Setup
+
+The fastest way to enable completions is `--install`, which writes the script to your shell's standard location:
+
+::: code-group
+
+```bash [bash]
+skilltap completions bash --install
+# then restart your shell, or:
+source ~/.local/share/bash-completion/completions/skilltap
+```
+
+```zsh [zsh]
+skilltap completions zsh --install
+# Add to ~/.zshrc (if not already there):
+#   fpath=(~/.zfunc $fpath)
+#   autoload -Uz compinit && compinit
+# Then restart your shell.
+```
+
+```fish [fish]
+skilltap completions fish --install
+# Available immediately in new fish sessions.
+```
+
+:::
+
+`--install` writes to the standard location for each shell and prints the exact activation command if any shell config change is needed.
+
+## Manual Install
+
+If you prefer to manage completion files yourself, print the script to stdout and pipe it where you want:
+
+```bash
+# Evaluate inline (add to ~/.bashrc)
+eval "$(skilltap completions bash)"
+
+# Or write to a file manually
+skilltap completions zsh > ~/.zfunc/_skilltap
+```
+
+## Install Locations
+
+| Shell | `--install` writes to |
+|-------|----------------------|
+| bash | `~/.local/share/bash-completion/completions/skilltap` |
+| zsh | `~/.zfunc/_skilltap` |
+| fish | `~/.config/fish/completions/skilltap.fish` |
+
+The directory is created if it doesn't exist. If a completion file already exists it is overwritten.
+
+## What Completes
+
+### Commands and Subcommands
+
+```
+skilltap <TAB>
+  install  remove  list  update  find  link  unlink  info
+  create  verify  config  tap  doctor  completions
+
+skilltap tap <TAB>
+  add  remove  list  update  init
+
+skilltap config <TAB>
+  agent-mode
+```
+
+### Flags
+
+Every command's flags complete. A few examples:
+
+```
+skilltap install --<TAB>
+  --project  --global  --also  --ref  --yes  --strict  --no-strict
+  --semantic  --agent  --skip-scan
+
+skilltap doctor --<TAB>
+  --json  --fix
+
+skilltap list --<TAB>
+  --global  --project  --json
+```
+
+### Flag Values
+
+```
+skilltap install --also <TAB>
+  claude-code  cursor  codex  gemini  windsurf
+
+skilltap create --template <TAB>
+  basic  npm  multi
+
+skilltap completions <TAB>
+  bash  zsh  fish
+```
+
+### Dynamic Values
+
+These are read from your local state at completion time, so they stay current:
+
+| Command | Completes |
+|---------|-----------|
+| `remove <TAB>` | Installed skill names |
+| `update <TAB>` | Installed skill names |
+| `unlink <TAB>` | Linked skill names only |
+| `info <TAB>` | Installed skill names + tap skill names |
+| `install <TAB>` | Tap skill names |
+| `tap remove <TAB>` | Configured tap names |
+| `tap update <TAB>` | Configured tap names |
+
+Dynamic completions are fast — they read `installed.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
+
+## Troubleshooting
+
+**Completions aren't working after `--install`**
+
+Restart your shell or source the file directly. For bash: `source ~/.local/share/bash-completion/completions/skilltap`.
+
+**zsh: "command not found: compdef"**
+
+Your `~/.zshrc` needs to initialize the completion system. Add these lines before sourcing any completion scripts:
+
+```zsh
+fpath=(~/.zfunc $fpath)
+autoload -Uz compinit && compinit
+```
+
+Then restart your shell.
+
+**fish: completions aren't loading**
+
+Fish auto-loads from `~/.config/fish/completions/`. Open a new terminal session (not just a new tab in the same session).
+
+**Dynamic completions show nothing**
+
+If `remove <TAB>` shows nothing but you have skills installed, check that `skilltap` is on PATH in your shell — the completion script runs `skilltap --get-completions installed-skills` as a subprocess.
+
+---
+
+<!-- Source: https://skilltap.dev/reference/cli -->
+
+# CLI Reference
+
+Complete reference for all skilltap commands, arguments, flags, and behavior.
+
+## Global Behavior
+
+- **Exit codes:** `0` success, `1` error, `2` user cancelled
+- **Errors** are written to stderr with an `error:` prefix and optional `hint:`
+- **Config** is stored at `~/.config/skilltap/config.toml`
+- **State** is tracked in `~/.config/skilltap/installed.json`
+- **Agent mode** (when enabled via config) changes all commands to non-interactive, strict-security, plain-text output
+
+---
+
+## skilltap install
+
+Install a skill from a URL, tap name, or local path.
+
+```
+skilltap install <source> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `source` | Yes | Git URL, `github:owner/repo`, `owner/repo`, tap skill name, `name@ref`, or local path |
+
+### Source Formats
+
+| Format | Example |
+|--------|---------|
+| Git URL (any host) | `https://gitea.example.com/user/repo` |
+| SSH | `git@github.com:user/repo.git` |
+| GitHub shorthand | `user/repo` |
+| GitHub explicit | `github:user/repo` |
+| npm package | `npm:vibe-rules` |
+| npm scoped + version | `npm:@scope/skill@1.2.0` |
+| Tap name | `commit-helper` |
+| Tap name + ref | `commit-helper@v1.2.0` |
+| Local path | `./my-skill` |
+
+Source resolution order:
+
+1. `https://`, `http://`, `git@`, `ssh://` — git adapter
+2. `npm:` prefix — npm registry adapter
+3. `url:` prefix — HTTP tarball (used internally by HTTP registry taps)
+4. `./`, `/`, `~/` — local adapter
+5. `github:` prefix, or contains `/` with no protocol — GitHub adapter
+6. Contains `@` — split into name + ref, resolve from taps
+7. Otherwise — search taps for matching skill name
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--project` | boolean | `false` | Install to `.agents/skills/` in current project |
+| `--global` | boolean | `false` | Install to `~/.agents/skills/` |
+| `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. Values: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf` |
+| `--ref <ref>` | string | default branch | Branch or tag to install |
+| `--yes` | boolean | `false` | Auto-select all skills, auto-accept clean installs, skip agent symlink prompt. Security warnings still prompt. |
+| `--strict` | boolean | from config | Abort on any security warning (exit 1) |
+| `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
+| `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
+| `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
+
+### Prompt Behavior
+
+Prompts appear in this order: scope → agents → (clone) → skill selection → scan → install confirm.
+
+| Flags | Scope | Agents (--also) | Skill selection | Static warnings | Semantic offer | Install confirm |
+|-------|-------|-----------------|-----------------|-----------------|----------------|-----------------|
+| (none) | Prompt | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--project` | Project | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--global` | Global | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--also <agent>` | Prompt | Skipped | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--yes` | **Still prompts** | Config default | Auto-select all | **Still prompts** | Offered if warnings | Auto-accept if clean |
+| `--yes --global` | Global | Config default | Auto-select all | **Still prompts** | Offered if warnings | Auto-accept if clean |
+| `--semantic` | Prompt | Prompt | Prompt if multiple | Prompt | **Always auto-runs** | **Prompt (Y/n)** |
+| `--strict` | Prompt | Prompt | Prompt if multiple | **Abort (exit 1)** | -- | -- |
+| `--strict --yes --global` | Global | Config default | Auto-select all | **Abort (exit 1)** | -- | -- |
+| `--skip-scan --yes --global` | Global | Config default | Auto-select all | Skipped | Skipped | Auto-accept |
+
+Notes:
+- `--semantic` causes the semantic scan to run automatically without a "Run semantic scan?" prompt.
+- The semantic offer prompt only appears when static warnings are found and `--semantic` was not passed.
+- When the semantic scan runs for the first time and no agent is configured, skilltap prompts to pick an agent CLI. The choice is saved to `config.toml`.
+
+::: info Scope always prompts
+`--yes` does **not** skip the scope prompt. Use `--yes --global` or `--yes --project` for fully non-interactive installs.
+:::
+
+::: warning Security is a hard gate
+`--yes` does **not** bypass security warnings. `--strict` goes further: any warning is a hard failure. The only way to skip scanning entirely is `--skip-scan`, which is blocked when `require_scan = true`.
+:::
+
+### Examples
+
+```bash
+# Install from any git URL
+skilltap install https://gitea.example.com/user/commit-helper
+
+# GitHub shorthand
+skilltap install user/repo
+
+# Install from npm
+skilltap install npm:vibe-rules
+skilltap install npm:@scope/my-skills@2.0.0
+
+# Install a specific version from a tap
+skilltap install commit-helper@v1.2.0
+
+# Fully non-interactive (clean skills only)
+skilltap install commit-helper --yes --global
+
+# Install to project scope with agent symlinks
+skilltap install my-skill --project --also claude-code --also cursor
+
+# Strict security + semantic scan
+skilltap install some-skill --strict --semantic
+```
+
+---
+
+## skilltap remove
+
+Remove an installed skill.
+
+```
+skilltap remove <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Name of installed skill |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--project` | boolean | `false` | Remove from project scope instead of global |
+| `--yes` | boolean | `false` | Skip confirmation prompt |
+
+### Behavior
+
+Removes the skill directory, any agent-specific symlinks (from the `also` list), and the cache entry if this was the last skill from a multi-skill repo. Updates `installed.json`.
+
+### Examples
+
+```bash
+# Remove with confirmation prompt
+skilltap remove commit-helper
+
+# Skip confirmation
+skilltap remove commit-helper --yes
+
+# Remove from project scope
+skilltap remove termtube-dev --project
+```
+
+---
+
+## skilltap list
+
+List installed skills.
+
+```
+skilltap list [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--global` | boolean | `false` | Show only global skills |
+| `--project` | boolean | `false` | Show only project skills |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output Format
+
+```
+Global (2 skills)
+  Name           Ref     Source                                   Trust          Description
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  commit-helper  v1.2.0  https://github.com/user/commit-helper…  ✓ provenance   Conventional commit messages
+  code-review    v2.0.0  https://github.com/user/code-review…    ◆ curated      Thorough code review
+
+Project (2 skills)
+  Name            Ref   Source                                  Trust          Description
+  ──────────────────────────────────────────────────────────────────────────────────────────
+  termtube-dev    main  https://github.com/user/termtube…       ○ unverified   Development workflow
+```
+
+Columns: Name, Ref, Source (raw repo URL, truncated), Trust, Description. Linked skills appear in a separate **Linked** section.
+
+The Source column shows the repo URL (or `local` for linked skills, `npm:...` for npm sources).
+
+If no skills are installed: `No skills installed. Run 'skilltap install <url>' to get started.`
+
+### Examples
+
+```bash
+# List all installed skills
+skilltap list
+
+# List only global skills
+skilltap list --global
+
+# Machine-readable output
+skilltap list --json
+```
+
+---
+
+## skilltap update
+
+Update installed skills.
+
+```
+skilltap update [name] [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Specific skill to update. If omitted, updates all. |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--yes` | boolean | `false` | Auto-accept clean updates. Security warnings still prompt. |
+| `--strict` | boolean | from config | Skip skills with security warnings in the diff (does not abort; continues to next skill). |
+| `--semantic` | boolean | from config | Force Layer 2 semantic scan on diff content |
+| `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
+
+### Behavior
+
+For each skill:
+
+1. `git fetch` in installed dir (standalone) or cache dir (multi-skill)
+2. Compare local HEAD SHA to remote
+3. If identical: `Already up to date.`
+4. If different: show diff summary, run static scan on changed lines only
+5. If `--strict` and warnings found: skip this skill, continue to next
+6. If warnings found (not strict): prompt to apply
+7. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
+8. Update `installed.json` with new SHA and `updatedAt`
+9. Re-create agent symlinks if target dirs are missing
+
+Linked skills (from `skilltap link`) are always skipped.
+
+### Examples
+
+```bash
+# Update all skills interactively
+skilltap update
+
+# Auto-accept clean updates
+skilltap update --yes
+
+# Update one skill
+skilltap update commit-helper
+
+# CI: fail on any new warnings
+skilltap update --strict
+```
+
+---
+
+## skilltap find
+
+Search for skills across all configured taps.
+
+```
+skilltap find [query] [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `query` | No | Search term (fuzzy matched against name, description, tags). If omitted, lists all skills. |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `-i` | boolean | `false` | Interactive fuzzy finder mode |
+| `--json` | boolean | `false` | Output as JSON |
+| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. |
+
+### Examples
+
+```bash
+# Search for skills matching "review"
+skilltap find review
+
+# List all skills from all taps
+skilltap find
+
+# Interactive fuzzy finder (type to filter, arrow keys, Enter to install)
+skilltap find -i
+
+# Search npm registry for skills matching "commit"
+skilltap find commit --npm
+
+# Search all npm packages with agent-skill keyword
+skilltap find --npm
+
+# Machine-readable output
+skilltap find --json
+```
+
+If no taps are configured: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+
+---
+
+## skilltap link
+
+Symlink a local skill directory into the install path. For development workflows.
+
+```
+skilltap link <path> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | Yes | Path to local skill directory (must contain SKILL.md) |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--project` | boolean | `false` | Link to project scope instead of global |
+| `--global` | boolean | `false` | Link to global scope (explicit, for scripts) |
+| `--also <agent>` | string | from config | Also symlink to agent-specific directory. Repeatable. |
+
+### Behavior
+
+Resolves the path to absolute, validates SKILL.md exists, parses frontmatter for the skill name, and creates a symlink at the install path. Records in `installed.json` with `scope: "linked"`.
+
+Does **not** clone or copy -- the symlink points to the original directory.
+
+### Examples
+
+```bash
+# Link current directory
+skilltap link .
+
+# Link to project scope with agent symlink
+skilltap link . --project --also claude-code
+
+# Link a specific path
+skilltap link ~/dev/my-new-skill
+```
+
+---
+
+## skilltap unlink
+
+Remove a linked skill.
+
+```
+skilltap unlink <name>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Name of linked skill |
+
+### Behavior
+
+Verifies the skill was linked (not installed via clone), removes the symlink from the install path, removes any agent-specific symlinks, and updates `installed.json`.
+
+Does **not** delete the original skill directory.
+
+### Examples
+
+```bash
+skilltap unlink my-new-skill
+```
+
+---
+
+## skilltap info
+
+Show details about an installed or available skill.
+
+```
+skilltap info <name>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Skill name |
+
+### Output
+
+For an installed skill (key-value rows, keys left-padded to 13 chars):
+
+```
+name:          commit-helper
+description:   Generates conventional commit messages
+scope:         global
+source:        https://gitea.example.com/nathan/commit-helper
+ref:           v1.2.0
+sha:           abc123d
+trust:         ✓ Provenance verified
+  source:      github.com/nathan/commit-helper
+  build:       .github/workflows/release.yml
+path:          /home/nathan/.agents/skills/commit-helper
+agents:        claude-code
+installed:     2026-02-28T12:00:00.000Z
+updated:       2026-02-28T12:00:00.000Z
+```
+
+`agents:` shows which agent-specific symlinks currently exist on disk.
+
+For a skill available in a tap (not installed):
+
+```
+name:          commit-helper
+description:   Some useful skill
+status:        (available)
+tap:           community
+source:        https://github.com/someone/commit-helper
+tags:          productivity, workflow
+
+Run 'skilltap install commit-helper' to install.
+```
+
+If not found anywhere: exit 1 with `error: Skill 'name' is not installed` and hint `Run 'skilltap find name' to search`.
+
+### Examples
+
+```bash
+skilltap info commit-helper
+skilltap info termtube-dev
+```
+
+---
+
+## skilltap config
+
+Interactive setup wizard for generating `config.toml`.
+
+```
+skilltap config [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--reset` | boolean | `false` | Overwrite existing config (prompts for confirmation first) |
+
+**Always interactive.** This command requires a TTY. It cannot be run non-interactively or by an agent.
+
+### Wizard Flow
+
+The wizard prompts for:
+
+1. Default install scope (ask each time / always global / always project)
+2. Auto-symlink agent selection (Claude Code, Cursor, Codex, Gemini, Windsurf)
+3. Security scan level (static / static + semantic / off)
+4. Agent CLI for scanning (if semantic selected)
+5. Behavior when security warnings are found (ask / always block)
+
+Writes the result to `~/.config/skilltap/config.toml`.
+
+### Examples
+
+```bash
+# Run the setup wizard
+skilltap config
+
+# Reset and reconfigure
+skilltap config --reset
+```
+
+---
+
+## skilltap config agent-mode
+
+Interactive wizard for enabling or disabling agent mode.
+
+```
+skilltap config agent-mode
+```
+
+**Always interactive.** Requires a TTY. This is the **only** way to toggle agent mode -- there are no CLI flags or environment variables. An agent cannot enable or disable its own safety constraints.
+
+### Wizard Flow (enabling)
+
+The wizard prompts for:
+
+1. Enable or disable agent mode
+2. Default scope for agent installs (project recommended / global)
+3. Auto-symlink agent selection
+4. Security scan level (static / static + semantic; "off" is not offered)
+5. Agent CLI for scanning (if semantic selected)
+
+### What Agent Mode Does
+
+When enabled, all skilltap commands behave differently:
+
+- All prompts auto-accept or hard-fail (no interactive input)
+- Security warnings always block installation (`on_warn = "fail"`)
+- Security scanning cannot be skipped (`require_scan = true`)
+- Output is plain text (no colors, spinners, or Unicode)
+- Security failures emit a directive message telling the agent to stop
+
+These constraints are **not overridable** via CLI flags.
+
+### Non-TTY Error
+
+```
+error: 'skilltap config agent-mode' must be run interactively.
+Agent mode can only be enabled or disabled by a human.
+```
+
+### Examples
+
+```bash
+# Enable agent mode
+skilltap config agent-mode
+
+# Disable agent mode (select "No" in the wizard)
+skilltap config agent-mode
+```
+
+---
+
+## skilltap tap add
+
+Add a tap. Supports git repos and HTTP registry endpoints.
+
+```
+skilltap tap add <name> <url>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Local name for this tap |
+| `url` | Yes | Git URL of the tap repo, or HTTP registry base URL |
+
+### Behavior
+
+Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates `tap.json`, and records the tap in `config.toml`.
+
+If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
+
+### Examples
+
+```bash
+# Git tap
+skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
+skilltap tap add community https://github.com/someone/awesome-skills-tap
+
+# HTTP registry tap (auto-detected)
+skilltap tap add enterprise https://skills.example.com/api/v1
+```
+
+---
+
+## skilltap tap remove
+
+Remove a configured tap.
+
+```
+skilltap tap remove <name>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Name of tap to remove |
+
+### Behavior
+
+Removes the tap directory from `~/.config/skilltap/taps/{name}/` and the tap entry from `config.toml`.
+
+Does **not** uninstall skills that were installed from this tap. Those skills remain independent.
+
+### Examples
+
+```bash
+skilltap tap remove community
+```
+
+---
+
+## skilltap tap list
+
+List configured taps.
+
+```
+skilltap tap list
+```
+
+### Output
+
+```
+  home        git   https://gitea.example.com/nathan/my-skills-tap     3 skills
+  community   git   https://github.com/someone/awesome-skills-tap      12 skills
+  enterprise  http  https://skills.example.com/api/v1                  47 skills
+```
+
+Columns: name, type (`git`/`http`), URL, skill count.
+
+If no taps configured: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+
+### Examples
+
+```bash
+skilltap tap list
+```
+
+---
+
+## skilltap tap update
+
+Update tap repos (git pull). HTTP taps are always live — this is a no-op for them.
+
+```
+skilltap tap update [name]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Specific tap to update. If omitted, updates all git taps. |
+
+### Examples
+
+```bash
+# Update all taps
+skilltap tap update
+
+# Update a specific tap
+skilltap tap update home
+```
+
+---
+
+## skilltap tap init
+
+Initialize a new tap repository.
+
+```
+skilltap tap init <name>
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Directory name for the new tap |
+
+### Behavior
+
+Creates the directory, initializes a git repo, and generates a `tap.json` with an empty skills array.
+
+### Output
+
+```
+Created my-tap/
+  tap.json
+  .git/
+
+Edit tap.json to add skills, then push:
+  cd my-tap && git remote add origin <url> && git push
+```
+
+### Examples
+
+```bash
+skilltap tap init my-tap
+```
+
+---
+
+## skilltap create
+
+Scaffold a new skill from a template.
+
+```
+skilltap create [name] [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Skill name (kebab-case). If omitted, prompted interactively. |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--template`, `-t` | `basic` \| `npm` \| `multi` | prompted | Template to use |
+| `--dir` | string | `./<name>` | Directory to create the skill in |
+
+When both `name` and `--template` are provided, runs non-interactively (uses `"{name} skill"` as description, MIT as license). Otherwise prompts for name, description, template, and license.
+
+### Templates
+
+| Template | Generated files |
+|----------|-----------------|
+| `basic` | `SKILL.md`, `.gitignore` |
+| `npm` | `SKILL.md`, `.gitignore`, `package.json`, `.github/workflows/publish.yml` |
+| `multi` | `.agents/skills/<skill-a>/SKILL.md`, `.agents/skills/<skill-b>/SKILL.md`, `.gitignore` |
+
+### Behavior
+
+Creates the skill directory (errors if it already exists), writes template files, and prints next-step instructions for testing, verifying, and publishing.
+
+### Examples
+
+```bash
+# Interactive mode
+skilltap create
+
+# Non-interactive
+skilltap create my-skill --template basic
+
+# npm package skill
+skilltap create my-skill --template npm --description "My skill description"
+
+# Custom output directory
+skilltap create my-skill --template basic --dir ~/dev/my-skill
+```
+
+---
+
+## skilltap verify
+
+Validate a skill before publishing.
+
+```
+skilltap verify [path] [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | No | Path to the skill directory. Defaults to `.`. |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output result as JSON |
+
+### Behavior
+
+Runs the following checks:
+
+1. `SKILL.md` exists
+2. Frontmatter is valid (required fields present, values within constraints)
+3. `name` field matches the parent directory name
+4. No static security issues (same checks as `skilltap install`)
+5. Total directory size is within the limit
+
+On success, also prints a `tap.json` snippet ready to paste into a tap.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks passed |
+| `1` | One or more errors found |
+
+### Output
+
+```
+✓ commit-helper is valid
+
+  SKILL.md   ✓
+  name       ✓ matches directory
+  security   ✓ no issues
+  size       ✓ 4.2 KB (3 files)
+
+tap.json snippet:
+
+  {
+    "name": "commit-helper",
+    "description": "Generates conventional commit messages",
+    "repo": "https://github.com/user/commit-helper",
+    "tags": []
+  }
+```
+
+With `--json`:
+
+```json
+{
+  "name": "commit-helper",
+  "valid": true,
+  "issues": [],
+  "frontmatter": { "name": "commit-helper", "description": "Generates conventional commit messages" },
+  "fileCount": 3,
+  "totalBytes": 4301
+}
+```
+
+### Examples
+
+```bash
+# Verify current directory
+skilltap verify
+
+# Verify a specific skill
+skilltap verify ./path/to/my-skill
+
+# CI-friendly output
+skilltap verify --json
+
+# Pre-push git hook
+echo 'skilltap verify' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+```
+
+---
+
+## skilltap doctor
+
+Check your environment, configuration, and installed state for problems.
+
+```
+skilltap doctor [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--fix` | boolean | `false` | Auto-repair issues where safe (recreate symlinks, remove orphan records, create missing dirs, re-clone missing taps) |
+| `--json` | boolean | `false` | Output as JSON (for CI/scripting) |
+
+### Checks
+
+Doctor runs 9 independent checks and streams each result as it completes:
+
+| # | Check | What it verifies |
+|---|-------|-----------------|
+| 1 | git | git is on PATH, version ≥ 2.25 |
+| 2 | config | `config.toml` exists, valid TOML, passes schema |
+| 3 | dirs | All required directories exist |
+| 4 | installed.json | State file parses and passes schema validation |
+| 5 | skills | Every `installed.json` entry has a directory on disk |
+| 6 | symlinks | Agent symlinks for `also` entries are valid |
+| 7 | taps | Each configured tap has a valid local clone |
+| 8 | agents | Detected agent CLIs; configured agent is available |
+| 9 | npm | npm is on PATH and registry reachable (only if npm skills are installed) |
+
+A failure in one check does not skip subsequent checks.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks pass, or only warnings |
+| `1` | One or more failures (corrupt files, missing git) |
+
+Warnings alone (missing optional features) produce exit code 0.
+
+### Examples
+
+```bash
+# Check everything
+skilltap doctor
+
+# Auto-repair where possible
+skilltap doctor --fix
+
+# CI health check (machine-readable)
+skilltap doctor --json
+```
+
+See the [Doctor guide](/guide/doctor) for detailed output examples and what each check covers.
+
+---
+
+## skilltap completions
+
+Generate a shell completion script for bash, zsh, or fish.
+
+```
+skilltap completions <shell> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `shell` | Yes | `bash`, `zsh`, or `fish` |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--install` | boolean | `false` | Write the completion script to the shell's standard location |
+
+### Without `--install`
+
+Prints the completion script to stdout. Useful for piping to a file or evaluating inline:
+
+```bash
+# Evaluate inline (add to ~/.bashrc)
+eval "$(skilltap completions bash)"
+
+# Write to a file manually
+skilltap completions zsh > ~/.zfunc/_skilltap
+```
+
+### With `--install`
+
+Writes to the standard location for each shell and prints activation instructions:
+
+| Shell | Writes to |
+|-------|-----------|
+| bash | `~/.local/share/bash-completion/completions/skilltap` |
+| zsh | `~/.zfunc/_skilltap` |
+| fish | `~/.config/fish/completions/skilltap.fish` |
+
+### Dynamic Completions
+
+The completion scripts call `skilltap --get-completions <type>` to provide live values:
+
+- `installed-skills` — for `remove`, `update`, `info`
+- `linked-skills` — for `unlink`
+- `tap-skills` — for `install`
+- `tap-names` — for `tap remove`, `tap update`
+
+### Examples
+
+```bash
+# Install for your shell
+skilltap completions bash --install
+skilltap completions zsh --install
+skilltap completions fish --install
+
+# Print script (manual setup)
+skilltap completions bash
+```
+
+See the [Shell Completions guide](/guide/shell-completions) for setup details and troubleshooting.
+
+---
+
+<!-- Source: https://skilltap.dev/reference/skill-format -->
+
+# SKILL.md Format
+
+SKILL.md is the file format for agent skills. It is a Markdown file with YAML frontmatter that provides structured metadata, followed by a body of instructions for the AI agent.
+
+Every installable skill must contain a `SKILL.md` file. This is how skilltap identifies, validates, and describes skills.
+
+## Structure
+
+A SKILL.md file has two parts:
+
+1. **Frontmatter** -- YAML metadata between `---` delimiters
+2. **Body** -- Markdown instructions for the AI agent
+
+```markdown
+---
+name: commit-helper
+description: Generates conventional commit messages from staged changes.
+license: MIT
+compatibility: Works with any git repository
+metadata:
+  author: nathan
+  version: "1.0"
+---
+
+## Instructions
+
+When the user asks you to commit, examine the staged changes with
+`git diff --cached` and generate a conventional commit message...
+```
+
+## Frontmatter Schema
+
+The frontmatter is YAML between `---` delimiters at the top of the file. It is validated against the following schema:
+
+| Field | Type | Required | Constraints | Description |
+|-------|------|----------|-------------|-------------|
+| `name` | string | Yes | 1-64 chars, lowercase alphanumeric + hyphens, no leading/trailing/consecutive hyphens. Must match `^[a-z0-9]+(-[a-z0-9]+)*$` | Unique identifier for the skill |
+| `description` | string | Yes | 1-1024 chars | Human-readable summary of what the skill does |
+| `license` | string | No | -- | License identifier (e.g., `MIT`, `Apache-2.0`) |
+| `compatibility` | string | No | Max 500 chars | Runtime requirements or agent compatibility notes |
+| `metadata` | object | No | String keys, any values | Arbitrary key-value pairs for additional metadata |
+
+### Validation
+
+- If frontmatter is missing or Zod validation fails, the skill is flagged with a warning but still offered for installation
+- When validation fails, the directory name is used as the skill name
+- The `name` field must match its parent directory name (e.g., a skill at `.agents/skills/commit-helper/SKILL.md` must have `name: commit-helper`)
+
+### Valid Name Examples
+
+```
+commit-helper        # valid
+code-review          # valid
+my-skill-v2          # valid
+a                    # valid (single char)
+```
+
+### Invalid Name Examples
+
+```
+Commit-Helper        # uppercase not allowed
+commit_helper        # underscores not allowed
+-commit-helper       # leading hyphen
+commit--helper       # consecutive hyphens
+commit-helper-       # trailing hyphen
+```
+
+## Body
+
+Everything after the closing `---` is the body. This is Markdown content that the AI agent reads as instructions. There are no constraints on body format -- write whatever instructions your agent needs.
+
+The body typically includes:
+
+- When and how the skill should be used
+- Step-by-step instructions for the agent
+- Code examples, templates, or patterns to follow
+- Constraints or rules the agent should observe
+
+## Skill Discovery Algorithm
+
+When skilltap clones a repo, it scans for SKILL.md files using the following priority order:
+
+### 1. Root SKILL.md (standalone skill)
+
+If `SKILL.md` exists at the repo root, the entire repo is treated as a single standalone skill. Steps 2-4 are skipped.
+
+### 2. Standard path
+
+```
+.agents/skills/*/SKILL.md
+```
+
+Each match is a separate skill, named by its parent directory. This is the canonical location for multi-skill repos.
+
+### 3. Agent-specific paths
+
+```
+.claude/skills/*/SKILL.md
+.cursor/skills/*/SKILL.md
+.codex/skills/*/SKILL.md
+.gemini/skills/*/SKILL.md
+.windsurf/skills/*/SKILL.md
+```
+
+Skills in agent-specific directories are also discovered. If a skill with the same name was already found in `.agents/skills/`, the `.agents/skills/` version takes precedence.
+
+### 4. Deep scan
+
+```
+**/SKILL.md
+```
+
+If no skills were found in steps 1-3, skilltap performs a deep scan for any SKILL.md file in the repo tree. This requires user confirmation.
+
+### Deduplication
+
+If the same skill name is found via multiple paths, skilltap deduplicates by name. The `.agents/skills/` path is preferred over agent-specific paths.
+
+## Examples
+
+### Standalone Skill Repo
+
+A repo with a single skill at the root:
+
+```
+commit-helper/
+  SKILL.md
+  scripts/
+    helper.sh
+  .git/
+```
+
+```markdown
+---
+name: commit-helper
+description: Generates conventional commit messages from staged changes.
+license: MIT
+---
+
+## When to use
+
+When the user asks you to commit their changes or create a commit message.
+
+## Instructions
+
+1. Run `git diff --cached` to see staged changes
+2. Analyze the diff to understand the nature of the change
+3. Generate a commit message following the Conventional Commits format
+4. Present the message to the user for approval
+```
+
+### Multi-Skill Repo
+
+A repo with multiple skills under `.agents/skills/`:
+
+```
+termtube/
+  .agents/
+    skills/
+      termtube-dev/
+        SKILL.md
+      termtube-review/
+        SKILL.md
+  README.md
+  .git/
+```
+
+Each skill directory contains its own `SKILL.md` with independent frontmatter:
+
+```markdown
+---
+name: termtube-dev
+description: Development workflow for the termtube project.
+---
+
+## Instructions
+...
+```
+
+```markdown
+---
+name: termtube-review
+description: Code review checklist for termtube contributions.
+---
+
+## Instructions
+...
+```
+
+When a user installs from this repo, skilltap discovers both skills and prompts the user to choose which to install (or install all with `--yes`).
+
+## Installation Paths
+
+After installation, skills are placed at:
+
+| Scope | Path |
+|-------|------|
+| Global | `~/.agents/skills/{name}/` |
+| Project | `{project}/.agents/skills/{name}/` |
+
+Agent-specific symlinks (via `--also` or config) point to the canonical `.agents/skills/` location:
+
+| Agent | Global Symlink | Project Symlink |
+|-------|---------------|-----------------|
+| `claude-code` | `~/.claude/skills/{name}/` | `.claude/skills/{name}/` |
+| `cursor` | `~/.cursor/skills/{name}/` | `.cursor/skills/{name}/` |
+| `codex` | `~/.codex/skills/{name}/` | `.codex/skills/{name}/` |
+| `gemini` | `~/.gemini/skills/{name}/` | `.gemini/skills/{name}/` |
+| `windsurf` | `~/.windsurf/skills/{name}/` | `.windsurf/skills/{name}/` |
+
+---
+
+<!-- Source: https://skilltap.dev/reference/tap-format -->
+
+# tap.json Format
+
+A **tap** is a git repository that acts as a skill registry. It contains a `tap.json` file listing skills with their names, descriptions, source repositories, and tags. Taps are how users discover and share collections of skills -- like Homebrew taps, but for agent skills.
+
+## What a Tap Does
+
+- Provides a searchable index of skills across repositories
+- Enables `skilltap install <name>` without remembering full git URLs
+- Powers `skilltap find` search across all configured taps
+- Can be public or private (any git host works)
+
+## Schema
+
+The `tap.json` file must be at the root of the tap repository.
+
+### Top-Level Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Human-readable name for the tap |
+| `description` | string | No | What this tap collection is about |
+| `skills` | array | Yes | List of skill entries |
+
+### Skill Entry Fields
+
+Each entry in the `skills` array:
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | Yes | -- | Skill name (matches the `name` field in SKILL.md frontmatter) |
+| `description` | string | Yes | -- | What the skill does |
+| `repo` | string | Yes | -- | Source of the skill. Git URL, `github:owner/repo`, or `npm:package-name`. |
+| `tags` | array of strings | No | `[]` | Searchable tags for categorization |
+
+## Full Example
+
+```json
+{
+  "name": "nathan's skills",
+  "description": "Curated collection of development skills",
+  "skills": [
+    {
+      "name": "commit-helper",
+      "description": "Generates conventional commit messages from staged changes",
+      "repo": "https://gitea.example.com/nathan/commit-helper",
+      "tags": ["git", "productivity", "commits"]
+    },
+    {
+      "name": "code-review",
+      "description": "Thorough code review with security focus",
+      "repo": "https://gitea.example.com/nathan/code-review",
+      "tags": ["review", "security", "quality"]
+    },
+    {
+      "name": "termtube-dev",
+      "description": "Development workflow for the termtube project",
+      "repo": "https://gitea.example.com/nathan/termtube",
+      "tags": ["termtube", "workflow"]
+    }
+  ]
+}
+```
+
+## Creating a Tap
+
+Use `skilltap tap init` to scaffold a new tap:
+
+```bash
+skilltap tap init my-tap
+```
+
+This creates:
+
+```
+my-tap/
+  tap.json      # Empty skills array, ready to edit
+  .git/         # Initialized git repo
+```
+
+Edit `tap.json` to add your skills, then push:
+
+```bash
+cd my-tap
+# Edit tap.json...
+git add tap.json
+git commit -m "Add skills"
+git remote add origin https://gitea.example.com/user/my-tap
+git push -u origin main
+```
+
+Others can then add your tap:
+
+```bash
+skilltap tap add friend https://gitea.example.com/user/my-tap
+```
+
+## Where Taps Are Stored
+
+When a user adds a tap with `skilltap tap add`, the tap repo is cloned to:
+
+```
+~/.config/skilltap/taps/{name}/
+```
+
+For example:
+
+```
+~/.config/skilltap/taps/
+  home/
+    tap.json
+    .git/
+  community/
+    tap.json
+    .git/
+```
+
+Tap entries are also recorded in `~/.config/skilltap/config.toml`:
+
+```toml
+[[taps]]
+name = "home"
+url = "https://gitea.example.com/nathan/my-skills-tap"
+
+[[taps]]
+name = "community"
+url = "https://github.com/someone/awesome-skills-tap"
+```
+
+## Validation
+
+`tap.json` is validated against its Zod schema when:
+
+- A tap is added (`skilltap tap add`)
+- A tap is updated (`skilltap tap update`)
+- Taps are loaded for search or install resolution
+
+If validation fails, skilltap reports a clear parse error with the specific issue:
+
+```
+error: Invalid tap.json in 'https://example.com/bad-tap': skills[2].repo is required
+```
+
+Invalid taps are skipped gracefully during `loadTaps()` -- a broken tap does not prevent other taps from working.
+
+## Managing Taps
+
+| Command | Description |
+|---------|-------------|
+| `skilltap tap add <name> <url>` | Add a tap by cloning its repo |
+| `skilltap tap remove <name>` | Remove a tap (does not uninstall skills from it) |
+| `skilltap tap list` | List configured taps with skill counts |
+| `skilltap tap update [name]` | Pull latest changes for one or all taps |
+| `skilltap tap init <name>` | Scaffold a new tap repo |
+
+## npm Sources in Taps
+
+Taps can reference skills published to the npm registry using an `npm:` prefix in the `repo` field:
+
+```json
+{
+  "name": "npm skills collection",
+  "skills": [
+    {
+      "name": "vibe-rules",
+      "description": "Curated coding rules for AI agents",
+      "repo": "npm:vibe-rules",
+      "tags": ["rules", "coding"]
+    },
+    {
+      "name": "my-scoped-skill",
+      "description": "A skill from a scoped npm package",
+      "repo": "npm:@myorg/my-skill",
+      "tags": ["internal"]
+    }
+  ]
+}
+```
+
+When a user installs a skill whose `repo` starts with `npm:`, the tarball is downloaded from the npm registry rather than cloned from git.
+
+## HTTP Registry API
+
+Instead of a static `tap.json` file in a git repo, you can serve a skill index over HTTP. Any web server that returns the correct JSON responses qualifies as an HTTP registry.
+
+`skilltap tap add` auto-detects HTTP registries by making a `GET /skills?limit=1` probe. If it returns a valid response, the tap is registered as HTTP type.
+
+### Required Endpoint
+
+**`GET /skills`** — Return a list of skills.
+
+Query parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` | string | Search term. Filter results by name/description/tags. |
+| `tag` | string | Filter by a specific tag. |
+| `limit` | integer | Max number of results to return. |
+| `cursor` | string | Pagination cursor from previous response. |
+
+Response schema:
+
+```json
+{
+  "skills": [
+    {
+      "name": "commit-helper",
+      "description": "Generates conventional commit messages",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/user/commit-helper"
+      },
+      "tags": ["git", "productivity"]
+    },
+    {
+      "name": "vibe-rules",
+      "description": "Curated coding rules",
+      "source": {
+        "type": "npm",
+        "package": "vibe-rules"
+      },
+      "tags": ["rules"]
+    }
+  ],
+  "cursor": "next-page-cursor",
+  "total": 42
+}
+```
+
+The `source` field is a discriminated union:
+
+| `type` | Additional fields | Description |
+|--------|-------------------|-------------|
+| `"git"` | `url` | Git-cloneable URL |
+| `"github"` | `repo` (`owner/repo`) | GitHub shorthand |
+| `"npm"` | `package` | npm package name (with optional `version`) |
+| `"url"` | `url` | Direct tarball download URL |
+
+### Optional Endpoint
+
+**`GET /skills/{name}`** — Return detail for a specific skill.
+
+Returns a single skill object (same shape as a `skills` array entry). Used by `skilltap info` and for install resolution.
+
+### Authentication
+
+HTTP registries can require a bearer token. Users configure credentials in `config.toml`:
+
+```toml
+[[taps]]
+name = "private-registry"
+url = "https://skills.example.com/api/v1"
+type = "http"
+auth_env = "REGISTRY_TOKEN"
+```
+
+skilltap sends `Authorization: Bearer <token>` on all requests to that tap.
+
+### Static Hosting
+
+A static JSON file hosted on any web server works as a read-only registry. The minimum is a single file at `/skills` (or at the configured URL root) that returns the response schema above. No server logic required.
+
+## Multi-Skill Repos in Taps
+
+A single repo can contain multiple skills (see [SKILL.md Format](/reference/skill-format#multi-skill-repo)). In a tap, each skill gets its own entry pointing to the same repo:
+
+```json
+{
+  "name": "termtube tap",
+  "skills": [
+    {
+      "name": "termtube-dev",
+      "description": "Development workflow for termtube",
+      "repo": "https://gitea.example.com/nathan/termtube",
+      "tags": ["termtube"]
+    },
+    {
+      "name": "termtube-review",
+      "description": "Code review checklist for termtube",
+      "repo": "https://gitea.example.com/nathan/termtube",
+      "tags": ["termtube", "review"]
+    }
+  ]
+}
+```
+
+When a user installs either skill by name, skilltap clones the repo and discovers both skills inside it.
+
+---
+
+<!-- Source: https://skilltap.dev/reference/config-options -->
+
+# Configuration Reference
+
+Complete reference for `~/.config/skilltap/config.toml` -- all options, defaults, and policy composition rules.
+
+## File Location
+
+```
+~/.config/skilltap/config.toml
+```
+
+Created with defaults on first run. Edit manually or use `skilltap config` to run the interactive setup wizard.
+
+State is tracked separately in `~/.config/skilltap/installed.json` (machine-managed, do not edit).
+
+---
+
+## `[defaults]`
+
+Default settings for install and link commands.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `scope` | `"global"` \| `"project"` \| `""` | `""` | Default install scope. Empty string means prompt every time. |
+| `also` | array of strings | `[]` | Agent-specific directories to auto-symlink on every install. Values: `"claude-code"`, `"cursor"`, `"codex"`, `"gemini"`, `"windsurf"` |
+| `yes` | boolean | `false` | Auto-accept prompts. Auto-selects all skills and auto-accepts clean installs. Security warnings still require confirmation. Scope still prompts unless `scope` is also set. |
+
+### Example
+
+```toml
+[defaults]
+scope = "global"
+also = ["claude-code", "cursor"]
+yes = false
+```
+
+### Interaction Between `scope` and `yes`
+
+| `yes` | `scope` | Behavior |
+|-------|---------|----------|
+| `false` | `""` | Prompt: skill selection, scope, install confirm |
+| `false` | `"global"` | Prompt: skill selection, install confirm (scope set) |
+| `true` | `""` | Auto-select skills, **still prompt: scope**, auto-install if clean |
+| `true` | `"global"` | Auto-select, scope=global, auto-install if clean |
+| `true` | `"project"` | Auto-select, scope=project, auto-install if clean |
+
+CLI flags always override config: `--project` overrides `scope`, `--yes` overrides `yes`.
+
+---
+
+## `[security]`
+
+Security scanning settings for install and update commands.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `scan` | `"static"` \| `"semantic"` \| `"off"` | `"static"` | Scan mode. `"static"` = Layer 1 pattern matching. `"semantic"` = Layer 1 + Layer 2 AI-powered analysis. `"off"` = no scanning. |
+| `on_warn` | `"prompt"` \| `"fail"` | `"prompt"` | What to do when security warnings are found. `"prompt"` = show warnings and ask. `"fail"` = abort immediately (same as `--strict`). |
+| `require_scan` | boolean | `false` | When `true`, blocks `--skip-scan` from being used. Useful for org or machine-level security policy. |
+| `agent` | string | `""` | Agent CLI for semantic scanning. Values: `"claude"`, `"gemini"`, `"codex"`, `"opencode"`, `"ollama"`, or an absolute path to a custom binary. Empty string = prompt on first use, then save selection. |
+| `threshold` | integer 0-10 | `5` | Risk threshold for semantic scan. Chunks scoring at or above this value are flagged. |
+| `max_size` | integer (bytes) | `51200` | Max total skill directory size before warning. Default is 50 KB. |
+| `ollama_model` | string | `""` | Model name when using the Ollama adapter. Required when `agent = "ollama"`. |
+
+### Example
+
+```toml
+[security]
+scan = "semantic"
+on_warn = "fail"
+require_scan = true
+agent = "claude"
+threshold = 5
+max_size = 51200
+ollama_model = ""
+```
+
+### Supported Agents
+
+| Value | Binary | Invocation |
+|-------|--------|------------|
+| `"claude"` | `claude` | `claude --print -p '<prompt>' --tools "" --output-format json` |
+| `"gemini"` | `gemini` | `echo '<prompt>' \| gemini --non-interactive` |
+| `"codex"` | `codex` | `codex --prompt '<prompt>' --no-tools` |
+| `"opencode"` | `opencode` | `opencode --prompt '<prompt>'` |
+| `"ollama"` | `ollama` | `ollama run <model> '<prompt>'` (requires `ollama_model`) |
+| Absolute path | any | `echo '<prompt>' \| /path/to/binary` |
+
+All agents are invoked without tool access -- they can only produce text output, never execute commands or read files during the scan.
+
+---
+
+## `[agent-mode]`
+
+Agent mode settings. When enabled, all skilltap commands become non-interactive with strict security. Toggle with `skilltap config agent-mode` (interactive, human-only).
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable agent mode. |
+| `scope` | `"global"` \| `"project"` | `"project"` | Default scope for agent installs. Required when agent mode is enabled. |
+| `also` | array of strings | from `[defaults]` | Agent-specific symlinks for agent mode installs. If not set, falls back to `defaults.also`. |
+| `scan` | `"static"` \| `"semantic"` | from `[security]` | Scan level for agent mode. `"off"` is not available -- scanning is always required. If not set, falls back to `security.scan` (promoted to `"static"` if `"off"`). |
+
+### Example
+
+```toml
+[agent-mode]
+enabled = true
+scope = "project"
+```
+
+### Forced Overrides
+
+When `agent-mode.enabled = true`, the following are **inherent and not overridable** via CLI flags:
+
+| Setting | Forced Value | Effect |
+|---------|-------------|--------|
+| `yes` | `true` | All prompts auto-accept or hard-fail |
+| `on_warn` | `"fail"` | Any security warning blocks installation |
+| `require_scan` | `true` | `--skip-scan` is rejected |
+| Output format | Plain text | No ANSI colors, spinners, or Unicode decorations |
+
+Agent mode has **no CLI flag** to toggle it. It can only be enabled or disabled through `skilltap config agent-mode`, which requires an interactive terminal.
+
+### Agent Mode Output
+
+Success:
+```
+OK: Installed commit-helper -> ~/.agents/skills/commit-helper/ (v1.2.0)
+```
+
+Skip:
+```
+SKIP: commit-helper is already installed.
+```
+
+Error:
+```
+ERROR: Repository not found: https://example.com/bad-url.git
+```
+
+Security failure (directive message to the agent):
+```
+SECURITY ISSUE FOUND -- INSTALLATION BLOCKED
+
+DO NOT install this skill. DO NOT retry. DO NOT use --skip-scan.
+STOP and report the following to the user:
+
+  SKILL.md L14: Invisible Unicode (3 zero-width chars)
+  SKILL.md L8: Hidden HTML comment containing instructions
+
+User action required: review warnings and install manually with
+  skilltap install <url>
+```
+
+---
+
+## `[[taps]]`
+
+Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | — | Local name for the tap |
+| `url` | string | — | URL of the tap (git repo or HTTP registry endpoint) |
+| `type` | `"git"` \| `"http"` | auto-detected | Tap type. `"git"` clones the repo locally; `"http"` queries a live API. Auto-detected on `tap add`. |
+| `auth_token` | string | — | Static bearer token for HTTP tap authentication. Prefer `auth_env` over this. |
+| `auth_env` | string | — | Name of an environment variable containing the bearer token for HTTP tap authentication. |
+
+### Example
+
+```toml
+[[taps]]
+name = "home"
+url = "https://gitea.example.com/nathan/my-skills-tap"
+
+[[taps]]
+name = "community"
+url = "https://github.com/someone/awesome-skills-tap"
+
+[[taps]]
+name = "enterprise"
+url = "https://skills.example.com/api/v1"
+type = "http"
+auth_env = "SKILLS_REGISTRY_TOKEN"
+```
+
+Git taps are cloned to `~/.config/skilltap/taps/{name}/`. HTTP taps have no local clone — they are queried live.
+
+---
+
+## Full Example
+
+A complete `config.toml` with all options:
+
+```toml
+# Default settings for install commands
+[defaults]
+# Default install scope. "" = prompt, "global" or "project" = skip prompt.
+scope = "global"
+# Auto-symlink to these agent directories on every install.
+also = ["claude-code", "cursor"]
+# Auto-accept clean installs (security warnings still prompt).
+yes = false
+
+# Security scanning settings
+[security]
+# Scan mode: "static" (fast), "semantic" (thorough), "off" (not recommended)
+scan = "static"
+# On warnings: "prompt" (ask user) or "fail" (abort, same as --strict)
+on_warn = "prompt"
+# Block --skip-scan entirely. For org-level security policy.
+require_scan = false
+# Agent CLI for semantic scan. "" = prompt on first use.
+agent = ""
+# Flag semantic chunks scoring >= this value (0-10)
+threshold = 5
+# Warn if skill directory exceeds this size in bytes (default 50KB)
+max_size = 51200
+# Required when agent = "ollama"
+ollama_model = ""
+
+# Agent mode -- for when skilltap is invoked by AI agents.
+# Toggle with: skilltap config agent-mode
+[agent-mode]
+enabled = false
+scope = "project"
+
+# Tap definitions
+[[taps]]
+name = "home"
+url = "https://gitea.example.com/nathan/my-skills-tap"
+```
+
+---
+
+## Policy Composition Rules
+
+Config options and CLI flags compose together. The general rule: **most restrictive wins**.
+
+### Flag Overrides
+
+| Config | CLI Flag | Result |
+|--------|----------|--------|
+| `on_warn = "prompt"` | `--strict` | strict (flag wins) |
+| `on_warn = "fail"` | (none) | strict (config wins) |
+| `on_warn = "fail"` | `--no-strict` | prompt (flag overrides) |
+| `require_scan = true` | `--skip-scan` | **ERROR** (config blocks) |
+| `scan = "semantic"` | (none) | Layer 1 + Layer 2 |
+| `scan = "static"` | `--semantic` | Layer 1 + Layer 2 (flag adds) |
+| `scan = "off"` | `--semantic` | Layer 2 only |
+| `yes = false` | `--yes` | yes (flag wins) |
+| `scope = "global"` | `--project` | project (flag overrides) |
+
+### Agent Mode Overrides
+
+When `agent-mode.enabled = true`, the following are forced regardless of other config or flags:
+
+- `yes` = `true`
+- `on_warn` = `"fail"`
+- `require_scan` = `true`
+- `scan = "off"` is promoted to `"static"`
+- `--skip-scan` is rejected with an error
+
+These cannot be overridden by CLI flags. Agent mode can only be toggled interactively via `skilltap config agent-mode`.
+
+### Worked Example: Power User
+
+```toml
+[defaults]
+also = ["claude-code", "cursor"]
+yes = true
+scope = "global"
+
+[security]
+scan = "semantic"
+on_warn = "fail"
+require_scan = true
+agent = "claude"
+threshold = 3
+max_size = 102400
+```
+
+With this config:
+
+```bash
+skilltap install <url>
+# -> auto-select all skills (yes = true)
+# -> scope = global (no prompt)
+# -> symlinks to claude-code + cursor
+# -> Layer 1 + Layer 2 scan
+# -> abort on any warning (on_warn = fail)
+# -> --skip-scan blocked (require_scan = true)
+# -> claude used for semantic scan
+# -> flag chunks scoring >= 3
+
+skilltap install <url> --no-strict
+# -> same as above but warnings prompt instead of abort
+
+skilltap install <url> --skip-scan
+# -> ERROR: Security scanning is required by config
+
+skilltap install <url> --project
+# -> --project overrides scope for this invocation
+```
+
+### Worked Example: Agent Mode
+
+```toml
+[defaults]
+also = ["claude-code"]
+
+[security]
+scan = "static"
+agent = "claude"
+
+[agent-mode]
+enabled = true
+scope = "project"
+```
+
+With this config:
+
+```bash
+skilltap install <url>
+# -> auto-select all (forced)
+# -> scope = project (from agent-mode.scope)
+# -> symlinks to claude-code (from defaults.also)
+# -> Layer 1 scan
+# -> any warning = SECURITY ISSUE FOUND directive + exit 1
+# -> --skip-scan blocked (forced)
+# -> plain text output, no colors
+```

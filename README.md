@@ -27,7 +27,7 @@ Or download a binary directly from [GitHub Releases](https://github.com/nklisch/
 
 ```bash
 # 1. Add a tap (registry of skills)
-skilltap tap add my-tap https://github.com/example/my-tap
+skilltap tap add nklisch https://github.com/nklisch/skills
 
 # 2. Browse available skills
 skilltap find
@@ -174,6 +174,15 @@ skilltap doctor --fix
 # Machine-readable output for CI
 skilltap doctor --json
 ```
+
+## Gotchas
+
+- **`--yes` does not skip the scope prompt.** You must pass `--global` or `--project` explicitly for a fully non-interactive install. This is intentional — defaulting to the wrong scope quietly is worse than prompting.
+- **`--yes` does not bypass security warnings.** If a static scan finds issues, you'll still be prompted. Use `--strict` to turn warnings into hard failures, or `--skip-scan` to bypass entirely (blocked if `require_scan = true`).
+- **Agent mode must be enabled before invoking from an AI agent.** Run `skilltap config agent-mode` interactively once. Without it, skilltap will prompt for input and hang in non-TTY environments.
+- **Agent symlinks are not automatic.** Installing a skill doesn't add it to any agent unless you pass `--also <agent>` or set defaults in config. The skill lands in `.agents/skills/` regardless; symlinks are opt-in.
+- **Multi-skill repos require selection.** If a repo contains multiple `SKILL.md` files, skilltap prompts you to choose. With `--yes`, all are auto-selected.
+- **npm installs require the `npm:` prefix.** `skilltap install vibe-rules` searches your configured taps. `skilltap install npm:vibe-rules` hits the npm registry.
 
 ## License
 

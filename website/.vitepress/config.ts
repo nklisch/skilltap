@@ -1,4 +1,4 @@
-import { defineConfig } from "vitepress";
+import { defineConfig, type HeadConfig } from "vitepress";
 
 const SITE_URL = "https://skilltap.dev";
 const OG_TITLE = "skilltap — Homebrew taps for AI agent skills";
@@ -65,10 +65,28 @@ export default defineConfig({
       .replace(/\.md$/, "")
       .replace(/(\/index|^index)$/, "");
     const url = `${SITE_URL}/${path}`;
-    return [
+    const heads: HeadConfig[] = [
       ["link", { rel: "canonical", href: url }],
       ["meta", { property: "og:url", content: url }],
     ];
+    if (path.startsWith("guide/") || path.startsWith("reference/")) {
+      heads.push([
+        "script",
+        { type: "application/ld+json" },
+        JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "TechArticle",
+          headline: pageData.title,
+          description: pageData.description,
+          url,
+          isPartOf: { "@type": "WebSite", name: "skilltap", url: SITE_URL },
+          ...(pageData.lastUpdated
+            ? { dateModified: new Date(pageData.lastUpdated).toISOString() }
+            : {}),
+        }),
+      ]);
+    }
+    return heads;
   },
 
   themeConfig: {

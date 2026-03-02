@@ -1,0 +1,35 @@
+# skilltap
+
+> CLI tool for installing agent skills (SKILL.md files) from any git host, npm registry, or
+> curated tap. "Homebrew taps for AI agent skills." Agent-agnostic — installs to
+> ~/.agents/skills/ with automatic symlinks for each agent (Claude Code, Cursor, Codex, Gemini,
+> Windsurf). One command, any source, any agent.
+
+skilltap scans every install for security issues (invisible Unicode, hidden HTML, obfuscated
+code, suspicious URLs, tag injection) before anything lands on disk. An optional semantic
+scan sends skill content to your local AI agent CLI for intent review.
+
+## Guide
+
+- [What is skilltap?](https://skilltap.dev/guide/what-is-skilltap): Overview, how it works, and what it is not
+- [Getting Started](https://skilltap.dev/guide/getting-started): Install skilltap and add your first skill in minutes
+- [Installation](https://skilltap.dev/guide/installation): All install methods — curl, npm, Bun, and binary download
+- [Installing Skills](https://skilltap.dev/guide/installing-skills): Git URLs, npm, SSH, tap names, scopes, agent symlinks, and all flags
+- [Creating Skills](https://skilltap.dev/guide/creating-skills): Scaffold, author, verify, and publish a SKILL.md skill
+- [Taps](https://skilltap.dev/guide/taps): Create and manage skill registries (taps) for discoverability
+- [Security](https://skilltap.dev/guide/security): Two-layer scan model, threat model, semantic scan, agent mode security
+- [Configuration](https://skilltap.dev/guide/configuration): config.toml reference, default scope, scan level, agent mode
+- [Doctor](https://skilltap.dev/guide/doctor): Environment, config, and state health checks with auto-repair
+- [Shell Completions](https://skilltap.dev/guide/shell-completions): bash, zsh, and fish completion setup
+
+## Reference
+
+- [CLI Commands](https://skilltap.dev/reference/cli): Complete reference for all commands, flags, prompt behavior, and exit codes
+- [SKILL.md Format](https://skilltap.dev/reference/skill-format): SKILL.md frontmatter schema, required fields, and constraints
+- [tap.json Format](https://skilltap.dev/reference/tap-format): tap.json schema for skill registries
+- [Config Options](https://skilltap.dev/reference/config-options): All config.toml keys with types, defaults, and examples
+
+## Optional
+
+- [GitHub Repository](https://github.com/nklisch/skilltap): Source code, issues, releases, and contributing
+- [Full documentation (single file)](https://skilltap.dev/llms-full.txt): All pages concatenated as Markdown for bulk ingestion

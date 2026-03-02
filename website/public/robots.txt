@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://skilltap.dev/sitemap.xml
+LLMs-txt: https://skilltap.dev/llms.txt
