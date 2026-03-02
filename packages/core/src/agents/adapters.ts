@@ -5,7 +5,7 @@ export const claudeAdapter = createCliAdapter(
   "Claude Code",
   "claude",
   (prompt) =>
-    $`claude --print -p ${prompt} --no-tools --output-format json`.quiet(),
+    $`claude --print -p ${prompt} --tools "" --output-format json`.quiet(),
 );
 
 export const geminiAdapter = createCliAdapter(
