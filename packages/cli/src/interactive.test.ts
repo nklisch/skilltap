@@ -26,8 +26,10 @@
 import { lstat } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  commitAll,
   createMultiSkillRepo,
   createStandaloneSkillRepo,
+  initRepo,
   makeTmpDir,
   removeTmpDir,
   runInteractive,
@@ -104,8 +106,9 @@ describe("install — scope prompt", () => {
       // Need a real git project dir for project-scope installs
       const projectDir = await makeTmpDir();
       try {
-        await Bun.$`git -C ${projectDir} init`.quiet();
-        await Bun.$`git -C ${projectDir} commit --allow-empty -m init`.quiet();
+        await initRepo(projectDir);
+        await Bun.write(`${projectDir}/.gitkeep`, "");
+        await commitAll(projectDir, "init");
 
         // --yes skips agents + confirm so we only need to drive the scope prompt.
         // CMD_ABS uses absolute path so bun can find src/index.ts from projectDir.
