@@ -41,6 +41,27 @@ Dependencies: `cli → core`, `cli → test-utils (dev)`, `core → test-utils (
 bun run dev          # Run CLI from source
 bun test             # Run all tests (recursive across packages)
 bun run build        # Compile to standalone binary
+bun run bump <patch|minor|major|x.y.z>  # Bump version (see Versioning below)
+```
+
+## Versioning
+
+**Always use the bump script for version changes. Never edit version numbers by hand.**
+
+`packages/core/package.json` is the single source of truth for the version. The `VERSION` constant exported from `@skilltap/core` is read from that file at build time. `packages/cli/package.json` must stay in lockstep — the bump script updates both atomically.
+
+```bash
+bun run bump patch   # 0.3.1 → 0.3.2
+bun run bump minor   # 0.3.1 → 0.4.0
+bun run bump major   # 0.3.1 → 1.0.0
+bun run bump 1.2.3   # set exact version
+```
+
+After bumping, commit and tag:
+```bash
+git commit -am "Release v<version>"
+git tag v<version>
+git push --follow-tags
 ```
 
 ## Shell Command Rules

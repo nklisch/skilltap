@@ -4,8 +4,15 @@
   "description": "Core library for skilltap — agent skill management",
   "type": "module",
   "license": "MIT",
-  "keywords": ["agent", "skills", "llm", "ai"],
-  "files": ["src/"],
+  "keywords": [
+    "agent",
+    "skills",
+    "llm",
+    "ai"
+  ],
+  "files": [
+    "src/"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/nklisch/skilltap.git",

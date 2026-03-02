@@ -9,7 +9,8 @@
     "lint": "biome lint packages/",
     "format": "biome format --write packages/",
     "check": "biome check --write packages/",
-    "bench": "bun run packages/core/src/benchmarks/scan.bench.ts"
+    "bench": "bun run packages/core/src/benchmarks/scan.bench.ts",
+    "bump": "bun scripts/bump-version.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",

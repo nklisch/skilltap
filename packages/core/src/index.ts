@@ -1,4 +1,5 @@
-export const VERSION = "0.2.0";
+import { version } from "../package.json";
+export const VERSION: string = version;
 export * from "./doctor";
 
 export * from "./adapters";
@@ -22,4 +23,5 @@ export * from "./templates";
 export * from "./trust";
 export * from "./policy";
 export * from "./validate";
+export * from "./self-update";
 export * from "./types";

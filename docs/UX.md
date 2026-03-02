@@ -474,6 +474,10 @@ $ skilltap find --npm review
 # Searches npm registry for packages with agent-skill keyword matching "review"
   @acme/code-review    1.0.3    AI-powered code review skill    [npm]
   @user/pr-review      2.1.0    Pull request review checklist   [npm]
+
+$ skilltap find --npm review  # when registry.allow_npm = false in config
+error: npm registry search is disabled by config (registry.allow_npm = false).
+hint: To allow npm search, set allow_npm = true in the [registry] section of config.toml.
 ```
 
 Empty state:
@@ -728,6 +732,9 @@ Welcome to skilltap setup!
 ◇ When security warnings are found?
 │  ● Ask me to decide
 │  ○ Always block (strict)
+│
+◇ Allow installing skills from npm registry?
+│  Yes
 │
 └ ✓ Wrote ~/.config/skilltap/config.toml
 ```

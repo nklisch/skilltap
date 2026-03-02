@@ -295,7 +295,7 @@ skilltap find [query] [flags]
 |------|------|---------|-------------|
 | `-i` | boolean | `false` | Interactive fuzzy finder mode |
 | `--json` | boolean | `false` | Output as JSON |
-| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. |
+| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. Blocked when `registry.allow_npm = false` in config. |
 
 ### Examples
 

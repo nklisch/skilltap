@@ -217,7 +217,7 @@ Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
 A tap is a curated index of skills -- a git repo containing a `tap.json` that lists skill names, descriptions, and URLs. Adding a tap lets you install skills by name instead of URL.
 
 ```bash
-skilltap tap add community https://github.com/example/awesome-skills-tap
+skilltap tap add nklisch https://github.com/nklisch/skills
 ```
 
 ```
@@ -232,18 +232,24 @@ You can add as many taps as you want -- your own, a friend's, a team's.
 Browse available skills:
 
 ```bash
-skilltap find review
+skilltap find
 ```
 
 ```
-  code-review        Thorough code review with security focus   [community]
-  pr-reviewer        Pull request review checklist              [community]
+  research           Research external libs, APIs, and patterns   [nklisch]
+  design             Create detailed DESIGN.md from a vision      [nklisch]
+  implement          Write code from a DESIGN.md                  [nklisch]
+  verify             Verify implementation against design          [nklisch]
+  fix                Fix gaps from VERIFICATION.md                [nklisch]
+  quality-gate       Final quality assessment for a phase         [nklisch]
+  extract-patterns   Discover and document reusable patterns      [nklisch]
+  refactor-plan      Plan refactoring work                        [nklisch]
 ```
 
 Install by name:
 
 ```bash
-skilltap install code-review --global
+skilltap install research --global
 ```
 
 skilltap resolves the name from your configured taps, finds the repo URL, and runs the normal clone-scan-install flow.
@@ -251,7 +257,7 @@ skilltap resolves the name from your configured taps, finds the repo URL, and ru
 You can also pin a version:
 
 ```bash
-skilltap install code-review@v2.0.0 --global
+skilltap install research@v1.0.0 --global
 ```
 
 ## List installed skills
@@ -262,10 +268,10 @@ skilltap list
 
 ```
 Global (2 skills)
-  Name            Ref     Source                                    Trust          Description
-  ──────────────────────────────────────────────────────────────────────────────────────────────
-  commit-helper   v1.2.0  https://github.com/user/commit-helper…   ○ unverified   Conventional commit messages
-  code-review     v2.0.0  https://github.com/user/code-review…     ○ unverified   Thorough code review
+  Name       Ref     Source                         Trust          Description
+  ────────────────────────────────────────────────────────────────────────────────────────
+  research   main    https://github.com/nklisch/…   ○ unverified   Research external libs
+  design     main    https://github.com/nklisch/…   ○ unverified   Create DESIGN.md
 ```
 
 Filter by scope:
@@ -893,7 +899,7 @@ skilltap verify
 
 ## SKILL.md format
 
-Every skill needs a `SKILL.md` file with YAML frontmatter:
+Every skill needs a `SKILL.md` file with YAML frontmatter. SKILL.md is an open standard maintained by Anthropic — see the [official specification](https://agentskills.io/specification) and the [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) for the authoritative reference.
 
 ```markdown
 ---
@@ -1147,7 +1153,7 @@ skilltap tap add <name> <url>
 skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
 
 ```bash
-skilltap tap add community https://github.com/skilltap/community-tap
+skilltap tap add nklisch https://github.com/nklisch/skills
 ```
 
 ## Listing taps
@@ -1203,7 +1209,7 @@ skilltap find -i <query>
 Once you have taps registered, install a skill by name:
 
 ```bash
-skilltap install commit-helper
+skilltap install research
 ```
 
 If the name exists in multiple taps, skilltap prompts you to choose which one.
@@ -1211,7 +1217,7 @@ If the name exists in multiple taps, skilltap prompts you to choose which one.
 To install a specific git ref (branch, tag, or commit):
 
 ```bash
-skilltap install commit-helper@v2.0
+skilltap install research@v1.0.0
 ```
 
 ## Creating your own tap
@@ -1608,6 +1614,16 @@ Settings applied when an AI agent runs skilltap.
 
 Agent mode inherits `defaults.also` and `security.scan` from the corresponding sections — there are no separate agent-mode overrides for those fields.
 
+### `[registry]`
+
+Controls access to external package registries.
+
+| Key         | Type    | Default | Description                                                   |
+| ----------- | ------- | ------- | ------------------------------------------------------------- |
+| `allow_npm` | boolean | `true`  | Allow npm registry installs and search. Set to `false` for air-gapped or restricted environments. |
+
+When `allow_npm = false`, both `skilltap install npm:...` and `skilltap find --npm` exit with an error.
+
 ## How config and flags compose
 
 When a CLI flag and a config value conflict, the **most restrictive** option wins:
@@ -1638,6 +1654,9 @@ threshold = 5
 [agent-mode]
 enabled = false
 scope = "project"
+
+[registry]
+allow_npm = true
 ```
 
 For the full list of options and their allowed values, see the [Config Options Reference](/reference/config-options).
@@ -2284,7 +2303,7 @@ skilltap find [query] [flags]
 |------|------|---------|-------------|
 | `-i` | boolean | `false` | Interactive fuzzy finder mode |
 | `--json` | boolean | `false` | Output as JSON |
-| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. |
+| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. Blocked when `registry.allow_npm = false` in config. |
 
 ### Examples
 
@@ -2964,6 +2983,10 @@ SKILL.md is the file format for agent skills. It is a Markdown file with YAML fr
 
 Every installable skill must contain a `SKILL.md` file. This is how skilltap identifies, validates, and describes skills.
 
+::: tip Official specification
+SKILL.md is an open standard maintained by Anthropic. The authoritative format reference is at [agentskills.io/specification](https://agentskills.io/specification). For Anthropic's platform documentation on using Skills across Claude Code, the API, and claude.ai, see [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview).
+:::
+
 ## Structure
 
 A SKILL.md file has two parts:
@@ -2999,6 +3022,7 @@ The frontmatter is YAML between `---` delimiters at the top of the file. It is v
 | `license` | string | No | -- | License identifier (e.g., `MIT`, `Apache-2.0`) |
 | `compatibility` | string | No | Max 500 chars | Runtime requirements or agent compatibility notes |
 | `metadata` | object | No | String keys, any values | Arbitrary key-value pairs for additional metadata |
+| `allowed-tools` | string | No | Space-delimited list | *(Experimental)* Pre-approved tools the skill may use (e.g. `Bash(git:*) Read`). Support varies by agent. |
 
 ### Validation
 
@@ -3619,6 +3643,28 @@ User action required: review warnings and install manually with
 
 ---
 
+## `[registry]`
+
+Controls access to external package registries.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `allow_npm` | boolean | `true` | Allow installing skills from the npm registry (`skilltap install npm:...`) and searching it (`skilltap find --npm`). Set to `false` for air-gapped environments or org policies that restrict external package sources. |
+
+### Example
+
+```toml
+[registry]
+allow_npm = false
+```
+
+When `allow_npm = false`:
+- `skilltap install npm:any-package` exits with an error
+- `skilltap find --npm` exits with an error
+- Git, local, and tap sources are unaffected
+
+---
+
 ## `[[taps]]`
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
@@ -3689,6 +3735,10 @@ ollama_model = ""
 [agent-mode]
 enabled = false
 scope = "project"
+
+# Registry access controls
+[registry]
+allow_npm = true
 
 # Tap definitions
 [[taps]]

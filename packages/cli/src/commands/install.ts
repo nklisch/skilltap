@@ -38,6 +38,7 @@ import {
   resolveScope,
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
+import { inferAdapter, sendEvent } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -135,6 +136,7 @@ async function runAgentMode(
     also,
     ref: args.ref,
     skipScan: false,
+    allowNpm: config.registry.allow_npm,
     onWarnings: async (
       warnings: StaticWarning[],
     ): Promise<boolean> => {
@@ -159,9 +161,33 @@ async function runAgentMode(
   });
 
   if (!result.ok) {
+    sendEvent(config, "install", {
+      os: process.platform,
+      arch: process.arch,
+      adapter: inferAdapter(args.source),
+      success: false,
+      error_category: result.error.constructor.name,
+      skill_count: 0,
+      scan_mode: policy.scanMode,
+      scope,
+      agent_mode: true,
+      ci: Boolean(process.env.CI),
+    });
     agentError(result.error.message);
     process.exit(1);
   }
+
+  sendEvent(config, "install", {
+    os: process.platform,
+    arch: process.arch,
+    adapter: inferAdapter(args.source),
+    success: true,
+    skill_count: result.value.records.length,
+    scan_mode: policy.scanMode,
+    scope,
+    agent_mode: true,
+    ci: Boolean(process.env.CI),
+  });
 
   for (const record of result.value.records) {
     const installDir = skillInstallDir(record.name, scope, projectRoot);
@@ -349,6 +375,7 @@ async function runInteractiveMode(
     also,
     ref: args.ref,
     skipScan,
+    allowNpm: config.registry.allow_npm,
     onWarnings: skipScan ? undefined : warningsCallback,
     onSelectSkills: selectSkillsCallback,
     onSelectTap: selectTapCallback,
@@ -364,9 +391,33 @@ async function runInteractiveMode(
 
   if (!result.ok) {
     s.stop("Failed.", 1);
+    sendEvent(config, "install", {
+      os: process.platform,
+      arch: process.arch,
+      adapter: inferAdapter(args.source),
+      success: false,
+      error_category: result.error.constructor.name,
+      skill_count: 0,
+      scan_mode: policy.scanMode,
+      scope,
+      agent_mode: false,
+      ci: Boolean(process.env.CI),
+    });
     errorLine(result.error.message, result.error.hint);
     process.exit(1);
   }
+
+  sendEvent(config, "install", {
+    os: process.platform,
+    arch: process.arch,
+    adapter: inferAdapter(args.source),
+    success: true,
+    skill_count: result.value.records.length,
+    scan_mode: policy.scanMode,
+    scope,
+    agent_mode: false,
+    ci: Boolean(process.env.CI),
+  });
 
   s.stop("Done.");
 

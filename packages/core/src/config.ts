@@ -78,6 +78,12 @@ enabled = false
 # Values: "global", "project"
 scope = "project"
 
+# Registry access controls
+[registry]
+# Set to false to disable npm registry installs and search.
+# Useful for air-gapped environments or org policies restricting external package sources.
+allow_npm = true
+
 # Tap definitions (repeatable section)
 # [[taps]]
 # name = "home"

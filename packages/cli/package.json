@@ -4,8 +4,17 @@
   "description": "Install agent skills from any git host",
   "type": "module",
   "license": "MIT",
-  "keywords": ["cli", "agent", "skills", "llm", "ai", "git"],
-  "files": ["src/"],
+  "keywords": [
+    "cli",
+    "agent",
+    "skills",
+    "llm",
+    "ai",
+    "git"
+  ],
+  "files": [
+    "src/"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/nklisch/skilltap.git",

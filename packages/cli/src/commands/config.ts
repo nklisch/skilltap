@@ -115,6 +115,12 @@ export default defineCommand({
             ],
             initialValue: existing.security.on_warn,
           }),
+
+        allowNpm: () =>
+          confirm({
+            message: "Allow installing skills from npm registry?",
+            initialValue: existing.registry.allow_npm,
+          }),
       },
       {
         onCancel() {
@@ -136,6 +142,10 @@ export default defineCommand({
         scan: result.scan as "static" | "semantic" | "off",
         on_warn: result.onWarn as "prompt" | "fail",
         agent: result.agent as string,
+      },
+      registry: {
+        ...existing.registry,
+        allow_npm: result.allowNpm as boolean,
       },
     };
 

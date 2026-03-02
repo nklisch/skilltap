@@ -1317,6 +1317,14 @@ enabled = false
 # Values: "global", "project"
 scope = "project"
 
+# Registry access controls
+[registry]
+# Set to false to disable npm registry installs (skilltap install npm:...)
+# and search (skilltap find --npm).
+# Useful for air-gapped environments or org policies restricting external package sources.
+# Default: true (npm allowed)
+allow_npm = true
+
 # Tap definitions (repeatable section)
 # [[taps]]
 # name = "home"

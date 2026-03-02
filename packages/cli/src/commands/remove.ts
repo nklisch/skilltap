@@ -6,6 +6,7 @@ import { errorLine, successLine } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import { confirmRemove } from "../ui/prompts";
 import { getInstalledSkillOrExit } from "../ui/resolve";
+import { sendEvent } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -31,7 +32,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const { policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project });
+    const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project });
 
     const skill = await getInstalledSkillOrExit(args.name, {
       notFoundHint: "Run 'skilltap list' to see installed skills.",
@@ -44,9 +45,26 @@ export default defineCommand({
     if (policy.agentMode) {
       const result = await removeSkill(args.name, { scope });
       if (!result.ok) {
+        sendEvent(config, "remove", {
+          os: process.platform,
+          arch: process.arch,
+          success: false,
+          error_category: result.error.constructor.name,
+          scope,
+          agent_mode: true,
+          ci: Boolean(process.env.CI),
+        });
         agentError(result.error.message);
         process.exit(1);
       }
+      sendEvent(config, "remove", {
+        os: process.platform,
+        arch: process.arch,
+        success: true,
+        scope,
+        agent_mode: true,
+        ci: Boolean(process.env.CI),
+      });
       process.stdout.write(`OK: Removed ${args.name}\n`);
       return;
     }
@@ -64,10 +82,27 @@ export default defineCommand({
     const result = await removeSkill(args.name, { scope });
     if (!result.ok) {
       s.stop("Failed.", 1);
+      sendEvent(config, "remove", {
+        os: process.platform,
+        arch: process.arch,
+        success: false,
+        error_category: result.error.constructor.name,
+        scope,
+        agent_mode: false,
+        ci: Boolean(process.env.CI),
+      });
       errorLine(result.error.message, result.error.hint);
       process.exit(1);
     }
 
+    sendEvent(config, "remove", {
+      os: process.platform,
+      arch: process.arch,
+      success: true,
+      scope,
+      agent_mode: false,
+      ci: Boolean(process.env.CI),
+    });
     s.stop("Removed.");
     successLine(`Removed ${args.name}`);
   },

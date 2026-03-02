@@ -15,6 +15,22 @@ export const AgentModeSchema = z.object({
   scope: z.enum(["global", "project"]).default("project"),
 });
 
+export const UpdatesConfigSchema = z.object({
+  // "off" = notify only, "patch" = auto-update patch releases, "minor" = auto-update patch+minor
+  auto_update: z.enum(["off", "patch", "minor"]).default("off"),
+  interval_hours: z.number().int().default(24),
+});
+
+export const RegistryConfigSchema = z.object({
+  allow_npm: z.boolean().default(true),
+});
+
+export const TelemetryConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  notice_shown: z.boolean().default(false),
+  anonymous_id: z.string().default(""),
+});
+
 export const ConfigSchema = z.object({
   defaults: z
     .object({
@@ -26,6 +42,7 @@ export const ConfigSchema = z.object({
     .prefault({}),
   security: SecurityConfigSchema.prefault({}),
   "agent-mode": AgentModeSchema.prefault({}),
+  registry: RegistryConfigSchema.prefault({}),
   taps: z
     .array(
       z.object({
@@ -37,8 +54,13 @@ export const ConfigSchema = z.object({
       }),
     )
     .default([]),
+  updates: UpdatesConfigSchema.prefault({}),
+  telemetry: TelemetryConfigSchema.prefault({}),
 });
 
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type AgentMode = z.infer<typeof AgentModeSchema>;
+export type UpdatesConfig = z.infer<typeof UpdatesConfigSchema>;
+export type RegistryConfig = z.infer<typeof RegistryConfigSchema>;
+export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
 export type Config = z.infer<typeof ConfigSchema>;

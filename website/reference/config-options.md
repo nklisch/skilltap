@@ -158,6 +158,28 @@ User action required: review warnings and install manually with
 
 ---
 
+## `[registry]`
+
+Controls access to external package registries.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `allow_npm` | boolean | `true` | Allow installing skills from the npm registry (`skilltap install npm:...`) and searching it (`skilltap find --npm`). Set to `false` for air-gapped environments or org policies that restrict external package sources. |
+
+### Example
+
+```toml
+[registry]
+allow_npm = false
+```
+
+When `allow_npm = false`:
+- `skilltap install npm:any-package` exits with an error
+- `skilltap find --npm` exits with an error
+- Git, local, and tap sources are unaffected
+
+---
+
 ## `[[taps]]`
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
@@ -228,6 +250,10 @@ ollama_model = ""
 [agent-mode]
 enabled = false
 scope = "project"
+
+# Registry access controls
+[registry]
+allow_npm = true
 
 # Tap definitions
 [[taps]]

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { version as pkgVersion } from "../package.json";
 import {
   AgentModeSchema,
   AgentResponseSchema,
@@ -33,7 +34,7 @@ import {
 
 describe("@skilltap/core", () => {
   test("exports VERSION", () => {
-    expect(VERSION).toBe("0.2.0");
+    expect(VERSION).toBe(pkgVersion);
   });
 
   test("exports Result helpers", () => {

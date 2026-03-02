@@ -55,6 +55,18 @@ export default defineCommand({
 
     // npm registry search
     if (args.npm) {
+      const configResult = await loadConfig();
+      if (!configResult.ok) {
+        errorLine(configResult.error.message, configResult.error.hint);
+        process.exit(1);
+      }
+      if (!configResult.value.registry.allow_npm) {
+        errorLine(
+          "npm registry search is disabled by config (registry.allow_npm = false).",
+          "To allow npm search, set allow_npm = true in the [registry] section of config.toml.",
+        );
+        process.exit(1);
+      }
       await runNpmSearch(query ?? "", args.json as boolean);
       return;
     }
