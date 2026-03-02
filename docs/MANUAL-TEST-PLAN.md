@@ -40,9 +40,9 @@ mkdir -p /tmp/st-test-project && cd /tmp/st-test-project && git init
 
 ```bash
 # owner/repo — resolves to github.com (multi-skill repo: prompts for skill selection)
-st install nklisch/skills --global
+st install nklisch/skilltap-skills --global
 ```
-**Expect:** Clone from `https://github.com/nklisch/skills`, skill picker shown (research, design, implement, verify, fix, quality-gate, extract-patterns, refactor-plan). Select one or more and install proceeds.
+**Expect:** Clone from `https://github.com/nklisch/skilltap-skills`, skill picker shown (skilltap, skilltap-find). Select one or more and install proceeds.
 
 ### 1.2 Full Git URL (HTTPS)
 
@@ -699,9 +699,9 @@ st find -i
 ### 10.1 Tap add (git)
 
 ```bash
-st tap add nklisch https://github.com/nklisch/skills
+st tap add skilltap https://github.com/nklisch/skilltap-skills
 ```
-**Expect:** "Added tap 'nklisch' (git, 8 skills)". Config updated.
+**Expect:** "Added tap 'skilltap' (git, 2 skills)". Config updated.
 
 ### 10.2 Tap add (HTTP registry)
 
@@ -729,14 +729,14 @@ st tap list
 ### 10.5 Tap remove (with confirmation)
 
 ```bash
-st tap remove nklisch
+st tap remove skilltap
 ```
-**Expect:** Prompt: "Remove tap 'nklisch'? Installed skills from this tap will not be affected. (y/N)". Confirm to remove.
+**Expect:** Prompt: "Remove tap 'skilltap'? Installed skills from this tap will not be affected. (y/N)". Confirm to remove.
 
 ### 10.6 Tap remove --yes
 
 ```bash
-st tap remove nklisch --yes
+st tap remove skilltap --yes
 ```
 **Expect:** No confirmation prompt. Removed silently.
 
@@ -757,9 +757,9 @@ st tap update
 ### 10.9 Tap update (specific)
 
 ```bash
-st tap update nklisch
+st tap update skilltap
 ```
-**Expect:** Only `nklisch` updated. Others untouched.
+**Expect:** Only `skilltap` updated. Others untouched.
 
 ### 10.10 Tap update non-existent
 
@@ -784,10 +784,10 @@ cat /tmp/my-new-tap/tap.json
 ### 10.12 Install from tap by name (real tap)
 
 ```bash
-st tap add nklisch https://github.com/nklisch/skills
-st install research --global --also claude-code --yes
+st tap add skilltap https://github.com/nklisch/skilltap-skills
+st install skilltap --global --also claude-code --yes
 ```
-**Expect:** Resolves `research` from nklisch tap, clones `nklisch/skills`, installs skill to `~/.agents/skills/research/` with claude-code symlink at `~/.claude/skills/research`.
+**Expect:** Resolves `skilltap` from skilltap tap, clones `nklisch/skilltap-skills`, installs skill to `~/.agents/skills/skilltap/` with claude-code symlink at `~/.claude/skills/skilltap`.
 
 ```bash
 # Previously (generic placeholder):

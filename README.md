@@ -26,14 +26,14 @@ Or download a binary directly from [GitHub Releases](https://github.com/nklisch/
 ## Quickstart
 
 ```bash
-# 1. Add a tap (registry of skills)
-skilltap tap add nklisch https://github.com/nklisch/skills
+# 1. Add the official tap (teaches your agent to use skilltap)
+skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
 
 # 2. Browse available skills
 skilltap find
 
 # 3. Install a skill
-skilltap install my-skill --global
+skilltap install skilltap --global
 
 # 4. List installed skills
 skilltap list

@@ -110,12 +110,12 @@ Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
 A tap is a curated index of skills -- a git repo containing a `tap.json` that lists skill names, descriptions, and URLs. Adding a tap lets you install skills by name instead of URL.
 
 ```bash
-skilltap tap add nklisch https://github.com/nklisch/skills
+skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
 ```
 
 ```
 Cloning tap...
-✓ Added tap 'community' (12 skills)
+✓ Added tap 'skilltap' (2 skills)
 ```
 
 You can add as many taps as you want -- your own, a friend's, a team's.
@@ -129,20 +129,14 @@ skilltap find
 ```
 
 ```
-  research           Research external libs, APIs, and patterns   [nklisch]
-  design             Create detailed DESIGN.md from a vision      [nklisch]
-  implement          Write code from a DESIGN.md                  [nklisch]
-  verify             Verify implementation against design          [nklisch]
-  fix                Fix gaps from VERIFICATION.md                [nklisch]
-  quality-gate       Final quality assessment for a phase         [nklisch]
-  extract-patterns   Discover and document reusable patterns      [nklisch]
-  refactor-plan      Plan refactoring work                        [nklisch]
+  skilltap        Manage agent skills with the skilltap CLI   [skilltap]
+  skilltap-find   Discover and search for agent skills        [skilltap]
 ```
 
 Install by name:
 
 ```bash
-skilltap install research --global
+skilltap install skilltap --global
 ```
 
 skilltap resolves the name from your configured taps, finds the repo URL, and runs the normal clone-scan-install flow.
@@ -150,7 +144,7 @@ skilltap resolves the name from your configured taps, finds the repo URL, and ru
 You can also pin a version:
 
 ```bash
-skilltap install research@v1.0.0 --global
+skilltap install skilltap@v1.0.0 --global
 ```
 
 ## List installed skills
@@ -160,11 +154,10 @@ skilltap list
 ```
 
 ```
-Global (2 skills)
-  Name       Ref     Source                         Trust          Description
-  ────────────────────────────────────────────────────────────────────────────────────────
-  research   main    https://github.com/nklisch/…   ○ unverified   Research external libs
-  design     main    https://github.com/nklisch/…   ○ unverified   Create DESIGN.md
+Global (1 skill)
+  Name       Ref     Source                                  Trust          Description
+  ──────────────────────────────────────────────────────────────────────────────────────────────────
+  skilltap   main    https://github.com/nklisch/skilltap-…   ○ unverified   Manage agent skills
 ```
 
 Filter by scope:

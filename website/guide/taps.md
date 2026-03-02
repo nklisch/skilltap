@@ -23,7 +23,7 @@ skilltap tap add <name> <url>
 skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
 
 ```bash
-skilltap tap add nklisch https://github.com/nklisch/skills
+skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
 ```
 
 ## Listing taps

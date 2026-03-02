@@ -32,4 +32,5 @@ scan sends skill content to your local AI agent CLI for intent review.
 ## Optional
 
 - [GitHub Repository](https://github.com/nklisch/skilltap): Source code, issues, releases, and contributing
+- [Official tap](https://github.com/nklisch/skilltap-skills): The `skilltap` tap — install the `skilltap` skill (manage skills) and `skilltap-find` skill (discover skills) via `skilltap tap add skilltap https://github.com/nklisch/skilltap-skills`
 - [Full documentation (single file)](https://skilltap.dev/llms-full.txt): All pages concatenated as Markdown for bulk ingestion
