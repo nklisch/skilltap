@@ -222,17 +222,17 @@ Provenance verification and trust metadata — without managing users. Piggyback
 
 Support HTTP registries as a tap type — for enterprise, large indexes, and dynamic registries.
 
-- [ ] **14.1** Define registry response schemas in `core/src/registry/types.ts` (RegistrySkillSchema, RegistryListResponseSchema, RegistryDetailResponseSchema)
-- [ ] **14.2** Implement `core/src/registry/client.ts` — HTTP client with auth (bearer token, env var), error handling, response validation
-- [ ] **14.3** Add `type` and `auth_token`/`auth_env` fields to tap config schema
-- [ ] **14.4** Implement tap type auto-detection in `tap add` (try JSON, fall back to git clone)
-- [ ] **14.5** Wire HTTP taps into `loadTaps()` / `searchTaps()` — fetch from API instead of reading local tap.json
-- [ ] **14.6** Handle `source.type` dispatch in install flow (git, github, npm, url → existing adapters)
-- [ ] **14.7** Implement direct tarball download for `source.type: "url"` sources
-- [ ] **14.8** `tap list` shows type column (git/http) and live skill count for HTTP taps
-- [ ] **14.9** `tap update` is no-op for HTTP taps (always live)
-- [ ] **14.10** Unit tests: response schema validation, auth header construction, type detection
-- [ ] **14.11** Integration tests: tap add HTTP (mock Bun.serve), find across git + HTTP taps, install from HTTP registry
+- [x] **14.1** Define registry response schemas in `core/src/registry/types.ts` (RegistrySkillSchema, RegistryListResponseSchema, RegistryDetailResponseSchema)
+- [x] **14.2** Implement `core/src/registry/client.ts` — HTTP client with auth (bearer token, env var), error handling, response validation
+- [x] **14.3** Add `type` and `auth_token`/`auth_env` fields to tap config schema
+- [x] **14.4** Implement tap type auto-detection in `tap add` (try JSON, fall back to git clone)
+- [x] **14.5** Wire HTTP taps into `loadTaps()` / `searchTaps()` — fetch from API instead of reading local tap.json
+- [x] **14.6** Handle `source.type` dispatch in install flow (git, github, npm, url → existing adapters)
+- [x] **14.7** Implement direct tarball download for `source.type: "url"` sources
+- [x] **14.8** `tap list` shows type column (git/http) and live skill count for HTTP taps
+- [x] **14.9** `tap update` is no-op for HTTP taps (always live)
+- [x] **14.10** Unit tests: response schema validation, auth header construction, type detection
+- [x] **14.11** Integration tests: tap add HTTP (mock Bun.serve), find across git + HTTP taps, install from HTTP registry
 - [ ] **14.12** Test fixture: static registry JSON files
 
 **Exit criteria:** `skilltap tap add name https://registry.example.com/skilltap/v1` works. Search and install through HTTP registries works. Auth (bearer token, env var) works. Static file hosting works as a valid registry.
@@ -245,13 +245,13 @@ Support HTTP registries as a tap type — for enterprise, large indexes, and dyn
 
 Homebrew formula, install script, GitHub Releases CI.
 
-- [ ] **15.1** GitHub Actions release workflow — build 4 binaries (linux-x64, linux-arm64, darwin-x64, darwin-arm64) on tag push
-- [ ] **15.2** Binary attestation with `actions/attest-build-provenance`
-- [ ] **15.3** Generate `checksums.txt` (sha256sum) and upload as release asset
-- [ ] **15.4** npm publish step in release workflow (`--provenance` for both `skilltap` and `@skilltap/core`)
-- [ ] **15.5** Create `skilltap/homebrew-skilltap` tap repo with `Formula/skilltap.rb`
-- [ ] **15.6** Homebrew formula auto-update workflow (repository_dispatch from main repo → PR to bump formula)
-- [ ] **15.7** Write `scripts/install.sh` — platform detection, checksum verification, PATH check
+- [x] **15.1** GitHub Actions release workflow — build 4 binaries (linux-x64, linux-arm64, darwin-x64, darwin-arm64) on tag push
+- [x] **15.2** Binary attestation with `actions/attest-build-provenance`
+- [x] **15.3** Generate `checksums.txt` (sha256sum) and upload as release asset
+- [x] **15.4** npm publish step in release workflow (`--provenance` for both `skilltap` and `@skilltap/core`)
+- [x] **15.5** Create `skilltap/homebrew-skilltap` tap repo with `Formula/skilltap.rb` (see `homebrew-skilltap/` — copy to separate repo)
+- [x] **15.6** Homebrew formula auto-update workflow (repository_dispatch from main repo → PR to bump formula)
+- [x] **15.7** Write `scripts/install.sh` — platform detection, checksum verification, PATH check
 - [ ] **15.8** Test: release workflow on a test tag, install script in clean Docker container, `brew install --build-from-source`
 
 **Exit criteria:** Pushing a `v*` tag builds binaries for 4 platforms, publishes to npm with provenance, creates a GitHub Release with checksums, and auto-updates the Homebrew formula. Install script works on Linux and macOS.
