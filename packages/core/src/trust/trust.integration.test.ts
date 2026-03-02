@@ -4,8 +4,13 @@
  * Two integration scenarios:
  *
  *   A) Real npm provenance verification (network, gated behind SKILLTAP_IT=1)
- *      Downloads a real tarball from the npm registry and verifies its
- *      Sigstore SLSA attestation end-to-end.
+ *      Fetches a real SLSA attestation from the npm registry, downloads the
+ *      tarball, and runs full end-to-end Sigstore + TUF verification.
+ *
+ *      Requires patches/@tufjs+models@4.1.0.patch — fixes a BoringSSL (Bun)
+ *      incompatibility where @tufjs/models called crypto.verify(undefined, ...)
+ *      but BoringSSL requires an explicit digest for ECDSA keys.
+ *      Tracked upstream: https://github.com/sigstore/sigstore-js/pull/1561
  *
  *   B) Install from a verified tap (local, always runs)
  *      Creates a local tap whose skill entry carries `trust.verified = true`,
@@ -16,6 +21,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import {
   commitAll,
@@ -99,40 +105,86 @@ async function createVerifiedTap(
 
 // ─── A) Real npm provenance verification ─────────────────────────────────────
 
-describe.skipIf(SKIP_NETWORK)("verifyNpmProvenance — real network", () => {
-  // sigstore@4.1.0: the Sigstore JS library, published via GitHub Actions with
-  // npm Trusted Publishing (--provenance), known to have SLSA attestations.
+describe.skipIf(SKIP_NETWORK)("npm attestation — real network", () => {
+  // sigstore@4.1.0: published via GitHub Actions with npm Trusted Publishing
+  // (--provenance flag), known to have SLSA v1 attestations on npm.
   const PACKAGE = "sigstore";
   const VERSION = "4.1.0";
 
   test(
-    "verifies SLSA provenance for sigstore@4.1.0",
+    "npm attestations endpoint returns SLSA bundle with correct structure",
     async () => {
       const tmpDir = await makeTmpDir();
       try {
-        // 1. Probe the attestations endpoint — skip if the version has no attestations
-        const attestationsUrl = `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE}@${VERSION}`;
+        // 1. Probe the attestations endpoint
         let probe: Response;
         try {
-          probe = await fetch(attestationsUrl, {
-            signal: AbortSignal.timeout(15_000),
-          });
-        } catch {
-          console.warn(
-            `[SKIP] Could not reach npm attestations endpoint (network unavailable)`,
+          probe = await fetch(
+            `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE}@${VERSION}`,
+            { signal: AbortSignal.timeout(15_000) },
           );
+        } catch {
+          console.warn("[SKIP] npm registry unreachable");
           return;
         }
-
         if (probe.status === 404) {
           console.warn(
-            `[SKIP] ${PACKAGE}@${VERSION} has no npm attestations — try a newer version`,
+            `[SKIP] ${PACKAGE}@${VERSION} has no attestations on npm`,
           );
           return;
         }
         expect(probe.ok).toBe(true);
 
-        // 2. Resolve the canonical tarball URL from npm registry metadata
+        const data = (await probe.json()) as {
+          attestations?: Array<{
+            predicateType: string;
+            bundle: {
+              dsseEnvelope?: {
+                payload?: string;
+                payloadType?: string;
+              };
+              verificationMaterial?: {
+                tlogEntries?: Array<{ logIndex?: string }>;
+              };
+            };
+          }>;
+        };
+        const attestations = data.attestations ?? [];
+        expect(attestations.length).toBeGreaterThan(0);
+
+        // 2. Find the SLSA v1 attestation
+        const slsa = attestations.find(
+          (a) => a.predicateType === "https://slsa.dev/provenance/v1",
+        );
+        expect(slsa).toBeDefined();
+        if (!slsa) return;
+
+        // 3. Decode and validate the DSSE payload structure
+        const dsse = slsa.bundle.dsseEnvelope;
+        expect(dsse?.payload).toBeString();
+        expect(dsse?.payloadType).toBe("application/vnd.in-toto+json");
+
+        const stmt = JSON.parse(
+          Buffer.from(dsse!.payload!, "base64").toString("utf-8"),
+        ) as {
+          _type?: string;
+          subject?: Array<{ name?: string; digest?: Record<string, string> }>;
+          predicateType?: string;
+          predicate?: unknown;
+        };
+
+        expect(stmt._type).toBe("https://in-toto.io/Statement/v1");
+        expect(stmt.subject).toHaveLength(1);
+        expect(stmt.subject?.[0]?.name).toContain(PACKAGE);
+        // npm SLSA attestations use sha512 digest (not sha256)
+        expect(stmt.subject?.[0]?.digest?.sha512).toBeString();
+
+        // 4. Transparency log entry should be present
+        const tlog = slsa.bundle.verificationMaterial?.tlogEntries;
+        expect(tlog?.length).toBeGreaterThan(0);
+        expect(tlog?.[0]?.logIndex).toBeString();
+
+        // 5. Download the tarball and verify the hash matches the attestation
         const metaResp = await fetch(
           `https://registry.npmjs.org/${PACKAGE}/${VERSION}`,
           { signal: AbortSignal.timeout(15_000) },
@@ -142,54 +194,44 @@ describe.skipIf(SKIP_NETWORK)("verifyNpmProvenance — real network", () => {
         const tarballUrl = meta.dist?.tarball;
         expect(tarballUrl).toBeString();
 
-        // 3. Download the tarball
         const tarResp = await fetch(tarballUrl as string, {
           signal: AbortSignal.timeout(30_000),
         });
         expect(tarResp.ok).toBe(true);
+        const tarball = Buffer.from(await tarResp.arrayBuffer());
+
+        const expectedHash = stmt.subject![0]!.digest!.sha512!;
+        const actualHash = createHash("sha512").update(tarball).digest("hex");
+        expect(actualHash).toBe(expectedHash);
+
+        // 6. Run full end-to-end provenance verification (Sigstore + TUF)
         const tarballPath = join(tmpDir, "_pkg.tgz");
-        await Bun.write(
-          tarballPath,
-          Buffer.from(await tarResp.arrayBuffer()),
-        );
+        await Bun.write(tarballPath, tarball);
+        const provResult = await verifyNpmProvenance(PACKAGE, VERSION, tarballPath);
 
-        // 4. Run the full provenance verification
-        const result = await verifyNpmProvenance(PACKAGE, VERSION, tarballPath);
-
-        expect(result).not.toBeNull();
-        if (!result) return; // type narrowing
-
-        expect(result.publisher).toBeString();
-        expect(result.publisher.length).toBeGreaterThan(0);
-        expect(result.sourceRepo).toBeString();
-        expect(result.sourceRepo).toContain("github.com");
-        expect(result.verifiedAt).toBeString();
-        // buildWorkflow: may or may not be present depending on SLSA payload
+        expect(provResult).not.toBeNull();
+        if (!provResult) return;
+        expect(provResult.publisher).toBe("sigstore");
+        expect(provResult.sourceRepo).toContain("github.com/sigstore/sigstore-js");
+        expect(provResult.buildWorkflow).toBeString();
+        expect(provResult.transparency).toContain("search.sigstore.dev");
+        expect(provResult.verifiedAt).toBeString();
       } finally {
         await removeTmpDir(tmpDir);
       }
     },
-    60_000, // 60 s — real network + crypto
+    60_000,
   );
 
   test(
-    "returns null for a package with no attestations",
+    "returns null gracefully for package with no attestations",
     async () => {
       const tmpDir = await makeTmpDir();
       try {
-        // A package that predates npm provenance (published before 2023)
-        // will never have attestations regardless of network conditions.
         const tarballPath = join(tmpDir, "_pkg.tgz");
-        await Bun.write(tarballPath, Buffer.alloc(0)); // empty — won't be read
-
-        // Use a clearly non-existent package version — always 404
-        const result = await verifyNpmProvenance(
-          "left-pad",
-          "1.3.0",
-          tarballPath,
-        );
-        // left-pad predates npm provenance; if it somehow has attestations
-        // the tarball hash check will still fail since our file is empty.
+        await Bun.write(tarballPath, Buffer.alloc(0));
+        // left-pad predates npm provenance — 404 on attestations endpoint
+        const result = await verifyNpmProvenance("left-pad", "1.3.0", tarballPath);
         expect(result).toBeNull();
       } finally {
         await removeTmpDir(tmpDir);

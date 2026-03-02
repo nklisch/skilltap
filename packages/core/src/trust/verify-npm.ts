@@ -21,7 +21,8 @@ interface NpmAttestationsResponse {
 interface InTotoStatement {
   subject?: Array<{
     name?: string;
-    digest?: { sha256?: string };
+    // npm SLSA attestations use sha512; older formats may use sha256
+    digest?: { sha256?: string; sha512?: string };
   }>;
   predicateType?: string;
   predicate?: SlsaPredicateV1;
@@ -101,17 +102,25 @@ export async function verifyNpmProvenance(
     const statement = decodeInTotoStatement(dsseEnvelope?.payload);
     if (!statement) return null;
 
-    // Verify the tarball SHA-256 matches the in-toto statement subject
-    const subjectDigest = statement.subject?.[0]?.digest?.sha256;
-    if (subjectDigest) {
+    // Verify the tarball digest matches the in-toto statement subject.
+    // npm SLSA attestations use sha512; fall back to sha256 for other formats.
+    const digestEntry = statement.subject?.[0]?.digest;
+    const subjectDigest512 = digestEntry?.sha512;
+    const subjectDigest256 = digestEntry?.sha256;
+    if (subjectDigest512 || subjectDigest256) {
       let tarballBytes: Buffer;
       try {
         tarballBytes = await readFile(tarballPath);
       } catch {
         return null;
       }
-      const actualDigest = createHash("sha256").update(tarballBytes).digest("hex");
-      if (actualDigest !== subjectDigest) return null;
+      if (subjectDigest512) {
+        const actual = createHash("sha512").update(tarballBytes).digest("hex");
+        if (actual !== subjectDigest512) return null;
+      } else if (subjectDigest256) {
+        const actual = createHash("sha256").update(tarballBytes).digest("hex");
+        if (actual !== subjectDigest256) return null;
+      }
     }
 
     // Extract provenance metadata

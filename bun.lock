@@ -10,7 +10,7 @@
       },
     },
     "packages/cli": {
-      "name": "skilltap",
+      "name": "@skilltap/skilltap",
       "version": "0.1.0",
       "bin": {
         "skilltap": "./src/index.ts",
@@ -49,6 +49,10 @@
         "vue": "^3.5.29",
       },
     },
+  },
+  "patchedDependencies": {
+    "@tufjs/models@4.1.0": "patches/@tufjs%2Fmodels@4.1.0.patch",
+    "@sigstore/core@3.1.0": "patches/@sigstore%2Fcore@3.1.0.patch",
   },
   "packages": {
     "@algolia/abtesting": ["@algolia/abtesting@1.15.1", "", { "dependencies": { "@algolia/client-common": "5.49.1", "@algolia/requester-browser-xhr": "5.49.1", "@algolia/requester-fetch": "5.49.1", "@algolia/requester-node-http": "5.49.1" } }, "sha512-2yuIC48rUuHGhU1U5qJ9kJHaxYpJ0jpDHJVI5ekOxSMYXlH4+HP+pA31G820lsAznfmu2nzDV7n5RO44zIY1zw=="],
@@ -270,6 +274,8 @@
     "@sigstore/verify": ["@sigstore/verify@3.1.0", "", { "dependencies": { "@sigstore/bundle": "^4.0.0", "@sigstore/core": "^3.1.0", "@sigstore/protobuf-specs": "^0.5.0" } }, "sha512-mNe0Iigql08YupSOGv197YdHpPPr+EzDZmfCgMc7RPNaZTw5aLN01nBl6CHJOh3BGtnMIj83EeN4butBchc8Ag=="],
 
     "@skilltap/core": ["@skilltap/core@workspace:packages/core"],
+
+    "@skilltap/skilltap": ["@skilltap/skilltap@workspace:packages/cli"],
 
     "@skilltap/test-utils": ["@skilltap/test-utils@workspace:packages/test-utils"],
 
@@ -624,8 +630,6 @@
     "sigstore": ["sigstore@4.1.0", "", { "dependencies": { "@sigstore/bundle": "^4.0.0", "@sigstore/core": "^3.1.0", "@sigstore/protobuf-specs": "^0.5.0", "@sigstore/sign": "^4.1.0", "@sigstore/tuf": "^4.0.1", "@sigstore/verify": "^3.1.0" } }, "sha512-/fUgUhYghuLzVT/gaJoeVehLCgZiUxPCPMcyVNY0lIf/cTCz58K/WTI7PefDarXxp9nUKpEwg1yyz3eSBMTtgA=="],
 
     "sisteransi": ["sisteransi@1.0.5", "", {}, "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="],
-
-    "skilltap": ["skilltap@workspace:packages/cli"],
 
     "skilltap-website": ["skilltap-website@workspace:website"],
 

@@ -1,0 +1,21 @@
+diff --git a/dist/utils/verify.js b/dist/utils/verify.js
+index 8232b6f6a97ab1713303f5e3696f4de253b8e22b..4a030149643e6b93e29ce3820c5bde06ae05a319 100644
+--- a/dist/utils/verify.js
++++ b/dist/utils/verify.js
+@@ -8,6 +8,15 @@ const canonical_json_1 = require("@tufjs/canonical-json");
+ const crypto_1 = __importDefault(require("crypto"));
+ const verifySignature = (metaDataSignedData, key, signature) => {
+     const canonicalData = Buffer.from((0, canonical_json_1.canonicalize)(metaDataSignedData));
+-    return crypto_1.default.verify(undefined, canonicalData, key, Buffer.from(signature, 'hex'));
++    // BoringSSL (Bun) requires an explicit digest for ECDSA — undefined auto-detection
++    // only works in Node.js/OpenSSL. Ed25519 is one-shot and still uses undefined.
++    // See: https://github.com/sigstore/sigstore-js/pull/1561
++    const keyObj = key && typeof key === 'object' && 'key' in key ? key.key : key;
++    let algo = undefined;
++    if (keyObj && keyObj.asymmetricKeyType === 'ec') {
++        const curve = keyObj.asymmetricKeyDetails?.namedCurve;
++        algo = curve === 'secp384r1' ? 'sha384' : curve === 'secp521r1' ? 'sha512' : 'sha256';
++    }
++    return crypto_1.default.verify(algo, canonicalData, key, Buffer.from(signature, 'hex'));
+ };
+ exports.verifySignature = verifySignature;
