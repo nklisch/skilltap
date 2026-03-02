@@ -1,6 +1,12 @@
 import { intro, isCancel, outro, spinner } from "@clack/prompts";
 import type { ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
-import { installSkill, loadConfig, loadTaps, searchTaps } from "@skilltap/core";
+import {
+  installSkill,
+  loadConfig,
+  loadTaps,
+  searchPackages,
+  searchTaps,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
   ansi,
@@ -37,8 +43,21 @@ export default defineCommand({
       description: "Output as JSON",
       default: false,
     },
+    npm: {
+      type: "boolean",
+      description: "Search npm registry instead of taps",
+      default: false,
+    },
   },
   async run({ args }) {
+    const query = args.query as string | undefined;
+
+    // npm registry search
+    if (args.npm) {
+      await runNpmSearch(query ?? "", args.json as boolean);
+      return;
+    }
+
     const tapsResult = await loadTaps();
     if (!tapsResult.ok) {
       errorLine(tapsResult.error.message, tapsResult.error.hint);
@@ -54,7 +73,6 @@ export default defineCommand({
       process.exit(0);
     }
 
-    const query = args.query as string | undefined;
     const skills = query ? searchTaps(all, query) : all;
 
     if (skills.length === 0) {
@@ -99,6 +117,55 @@ export default defineCommand({
     process.stdout.write("\n\n");
   },
 });
+
+async function runNpmSearch(query: string, json: boolean): Promise<void> {
+  const result = await searchPackages(query, { keywords: ["agent-skill"] });
+  if (!result.ok) {
+    errorLine(result.error.message, result.error.hint);
+    process.exit(1);
+  }
+
+  const packages = result.value;
+
+  if (packages.length === 0) {
+    process.stdout.write(
+      query
+        ? `No npm packages found matching '${query}'.\n`
+        : "No npm packages found with the 'agent-skill' keyword.\n",
+    );
+    process.exit(0);
+  }
+
+  if (json) {
+    process.stdout.write(
+      JSON.stringify(
+        packages.map((p) => ({
+          name: p.name,
+          version: p.version,
+          description: p.description,
+          source: "npm",
+        })),
+        null,
+        2,
+      ),
+    );
+    process.stdout.write("\n");
+    return;
+  }
+
+  const width = termWidth();
+  const descWidth = Math.max(20, width - 44);
+  const rows = packages.map((p) => [
+    ansi.bold(p.name),
+    ansi.dim(p.version),
+    truncate(p.description, descWidth),
+    ansi.dim("[npm]"),
+  ]);
+
+  process.stdout.write("\n");
+  process.stdout.write(table(rows));
+  process.stdout.write("\n\n");
+}
 
 async function runInteractive(skills: TapEntry[]): Promise<void> {
   const { select } = await import("@clack/prompts");

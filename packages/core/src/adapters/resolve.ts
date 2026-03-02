@@ -4,9 +4,16 @@ import { err, UserError } from "../types";
 import { gitAdapter } from "./git";
 import { githubAdapter } from "./github";
 import { localAdapter } from "./local";
+import { npmAdapter } from "./npm";
 import type { SourceAdapter } from "./types";
 
-const ADAPTERS: SourceAdapter[] = [gitAdapter, localAdapter, githubAdapter];
+// Resolution order per SPEC:
+// 1. URL protocols (https://, http://, git@, ssh://) → git
+// 2. github: prefix → github
+// 3. npm: prefix → npm
+// 4. Local paths (./, /, ~/) → local
+// 5. Bare owner/repo → github (shorthand)
+const ADAPTERS: SourceAdapter[] = [gitAdapter, npmAdapter, localAdapter, githubAdapter];
 
 export async function resolveSource(
   source: string,

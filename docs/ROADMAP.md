@@ -175,16 +175,16 @@ Finalize for v0.1 release.
 
 Install skills published as npm packages. Opens access to the 69K+ skills already on npm via skills.sh, vibe-rules, skills-npm, and others.
 
-- [ ] **12.1** Implement `core/src/npm-registry.ts` — npm registry API client (fetch metadata, resolve version, search, download + extract tarball)
-- [ ] **12.2** Implement `core/src/adapters/npm.ts` — `canHandle("npm:")`, resolve to tarball URL, parse `@scope/name@version`
-- [ ] **12.3** Wire npm adapter into `ADAPTERS[]` array (after github: prefix, before local paths)
-- [ ] **12.4** Extend scanner to check `skills/*/SKILL.md` as a priority path (antfu/skillpm convention) without deep-scan prompt
-- [ ] **12.5** Implement tarball integrity verification (SHA-512 SRI hash)
-- [ ] **12.6** Handle npm-sourced skill updates (version comparison instead of SHA, file-level diff)
-- [ ] **12.7** Private registry support — read registry URL and auth from `.npmrc` and env vars
-- [ ] **12.8** `skilltap find --npm <query>` — search npm registry API with `keywords:agent-skill` filter
-- [ ] **12.9** Allow `npm:` sources in tap.json `repo` field
-- [ ] **12.10** Unit tests: adapter canHandle/resolve, version parsing, tarball extraction
+- [x] **12.1** Implement `core/src/npm-registry.ts` — npm registry API client (fetch metadata, resolve version, search, download + extract tarball)
+- [x] **12.2** Implement `core/src/adapters/npm.ts` — `canHandle("npm:")`, resolve to tarball URL, parse `@scope/name@version`
+- [x] **12.3** Wire npm adapter into `ADAPTERS[]` array (after github: prefix, before local paths)
+- [x] **12.4** Extend scanner to check `skills/*/SKILL.md` as a priority path (antfu/skillpm convention) without deep-scan prompt
+- [x] **12.5** Implement tarball integrity verification (SHA-512 SRI hash)
+- [x] **12.6** Handle npm-sourced skill updates (version comparison instead of SHA, file-level diff)
+- [x] **12.7** Private registry support — read registry URL and auth from `.npmrc` and env vars
+- [x] **12.8** `skilltap find --npm <query>` — search npm registry API with `keywords:agent-skill` filter
+- [x] **12.9** Allow `npm:` sources in tap.json `repo` field
+- [x] **12.10** Unit tests: adapter canHandle/resolve, version parsing, tarball extraction
 - [ ] **12.11** Integration tests: install from npm, find --npm, update npm-sourced skill
 - [ ] **12.12** Test fixture: pre-built npm tarball with known skill structure
 

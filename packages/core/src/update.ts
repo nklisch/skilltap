@@ -3,17 +3,31 @@ import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
+import { makeTmpDir, removeTmpDir } from "./fs";
 import type { DiffStat } from "./git";
 import { diff, diffStat, fetch, pull, revParse } from "./git";
+import {
+  downloadAndExtract,
+  fetchPackageMetadata,
+  parseNpmSource,
+  resolveVersion,
+} from "./npm-registry";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
-import { scanDiff } from "./security";
+import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
-import { err, type GitError, ok, type ScanError, UserError } from "./types";
+import {
+  err,
+  type GitError,
+  NetworkError,
+  ok,
+  type ScanError,
+  UserError,
+} from "./types";
 
 export type UpdateOptions = {
   /** Specific skill to update; undefined = update all */
@@ -110,9 +124,121 @@ async function refreshAgentSymlinks(
   );
 }
 
+/** Handle updates for npm-sourced skills (version comparison instead of git SHA). */
+async function updateNpmSkill(
+  record: InstalledSkill,
+  installed: { skills: InstalledSkill[] },
+  options: UpdateOptions,
+  result: UpdateResult,
+): Promise<Result<void, UserError | NetworkError | ScanError>> {
+  // biome-ignore lint/style/noNonNullAssertion: caller checks record.repo?.startsWith("npm:")
+  const { name: packageName } = parseNpmSource(record.repo!);
+
+  const metaResult = await fetchPackageMetadata(packageName);
+  if (!metaResult.ok) {
+    // Network failure — skip gracefully rather than hard-failing the whole update
+    result.skipped.push(record.name);
+    options.onProgress?.(record.name, "skipped");
+    return ok(undefined);
+  }
+
+  const versionResult = resolveVersion(metaResult.value, "latest");
+  if (!versionResult.ok) {
+    result.skipped.push(record.name);
+    options.onProgress?.(record.name, "skipped");
+    return ok(undefined);
+  }
+
+  const latestVersion = versionResult.value.version;
+
+  if (record.ref === latestVersion) {
+    result.upToDate.push(record.name);
+    options.onProgress?.(record.name, "upToDate");
+    return ok(undefined);
+  }
+
+  const tmpResult = await makeTmpDir();
+  if (!tmpResult.ok) return tmpResult;
+  const tmpDir = tmpResult.value;
+
+  try {
+    const info = versionResult.value;
+    const extractResult = await downloadAndExtract(
+      info.dist.tarball,
+      tmpDir,
+      info.dist.integrity,
+    );
+    if (!extractResult.ok) {
+      result.skipped.push(record.name);
+      options.onProgress?.(record.name, "skipped");
+      return ok(undefined);
+    }
+
+    const pkgDir = extractResult.value;
+    // Standalone: path is null → use the whole package dir
+    // Multi-skill: path is relative within the package (e.g. "skills/skill-a")
+    const newSkillDir = record.path ? join(pkgDir, record.path) : pkgDir;
+
+    // Static security scan on the new version's content
+    const scanResult = await scanStatic(newSkillDir);
+    const warnings: StaticWarning[] = scanResult.ok ? scanResult.value : [];
+
+    if (await shouldSkipUpdate(warnings, options, record.name)) {
+      result.skipped.push(record.name);
+      options.onProgress?.(record.name, "skipped");
+      return ok(undefined);
+    }
+
+    // Replace the installed skill directory
+    const installDir = skillInstallDir(
+      record.name,
+      record.scope as "global" | "project",
+      options.projectRoot,
+    );
+    await $`rm -rf ${installDir}`.quiet();
+    await mkdir(dirname(installDir), { recursive: true });
+    await $`cp -r ${newSkillDir} ${installDir}`.quiet();
+
+    // Semantic scan on updated content
+    if (options.semantic && options.agent) {
+      const semResult = await scanSemantic(installDir, options.agent, {
+        threshold: options.threshold,
+        onProgress: options.onSemanticProgress,
+      });
+      if (semResult.ok && semResult.value.length > 0) {
+        options.onSemanticWarnings?.(semResult.value, record.name);
+        if (options.strict) {
+          result.skipped.push(record.name);
+          options.onProgress?.(record.name, "skipped");
+          return ok(undefined);
+        }
+      }
+    }
+
+    await refreshAgentSymlinks(record, options.projectRoot);
+
+    // Update record in place
+    const idx = installed.skills.indexOf(record);
+    if (idx !== -1) {
+      installed.skills[idx] = {
+        ...record,
+        ref: latestVersion,
+        sha: null,
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    result.updated.push(record.name);
+    options.onProgress?.(record.name, "updated");
+    return ok(undefined);
+  } finally {
+    await removeTmpDir(tmpDir);
+  }
+}
+
 export async function updateSkill(
   options: UpdateOptions = {},
-): Promise<Result<UpdateResult, UserError | GitError | ScanError>> {
+): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
   const installedResult = await loadInstalled();
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
@@ -140,6 +266,13 @@ export async function updateSkill(
     }
 
     options.onProgress?.(record.name, "checking");
+
+    // npm-sourced skills use version comparison instead of git SHA comparison
+    if (record.repo?.startsWith("npm:")) {
+      const npmResult = await updateNpmSkill(record, installed, options, result);
+      if (!npmResult.ok) return npmResult;
+      continue;
+    }
 
     // Standalone: work dir is the install path. Multi-skill: work dir is the cache.
     const isMulti = record.path !== null;

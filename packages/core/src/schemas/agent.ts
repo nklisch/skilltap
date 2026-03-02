@@ -9,6 +9,7 @@ export const ResolvedSourceSchema = z.object({
   url: z.string(),
   ref: z.string().optional(),
   adapter: z.string(),
+  integrity: z.string().optional(),
 });
 
 export type AgentResponse = z.infer<typeof AgentResponseSchema>;

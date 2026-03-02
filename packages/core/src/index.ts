@@ -7,6 +7,7 @@ export * from "./fs";
 export * from "./git";
 export * from "./install";
 export * from "./link";
+export * from "./npm-registry";
 export * from "./paths";
 export * from "./remove";
 export * from "./update";
