@@ -195,21 +195,29 @@ Trust tier appears as a column in `skilltap list`, a row in `skilltap info`, and
 
 ```
 $ skilltap list
-Global:
-  commit-helper    v1.2.0  home  ✓ provenance  Conventional commit messages
-  my-local-skill   main    url   ○ unverified  My development skill
+Global (2 skills)
+  Name             Ref     Source                                  Trust          Description
+  ───────────────────────────────────────────────────────────────────────────────────────────
+  commit-helper    v1.2.0  npm:@user/commit-helper                 ✓ provenance   Conventional commit messages
+  my-local-skill   main    local                                   ○ unverified   My development skill
 ```
 
 ```
 $ skilltap info commit-helper
-commit-helper (installed, global)
-  Generates conventional commit messages
-  Source: https://github.com/user/commit-helper
-  Ref:    v1.2.0 (abc123de)
-  Trust:  ✓ Provenance verified
-    npm:  github.com/user/commit-helper
-    Built by: .github/workflows/release.yml
-    Transparency: https://search.sigstore.dev/...
+name:          commit-helper
+description:   Generates conventional commit messages
+scope:         global
+source:        npm:@user/commit-helper
+ref:           1.2.0
+sha:           —
+trust:         ✓ Provenance verified
+  source:      github.com/user/commit-helper
+  build:       .github/workflows/release.yml
+  log:         https://search.sigstore.dev/...
+path:          /home/user/.agents/skills/commit-helper
+agents:        claude-code
+installed:     2026-02-28T12:00:00.000Z
+updated:       2026-02-28T12:00:00.000Z
 ```
 
 ## Agent mode

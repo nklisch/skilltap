@@ -150,9 +150,11 @@ skilltap list
 ```
 
 ```
-Global:
-  commit-helper      v1.2.0   community   Conventional commit messages
-  code-review        v2.0.0   community   Thorough code review
+Global (2 skills)
+  Name            Ref     Source                                    Trust          Description
+  ──────────────────────────────────────────────────────────────────────────────────────────────
+  commit-helper   v1.2.0  https://github.com/user/commit-helper…   ○ unverified   Conventional commit messages
+  code-review     v2.0.0  https://github.com/user/code-review…     ○ unverified   Thorough code review
 ```
 
 Filter by scope:
@@ -171,15 +173,19 @@ skilltap update
 ```
 
 ```
-Checking commit-helper... abc123 → def456 (2 files changed)
+◆ Checking commit-helper...
+│ abc123 → def456 (2 files changed)
   M SKILL.md (+5 -2)
-  A scripts/helper.sh (new, 180 bytes)
+  A scripts/helper.sh (+18)
 
-Scanning changes... ✓ No warnings
-Apply update? (y/N): y
-✓ Updated commit-helper (v1.2.0 → v1.3.0)
+◇ Apply update to commit-helper?
+│ › Yes
+✓ Updated commit-helper
 
-Checking code-review... Already up to date.
+◆ Checking code-review...
+│ Already up to date.
+
+Updated: 1   Skipped: 0   Up to date: 1
 ```
 
 Updates fetch the latest changes, show you a diff summary, scan the changed files for security issues, and ask before applying.

@@ -181,15 +181,21 @@ skilltap list [flags]
 ### Output Format
 
 ```
-Global:
-  commit-helper    v1.2.0  home   ✓ provenance  Conventional commit messages
-  code-review      v2.0.0  home   ◆ curated     Thorough code review
+Global (2 skills)
+  Name           Ref     Source                                   Trust          Description
+  ────────────────────────────────────────────────────────────────────────────────────────────────
+  commit-helper  v1.2.0  https://github.com/user/commit-helper…  ✓ provenance   Conventional commit messages
+  code-review    v2.0.0  https://github.com/user/code-review…    ◆ curated      Thorough code review
 
-Project (/home/nathan/dev/termtube):
-  termtube-dev     main    local  ○ unverified  Development workflow
+Project (2 skills)
+  Name            Ref   Source                                  Trust          Description
+  ──────────────────────────────────────────────────────────────────────────────────────────
+  termtube-dev    main  https://github.com/user/termtube…       ○ unverified   Development workflow
 ```
 
-Columns: name, ref, source (tap name or `local`/`url`), trust tier, description (truncated to terminal width).
+Columns: Name, Ref, Source (raw repo URL, truncated), Trust, Description. Linked skills appear in a separate **Linked** section.
+
+The Source column shows the repo URL (or `local` for linked skills, `npm:...` for npm sources).
 
 If no skills are installed: `No skills installed. Run 'skilltap install <url>' to get started.`
 
@@ -285,7 +291,7 @@ skilltap find [query] [flags]
 |------|------|---------|-------------|
 | `-i` | boolean | `false` | Interactive fuzzy finder mode |
 | `--json` | boolean | `false` | Output as JSON |
-| `--npm <query>` | string | — | Search the npm registry for packages tagged with `agent-skill`. Cannot be combined with `-i`. |
+| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. |
 
 ### Examples
 
@@ -299,8 +305,11 @@ skilltap find
 # Interactive fuzzy finder (type to filter, arrow keys, Enter to install)
 skilltap find -i
 
-# Search npm registry for skills
-skilltap find --npm commit
+# Search npm registry for skills matching "commit"
+skilltap find commit --npm
+
+# Search all npm packages with agent-skill keyword
+skilltap find --npm
 
 # Machine-readable output
 skilltap find --json
@@ -397,46 +406,40 @@ skilltap info <name>
 
 ### Output
 
-For an installed skill:
+For an installed skill (key-value rows, keys left-padded to 13 chars):
 
 ```
-commit-helper (installed, global)
-  Generates conventional commit messages
-  Source: https://gitea.example.com/nathan/commit-helper
-  Ref:    v1.2.0 (abc123de)
-  Tap:    home
-  Trust:  ✓ Provenance verified
-    npm:  github.com/nathan/commit-helper
-    Built by: .github/workflows/release.yml
-  Also:   claude-code
-  Size:   12.3 KB (3 files)
-  Installed: 2026-02-28
-  Updated:   2026-02-28
+name:          commit-helper
+description:   Generates conventional commit messages
+scope:         global
+source:        https://gitea.example.com/nathan/commit-helper
+ref:           v1.2.0
+sha:           abc123d
+trust:         ✓ Provenance verified
+  source:      github.com/nathan/commit-helper
+  build:       .github/workflows/release.yml
+path:          /home/nathan/.agents/skills/commit-helper
+agents:        claude-code
+installed:     2026-02-28T12:00:00.000Z
+updated:       2026-02-28T12:00:00.000Z
 ```
 
-For a linked skill:
-
-```
-my-local-skill (linked, global)
-  My development skill
-  Path:   /home/nathan/dev/my-local-skill
-  Also:   ---
-  Linked: 2026-02-28
-```
+`agents:` shows which agent-specific symlinks currently exist on disk.
 
 For a skill available in a tap (not installed):
 
 ```
-unknown-skill (available)
-  Some useful skill
-  Repo: https://github.com/someone/unknown-skill
-  Tap:  community
-  Tags: productivity, workflow
+name:          commit-helper
+description:   Some useful skill
+status:        (available)
+tap:           community
+source:        https://github.com/someone/commit-helper
+tags:          productivity, workflow
 
-  Run 'skilltap install unknown-skill' to install.
+Run 'skilltap install commit-helper' to install.
 ```
 
-If not found anywhere: exit 1 with `Skill 'name' not found. Try 'skilltap find name'.`
+If not found anywhere: exit 1 with `error: Skill 'name' is not installed` and hint `Run 'skilltap find name' to search`.
 
 ### Examples
 
@@ -709,20 +712,18 @@ skilltap create [name] [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--template` | `basic` \| `npm` \| `multi` | prompted | Template to use |
+| `--template`, `-t` | `basic` \| `npm` \| `multi` | prompted | Template to use |
 | `--dir` | string | `./<name>` | Directory to create the skill in |
-| `--description` | string | prompted | Short description for the skill |
-| `--author` | string | from git config | Author name |
 
-When both `name` and `--template` are provided, runs non-interactively. Otherwise prompts for missing values.
+When both `name` and `--template` are provided, runs non-interactively (uses `"{name} skill"` as description, MIT as license). Otherwise prompts for name, description, template, and license.
 
 ### Templates
 
 | Template | Generated files |
 |----------|-----------------|
-| `basic` | `SKILL.md`, `README.md`, `.gitignore` |
-| `npm` | `SKILL.md`, `README.md`, `.gitignore`, `package.json`, `.github/workflows/publish.yml` |
-| `multi` | `.agents/skills/<skill-a>/SKILL.md`, `.agents/skills/<skill-b>/SKILL.md`, `README.md`, `.gitignore` |
+| `basic` | `SKILL.md`, `.gitignore` |
+| `npm` | `SKILL.md`, `.gitignore`, `package.json`, `.github/workflows/publish.yml` |
+| `multi` | `.agents/skills/<skill-a>/SKILL.md`, `.agents/skills/<skill-b>/SKILL.md`, `.gitignore` |
 
 ### Behavior
 
@@ -809,8 +810,10 @@ With `--json`:
 
 ```json
 {
+  "name": "commit-helper",
   "valid": true,
   "issues": [],
+  "frontmatter": { "name": "commit-helper", "description": "Generates conventional commit messages" },
   "fileCount": 3,
   "totalBytes": 4301
 }

@@ -22,9 +22,9 @@ skilltap create my-skill --template basic
 
 | Template | Description |
 |----------|-------------|
-| `basic` | Single skill: `SKILL.md`, `README.md`, `.gitignore` |
-| `npm` | npm package: adds `package.json` (with `agent-skill` keyword) and a GitHub Actions publish workflow with provenance attestation |
-| `multi` | Multi-skill repo: `.agents/skills/` structure with multiple skills |
+| `basic` | Single skill: `SKILL.md`, `.gitignore` |
+| `npm` | npm package: `SKILL.md`, `.gitignore`, `package.json` (with `agent-skill` keyword), `.github/workflows/publish.yml` with provenance attestation |
+| `multi` | Multi-skill repo: `.agents/skills/` structure with multiple skills, `.gitignore` |
 
 After scaffolding, the command prints next steps — how to test locally, verify the skill, and publish it.
 
@@ -76,15 +76,18 @@ This checks:
 Output on success:
 
 ```
-✓ commit-helper is valid
+◆ Verifying commit-helper
+✓ SKILL.md found
+✓ Frontmatter valid
+   name: commit-helper
+   description: Generates conventional commit messages
+✓ Name matches directory
+✓ Security scan: clean
+✓ Size: 4.2 KB (3 files)
 
-  SKILL.md   ✓
-  name       ✓ matches directory
-  security   ✓ no issues
-  size       ✓ 4.2 KB (3 files)
+◆ ✓ Skill is valid and ready to share.
 
-tap.json snippet (to list this skill in a tap):
-
+  To make this discoverable via taps, add to your tap's tap.json:
   {
     "name": "commit-helper",
     "description": "Generates conventional commit messages",
@@ -105,8 +108,10 @@ skilltap verify --json
 
 ```json
 {
+  "name": "commit-helper",
   "valid": true,
   "issues": [],
+  "frontmatter": { "name": "commit-helper", "description": "Generates conventional commit messages" },
   "fileCount": 3,
   "totalBytes": 4301
 }
