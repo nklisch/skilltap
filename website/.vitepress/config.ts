@@ -22,6 +22,13 @@ export default defineConfig({
   head: [
     ["link", { rel: "icon", href: "/favicon.svg" }],
 
+    // Google Analytics
+    ["script", { async: "", src: "https://www.googletagmanager.com/gtag/js?id=G-P45TWRKXC4" }],
+    ["script", {}, `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-P45TWRKXC4');`],
+
     // Open Graph
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "skilltap" }],

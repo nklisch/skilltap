@@ -36,6 +36,8 @@ jobs:
         run: bun test
 
       - name: Build binaries
+        env:
+          GA4_API_SECRET: ${{ secrets.GA4_API_SECRET }}
         run: |
           bun build packages/cli/src/index.ts --compile --target=bun-linux-x64   --outfile=skilltap-linux-x64
           bun build packages/cli/src/index.ts --compile --target=bun-linux-arm64 --outfile=skilltap-linux-arm64

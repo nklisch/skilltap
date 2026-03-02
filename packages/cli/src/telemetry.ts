@@ -1,10 +1,7 @@
 import type { Config } from "@skilltap/core";
 
-// Replace these with your GA4 Measurement ID and API secret after setting up
-// a GA4 property at analytics.google.com → Admin → Data Streams →
-// Measurement Protocol API secrets
-const GA4_MEASUREMENT_ID = "G-XXXXXXXXXX";
-const GA4_API_SECRET = "REPLACE_WITH_SECRET";
+const GA4_MEASUREMENT_ID = "G-P45TWRKXC4";
+const GA4_API_SECRET = process.env.GA4_API_SECRET ?? "";
 const GA4_ENDPOINT = `https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`;
 
 export function isTelemetryEnabled(config: Config): boolean {
