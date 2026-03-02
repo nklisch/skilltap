@@ -2,34 +2,36 @@
 import { ref, onMounted } from "vue";
 
 const lines = [
-  { type: "cmd",    text: "$ skilltap install user/code-reviewer --global --semantic --also claude-code" },
-  { type: "out",    text: "◆  Cloning user/code-reviewer..." },
-  { type: "out",    text: "◆  Scanning for skills..." },
-  { type: "out",    text: "│" },
-  { type: "out",    text: "│  Found 1 skill:" },
-  { type: "skill",  text: "│  ● code-reviewer — Review code for bugs and style" },
-  { type: "out",    text: "│" },
-  { type: "out",    text: "◇  Static scan: 0 warnings" },
-  { type: "out",    text: "│" },
-  { type: "out",    text: "◆  Semantic scan (4 chunks)..." },
-  { type: "check",  text: "│  ✓  chunk 1/4" },
-  { type: "check",  text: "│  ✓  chunk 2/4" },
-  { type: "check",  text: "│  ✓  chunk 3/4" },
-  { type: "check",  text: "│  ✓  chunk 4/4" },
-  { type: "out",    text: "│" },
-  { type: "out",    text: "◇  Semantic scan: clean" },
-  { type: "out",    text: "│" },
-  { type: "prompt", text: "◇  Install code-reviewer?" },
-  { type: "answer", text: "│  › Yes" },
-  { type: "out",    text: "│" },
+  { type: "cmd",     text: "$ skilltap install user/code-reviewer" },
+  { type: "prompt",  text: "◆  Install to:" },
+  { type: "optsel",  text: "│  ● Global (~/.agents/skills/)" },
+  { type: "opt",     text: "│  ○ Project (.agents/skills/)" },
+  { type: "out",     text: "│" },
+  { type: "prompt",  text: "◆  Which agents?" },
+  { type: "optsel",  text: "│  ◼ Claude Code" },
+  { type: "opt",     text: "│  ◻ Cursor" },
+  { type: "opt",     text: "│  ◻ Codex" },
+  { type: "out",     text: "│" },
+  { type: "out",     text: "◆  Cloning user/code-reviewer..." },
+  { type: "out",     text: "◆  Scanning for skills..." },
+  { type: "out",     text: "│" },
+  { type: "out",     text: "│  Found 1 skill:" },
+  { type: "skill",   text: "│  ● code-reviewer — Review code for bugs and style" },
+  { type: "out",     text: "│" },
+  { type: "out",     text: "◇  Static scan: 0 warnings" },
+  { type: "out",     text: "│" },
+  { type: "prompt",  text: "◇  Install code-reviewer?" },
+  { type: "answer",  text: "│  › Yes" },
+  { type: "out",     text: "│" },
   { type: "success", text: "◆  Installed code-reviewer" },
-  { type: "path",   text: "   → ~/.agents/skills/code-reviewer" },
-  { type: "path",   text: "   → ~/.claude/skills/code-reviewer" },
+  { type: "path",    text: "   → ~/.agents/skills/code-reviewer" },
+  { type: "path",    text: "   → ~/.claude/skills/code-reviewer" },
 ];
 
 function getDelay(line) {
   if (line.type === "cmd") return 800;
-  if (line.type === "prompt") return 600;
+  if (line.type === "prompt") return 500;
+  if (line.type === "optsel" || line.type === "opt") return 120;
   if (line.type === "answer") return 900;
   if (line.type === "check") return 280;
   return 150;
@@ -150,6 +152,14 @@ onMounted(() => {
 
 .line.prompt {
   color: #e7e5e4;
+}
+
+.line.optsel {
+  color: #fbbf24;
+}
+
+.line.opt {
+  color: #57534e;
 }
 
 .line.answer {
