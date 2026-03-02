@@ -164,7 +164,7 @@ async function runAgentMode(
 
   for (const record of result.value.records) {
     const installDir = skillInstallDir(record.name, scope, projectRoot);
-    agentSuccess(record.name, installDir, record.ref);
+    agentSuccess(record.name, installDir, record.ref, record.trust);
   }
 }
 

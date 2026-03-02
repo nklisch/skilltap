@@ -1,0 +1,46 @@
+name: Update Formula
+
+on:
+  repository_dispatch:
+    types: [release]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to update to (e.g. v0.2.0)"
+        required: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION="${{ github.event.client_payload.version || inputs.version }}"
+          # Strip leading 'v' for the formula
+          echo "tag=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "num=${VERSION#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download checksums
+        run: |
+          curl -fsSL \
+            "https://github.com/nklisch/skilltap/releases/download/${{ steps.version.outputs.tag }}/checksums.txt" \
+            -o checksums.txt
+
+      - name: Update formula
+        run: |
+          chmod +x scripts/update-formula.sh
+          ./scripts/update-formula.sh "${{ steps.version.outputs.num }}" checksums.txt
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "Update skilltap to ${{ steps.version.outputs.tag }}"
+          title: "skilltap ${{ steps.version.outputs.tag }}"
+          branch: "update-${{ steps.version.outputs.tag }}"
+          body: |
+            Auto-update formula for skilltap ${{ steps.version.outputs.tag }}.
+
+            Triggered by release workflow.

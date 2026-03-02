@@ -1,4 +1,4 @@
-export const VERSION = "0.1.0";
+export const VERSION = "0.2.0";
 
 export * from "./adapters";
 export * from "./agents";
@@ -7,6 +7,7 @@ export * from "./fs";
 export * from "./git";
 export * from "./install";
 export * from "./link";
+export * from "./npm-registry";
 export * from "./paths";
 export * from "./remove";
 export * from "./update";
@@ -14,6 +15,8 @@ export * from "./scanner";
 export * from "./schemas";
 export * from "./security";
 export * from "./symlink";
+export * from "./registry";
 export * from "./taps";
+export * from "./trust";
 export * from "./policy";
 export * from "./types";

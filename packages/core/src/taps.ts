@@ -4,11 +4,20 @@ import { $ } from "bun";
 import { z } from "zod/v4";
 import { getConfigDir, loadConfig, saveConfig } from "./config";
 import { checkGitInstalled, clone, pull } from "./git";
+import type { RegistrySource } from "./registry";
+import { detectTapType, fetchSkillList } from "./registry";
 import type { Tap, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
 import { err, type GitError, ok, type Result, UserError } from "./types";
 
 export type TapEntry = { tapName: string; skill: TapSkill };
+
+export type UpdateTapResult = {
+  /** Git taps: skill counts after pull. */
+  updated: Record<string, number>;
+  /** HTTP tap names (always live, no update needed). */
+  http: string[];
+};
 
 function tapDir(name: string): string {
   return join(getConfigDir(), "taps", name);
@@ -39,10 +48,25 @@ async function loadTapJson(
   return ok(result.data);
 }
 
+/** Map a registry source to a TapSkill repo string usable by the source adapter chain. */
+function registrySourceToRepo(source: RegistrySource): string {
+  switch (source.type) {
+    case "git":
+      return source.url;
+    case "github":
+      return source.repo;
+    case "npm":
+      return `npm:${source.package}`;
+    case "url":
+      return `url:${source.url}`;
+  }
+}
+
 export async function addTap(
   name: string,
   url: string,
-): Promise<Result<{ skillCount: number }, UserError | GitError>> {
+  typeOverride?: "git" | "http",
+): Promise<Result<{ skillCount: number; type: "git" | "http" }, UserError | GitError>> {
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
   const config = configResult.value;
@@ -56,6 +80,21 @@ export async function addTap(
     );
   }
 
+  // Auto-detect type if not specified
+  const tapType = typeOverride ?? (await detectTapType(url));
+
+  if (tapType === "http") {
+    const listResult = await fetchSkillList(url, name, {});
+    if (!listResult.ok) return listResult;
+
+    config.taps.push({ name, url, type: "http" });
+    const saveResult = await saveConfig(config);
+    if (!saveResult.ok) return saveResult;
+
+    return ok({ skillCount: listResult.value.skills.length, type: "http" });
+  }
+
+  // Git tap
   const gitCheck = await checkGitInstalled();
   if (!gitCheck.ok) return gitCheck;
 
@@ -69,11 +108,11 @@ export async function addTap(
     return tapResult;
   }
 
-  config.taps.push({ name, url });
+  config.taps.push({ name, url, type: "git" });
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) return saveResult;
 
-  return ok({ skillCount: tapResult.value.skills.length });
+  return ok({ skillCount: tapResult.value.skills.length, type: "git" });
 }
 
 export async function removeTap(
@@ -93,17 +132,21 @@ export async function removeTap(
     );
   }
 
+  const tap = config.taps[idx]!;
   config.taps.splice(idx, 1);
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) return saveResult;
 
-  await rm(tapDir(name), { recursive: true, force: true });
+  // Only clean up local directory for git taps
+  if (tap.type !== "http") {
+    await rm(tapDir(name), { recursive: true, force: true });
+  }
   return ok(undefined);
 }
 
 export async function updateTap(
   name?: string,
-): Promise<Result<Record<string, number>, UserError | GitError>> {
+): Promise<Result<UpdateTapResult, UserError | GitError>> {
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
   const config = configResult.value;
@@ -121,17 +164,25 @@ export async function updateTap(
     );
   }
 
-  const counts: Record<string, number> = {};
+  const updated: Record<string, number> = {};
+  const http: string[] = [];
+
   for (const tap of targets) {
+    if (tap.type === "http") {
+      http.push(tap.name);
+      continue;
+    }
+
+    // Git tap: pull and count skills
     const dir = tapDir(tap.name);
     const pullResult = await pull(dir);
     if (!pullResult.ok) return pullResult;
 
     const tapResult = await loadTapJson(dir, tap.name);
-    counts[tap.name] = tapResult.ok ? tapResult.value.skills.length : 0;
+    updated[tap.name] = tapResult.ok ? tapResult.value.skills.length : 0;
   }
 
-  return ok(counts);
+  return ok({ updated, http });
 }
 
 export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
@@ -140,15 +191,39 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
   const config = configResult.value;
 
   const entries: TapEntry[] = [];
+
   for (const tap of config.taps) {
-    const dir = tapDir(tap.name);
-    const tapResult = await loadTapJson(dir, tap.name);
-    if (!tapResult.ok) {
-      // Graceful degradation: skip invalid taps
-      continue;
-    }
-    for (const skill of tapResult.value.skills) {
-      entries.push({ tapName: tap.name, skill });
+    if (tap.type === "http") {
+      // HTTP registry: fetch skills from API
+      const auth = { token: tap.auth_token, envVar: tap.auth_env };
+      const listResult = await fetchSkillList(tap.url, tap.name, auth);
+      if (!listResult.ok) {
+        // Graceful degradation: skip unreachable/invalid HTTP registries
+        continue;
+      }
+      for (const skill of listResult.value.skills) {
+        entries.push({
+          tapName: tap.name,
+          skill: {
+            name: skill.name,
+            description: skill.description,
+            repo: registrySourceToRepo(skill.source),
+            tags: skill.tags,
+            trust: skill.trust,
+          },
+        });
+      }
+    } else {
+      // Git tap: read local tap.json
+      const dir = tapDir(tap.name);
+      const tapResult = await loadTapJson(dir, tap.name);
+      if (!tapResult.ok) {
+        // Graceful degradation: skip invalid taps
+        continue;
+      }
+      for (const skill of tapResult.value.skills) {
+        entries.push({ tapName: tap.name, skill });
+      }
     }
   }
 

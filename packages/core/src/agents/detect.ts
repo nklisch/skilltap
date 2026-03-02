@@ -28,6 +28,23 @@ const ADAPTER_MAP: Record<string, AgentAdapter> = {
   opencode: opencodeAdapter,
 };
 
+/** Verify an adapter is reachable on PATH. Returns ok(adapter) or err with install hint. */
+async function verifyAdapterAvailable(
+  adapter: AgentAdapter,
+  configuredName: string,
+): Promise<Result<AgentAdapter, ScanError>> {
+  const available = await adapter.detect();
+  if (!available) {
+    return err(
+      new ScanError(
+        `Configured agent '${configuredName}' not found on PATH.`,
+        `Install ${adapter.name} or change security.agent in config.toml`,
+      ),
+    );
+  }
+  return ok(adapter);
+}
+
 /** Detect which agent CLIs are available on PATH. */
 export async function detectAgents(): Promise<AgentAdapter[]> {
   const results = await Promise.all(
@@ -55,19 +72,11 @@ export async function resolveAgent(
 
   // 1. Known adapter name
   if (agentSetting && !agentSetting.startsWith("/")) {
-    // Check for ollama specially
     if (agentSetting === "ollama") {
-      const adapter = createOllamaAdapter(config.security.ollama_model);
-      const available = await adapter.detect();
-      if (!available) {
-        return err(
-          new ScanError(
-            `Configured agent 'ollama' not found on PATH.`,
-            "Install Ollama or change security.agent in config.toml",
-          ),
-        );
-      }
-      return ok(adapter);
+      return verifyAdapterAvailable(
+        createOllamaAdapter(config.security.ollama_model),
+        "ollama",
+      );
     }
 
     const adapter = ADAPTER_MAP[agentSetting];
@@ -80,16 +89,7 @@ export async function resolveAgent(
       );
     }
 
-    const available = await adapter.detect();
-    if (!available) {
-      return err(
-        new ScanError(
-          `Configured agent '${agentSetting}' not found on PATH.`,
-          `Install ${adapter.name} or change security.agent in config.toml`,
-        ),
-      );
-    }
-    return ok(adapter);
+    return verifyAdapterAvailable(adapter, agentSetting);
   }
 
   // 2. Absolute path

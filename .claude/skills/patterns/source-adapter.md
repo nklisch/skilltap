@@ -55,7 +55,7 @@ export const githubAdapter: SourceAdapter = {
 ### Example 4: Resolver — priority-ordered adapter loop
 **File**: `packages/core/src/adapters/resolve.ts:10`
 ```typescript
-const ADAPTERS: SourceAdapter[] = [gitAdapter, localAdapter, githubAdapter]
+const ADAPTERS: SourceAdapter[] = [gitAdapter, npmAdapter, localAdapter, githubAdapter]
 
 export async function resolveSource(source: string): Promise<Result<ResolvedSource, UserError>> {
   for (const adapter of ADAPTERS) {

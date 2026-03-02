@@ -3,9 +3,9 @@ import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import type { AgentAdapter } from "../agents/types";
 import { detectDangerousPatterns, detectSuspiciousUrls } from "./patterns";
+import { chunkSkillDir } from "./chunking";
 import {
   buildSecurityPrompt,
-  chunkSkillDir,
   escapeTagInjections,
   scanSemantic,
 } from "./semantic";

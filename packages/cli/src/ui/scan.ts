@@ -7,11 +7,7 @@ export function formatWarnings(
   const lines: string[] = [`⚠ Static warnings in ${skillName}:`, ""];
 
   for (const w of warnings) {
-    const lineRef = Array.isArray(w.line)
-      ? `L${w.line[0]}-${w.line[1]}`
-      : w.line > 0
-        ? `L${w.line}`
-        : w.file;
+    const lineRef = formatLineRef(w.line) || w.file;
 
     lines.push(`  ${lineRef}: ${w.category}`);
 
@@ -61,4 +57,10 @@ export function printSemanticWarnings(
   skillName: string,
 ): void {
   process.stderr.write(`${formatSemanticWarnings(warnings, skillName)}\n`);
+}
+
+/** Format a StaticWarning line reference into a location string like "L42" or "L10-15". Returns "" for file-level warnings (line 0). */
+export function formatLineRef(line: number | [number, number]): string {
+  if (Array.isArray(line)) return `L${line[0]}-${line[1]}`;
+  return line > 0 ? `L${line}` : "";
 }

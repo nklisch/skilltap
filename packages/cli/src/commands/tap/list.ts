@@ -36,6 +36,7 @@ export default defineCommand({
 
     const rows = config.taps.map((tap) => [
       ansi.bold(tap.name),
+      tap.type === "http" ? ansi.dim("http") : ansi.dim("git"),
       tap.url,
       `${counts[tap.name] ?? 0} skills`,
     ]);

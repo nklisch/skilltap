@@ -1,0 +1,16 @@
+diff --git a/dist/crypto.js b/dist/crypto.js
+index 296b5ba43e86a0dc5c62b36ee34203f2fe26a013..93e0bf978bcc68b621d8b684aeb787051a9d5799 100644
+--- a/dist/crypto.js
++++ b/dist/crypto.js
+@@ -42,7 +42,10 @@ function verify(data, key, signature, algorithm) {
+     // The try/catch is to work around an issue in Node 14.x where verify throws
+     // an error in some scenarios if the signature is invalid.
+     try {
+-        return crypto_1.default.verify(algorithm, data, key, signature);
++        // BoringSSL (Bun) requires an explicit digest; fall back to sha256 for ECDSA.
++        // See: https://github.com/sigstore/sigstore-js/pull/1561
++        const algo = algorithm ?? 'sha256';
++        return crypto_1.default.verify(algo, data, key, signature);
+     }
+     catch (e) {
+         /* istanbul ignore next */

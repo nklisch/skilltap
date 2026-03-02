@@ -136,6 +136,17 @@ export async function scan(dir: string): Promise<ScannedSkill[]> {
     agentsPaths.push(join(dir, rel));
   }
 
+  // Step 2.5: skills/*/SKILL.md (antfu/skillpm convention) — priority path for npm packages
+  const skillsGlob = new Bun.Glob("skills/*/SKILL.md");
+  const skillsPaths: string[] = [];
+  for await (const rel of skillsGlob.scan({
+    cwd: dir,
+    onlyFiles: true,
+    dot: true,
+  })) {
+    skillsPaths.push(join(dir, rel));
+  }
+
   // Step 3: Agent-specific paths (scanned in parallel — independent directories)
   const agentSpecificPatterns = [
     ".claude/skills/*/SKILL.md",
@@ -160,7 +171,7 @@ export async function scan(dir: string): Promise<ScannedSkill[]> {
     )
   ).flat();
 
-  const combined = [...agentsPaths, ...agentSpecificPaths];
+  const combined = [...agentsPaths, ...skillsPaths, ...agentSpecificPaths];
 
   // Step 4: Deep scan fallback if nothing found
   const discoveredPaths = combined.length > 0 ? combined : await deepScan(dir);

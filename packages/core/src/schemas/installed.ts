@@ -1,4 +1,5 @@
 import { z } from "zod/v4";
+import { TrustInfoSchema } from "../trust/types";
 
 export const InstalledSkillSchema = z.object({
   name: z.string(),
@@ -12,6 +13,7 @@ export const InstalledSkillSchema = z.object({
   also: z.array(z.string()).default([]),
   installedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime().default("1970-01-01T00:00:00.000Z"),
+  trust: TrustInfoSchema.optional(),
 });
 
 export const InstalledJsonSchema = z.object({

@@ -4,7 +4,7 @@ import { defineCommand, runMain } from "citty";
 const main = defineCommand({
   meta: {
     name: "skilltap",
-    version: "0.1.0",
+    version: "0.2.0",
     description: "Install agent skills from any git host",
   },
   subCommands: {
