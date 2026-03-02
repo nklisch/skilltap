@@ -14,7 +14,11 @@ skilltap install https://gitlab.com/team/code-review
 skilltap install https://github.com/user/my-skill
 ```
 
-This works with any host that supports `git clone` -- GitHub, GitLab, Gitea, Bitbucket, your company's private server.
+This works with any host that supports `git clone` -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. The repo just needs a `SKILL.md` somewhere in the tree. No `tap.json` or special structure required -- skilltap clones the repo and scans for `SKILL.md` files automatically.
+
+::: tip Want discoverability?
+Any repo with a `SKILL.md` is installable by URL, but adding your skills to a [tap](/guide/taps) gives them names, descriptions, and tags so others can find them with `skilltap find`.
+:::
 
 ### SSH
 
@@ -108,17 +112,31 @@ The `--yes` flag does **not** skip the scope prompt. Use `--yes --global` or `--
 
 ## Agent symlinks
 
-By default, skills are installed to `.agents/skills/` only. To also make a skill visible to a specific agent, use `--also`:
+During interactive install, skilltap prompts you to choose which agents the skill should be visible to:
 
-```bash
-skilltap install commit-helper --global --also claude-code
+```
+◆ Which agents should this skill be available to?
+│ ◼ Claude Code
+│ ◻ Cursor
+│ ◻ Codex
+│ ◻ Gemini
+│ ◻ Windsurf
 ```
 
-This creates:
-- `~/.agents/skills/commit-helper/` (the actual files)
-- `~/.claude/skills/commit-helper/` (a symlink to the above)
+If your selection differs from your saved default, you'll be asked whether to save it:
 
-You can specify multiple agents:
+```
+◆ Save agent selection as default?
+│ No
+```
+
+You can select none — the skill will only be installed to `.agents/skills/`.
+
+The agent prompt is **skipped** when:
+- `--also` is passed explicitly (e.g. `--also claude-code`)
+- `--yes` is set (uses config default or none)
+
+You can also specify agents directly via `--also`:
 
 ```bash
 skilltap install commit-helper --global --also claude-code --also cursor
@@ -136,7 +154,7 @@ Supported agent identifiers:
 
 ### Default agent symlinks
 
-If you always want to symlink to the same agents, set it in your config:
+You can set a default agent selection in your config, either via the "Save as default?" prompt during install or manually:
 
 ```toml
 # ~/.config/skilltap/config.toml
@@ -144,13 +162,13 @@ If you always want to symlink to the same agents, set it in your config:
 also = ["claude-code", "cursor"]
 ```
 
-Now every `skilltap install` automatically symlinks to both agents without needing `--also`.
+When defaults are set, the agent selection prompt pre-selects them. With `--yes`, the defaults are used without prompting.
 
 ## Multi-skill repos
 
-Some repos contain multiple skills -- for example, a project with both a development workflow skill and a review checklist skill.
+Some repos contain multiple skills -- for example, a project with both a development workflow skill and a review checklist skill. There's no special manifest needed; skilltap discovers all `SKILL.md` files in the repo automatically.
 
-When skilltap finds multiple `SKILL.md` files in a repo, it prompts you to choose:
+When skilltap finds multiple `SKILL.md` files, it prompts you to choose:
 
 ```
 $ skilltap install https://gitea.example.com/user/termtube
@@ -173,6 +191,33 @@ Auto-selecting all (--yes)
 ✓ Installed termtube-dev → ~/.agents/skills/termtube-dev/
 ✓ Installed termtube-review → ~/.agents/skills/termtube-review/
 ```
+
+## Security during install
+
+Every install runs a static security scan. If warnings are found, you'll see them and be asked how to proceed:
+
+```
+⚠ Static warnings in some-skill:
+  SKILL.md L14: Invisible Unicode (3 zero-width chars)
+
+? Run semantic scan?
+  ● Yes
+  ○ No
+```
+
+If you choose to run the semantic scan and haven't set up an agent yet, skilltap detects available agent CLIs on your machine and lets you pick one. Your choice is saved for future installs.
+
+After all scans complete, if there are warnings you're asked to confirm:
+
+```
+? Install some-skill despite warnings?
+  ○ Yes
+  ● No
+```
+
+With `--strict`, any warning aborts immediately — no prompt. With `--skip-scan`, scanning is bypassed entirely (blocked if `require_scan = true` in config).
+
+For the full security model, see [Security](./security).
 
 ## Flags reference
 

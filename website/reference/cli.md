@@ -59,21 +59,25 @@ Source resolution order:
 | `--strict` | boolean | from config | Abort on any security warning (exit 1) |
 | `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan |
+| `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
 | `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
 
 ### Prompt Behavior
 
-| Flags | Skill selection | Scope | Security warnings | Clean install |
-|-------|----------------|-------|-------------------|---------------|
-| (none) | Prompt if multiple | Prompt | Prompt | Prompt |
-| `--project` | Prompt if multiple | Project | Prompt | Prompt |
-| `--global` | Prompt if multiple | Global | Prompt | Prompt |
-| `--yes` | Auto-select all | **Still prompts** | **Still prompts** | Auto-accept |
-| `--yes --global` | Auto-select all | Global | **Still prompts** | Auto-accept |
-| `--yes --project` | Auto-select all | Project | **Still prompts** | Auto-accept |
-| `--strict` | Prompt if multiple | Prompt | **Abort (exit 1)** | Prompt |
-| `--strict --yes --global` | Auto-select all | Global | **Abort (exit 1)** | Auto-accept |
-| `--skip-scan --yes --global` | Auto-select all | Global | Skipped | Auto-accept |
+| Flags | Skill selection | Scope | Agents | Static warnings | Semantic offer | Install confirm |
+|-------|----------------|-------|--------|-----------------|----------------|-----------------|
+| (none) | Prompt if multiple | Prompt | Prompt | Prompt | Offered if warnings | Prompt |
+| `--project` | Prompt if multiple | Project | Prompt | Prompt | Offered if warnings | Prompt |
+| `--global` | Prompt if multiple | Global | Prompt | Prompt | Offered if warnings | Prompt |
+| `--also <agent>` | Prompt if multiple | Prompt | Skipped | Prompt | Offered if warnings | Prompt |
+| `--yes` | Auto-select all | **Still prompts** | Config default | **Still prompts** | Offered if warnings | Auto-accept if clean |
+| `--yes --global` | Auto-select all | Global | Config default | **Still prompts** | Offered if warnings | Auto-accept if clean |
+| `--semantic` | Prompt if multiple | Prompt | Prompt | Prompt | **Always runs** | Prompt |
+| `--strict` | Prompt if multiple | Prompt | Prompt | **Abort (exit 1)** | -- | -- |
+| `--strict --yes --global` | Auto-select all | Global | Config default | **Abort (exit 1)** | -- | -- |
+| `--skip-scan --yes --global` | Auto-select all | Global | Config default | Skipped | Skipped | Auto-accept |
+
+When the semantic scan is offered and accepted, skilltap prompts for which agent CLI to use if one hasn't been configured yet. The choice is saved to `config.toml` for future use.
 
 ::: info Scope always prompts
 `--yes` does **not** skip the scope prompt. Use `--yes --global` or `--yes --project` for fully non-interactive installs.
@@ -214,6 +218,7 @@ skilltap update [name] [flags]
 | `--yes` | boolean | `false` | Auto-accept clean updates. Security warnings still prompt. |
 | `--strict` | boolean | from config | Skip skills with security warnings in the diff (does not abort; continues to next skill). |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan on diff content |
+| `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
 
 ### Behavior
 

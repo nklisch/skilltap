@@ -56,6 +56,56 @@ scan = "semantic"
 
 The semantic scan works with any supported agent: Claude Code, Gemini CLI, Codex, OpenCode, Ollama, or a custom binary.
 
+## What happens during install
+
+When you run `skilltap install`, the security flow is interactive:
+
+```
+$ skilltap install some-skill --global
+
+Cloning some-skill...
+Scanning some-skill...
+
+⚠ Static warnings in some-skill:
+
+  SKILL.md L14: Invisible Unicode (3 zero-width chars)
+  SKILL.md L42-45: Suspicious URL
+    │ "https://192.168.1.1/exfil?data=..."
+
+? Run semantic scan? (uses your local agent)
+  ● Yes
+  ○ No
+```
+
+If you choose **Yes** and haven't configured an agent yet, skilltap detects available agent CLIs and asks you to pick one:
+
+```
+? Which agent CLI for semantic scanning?
+  ● Claude Code   [claude]
+  ○ Gemini CLI    [gemini]
+  ○ Codex         [codex]
+  ○ Other — enter path
+```
+
+Your choice is saved to `config.toml` so you're only asked once. Then the semantic scan runs:
+
+```
+Scanning chunk 1/8...
+Scanning chunk 2/8...
+
+⚠ Semantic warnings in some-skill:
+
+  SKILL.md L45-60 (chunk 2) — risk 8/10
+    │ Prompt injection detected: instructions attempt to override
+    │ agent safety constraints
+
+? Install some-skill despite warnings?
+  ○ Yes
+  ● No
+```
+
+With `--strict`, any warning skips the prompt and aborts immediately.
+
 ## Configuring security behavior
 
 ### Warning behavior
@@ -64,16 +114,15 @@ Control what happens when a scan finds warnings:
 
 ```toml
 [security]
-on_warn = "prompt"   # ask what to do (default)
-# on_warn = "fail"   # block installation
-# on_warn = "allow"  # install anyway (log warnings)
+on_warn = "prompt"   # show warnings and ask (default)
+# on_warn = "fail"   # block installation immediately
 ```
 
 Override per-command with flags:
 
 ```bash
 skilltap install some-skill --strict      # treat warnings as errors
-skilltap install some-skill --no-strict   # allow despite warnings
+skilltap install some-skill --no-strict   # override on_warn=fail for this run
 ```
 
 ### Requiring scans

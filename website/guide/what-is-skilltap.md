@@ -40,7 +40,7 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 ## Key features
 
-**Git-native.** Install from any git host -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. skilltap uses `git clone` under the hood, so your existing SSH keys and credential helpers just work.
+**Git-native.** Install from any git host -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. Point skilltap at any repo with a `SKILL.md` -- no special structure or manifest required. skilltap uses `git clone` under the hood, so your existing SSH keys and credential helpers just work.
 
 **Agent-agnostic.** Installs to the universal `.agents/skills/` directory. Opt in to symlinking to agent-specific directories (Claude Code, Cursor, Codex, Gemini, Windsurf) with a single flag.
 

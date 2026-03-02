@@ -30,37 +30,67 @@ skilltap --version
 Install a skill from a git URL:
 
 ```bash
-skilltap install user/commit-helper --global
+skilltap install user/commit-helper
 ```
 
-Here's what happens:
+skilltap walks you through the process interactively:
 
 ```
-Cloning user/commit-helper...
-Scanning commit-helper...
-✓ No warnings
+◆ skilltap
 
-Install? (Y/n): y
+◆ Install to:
+│ ● Global (~/.agents/skills/)
+│ ○ Project (.agents/skills/)
+
+◆ Which agents should this skill be available to?
+│ ◼ Claude Code
+│ ◻ Cursor
+│ ◻ Codex
+│ ◻ Gemini
+│ ◻ Windsurf
+
+◆ Save agent selection as default?
+│ Yes
+
+◇ Cloning user/commit-helper...
+◇ Scanning commit-helper...
+│ ✓ No warnings
+
 ✓ Installed commit-helper → ~/.agents/skills/commit-helper/
 ```
 
-1. skilltap clones the repo to a temp directory
-2. Finds the `SKILL.md` file and reads its metadata
-3. Runs a static security scan on all files
-4. Shows the result and asks you to confirm
-5. Moves the skill to `~/.agents/skills/commit-helper/`
+Here's what happened:
 
-The skill is now available to any agent that reads from `~/.agents/skills/`.
+1. You chose where to install (global or project scope)
+2. You selected which agents should see the skill (symlinks are created automatically)
+3. skilltap cloned the repo
+4. A static security scan checked all files for suspicious content
+5. No warnings found — the skill was installed
+6. The skill was placed at `~/.agents/skills/commit-helper/` with a symlink in `~/.claude/skills/commit-helper/`
 
-### Make it visible to a specific agent
+If the scan had found warnings, skilltap would show them and offer to run a deeper [semantic scan](./security) using your local AI agent before asking you to confirm.
 
-If you also want the skill in your agent's directory, use `--also`:
+You can skip the scope prompt with `--global` or `--project`:
+
+```bash
+skilltap install user/commit-helper --global
+```
+
+### Agent symlinks
+
+During install, skilltap asks which agents the skill should be visible to. Your selection creates symlinks into agent-specific directories (e.g. `~/.claude/skills/`). You can save your choice as the default for future installs.
+
+To skip the prompt, pass `--also` explicitly:
 
 ```bash
 skilltap install user/commit-helper --global --also claude-code
 ```
 
-This creates a symlink at `~/.claude/skills/commit-helper/` pointing to the canonical install location. Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
+This creates:
+- `~/.agents/skills/commit-helper/` (the actual files)
+- `~/.claude/skills/commit-helper/` (symlink)
+
+Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
 
 ## Add a tap
 
