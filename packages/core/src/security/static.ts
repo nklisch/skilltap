@@ -43,6 +43,15 @@ const FLAGGED_EXTENSIONS = new Set([
   ".gz",
 ]);
 
+/** Returns true if the path is inside a VCS metadata directory (.git/, .svn/, .hg/). */
+export function isVcsPath(relPath: string): boolean {
+  return (
+    relPath.startsWith(".git/") ||
+    relPath.startsWith(".svn/") ||
+    relPath.startsWith(".hg/")
+  );
+}
+
 // Binary magic byte signatures
 const BINARY_SIGNATURES: Array<{ sig: Uint8Array; category: string }> = [
   { sig: new Uint8Array([0x7f, 0x45, 0x4c, 0x46]), category: "ELF binary" },
@@ -163,13 +172,7 @@ export async function scanStatic(
       onlyFiles: true,
       dot: true,
     })) {
-      // Skip VCS metadata directories
-      if (
-        relPath.startsWith(".git/") ||
-        relPath.startsWith(".svn/") ||
-        relPath.startsWith(".hg/")
-      )
-        continue;
+      if (isVcsPath(relPath)) continue; // Skip VCS metadata directories
       relPaths.push(relPath);
     }
 

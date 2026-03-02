@@ -1,7 +1,9 @@
 import { isCancel, spinner } from "@clack/prompts";
 import { removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { agentError } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
+import { loadPolicyOrExit } from "../ui/policy";
 import { confirmRemove } from "../ui/prompts";
 import { getInstalledSkillOrExit } from "../ui/resolve";
 
@@ -29,6 +31,8 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const { policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project });
+
     const skill = await getInstalledSkillOrExit(args.name, {
       notFoundHint: "Run 'skilltap list' to see installed skills.",
     });
@@ -36,6 +40,16 @@ export default defineCommand({
     const scope = args.project
       ? "project"
       : (skill.scope as "global" | "project" | "linked");
+
+    if (policy.agentMode) {
+      const result = await removeSkill(args.name, { scope });
+      if (!result.ok) {
+        agentError(result.error.message);
+        process.exit(1);
+      }
+      process.stdout.write(`OK: Removed ${args.name}\n`);
+      return;
+    }
 
     if (!args.yes) {
       const confirmed = await confirmRemove(args.name);

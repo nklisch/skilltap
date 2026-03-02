@@ -1,22 +1,28 @@
-import type { SemanticWarning, StaticWarning } from "@skilltap/core";
+import type { SemanticWarning, StaticWarning, TrustInfo } from "@skilltap/core";
+import { agentTrustLabel } from "./trust";
+import { formatLineRef } from "./scan";
 
 export function agentSuccess(
   name: string,
   path: string,
   ref: string | null,
+  trust?: TrustInfo,
 ): void {
   const refStr = ref ? ` (${ref})` : "";
-  process.stdout.write(`OK: Installed ${name} → ${path}${refStr}\n`);
+  const trustStr = trust ? ` [${agentTrustLabel(trust)}]` : "";
+  process.stdout.write(`OK: Installed ${name} → ${path}${refStr}${trustStr}\n`);
 }
 
 export function agentUpdated(
   name: string,
   fromRef?: string,
   toRef?: string,
+  trust?: TrustInfo,
 ): void {
   const detail =
     fromRef && toRef ? ` (${fromRef} → ${toRef})` : "";
-  process.stdout.write(`OK: Updated ${name}${detail}\n`);
+  const trustStr = trust ? ` [${agentTrustLabel(trust)}]` : "";
+  process.stdout.write(`OK: Updated ${name}${detail}${trustStr}\n`);
 }
 
 export function agentSkip(name: string, reason: string): void {
@@ -44,11 +50,7 @@ export function agentSecurityBlock(
   ];
 
   for (const w of staticWarnings) {
-    const lineRef = Array.isArray(w.line)
-      ? `L${w.line[0]}-${w.line[1]}`
-      : w.line > 0
-        ? `L${w.line}`
-        : "";
+    const lineRef = formatLineRef(w.line);
     const loc = lineRef ? ` ${lineRef}` : "";
     lines.push(`  ${w.file}${loc}: ${w.category}`);
   }

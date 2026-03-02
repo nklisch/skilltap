@@ -11,6 +11,7 @@ export interface NpmVersionInfo {
     integrity: string;
     attestations?: { url: string; provenance: unknown };
   };
+  npmUser?: string;
 }
 
 export interface NpmPackageMetadata {
@@ -113,6 +114,7 @@ export async function fetchPackageMetadata(
     const v = info as Record<string, unknown>;
     const dist = v.dist as Record<string, unknown> | undefined;
     if (!dist?.tarball) continue;
+    const npmUser = v._npmUser as { name?: string } | undefined;
     versions[ver] = {
       version: ver,
       dist: {
@@ -120,6 +122,7 @@ export async function fetchPackageMetadata(
         integrity: (dist.integrity as string) ?? "",
         attestations: dist.attestations as NpmVersionInfo["dist"]["attestations"],
       },
+      npmUser: npmUser?.name,
     };
   }
 

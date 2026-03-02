@@ -19,6 +19,7 @@ import {
 import { confirmInstall, selectSkills, selectTap } from "../ui/prompts";
 import { resolveScope } from "../ui/resolve";
 import { printWarnings } from "../ui/scan";
+import { formatTapTrust, formatTrustTier } from "../ui/trust";
 
 export default defineCommand({
   meta: {
@@ -105,10 +106,11 @@ export default defineCommand({
 
     // Non-interactive table output
     const width = termWidth();
-    const descWidth = Math.max(20, width - 40);
+    const descWidth = Math.max(20, width - 55);
     const rows = skills.map(({ tapName, skill }) => [
       ansi.bold(skill.name),
       truncate(skill.description, descWidth),
+      formatTapTrust(skill.trust),
       ansi.dim(`[${tapName}]`),
     ]);
 
@@ -154,11 +156,13 @@ async function runNpmSearch(query: string, json: boolean): Promise<void> {
   }
 
   const width = termWidth();
-  const descWidth = Math.max(20, width - 44);
+  const descWidth = Math.max(20, width - 56);
   const rows = packages.map((p) => [
     ansi.bold(p.name),
     ansi.dim(p.version),
     truncate(p.description, descWidth),
+    // npm publisher is always known from registry metadata
+    ansi.dim("● publisher"),
     ansi.dim("[npm]"),
   ]);
 

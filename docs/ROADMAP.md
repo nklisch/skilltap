@@ -198,18 +198,18 @@ Install skills published as npm packages. Opens access to the 69K+ skills alread
 
 Provenance verification and trust metadata — without managing users. Piggybacks on npm provenance (Sigstore/SLSA) and GitHub attestations.
 
-- [ ] **13.1** Define `TrustInfoSchema` in `core/src/trust/types.ts` (four tiers: provenance, publisher, curated, unverified)
-- [ ] **13.2** Implement `core/src/trust/verify-npm.ts` — fetch npm attestations, verify Sigstore bundle via `sigstore-js`
-- [ ] **13.3** Implement `core/src/trust/verify-github.ts` — verify GitHub attestations via `gh attestation verify` (optional, when `gh` is on PATH)
-- [ ] **13.4** Implement `core/src/trust/resolve.ts` — `resolveTrust()` computes tier from available signals
-- [ ] **13.5** Add optional `trust` field to `InstalledSkillSchema`
-- [ ] **13.6** Wire trust resolution into install flow (verify after download, store in record)
-- [ ] **13.7** Re-verify trust on update (new version may have different attestation status)
-- [ ] **13.8** Add optional `trust` field to `TapSkillSchema` (verified, verifiedBy, verifiedAt)
-- [ ] **13.9** Display trust tier in `list`, `info`, `find` output
-- [ ] **13.10** Agent mode: include trust tier in plain text output
-- [ ] **13.11** Install `sigstore-js` dependency
-- [ ] **13.12** Unit tests: tier resolution logic, attestation response parsing, display formatting
+- [x] **13.1** Define `TrustInfoSchema` in `core/src/trust/types.ts` (four tiers: provenance, publisher, curated, unverified)
+- [x] **13.2** Implement `core/src/trust/verify-npm.ts` — fetch npm attestations, verify Sigstore bundle via `sigstore-js`
+- [x] **13.3** Implement `core/src/trust/verify-github.ts` — verify GitHub attestations via `gh attestation verify` (optional, when `gh` is on PATH)
+- [x] **13.4** Implement `core/src/trust/resolve.ts` — `resolveTrust()` computes tier from available signals
+- [x] **13.5** Add optional `trust` field to `InstalledSkillSchema`
+- [x] **13.6** Wire trust resolution into install flow (verify after download, store in record)
+- [x] **13.7** Re-verify trust on update (new version may have different attestation status)
+- [x] **13.8** Add optional `trust` field to `TapSkillSchema` (verified, verifiedBy, verifiedAt)
+- [x] **13.9** Display trust tier in `list`, `info`, `find` output
+- [x] **13.10** Agent mode: include trust tier in plain text output
+- [x] **13.11** Install `sigstore-js` dependency
+- [x] **13.12** Unit tests: tier resolution logic, attestation response parsing, display formatting
 - [ ] **13.13** Integration tests: install with provenance, install from verified tap
 
 **Exit criteria:** npm-sourced skills show provenance status. Git-sourced skills show GitHub attestation status when available. Trust tier displayed in list/info output. Verification failures degrade gracefully.

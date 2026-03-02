@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
-import { linkSkill } from "@skilltap/core";
+import { linkSkill, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { agentError } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
 import { parseAlsoFlag, resolveScope } from "../ui/resolve";
 
@@ -31,6 +32,9 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const configResult = await loadConfig();
+    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+
     // Resolve the local path (expand ~ and relative paths)
     const rawPath = args.path.replace(/^~/, process.env.HOME ?? "~");
     const localPath = resolve(process.cwd(), rawPath);
@@ -40,14 +44,25 @@ export default defineCommand({
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      if (agentMode) {
+        agentError(result.error.message);
+      } else {
+        errorLine(result.error.message, result.error.hint);
+      }
       process.exit(1);
     }
 
     const skill = result.value;
-    successLine(`Linked ${skill.name} → ${skill.path}`);
-    for (const agent of also) {
-      successLine(`  Also linked for ${agent}`);
+    if (agentMode) {
+      process.stdout.write(`OK: Linked ${skill.name} → ${skill.path}\n`);
+      for (const agent of also) {
+        process.stdout.write(`OK: Also linked for ${agent}\n`);
+      }
+    } else {
+      successLine(`Linked ${skill.name} → ${skill.path}`);
+      for (const agent of also) {
+        successLine(`  Also linked for ${agent}`);
+      }
     }
   },
 });

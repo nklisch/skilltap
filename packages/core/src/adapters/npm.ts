@@ -32,6 +32,7 @@ export const npmAdapter: SourceAdapter = {
         ref: info.version,
         adapter: "npm",
         integrity: info.dist.integrity || undefined,
+        npmPublisher: info.npmUser,
       },
     };
   },

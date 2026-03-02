@@ -2,6 +2,7 @@ import type { InstalledSkill } from "@skilltap/core";
 import { loadInstalled } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine, table, termWidth, truncate } from "../ui/format";
+import { formatTrustTier } from "../ui/trust";
 
 export default defineCommand({
   meta: {
@@ -66,24 +67,26 @@ export default defineCommand({
         `\n${ansi.bold(label)} (${count} ${count === 1 ? "skill" : "skills"})\n`,
       );
 
-      // Fixed column widths for Name, Ref, Source — description gets the rest
+      // Fixed column widths for Name, Ref, Source, Trust — description gets the rest
       const NAME_W = width < 60 ? 15 : 20;
       const REF_W = width < 60 ? 8 : 10;
       const SRC_W = width < 60 ? 16 : 24;
+      const TRUST_W = width < 60 ? 12 : 15;
       const PADDING = 2; // between each col
       const INDENT = 2; // leading indent added by table()
-      const fixed = NAME_W + REF_W + SRC_W + PADDING * 3 + INDENT;
+      const fixed = NAME_W + REF_W + SRC_W + TRUST_W + PADDING * 4 + INDENT;
       const descW = Math.max(10, width - fixed - 4);
 
       const rows = section.map((s) => [
         truncate(s.name, NAME_W),
         truncate(s.ref ?? "—", REF_W),
         truncate(s.repo ?? "local", SRC_W),
+        formatTrustTier(s.trust),
         truncate(s.description, descW),
       ]);
 
       process.stdout.write(
-        `${table(rows, { header: ["Name", "Ref", "Source", "Description"] })}\n`,
+        `${table(rows, { header: ["Name", "Ref", "Source", "Trust", "Description"] })}\n`,
       );
     }
 

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { AGENT_PATHS, globalBase, loadInstalled, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine } from "../ui/format";
+import { formatTrustLabel, formatTrustTier } from "../ui/trust";
 
 export default defineCommand({
   meta: {
@@ -54,18 +55,36 @@ export default defineCommand({
         .filter((a) => a.exists)
         .map((a) => a.agent);
 
-      const rows = [
+      const rows: [string, string][] = [
         ["name:", ansi.bold(skill.name)],
         ["description:", skill.description || "—"],
         ["scope:", skill.scope],
         ["source:", skill.repo ?? "local"],
         ["ref:", skill.ref ?? "—"],
         ["sha:", skill.sha ? skill.sha.slice(0, 7) : "—"],
+        ["trust:", skill.trust ? formatTrustLabel(skill.trust) : ansi.dim("○ unverified")],
         ["path:", skillPath],
         ["agents:", activeAgents.length > 0 ? activeAgents.join(", ") : "none"],
         ["installed:", skill.installedAt],
         ["updated:", skill.updatedAt],
       ];
+      // Append provenance details when available
+      if (skill.trust?.tier === "provenance") {
+        if (skill.trust.npm) {
+          rows.push(["  source:", skill.trust.npm.sourceRepo]);
+          if (skill.trust.npm.buildWorkflow)
+            rows.push(["  build:", skill.trust.npm.buildWorkflow]);
+          if (skill.trust.npm.transparency)
+            rows.push(["  log:", skill.trust.npm.transparency]);
+        } else if (skill.trust.github) {
+          rows.push([
+            "  repo:",
+            `${skill.trust.github.owner}/${skill.trust.github.repo}`,
+          ]);
+          if (skill.trust.github.workflow)
+            rows.push(["  build:", skill.trust.github.workflow]);
+        }
+      }
 
       for (const [key, val] of rows) {
         process.stdout.write(`${ansi.dim(key.padEnd(13))} ${val}\n`);
@@ -85,6 +104,9 @@ export default defineCommand({
           return;
         }
 
+        const tapTrust = tapEntry.skill.trust?.verified
+          ? ansi.dim("◆ verified by tap")
+          : undefined;
         const rows = [
           ["name:", ansi.bold(tapEntry.skill.name)],
           ["description:", tapEntry.skill.description || "—"],
@@ -92,6 +114,7 @@ export default defineCommand({
           ["tap:", tapEntry.tapName],
           ["source:", tapEntry.skill.repo],
           ["tags:", tapEntry.skill.tags.length > 0 ? tapEntry.skill.tags.join(", ") : "—"],
+          ...(tapTrust ? [["trust:", tapTrust] as [string, string]] : []),
         ];
 
         for (const [key, val] of rows) {

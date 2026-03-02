@@ -19,6 +19,7 @@ import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
+import { parseGitHubRepo, resolveTrust } from "./trust";
 import type { Result } from "./types";
 import {
   err,
@@ -217,6 +218,18 @@ async function updateNpmSkill(
 
     await refreshAgentSymlinks(record, options.projectRoot);
 
+    // Re-verify trust for the new version
+    const { name: packageName } = parseNpmSource(record.repo!);
+    const newTrust = await resolveTrust({
+      adapter: "npm",
+      url: record.repo!,
+      tap: record.tap,
+      tarballPath: join(tmpDir, "_pkg.tgz"),
+      npmPackageName: packageName,
+      npmVersion: latestVersion,
+      npmPublisher: record.trust?.publisher?.name,
+    });
+
     // Update record in place
     const idx = installed.skills.indexOf(record);
     if (idx !== -1) {
@@ -225,6 +238,7 @@ async function updateNpmSkill(
         ref: latestVersion,
         sha: null,
         updatedAt: new Date().toISOString(),
+        trust: newTrust,
       };
     }
 
@@ -371,6 +385,20 @@ export async function updateSkill(
     const newShaResult = await revParse(workDir, "HEAD");
     if (!newShaResult.ok) return newShaResult;
 
+    // Re-verify trust for the updated skill
+    const installDir = skillInstallDir(
+      record.name,
+      record.scope as "global" | "project",
+      options.projectRoot,
+    );
+    const newTrust = await resolveTrust({
+      adapter: "git",
+      url: record.repo ?? "",
+      tap: record.tap,
+      skillDir: installDir,
+      githubRepo: record.repo ? parseGitHubRepo(record.repo) : null,
+    });
+
     // Update the record in place
     const idx = installed.skills.indexOf(record);
     if (idx !== -1) {
@@ -378,6 +406,7 @@ export async function updateSkill(
         ...record,
         sha: newShaResult.value,
         updatedAt: new Date().toISOString(),
+        trust: newTrust,
       };
     }
 

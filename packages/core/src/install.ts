@@ -1,12 +1,12 @@
 import { mkdir } from "node:fs/promises";
-import { dirname, relative } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import { checkGitInstalled, clone, revParse } from "./git";
-import { downloadAndExtract } from "./npm-registry";
+import { downloadAndExtract, parseNpmSource } from "./npm-registry";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import type { ScannedSkill } from "./scanner";
 import { scan } from "./scanner";
@@ -19,6 +19,8 @@ import { scanSemantic } from "./security/semantic";
 import { createAgentSymlinks } from "./symlink";
 import type { TapEntry } from "./taps";
 import { loadTaps } from "./taps";
+import type { TrustInfo } from "./trust";
+import { parseGitHubRepo, resolveTrust } from "./trust";
 import type { Result } from "./types";
 import {
   err,
@@ -174,6 +176,7 @@ function makeRecord(
   now: string,
   effectiveTap: string | null,
   effectiveRef: string | undefined,
+  trust: TrustInfo | undefined,
   sourceKey?: string,
 ): InstalledSkill {
   return {
@@ -188,6 +191,7 @@ function makeRecord(
     also,
     installedAt: now,
     updatedAt: now,
+    trust,
   };
 }
 
@@ -337,6 +341,41 @@ export async function installSkill(
       }
     }
 
+    // 7.5. Resolve trust (once per source, before placement)
+    let trust: TrustInfo | undefined;
+    {
+      const tapSkillEntry = tapResult.value
+        ? (await loadTaps()).ok
+          ? (await loadTaps()).value?.find(
+              (e) =>
+                e.tapName === effectiveTap && e.skill.repo === effectiveSource,
+            )
+          : undefined
+        : undefined;
+      const npmInfo =
+        resolved.adapter === "npm"
+          ? parseNpmSource(effectiveSource)
+          : undefined;
+      trust = await resolveTrust({
+        adapter: resolved.adapter,
+        url: effectiveSource,
+        tap: effectiveTap,
+        tapSkill: tapSkillEntry?.skill,
+        tarballPath:
+          resolved.adapter === "npm"
+            ? join(tmpDir, "_pkg.tgz")
+            : undefined,
+        npmPackageName: npmInfo?.name,
+        npmVersion: finalRef ?? undefined,
+        npmPublisher: resolved.npmPublisher,
+        skillDir: resolved.adapter !== "npm" ? contentDir : undefined,
+        githubRepo:
+          resolved.adapter !== "npm"
+            ? parseGitHubRepo(resolved.url)
+            : undefined,
+      });
+    }
+
     // 8. Determine standalone vs multi-skill
     // Standalone: single skill at content root (skill.path === contentDir)
     const isStandalone = scanned.length === 1 && scanned[0]?.path === contentDir;
@@ -349,114 +388,65 @@ export async function installSkill(
     const now = new Date().toISOString();
     const newRecords: InstalledSkill[] = [];
 
+    // Pre-compute placements: each entry captures the source path, destination, and copy strategy.
+    // git multi-skill: move the clone to cache before building placements.
+    const placements: Array<{
+      skill: ScannedSkill;
+      srcPath: string;
+      relPath: string | null;
+      destDir: string;
+      useMove: boolean;
+    }> = [];
+
     if (isStandalone) {
       // biome-ignore lint/style/noNonNullAssertion: isStandalone guarantees exactly one selected skill
       const skill = selected[0]!;
-      const destDir = skillInstallDir(
-        skill.name,
-        options.scope,
-        options.projectRoot,
-      );
-      await mkdir(dirname(destDir), { recursive: true });
-      await $`mv ${contentDir} ${destDir}`.quiet();
-
-      await createAgentSymlinks(
-        skill.name,
-        destDir,
-        also,
-        options.scope,
-        options.projectRoot,
-      );
-      newRecords.push(
-        makeRecord(
-          skill,
-          resolved,
-          sha,
-          null,
-          options,
-          also,
-          now,
-          effectiveTap,
-          finalRef,
-          sourceKey,
-        ),
-      );
+      placements.push({
+        skill,
+        srcPath: contentDir,
+        relPath: null,
+        destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
+        useMove: true,
+      });
     } else if (resolved.adapter === "npm") {
       // npm multi-skill: copy directly from extracted package (no git cache)
       for (const skill of selected) {
-        const relPath = relative(contentDir, skill.path);
-        const destDir = skillInstallDir(
-          skill.name,
-          options.scope,
-          options.projectRoot,
-        );
-        await mkdir(dirname(destDir), { recursive: true });
-        await $`cp -r ${skill.path} ${destDir}`.quiet();
-
-        await createAgentSymlinks(
-          skill.name,
-          destDir,
-          also,
-          options.scope,
-          options.projectRoot,
-        );
-        newRecords.push(
-          makeRecord(
-            skill,
-            resolved,
-            sha,
-            relPath,
-            options,
-            also,
-            now,
-            effectiveTap,
-            finalRef,
-            sourceKey,
-          ),
-        );
+        placements.push({
+          skill,
+          srcPath: skill.path,
+          relPath: relative(contentDir, skill.path),
+          destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
+          useMove: false,
+        });
       }
     } else {
-      // git multi-skill: move clone to cache, copy selected skills to install dirs
+      // git multi-skill: move clone to cache first, then copy selected skills
       const cacheRoot = skillCacheDir(resolved.url);
       await mkdir(dirname(cacheRoot), { recursive: true });
       await $`mv ${contentDir} ${cacheRoot}`.quiet();
-
       for (const skill of selected) {
-        const relPath = relative(
-          cacheRoot,
-          skill.path.replace(contentDir, cacheRoot),
-        );
         const skillSrcInCache = skill.path.replace(contentDir, cacheRoot);
-        const destDir = skillInstallDir(
-          skill.name,
-          options.scope,
-          options.projectRoot,
-        );
-        await mkdir(dirname(destDir), { recursive: true });
-        await $`cp -r ${skillSrcInCache} ${destDir}`.quiet();
-
-        await createAgentSymlinks(
-          skill.name,
-          destDir,
-          also,
-          options.scope,
-          options.projectRoot,
-        );
-        newRecords.push(
-          makeRecord(
-            skill,
-            resolved,
-            sha,
-            relPath,
-            options,
-            also,
-            now,
-            effectiveTap,
-            finalRef,
-            sourceKey,
-          ),
-        );
+        placements.push({
+          skill,
+          srcPath: skillSrcInCache,
+          relPath: relative(cacheRoot, skillSrcInCache),
+          destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
+          useMove: false,
+        });
       }
+    }
+
+    for (const { skill, srcPath, relPath, destDir, useMove } of placements) {
+      await mkdir(dirname(destDir), { recursive: true });
+      if (useMove) {
+        await $`mv ${srcPath} ${destDir}`.quiet();
+      } else {
+        await $`cp -r ${srcPath} ${destDir}`.quiet();
+      }
+      await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot);
+      newRecords.push(
+        makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey),
+      );
     }
 
     // 10. Save installed.json
