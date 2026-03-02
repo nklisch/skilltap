@@ -158,10 +158,13 @@ User action required: review warnings and install manually with
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `name` | string | Local name for the tap |
-| `url` | string | Git URL of the tap repo |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `name` | string | — | Local name for the tap |
+| `url` | string | — | URL of the tap (git repo or HTTP registry endpoint) |
+| `type` | `"git"` \| `"http"` | auto-detected | Tap type. `"git"` clones the repo locally; `"http"` queries a live API. Auto-detected on `tap add`. |
+| `auth_token` | string | — | Static bearer token for HTTP tap authentication. Prefer `auth_env` over this. |
+| `auth_env` | string | — | Name of an environment variable containing the bearer token for HTTP tap authentication. |
 
 ### Example
 
@@ -173,9 +176,15 @@ url = "https://gitea.example.com/nathan/my-skills-tap"
 [[taps]]
 name = "community"
 url = "https://github.com/someone/awesome-skills-tap"
+
+[[taps]]
+name = "enterprise"
+url = "https://skills.example.com/api/v1"
+type = "http"
+auth_env = "SKILLS_REGISTRY_TOKEN"
 ```
 
-Taps are cloned to `~/.config/skilltap/taps/{name}/`.
+Git taps are cloned to `~/.config/skilltap/taps/{name}/`. HTTP taps have no local clone — they are queried live.
 
 ---
 

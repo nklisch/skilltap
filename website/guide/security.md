@@ -146,6 +146,54 @@ skilltap install trusted-skill --skip-scan
 
 This skips both static and semantic scans. Blocked if `require_scan` is enabled.
 
+## Trust signals
+
+In addition to scanning skill content for malicious patterns, skilltap verifies the provenance of skills — confirming they come from where they claim to come from.
+
+### Trust tiers
+
+| Tier | Symbol | Meaning |
+|------|--------|---------|
+| Provenance | `✓ provenance` | SLSA build attestation (npm) or GitHub Actions artifact attestation (git) |
+| Publisher | `● publisher` | Skill published under a known npm identity |
+| Curated | `◆ curated` | Listed in a tap that includes verification metadata |
+| Unverified | `○ unverified` | No verification signals available |
+
+`unverified` is the default for skills that have no provenance data. It's not a warning — just the baseline.
+
+### Provenance verification
+
+For **npm-sourced skills**, skilltap verifies SLSA Build Level 2 attestations via [Sigstore](https://sigstore.dev). This confirms that the tarball was built by a specific GitHub Actions workflow from a known source repository.
+
+For **git-sourced skills**, skilltap checks GitHub artifact attestations when the `gh` CLI is installed and available on your PATH.
+
+### Automatic and non-blocking
+
+Trust verification runs automatically at install time and is re-verified on every update. Verification failures always degrade gracefully — a failed Sigstore check returns `unverified`, not an error. No configuration is required.
+
+### Where trust is shown
+
+Trust tier appears as a column in `skilltap list`, a row in `skilltap info`, and a column in `skilltap find`:
+
+```
+$ skilltap list
+Global:
+  commit-helper    v1.2.0  home  ✓ provenance  Conventional commit messages
+  my-local-skill   main    url   ○ unverified  My development skill
+```
+
+```
+$ skilltap info commit-helper
+commit-helper (installed, global)
+  Generates conventional commit messages
+  Source: https://github.com/user/commit-helper
+  Ref:    v1.2.0 (abc123de)
+  Trust:  ✓ Provenance verified
+    npm:  github.com/user/commit-helper
+    Built by: .github/workflows/release.yml
+    Transparency: https://search.sigstore.dev/...
+```
+
 ## Agent mode
 
 When [agent mode](./configuration.md) is enabled, security behavior is hardened automatically:

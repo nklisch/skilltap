@@ -16,6 +16,16 @@ To install to a different location, set `SKILLTAP_INSTALL`:
 SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
 ```
 
+## Via Homebrew
+
+On macOS and Linux with [Homebrew](https://brew.sh):
+
+```bash
+brew install skilltap/skilltap/skilltap
+```
+
+This installs a pre-built binary and keeps it up to date with `brew upgrade`.
+
 ## Via bunx
 
 If you have [Bun](https://bun.sh) installed, you can run skilltap without installing it:
@@ -44,6 +54,12 @@ Pre-built binaries are available on the [GitHub Releases](https://github.com/ski
 | macOS        | ARM64        |
 
 Download the binary for your platform, make it executable, and move it to a directory on your PATH.
+
+Each release includes a `checksums.txt` file with SHA-256 hashes for all binaries. To verify your download:
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+```
 
 ## Platform support
 

@@ -74,6 +74,28 @@ skilltap install ~/skills/my-skill
 
 The directory must contain a `SKILL.md` file.
 
+### npm package
+
+Install a skill published to the npm registry:
+
+```bash
+skilltap install npm:vibe-rules
+skilltap install npm:@scope/my-skills
+skilltap install npm:vibe-rules@1.0.0
+```
+
+The `npm:` prefix downloads the tarball from the npm registry and verifies its SHA-512 integrity before installing. This gives you access to any skill published as an npm package.
+
+**Version pinning:** Append `@version` or a dist-tag (e.g. `@latest`). Without a version, the `latest` dist-tag is used.
+
+**Private registries:** skilltap reads your `.npmrc` file or `NPM_CONFIG_REGISTRY` environment variable automatically.
+
+**Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
+
+::: tip Finding npm skills
+Search the npm registry with `skilltap find --npm <query>`. This searches packages tagged with `agent-skill` in the npm registry.
+:::
+
 ## Scope: global vs project
 
 Every skill is installed to either a **global** or **project** scope.
@@ -225,6 +247,7 @@ For the full security model, see [Security](./security).
 |---|---|
 | `--global` | Install to `~/.agents/skills/` |
 | `--project` | Install to `.agents/skills/` in the current project |
+| `--ref <ref>` | Install a specific branch or tag (git sources only) |
 | `--also <agent>` | Also symlink to an agent's directory. Repeatable. |
 | `--ref <ref>` | Install a specific branch or tag |
 | `--yes` | Auto-select all skills and auto-accept clean installs |

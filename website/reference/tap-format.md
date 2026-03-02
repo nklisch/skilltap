@@ -29,7 +29,7 @@ Each entry in the `skills` array:
 |-------|------|----------|---------|-------------|
 | `name` | string | Yes | -- | Skill name (matches the `name` field in SKILL.md frontmatter) |
 | `description` | string | Yes | -- | What the skill does |
-| `repo` | string | Yes | -- | Git URL of the repository containing the skill |
+| `repo` | string | Yes | -- | Source of the skill. Git URL, `github:owner/repo`, or `npm:package-name`. |
 | `tags` | array of strings | No | `[]` | Searchable tags for categorization |
 
 ## Full Example
@@ -151,6 +151,113 @@ Invalid taps are skipped gracefully during `loadTaps()` -- a broken tap does not
 | `skilltap tap list` | List configured taps with skill counts |
 | `skilltap tap update [name]` | Pull latest changes for one or all taps |
 | `skilltap tap init <name>` | Scaffold a new tap repo |
+
+## npm Sources in Taps
+
+Taps can reference skills published to the npm registry using an `npm:` prefix in the `repo` field:
+
+```json
+{
+  "name": "npm skills collection",
+  "skills": [
+    {
+      "name": "vibe-rules",
+      "description": "Curated coding rules for AI agents",
+      "repo": "npm:vibe-rules",
+      "tags": ["rules", "coding"]
+    },
+    {
+      "name": "my-scoped-skill",
+      "description": "A skill from a scoped npm package",
+      "repo": "npm:@myorg/my-skill",
+      "tags": ["internal"]
+    }
+  ]
+}
+```
+
+When a user installs a skill whose `repo` starts with `npm:`, the tarball is downloaded from the npm registry rather than cloned from git.
+
+## HTTP Registry API
+
+Instead of a static `tap.json` file in a git repo, you can serve a skill index over HTTP. Any web server that returns the correct JSON responses qualifies as an HTTP registry.
+
+`skilltap tap add` auto-detects HTTP registries by making a `GET /skills?limit=1` probe. If it returns a valid response, the tap is registered as HTTP type.
+
+### Required Endpoint
+
+**`GET /skills`** — Return a list of skills.
+
+Query parameters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` | string | Search term. Filter results by name/description/tags. |
+| `tag` | string | Filter by a specific tag. |
+| `limit` | integer | Max number of results to return. |
+| `cursor` | string | Pagination cursor from previous response. |
+
+Response schema:
+
+```json
+{
+  "skills": [
+    {
+      "name": "commit-helper",
+      "description": "Generates conventional commit messages",
+      "source": {
+        "type": "git",
+        "url": "https://github.com/user/commit-helper"
+      },
+      "tags": ["git", "productivity"]
+    },
+    {
+      "name": "vibe-rules",
+      "description": "Curated coding rules",
+      "source": {
+        "type": "npm",
+        "package": "vibe-rules"
+      },
+      "tags": ["rules"]
+    }
+  ],
+  "cursor": "next-page-cursor",
+  "total": 42
+}
+```
+
+The `source` field is a discriminated union:
+
+| `type` | Additional fields | Description |
+|--------|-------------------|-------------|
+| `"git"` | `url` | Git-cloneable URL |
+| `"github"` | `repo` (`owner/repo`) | GitHub shorthand |
+| `"npm"` | `package` | npm package name (with optional `version`) |
+| `"url"` | `url` | Direct tarball download URL |
+
+### Optional Endpoint
+
+**`GET /skills/{name}`** — Return detail for a specific skill.
+
+Returns a single skill object (same shape as a `skills` array entry). Used by `skilltap info` and for install resolution.
+
+### Authentication
+
+HTTP registries can require a bearer token. Users configure credentials in `config.toml`:
+
+```toml
+[[taps]]
+name = "private-registry"
+url = "https://skills.example.com/api/v1"
+type = "http"
+auth_env = "REGISTRY_TOKEN"
+```
+
+skilltap sends `Authorization: Bearer <token>` on all requests to that tap.
+
+### Static Hosting
+
+A static JSON file hosted on any web server works as a read-only registry. The minimum is a single file at `/skills` (or at the configured URL root) that returns the response schema above. No server logic required.
 
 ## Multi-Skill Repos in Taps
 

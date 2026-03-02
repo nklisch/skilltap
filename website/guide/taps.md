@@ -1,6 +1,6 @@
 # Taps
 
-A **tap** is a git repository containing a `tap.json` file that lists skills with their names, descriptions, source URLs, and tags. Think of taps as curated indexes -- they don't contain skills themselves, they point to where skills live.
+A **tap** is either a git repository with a `tap.json` file or an HTTP registry endpoint that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
 
 ## Why taps?
 
@@ -16,7 +16,7 @@ Taps solve discovery and curation:
 skilltap tap add <name> <url>
 ```
 
-This clones the tap repository to `~/.config/skilltap/taps/<name>/` and makes its skills searchable.
+skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
 
 ```bash
 skilltap tap add community https://github.com/skilltap/community-tap
@@ -28,11 +28,11 @@ skilltap tap add community https://github.com/skilltap/community-tap
 skilltap tap list
 ```
 
-Shows all registered taps with their names and URLs.
+Shows all registered taps with their names, URLs, type (`git`/`http`), and skill count.
 
 ## Updating taps
 
-Pull the latest changes for all taps:
+Pull the latest changes for all git taps:
 
 ```bash
 skilltap tap update
@@ -43,6 +43,8 @@ Or update a specific tap:
 ```bash
 skilltap tap update community
 ```
+
+HTTP taps are always live — `tap update` is a no-op for them.
 
 ## Removing a tap
 
@@ -119,15 +121,54 @@ Each entry in `skills` has:
 | ------------- | -------- | -------------------------------------- |
 | `name`        | Yes      | Unique skill name within this tap      |
 | `description` | Yes      | Short description shown in search      |
-| `repo`        | Yes      | Git URL where the skill lives          |
+| `repo`        | Yes      | Source URL — git URL, `github:owner/repo`, or `npm:package-name` |
 | `tags`        | No       | Array of strings for filtering/search  |
 
 ### Publish your tap
 
-Push the repository to any git host -- GitHub, GitLab, Bitbucket, a self-hosted server. Then share the URL:
+Push the repository to any git host — GitHub, GitLab, Bitbucket, a self-hosted server. Then share the URL:
 
 ```bash
 skilltap tap add my-tap https://github.com/you/my-tap
 ```
 
 Anyone with access to the repo can add it as a tap.
+
+## HTTP registry taps
+
+HTTP taps are live web services that serve skill indexes over an API. They're useful for enterprise registries, large or dynamic catalogs, or anything that doesn't fit cleanly into a git repo.
+
+### Adding an HTTP tap
+
+`skilltap tap add` probes the URL to auto-detect the type:
+
+```bash
+skilltap tap add enterprise https://skills.example.com/api/v1
+```
+
+If the URL returns a valid skill list response, it's registered as an HTTP tap. Otherwise skilltap falls back to treating it as a git repo.
+
+### HTTP vs git taps
+
+|  | Git tap | HTTP tap |
+|---|---|---|
+| Storage | Cloned locally | No local clone |
+| Updates | `tap update` to pull | Always live |
+| Discovery | Reads local `tap.json` | Queries the API |
+| Auth | Git credentials | Bearer token |
+
+### Authentication
+
+For private HTTP registries, add credentials in your config:
+
+```toml
+[[taps]]
+name = "enterprise"
+url = "https://skills.example.com/api/v1"
+type = "http"
+auth_env = "SKILLS_REGISTRY_TOKEN"
+```
+
+`auth_env` names an environment variable that holds the bearer token. Prefer it over `auth_token` (which embeds the token directly in config).
+
+See the [tap-format reference](/reference/tap-format#http-registry-api) for the full HTTP registry API spec.

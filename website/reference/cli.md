@@ -34,18 +34,21 @@ skilltap install <source> [flags]
 | SSH | `git@github.com:user/repo.git` |
 | GitHub shorthand | `user/repo` |
 | GitHub explicit | `github:user/repo` |
+| npm package | `npm:vibe-rules` |
+| npm scoped + version | `npm:@scope/skill@1.2.0` |
 | Tap name | `commit-helper` |
 | Tap name + ref | `commit-helper@v1.2.0` |
 | Local path | `./my-skill` |
 
 Source resolution order:
 
-1. `https://`, `http://`, `git@`, `ssh://` -- git adapter
-2. `github:` prefix -- GitHub adapter
-3. `./`, `/`, `~/` -- local adapter
-4. Contains `/` with no protocol -- treated as `github:source`
-5. Contains `@` -- split into name + ref, resolve from taps
-6. Otherwise -- search taps for matching skill name
+1. `https://`, `http://`, `git@`, `ssh://` — git adapter
+2. `github:` prefix — GitHub adapter
+3. `npm:` prefix — npm registry adapter
+4. `./`, `/`, `~/` — local adapter
+5. Contains `/` with no protocol — treated as `github:source`
+6. Contains `@` — split into name + ref, resolve from taps
+7. Otherwise — search taps for matching skill name
 
 ### Flags
 
@@ -95,6 +98,10 @@ skilltap install https://gitea.example.com/user/commit-helper
 
 # GitHub shorthand
 skilltap install user/repo
+
+# Install from npm
+skilltap install npm:vibe-rules
+skilltap install npm:@scope/my-skills@2.0.0
 
 # Install a specific version from a tap
 skilltap install commit-helper@v1.2.0
@@ -171,14 +178,14 @@ skilltap list [flags]
 
 ```
 Global:
-  commit-helper      v1.2.0   home    Conventional commit messages
-  code-review        v2.0.0   home    Thorough code review
+  commit-helper    v1.2.0  home   ✓ provenance  Conventional commit messages
+  code-review      v2.0.0  home   ◆ curated     Thorough code review
 
 Project (/home/nathan/dev/termtube):
-  termtube-dev       main     local   Development workflow
+  termtube-dev     main    local  ○ unverified  Development workflow
 ```
 
-Columns: name, ref, source (tap name or `local`/`url`), description (truncated to terminal width).
+Columns: name, ref, source (tap name or `local`/`url`), trust tier, description (truncated to terminal width).
 
 If no skills are installed: `No skills installed. Run 'skilltap install <url>' to get started.`
 
@@ -274,6 +281,7 @@ skilltap find [query] [flags]
 |------|------|---------|-------------|
 | `-i` | boolean | `false` | Interactive fuzzy finder mode |
 | `--json` | boolean | `false` | Output as JSON |
+| `--npm <query>` | string | — | Search the npm registry for packages tagged with `agent-skill`. Cannot be combined with `-i`. |
 
 ### Examples
 
@@ -286,6 +294,9 @@ skilltap find
 
 # Interactive fuzzy finder (type to filter, arrow keys, Enter to install)
 skilltap find -i
+
+# Search npm registry for skills
+skilltap find --npm commit
 
 # Machine-readable output
 skilltap find --json
@@ -390,6 +401,9 @@ commit-helper (installed, global)
   Source: https://gitea.example.com/nathan/commit-helper
   Ref:    v1.2.0 (abc123de)
   Tap:    home
+  Trust:  ✓ Provenance verified
+    npm:  github.com/nathan/commit-helper
+    Built by: .github/workflows/release.yml
   Also:   claude-code
   Size:   12.3 KB (3 files)
   Installed: 2026-02-28
@@ -522,7 +536,7 @@ skilltap config agent-mode
 
 ## skilltap tap add
 
-Add a tap (a git repo containing `tap.json`).
+Add a tap. Supports git repos and HTTP registry endpoints.
 
 ```
 skilltap tap add <name> <url>
@@ -533,19 +547,23 @@ skilltap tap add <name> <url>
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `name` | Yes | Local name for this tap |
-| `url` | Yes | Git URL of the tap repo |
+| `url` | Yes | Git URL of the tap repo, or HTTP registry base URL |
 
 ### Behavior
 
-Clones the tap repo to `~/.config/skilltap/taps/{name}/`, validates `tap.json` exists and parses correctly, and records the tap in `config.toml`.
+Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates `tap.json`, and records the tap in `config.toml`.
 
 If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
 
 ### Examples
 
 ```bash
+# Git tap
 skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
 skilltap tap add community https://github.com/someone/awesome-skills-tap
+
+# HTTP registry tap (auto-detected)
+skilltap tap add enterprise https://skills.example.com/api/v1
 ```
 
 ---
@@ -589,9 +607,12 @@ skilltap tap list
 ### Output
 
 ```
-  home       https://gitea.example.com/nathan/my-skills-tap     3 skills
-  community  https://github.com/someone/awesome-skills-tap      12 skills
+  home        git   https://gitea.example.com/nathan/my-skills-tap     3 skills
+  community   git   https://github.com/someone/awesome-skills-tap      12 skills
+  enterprise  http  https://skills.example.com/api/v1                  47 skills
 ```
+
+Columns: name, type (`git`/`http`), URL, skill count.
 
 If no taps configured: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
@@ -605,7 +626,7 @@ skilltap tap list
 
 ## skilltap tap update
 
-Update tap repos (git pull).
+Update tap repos (git pull). HTTP taps are always live — this is a no-op for them.
 
 ```
 skilltap tap update [name]
@@ -615,7 +636,7 @@ skilltap tap update [name]
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `name` | No | Specific tap to update. If omitted, updates all. |
+| `name` | No | Specific tap to update. If omitted, updates all git taps. |
 
 ### Examples
 
@@ -662,4 +683,147 @@ Edit tap.json to add skills, then push:
 
 ```bash
 skilltap tap init my-tap
+```
+
+---
+
+## skilltap create
+
+Scaffold a new skill from a template.
+
+```
+skilltap create [name] [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Skill name (kebab-case). If omitted, prompted interactively. |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--template` | `basic` \| `npm` \| `multi` | prompted | Template to use |
+| `--dir` | string | `./<name>` | Directory to create the skill in |
+| `--description` | string | prompted | Short description for the skill |
+| `--author` | string | from git config | Author name |
+
+When both `name` and `--template` are provided, runs non-interactively. Otherwise prompts for missing values.
+
+### Templates
+
+| Template | Generated files |
+|----------|-----------------|
+| `basic` | `SKILL.md`, `README.md`, `.gitignore` |
+| `npm` | `SKILL.md`, `README.md`, `.gitignore`, `package.json`, `.github/workflows/publish.yml` |
+| `multi` | `.agents/skills/<skill-a>/SKILL.md`, `.agents/skills/<skill-b>/SKILL.md`, `README.md`, `.gitignore` |
+
+### Behavior
+
+Creates the skill directory (errors if it already exists), writes template files, and prints next-step instructions for testing, verifying, and publishing.
+
+### Examples
+
+```bash
+# Interactive mode
+skilltap create
+
+# Non-interactive
+skilltap create my-skill --template basic
+
+# npm package skill
+skilltap create my-skill --template npm --description "My skill description"
+
+# Custom output directory
+skilltap create my-skill --template basic --dir ~/dev/my-skill
+```
+
+---
+
+## skilltap verify
+
+Validate a skill before publishing.
+
+```
+skilltap verify [path] [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `path` | No | Path to the skill directory. Defaults to `.`. |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output result as JSON |
+
+### Behavior
+
+Runs the following checks:
+
+1. `SKILL.md` exists
+2. Frontmatter is valid (required fields present, values within constraints)
+3. `name` field matches the parent directory name
+4. No static security issues (same checks as `skilltap install`)
+5. Total directory size is within the limit
+
+On success, also prints a `tap.json` snippet ready to paste into a tap.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks passed |
+| `1` | One or more errors found |
+
+### Output
+
+```
+✓ commit-helper is valid
+
+  SKILL.md   ✓
+  name       ✓ matches directory
+  security   ✓ no issues
+  size       ✓ 4.2 KB (3 files)
+
+tap.json snippet:
+
+  {
+    "name": "commit-helper",
+    "description": "Generates conventional commit messages",
+    "repo": "https://github.com/user/commit-helper",
+    "tags": []
+  }
+```
+
+With `--json`:
+
+```json
+{
+  "valid": true,
+  "issues": [],
+  "fileCount": 3,
+  "totalBytes": 4301
+}
+```
+
+### Examples
+
+```bash
+# Verify current directory
+skilltap verify
+
+# Verify a specific skill
+skilltap verify ./path/to/my-skill
+
+# CI-friendly output
+skilltap verify --json
+
+# Pre-push git hook
+echo 'skilltap verify' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
 ```

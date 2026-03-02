@@ -1,6 +1,123 @@
 # Creating Skills
 
-A skill is a directory with a `SKILL.md` file. There is no build step, no manifest file, no special tooling. If it has a `SKILL.md`, it's a skill.
+A skill is a directory with a `SKILL.md` file. There is no build step, no manifest, no special tooling. If it has a `SKILL.md`, it's a skill.
+
+## Scaffolding with `skilltap create`
+
+The fastest way to start is with the interactive scaffolding command:
+
+```bash
+skilltap create
+```
+
+This prompts for a name, template, author, and description, then generates all the starter files.
+
+For non-interactive use (scripts, CI):
+
+```bash
+skilltap create my-skill --template basic
+```
+
+### Templates
+
+| Template | Description |
+|----------|-------------|
+| `basic` | Single skill: `SKILL.md`, `README.md`, `.gitignore` |
+| `npm` | npm package: adds `package.json` (with `agent-skill` keyword) and a GitHub Actions publish workflow with provenance attestation |
+| `multi` | Multi-skill repo: `.agents/skills/` structure with multiple skills |
+
+After scaffolding, the command prints next steps — how to test locally, verify the skill, and publish it.
+
+### The `npm` template
+
+The npm template is for publishing skills to the npm registry. It generates a `package.json` pre-configured with the `agent-skill` keyword so your skill is discoverable via `skilltap find --npm`, and a `.github/workflows/publish.yml` that publishes with npm provenance on every release tag:
+
+```bash
+skilltap create my-skill --template npm
+cd my-skill
+# edit SKILL.md, then:
+npm publish --provenance   # or push a tag to trigger the workflow
+```
+
+Skills published this way get a `✓ provenance` trust tier when installed.
+
+### The `multi` template
+
+The multi template generates a `.agents/skills/` layout for a repo that ships multiple skills. You'll be prompted for the skill names during create:
+
+```bash
+skilltap create my-project --template multi
+# creates:
+#   .agents/skills/my-skill-a/SKILL.md
+#   .agents/skills/my-skill-b/SKILL.md
+```
+
+## Verifying a skill
+
+Before publishing, run `skilltap verify` to validate your skill:
+
+```bash
+skilltap verify
+```
+
+Or point it at a specific path:
+
+```bash
+skilltap verify ./path/to/skill
+```
+
+This checks:
+- `SKILL.md` exists
+- Frontmatter is valid (required fields present, name format correct)
+- `name` field matches the directory name
+- No static security warnings (same checks as `skilltap install`)
+- Directory is within the size limit
+
+Output on success:
+
+```
+✓ commit-helper is valid
+
+  SKILL.md   ✓
+  name       ✓ matches directory
+  security   ✓ no issues
+  size       ✓ 4.2 KB (3 files)
+
+tap.json snippet (to list this skill in a tap):
+
+  {
+    "name": "commit-helper",
+    "description": "Generates conventional commit messages",
+    "repo": "https://github.com/user/commit-helper",
+    "tags": []
+  }
+```
+
+Exit code `0` = valid, `1` = errors found.
+
+### Using verify in CI
+
+`skilltap verify --json` outputs machine-readable results:
+
+```bash
+skilltap verify --json
+```
+
+```json
+{
+  "valid": true,
+  "issues": [],
+  "fileCount": 3,
+  "totalBytes": 4301
+}
+```
+
+As a pre-push git hook (`.git/hooks/pre-push`):
+
+```bash
+#!/bin/sh
+skilltap verify
+```
 
 ## SKILL.md format
 
