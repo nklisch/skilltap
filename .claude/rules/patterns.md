@@ -15,3 +15,6 @@
 - **Fixture repo factory**: `createX()` returns `{ path, cleanup }` — copy static fixture dir, `initRepo`, `commitAll`; always `dot:true` in Bun.Glob.scan → [patterns/test-fixtures.md]
 - **Result test assertions**: `expect(result.ok).toBe(true)` then `if (!result.ok) return` guard; `VALID_*` constants with spread for schema variants → [patterns/test-result-assertions.md]
 - **CLI subprocess testing**: CLI integration tests use `Bun.spawn` with `SKILLTAP_HOME`/`XDG_CONFIG_HOME` env vars; `stdin: "pipe"` for non-TTY tests → [patterns/cli-subprocess-testing.md]
+- **Injectable dependencies**: Core functions with external I/O accept `_dep = realImpl` optional params; tests pass mocks as 2nd/3rd args; private `type Fn = typeof realFn` aliases enforce signature → [patterns/injectable-dependencies.md]
+- **Graceful fallback chain**: Optional verifiers return `T | null` (never `Result`); caller cascades through priority tiers; outer `try/catch` guarantees a valid result is always returned → [patterns/graceful-fallback-chain.md]
+- **Adapter-driven branching**: After `resolveSource()`, `resolved.adapter` (and `record.repo?.startsWith("npm:")` on update) gates distinct install/update/trust paths per source type → [patterns/adapter-driven-branching.md]

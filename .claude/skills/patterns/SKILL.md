@@ -42,3 +42,8 @@ The dense index at `.claude/rules/patterns.md` loads automatically and provides 
 - **test-fixtures.md** — Fixture repo factories: `createX()` returns `{ path, cleanup }`; copies static fixtures, initializes git repo, commits; always `dot:true` in Bun.Glob.scan
 - **test-result-assertions.md** — Result assertion pattern: `expect(result.ok).toBe(true)` + discriminated union guard; `VALID_*` constants with spread for schema test variants
 - **cli-subprocess-testing.md** — CLI integration tests use `Bun.spawn` with `SKILLTAP_HOME`/`XDG_CONFIG_HOME` env vars for isolation; `stdin: "pipe"` for non-TTY detection tests
+
+### Trust & Source Handling
+- **injectable-dependencies.md** — Core functions with external I/O accept `_dep = realImpl` optional params; tests inject mocks as 2nd/3rd args; private `type Fn = typeof realFn` aliases enforce signature compatibility
+- **graceful-fallback-chain.md** — Optional verifiers return `T | null` not `Result`; caller cascades through priority tiers (provenance → publisher → curated → unverified); outer `try/catch` guarantees a valid result always
+- **adapter-driven-branching.md** — `resolved.adapter` from `resolveSource()` gates source-type-specific logic (npm vs git vs local) throughout install, update, and trust flows

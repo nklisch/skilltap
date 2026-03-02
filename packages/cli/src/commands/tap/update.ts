@@ -31,8 +31,11 @@ export default defineCommand({
 
     s.stop("Done.");
 
-    for (const [name, count] of Object.entries(result.value)) {
+    for (const [name, count] of Object.entries(result.value.updated)) {
       successLine(`${ansi.bold(name)} — ${count} skills`);
+    }
+    for (const name of result.value.http) {
+      successLine(`${ansi.bold(name)} — HTTP registry (always up to date)`);
     }
 
     outro("Complete!");

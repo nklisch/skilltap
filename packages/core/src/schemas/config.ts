@@ -31,6 +31,9 @@ export const ConfigSchema = z.object({
       z.object({
         name: z.string(),
         url: z.string(),
+        type: z.enum(["git", "http"]).default("git"),
+        auth_token: z.string().optional(),
+        auth_env: z.string().optional(),
       }),
     )
     .default([]),

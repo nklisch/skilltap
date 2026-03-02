@@ -33,7 +33,7 @@ import {
 
 describe("@skilltap/core", () => {
   test("exports VERSION", () => {
-    expect(VERSION).toBe("0.1.0");
+    expect(VERSION).toBe("0.2.0");
   });
 
   test("exports Result helpers", () => {

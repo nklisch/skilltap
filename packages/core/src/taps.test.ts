@@ -353,7 +353,7 @@ describe("updateTap", () => {
       const result = await updateTap("home");
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      expect(result.value.home).toBe(2);
+      expect(result.value.updated.home).toBe(2);
     } finally {
       await tap.cleanup();
     }

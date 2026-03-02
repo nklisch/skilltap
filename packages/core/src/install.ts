@@ -228,8 +228,8 @@ export async function installSkill(
   const resolved = resolvedResult.value;
   const finalRef = effectiveRef ?? resolved.ref;
 
-  // 2.5. Check git is installed (skip for local paths and npm)
-  if (resolved.adapter !== "local" && resolved.adapter !== "npm") {
+  // 2.5. Check git is installed (skip for local paths, npm, and http tarball downloads)
+  if (resolved.adapter !== "local" && resolved.adapter !== "npm" && resolved.adapter !== "http") {
     const gitCheck = await checkGitInstalled();
     if (!gitCheck.ok) return gitCheck;
   }
@@ -244,7 +244,7 @@ export async function installSkill(
     let contentDir: string;
     let sha: string | null;
 
-    if (resolved.adapter === "npm") {
+    if (resolved.adapter === "npm" || resolved.adapter === "http") {
       const extractResult = await downloadAndExtract(
         resolved.url,
         tmpDir,
@@ -269,7 +269,12 @@ export async function installSkill(
     // 5. Scan for skills
     const scanned = await scan(contentDir);
     if (scanned.length === 0) {
-      const sourceKind = resolved.adapter === "npm" ? "npm package" : "repo";
+      const sourceKind =
+        resolved.adapter === "npm"
+          ? "npm package"
+          : resolved.adapter === "http"
+            ? "HTTP registry skill"
+            : "repo";
       return err(
         new UserError(
           `No SKILL.md found in "${source}". This ${sourceKind} doesn't contain any skills.`,
@@ -381,8 +386,11 @@ export async function installSkill(
     const isStandalone = scanned.length === 1 && scanned[0]?.path === contentDir;
 
     // sourceKey: identifier stored as `repo` in the installed record.
-    // For npm, store the original npm: source (not the tarball URL).
-    const sourceKey = resolved.adapter === "npm" ? effectiveSource : undefined;
+    // For npm and http, store the original source string (not the tarball URL).
+    const sourceKey =
+      resolved.adapter === "npm" || resolved.adapter === "http"
+        ? effectiveSource
+        : undefined;
 
     // 9. Place skills
     const now = new Date().toISOString();
@@ -408,8 +416,8 @@ export async function installSkill(
         destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
         useMove: true,
       });
-    } else if (resolved.adapter === "npm") {
-      // npm multi-skill: copy directly from extracted package (no git cache)
+    } else if (resolved.adapter === "npm" || resolved.adapter === "http") {
+      // npm/http multi-skill: copy directly from extracted package (no git cache)
       for (const skill of selected) {
         placements.push({
           skill,
