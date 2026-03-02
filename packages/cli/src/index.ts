@@ -1,6 +1,15 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
 
+// Handle --get-completions before citty takes over — fast path for tab completion
+if (process.argv.includes("--get-completions")) {
+  const idx = process.argv.indexOf("--get-completions");
+  const type = process.argv[idx + 1] ?? "";
+  const { printCompletions } = await import("./completions/dynamic");
+  await printCompletions(type);
+  process.exit(0);
+}
+
 const main = defineCommand({
   meta: {
     name: "skilltap",
@@ -20,6 +29,8 @@ const main = defineCommand({
     verify: () => import("./commands/verify").then((m) => m.default),
     doctor: () => import("./commands/doctor").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
+    completions: () =>
+      import("./commands/completions").then((m) => m.default),
     tap: defineCommand({
       meta: {
         name: "tap",

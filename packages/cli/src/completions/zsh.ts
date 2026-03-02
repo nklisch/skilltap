@@ -1,0 +1,137 @@
+export function generateZshCompletions(): string {
+  return `#compdef skilltap
+
+_skilltap() {
+  local -a commands
+  commands=(
+    'install:Install a skill'
+    'remove:Remove an installed skill'
+    'list:List installed skills'
+    'update:Update installed skills'
+    'find:Search for skills'
+    'link:Symlink a local skill'
+    'unlink:Remove a linked skill'
+    'info:Show skill details'
+    'create:Create a new skill'
+    'verify:Validate a skill'
+    'config:Interactive setup wizard'
+    'tap:Manage taps'
+    'doctor:Check environment and state'
+    'completions:Generate shell completions'
+  )
+
+  _arguments -C \\
+    '1:command:->command' \\
+    '*::arg:->args'
+
+  case $state in
+    command) _describe 'command' commands ;;
+    args)
+      case $words[1] in
+        install)
+          local -a skills
+          skills=(\${(f)"\$(skilltap --get-completions tap-skills 2>/dev/null)"})
+          _arguments \\
+            '--project[Install to project scope]' \\
+            '--global[Install to global scope]' \\
+            '--also[Symlink to agent dir]:agent:(claude-code cursor codex gemini windsurf)' \\
+            '--ref[Branch or tag]:ref:' \\
+            '--yes[Auto-accept]' \\
+            '--strict[Abort on warnings]' \\
+            '--no-strict[Override strict config]' \\
+            '--semantic[Force semantic scan]' \\
+            '--skip-scan[Skip security scan]' \\
+            "1:source:($skills)"
+          ;;
+        remove)
+          local -a skills
+          skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          _arguments \\
+            '--project[Remove from project scope]' \\
+            '--yes[Skip confirmation]' \\
+            "1:skill:($skills)"
+          ;;
+        list)
+          _arguments \\
+            '--global[Global scope]' \\
+            '--project[Project scope]' \\
+            '--json[JSON output]'
+          ;;
+        update)
+          local -a skills
+          skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          _arguments \\
+            '--yes[Auto-accept]' \\
+            '--strict[Abort on warnings]' \\
+            '--no-strict[Override strict config]' \\
+            '--semantic[Force semantic scan]' \\
+            '--skip-scan[Skip security scan]' \\
+            "1:skill:($skills)"
+          ;;
+        find)
+          _arguments \\
+            '--npm[Search npm registry]' \\
+            '--json[JSON output]' \\
+            '-i[Interactive mode]'
+          ;;
+        link)
+          _arguments \\
+            '--global[Global scope]' \\
+            '--project[Project scope]' \\
+            '--also[Agent symlink]:agent:(claude-code cursor codex gemini windsurf)'
+          ;;
+        unlink)
+          local -a skills
+          skills=(\${(f)"\$(skilltap --get-completions linked-skills 2>/dev/null)"})
+          _arguments \\
+            '--yes[Skip confirmation]' \\
+            "1:skill:($skills)"
+          ;;
+        info)
+          local -a skills
+          skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          _arguments "1:skill:($skills)"
+          ;;
+        create)
+          _arguments \\
+            '--template[Template type]:template:(basic npm multi)' \\
+            '--dir[Target directory]:dir:_files -/'
+          ;;
+        verify)
+          _arguments '--json[JSON output]'
+          ;;
+        config)
+          _arguments '1:subcommand:(agent-mode)'
+          ;;
+        tap)
+          local -a tap_commands
+          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'update:Update taps' 'init:Scaffold a tap repo')
+          _arguments -C '1:subcommand:->tap_cmd' '*::arg:->tap_args'
+          case $state in
+            tap_cmd) _describe 'subcommand' tap_commands ;;
+            tap_args)
+              case $words[1] in
+                remove|update)
+                  local -a taps
+                  taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
+                  _arguments "1:tap:($taps)"
+                  ;;
+              esac
+              ;;
+          esac
+          ;;
+        doctor)
+          _arguments \\
+            '--json[JSON output]' \\
+            '--fix[Auto-fix issues]'
+          ;;
+        completions)
+          _arguments '1:shell:(bash zsh fish)'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_skilltap`;
+}

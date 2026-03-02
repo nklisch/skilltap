@@ -304,14 +304,14 @@ Diagnostic command that checks environment, config, and state integrity.
 
 Tab-completion for bash, zsh, and fish.
 
-- [ ] **18.1** Implement `--get-completions` hidden endpoint (installed-skills, linked-skills, tap-skills, tap-names)
-- [ ] **18.2** Implement completion script generators in `cli/src/completions/` (bash, zsh, fish)
-- [ ] **18.3** `skilltap completions <shell>` command — print script to stdout
-- [ ] **18.4** `skilltap completions <shell> --install` — write to shell-standard location
-- [ ] **18.5** Dynamic completions: skill names for remove/update/unlink/info, tap names for tap remove/update
-- [ ] **18.6** Static completions: commands, subcommands, flags, flag values (--also agents, --template types)
-- [ ] **18.7** Unit tests: script generation, --get-completions handler
-- [ ] **18.8** Integration tests: completions command output, --install writes to correct path
+- [x] **18.1** Implement `--get-completions` hidden endpoint (installed-skills, linked-skills, tap-skills, tap-names)
+- [x] **18.2** Implement completion script generators in `cli/src/completions/` (bash, zsh, fish)
+- [x] **18.3** `skilltap completions <shell>` command — print script to stdout
+- [x] **18.4** `skilltap completions <shell> --install` — write to shell-standard location
+- [x] **18.5** Dynamic completions: skill names for remove/update/unlink/info, tap names for tap remove/update
+- [x] **18.6** Static completions: commands, subcommands, flags, flag values (--also agents, --template types)
+- [x] **18.7** Unit tests: script generation, --get-completions handler
+- [x] **18.8** Integration tests: completions command output, --install writes to correct path
 
 **Exit criteria:** Tab-completion works for all commands, flags, and dynamic values in bash, zsh, and fish. `--install` writes to the correct shell-standard location.
 
