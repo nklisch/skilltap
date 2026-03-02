@@ -3,3 +3,6 @@ dist/
 *.d.ts
 skilltap
 .DS_Store
+website/.vitepress/cache
+website/.vitepress/dist
+.playwright-mcp

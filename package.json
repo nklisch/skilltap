@@ -1,7 +1,7 @@
 {
   "name": "skilltap-monorepo",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": ["packages/*", "website"],
   "scripts": {
     "dev": "bun run --bun packages/cli/src/index.ts",
     "test": "bun test --recursive packages/",

@@ -1,0 +1,75 @@
+/* skilltap — Taproom + Terminal theme */
+
+:root {
+  /* Brand: warm amber */
+  --vp-c-brand-1: #f59e0b;
+  --vp-c-brand-2: #d97706;
+  --vp-c-brand-3: #b45309;
+  --vp-c-brand-soft: rgba(245, 158, 11, 0.14);
+
+  /* Typography */
+  --vp-font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* Button overrides */
+  --vp-button-brand-bg: #f59e0b;
+  --vp-button-brand-hover-bg: #d97706;
+  --vp-button-brand-active-bg: #b45309;
+  --vp-button-brand-text: #0c0a09;
+  --vp-button-brand-border: transparent;
+  --vp-button-brand-hover-border: transparent;
+}
+
+.dark {
+  /* Dark mode: warm black background */
+  --vp-c-bg: #0c0a09;
+  --vp-c-bg-alt: #1c1917;
+  --vp-c-bg-soft: #1c1917;
+  --vp-c-bg-elv: #1c1917;
+
+  /* Brand stays bright in dark */
+  --vp-c-brand-1: #fbbf24;
+  --vp-c-brand-2: #f59e0b;
+  --vp-c-brand-3: #d97706;
+  --vp-c-brand-soft: rgba(251, 191, 36, 0.14);
+
+  /* Text: warm whites */
+  --vp-c-text-1: #f5f5f4;
+  --vp-c-text-2: #d6d3d1;
+  --vp-c-text-3: #a8a29e;
+
+  /* Borders */
+  --vp-c-border: #292524;
+  --vp-c-divider: #292524;
+  --vp-c-gutter: #1c1917;
+
+  /* Code blocks */
+  --vp-code-block-bg: #1c1917;
+  --vp-code-line-highlight-color: rgba(245, 158, 11, 0.08);
+
+  /* Button overrides for dark */
+  --vp-button-brand-bg: #f59e0b;
+  --vp-button-brand-hover-bg: #fbbf24;
+  --vp-button-brand-active-bg: #d97706;
+  --vp-button-brand-text: #0c0a09;
+
+  --vp-button-alt-bg: #292524;
+  --vp-button-alt-hover-bg: #44403c;
+  --vp-button-alt-text: #f5f5f4;
+}
+
+/* Code blocks: amber left border */
+.dark .vp-doc div[class*="language-"] {
+  border-left: 3px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Nav/sidebar: warm tones */
+.dark .VPNav {
+  background-color: rgba(12, 10, 9, 0.85) !important;
+  backdrop-filter: blur(12px);
+}
+
+/* Sidebar active link: amber */
+.dark .VPSidebar .is-active > .link > .text {
+  color: var(--vp-c-brand-1);
+}
