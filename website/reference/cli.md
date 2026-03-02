@@ -43,10 +43,10 @@ skilltap install <source> [flags]
 Source resolution order:
 
 1. `https://`, `http://`, `git@`, `ssh://` — git adapter
-2. `github:` prefix — GitHub adapter
-3. `npm:` prefix — npm registry adapter
+2. `npm:` prefix — npm registry adapter
+3. `url:` prefix — HTTP tarball (used internally by HTTP registry taps)
 4. `./`, `/`, `~/` — local adapter
-5. Contains `/` with no protocol — treated as `github:source`
+5. `github:` prefix, or contains `/` with no protocol — GitHub adapter
 6. Contains `@` — split into name + ref, resolve from taps
 7. Otherwise — search taps for matching skill name
 
@@ -58,29 +58,33 @@ Source resolution order:
 | `--global` | boolean | `false` | Install to `~/.agents/skills/` |
 | `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. Values: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf` |
 | `--ref <ref>` | string | default branch | Branch or tag to install |
-| `--yes` | boolean | `false` | Auto-select all skills, auto-accept clean installs. Security warnings still prompt. |
+| `--yes` | boolean | `false` | Auto-select all skills, auto-accept clean installs, skip agent symlink prompt. Security warnings still prompt. |
 | `--strict` | boolean | from config | Abort on any security warning (exit 1) |
 | `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
-| `--semantic` | boolean | from config | Force Layer 2 semantic scan |
-| `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
+| `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
 | `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
 
 ### Prompt Behavior
 
-| Flags | Skill selection | Scope | Agents | Static warnings | Semantic offer | Install confirm |
-|-------|----------------|-------|--------|-----------------|----------------|-----------------|
-| (none) | Prompt if multiple | Prompt | Prompt | Prompt | Offered if warnings | Prompt |
-| `--project` | Prompt if multiple | Project | Prompt | Prompt | Offered if warnings | Prompt |
-| `--global` | Prompt if multiple | Global | Prompt | Prompt | Offered if warnings | Prompt |
-| `--also <agent>` | Prompt if multiple | Prompt | Skipped | Prompt | Offered if warnings | Prompt |
-| `--yes` | Auto-select all | **Still prompts** | Config default | **Still prompts** | Offered if warnings | Auto-accept if clean |
-| `--yes --global` | Auto-select all | Global | Config default | **Still prompts** | Offered if warnings | Auto-accept if clean |
-| `--semantic` | Prompt if multiple | Prompt | Prompt | Prompt | **Always runs** | Prompt |
-| `--strict` | Prompt if multiple | Prompt | Prompt | **Abort (exit 1)** | -- | -- |
-| `--strict --yes --global` | Auto-select all | Global | Config default | **Abort (exit 1)** | -- | -- |
-| `--skip-scan --yes --global` | Auto-select all | Global | Config default | Skipped | Skipped | Auto-accept |
+Prompts appear in this order: scope → agents → (clone) → skill selection → scan → install confirm.
 
-When the semantic scan is offered and accepted, skilltap prompts for which agent CLI to use if one hasn't been configured yet. The choice is saved to `config.toml` for future use.
+| Flags | Scope | Agents (--also) | Skill selection | Static warnings | Semantic offer | Install confirm |
+|-------|-------|-----------------|-----------------|-----------------|----------------|-----------------|
+| (none) | Prompt | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--project` | Project | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--global` | Global | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--also <agent>` | Prompt | Skipped | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
+| `--yes` | **Still prompts** | Config default | Auto-select all | **Still prompts** | Offered if warnings | Auto-accept if clean |
+| `--yes --global` | Global | Config default | Auto-select all | **Still prompts** | Offered if warnings | Auto-accept if clean |
+| `--semantic` | Prompt | Prompt | Prompt if multiple | Prompt | **Always auto-runs** | **Prompt (Y/n)** |
+| `--strict` | Prompt | Prompt | Prompt if multiple | **Abort (exit 1)** | -- | -- |
+| `--strict --yes --global` | Global | Config default | Auto-select all | **Abort (exit 1)** | -- | -- |
+| `--skip-scan --yes --global` | Global | Config default | Auto-select all | Skipped | Skipped | Auto-accept |
+
+Notes:
+- `--semantic` causes the semantic scan to run automatically without a "Run semantic scan?" prompt.
+- The semantic offer prompt only appears when static warnings are found and `--semantic` was not passed.
+- When the semantic scan runs for the first time and no agent is configured, skilltap prompts to pick an agent CLI. The choice is saved to `config.toml`.
 
 ::: info Scope always prompts
 `--yes` does **not** skip the scope prompt. Use `--yes --global` or `--yes --project` for fully non-interactive installs.

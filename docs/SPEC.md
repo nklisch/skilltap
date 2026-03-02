@@ -19,11 +19,13 @@ Install a skill from a URL, tap name, or local path.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--project` | boolean | false | Install to `.agents/skills/` in current project instead of global |
+| `--global` | boolean | false | Install to `~/.agents/skills/` (global, explicit for scripts) |
 | `--also <agent>` | string | (from config) | Create symlink in agent-specific directory. Repeatable. |
 | `--ref <ref>` | string | default branch | Branch or tag to install |
 | `--skip-scan` | boolean | false | Skip security scanning (not recommended). Blocked if `security.require_scan = true` in config. |
 | `--semantic` | boolean | (from config) | Force semantic scan regardless of config |
 | `--strict` | boolean | (from config) | Abort install if any security warnings are found. No prompt, just fail. |
+| `--no-strict` | boolean | false | Override `security.on_warn = "fail"` for this invocation |
 | `--yes` | boolean | false | Auto-select all skills and auto-accept install. Security warnings still require confirmation. |
 
 **Prompt behavior with flags:**
@@ -94,7 +96,7 @@ Auto-selecting all (--yes)
    - If `--strict` (or `security.on_warn = "fail"`) and warnings found → print warnings, abort (exit 1)
    - If warnings found (not strict) → prompt `Install anyway? (y/N)` (**always**, even with `--yes`)
    - If no warnings + `--yes` → proceed without prompting
-   - If no warnings (no `--yes`) → prompt `Install? (Y/n)`
+   - If no warnings (no `--yes`) → prompt `Install? (Y/n)` (default Y)
    - Optionally run Layer 2 semantic scan (if config/flag says so)
    - If strict + semantic flags found → abort (exit 1)
 6. Install to target directory
@@ -745,7 +747,7 @@ Scan locations in priority order:
 1. **Root**: `SKILL.md` at repo root → standalone skill, named by repo directory
 2. **Standard path**: `.agents/skills/*/SKILL.md` → each match is a skill, named by parent directory
 3. **Agent-specific paths**: `.claude/skills/*/SKILL.md`, `.cursor/skills/*/SKILL.md`, `.codex/skills/*/SKILL.md`, `.gemini/skills/*/SKILL.md`, `.windsurf/skills/*/SKILL.md`
-4. **Deep scan**: `**/SKILL.md` anywhere else in the tree (with confirmation prompt)
+4. **Deep scan**: `**/SKILL.md` anywhere else in the tree — if skills are found, prompt: `Found N SKILL.md at non-standard path(s). Continue? (Y/n)` (default Y). In agent mode or `--yes`, auto-accept.
 
 **Stop condition**: If step 1 finds a root SKILL.md, steps 2-4 are skipped (the repo is a standalone skill).
 
@@ -996,7 +998,7 @@ interface AgentAdapter {
   name: string;         // Human-readable name
   cliName: string;      // Binary name (checked on PATH)
   detect(): Promise<boolean>;
-  invoke(prompt: string): Promise<AgentResponse>;
+  invoke(prompt: string): Promise<Result<AgentResponse, ScanError>>;
 }
 ```
 

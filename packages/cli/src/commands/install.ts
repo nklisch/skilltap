@@ -1,4 +1,4 @@
-import { intro, isCancel, log, outro, spinner } from "@clack/prompts";
+import { confirm, intro, isCancel, log, outro, spinner } from "@clack/prompts";
 import type {
   AgentAdapter,
   Config,
@@ -24,6 +24,7 @@ import { errorLine, successLine } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import {
   confirmInstall,
+  confirmReadyInstall,
   confirmSaveDefault,
   offerSemanticScan,
   selectAgents,
@@ -323,6 +324,25 @@ async function runInteractiveMode(
     s.message(`Scanning chunk ${completed}/${total}...`);
   };
 
+  const deepScanCallback = async (count: number): Promise<boolean> =>
+    withSpinnerPaused(async () => {
+      const proceed = await confirm({
+        message: `Found ${count} SKILL.md at non-standard path(s). Continue?`,
+        initialValue: true,
+      });
+      if (isCancel(proceed) || proceed === false) process.exit(2);
+      return true;
+    });
+
+  const confirmInstallCallback = policy.yes
+    ? undefined
+    : async (skillNames: string[]): Promise<boolean> =>
+        withSpinnerPaused(async () => {
+          const proceed = await confirmReadyInstall(skillNames);
+          if (isCancel(proceed) || proceed === false) process.exit(2);
+          return true;
+        });
+
   const result = await installSkill(args.source, {
     scope,
     projectRoot,
@@ -338,6 +358,8 @@ async function runInteractiveMode(
     onSemanticWarnings: agent ? semanticWarningsCallback : undefined,
     onOfferSemantic: agent ? offerSemanticCallback : undefined,
     onSemanticProgress: agent ? semanticProgressCallback : undefined,
+    onConfirmInstall: confirmInstallCallback,
+    onDeepScan: deepScanCallback,
   });
 
   if (!result.ok) {

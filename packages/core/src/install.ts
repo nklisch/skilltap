@@ -63,6 +63,10 @@ export type InstallOptions = {
   onOfferSemantic?: () => Promise<boolean>;
   /** Called with progress during semantic scan. */
   onSemanticProgress?: (completed: number, total: number) => void;
+  /** Called after all scans pass cleanly, before placement. Return false to cancel. */
+  onConfirmInstall?: (skillNames: string[]) => Promise<boolean>;
+  /** Called when deep scan is triggered (no SKILL.md at standard paths). Return false to cancel. */
+  onDeepScan?: (count: number) => Promise<boolean>;
 };
 
 export type InstallResult = {
@@ -266,7 +270,7 @@ export async function installSkill(
     }
 
     // 5. Scan for skills
-    const scanned = await scan(contentDir);
+    const scanned = await scan(contentDir, { onDeepScan: options.onDeepScan });
     if (scanned.length === 0) {
       const sourceKind =
         resolved.adapter === "npm"
@@ -328,6 +332,12 @@ export async function installSkill(
           }
         }
       }
+    }
+
+    // 6.7. Clean-install confirmation (fires only when no warnings were found and no --yes)
+    if (allWarnings.length === 0 && allSemanticWarnings.length === 0 && options.onConfirmInstall) {
+      const proceed = await options.onConfirmInstall(selected.map((s) => s.name));
+      if (!proceed) return err(new UserError("Install cancelled."));
     }
 
     // 7. Check for already-installed conflicts

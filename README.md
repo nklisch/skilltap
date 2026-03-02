@@ -71,7 +71,7 @@ Most commands accept `--global` / `--project` for scope and `--yes` to skip prom
 
 ## How it works
 
-Skills are directories containing a `SKILL.md` file. skilltap installs them to `~/.agents/skills/<name>/` (global) or `.agents/skills/<name>/` (project), then creates symlinks at each agent's expected location (`.claude/skills/`, `.cursor/rules/`, etc.) so every agent picks them up automatically.
+Skills are directories containing a `SKILL.md` file. skilltap installs them to `~/.agents/skills/<name>/` (global) or `.agents/skills/<name>/` (project), then creates symlinks at each agent's expected location (`.claude/skills/`, `.cursor/skills/`, etc.) so every agent picks them up automatically.
 
 ## Security
 
@@ -107,7 +107,7 @@ Config is stored at `~/.config/skilltap/config.toml`. Run the interactive wizard
 skilltap config
 ```
 
-Key settings: default scope (`global`/`project`), additional agent symlinks (`--also`), security scan mode (`static`/`semantic`/`off`), and `on_warn` behavior (`block`/`warn`/`allow`).
+Key settings: default scope (`global`/`project`), additional agent symlinks (`--also`), security scan mode (`static`/`semantic`/`off`), and `on_warn` behavior (`prompt`/`fail`).
 
 ## Authoring Skills
 

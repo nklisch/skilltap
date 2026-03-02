@@ -146,8 +146,8 @@ const features = [
 <span class="c-dim">  community/code-reviewer  Review code for bugs and style issues</span>
 <span class="c-dim">  community/pr-review      Generate PR review comments</span>
 
-<span class="c-comment"># Install one</span>
-<span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
+<span class="c-comment"># Install one (--yes skips prompts for clean skills)</span>
+<span class="c-prompt">$</span> skilltap install code-reviewer --global --yes --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
 <span class="c-comment"># That's it. Your agent can use it now.</span></code></pre>

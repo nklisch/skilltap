@@ -56,6 +56,9 @@ skilltap walks you through the process interactively:
 ◇ Scanning commit-helper...
 │ ✓ No warnings
 
+◇ Install commit-helper?
+│ › Yes
+
 ✓ Installed commit-helper → ~/.agents/skills/commit-helper/
 ```
 
@@ -65,10 +68,16 @@ Here's what happened:
 2. You selected which agents should see the skill (symlinks are created automatically)
 3. skilltap cloned the repo
 4. A static security scan checked all files for suspicious content
-5. No warnings found — the skill was installed
+5. No warnings found — you confirmed the install
 6. The skill was placed at `~/.agents/skills/commit-helper/` with a symlink in `~/.claude/skills/commit-helper/`
 
 If the scan had found warnings, skilltap would show them and offer to run a deeper [semantic scan](./security) using your local AI agent before asking you to confirm.
+
+Skip all prompts with `--yes --global` for clean CI-style installs:
+
+```bash
+skilltap install user/commit-helper --global --yes
+```
 
 You can skip the scope prompt with `--global` or `--project`:
 

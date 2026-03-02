@@ -64,11 +64,11 @@ Source resolution order is defined in [SPEC.md — Source resolution](./SPEC.md#
 
 ```
 --project          Install to .agents/skills/ in current project
---global           Install to ~/.agents/skills/ (default)
+--global           Install to ~/.agents/skills/ (global, explicit for scripts)
 --also <agent>     Also symlink to agent dir. Repeatable.
                    Values: claude-code, cursor, codex, gemini, windsurf
 --ref <ref>        Branch or tag to install
---yes              Auto-select all skills, auto-accept clean installs
+--yes              Auto-select all skills, auto-accept clean installs, skip --also prompt
 --strict           Abort on any security warning (exit 1)
 --no-strict        Override config on_warn=fail for this invocation
 --semantic         Force Layer 2 semantic scan
@@ -79,22 +79,22 @@ Source resolution order is defined in [SPEC.md — Source resolution](./SPEC.md#
 
 ```
 skilltap install <url>
-  → prompt: choose skill (if multiple) → prompt: scope (global/project) → scan → prompt: install?
+  → prompt: scope → prompt: agents → clone → prompt: choose skill (if multiple) → scan → prompt: install?
 
 skilltap install <url> --global
-  → prompt: choose skill → scope=global → scan → prompt: install?
+  → scope=global → prompt: agents → clone → prompt: choose skill → scan → prompt: install?
 
 skilltap install <url> --project
-  → prompt: choose skill → scope=project → scan → prompt: install?
+  → scope=project → prompt: agents → clone → prompt: choose skill → scan → prompt: install?
 
 skilltap install <url> --yes
-  → auto-select all skills → prompt: scope (still asks!) → scan → auto-install if clean
+  → prompt: scope (still asks!) → auto-select all skills, skip agent prompt → clone → scan → auto-install if clean
 
 skilltap install <url> --global --yes
-  → auto-select all, scope=global → scan → prompt: warnings? → auto-install if clean
+  → scope=global, skip agent prompt → clone → auto-select all → scan → prompt: warnings? → auto-install if clean
 
 skilltap install <url> --project --yes
-  → auto-select all, scope=project → scan → prompt: warnings? → auto-install if clean
+  → scope=project, skip agent prompt → clone → auto-select all → scan → prompt: warnings? → auto-install if clean
 
 skilltap install <url> --strict --global
   → prompt: choose skill → scope=global → scan → abort if warnings (exit 1)
@@ -106,7 +106,7 @@ skilltap install <url> --skip-scan --yes --global
   → auto-select all, scope=global, no scan → install immediately (fully silent)
 
 skilltap install <url> --semantic
-  → prompt: choose skill → prompt: scope → static scan → semantic scan → prompt: install?
+  → prompt: scope → prompt: agents → clone → choose skill → static scan → semantic scan (auto) → prompt: install?
 
 skilltap install <url> --also claude-code --also cursor
   → install + symlink to ~/.claude/skills/ and ~/.cursor/skills/
@@ -120,32 +120,42 @@ Scope always prompts unless `--project` or `--global` is passed. `--yes` does **
 ### Decision Matrix
 
 ```
-source → resolve → clone → select skill(s)
-                              │
-                              ├── single skill ────→ auto-select
-                              ├── multi + --yes ───→ auto-select all
-                              └── multi ───────────→ prompt "Install which?"
-                                                          │
-                                             ┌─────── scope ────────┐
-                                             ├── --project ─→ project│
-                                             ├── --global ──→ global │
-                                             └── neither ───→ prompt │
-                                                          │          │
-                                                          ▼──────────┘
-                                                     ┌─ skip-scan? → [no scan] → install
+source
+  │
+  ├── scope? ┬── --project ──→ project
+  │          ├── --global ───→ global
+  │          └── neither ────→ prompt "Install to: Global / Project"
+  │
+  ├── agents? ┬── --also passed ──→ use flag value
+  │           ├── --yes ──────────→ use config default
+  │           └── neither ────────→ prompt "Which agents?"
+  │
+  → resolve → clone
+                 │
+                 → select skill(s)
+                         │
+                         ├── single skill ────→ auto-select
+                         ├── multi + --yes ───→ auto-select all
+                         └── multi ───────────→ prompt "Which skills to install?"
                                                      │
-                                                     → scan (Layer 1)
+                                        (deep scan?) → prompt "Found N at non-standard path. Continue?"
                                                      │
-                                                     ├─ clean ──┬── --yes? ──→ install silently
-                                                     │          └── else ────→ prompt "Install?"
+                                                ┌─ skip-scan? → [no scan] ─┐
+                                                │                           │
+                                                → scan (Layer 1)            │
+                                                │                           │
+                                                ├─ clean ──────────────────►┤
+                                                │                           │
+                                                ├─ warnings ┬── --strict? → ABORT (exit 1)
+                                                │           └── else ─────→ prompt "Install anyway? (y/N)"
+                                                │
+                                                └─ --semantic or config? → scan (Layer 2, auto)
+                                                                         └─ flagged ┬── --strict? → ABORT
+                                                                                    └── else ─────→ prompt
                                                      │
-                                                     ├─ warnings ┬── --strict? → ABORT (exit 1)
-                                                     │           └── else ─────→ prompt "Install anyway?"
-                                                     │
-                                                     └─ --semantic? → scan (Layer 2)
-                                                                     ├─ clean → [same as L1 clean]
-                                                                     ├─ flagged ┬── --strict? → ABORT
-                                                                     │          └── else ─────→ prompt
+                                                     ▼
+                                                ── --yes? ──→ install silently
+                                                └── else ───→ prompt "Install? (Y/n)"
 ```
 
 ### Multi-Skill Selection
@@ -1126,36 +1136,42 @@ Every interactive prompt in skilltap, in the order they can appear:
 
 ```
 install:
-  1. Skill selection    (multi-skill repo, no --yes)       "Install which? (1,2,all)"
-  2. Scope selection    (no --project/--global)             "Install to: Global / Project"
-  3. Static scan result (warnings found, not --strict)      "Install anyway? (y/N)"
-  4. Semantic scan offer (warnings found)                    "Run semantic scan? (Y/n)"
-  5. Agent selection    (first semantic scan, no config)     "Use Claude Code? (↑↓)"
-  6. Semantic result    (flags found, not --strict)          "Install anyway? (y/N)"
-  7. Install confirm    (clean, no --yes)                    "Install? (Y/n)"
+  1. Scope selection    (no --project/--global)                "Install to: Global / Project"
+  2. Agent selection    (no --also and no --yes, interactive)  "Which agents?"
+  [clone happens here]
+  3. Skill selection    (multi-skill repo, no --yes)           "Which skills to install?"
+  3a. Deep scan confirm (non-standard SKILL.md path)           "Found N SKILL.md at non-standard path. Continue? (Y/n)"
+  4. Static scan result (warnings found, not --strict)         "Install anyway? (y/N)"
+  5. Semantic scan offer (static warnings found, no --semantic) "Run semantic scan? (Y/n)"
+  6. Agent selection    (first semantic scan, no config)        "Use Claude Code? (↑↓)"
+  7. Semantic result    (flags found, not --strict)             "Install anyway? (y/N)"
+  8. Install confirm    (clean, no --yes)                       "Install? (Y/n)"
 
 remove:
-  1. Confirm            (no --yes)                           "Remove {name}? (y/N)"
+  1. Confirm            (no --yes)                              "Remove {name}? (y/N)"
 
 update:
-  1. Update confirm     (per skill, no --yes)                "Apply update? (y/N)"
+  1. Update confirm     (per skill, no --yes)                   "Apply update? (y/N)"
 
 tap add:
   (none — always proceeds)
 
 tap remove:
-  1. Confirm                                                 "Remove tap '{name}'? (y/N)"
+  1. Confirm                                                    "Remove tap '{name}'? (y/N)"
 
 link / unlink:
   (none — always proceeds)
 ```
 
-Prompts skipped by `--yes`: install#1, install#7, remove#1, update#1.
-Prompts skipped by `--project` or `--global`: install#2.
-Prompts turned into hard failures by `--strict`: install#3, install#6, update (warnings → skip).
-Prompts that always appear regardless of flags: install#4, install#5 (first-use only).
+Prompts skipped by `--yes`: install#3, install#8, remove#1, update#1. `--yes` also skips install#2 (agent selection).
+Prompts skipped by `--project` or `--global`: install#1.
+Prompts skipped by `--also <agent>`: install#2.
+Prompts skipped by `--semantic`: install#5 (semantic scan runs automatically, no offer prompt).
+Prompts turned into hard failures by `--strict`: install#4, install#7, update (warnings → skip).
+Prompts that always appear regardless of flags: install#5→#6 (first-use only, when static warnings present and no --semantic).
 **Scope always prompts** unless `--project`/`--global`/config is set. `--yes` does NOT skip scope.
-**Agent mode** (config only, no flags): ALL prompts eliminated. #1 auto-selects, #2 from config (error if unset), #3/#6 hard fail with stop directive, #4/#5 error if not configured, #7 auto-accept. Toggle with `skilltap config agent-mode`.
+**install#2** (agent selection) fires when `--also` is not passed and `--yes` is not set. If selection differs from config default, offers to save as default.
+**Agent mode** (config only, no flags): ALL prompts eliminated. #1 from config (error if unset), #2 from config, #3 auto-selects all, #4/#7 hard fail with stop directive, #5/#6 error if not configured, #8 auto-accept. Toggle with `skilltap config agent-mode`.
 
 ---
 

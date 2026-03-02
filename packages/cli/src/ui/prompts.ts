@@ -47,6 +47,21 @@ export async function selectScope(): Promise<string | symbol> {
   return result as string;
 }
 
+export async function confirmReadyInstall(
+  skillNames: string[],
+): Promise<boolean | symbol> {
+  const label = skillNames.length === 1 ? skillNames[0]! : `${skillNames.length} skills`;
+  const result = await confirm({
+    message: `Install ${label}?`,
+    initialValue: true,
+  });
+  if (isCancel(result)) {
+    cancel("Operation cancelled.");
+    return result;
+  }
+  return result as boolean;
+}
+
 export async function confirmInstall(
   skillName: string,
 ): Promise<boolean | symbol> {

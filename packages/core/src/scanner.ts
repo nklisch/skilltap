@@ -117,7 +117,12 @@ function deduplicate(skills: ScannedSkill[]): ScannedSkill[] {
   );
 }
 
-export async function scan(dir: string): Promise<ScannedSkill[]> {
+export type ScanOptions = {
+  /** Called when deep scan is needed (no skills found at standard paths). Return false to cancel. */
+  onDeepScan?: (count: number) => Promise<boolean>;
+};
+
+export async function scan(dir: string, options?: ScanOptions): Promise<ScannedSkill[]> {
   // Step 1: Root SKILL.md — standalone repo
   const rootSkillMd = join(dir, "SKILL.md");
   if (await Bun.file(rootSkillMd).exists()) {
@@ -174,7 +179,17 @@ export async function scan(dir: string): Promise<ScannedSkill[]> {
   const combined = [...agentsPaths, ...skillsPaths, ...agentSpecificPaths];
 
   // Step 4: Deep scan fallback if nothing found
-  const discoveredPaths = combined.length > 0 ? combined : await deepScan(dir);
+  let discoveredPaths: string[];
+  if (combined.length > 0) {
+    discoveredPaths = combined;
+  } else {
+    const deepPaths = await deepScan(dir);
+    if (deepPaths.length > 0 && options?.onDeepScan) {
+      const proceed = await options.onDeepScan(deepPaths.length);
+      if (!proceed) return [];
+    }
+    discoveredPaths = deepPaths;
+  }
 
   if (discoveredPaths.length === 0) return [];
 

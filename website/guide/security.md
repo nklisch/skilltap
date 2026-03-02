@@ -41,11 +41,13 @@ The semantic scan includes defenses against meta-attacks -- skills that try to t
 - **Parallel evaluation** processes 4 chunks at a time for speed
 - **Fail-open on errors** -- if an agent call fails, that chunk scores 0 and scanning continues
 
-Enable semantic scanning with the `--semantic` flag:
+Enable semantic scanning with the `--semantic` flag. When passed, the scan runs automatically without a prompt:
 
 ```bash
 skilltap install some-skill --semantic
 ```
+
+The "Run semantic scan?" prompt only appears when **static warnings are found** and `--semantic` was not passed — offering you the option to do a deeper check before deciding.
 
 Or set it permanently in your config:
 
@@ -58,7 +60,23 @@ The semantic scan works with any supported agent: Claude Code, Gemini CLI, Codex
 
 ## What happens during install
 
-When you run `skilltap install`, the security flow is interactive:
+When you run `skilltap install`, the security flow is interactive. For a **clean skill** (no warnings), you see a final confirmation before anything is written to disk:
+
+```
+$ skilltap install some-skill --global
+
+Cloning some-skill...
+Scanning some-skill...  ✓ No warnings
+
+◇  Install some-skill?
+│  › Yes
+
+✓ Installed some-skill → ~/.agents/skills/some-skill/
+```
+
+Pass `--yes` to skip this confirmation for clean installs (warnings always prompt regardless).
+
+For a skill with **warnings**, the flow continues:
 
 ```
 $ skilltap install some-skill --global

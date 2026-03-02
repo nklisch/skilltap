@@ -334,15 +334,18 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 2. Resolve → { url, ref }
 3. Clone to temp dir (/tmp/skilltap-{random}/)
 4. Scan for SKILL.md files (scanner)
-5. Skill selection (single → auto, multiple → prompt or auto with --yes)
-6. Scope resolution (--project, --global, or prompt)
-7. Security scan (static.ts, optionally semantic.ts)
-8. Move skill directory to install path
+   - Deep scan: prompt user if non-standard paths found (onDeepScan callback)
+5. Skill selection (single → auto, multiple → onSelectSkills callback)
+6. Security scan (static.ts, optionally semantic.ts)
+   - onWarnings / onSemanticWarnings callbacks for per-skill UI decisions
+7. Clean-install confirmation (onConfirmInstall callback, skipped with --yes)
+8. Resolve trust tier (trust/)
+9. Move skill directory to install path
    - Standalone repo → move entire temp clone
    - Multi-skill repo → copy skill dir, cache repo clone
-9. Update installed.json (config.ts)
-10. Create agent symlinks if --also (symlink.ts)
-11. Clean up temp dir
+10. Update installed.json (config.ts)
+11. Create agent symlinks if --also (symlink.ts)
+12. Clean up temp dir
 ```
 
 ### Install from Tap Name
@@ -357,11 +360,17 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 ### Update
 
 ```
-1. Look up in installed.json → get repo URL, current SHA
-2. git fetch (git.ts)
-3. Compare HEAD SHA to remote SHA
-4. If different: show diff summary → scan diff (static.ts) → apply if accepted
-5. Update installed.json with new SHA
+1. Look up in installed.json → get repo URL, current SHA (or npm version)
+2. git fetch (git.ts) or npm registry check (npm-registry.ts)
+3. Compare HEAD SHA to FETCH_HEAD (git) or installed version to latest (npm)
+4. If different: show diff summary (onDiff callback)
+5. Scan diff (static.ts) → onShowWarnings callback
+6. Confirm update (onConfirm callback) or skip on --strict
+7. git pull (or tarball replace for npm)
+8. Optionally run semantic scan on updated directory (semantic.ts)
+9. Re-create agent symlinks
+10. Re-resolve trust tier (trust/)
+11. Update installed.json with new SHA / version / updatedAt
 ```
 
 ## Storage Layout

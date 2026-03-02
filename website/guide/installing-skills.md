@@ -216,7 +216,18 @@ Auto-selecting all (--yes)
 
 ## Security during install
 
-Every install runs a static security scan. If warnings are found, you'll see them and be asked how to proceed:
+Every install runs a static security scan. For a clean skill (no warnings), you're asked to confirm before anything is written to disk:
+
+```
+◇  Static scan: 0 warnings
+│
+◇  Install code-reviewer?
+│  › Yes
+```
+
+With `--yes`, this final confirmation is skipped and the skill is installed automatically.
+
+If warnings are found, you'll see them and be asked how to proceed:
 
 ```
 ⚠ Static warnings in some-skill:
@@ -229,7 +240,7 @@ Every install runs a static security scan. If warnings are found, you'll see the
 
 If you choose to run the semantic scan and haven't set up an agent yet, skilltap detects available agent CLIs on your machine and lets you pick one. Your choice is saved for future installs.
 
-After all scans complete, if there are warnings you're asked to confirm:
+After all scans complete, if there are still warnings you're asked to confirm:
 
 ```
 ? Install some-skill despite warnings?
@@ -248,12 +259,11 @@ For the full security model, see [Security](./security).
 | `--global` | Install to `~/.agents/skills/` |
 | `--project` | Install to `.agents/skills/` in the current project |
 | `--ref <ref>` | Install a specific branch or tag (git sources only) |
-| `--also <agent>` | Also symlink to an agent's directory. Repeatable. |
-| `--ref <ref>` | Install a specific branch or tag |
-| `--yes` | Auto-select all skills and auto-accept clean installs |
+| `--also <agent>` | Also symlink to an agent's directory. Repeatable. Skips the agent selection prompt. |
+| `--yes` | Auto-select all skills, auto-accept clean installs, skip agent selection prompt |
 | `--strict` | Abort if any security warnings are found (exit 1) |
 | `--no-strict` | Override `on_warn = "fail"` in config for this invocation |
-| `--semantic` | Run Layer 2 semantic security scan |
+| `--semantic` | Run Layer 2 semantic scan (auto-runs — no prompt shown) |
 | `--skip-scan` | Skip security scanning entirely (not recommended) |
 
 ### Fully non-interactive install
