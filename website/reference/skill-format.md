@@ -8,6 +8,10 @@ SKILL.md is the file format for agent skills. It is a Markdown file with YAML fr
 
 Every installable skill must contain a `SKILL.md` file. This is how skilltap identifies, validates, and describes skills.
 
+::: tip Official specification
+SKILL.md is an open standard maintained by Anthropic. The authoritative format reference is at [agentskills.io/specification](https://agentskills.io/specification). For Anthropic's platform documentation on using Skills across Claude Code, the API, and claude.ai, see [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview).
+:::
+
 ## Structure
 
 A SKILL.md file has two parts:
@@ -43,6 +47,7 @@ The frontmatter is YAML between `---` delimiters at the top of the file. It is v
 | `license` | string | No | -- | License identifier (e.g., `MIT`, `Apache-2.0`) |
 | `compatibility` | string | No | Max 500 chars | Runtime requirements or agent compatibility notes |
 | `metadata` | object | No | String keys, any values | Arbitrary key-value pairs for additional metadata |
+| `allowed-tools` | string | No | Space-delimited list | *(Experimental)* Pre-approved tools the skill may use (e.g. `Bash(git:*) Read`). Support varies by agent. |
 
 ### Validation
 

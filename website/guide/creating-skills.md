@@ -130,7 +130,7 @@ skilltap verify
 
 ## SKILL.md format
 
-Every skill needs a `SKILL.md` file with YAML frontmatter:
+Every skill needs a `SKILL.md` file with YAML frontmatter. SKILL.md is an open standard maintained by Anthropic — see the [official specification](https://agentskills.io/specification) and the [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview) for the authoritative reference.
 
 ```markdown
 ---
