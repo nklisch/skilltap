@@ -7,7 +7,7 @@ import {
   text,
 } from "@clack/prompts";
 import type { AgentAdapter, ScannedSkill, TapEntry } from "@skilltap/core";
-import { detectAgents } from "@skilltap/core";
+import { detectAgents, VALID_AGENT_IDS } from "@skilltap/core";
 
 export async function selectSkills(
   skills: ScannedSkill[],
@@ -115,6 +115,47 @@ export async function offerSemanticScan(): Promise<boolean | symbol> {
   const result = await confirm({
     message: "Run semantic scan?",
     initialValue: true,
+  });
+  if (isCancel(result)) {
+    cancel("Operation cancelled.");
+    return result;
+  }
+  return result as boolean;
+}
+
+const AGENT_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  cursor: "Cursor",
+  codex: "Codex",
+  gemini: "Gemini",
+  windsurf: "Windsurf",
+};
+
+export async function selectAgents(
+  currentSelection: string[],
+): Promise<string[] | symbol> {
+  const result = await multiselect({
+    message: "Which agents should this skill be available to?",
+    options: VALID_AGENT_IDS.map((id) => ({
+      value: id,
+      label: AGENT_LABELS[id] ?? id,
+    })),
+    initialValues: currentSelection,
+    required: false,
+  });
+  if (isCancel(result)) {
+    cancel("Operation cancelled.");
+    return result;
+  }
+  return result as string[];
+}
+
+export async function confirmSaveDefault(
+  message: string,
+): Promise<boolean | symbol> {
+  const result = await confirm({
+    message,
+    initialValue: false,
   });
   if (isCancel(result)) {
     cancel("Operation cancelled.");

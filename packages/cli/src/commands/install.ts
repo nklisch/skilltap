@@ -11,6 +11,7 @@ import type {
 import {
   findProjectRoot,
   installSkill,
+  saveConfig,
   skillInstallDir,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
@@ -23,7 +24,9 @@ import { errorLine, successLine } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import {
   confirmInstall,
+  confirmSaveDefault,
   offerSemanticScan,
+  selectAgents,
   selectSkills,
   selectTap,
 } from "../ui/prompts";
@@ -178,7 +181,7 @@ async function runInteractiveMode(
   policy: EffectivePolicy,
 ): Promise<void> {
   const { onWarn, skipScan } = policy;
-  const also = parseAlsoFlag(args.also, config);
+  let also = parseAlsoFlag(args.also, config);
 
   const runSemantic =
     policy.scanMode === "semantic" || args.semantic;
@@ -203,6 +206,28 @@ async function runInteractiveMode(
     const resolved = await resolveScope({}, undefined);
     scope = resolved.scope;
     projectRoot = resolved.projectRoot;
+  }
+
+  // Prompt for agent symlinks unless --also was explicitly passed or --yes is set
+  if (!args.also && !policy.yes) {
+    const selected = await selectAgents(also);
+    if (isCancel(selected)) process.exit(2);
+    also = selected as string[];
+
+    // Offer to save if selection differs from config default
+    const configAlso = config.defaults.also;
+    const differs =
+      also.length !== configAlso.length ||
+      also.some((a) => !configAlso.includes(a));
+    if (differs) {
+      const save = await confirmSaveDefault(
+        "Save agent selection as default?",
+      );
+      if (!isCancel(save) && save) {
+        config.defaults.also = also;
+        await saveConfig(config);
+      }
+    }
   }
 
   const s = spinner();

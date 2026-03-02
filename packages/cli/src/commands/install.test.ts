@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { loadInstalled } from "@skilltap/core";
@@ -150,6 +150,135 @@ describe("install — security scanning", () => {
   });
 });
 
+// ── Agent Selection Tests ──
+
+async function writeConfig(
+  configDir: string,
+  toml: string,
+): Promise<void> {
+  const dir = join(configDir, "skilltap");
+  await mkdir(dir, { recursive: true });
+  await Bun.write(join(dir, "config.toml"), toml);
+}
+
+describe("install — agent selection", () => {
+  test("--yes uses config defaults.also for symlinks", async () => {
+    await writeConfig(
+      configDir,
+      '[defaults]\nalso = ["claude-code"]\n',
+    );
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode } = await runInstall(
+        [repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      // Verify the agent symlink was created
+      const symlinkPath = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
+      const stat = await lstat(symlinkPath);
+      expect(stat.isSymbolicLink()).toBe(true);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("--also flag creates symlink and skips prompt", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode } = await runInstall(
+        [repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      const symlinkPath = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
+      const stat = await lstat(symlinkPath);
+      expect(stat.isSymbolicLink()).toBe(true);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("--yes without config defaults.also creates no symlinks", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode } = await runInstall(
+        [repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      // No agent symlink should exist
+      const symlinkPath = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
+      expect(await lstat(symlinkPath).catch(() => null)).toBeNull();
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("--also with multiple agents creates all symlinks", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode } = await runInstall(
+        [repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code,cursor"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      const claudeLink = join(homeDir, ".claude", "skills", "standalone-skill");
+      const cursorLink = join(homeDir, ".cursor", "skills", "standalone-skill");
+      expect((await lstat(claudeLink)).isSymbolicLink()).toBe(true);
+      expect((await lstat(cursorLink)).isSymbolicLink()).toBe(true);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("config defaults.also with multiple agents creates all symlinks", async () => {
+    await writeConfig(
+      configDir,
+      '[defaults]\nalso = ["claude-code", "cursor"]\n',
+    );
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode } = await runInstall(
+        [repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      const claudeLink = join(homeDir, ".claude", "skills", "standalone-skill");
+      const cursorLink = join(homeDir, ".cursor", "skills", "standalone-skill");
+      expect((await lstat(claudeLink)).isSymbolicLink()).toBe(true);
+      expect((await lstat(cursorLink)).isSymbolicLink()).toBe(true);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
 // ── Agent Mode Tests ──
 
 async function writeAgentModeConfig(
@@ -248,6 +377,33 @@ describe("install — agent mode", () => {
       );
       expect(exitCode).toBe(1);
       expect(stderr).toContain("already installed");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("agent mode uses config defaults.also for symlinks", async () => {
+    await writeAgentModeConfig(
+      configDir,
+      '\n[defaults]\nalso = ["claude-code"]\n',
+    );
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode } = await runInstall(
+        [repo.path],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      const symlinkPath = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
+      const stat = await lstat(symlinkPath);
+      expect(stat.isSymbolicLink()).toBe(true);
     } finally {
       await repo.cleanup();
     }
