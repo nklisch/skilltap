@@ -67,14 +67,16 @@ Skill content is processed in bounded chunks so the agent can reason about each 
 
 Each chunk tracks its source file and line range. All text files in the skill directory are chunked — not just `SKILL.md`.
 
+**Overlap chunks:** After splitting, skilltap generates overlap chunks that span each boundary — the last 200 chars of chunk N joined with the first 200 chars of chunk N+1. This catches attacks crafted to split a malicious payload across a predictable paragraph boundary, where each half alone appears benign but together they reveal the full intent (e.g. credential read in one paragraph, exfiltration URL in the next). Overlap chunks are only generated between adjacent chunks from the same file.
+
 Binary files, non-UTF-8 content, and VCS directories (`.git/`, `.svn/`, `.hg/`) are skipped.
 
 ### Agent invoked without tools or permissions
 
 The reviewing agent is invoked in a sandboxed, read-only mode — it cannot take actions while analyzing skill content:
 
-- **Claude Code**: `--no-tools --print` — tool use disabled, non-interactive output only
-- **Codex CLI**: `--no-tools` — tool use disabled
+- **Claude Code**: `--tools "" --print` — tool use disabled, non-interactive output only
+- **Codex CLI**: `--no-tools` — tool use disabled (Codex supports this flag)
 - **Gemini CLI**: `--non-interactive` — no interactive session, no tool calls
 
 This means even if a malicious skill constructs a prompt that tricks the reviewing agent, the agent cannot execute shell commands, read files, or call external APIs in response. It can only produce text output, which skilltap parses for a JSON score.
@@ -130,7 +132,7 @@ ollama_model = ""      # model name when using Ollama
 
 | Name | Binary | Notes |
 |---|---|---|
-| Claude Code | `claude` | Uses `--print --no-tools --output-format json` |
+| Claude Code | `claude` | Uses `--print --tools "" --output-format json` |
 | Gemini CLI | `gemini` | Uses `--non-interactive` via stdin |
 | Codex CLI | `codex` | Uses `--no-tools` |
 | OpenCode | `opencode` | Uses `--prompt` |

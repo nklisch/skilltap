@@ -31,6 +31,7 @@ export type SemanticScanOptions = {
 // ── Constants ──
 
 const MAX_CHUNK_SIZE = 2000;
+const CHUNK_OVERLAP = 200;
 const RAW_DISPLAY_LIMIT = 200;
 const MAX_CONCURRENCY = 4;
 
@@ -101,6 +102,7 @@ export async function chunkSkillDir(dir: string): Promise<Chunk[]> {
   // Sort for deterministic ordering
   relPaths.sort();
 
+  const allFileChunks: FileChunk[] = [];
   for (const relPath of relPaths) {
     const filePath = join(dir, relPath);
     let content: string;
@@ -111,10 +113,14 @@ export async function chunkSkillDir(dir: string): Promise<Chunk[]> {
       continue; // Skip binary/non-UTF-8 files
     }
 
-    const fileChunks = splitIntoChunks(content, relPath);
-    for (const fc of fileChunks) {
-      chunks.push({ ...fc, index: chunkIndex++ });
-    }
+    allFileChunks.push(...splitIntoChunks(content, relPath));
+  }
+
+  // Add overlap chunks to catch payloads split across boundaries
+  const withOverlaps = addOverlapChunks(allFileChunks);
+
+  for (const fc of withOverlaps) {
+    chunks.push({ ...fc, index: chunkIndex++ });
   }
 
   return chunks;
@@ -224,6 +230,47 @@ function hardSplit(chunk: FileChunk): FileChunk[] {
     const endLine = startLine + countLines(slice) - 1;
     result.push({ file, lineRange: [startLine, endLine], content: slice });
     startLine = endLine;
+  }
+
+  return result;
+}
+
+/**
+ * Generate overlap chunks that span the boundaries between adjacent chunks.
+ * Each overlap chunk takes the last CHUNK_OVERLAP chars of chunk N and the
+ * first CHUNK_OVERLAP chars of chunk N+1, catching payloads that an attacker
+ * might split across a predictable boundary.
+ */
+function addOverlapChunks(chunks: FileChunk[]): FileChunk[] {
+  if (chunks.length < 2) return chunks;
+
+  const result: FileChunk[] = [];
+  for (let i = 0; i < chunks.length; i++) {
+    // biome-ignore lint/style/noNonNullAssertion: i is within bounds
+    result.push(chunks[i]!);
+
+    if (i < chunks.length - 1) {
+      // biome-ignore lint/style/noNonNullAssertion: i and i+1 are within bounds
+      const current = chunks[i]!;
+      // biome-ignore lint/style/noNonNullAssertion: i+1 is within bounds
+      const next = chunks[i + 1]!;
+
+      // Only overlap chunks from the same file
+      if (current.file !== next.file) continue;
+
+      const tail = current.content.slice(-CHUNK_OVERLAP);
+      const head = next.content.slice(0, CHUNK_OVERLAP);
+      const overlapContent = `${tail}\n\n${head}`;
+
+      // Skip if the overlap is trivially small
+      if (overlapContent.length < 50) continue;
+
+      result.push({
+        file: current.file,
+        lineRange: [current.lineRange[1], next.lineRange[0]],
+        content: overlapContent,
+      });
+    }
   }
 
   return result;
