@@ -1,19 +1,19 @@
 {
-  "timestamp": "2026-03-02T00:40:24.178Z",
+  "timestamp": "2026-03-02T00:52:12.257Z",
   "model": "claude-sonnet-4-6",
   "total": 39,
-  "passed": 37,
-  "failed": 2,
-  "true_positives": 28,
+  "passed": 39,
+  "failed": 0,
+  "true_positives": 29,
   "false_positives": 0,
   "true_negatives": 10,
-  "false_negatives": 1,
+  "false_negatives": 0,
   "precision": 1,
-  "recall": 0.97,
+  "recall": 1,
   "by_category": {
     "context_escape": {
       "total": 4,
-      "correct": 2
+      "correct": 4
     },
     "credential_theft": {
       "total": 3,
