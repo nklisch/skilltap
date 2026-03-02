@@ -1,12 +1,12 @@
 {
-  "name": "test-tap",
-  "description": "A sample tap for integration tests.",
+  "name": "nklisch",
+  "description": "Reference skills tap — reusable agent workflow skills.",
   "skills": [
     {
-      "name": "standalone-skill",
-      "description": "A standalone test skill.",
-      "repo": "https://github.com/example/standalone-skill",
-      "tags": ["test", "example"]
+      "name": "research",
+      "description": "Research external libs, APIs, and patterns.",
+      "repo": "nklisch/skills",
+      "tags": ["research", "workflow", "agentic"]
     }
   ]
 }
