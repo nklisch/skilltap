@@ -6,6 +6,13 @@
   "license": "MIT",
   "keywords": ["agent", "skills", "llm", "ai"],
   "files": ["src/"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nklisch/skilltap.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/nklisch/skilltap#readme",
+  "bugs": "https://github.com/nklisch/skilltap/issues",
   "exports": {
     ".": "./src/index.ts"
   },

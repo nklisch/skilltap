@@ -426,7 +426,7 @@ describe("installSkill via tap name", () => {
     });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.message).toContain("no taps configured");
+    expect(result.error.message).toContain("No taps configured");
   });
 
   test("errors if skill not found in taps", async () => {

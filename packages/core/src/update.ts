@@ -125,6 +125,24 @@ async function refreshAgentSymlinks(
   );
 }
 
+/** Run semantic scan on a skill directory after an update. Returns whether to skip the skill. */
+async function runUpdateSemanticScan(
+  installDir: string,
+  skillName: string,
+  options: UpdateOptions,
+): Promise<boolean> {
+  if (!options.semantic || !options.agent) return false;
+  const semResult = await scanSemantic(installDir, options.agent, {
+    threshold: options.threshold,
+    onProgress: options.onSemanticProgress,
+  });
+  if (semResult.ok && semResult.value.length > 0) {
+    options.onSemanticWarnings?.(semResult.value, skillName);
+    if (options.strict) return true;
+  }
+  return false;
+}
+
 /** Handle updates for npm-sourced skills (version comparison instead of git SHA). */
 async function updateNpmSkill(
   record: InstalledSkill,
@@ -201,25 +219,15 @@ async function updateNpmSkill(
     await $`cp -r ${newSkillDir} ${installDir}`.quiet();
 
     // Semantic scan on updated content
-    if (options.semantic && options.agent) {
-      const semResult = await scanSemantic(installDir, options.agent, {
-        threshold: options.threshold,
-        onProgress: options.onSemanticProgress,
-      });
-      if (semResult.ok && semResult.value.length > 0) {
-        options.onSemanticWarnings?.(semResult.value, record.name);
-        if (options.strict) {
-          result.skipped.push(record.name);
-          options.onProgress?.(record.name, "skipped");
-          return ok(undefined);
-        }
-      }
+    if (await runUpdateSemanticScan(installDir, record.name, options)) {
+      result.skipped.push(record.name);
+      options.onProgress?.(record.name, "skipped");
+      return ok(undefined);
     }
 
     await refreshAgentSymlinks(record, options.projectRoot);
 
     // Re-verify trust for the new version
-    const { name: packageName } = parseNpmSource(record.repo!);
     const newTrust = await resolveTrust({
       adapter: "npm",
       url: record.repo!,
@@ -360,25 +368,17 @@ export async function updateSkill(
 
     if (isMulti) await recopyMultiSkill(workDir, record, options.projectRoot);
 
+    const installDir = skillInstallDir(
+      record.name,
+      record.scope as "global" | "project",
+      options.projectRoot,
+    );
+
     // Semantic scan on updated skill directory
-    if (options.semantic && options.agent) {
-      const installDir = skillInstallDir(
-        record.name,
-        record.scope as "global" | "project",
-        options.projectRoot,
-      );
-      const semResult = await scanSemantic(installDir, options.agent, {
-        threshold: options.threshold,
-        onProgress: options.onSemanticProgress,
-      });
-      if (semResult.ok && semResult.value.length > 0) {
-        options.onSemanticWarnings?.(semResult.value, record.name);
-        if (options.strict) {
-          result.skipped.push(record.name);
-          options.onProgress?.(record.name, "skipped");
-          continue;
-        }
-      }
+    if (await runUpdateSemanticScan(installDir, record.name, options)) {
+      result.skipped.push(record.name);
+      options.onProgress?.(record.name, "skipped");
+      continue;
     }
 
     // Get new SHA
@@ -386,11 +386,6 @@ export async function updateSkill(
     if (!newShaResult.ok) return newShaResult;
 
     // Re-verify trust for the updated skill
-    const installDir = skillInstallDir(
-      record.name,
-      record.scope as "global" | "project",
-      options.projectRoot,
-    );
     const newTrust = await resolveTrust({
       adapter: "git",
       url: record.repo ?? "",

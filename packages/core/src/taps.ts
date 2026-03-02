@@ -75,7 +75,7 @@ export async function addTap(
     return err(
       new UserError(
         `Tap '${name}' already exists.`,
-        `Remove it first with 'skilltap tap remove ${name}'`,
+        `Remove it first with 'skilltap tap remove ${name}'.`,
       ),
     );
   }

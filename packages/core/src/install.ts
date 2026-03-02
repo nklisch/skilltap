@@ -111,8 +111,7 @@ async function resolveTapName(
   if (allSkills.length === 0) {
     return err(
       new UserError(
-        `Skill '${tapName}' not found — no taps configured.`,
-        `Add a tap with 'skilltap tap add <name> <url>'`,
+        `No taps configured. Add one with 'skilltap tap add <name> <url>'.`,
       ),
     );
   }
@@ -349,14 +348,15 @@ export async function installSkill(
     // 7.5. Resolve trust (once per source, before placement)
     let trust: TrustInfo | undefined;
     {
-      const tapSkillEntry = tapResult.value
-        ? (await loadTaps()).ok
-          ? (await loadTaps()).value?.find(
-              (e) =>
-                e.tapName === effectiveTap && e.skill.repo === effectiveSource,
-            )
-          : undefined
-        : undefined;
+      let tapSkillEntry: TapEntry | undefined;
+      if (tapResult.value) {
+        const tapsResult = await loadTaps();
+        if (tapsResult.ok) {
+          tapSkillEntry = tapsResult.value.find(
+            (e) => e.tapName === effectiveTap && e.skill.repo === effectiveSource,
+          );
+        }
+      }
       const npmInfo =
         resolved.adapter === "npm"
           ? parseNpmSource(effectiveSource)

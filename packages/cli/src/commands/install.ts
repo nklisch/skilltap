@@ -233,26 +233,37 @@ async function runInteractiveMode(
   const s = spinner();
   s.start(`Cloning ${args.source}...`);
 
+  async function withSpinnerPaused<T>(
+    fn: () => Promise<T>,
+    resumeMsg = "Installing...",
+  ): Promise<T> {
+    s.stop();
+    try {
+      return await fn();
+    } finally {
+      s.start(resumeMsg);
+    }
+  }
+
   const autoSelectAll = policy.yes;
 
   // Callbacks
   const warningsCallback = async (
     warnings: StaticWarning[],
     skillName: string,
-  ): Promise<boolean> => {
-    s.stop();
-    printWarnings(warnings, skillName);
-    if (onWarn === "fail") {
-      errorLine(
-        `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
-      );
-      process.exit(1);
-    }
-    const proceed = await confirmInstall(skillName);
-    if (isCancel(proceed) || proceed === false) process.exit(2);
-    s.start("Installing...");
-    return true;
-  };
+  ): Promise<boolean> =>
+    withSpinnerPaused(async () => {
+      printWarnings(warnings, skillName);
+      if (onWarn === "fail") {
+        errorLine(
+          `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
+        );
+        process.exit(1);
+      }
+      const proceed = await confirmInstall(skillName);
+      if (isCancel(proceed) || proceed === false) process.exit(2);
+      return true;
+    });
 
   const selectSkillsCallback = async (
     skills: ScannedSkill[],
@@ -263,48 +274,46 @@ async function runInteractiveMode(
       }
       return skills.map((sk) => sk.name);
     }
-    s.stop();
-    const selected = await selectSkills(skills);
-    if (isCancel(selected)) process.exit(2);
-    s.start("Installing...");
-    return selected as string[];
+    return withSpinnerPaused(async () => {
+      const selected = await selectSkills(skills);
+      if (isCancel(selected)) process.exit(2);
+      return selected as string[];
+    });
   };
 
   const selectTapCallback = async (
     matches: TapEntry[],
-  ): Promise<TapEntry | null> => {
-    s.stop();
-    const chosen = await selectTap(matches);
-    if (isCancel(chosen)) process.exit(2);
-    s.start("Installing...");
-    return chosen as TapEntry;
-  };
+  ): Promise<TapEntry | null> =>
+    withSpinnerPaused(async () => {
+      const chosen = await selectTap(matches);
+      if (isCancel(chosen)) process.exit(2);
+      return chosen as TapEntry;
+    });
 
   const semanticWarningsCallback = async (
     warnings: SemanticWarning[],
     skillName: string,
-  ): Promise<boolean> => {
-    s.stop();
-    printSemanticWarnings(warnings, skillName);
-    if (onWarn === "fail") {
-      errorLine(
-        `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
-      );
-      process.exit(1);
-    }
-    const proceed = await confirmInstall(skillName);
-    if (isCancel(proceed) || proceed === false) process.exit(2);
-    s.start("Installing...");
-    return true;
-  };
+  ): Promise<boolean> =>
+    withSpinnerPaused(async () => {
+      printSemanticWarnings(warnings, skillName);
+      if (onWarn === "fail") {
+        errorLine(
+          `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
+        );
+        process.exit(1);
+      }
+      const proceed = await confirmInstall(skillName);
+      if (isCancel(proceed) || proceed === false) process.exit(2);
+      return true;
+    });
 
   const offerSemanticCallback = async (): Promise<boolean> => {
     if (!agent) return false;
-    s.stop();
-    const answer = await offerSemanticScan();
-    if (isCancel(answer)) return false;
-    s.start("Running semantic scan...");
-    return answer as boolean;
+    return withSpinnerPaused(async () => {
+      const answer = await offerSemanticScan();
+      if (isCancel(answer)) return false;
+      return answer as boolean;
+    }, "Running semantic scan...");
   };
 
   const semanticProgressCallback = (
