@@ -18,7 +18,6 @@ describe("basicTemplate", () => {
     expect(files["SKILL.md"]).toContain("description: A test skill");
     expect(files["SKILL.md"]).toContain("license: MIT");
     expect(files["SKILL.md"]).toContain("author: Test User");
-    expect(files["SKILL.md"]).toContain("version: \"0.1.0\"");
   });
 
   test("generates .gitignore", () => {

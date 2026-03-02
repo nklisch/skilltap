@@ -7,14 +7,12 @@ export interface NpmTemplateOpts {
 
 export function npmTemplate(opts: NpmTemplateOpts): Record<string, string> {
   const license = opts.license !== "None" ? `\nlicense: ${opts.license}` : "";
+  const author = opts.author ? `\n# author: ${opts.author}` : "";
   const skillMd = `---
 name: ${opts.name}
 description: ${opts.description}${license}
-metadata:
-  author: ${opts.author}
-  version: "0.1.0"
 ---
-
+${author}
 ## Instructions
 
 Describe what this skill does and when to use it.

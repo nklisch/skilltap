@@ -12,14 +12,12 @@ export function multiTemplate(opts: MultiTemplateOpts): Record<string, string> {
 
   for (const skillName of opts.skillNames) {
     const license = opts.license !== "None" ? `\nlicense: ${opts.license}` : "";
+    const author = opts.author ? `\n# author: ${opts.author}` : "";
     const skillMd = `---
 name: ${skillName}
 description: Describe what ${skillName} does and when to use it.${license}
-metadata:
-  author: ${opts.author}
-  version: "0.1.0"
 ---
-
+${author}
 ## Instructions
 
 Describe what this skill does and when to use it.

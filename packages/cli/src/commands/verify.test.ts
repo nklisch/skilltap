@@ -100,7 +100,7 @@ name: bad-skill
 
     const { exitCode, stdout } = await runVerify([skillDir]);
     expect(exitCode).toBe(1);
-    expect(stdout).toContain("issues");
+    expect(stdout).toContain("Fix");
   });
 });
 
