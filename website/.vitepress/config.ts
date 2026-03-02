@@ -92,6 +92,13 @@ export default defineConfig({
             { text: "Configuration", link: "/guide/configuration" },
           ],
         },
+        {
+          text: "Tooling",
+          items: [
+            { text: "Doctor", link: "/guide/doctor" },
+            { text: "Shell Completions", link: "/guide/shell-completions" },
+          ],
+        },
       ],
       "/reference/": [
         {

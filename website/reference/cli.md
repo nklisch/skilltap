@@ -827,3 +827,129 @@ skilltap verify --json
 # Pre-push git hook
 echo 'skilltap verify' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
 ```
+
+---
+
+## skilltap doctor
+
+Check your environment, configuration, and installed state for problems.
+
+```
+skilltap doctor [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--fix` | boolean | `false` | Auto-repair issues where safe (recreate symlinks, remove orphan records, create missing dirs, re-clone missing taps) |
+| `--json` | boolean | `false` | Output as JSON (for CI/scripting) |
+
+### Checks
+
+Doctor runs 9 independent checks and streams each result as it completes:
+
+| # | Check | What it verifies |
+|---|-------|-----------------|
+| 1 | git | git is on PATH, version ≥ 2.25 |
+| 2 | config | `config.toml` exists, valid TOML, passes schema |
+| 3 | dirs | All required directories exist |
+| 4 | installed.json | State file parses and passes schema validation |
+| 5 | skills | Every `installed.json` entry has a directory on disk |
+| 6 | symlinks | Agent symlinks for `also` entries are valid |
+| 7 | taps | Each configured tap has a valid local clone |
+| 8 | agents | Detected agent CLIs; configured agent is available |
+| 9 | npm | npm is on PATH and registry reachable (only if npm skills are installed) |
+
+A failure in one check does not skip subsequent checks.
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | All checks pass, or only warnings |
+| `1` | One or more failures (corrupt files, missing git) |
+
+Warnings alone (missing optional features) produce exit code 0.
+
+### Examples
+
+```bash
+# Check everything
+skilltap doctor
+
+# Auto-repair where possible
+skilltap doctor --fix
+
+# CI health check (machine-readable)
+skilltap doctor --json
+```
+
+See the [Doctor guide](/guide/doctor) for detailed output examples and what each check covers.
+
+---
+
+## skilltap completions
+
+Generate a shell completion script for bash, zsh, or fish.
+
+```
+skilltap completions <shell> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `shell` | Yes | `bash`, `zsh`, or `fish` |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--install` | boolean | `false` | Write the completion script to the shell's standard location |
+
+### Without `--install`
+
+Prints the completion script to stdout. Useful for piping to a file or evaluating inline:
+
+```bash
+# Evaluate inline (add to ~/.bashrc)
+eval "$(skilltap completions bash)"
+
+# Write to a file manually
+skilltap completions zsh > ~/.zfunc/_skilltap
+```
+
+### With `--install`
+
+Writes to the standard location for each shell and prints activation instructions:
+
+| Shell | Writes to |
+|-------|-----------|
+| bash | `~/.local/share/bash-completion/completions/skilltap` |
+| zsh | `~/.zfunc/_skilltap` |
+| fish | `~/.config/fish/completions/skilltap.fish` |
+
+### Dynamic Completions
+
+The completion scripts call `skilltap --get-completions <type>` to provide live values:
+
+- `installed-skills` — for `remove`, `update`, `info`
+- `linked-skills` — for `unlink`
+- `tap-skills` — for `install`
+- `tap-names` — for `tap remove`, `tap update`
+
+### Examples
+
+```bash
+# Install for your shell
+skilltap completions bash --install
+skilltap completions zsh --install
+skilltap completions fish --install
+
+# Print script (manual setup)
+skilltap completions bash
+```
+
+See the [Shell Completions guide](/guide/shell-completions) for setup details and troubleshooting.

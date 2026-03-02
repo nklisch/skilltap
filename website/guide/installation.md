@@ -76,3 +76,15 @@ skilltap --help
 ```
 
 You should see the list of available commands and global flags.
+
+## Shell completions (optional)
+
+Set up tab-completion for your shell:
+
+```bash
+skilltap completions bash --install   # bash
+skilltap completions zsh --install    # zsh
+skilltap completions fish --install   # fish
+```
+
+See [Shell Completions](/guide/shell-completions) for details and troubleshooting.
