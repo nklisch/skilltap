@@ -260,25 +260,23 @@ Homebrew formula, install script, GitHub Releases CI.
 
 ## v0.3 — Authoring + Polish
 
-### Phase 16 — Publish and Create
+### Phase 16 — Create and Verify
 
 > Design doc: [DESIGN-PUBLISH.md](./DESIGN-PUBLISH.md)
 
-Skill authoring tools — scaffold new skills and publish to npm or validate for git.
+Skill authoring tools — scaffold new skills and validate them before sharing.
 
-- [ ] **16.1** Implement `core/src/validate.ts` — `validateSkill()` shared validation (SKILL.md exists, frontmatter valid, name matches dir, security self-scan, size check)
-- [ ] **16.2** Implement templates in `core/src/templates/` — `basic.ts`, `npm.ts`, `multi.ts` (embedded TypeScript functions, not files)
-- [ ] **16.3** `skilltap create [name]` command — interactive prompts (name, description, template, license), non-interactive with flags
-- [ ] **16.4** npm template: generate `package.json` with `agent-skill` keyword, `.github/workflows/publish.yml` with `--provenance` and `attest-build-provenance`
-- [ ] **16.5** Multi template: generate `.agents/skills/` structure with prompted skill names
-- [ ] **16.6** `skilltap publish [path]` command — run `validateSkill()`, display results
-- [ ] **16.7** `skilltap publish --npm` — check package.json, verify npm auth, run `npm publish --provenance`
-- [ ] **16.8** `skilltap publish --dry-run` — validate only, no publish (CI/pre-commit hook use case)
-- [ ] **16.9** Print next-steps instructions after create, tap.json snippet after publish
-- [ ] **16.10** Unit tests: template generation, validateSkill with valid/invalid skills
-- [ ] **16.11** Integration tests: create + link roundtrip, publish --dry-run, publish --npm --dry-run
+- [x] **16.1** Implement `core/src/validate.ts` — `validateSkill()` shared validation (SKILL.md exists, frontmatter valid, name matches dir, security self-scan, size check)
+- [x] **16.2** Implement templates in `core/src/templates/` — `basic.ts`, `npm.ts`, `multi.ts` (embedded TypeScript functions, not files)
+- [x] **16.3** `skilltap create [name]` command — interactive prompts (name, description, template, license), non-interactive with flags
+- [x] **16.4** npm template: generate `package.json` with `agent-skill` keyword, `.github/workflows/publish.yml` with `--provenance` and `attest-build-provenance`
+- [x] **16.5** Multi template: generate `.agents/skills/` structure with prompted skill names
+- [x] **16.6** `skilltap verify [path]` command — run `validateSkill()`, display results (exit 0 = valid, exit 1 = invalid; useful as pre-push hook or CI step)
+- [x] **16.7** Print next-steps instructions after create, tap.json snippet after verify
+- [x] **16.8** Unit tests: template generation, validateSkill with valid/invalid skills
+- [x] **16.9** Integration tests: create + verify roundtrip, verify on invalid skill
 
-**Exit criteria:** `skilltap create` scaffolds valid skills with all three templates. `skilltap publish --dry-run` validates skills. `skilltap publish --npm` publishes to npm with provenance.
+**Exit criteria:** `skilltap create` scaffolds valid skills with all three templates. `skilltap verify` validates skills and exits 0/1 for CI use. npm publish is handled externally via the generated GitHub Actions workflow.
 
 ---
 
@@ -323,10 +321,10 @@ Tab-completion for bash, zsh, and fish.
 
 Finalize for v0.3 release.
 
-- [ ] **19.1** Update SPEC.md with npm adapter, HTTP registry, trust signals, create, publish, doctor, completions
+- [ ] **19.1** Update SPEC.md with npm adapter, HTTP registry, trust signals, create, verify, doctor, completions
 - [ ] **19.2** Update ARCH.md with new modules (trust/, registry/, templates/, doctor, completions)
-- [ ] **19.3** Update UX.md with new commands (create, publish, doctor, completions, find --npm)
-- [ ] **19.4** End-to-end test: create → publish --dry-run → install npm: → doctor → completions
+- [ ] **19.3** Update UX.md with new commands (create, verify, doctor, completions, find --npm)
+- [ ] **19.4** End-to-end test: create → verify → install npm: → doctor → completions
 - [ ] **19.5** README update with v0.3 features
 
 **Exit criteria:** All docs reflect the current state. End-to-end workflow works across all new features.
@@ -340,21 +338,21 @@ v0.1 (complete through Phase 10, Phase 11 in progress)
   │
   ├→ Phase 12 (npm adapter)
   │    └→ Phase 13 (trust signals — needs npm for provenance verification)
-  │         └→ Phase 16 (publish — needs trust for --provenance workflow)
   │
   ├→ Phase 14 (HTTP registry — independent of npm adapter)
   │
   ├→ Phase 15 (distribution — independent, can run in parallel)
   │
+  ├→ Phase 16 (create + verify — independent, can run anytime after v0.1)
+  │
   ├→ Phase 17 (doctor — independent, can run anytime after v0.1)
   │
   ├→ Phase 18 (completions — independent, can run anytime after v0.1)
   │
-  └→ Phase 16 (create — independent of npm, but publish --npm needs Phase 12)
-       └→ Phase 19 (polish — after everything else)
+  └→ Phase 19 (polish — after everything else)
 ```
 
-Phases 12, 14, 15, 17, and 18 can all be developed in parallel. Phase 13 depends on 12 (npm provenance). Phase 16's `publish --npm` depends on 12 (npm adapter), but `create` and `publish --dry-run` are independent.
+Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 depends on 12 (npm provenance). npm publishing is handled via the GitHub Actions workflow generated by `skilltap create --template npm`, not by a CLI command.
 
 ---
 

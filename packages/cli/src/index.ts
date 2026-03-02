@@ -16,6 +16,8 @@ const main = defineCommand({
     link: () => import("./commands/link").then((m) => m.default),
     unlink: () => import("./commands/unlink").then((m) => m.default),
     info: () => import("./commands/info").then((m) => m.default),
+    create: () => import("./commands/create").then((m) => m.default),
+    verify: () => import("./commands/verify").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
     tap: defineCommand({
       meta: {

@@ -17,6 +17,8 @@ export * from "./security";
 export * from "./symlink";
 export * from "./registry";
 export * from "./taps";
+export * from "./templates";
 export * from "./trust";
 export * from "./policy";
+export * from "./validate";
 export * from "./types";
