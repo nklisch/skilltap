@@ -98,6 +98,8 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Publish packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/cli && npm publish --provenance --access public
           cd ../core && npm publish --provenance --access public
