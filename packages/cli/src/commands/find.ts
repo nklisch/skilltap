@@ -1,4 +1,4 @@
-import { autocomplete, isCancel, outro, spinner, text } from "@clack/prompts";
+import { isCancel, outro, S_RADIO_ACTIVE, S_RADIO_INACTIVE, spinner } from "@clack/prompts";
 import type {
   Config,
   RegistrySearchResult,
@@ -15,10 +15,12 @@ import {
   searchTaps,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import pc from "picocolors";
 import {
   ansi,
   errorLine,
   formatInstallCount,
+  highlightMatches,
   successLine,
   table,
   termWidth,
@@ -27,6 +29,7 @@ import {
 import { confirmInstall, selectSkills, selectTap } from "../ui/prompts";
 import { resolveScope } from "../ui/resolve";
 import { printWarnings } from "../ui/scan";
+import { searchPrompt } from "../ui/search-prompt";
 import { formatTapTrust } from "../ui/trust";
 
 type SearchEntry = {
@@ -245,85 +248,57 @@ async function runInteractiveSearch(
   local: boolean,
   config: Config,
 ): Promise<void> {
-  let query = initialQuery;
-
-  // If no query provided, prompt for one
-  if (!query) {
-    const input = await text({
-      message: "Search for skills:",
-      placeholder: "e.g. git, testing, docker…",
-      validate: (v) => {
-        if (!v || v.trim().length < 2) return "Enter at least 2 characters";
-      },
-    });
-    if (isCancel(input)) process.exit(2);
-    query = (input as string).trim();
-  }
-
-  const s = spinner();
-  s.start("Searching…");
-
-  const { filtered } = await search(query, local, config);
-
-  s.stop(
-    filtered.length > 0
-      ? `Found ${filtered.length} skill${filtered.length === 1 ? "" : "s"}`
-      : "No results",
-  );
-
-  if (filtered.length === 0) {
-    process.stdout.write(`No skills found matching '${query}'.\n`);
-    process.exit(0);
-  }
-
-  await runPicker(filtered, config);
-}
-
-async function runPicker(
-  entries: SearchEntry[],
-  config: Config,
-): Promise<void> {
   const width = termWidth();
   const maxLabelWidth = Math.max(40, width - 10);
 
-  const result = await autocomplete({
-    message: "Select a skill to install:",
-    options: entries.map((entry, i) => ({
-      value: i,
-      label: formatPickerLabel(entry, maxLabelWidth),
-      hint: truncate(entry.description || "", 60) || undefined,
-    })),
-    placeholder: "Type to filter…",
-    filter: (search, option) => {
-      const entry = entries[option.value as number];
-      if (!entry) return false;
-      const s = search.toLowerCase();
-      return (
-        entry.name.toLowerCase().includes(s) ||
-        entry.description.toLowerCase().includes(s)
+  const result = await searchPrompt<SearchEntry>({
+    message: "Search for skills:",
+    placeholder: "e.g. git, testing, docker…",
+    initialQuery,
+    debounce: 250,
+    source: async (query) => {
+      if (!query || query.trim().length < 2) {
+        // Short queries: tap skills only (no registry API call)
+        const tapsResult = await loadTaps();
+        if (!tapsResult.ok) return [];
+        return tapsResult.value.map(({ tapName, skill }) => ({
+          name: skill.name,
+          description: skill.description,
+          source: tapName,
+          installRef: skill.name,
+          trustLabel: formatTapTrust(skill.trust),
+        }));
+      }
+      const { filtered } = await search(query, local, config);
+      return filtered;
+    },
+    selector: (entry) => `${entry.name} ${entry.description}`,
+    renderItem: (entry, active, positions) => {
+      const installs =
+        entry.installs !== undefined
+          ? formatInstallCount(entry.installs)
+          : "";
+      const source = `[${entry.source}]`;
+      const suffix = installs ? `${source}  ${installs}` : source;
+      const nameWidth = Math.min(
+        entry.name.length,
+        maxLabelWidth - suffix.length - 2,
       );
+      const rawName = truncate(entry.name, nameWidth);
+      const name = positions
+        ? highlightMatches(rawName, positions)
+        : rawName;
+      const pad = Math.max(1, maxLabelWidth - rawName.length - suffix.length);
+
+      if (active) {
+        return `${pc.green(S_RADIO_ACTIVE)} ${name}${" ".repeat(pad)}${pc.dim(suffix)}`;
+      }
+      return `${pc.dim(S_RADIO_INACTIVE)} ${pc.dim(rawName)}${" ".repeat(pad)}${pc.dim(suffix)}`;
     },
   });
 
   if (isCancel(result)) process.exit(2);
-
-  const chosen = entries[result as number];
-  if (!chosen) process.exit(1);
-
-  await installChosen(chosen, config);
-}
-
-function formatPickerLabel(entry: SearchEntry, maxWidth: number): string {
-  const installs = entry.installs !== undefined
-    ? formatInstallCount(entry.installs)
-    : "";
-  const source = `[${entry.source}]`;
-  const suffix = installs ? `${source}  ${installs}` : source;
-  // Pad name to align suffixes, then append
-  const nameWidth = Math.min(entry.name.length, maxWidth - suffix.length - 2);
-  const name = truncate(entry.name, nameWidth);
-  const pad = Math.max(1, maxWidth - name.length - suffix.length);
-  return `${name}${" ".repeat(pad)}${suffix}`;
+  await installChosen(result as SearchEntry, config);
 }
 
 // ---------------------------------------------------------------------------

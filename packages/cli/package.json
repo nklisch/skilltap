@@ -26,9 +26,12 @@
     "skilltap": "./src/index.ts"
   },
   "dependencies": {
-    "@skilltap/core": "workspace:*",
+    "@clack/core": "^1.0.1",
     "@clack/prompts": "^1.0.1",
-    "citty": "^0.2.1"
+    "@skilltap/core": "workspace:*",
+    "citty": "^0.2.1",
+    "fzf": "^0.5.2",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
     "@skilltap/test-utils": "workspace:*"

@@ -99,3 +99,17 @@ export function formatDiffFileLine(file: DiffFileStat): string {
   const countStr = counts.length > 0 ? ` (${counts.join(" ")})` : "";
   return `  ${ansi.dim(file.status)} ${file.path}${countStr}`;
 }
+
+/** Bold+underline characters at fzf match positions. */
+export function highlightMatches(
+  text: string,
+  positions: Set<number>,
+): string {
+  let result = "";
+  for (let i = 0; i < text.length; i++) {
+    result += positions.has(i)
+      ? `${BOLD}\x1b[4m${text[i]}${RESET}`
+      : text[i];
+  }
+  return result;
+}

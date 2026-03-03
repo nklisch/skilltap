@@ -11,14 +11,17 @@
     },
     "packages/cli": {
       "name": "@skilltap/skilltap",
-      "version": "0.3.1",
+      "version": "0.3.8",
       "bin": {
         "skilltap": "./src/index.ts",
       },
       "dependencies": {
+        "@clack/core": "^1.0.1",
         "@clack/prompts": "^1.0.1",
         "@skilltap/core": "workspace:*",
         "citty": "^0.2.1",
+        "fzf": "^0.5.2",
+        "picocolors": "^1.1.1",
       },
       "devDependencies": {
         "@skilltap/test-utils": "workspace:*",
@@ -26,7 +29,7 @@
     },
     "packages/core": {
       "name": "@skilltap/core",
-      "version": "0.3.1",
+      "version": "0.3.8",
       "dependencies": {
         "anti-trojan-source": "^1.8.1",
         "out-of-character": "^2.1.0",
@@ -456,6 +459,8 @@
     "fsevents": ["fsevents@2.3.3", "", { "os": "darwin" }, "sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw=="],
 
     "function-bind": ["function-bind@1.1.2", "", {}, "sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA=="],
+
+    "fzf": ["fzf@0.5.2", "", {}, "sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q=="],
 
     "github-from-package": ["github-from-package@0.0.0", "", {}, "sha512-SyHy3T1v2NUXn29OsWdxmK6RwHD+vkj3v8en8AOBZ1wBQ/hCAQ5bAQTD02kW4W9tUp/3Qh6J8r9EvntiyCmOOw=="],
 
