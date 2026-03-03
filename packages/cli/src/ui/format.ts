@@ -26,20 +26,30 @@ export function truncate(s: string, max: number): string {
   return `${s.slice(0, max - 1)}…`;
 }
 
+/** Strip ANSI escape sequences to get the visible width of a string. */
+function visibleLength(s: string): number {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1b\[[0-9;]*m/g, "").length;
+}
+
 export function table(rows: string[][], opts?: { header?: string[] }): string {
   const allRows = opts?.header ? [opts.header, ...rows] : rows;
   if (allRows.length === 0) return "";
 
   const numCols = Math.max(...allRows.map((r) => r.length));
+  // Measure column widths using visible length (ignoring ANSI codes)
   const colWidths: number[] = Array.from({ length: numCols }, (_, i) =>
-    Math.max(...allRows.map((r) => (r[i] ?? "").length)),
+    Math.max(...allRows.map((r) => visibleLength(r[i] ?? ""))),
   );
 
   const lines: string[] = [];
   allRows.forEach((row, rowIdx) => {
-    const cells = Array.from({ length: numCols }, (_, i) =>
-      (row[i] ?? "").padEnd(colWidths[i] ?? 0),
-    );
+    const cells = Array.from({ length: numCols }, (_, i) => {
+      const cell = row[i] ?? "";
+      // Pad based on visible width: add (targetWidth - visibleWidth) spaces
+      const pad = (colWidths[i] ?? 0) - visibleLength(cell);
+      return pad > 0 ? cell + " ".repeat(pad) : cell;
+    });
     lines.push(`  ${cells.join("  ")}`);
     if (rowIdx === 0 && opts?.header) {
       const sep = colWidths.map((w) => "─".repeat(w)).join("  ");

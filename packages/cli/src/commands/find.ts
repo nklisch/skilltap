@@ -1,4 +1,4 @@
-import { autocomplete, isCancel, outro, spinner } from "@clack/prompts";
+import { autocomplete, isCancel, outro, spinner, text } from "@clack/prompts";
 import type {
   Config,
   RegistrySearchResult,
@@ -86,53 +86,33 @@ export default defineCommand({
     }
     const config = configResult.value;
 
-    const registries = args.local ? [] : resolveRegistries(config);
+    const isTTY = process.stdout.isTTY === true;
+    const wantInteractive = args.interactive || (!query && !args.json && isTTY);
 
-    // Collect results: taps + configured registries in parallel
-    const [tapsResult, registrySkills] = await Promise.all([
-      loadTaps(),
-      query && query.length >= 2 && registries.length > 0
-        ? searchRegistries(query, registries, 20)
-        : Promise.resolve([] as RegistrySearchResult[]),
-    ]);
-
-    if (!tapsResult.ok) {
-      errorLine(tapsResult.error.message, tapsResult.error.hint);
-      process.exit(1);
+    if (wantInteractive) {
+      await runInteractiveSearch(query, args.local, config);
+      return;
     }
 
-    const tapEntries = tapsResult.value;
-    const registryEntries: SearchEntry[] = registryToEntries(registrySkills);
+    // Non-interactive path
+    const { filtered, tapEntries } = await search(query ?? "", args.local, config);
 
-    const tapSearchEntries: SearchEntry[] = tapEntries.map(
-      ({ tapName, skill }) => ({
-        name: skill.name,
-        description: skill.description,
-        source: tapName,
-        installRef: skill.name,
-        trustLabel: formatTapTrust(skill.trust),
-      }),
-    );
-
-    if (tapEntries.length === 0 && !query) {
-      process.stdout.write(
-        `No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n`,
-      );
-      process.stdout.write(
-        `Tip: search the skills.sh registry with 'skilltap find <query>'.\n`,
-      );
+    if (filtered.length === 0 && !query) {
+      if (tapEntries.length === 0) {
+        process.stdout.write(
+          "No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n",
+        );
+        process.stdout.write(
+          "Tip: search the skills.sh registry with 'skilltap find <query>'.\n",
+        );
+      } else {
+        process.stdout.write("No skills found.\n");
+      }
       process.exit(0);
     }
 
-    // Apply text filter to taps; registry results are already filtered by query
-    const filtered = applyFilter(tapEntries, tapSearchEntries, registryEntries, query);
-
     if (filtered.length === 0) {
-      process.stdout.write(
-        query
-          ? `No skills found matching '${query}'.\n`
-          : "No skills found.\n",
-      );
+      process.stdout.write(`No skills found matching '${query}'.\n`);
       process.exit(0);
     }
 
@@ -155,18 +135,51 @@ export default defineCommand({
       return;
     }
 
-    if (args.interactive) {
-      await runInteractive(filtered, config);
-      return;
-    }
-
     printTable(filtered);
   },
 });
 
+// ---------------------------------------------------------------------------
+// Search helpers
+// ---------------------------------------------------------------------------
+
+async function search(
+  query: string,
+  local: boolean,
+  config: Config,
+): Promise<{ filtered: SearchEntry[]; tapEntries: TapEntry[] }> {
+  const registries = local ? [] : resolveRegistries(config);
+
+  const [tapsResult, registrySkills] = await Promise.all([
+    loadTaps(),
+    query.length >= 2 && registries.length > 0
+      ? searchRegistries(query, registries, 20)
+      : Promise.resolve([] as RegistrySearchResult[]),
+  ]);
+
+  if (!tapsResult.ok) {
+    errorLine(tapsResult.error.message, tapsResult.error.hint);
+    process.exit(1);
+  }
+
+  const tapEntries = tapsResult.value;
+  const registryEntries = registryToEntries(registrySkills);
+  const tapSearchEntries: SearchEntry[] = tapEntries.map(
+    ({ tapName, skill }) => ({
+      name: skill.name,
+      description: skill.description,
+      source: tapName,
+      installRef: skill.name,
+      trustLabel: formatTapTrust(skill.trust),
+    }),
+  );
+
+  const filtered = applyFilter(tapEntries, tapSearchEntries, registryEntries, query);
+  return { filtered, tapEntries };
+}
+
 function registryToEntries(results: RegistrySearchResult[]): SearchEntry[] {
   return results.map((r) => {
-    // Extract skill name from id when id = "{source}/{skill-name}"
     const skillName = r.id.startsWith(r.source + "/")
       ? r.id.slice(r.source.length + 1)
       : undefined;
@@ -197,13 +210,16 @@ function applyFilter(
       }))
     : tapSearchEntries;
 
-  // Sort registry results by install count (most popular first)
   const sortedRegistry = [...registryEntries].sort(
     (a, b) => (b.installs ?? 0) - (a.installs ?? 0),
   );
 
   return [...filteredTaps, ...sortedRegistry];
 }
+
+// ---------------------------------------------------------------------------
+// Table output
+// ---------------------------------------------------------------------------
 
 function printTable(entries: SearchEntry[]): void {
   const width = termWidth();
@@ -224,16 +240,60 @@ function printTable(entries: SearchEntry[]): void {
 // Interactive mode
 // ---------------------------------------------------------------------------
 
-async function runInteractive(
+async function runInteractiveSearch(
+  initialQuery: string | undefined,
+  local: boolean,
+  config: Config,
+): Promise<void> {
+  let query = initialQuery;
+
+  // If no query provided, prompt for one
+  if (!query) {
+    const input = await text({
+      message: "Search for skills:",
+      placeholder: "e.g. git, testing, docker…",
+      validate: (v) => {
+        if (!v || v.trim().length < 2) return "Enter at least 2 characters";
+      },
+    });
+    if (isCancel(input)) process.exit(2);
+    query = (input as string).trim();
+  }
+
+  const s = spinner();
+  s.start("Searching…");
+
+  const { filtered } = await search(query, local, config);
+
+  s.stop(
+    filtered.length > 0
+      ? `Found ${filtered.length} skill${filtered.length === 1 ? "" : "s"}`
+      : "No results",
+  );
+
+  if (filtered.length === 0) {
+    process.stdout.write(`No skills found matching '${query}'.\n`);
+    process.exit(0);
+  }
+
+  await runPicker(filtered, config);
+}
+
+async function runPicker(
   entries: SearchEntry[],
   config: Config,
 ): Promise<void> {
+  const width = termWidth();
+  // Reserve space: name column + padding + source tag + some breathing room
+  // hint = "description  [source]  1.2K installs"
+  const maxHintWidth = Math.max(30, width - 30);
+
   const result = await autocomplete({
     message: "Select a skill to install:",
     options: entries.map((entry, i) => ({
       value: i,
       label: entry.name,
-      hint: `${entry.description || entry.source}  [${entry.source}]${entry.installs !== undefined ? `  ${formatInstallCount(entry.installs)}` : ""}`,
+      hint: formatPickerHint(entry, maxHintWidth),
     })),
     placeholder: "Type to filter…",
   });
@@ -245,6 +305,25 @@ async function runInteractive(
 
   await installChosen(chosen, config);
 }
+
+function formatPickerHint(entry: SearchEntry, maxWidth: number): string {
+  const source = `[${entry.source}]`;
+  const installs = entry.installs !== undefined
+    ? formatInstallCount(entry.installs)
+    : "";
+  // Fixed-width parts: source + installs + separators
+  const fixedWidth = source.length + (installs ? installs.length + 4 : 2);
+  const descWidth = Math.max(10, maxWidth - fixedWidth);
+  const desc = truncate(entry.description || "—", descWidth);
+
+  return installs
+    ? `${desc}  ${source}  ${installs}`
+    : `${desc}  ${source}`;
+}
+
+// ---------------------------------------------------------------------------
+// Install from picker
+// ---------------------------------------------------------------------------
 
 async function installChosen(
   chosen: SearchEntry,
@@ -275,7 +354,6 @@ async function installChosen(
   const selectSkillsCallback = async (
     skills_list: ScannedSkill[],
   ): Promise<string[]> => {
-    // If we know which skill to install (from registry search), auto-select it
     if (chosen.preSelectedSkill) {
       const match = skills_list.find((sk) => sk.name === chosen.preSelectedSkill);
       if (match) return [match.name];
