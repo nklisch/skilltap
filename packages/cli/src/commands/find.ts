@@ -279,21 +279,26 @@ async function runInteractiveSearch(
           ? formatInstallCount(entry.installs)
           : "";
       const source = `[${entry.source}]`;
-      const suffix = installs ? `${source}  ${installs}` : source;
-      const nameWidth = Math.min(
-        entry.name.length,
-        maxLabelWidth - suffix.length - 2,
-      );
-      const rawName = truncate(entry.name, nameWidth);
+      const meta = installs ? `${source}  ${installs}` : source;
+
+      // Layout: name  description  [source]  installs
+      const rawName = truncate(entry.name, 30);
       const name = positions
         ? highlightMatches(rawName, positions)
         : rawName;
-      const pad = Math.max(1, maxLabelWidth - rawName.length - suffix.length);
+
+      // Fill description into remaining space between name and meta
+      const fixedCols = rawName.length + 2 + meta.length + 2; // name + gaps + meta
+      const descSpace = Math.max(0, maxLabelWidth - fixedCols);
+      const desc = entry.description
+        ? truncate(entry.description, descSpace)
+        : "";
+      const pad = Math.max(1, maxLabelWidth - rawName.length - desc.length - meta.length - 2);
 
       if (active) {
-        return `${pc.green(S_RADIO_ACTIVE)} ${name}${" ".repeat(pad)}${pc.dim(suffix)}`;
+        return `${pc.green(S_RADIO_ACTIVE)} ${name}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(meta)}`;
       }
-      return `${pc.dim(S_RADIO_INACTIVE)} ${pc.dim(rawName)}${" ".repeat(pad)}${pc.dim(suffix)}`;
+      return `${pc.dim(S_RADIO_INACTIVE)} ${pc.dim(rawName)}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(meta)}`;
     },
   });
 
