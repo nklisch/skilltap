@@ -298,7 +298,7 @@ Search for skills across all configured taps. When `registry.allow_npm = true` (
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-i` | boolean | false | Interactive search mode — uses fzf when available, otherwise a text prompt + select |
+| `-i` | boolean | false | Interactive search mode with type-ahead filtering |
 | `--json` | boolean | false | Output as JSON |
 | `--npm` | boolean | false | Search npm registry **only** (skip taps). Blocked when `registry.allow_npm = false`. |
 
@@ -312,7 +312,7 @@ $ skilltap find review
   @acme/code-review  AI-powered code review skill               ● publisher    1.0.3  [npm]
 ```
 
-Interactive mode (`-i`) uses fzf when available for live fuzzy filtering. Without fzf, prompts for a search term then shows a clack select list. Enter on a result immediately proceeds to install.
+Interactive mode (`-i`) shows a clack autocomplete prompt with type-ahead filtering. Enter on a result immediately proceeds to install.
 
 If no taps are configured and npm is disabled: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
@@ -445,8 +445,22 @@ Welcome to skilltap setup!
 │  ● Ask me to decide
 │  ○ Always block (strict)
 │
+◇ Allow installing skills from npm registry?
+│  ● Yes  ○ No
+│
+◇ Share anonymous usage data?
+│  (OS, arch, command success/fail — no skill names or paths. Never sold.)
+│  ● Yes  ○ No
+│
 └ ✓ Wrote ~/.config/skilltap/config.toml
 ```
+
+**Subcommands:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `agent-mode` | Enable or disable agent mode |
+| `telemetry` | Manage anonymous usage telemetry |
 
 ---
 
@@ -1295,29 +1309,29 @@ Sends `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. Th
 
 ---
 
-## telemetry
+## config telemetry
 
 ```
-skilltap telemetry <subcommand>
+skilltap config telemetry <subcommand>
 ```
 
-Subcommands: `status`, `enable`, `disable`. Skipped in `SKIP_STARTUP_ARGS` (no update check, no telemetry notice).
+Subcommands: `status`, `enable`, `disable`. The word `telemetry` in argv causes `SKIP_STARTUP_ARGS` to suppress the consent prompt (same mechanism as before).
 
 ### Behavior
 
-**`telemetry status`**
+**`config telemetry status`**
 1. If `DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1`: print `Telemetry: disabled (<VAR>=1 overrides config)` and return
 2. If `config.telemetry.enabled`: print enabled status + `anonymous_id`
-3. Otherwise: print disabled status + opt-in hint
+3. Otherwise: print disabled status + opt-in hint (`'skilltap config telemetry enable'`)
 4. Always print the collected-data summary
 
-**`telemetry enable`**
+**`config telemetry enable`**
 1. Load config
 2. If `config.telemetry.anonymous_id` is empty, generate `crypto.randomUUID()`
 3. Set `enabled = true`, save config
 4. Print confirmation with the anonymous ID
 
-**`telemetry disable`**
+**`config telemetry disable`**
 1. Load config
 2. Set `enabled = false`, save config
 3. Print confirmation
@@ -1330,15 +1344,30 @@ Stored in `[telemetry]` section of `config.toml`:
 |-----|------|---------|-------------|
 | `enabled` | boolean | `false` | Telemetry active |
 | `anonymous_id` | string | `""` | Random UUID assigned on enable; never changes |
-| `notice_shown` | boolean | `false` | Internal — set when startup banner has been displayed |
+| `notice_shown` | boolean | `false` | Internal — set after the first-run consent prompt has been shown |
+
+### Startup Consent Prompt
+
+Runs once on first invocation (when `notice_shown` is `false`). Skipped in agent mode, CI, or when `DO_NOT_TRACK=1`/`SKILLTAP_TELEMETRY_DISABLED=1`.
+
+- **TTY (interactive):** Uses `@clack/prompts` `confirm` to ask:
+  > "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)"
+  - User accepts → `enabled = true`, `anonymous_id` generated if empty, `notice_shown = true` saved
+  - User declines or cancels → `enabled = false`, `notice_shown = true` saved
+- **Non-TTY (piped/scripted):** Prints the informational banner to stderr and marks `notice_shown = true` without enabling telemetry.
+- **`DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1`:** Marks `notice_shown = true` silently and returns without showing anything.
+
+The `config` wizard also includes a telemetry opt-in/out question, which sets `notice_shown = true`.
 
 ### Environment Overrides
 
-`DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1` suppress telemetry and silence the startup notice regardless of config.
+`DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1` suppress telemetry and silence the startup prompt regardless of config.
 
 ### What Is Collected
 
 OS, architecture, CLI version, command name, success/failure, error type, installed skill count, command duration. No skill names, repo URLs, paths, or personally identifiable information.
+
+**`skilltap_installed` event:** Fired once when a user opts in via the first-run consent prompt. Records OS, arch, and CLI version. Lets maintainers track adoption.
 
 ### Exit Codes
 

@@ -110,12 +110,13 @@ describe("completions — bash script", () => {
       "tap",
       "doctor",
       "completions",
-      "telemetry",
       "self-update",
     ];
     for (const cmd of commands) {
       expect(stdout).toContain(cmd);
     }
+    // telemetry is now a config subcommand, not top-level
+    expect(stdout).toContain("agent-mode telemetry");
   });
 
   test("script includes --get-completions dynamic calls", async () => {
@@ -161,11 +162,12 @@ describe("completions — zsh script", () => {
       "tap",
       "doctor",
       "completions",
-      "telemetry",
       "self-update",
     ]) {
       expect(stdout).toContain(cmd);
     }
+    // telemetry is now a config subcommand, not top-level
+    expect(stdout).toContain("agent-mode telemetry");
   });
 
   test("script includes dynamic completion calls", async () => {
@@ -206,11 +208,12 @@ describe("completions — fish script", () => {
       "tap",
       "doctor",
       "completions",
-      "telemetry",
       "self-update",
     ]) {
       expect(stdout).toContain(`-a ${cmd}`);
     }
+    // telemetry is now a config subcommand, not top-level
+    expect(stdout).toContain("-a 'telemetry'");
   });
 
   test("script includes dynamic completion calls", async () => {

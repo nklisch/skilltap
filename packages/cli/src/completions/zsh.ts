@@ -19,7 +19,6 @@ _skilltap() {
     'tap:Manage taps'
     'doctor:Check environment and state'
     'completions:Generate shell completions'
-    'telemetry:Manage telemetry settings'
     'self-update:Update the skilltap binary'
   )
 
@@ -104,7 +103,7 @@ _skilltap() {
           _arguments '--json[JSON output]'
           ;;
         config)
-          _arguments '1:subcommand:(agent-mode)'
+          _arguments '1:subcommand:(agent-mode telemetry)'
           ;;
         tap)
           local -a tap_commands
@@ -133,9 +132,6 @@ _skilltap() {
           ;;
         status)
           _arguments '--json[Output as JSON]'
-          ;;
-        telemetry)
-          _arguments '1:subcommand:(status enable disable)'
           ;;
         self-update)
           _arguments '--force[Re-install even if already on latest version]'

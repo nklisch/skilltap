@@ -1,5 +1,4 @@
-import { isCancel, outro, select, spinner, text } from "@clack/prompts";
-import { $ } from "bun";
+import { autocomplete, isCancel, outro, spinner } from "@clack/prompts";
 import type { Config, NpmSearchResult, ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
 import {
   installSkill,
@@ -48,7 +47,7 @@ export default defineCommand({
     interactive: {
       type: "boolean",
       alias: "i",
-      description: "Interactive search mode (fzf if available, otherwise guided)",
+      description: "Interactive search mode with type-ahead filtering",
       default: false,
     },
     json: {
@@ -83,7 +82,7 @@ export default defineCommand({
       }
       const entries = await fetchNpmEntries(query ?? "");
       const filtered = query ? filterEntries(entries, query) : entries;
-      outputResults(filtered, query, args.json as boolean, false);
+      outputResults(filtered, query, args.json as boolean);
       return;
     }
 
@@ -232,7 +231,6 @@ function outputResults(
   entries: SearchEntry[],
   query: string | undefined,
   json: boolean,
-  _interactive: boolean,
 ): void {
   if (entries.length === 0) {
     process.stdout.write(
@@ -260,98 +258,19 @@ async function runInteractive(
   entries: SearchEntry[],
   config: Config,
 ): Promise<void> {
-  // Try fzf first
-  const fzfPath = await $`which fzf`.quiet().text().catch(() => "");
-  if (fzfPath.trim()) {
-    const chosen = await runFzf(entries, fzfPath.trim());
-    if (chosen) {
-      await installChosen(chosen, config);
-    }
-    return;
-  }
-
-  // Fallback: text search → clack select
-  await runGuidedSearch(entries, config);
-}
-
-async function runFzf(
-  entries: SearchEntry[],
-  fzfBin: string,
-): Promise<SearchEntry | null> {
-  // Format: "{index}\t{name}\t{description}\t[{source}]"
-  const lines = entries.map(
-    (e, i) => `${i}\t${e.name}\t${e.description}${e.version ? ` ${e.version}` : ""}\t[${e.source}]`,
-  );
-  const input = lines.join("\n");
-
-  const proc = Bun.spawn(
-    [
-      fzfBin,
-      "--delimiter",
-      "\t",
-      "--with-nth",
-      "2..",
-      "--ansi",
-      "--height",
-      "~50%",
-      "--min-height",
-      "10",
-      "--reverse",
-      "--prompt",
-      "Search skills: ",
-      "--info",
-      "inline",
-    ],
-    {
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "inherit",
-    },
-  );
-
-  proc.stdin.write(input);
-  proc.stdin.end();
-
-  const output = await new Response(proc.stdout).text();
-  const exitCode = await proc.exited;
-
-  if (exitCode !== 0 || !output.trim()) return null;
-
-  const idx = parseInt(output.split("\t")[0] ?? "");
-  return Number.isNaN(idx) ? null : (entries[idx] ?? null);
-}
-
-async function runGuidedSearch(
-  entries: SearchEntry[],
-  config: Config,
-): Promise<void> {
-  const queryInput = await text({
-    message: "Search skills:",
-    placeholder: "type to filter by name, description…",
-  });
-
-  if (isCancel(queryInput)) process.exit(2);
-
-  const q = String(queryInput).trim();
-  const filtered = q ? filterEntries(entries, q) : entries;
-
-  if (filtered.length === 0) {
-    process.stdout.write(`No skills found matching '${q}'.\n`);
-    process.exit(0);
-  }
-
-  const result = await select({
+  const result = await autocomplete({
     message: "Select a skill to install:",
-    options: filtered.map((entry, i) => ({
+    options: entries.map((entry, i) => ({
       value: i,
       label: entry.name,
-      hint: `[${entry.source}] ${entry.description}`,
+      hint: `${entry.description}  [${entry.source}]${entry.version ? `  ${entry.version}` : ""}`,
     })),
+    placeholder: "Type to filter…",
   });
 
   if (isCancel(result)) process.exit(2);
 
-  const chosen = filtered[result as number];
+  const chosen = entries[result as number];
   if (!chosen) process.exit(1);
 
   await installChosen(chosen, config);

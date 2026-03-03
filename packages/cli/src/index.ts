@@ -21,13 +21,19 @@ const SKIP_STARTUP_ARGS = new Set([
   "telemetry",
   "status",
 ]);
+
+// These commands handle telemetry consent themselves — skip the startup prompt for them
+const SKIP_TELEMETRY_NOTICE_ARGS = new Set([...SKIP_STARTUP_ARGS, "config"]);
 const shouldRunStartup = !process.argv.slice(2).some((a) =>
   SKIP_STARTUP_ARGS.has(a),
 );
 
 if (shouldRunStartup) {
   await runStartupUpdateCheck();
-  await runTelemetryNotice();
+  const shouldRunTelemetryNotice = !process.argv.slice(2).some((a) =>
+    SKIP_TELEMETRY_NOTICE_ARGS.has(a),
+  );
+  if (shouldRunTelemetryNotice) await runTelemetryNotice();
 }
 
 async function runTelemetryNotice(): Promise<void> {
@@ -39,24 +45,56 @@ async function runTelemetryNotice(): Promise<void> {
   if (config["agent-mode"].enabled) return;
   if (process.env.CI) return;
   if (config.telemetry.notice_shown) return;
+  if (process.env.DO_NOT_TRACK === "1" || process.env.SKILLTAP_TELEMETRY_DISABLED === "1") {
+    // Mark shown so we don't re-display on every run
+    const updated = { ...config, telemetry: { ...config.telemetry, notice_shown: true } };
+    await saveConfig(updated);
+    return;
+  }
 
-  // Show once, then mark as shown
-  process.stderr.write(
-    "\n┌─ Telemetry Notice ─────────────────────────────────────────────────────┐\n" +
-    "│ skilltap can send anonymous usage data (OS, arch, command              │\n" +
-    "│ success/fail). No skill names, paths, or personal info collected.      │\n" +
-    "│ Data is never sold.                                                    │\n" +
-    "│                                                                        │\n" +
-    "│ Run 'skilltap telemetry enable' to opt in.                             │\n" +
-    "│ Set DO_NOT_TRACK=1 to silence this notice without opting in.           │\n" +
-    "└────────────────────────────────────────────────────────────────────────┘\n\n",
-  );
+  if (process.stdin.isTTY && process.stderr.isTTY) {
+    // Interactive: ask the user directly
+    const { confirm, isCancel } = await import("@clack/prompts");
+    process.stderr.write("\n");
+    const opted = await confirm({
+      message:
+        "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)",
+      initialValue: false,
+    });
+    const enabled = !isCancel(opted) && opted === true;
+    const anonymousId = enabled
+      ? config.telemetry.anonymous_id || crypto.randomUUID()
+      : config.telemetry.anonymous_id;
+    const updated = {
+      ...config,
+      telemetry: { ...config.telemetry, enabled, anonymous_id: anonymousId, notice_shown: true },
+    };
+    await saveConfig(updated);
 
-  const updated = {
-    ...config,
-    telemetry: { ...config.telemetry, notice_shown: true },
-  };
-  await saveConfig(updated);
+    if (enabled) {
+      const { sendEvent, telemetryBase } = await import("./telemetry");
+      sendEvent(updated, "skilltap_installed", {
+        ...telemetryBase(false),
+        version: VERSION,
+      });
+    }
+
+    process.stderr.write("\n");
+  } else {
+    // Non-interactive: show banner, don't enable
+    process.stderr.write(
+      "\n┌─ Telemetry Notice ─────────────────────────────────────────────────────┐\n" +
+      "│ skilltap can send anonymous usage data (OS, arch, command              │\n" +
+      "│ success/fail). No skill names, paths, or personal info collected.      │\n" +
+      "│ Data is never sold.                                                    │\n" +
+      "│                                                                        │\n" +
+      "│ Run 'skilltap telemetry enable' to opt in.                             │\n" +
+      "│ Set DO_NOT_TRACK=1 to silence this notice without opting in.           │\n" +
+      "└────────────────────────────────────────────────────────────────────────┘\n\n",
+    );
+    const updated = { ...config, telemetry: { ...config.telemetry, notice_shown: true } };
+    await saveConfig(updated);
+  }
 }
 
 async function runStartupUpdateCheck(): Promise<void> {
@@ -148,7 +186,6 @@ const main = defineCommand({
     verify: () => import("./commands/verify").then((m) => m.default),
     doctor: () => import("./commands/doctor").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
-    telemetry: () => import("./commands/telemetry").then((m) => m.default),
     "self-update": () =>
       import("./commands/self-update").then((m) => m.default),
     completions: () =>

@@ -21,7 +21,6 @@ complete -c skilltap -n '__fish_use_subcommand' -a config -d 'Interactive setup 
 complete -c skilltap -n '__fish_use_subcommand' -a tap -d 'Manage taps'
 complete -c skilltap -n '__fish_use_subcommand' -a doctor -d 'Check environment and state'
 complete -c skilltap -n '__fish_use_subcommand' -a completions -d 'Generate shell completions'
-complete -c skilltap -n '__fish_use_subcommand' -a telemetry -d 'Manage telemetry settings'
 complete -c skilltap -n '__fish_use_subcommand' -a self-update -d 'Update the skilltap binary'
 
 # install flags
@@ -79,7 +78,8 @@ complete -c skilltap -n '__fish_seen_subcommand_from create' -l dir -d 'Target d
 complete -c skilltap -n '__fish_seen_subcommand_from verify' -l json -d 'JSON output'
 
 # config subcommands
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode' -a 'agent-mode' -d 'Configure agent mode'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry' -a 'agent-mode' -d 'Configure agent mode'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry' -a 'telemetry' -d 'Manage telemetry settings'
 
 # tap subcommands
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'add' -d 'Add a tap'
@@ -99,8 +99,8 @@ complete -c skilltap -n '__fish_seen_subcommand_from completions' -xa 'bash zsh 
 # status flags
 complete -c skilltap -n '__fish_seen_subcommand_from status' -l json -d 'Output as JSON'
 
-# telemetry subcommands
-complete -c skilltap -n '__fish_seen_subcommand_from telemetry; and not __fish_seen_subcommand_from status enable disable' -xa 'status enable disable'
+# config telemetry subcommands
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from telemetry; and not __fish_seen_subcommand_from status enable disable' -xa 'status enable disable'
 
 # self-update flags
 complete -c skilltap -n '__fish_seen_subcommand_from self-update' -l force -d 'Re-install even if already on latest version'`;

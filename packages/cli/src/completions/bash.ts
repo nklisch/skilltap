@@ -8,7 +8,7 @@ _skilltap() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="status install remove list update find link unlink info create verify config tap doctor completions telemetry self-update"
+  local commands="status install remove list update find link unlink info create verify config tap doctor completions self-update"
   local tap_commands="add remove list update init"
   local agents="claude-code cursor codex gemini windsurf"
   local templates="basic npm multi"
@@ -83,7 +83,7 @@ _skilltap() {
       COMPREPLY=($(compgen -W "--json" -- "$cur"))
       ;;
     config)
-      COMPREPLY=($(compgen -W "agent-mode" -- "$cur"))
+      COMPREPLY=($(compgen -W "agent-mode telemetry" -- "$cur"))
       ;;
     tap)
       case "\${COMP_WORDS[2]}" in
@@ -105,9 +105,6 @@ _skilltap() {
       ;;
     status)
       COMPREPLY=($(compgen -W "--json" -- "$cur"))
-      ;;
-    telemetry)
-      COMPREPLY=($(compgen -W "status enable disable" -- "$cur"))
       ;;
     self-update)
       COMPREPLY=($(compgen -W "--force" -- "$cur"))

@@ -1,7 +1,7 @@
 import { loadConfig, saveConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine } from "../ui/format";
-import { isTelemetryEnabled } from "../telemetry";
+import { errorLine } from "../../ui/format";
+import { isTelemetryEnabled } from "../../telemetry";
 
 const status = defineCommand({
   meta: {
@@ -30,7 +30,7 @@ const status = defineCommand({
       process.stdout.write(`Anonymous ID: ${config.telemetry.anonymous_id}\n`);
     } else {
       process.stdout.write(`Telemetry: disabled\n`);
-      process.stdout.write(`Run 'skilltap telemetry enable' to opt in.\n`);
+      process.stdout.write(`Run 'skilltap config telemetry enable' to opt in.\n`);
     }
 
     process.stdout.write(`\nWhat's collected: OS, arch, CLI version, command success/failure,\n`);
@@ -65,7 +65,7 @@ const enable = defineCommand({
     }
 
     process.stdout.write(`Telemetry enabled. Anonymous ID: ${anonymousId}\n`);
-    process.stdout.write(`Run 'skilltap telemetry disable' to opt out at any time.\n`);
+    process.stdout.write(`Run 'skilltap config telemetry disable' to opt out at any time.\n`);
   },
 });
 

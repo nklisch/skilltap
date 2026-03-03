@@ -166,7 +166,7 @@ export async function searchPackages(
   const size = options?.size ?? 20;
 
   const keywordFilter = keywords.map((k) => `keywords:${k}`).join("+");
-  const text = encodeURIComponent(`${keywordFilter} ${query}`);
+  const text = encodeURIComponent([keywordFilter, query].filter(Boolean).join(" "));
   const url = `${registryUrl.replace(/\/$/, "")}/-/v1/search?text=${text}&size=${size}`;
 
   let response: Response;

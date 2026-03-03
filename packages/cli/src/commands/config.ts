@@ -27,6 +27,7 @@ export default defineCommand({
   },
   subCommands: {
     "agent-mode": () => import("./config/agent-mode").then((m) => m.default),
+    telemetry: () => import("./config/telemetry").then((m) => m.default),
   },
   async run({ args }) {
     if (!process.stdin.isTTY) {
@@ -121,6 +122,13 @@ export default defineCommand({
             message: "Allow installing skills from npm registry?",
             initialValue: existing.registry.allow_npm,
           }),
+
+        telemetry: () =>
+          confirm({
+            message:
+              "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)",
+            initialValue: existing.telemetry.enabled,
+          }),
       },
       {
         onCancel() {
@@ -129,6 +137,11 @@ export default defineCommand({
         },
       },
     );
+
+    const telemetryEnabled = result.telemetry as boolean;
+    const anonymousId = telemetryEnabled
+      ? existing.telemetry.anonymous_id || crypto.randomUUID()
+      : existing.telemetry.anonymous_id;
 
     const newConfig: Config = {
       ...existing,
@@ -146,6 +159,12 @@ export default defineCommand({
       registry: {
         ...existing.registry,
         allow_npm: result.allowNpm as boolean,
+      },
+      telemetry: {
+        ...existing.telemetry,
+        enabled: telemetryEnabled,
+        anonymous_id: anonymousId,
+        notice_shown: true,
       },
     };
 

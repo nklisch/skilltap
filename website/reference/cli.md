@@ -295,7 +295,7 @@ skilltap find [query] [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-i` | boolean | `false` | Interactive search — uses fzf when available, otherwise a text prompt + clack select. Enter on a result installs it. |
+| `-i` | boolean | `false` | Interactive search with type-ahead filtering. Enter on a result installs it. |
 | `--json` | boolean | `false` | Output as JSON |
 | `--npm` | boolean | `false` | Search npm registry **only** (skips taps). Blocked when `registry.allow_npm = false` in config. When `allow_npm = true`, npm results are included automatically in the default search — no flag required. |
 
@@ -308,7 +308,7 @@ skilltap find review
 # List all skills from taps + npm
 skilltap find
 
-# Interactive fuzzy finder (fzf or text+select fallback)
+# Interactive search — type to filter, Enter to install
 skilltap find -i
 
 # Search npm only
@@ -478,6 +478,8 @@ The wizard prompts for:
 3. Security scan level (static / static + semantic / off)
 4. Agent CLI for scanning (if semantic selected)
 5. Behavior when security warnings are found (ask / always block)
+6. Allow npm registry (yes / no)
+7. Anonymous usage telemetry (yes / no)
 
 Writes the result to `~/.config/skilltap/config.toml`.
 
@@ -1019,12 +1021,12 @@ See the [Shell Completions guide](/guide/shell-completions) for setup details an
 
 ---
 
-## skilltap telemetry
+## skilltap config telemetry
 
-Manage anonymous usage telemetry.
+Manage anonymous usage telemetry. Subcommand of `skilltap config`.
 
 ```
-skilltap telemetry <subcommand>
+skilltap config telemetry <subcommand>
 ```
 
 ### Subcommands
@@ -1046,7 +1048,7 @@ Telemetry preference is stored in `config.toml` under `[telemetry]`. Two environ
 
 **What is collected:** OS, architecture, CLI version, command name, success/failure, error type, installed skill count, command duration. No skill names, paths, repo URLs, or personal information are ever collected.
 
-**`telemetry status` output (example):**
+**`config telemetry status` output (example):**
 ```
 Telemetry: enabled
 Anonymous ID: a3f8c1d2-...
@@ -1056,19 +1058,23 @@ error type, skill count, duration. No skill names, paths, or personal info.
 Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.
 ```
 
-**Startup notice:** On first run (before the preference is recorded), a banner is printed to stderr prompting the user to opt in. Set `DO_NOT_TRACK=1` to silence it without opting in. The `telemetry` and `status` commands never trigger the startup notice.
+**First-run consent prompt:** On the first interactive run (before a preference is recorded), skilltap asks via a yes/no prompt whether you want to share anonymous usage data. Answering yes enables telemetry and fires a one-time `skilltap_installed` event recording that you installed the tool. In non-interactive environments (piped input, CI), a one-time informational banner is printed to stderr instead, and telemetry remains disabled.
+
+Running `skilltap config` also includes a telemetry opt-in/out question.
+
+Set `DO_NOT_TRACK=1` to skip the prompt entirely without opting in. The `config telemetry` and `status` commands never trigger the prompt.
 
 ### Examples
 
 ```bash
 # Check current state
-skilltap telemetry status
+skilltap config telemetry status
 
 # Opt in
-skilltap telemetry enable
+skilltap config telemetry enable
 
 # Opt out
-skilltap telemetry disable
+skilltap config telemetry disable
 ```
 
 ---

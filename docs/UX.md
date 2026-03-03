@@ -443,7 +443,7 @@ skilltap find [query] [flags]
 ### Flags
 
 ```
--i                 Interactive search (fzf if installed, else text prompt + select)
+-i                 Interactive search with type-ahead filtering
 --json             Output as JSON
 --npm              Search npm registry only (skip taps)
 ```
@@ -462,8 +462,7 @@ $ skilltap find git
   git-workflow       Git branching workflow guidance             [community]
 
 $ skilltap find -i
-# Opens fzf picker (or text+select if fzf not installed)
-# Live filter → ↑↓ to navigate → Enter to install
+# Opens autocomplete prompt — type to filter, ↑↓ to navigate, Enter to install
 
 $ skilltap find
 # No query: lists all skills from all taps + npm
