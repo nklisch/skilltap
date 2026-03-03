@@ -284,18 +284,25 @@ async function runPicker(
   config: Config,
 ): Promise<void> {
   const width = termWidth();
-  // Reserve space: name column + padding + source tag + some breathing room
-  // hint = "description  [source]  1.2K installs"
-  const maxHintWidth = Math.max(30, width - 30);
+  const maxLabelWidth = Math.max(40, width - 10);
 
   const result = await autocomplete({
     message: "Select a skill to install:",
     options: entries.map((entry, i) => ({
       value: i,
-      label: entry.name,
-      hint: formatPickerHint(entry, maxHintWidth),
+      label: formatPickerLabel(entry, maxLabelWidth),
+      hint: truncate(entry.description || "", 60) || undefined,
     })),
     placeholder: "Type to filter…",
+    filter: (search, option) => {
+      const entry = entries[option.value as number];
+      if (!entry) return false;
+      const s = search.toLowerCase();
+      return (
+        entry.name.toLowerCase().includes(s) ||
+        entry.description.toLowerCase().includes(s)
+      );
+    },
   });
 
   if (isCancel(result)) process.exit(2);
@@ -306,19 +313,17 @@ async function runPicker(
   await installChosen(chosen, config);
 }
 
-function formatPickerHint(entry: SearchEntry, maxWidth: number): string {
-  const source = `[${entry.source}]`;
+function formatPickerLabel(entry: SearchEntry, maxWidth: number): string {
   const installs = entry.installs !== undefined
     ? formatInstallCount(entry.installs)
     : "";
-  // Fixed-width parts: source + installs + separators
-  const fixedWidth = source.length + (installs ? installs.length + 4 : 2);
-  const descWidth = Math.max(10, maxWidth - fixedWidth);
-  const desc = truncate(entry.description || "—", descWidth);
-
-  return installs
-    ? `${desc}  ${source}  ${installs}`
-    : `${desc}  ${source}`;
+  const source = `[${entry.source}]`;
+  const suffix = installs ? `${source}  ${installs}` : source;
+  // Pad name to align suffixes, then append
+  const nameWidth = Math.min(entry.name.length, maxWidth - suffix.length - 2);
+  const name = truncate(entry.name, nameWidth);
+  const pad = Math.max(1, maxWidth - name.length - suffix.length);
+  return `${name}${" ".repeat(pad)}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------
