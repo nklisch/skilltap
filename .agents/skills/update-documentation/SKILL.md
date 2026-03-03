@@ -60,6 +60,15 @@ condition lists. `website/reference/` pages need their tables kept accurate. Bot
 ```bash
 cd /home/nathan/dev/skilltap/website && bun scripts/gen-llms-txt.ts
 ```
+This concatenates all pages in sidebar order into a single Markdown file for AI bulk ingestion. The script is the source of truth for page order — if a new page is added, add it to `PAGES` in `website/scripts/gen-llms-txt.ts`.
 
-**5. Update `MEMORY.md` for new stable patterns, gotchas, or completed phases.**
+**5. Update `llms.txt` only when page structure changes.**
+`website/public/llms.txt` is a manually maintained index following the [llms.txt standard](https://llmstxt.org/). It lists pages — not individual commands or flags. Update it when:
+- A new guide or reference *page* is added or removed
+- The site tagline / description changes
+- A link in the Optional section needs updating
+
+Do **not** update it for: new commands on existing pages, new config keys, flag changes, or content edits within an existing page.
+
+**6. Update `MEMORY.md` for new stable patterns, gotchas, or completed phases.**
 Keep it under 200 lines — be terse, put detail in a topic file if needed.
