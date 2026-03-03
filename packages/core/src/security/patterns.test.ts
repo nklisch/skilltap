@@ -160,6 +160,19 @@ describe("detectObfuscation", () => {
     expect(matches.some((m) => m.category === "Base64 block")).toBe(false);
   });
 
+  test("does not flag long camelCase identifiers (20+ chars)", () => {
+    const content =
+      "allowImportingTsExtensions\nallowSyntheticDefaultImports\nforceConsistentCasingInFileNames";
+    const matches = detectObfuscation(content);
+    expect(matches.some((m) => m.category === "Base64 block")).toBe(false);
+  });
+
+  test("does not flag slash-separated words like JavaScript/TypeScript", () => {
+    const content = "Supports JavaScript/TypeScript out of the box";
+    const matches = detectObfuscation(content);
+    expect(matches.some((m) => m.category === "Base64 block")).toBe(false);
+  });
+
   test("detects hex-encoded strings", () => {
     const content = "Run: \\x63\\x75\\x72\\x6c\\x20\\x68\\x74\\x74\\x70\\x73";
     const matches = detectObfuscation(content);
@@ -225,6 +238,18 @@ describe("detectSuspiciousUrls", () => {
     const content = "Docs at https://docs.anthropic.com/claude/overview";
     expect(detectSuspiciousUrls(content)).toEqual([]);
   });
+
+  test("does not flag localhost URLs with interpolation", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional — testing detection of interpolation in URLs
+    const content = "const url = `http://localhost:${server.port}/api`";
+    expect(detectSuspiciousUrls(content)).toEqual([]);
+  });
+
+  test("does not flag 127.0.0.1 URLs with interpolation", () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional — testing detection of interpolation in URLs
+    const content = "fetch(`http://127.0.0.1:${port}/health`)";
+    expect(detectSuspiciousUrls(content)).toEqual([]);
+  });
 });
 
 describe("detectDangerousPatterns", () => {
@@ -273,10 +298,17 @@ describe("detectDangerousPatterns", () => {
     expect(matches.some((m) => m.category === "Credential access")).toBe(true);
   });
 
-  test("detects process.env access", () => {
+  test("detects process.env access for sensitive vars", () => {
     const content = "Access token via process.env.SECRET_TOKEN";
     const matches = detectDangerousPatterns(content);
     expect(matches.some((m) => m.category === "Credential access")).toBe(true);
+  });
+
+  test("does not flag process.env for non-sensitive vars", () => {
+    const content =
+      "const env = process.env.NODE_ENV;\nconst port = process.env.PORT;";
+    const matches = detectDangerousPatterns(content);
+    expect(matches.some((m) => m.category === "Credential access")).toBe(false);
   });
 
   test("returns empty for clean content", () => {

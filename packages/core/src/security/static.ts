@@ -28,6 +28,7 @@ export type StaticWarning = {
   raw: string;
   visible?: string;
   decoded?: string;
+  context?: string[];
 };
 
 const DEFAULT_MAX_SIZE = 51200; // 50KB
@@ -150,11 +151,29 @@ async function scanSingleFile(
     }
   }
 
+  const fileWarnings: StaticWarning[] = [];
   for (const detect of DETECTORS) {
     for (const m of detect(content)) {
-      warnings.push({ file: relPath, ...m });
+      fileWarnings.push({ file: relPath, ...m });
     }
   }
+
+  // Attach ±1 surrounding lines as context for line-level warnings
+  if (fileWarnings.length > 0) {
+    const fileLines = content.split("\n");
+    for (const w of fileWarnings) {
+      const lineNum = Array.isArray(w.line) ? w.line[0] : w.line;
+      if (lineNum > 0) {
+        const ctx: string[] = [];
+        if (lineNum > 1) ctx.push(fileLines[lineNum - 2]!);
+        ctx.push(fileLines[lineNum - 1]!);
+        if (lineNum < fileLines.length) ctx.push(fileLines[lineNum]!);
+        w.context = ctx;
+      }
+    }
+  }
+
+  warnings.push(...fileWarnings);
 }
 
 export async function scanStatic(

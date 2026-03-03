@@ -1,4 +1,5 @@
 import type { SemanticWarning, StaticWarning } from "@skilltap/core";
+import { ansi } from "./format";
 
 export function formatWarnings(
   warnings: StaticWarning[],
@@ -14,6 +15,18 @@ export function formatWarnings(
     if (w.visible !== undefined && w.visible !== w.raw) {
       lines.push(`  │ Raw: "${w.raw}"`);
       lines.push(`  │ Visible: "${w.visible}"`);
+    } else if (w.context && w.context.length > 0) {
+      const startLine = Array.isArray(w.line) ? w.line[0] : w.line;
+      const matchLineIdx = startLine > 1 ? 1 : 0; // index of matched line in context array
+      for (let i = 0; i < w.context.length; i++) {
+        const num = startLine - matchLineIdx + i;
+        const prefix = `  │ ${ansi.dim(String(num).padStart(4))}  `;
+        if (i === matchLineIdx) {
+          lines.push(`${prefix}${w.context[i]}`);
+        } else {
+          lines.push(`${prefix}${ansi.dim(w.context[i]!)}`);
+        }
+      }
     } else {
       lines.push(`  │ ${w.raw}`);
     }

@@ -169,9 +169,10 @@ export function detectObfuscation(content: string): PatternMatch[] {
       const hasPadding = base.length < m[0].length;
       // Short matches need extra confirmation to avoid flagging English words
       if (base.length < 20 && !hasPadding && !looksLikeBase64(base)) continue;
-      // All-lowercase + slashes looks like a doc word-list (e.g. "name/description/tags"),
-      // not base64 (real base64 always has uppercase A-Z and/or digits)
-      if (/^[a-z/]+$/.test(base)) continue;
+      // Letter-only sequences (with optional slashes) are identifiers or words, not base64.
+      // Real base64 of 10+ chars statistically always contains digits or + characters.
+      // P(all-letters in 20 random base64 chars) ≈ 1.5%, at 30 chars ≈ 0.18%.
+      if (/^[a-zA-Z/]+$/.test(base)) continue;
       let decoded: string | undefined;
       try {
         const bytes = Buffer.from(m[0], "base64");
@@ -262,7 +263,10 @@ export function detectSuspiciousUrls(content: string): PatternMatch[] {
       const isSuspiciousDomain = SUSPICIOUS_DOMAINS.some((d) =>
         url.includes(d),
       );
-      const hasInterpolation = /\$\{|\$\(|\{\{/.test(url);
+      const isLocalhost =
+        /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/.test(url);
+      const hasInterpolation =
+        !isLocalhost && /\$\{|\$\(|\{\{/.test(url);
       const hasSuspiciousParams = /[?&](?:data|exfil|d|payload)=/.test(url);
 
       if (isSuspiciousDomain || hasInterpolation || hasSuspiciousParams) {
@@ -286,7 +290,7 @@ export function detectDangerousPatterns(content: string): PatternMatch[] {
     /~\/\.(?:ssh|aws|gnupg|config)\/|\/etc\/(?:passwd|shadow|hosts)\b/;
   // Credential/environment variable access
   const credentialRe =
-    /\$(?:SSH_(?:KEY|AUTH_SOCK|PRIVATE_KEY)|AWS_(?:SECRET|ACCESS_KEY(?:_ID)?)|GITHUB_TOKEN|API_KEY|PASSWORD\b|TOKEN\b)|process\.env\./;
+    /\$(?:SSH_(?:KEY|AUTH_SOCK|PRIVATE_KEY)|AWS_(?:SECRET|ACCESS_KEY(?:_ID)?)|GITHUB_TOKEN|API_KEY|PASSWORD\b|TOKEN\b)|process\.env\.(?:API_KEY|SECRET|TOKEN|PASSWORD|PRIVATE_KEY|CREDENTIAL|AWS_|SSH_|GITHUB_TOKEN)/;
 
   for (const [i, line] of lines.entries()) {
     if (shellCmdRe.test(line)) {
