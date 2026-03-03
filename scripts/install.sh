@@ -164,15 +164,47 @@ main() {
   ok "Installed skilltap ${VERSION} to ${INSTALL_DIR}/skilltap"
   echo ""
 
-  # Check PATH
+  # Update shell profiles if INSTALL_DIR isn't already on PATH
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;
     *)
-      bold "Add skilltap to your PATH:"
-      echo ""
-      echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
-      echo ""
-      echo "Then add that line to your shell profile (~/.bashrc, ~/.zshrc, etc.)"
+      EXPORT_LINE="export PATH=\"${INSTALL_DIR}:\$PATH\""
+      PROFILE_UPDATED=""
+
+      # Build list of profile files to update based on current shell
+      case "$(basename "${SHELL:-sh}")" in
+        zsh)  PROFILES="$HOME/.zshrc $HOME/.profile" ;;
+        bash) PROFILES="$HOME/.bashrc $HOME/.bash_profile $HOME/.profile" ;;
+        fish) PROFILES="" ;;
+        *)    PROFILES="$HOME/.profile" ;;
+      esac
+
+      for PROFILE in $PROFILES; do
+        if [ -f "$PROFILE" ] || [ "$PROFILE" = "$HOME/.profile" ]; then
+          if grep -qF "$INSTALL_DIR" "$PROFILE" 2>/dev/null; then
+            PROFILE_UPDATED="$PROFILE"
+            break
+          fi
+          printf '\n# skilltap\n%s\n' "$EXPORT_LINE" >> "$PROFILE"
+          PROFILE_UPDATED="$PROFILE"
+          break
+        fi
+      done
+
+      if [ -n "$PROFILE_UPDATED" ]; then
+        ok "Added to PATH in ${PROFILE_UPDATED}"
+        echo ""
+        bold "To use skilltap now, run:"
+        echo ""
+        echo "  source ${PROFILE_UPDATED}"
+        echo ""
+      else
+        bold "Add skilltap to your PATH:"
+        echo ""
+        echo "  ${EXPORT_LINE}"
+        echo ""
+        echo "Then add that line to your shell profile."
+      fi
       ;;
   esac
 }
