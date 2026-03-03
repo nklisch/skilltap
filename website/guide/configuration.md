@@ -78,7 +78,7 @@ Controls access to external package registries.
 | ----------- | ------- | ------- | ------------------------------------------------------------- |
 | `allow_npm` | boolean | `true`  | Allow npm registry installs and search. Set to `false` for air-gapped or restricted environments. |
 
-When `allow_npm = false`, both `skilltap install npm:...` and `skilltap find --npm` exit with an error.
+When `allow_npm = false`, `skilltap install npm:...` and `skilltap find --npm` exit with an error, and npm results are excluded from the default `skilltap find` output.
 
 ## How config and flags compose
 

@@ -231,15 +231,46 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
 }
 
 export function searchTaps(skills: TapEntry[], query: string): TapEntry[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return skills;
-  return skills.filter(({ skill }) => {
-    return (
-      skill.name.toLowerCase().includes(q) ||
-      skill.description.toLowerCase().includes(q) ||
-      skill.tags.some((tag) => tag.toLowerCase().includes(q))
-    );
-  });
+  const tokens = query
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (tokens.length === 0) return skills;
+
+  const scored: Array<{ entry: TapEntry; score: number }> = [];
+
+  for (const entry of skills) {
+    const { skill } = entry;
+    const name = skill.name.toLowerCase();
+    const desc = skill.description.toLowerCase();
+    const tags = skill.tags.map((t) => t.toLowerCase());
+
+    let score = 0;
+    let allMatch = true;
+
+    for (const token of tokens) {
+      const inName = name.includes(token);
+      const inDesc = desc.includes(token);
+      const inTags = tags.some((t) => t.includes(token));
+
+      if (!inName && !inDesc && !inTags) {
+        allMatch = false;
+        break;
+      }
+
+      if (name === token) score += 8;
+      else if (name.startsWith(token)) score += 4;
+      else if (inName) score += 2;
+      if (tags.some((t) => t === token)) score += 3;
+      else if (inTags) score += 1;
+      if (inDesc) score += 1;
+    }
+
+    if (allMatch) scored.push({ entry, score });
+  }
+
+  return scored.sort((a, b) => b.score - a.score).map((s) => s.entry);
 }
 
 export async function initTap(name: string): Promise<Result<void, UserError>> {

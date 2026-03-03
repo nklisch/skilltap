@@ -97,7 +97,7 @@ The `npm:` prefix downloads the tarball from the npm registry and verifies its S
 **Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
 
 ::: tip Finding npm skills
-Search the npm registry with `skilltap find <query> --npm`. The `--npm` flag is a boolean switch; the search term is the positional argument. Omit the query to list all packages with the `agent-skill` keyword.
+When `registry.allow_npm = true` (the default), `skilltap find` automatically includes npm results alongside tap results. Use `--npm` to search npm only. Toggle this setting in `skilltap config`.
 :::
 
 ## Scope: global vs project

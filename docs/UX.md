@@ -443,18 +443,18 @@ skilltap find [query] [flags]
 ### Flags
 
 ```
--i                 Interactive fuzzy finder
+-i                 Interactive search (fzf if installed, else text prompt + select)
 --json             Output as JSON
---npm <query>      Search npm registry instead of taps
+--npm              Search npm registry only (skip taps)
 ```
 
 ### Examples
 
 ```
 $ skilltap find review
-
-  code-review        Thorough code review with security focus   [home]
-  termtube-review    Termtube review checklist                  [home]
+# Taps + npm merged (when allow_npm = true)
+  code-review        Thorough code review with security focus   ◆ curated    [home]
+  @acme/code-review  AI-powered code review skill               ● publisher  1.0.3  [npm]
 
 $ skilltap find git
 
@@ -462,26 +462,26 @@ $ skilltap find git
   git-workflow       Git branching workflow guidance             [community]
 
 $ skilltap find -i
-# Opens fullscreen fuzzy finder
-# Type to filter → ↑↓ to navigate → Enter to install
+# Opens fzf picker (or text+select if fzf not installed)
+# Live filter → ↑↓ to navigate → Enter to install
 
 $ skilltap find
-# No query: lists all skills from all taps
+# No query: lists all skills from all taps + npm
 
 $ skilltap find --json
-[{"name":"commit-helper","description":"...","tap":"home","tags":["git"]}]
+[{"name":"commit-helper","description":"...","source":"home","installRef":"commit-helper"}]
 
 $ skilltap find --npm review
-# Searches npm registry for packages with agent-skill keyword matching "review"
+# Search npm only
   @acme/code-review    1.0.3    AI-powered code review skill    [npm]
   @user/pr-review      2.1.0    Pull request review checklist   [npm]
 
 $ skilltap find --npm review  # when registry.allow_npm = false in config
 error: npm registry search is disabled by config (registry.allow_npm = false).
-hint: To allow npm search, set allow_npm = true in the [registry] section of config.toml.
+hint: To allow npm search, set allow_npm = true via 'skilltap config'.
 ```
 
-Empty state:
+Empty state (no taps, npm disabled):
 
 ```
 $ skilltap find review

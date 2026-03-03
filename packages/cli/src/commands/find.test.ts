@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   commitAll,
@@ -28,6 +29,12 @@ async function runCli(
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
   return { exitCode, stdout, stderr };
+}
+
+async function writeConfig(configDir: string, toml: string): Promise<void> {
+  const dir = join(configDir, "skilltap");
+  await mkdir(dir, { recursive: true });
+  await Bun.write(join(dir, "config.toml"), toml);
 }
 
 async function createLocalTap(
@@ -64,15 +71,27 @@ afterEach(async () => {
 });
 
 describe("find — no taps configured", () => {
-  test("shows no taps message", async () => {
+  test("shows no taps message when npm disabled", async () => {
+    await writeConfig(configDir, "[registry]\nallow_npm = false\n");
     const { exitCode, stdout } = await runCli(["find"], homeDir, configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No taps configured");
+  });
+
+  test("shows npm results when allow_npm = true and no taps", async () => {
+    const { exitCode, stdout } = await runCli(
+      ["find", "refactoring"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("[npm]");
   });
 });
 
 describe("find — with taps", () => {
   test("lists all skills when no query", async () => {
+    await writeConfig(configDir, "[registry]\nallow_npm = false\n");
     const tap = await createLocalTap([
       {
         name: "commit-helper",
@@ -100,6 +119,7 @@ describe("find — with taps", () => {
   });
 
   test("filters by query", async () => {
+    await writeConfig(configDir, "[registry]\nallow_npm = false\n");
     const tap = await createLocalTap([
       {
         name: "commit-helper",
@@ -130,6 +150,7 @@ describe("find — with taps", () => {
   });
 
   test("shows no results message when query has no matches", async () => {
+    await writeConfig(configDir, "[registry]\nallow_npm = false\n");
     const tap = await createLocalTap([
       {
         name: "commit-helper",
@@ -152,6 +173,7 @@ describe("find — with taps", () => {
   });
 
   test("--json outputs valid JSON", async () => {
+    await writeConfig(configDir, "[registry]\nallow_npm = false\n");
     const tap = await createLocalTap([
       {
         name: "commit-helper",
@@ -172,14 +194,15 @@ describe("find — with taps", () => {
       expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].name).toBe("commit-helper");
-      expect(parsed[0].tap).toBe("home");
-      expect(Array.isArray(parsed[0].tags)).toBe(true);
+      expect(parsed[0].source).toBe("home");
+      expect(parsed[0].installRef).toBe("commit-helper");
     } finally {
       await tap.cleanup();
     }
   });
 
   test("--json with query filter", async () => {
+    await writeConfig(configDir, "[registry]\nallow_npm = false\n");
     const tap = await createLocalTap([
       {
         name: "commit-helper",
@@ -203,6 +226,36 @@ describe("find — with taps", () => {
       const parsed = JSON.parse(stdout);
       expect(parsed).toHaveLength(1);
       expect(parsed[0].name).toBe("commit-helper");
+    } finally {
+      await tap.cleanup();
+    }
+  });
+
+  test("merges npm results when allow_npm = true", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "my-local-skill",
+        description: "Local tap skill",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runCli(
+        ["find", "--json"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      const parsed = JSON.parse(stdout);
+      expect(Array.isArray(parsed)).toBe(true);
+      // Should have both the tap skill and npm results
+      const tapSkill = parsed.find((e: { source: string }) => e.source === "home");
+      const npmSkill = parsed.find((e: { source: string }) => e.source === "npm");
+      expect(tapSkill).toBeDefined();
+      expect(npmSkill).toBeDefined();
+      // npm installRef should be prefixed with "npm:"
+      expect(npmSkill.installRef).toMatch(/^npm:/);
     } finally {
       await tap.cleanup();
     }
