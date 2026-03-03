@@ -439,13 +439,16 @@ Checking my-local-skill... Skipped (linked)
 ## find
 
 ```
-skilltap find [query] [flags]
+skilltap find [query...] [flags]
 ```
+
+Multiple words can be given without quoting — they are joined into a single query.
 
 ### Flags
 
 ```
--i                 Interactive search with type-ahead filtering
+-i, --interactive  Interactive search with type-ahead filtering
+-l, --local        Search local taps only (skip registries)
 --json             Output as JSON
 ```
 
@@ -462,11 +465,17 @@ $ skilltap find git
   commit-helper      Conventional commit messages               [home]
   git-workflow       Git branching workflow guidance             [community]
 
+$ skilltap find git hooks
+# Multi-word query — no quoting needed
+
 $ skilltap find -i
 # Opens autocomplete prompt — type to filter, ↑↓ to navigate, Enter to install
 
 $ skilltap find
 # No query: lists all skills from configured taps only
+
+$ skilltap find --local react
+# Search taps only, skip registries
 
 $ skilltap find --json
 [{"name":"commit-helper","description":"...","source":"home","installRef":"commit-helper"},

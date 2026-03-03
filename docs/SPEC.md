@@ -284,7 +284,7 @@ If not found anywhere, exit 1 with: `Skill 'name' not found. Try 'skilltap find 
 
 ---
 
-### `skilltap find [query]`
+### `skilltap find [query...]`
 
 Search for skills across all configured taps and the skills.sh public registry.
 
@@ -292,7 +292,7 @@ Search for skills across all configured taps and the skills.sh public registry.
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `query` | No | Search term (matched against name, description, tags) |
+| `query` | No | Search term (matched against name, description, tags). Multiple words can be given without quoting — they are joined into a single query. |
 
 **Options:**
 
@@ -300,11 +300,13 @@ Search for skills across all configured taps and the skills.sh public registry.
 |------|------|---------|-------------|
 | `-i` | boolean | false | Interactive search mode with type-ahead filtering |
 | `--json` | boolean | false | Output as JSON |
+| `-l, --local` | boolean | false | Search local taps only (skip registries) |
 
 **Behavior:**
 
 - Without a query: lists all skills from configured taps (no registry fetch).
-- With a query (≥ 2 characters): searches taps locally AND fetches results from the skills.sh registry (`https://skills.sh/api/search?q=...&limit=20`). Registry results are appended after tap results.
+- With a query (≥ 2 characters): searches taps locally AND fetches results from the skills.sh registry (`https://skills.sh/api/search?q=...&limit=20`). Registry results are sorted by install count (descending) and appended after tap results.
+- With `--local`: skips all registry searches, only shows tap results.
 - Install counts from skills.sh are shown in the results table.
 
 **Output:**

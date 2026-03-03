@@ -66,7 +66,13 @@ Find skills by name, description, or tag across all your registered taps:
 skilltap find <query>
 ```
 
-This prints a table of matching skills with their tap, name, description, and tags.
+Multi-word queries work without quoting — `skilltap find git hooks` and `skilltap find "git hooks"` are equivalent.
+
+This prints a table of matching skills with their tap, name, description, and tags. By default, results from the skills.sh public registry are also included (sorted by install count). To search only your local taps:
+
+```bash
+skilltap find --local <query>
+```
 
 For interactive selection (pick a result and install it directly):
 
