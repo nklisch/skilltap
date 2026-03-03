@@ -1,6 +1,6 @@
 import type { Config } from "@skilltap/core";
 
-const GA4_MEASUREMENT_ID = "G-P45TWRKXC4";
+const GA4_MEASUREMENT_ID = "G-B0D0L2YB0N";
 const GA4_API_SECRET = process.env.GA4_API_SECRET ?? "";
 const GA4_ENDPOINT = `https://www.google-analytics.com/mp/collect?measurement_id=${GA4_MEASUREMENT_ID}&api_secret=${GA4_API_SECRET}`;
 

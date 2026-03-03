@@ -23,11 +23,11 @@ export default defineConfig({
     ["link", { rel: "icon", href: "/favicon.svg" }],
 
     // Google Analytics
-    ["script", { async: "", src: "https://www.googletagmanager.com/gtag/js?id=G-P45TWRKXC4" }],
+    ["script", { async: "", src: "https://www.googletagmanager.com/gtag/js?id=G-B0D0L2YB0N" }],
     ["script", {}, `window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
-gtag('config', 'G-P45TWRKXC4');`],
+gtag('config', 'G-B0D0L2YB0N');`],
 
     // Open Graph
     ["meta", { property: "og:type", content: "website" }],
