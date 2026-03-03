@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "bun scripts/gen-llms-txt.ts && vitepress build",
+    "build": "bun scripts/gen-llms-txt.ts && cp ../install.sh public/install.sh && vitepress build",
     "preview": "vitepress preview"
   },
   "devDependencies": {
