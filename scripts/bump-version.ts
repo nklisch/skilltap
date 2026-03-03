@@ -3,8 +3,10 @@
  * Usage:  bun scripts/bump-version.ts <patch|minor|major|x.y.z>
  *
  * Bumps the version in packages/core/package.json and packages/cli/package.json
- * in lockstep. core/package.json is the source of truth read by VERSION at runtime.
+ * in lockstep, commits, and tags. core/package.json is the source of truth
+ * read by VERSION at runtime.
  */
+import { $ } from "bun";
 
 const PACKAGES = [
   "packages/core/package.json",
@@ -44,4 +46,8 @@ for (const path of PACKAGES) {
   console.log(`  updated ${path}`);
 }
 
-console.log(`\nDone. Commit with: git commit -am "Release v${next}"`);
+// Commit and tag
+const tag = `v${next}`;
+await $`git commit -am "Release ${tag}"`;
+await $`git tag ${tag}`;
+console.log(`\nTagged ${tag}. Push with: git push --follow-tags`);
