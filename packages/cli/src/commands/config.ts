@@ -130,7 +130,9 @@ export default defineCommand({
           confirm({
             message:
               "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)",
-            initialValue: existing.telemetry.enabled,
+            initialValue: existing.telemetry.notice_shown
+              ? existing.telemetry.enabled
+              : true,
           }),
       },
       {
