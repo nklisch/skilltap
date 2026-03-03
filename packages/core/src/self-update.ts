@@ -1,5 +1,6 @@
 import { basename, join } from "node:path";
 import { getConfigDir } from "./config";
+import { extractStderr } from "./shell";
 import { err, NetworkError, ok, type Result, UserError } from "./types";
 
 export type UpdateType = "patch" | "minor" | "major";
@@ -169,7 +170,7 @@ export async function downloadAndInstall(
     Bun.$`rm -f ${tmpPath}`.quiet();
     return err(
       new UserError(
-        `Failed to replace binary: ${e}`,
+        `Failed to replace binary: ${extractStderr(e)}`,
         "Try running with sudo, or install via npm: npm install -g skilltap",
       ),
     );

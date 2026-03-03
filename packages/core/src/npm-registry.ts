@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { $ } from "bun";
+import { debug } from "./debug";
+import { extractStderr } from "./shell";
 import type { Result } from "./types";
 import { err, NetworkError, ok, UserError } from "./types";
 
@@ -156,6 +158,7 @@ export async function downloadAndExtract(
   dest: string,
   integrity?: string,
 ): Promise<Result<string, NetworkError>> {
+  debug("downloadAndExtract", { tarballUrl, dest });
   let response: Response;
   try {
     response = await fetch(tarballUrl);
@@ -184,6 +187,7 @@ export async function downloadAndExtract(
     const digest = hasher.digest("base64");
     const expected = integrity.slice("sha512-".length);
     if (digest !== expected) {
+      debug("integrity check failed", { expected, got: digest });
       return err(
         new NetworkError(
           "Tarball integrity check failed. The download may be corrupted.",
@@ -199,8 +203,10 @@ export async function downloadAndExtract(
   // Extract (npm tarballs always extract to a `package/` subdirectory)
   try {
     await $`tar -xzf ${tarPath} -C ${dest}`.quiet();
-  } catch {
-    return err(new NetworkError("Failed to extract npm package tarball."));
+  } catch (e) {
+    const detail = extractStderr(e);
+    debug("tar extraction failed", { tarballUrl, error: detail });
+    return err(new NetworkError(`Failed to extract npm package tarball: ${detail}`));
   }
 
   return ok(join(dest, "package"));

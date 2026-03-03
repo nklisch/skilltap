@@ -1,5 +1,6 @@
 import { version } from "../package.json";
 export const VERSION: string = version;
+export * from "./debug";
 export * from "./doctor";
 
 export * from "./adapters";
@@ -26,4 +27,5 @@ export * from "./trust";
 export * from "./policy";
 export * from "./validate";
 export * from "./self-update";
+export * from "./shell";
 export * from "./types";

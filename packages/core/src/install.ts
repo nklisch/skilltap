@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
+import { debug } from "./debug";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import { makeTmpDir, removeTmpDir } from "./fs";
@@ -16,6 +17,7 @@ import type { StaticWarning } from "./security";
 import { scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
+import { wrapShell } from "./shell";
 import { createAgentSymlinks } from "./symlink";
 import type { TapEntry } from "./taps";
 import { loadTaps } from "./taps";
@@ -218,7 +220,12 @@ async function buildPlacements(params: {
     // git multi-skill: move clone to cache first, then copy selected skills
     const cacheRoot = skillCacheDir(resolvedUrl);
     await mkdir(dirname(cacheRoot), { recursive: true });
-    await $`mv ${contentDir} ${cacheRoot}`.quiet();
+    const mvResult = await wrapShell(
+      () => $`mv ${contentDir} ${cacheRoot}`.quiet().then(() => undefined),
+      "Failed to move clone to cache",
+      "Check disk space and permissions.",
+    );
+    if (!mvResult.ok) throw mvResult.error;
     for (const skill of selected) {
       const skillSrcInCache = skill.path.replace(contentDir, cacheRoot);
       placements.push({
@@ -251,11 +258,16 @@ async function executePlacements(params: {
 
   for (const { skill, srcPath, relPath, destDir, useMove } of placements) {
     await mkdir(dirname(destDir), { recursive: true });
-    if (useMove) {
-      await $`mv ${srcPath} ${destDir}`.quiet();
-    } else {
-      await $`cp -r ${srcPath} ${destDir}`.quiet();
-    }
+    const op = useMove ? "move" : "copy";
+    const shellResult = await wrapShell(
+      () =>
+        useMove
+          ? $`mv ${srcPath} ${destDir}`.quiet().then(() => undefined)
+          : $`cp -r ${srcPath} ${destDir}`.quiet().then(() => undefined),
+      `Failed to ${op} skill '${skill.name}' to ${destDir}`,
+      "Check disk space and permissions.",
+    );
+    if (!shellResult.ok) throw shellResult.error;
     await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot);
     records.push(
       makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey),
@@ -342,6 +354,7 @@ export async function installSkill(
   source: string,
   options: InstallOptions,
 ): Promise<Result<InstallResult, UserError | GitError | ScanError | NetworkError>> {
+  debug("installSkill", { source, scope: options.scope });
   const also = options.also ?? [];
   const allWarnings: StaticWarning[] = [];
   const allSemanticWarnings: SemanticWarning[] = [];
@@ -408,6 +421,8 @@ export async function installSkill(
       if (!shaResult.ok) return shaResult;
       sha = shaResult.value;
     }
+
+    debug("content fetched", { contentDir, sha, adapter: resolved.adapter });
 
     // 5. Scan for skills
     const scanned = await scan(contentDir, { onDeepScan: options.onDeepScan });
@@ -538,6 +553,8 @@ export async function installSkill(
       placements, resolved, sha, options, also, now,
       effectiveTap, finalRef, trust, sourceKey,
     });
+
+    debug("placements complete", { installed: newRecords.map((r) => r.name) });
 
     // 10. Save installed.json
     installed.skills.push(...newRecords);

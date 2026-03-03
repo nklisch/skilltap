@@ -1,6 +1,8 @@
 import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
+import { debug } from "./debug";
 import { skillCacheDir, skillInstallDir } from "./paths";
+import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
@@ -14,6 +16,7 @@ export async function removeSkill(
   name: string,
   options: RemoveOptions = {},
 ): Promise<Result<void, UserError>> {
+  debug("removeSkill", { name, scope: options.scope });
   const installedResult = await loadInstalled();
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
@@ -51,7 +54,12 @@ export async function removeSkill(
           record.scope === "linked" ? "global" : record.scope,
           options.projectRoot,
         );
-  await $`rm -rf ${installPath}`.quiet();
+  const rmResult = await wrapShell(
+    () => $`rm -rf ${installPath}`.quiet().then(() => undefined),
+    `Failed to remove skill directory '${name}'`,
+    "Check file permissions.",
+  );
+  if (!rmResult.ok) return rmResult;
 
   // Remove cache if this was the last skill from the repo
   if (record.path !== null && record.repo) {
@@ -60,7 +68,13 @@ export async function removeSkill(
     );
     if (remainingFromSameRepo.length === 0) {
       const cacheRoot = skillCacheDir(record.repo);
-      await $`rm -rf ${cacheRoot}`.quiet();
+      const cacheResult = await wrapShell(
+        () => $`rm -rf ${cacheRoot}`.quiet().then(() => undefined),
+        `Failed to remove cache directory for '${name}'`,
+      );
+      if (!cacheResult.ok) {
+        debug("cache cleanup failed", { name, cacheRoot, error: cacheResult.error.message });
+      }
     }
   }
 

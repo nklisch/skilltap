@@ -1,4 +1,6 @@
 import { $ } from "bun";
+import { debug } from "./debug";
+import { extractStderr } from "./shell";
 import type { Result } from "./types";
 import { err, GitError, ok } from "./types";
 
@@ -13,15 +15,6 @@ export type CloneOptions = {
   depth?: number;
 };
 
-function extractStderr(e: unknown): string {
-  if (e instanceof Error && "stderr" in e) {
-    const raw = (e as { stderr: unknown }).stderr;
-    if (raw instanceof Uint8Array) return new TextDecoder().decode(raw).trim();
-    return String(raw).trim();
-  }
-  return String(e);
-}
-
 async function wrapGit<T>(
   fn: () => Promise<T>,
   msg: string,
@@ -30,8 +23,10 @@ async function wrapGit<T>(
   try {
     return ok(await fn());
   } catch (e) {
+    const stderr = extractStderr(e);
+    debug(msg, { stderr });
     return err(
-      new GitError(`${msg}: ${extractStderr(e)}`, hint ? { hint } : undefined),
+      new GitError(`${msg}: ${stderr}`, hint ? { hint } : undefined),
     );
   }
 }
@@ -49,6 +44,7 @@ export async function clone(
   dest: string,
   opts?: CloneOptions,
 ): Promise<Result<void, GitError>> {
+  debug("git clone", { url, dest, branch: opts?.branch });
   const flags: string[] = ["--depth", String(opts?.depth ?? 1)];
   if (opts?.branch) flags.push("--branch", opts.branch);
   try {

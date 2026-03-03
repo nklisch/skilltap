@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { $ } from "bun";
 import { z } from "zod/v4";
 import { getConfigDir, loadConfig, saveConfig } from "./config";
+import { extractStderr } from "./shell";
 import { checkGitInstalled, clone, pull } from "./git";
 import type { RegistrySource } from "./registry";
 import { detectTapType, fetchSkillList } from "./registry";
@@ -292,9 +293,7 @@ export async function initTap(name: string): Promise<Result<void, UserError>> {
     return ok(undefined);
   } catch (e) {
     return err(
-      new UserError(
-        `Failed to initialize tap: ${e instanceof Error ? e.message : String(e)}`,
-      ),
+      new UserError(`Failed to initialize tap: ${extractStderr(e)}`),
     );
   }
 }

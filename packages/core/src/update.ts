@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
+import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import type { DiffStat } from "./git";
 import { diff, diffStat, fetch, pull, revParse } from "./git";
@@ -18,6 +19,7 @@ import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
+import { wrapShell } from "./shell";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import { parseGitHubRepo, resolveTrust } from "./trust";
 import type { Result } from "./types";
@@ -94,17 +96,27 @@ async function recopyMultiSkill(
   workDir: string,
   record: InstalledSkill,
   projectRoot?: string,
-): Promise<void> {
-  if (record.path === null) return;
+): Promise<Result<void, UserError>> {
+  if (record.path === null) return ok(undefined);
   const skillSrc = join(workDir, record.path);
   const destDir = skillInstallDir(
     record.name,
     record.scope as "global" | "project",
     projectRoot,
   );
-  await $`rm -rf ${destDir}`.quiet();
+  const rmResult = await wrapShell(
+    () => $`rm -rf ${destDir}`.quiet().then(() => undefined),
+    `Failed to remove old skill directory '${record.name}'`,
+  );
+  if (!rmResult.ok) return rmResult;
+
   await mkdir(dirname(destDir), { recursive: true });
-  await $`cp -r ${skillSrc} ${destDir}`.quiet();
+
+  return wrapShell(
+    () => $`cp -r ${skillSrc} ${destDir}`.quiet().then(() => undefined),
+    `Failed to copy updated skill '${record.name}'`,
+    "Check disk space and permissions.",
+  );
 }
 
 /** Remove and re-create agent symlinks for a skill (idempotent). */
@@ -225,9 +237,20 @@ async function updateNpmSkill(
       record.scope as "global" | "project",
       options.projectRoot,
     );
-    await $`rm -rf ${installDir}`.quiet();
+    const rmResult = await wrapShell(
+      () => $`rm -rf ${installDir}`.quiet().then(() => undefined),
+      `Failed to remove old skill directory '${record.name}'`,
+    );
+    if (!rmResult.ok) return rmResult;
+
     await mkdir(dirname(installDir), { recursive: true });
-    await $`cp -r ${newSkillDir} ${installDir}`.quiet();
+
+    const cpResult = await wrapShell(
+      () => $`cp -r ${newSkillDir} ${installDir}`.quiet().then(() => undefined),
+      `Failed to install updated skill '${record.name}'`,
+      "Check disk space and permissions.",
+    );
+    if (!cpResult.ok) return cpResult;
 
     // Semantic scan on updated content
     if (await runUpdateSemanticScan(installDir, record.name, options)) {
@@ -342,7 +365,10 @@ async function updateGitSkill(
   const pullResult = await pull(workDir);
   if (!pullResult.ok) return pullResult;
 
-  if (isMulti) await recopyMultiSkill(workDir, record, options.projectRoot);
+  if (isMulti) {
+    const recopyResult = await recopyMultiSkill(workDir, record, options.projectRoot);
+    if (!recopyResult.ok) return recopyResult;
+  }
 
   const installDir = skillInstallDir(
     record.name,
@@ -387,6 +413,7 @@ async function updateGitSkill(
 export async function updateSkill(
   options: UpdateOptions = {},
 ): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
+  debug("updateSkill", { name: options.name ?? "all" });
   const installedResult = await loadInstalled();
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
