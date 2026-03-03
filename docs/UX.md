@@ -19,7 +19,9 @@ skilltap
 ├── doctor                   Check environment and state
 ├── completions <shell>      Generate shell completion script
 ├── config                   Interactive setup wizard
-│   └── agent-mode           Toggle agent mode (human-only)
+│   ├── agent-mode           Toggle agent mode (human-only)
+│   ├── get [key]            Get a config value
+│   └── set <key> <value>    Set a config value
 └── tap                      Manage taps
     ├── add <name> <url>     Add a tap
     ├── remove <name>        Remove a tap
@@ -684,11 +686,14 @@ Edit tap.json to add skills, then push:
 ## config
 
 ```
-skilltap config
-skilltap config agent-mode
+skilltap config                              Interactive setup wizard (TTY only)
+skilltap config agent-mode                   Toggle agent mode (TTY only)
+skilltap config get [key] [--json]           Get a config value
+skilltap config set <key> <value...>         Set a config value
 ```
 
-Always interactive. Requires a TTY — agents cannot run these commands.
+`config` and `config agent-mode` are always interactive and require a TTY.
+`config get` and `config set` are non-interactive — safe for agents and scripts.
 
 ### skilltap config
 
@@ -726,8 +731,12 @@ Welcome to skilltap setup!
 │  ● Ask me to decide
 │  ○ Always block (strict)
 │
-◇ Allow installing skills from npm registry?
-│  Yes
+◇ Search public registries (skills.sh) when using 'skilltap find'?
+│  ● Yes  ○ No
+│
+◇ Share anonymous usage data?
+│  (OS, arch, command success/fail — no skill names or paths. Never sold.)
+│  ● Yes  ○ No
 │
 └ ✓ Wrote ~/.config/skilltap/config.toml
 ```
@@ -794,6 +803,61 @@ If not a TTY:
 ```
 error: 'skilltap config agent-mode' must be run interactively.
 Agent mode can only be enabled or disabled by a human.
+```
+
+### skilltap config get
+
+```
+$ skilltap config get defaults.scope
+global
+
+$ skilltap config get defaults.also
+claude-code cursor
+
+$ skilltap config get --json
+{
+  "defaults": { "also": ["claude-code"], "yes": false, "scope": "global" },
+  "security": { "scan": "static", ... },
+  ...
+}
+
+$ skilltap config get nonexistent.key
+error: Unknown config key: 'nonexistent.key'
+hint: Run 'skilltap config get --json' to see all keys
+```
+
+No key without `--json` prints a flat dump:
+
+```
+$ skilltap config get
+defaults.scope = global
+defaults.also = claude-code cursor
+defaults.yes = false
+security.scan = static
+...
+```
+
+### skilltap config set
+
+Silent on success. Errors to stderr with hints.
+
+```
+$ skilltap config set defaults.scope global
+(no output, exit 0)
+
+$ skilltap config set defaults.also claude-code cursor
+(no output, exit 0)
+
+$ skilltap config set defaults.also
+(clears to empty array, exit 0)
+
+$ skilltap config set agent-mode.enabled true
+error: 'agent-mode.enabled' cannot be set via 'config set'
+hint: Use 'skilltap config agent-mode'
+
+$ skilltap config set security.scan off
+error: 'security.scan' cannot be set via 'config set'
+hint: Use 'skilltap config' interactive wizard
 ```
 
 ---

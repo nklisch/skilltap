@@ -481,7 +481,8 @@ The wizard prompts for:
 3. Security scan level (static / static + semantic / off)
 4. Agent CLI for scanning (if semantic selected)
 5. Behavior when security warnings are found (ask / always block)
-6. Anonymous usage telemetry (yes / no)
+6. Search public registries (skills.sh) when using `skilltap find` (yes / no)
+7. Anonymous usage telemetry (yes / no)
 
 Writes the result to `~/.config/skilltap/config.toml`.
 
@@ -493,6 +494,92 @@ skilltap config
 
 # Reset and reconfigure
 skilltap config --reset
+```
+
+---
+
+## skilltap config get
+
+Read config values. Non-interactive — safe for agents and scripts.
+
+```
+skilltap config get [key] [--json]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output as JSON |
+
+### Behavior
+
+- `skilltap config get <key>` — prints the value for a dot-notation key (e.g. `defaults.scope`)
+- `skilltap config get --json` — prints the full config as JSON
+- `skilltap config get <key> --json` — prints the single value as JSON
+- Arrays are printed space-separated in plain text mode
+- No key without `--json` prints all values as `section.field = value` lines
+- Unknown keys exit 1 with an error message
+
+### Examples
+
+```bash
+skilltap config get defaults.scope
+# → global
+
+skilltap config get defaults.also
+# → claude-code cursor
+
+skilltap config get --json
+# → { "defaults": { ... }, "security": { ... }, ... }
+
+skilltap config get security.scan --json
+# → "static"
+```
+
+---
+
+## skilltap config set
+
+Set config values. Non-interactive — safe for agents and scripts.
+
+```
+skilltap config set <key> <value...>
+```
+
+Only preference keys are settable. Security policy keys (`security.scan`, `security.on_warn`, `security.require_scan`, `security.max_size`, `security.threshold`), agent mode keys, and telemetry keys are blocked with hints pointing to the appropriate command.
+
+### Settable Keys
+
+| Key | Type | Accepted values |
+|-----|------|-----------------|
+| `defaults.scope` | enum | `""`, `"global"`, `"project"` |
+| `defaults.also` | string[] | Agent names (variadic; omit values to clear) |
+| `defaults.yes` | boolean | `true`/`false`/`yes`/`no`/`1`/`0` |
+| `security.agent` | string | Agent CLI name or absolute path |
+| `security.ollama_model` | string | Model name |
+| `updates.auto_update` | enum | `"off"`, `"patch"`, `"minor"` |
+| `updates.interval_hours` | number | Positive integer |
+
+### Behavior
+
+- Silent on success (exit 0, no stdout). Agent-friendly.
+- Invalid key, blocked key, or invalid value: error on stderr, exit 1.
+- For `string[]` type with zero values, sets to empty array (clears the field).
+
+### Examples
+
+```bash
+skilltap config set defaults.scope global
+skilltap config set defaults.also claude-code cursor
+skilltap config set defaults.also          # clears to []
+skilltap config set defaults.yes true
+skilltap config set updates.auto_update patch
+
+# Blocked keys show hints:
+skilltap config set agent-mode.enabled true
+# error: 'agent-mode.enabled' cannot be set via 'config set'
+# hint: Use 'skilltap config agent-mode'
 ```
 
 ---

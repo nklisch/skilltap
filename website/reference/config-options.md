@@ -12,7 +12,7 @@ Complete reference for `~/.config/skilltap/config.toml` -- all options, defaults
 ~/.config/skilltap/config.toml
 ```
 
-Created with defaults on first run. Edit manually or use `skilltap config` to run the interactive setup wizard.
+Created with defaults on first run. Edit manually, use `skilltap config` for the interactive wizard, or use `skilltap config get`/`skilltap config set` for scripted access.
 
 State is tracked separately in `~/.config/skilltap/installed.json` (machine-managed, do not edit).
 
@@ -210,6 +210,49 @@ anonymous_id = "a3f8c1d2-4b5e-6f7a-8c9d-0e1f2a3b4c5d"
 
 ---
 
+## `[registry]`
+
+Controls which skill registries are searched when running `skilltap find <query>`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | array of strings | `["skills.sh"]` | Which registries to search, in order. Built-in: `"skills.sh"`. Set to `[]` to disable all registry search. |
+| `sources` | array of tables | `[]` | Custom registry definitions. Each entry needs `name` and `url`. |
+| `allow_npm` | boolean | `true` | *(Deprecated)* Use `enabled = []` to disable registries instead. |
+
+### Custom Registries
+
+Any URL implementing the skills.sh search API can be added as a custom registry:
+
+```
+GET {url}/api/search?q={query}&limit={n}
+→ { "skills": [{ "id": string, "name": string, "description": string, "source": string, "installs": number }] }
+```
+
+The `source` field in each result must be a valid skilltap install ref (e.g. `owner/repo` for GitHub sources, a full git URL, or `npm:package`).
+
+### Example
+
+```toml
+[registry]
+# Search skills.sh and a company registry
+enabled = ["skills.sh", "acme"]
+
+# Custom registry definition
+[[registry.sources]]
+name = "acme"
+url = "https://skills.acme.com"
+```
+
+To disable all registry search (taps only):
+
+```toml
+[registry]
+enabled = []
+```
+
+---
+
 ## `[[taps]]`
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
@@ -285,6 +328,11 @@ scope = "project"
 [updates]
 auto_update = "patch"
 interval_hours = 24
+
+# Skill registry search settings
+[registry]
+# Which registries to query with 'skilltap find'. Set to [] to disable.
+enabled = ["skills.sh"]
 
 # Telemetry (managed via `skilltap telemetry enable/disable`)
 [telemetry]

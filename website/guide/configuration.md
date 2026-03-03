@@ -12,7 +12,7 @@ skilltap stores its configuration at:
 ~/.config/skilltap/config.toml
 ```
 
-You can edit this file directly or use the interactive wizard.
+You can edit this file directly, use the interactive wizard, or use `config get`/`config set` for scripted access.
 
 ## Interactive wizard
 
@@ -33,6 +33,24 @@ skilltap config agent-mode
 ```
 
 This command requires a TTY -- it must be run by a human, not by an agent. It prompts for agent-mode-specific settings like default scope, scan level, and which agent to use.
+
+## Programmatic access
+
+For scripts and agents, use `config get` and `config set` instead of the interactive wizard:
+
+```bash
+# Read any config value
+skilltap config get defaults.scope          # → global
+skilltap config get defaults.also           # → claude-code cursor
+skilltap config get --json                  # full config as JSON
+
+# Set preference values (silent on success)
+skilltap config set defaults.scope project
+skilltap config set defaults.also claude-code cursor
+skilltap config set defaults.yes true
+```
+
+Only preference keys are settable via `config set`. Security policy keys, agent mode, and telemetry are blocked -- use the interactive wizard or dedicated subcommands for those. See the [CLI reference](/reference/cli#skilltap-config-set) for the full list of settable keys.
 
 ## Config reference
 
@@ -70,6 +88,17 @@ Settings applied when an AI agent runs skilltap.
 
 Agent mode inherits `defaults.also` and `security.scan` from the corresponding sections — there are no separate agent-mode overrides for those fields.
 
+### `[registry]`
+
+Controls which skill registries are searched when running `skilltap find`.
+
+| Key       | Type     | Default          | Description                                                          |
+| --------- | -------- | ---------------- | -------------------------------------------------------------------- |
+| `enabled` | string[] | `["skills.sh"]`  | Registries to search, in order. Set to `[]` to disable all.          |
+| `sources` | array    | `[]`             | Custom registry definitions (see below).                             |
+
+skilltap includes one built-in registry: [skills.sh](https://skills.sh). You can add custom registries that implement the same search API — see [Using skilltap with a Team](/guide/teams#custom-skill-registry) for details.
+
 ## How config and flags compose
 
 When a CLI flag and a config value conflict, the **most restrictive** option wins:
@@ -96,6 +125,9 @@ on_warn = "prompt"
 require_scan = false
 agent = "claude"
 threshold = 5
+
+[registry]
+enabled = ["skills.sh"]
 
 [agent-mode]
 enabled = false

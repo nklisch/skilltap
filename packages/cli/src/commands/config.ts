@@ -119,6 +119,13 @@ export default defineCommand({
             initialValue: existing.security.on_warn,
           }),
 
+        registries: () =>
+          confirm({
+            message:
+              "Search public registries (skills.sh) when using 'skilltap find'?",
+            initialValue: (existing.registry?.enabled ?? ["skills.sh"]).includes("skills.sh"),
+          }),
+
         telemetry: () =>
           confirm({
             message:
@@ -139,6 +146,11 @@ export default defineCommand({
       ? existing.telemetry.anonymous_id || crypto.randomUUID()
       : existing.telemetry.anonymous_id;
 
+    const searchRegistries = result.registries as boolean;
+    const enabledRegistries = searchRegistries
+      ? ["skills.sh", ...(existing.registry?.enabled ?? []).filter((r: string) => r !== "skills.sh")]
+      : (existing.registry?.enabled ?? []).filter((r: string) => r !== "skills.sh");
+
     const newConfig: Config = {
       ...existing,
       defaults: {
@@ -151,6 +163,10 @@ export default defineCommand({
         scan: result.scan as "static" | "semantic" | "off",
         on_warn: result.onWarn as "prompt" | "fail",
         agent: result.agent as string,
+      },
+      registry: {
+        ...existing.registry,
+        enabled: enabledRegistries,
       },
       telemetry: {
         ...existing.telemetry,

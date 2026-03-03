@@ -450,7 +450,7 @@ Welcome to skilltap setup!
 │  ● Ask me to decide
 │  ○ Always block (strict)
 │
-◇ Allow installing skills from npm registry?
+◇ Search public registries (skills.sh) when using 'skilltap find'?
 │  ● Yes  ○ No
 │
 ◇ Share anonymous usage data?
@@ -466,6 +466,92 @@ Welcome to skilltap setup!
 |------------|-------------|
 | `agent-mode` | Enable or disable agent mode |
 | `telemetry` | Manage anonymous usage telemetry |
+| `get` | Get a config value (non-interactive) |
+| `set` | Set a config value (non-interactive) |
+
+---
+
+### `skilltap config get [key]`
+
+Read config values. Non-interactive — safe for agents and scripts.
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output as JSON |
+
+**Behavior:**
+
+- `skilltap config get <key>` — prints the value for a dot-notation key (e.g. `defaults.scope`)
+- `skilltap config get --json` — prints the full config as JSON
+- `skilltap config get <key> --json` — prints the single value as JSON
+- Arrays are printed space-separated in plain text mode
+- Unknown keys exit 1 with an error message
+
+**Examples:**
+
+```
+$ skilltap config get defaults.scope
+global
+
+$ skilltap config get defaults.also
+claude-code cursor
+
+$ skilltap config get security.scan --json
+"static"
+
+$ skilltap config get --json
+{ "defaults": { ... }, "security": { ... }, ... }
+```
+
+---
+
+### `skilltap config set <key> <value...>`
+
+Set config values. Non-interactive — safe for agents and scripts. Only preference keys are settable; security policy and agent mode keys are blocked.
+
+**Settable keys:**
+
+| Key | Type | Accepted values |
+|-----|------|-----------------|
+| `defaults.scope` | enum | `""`, `"global"`, `"project"` |
+| `defaults.also` | string[] | Agent names (variadic; omit values to clear) |
+| `defaults.yes` | boolean | `true`/`false`/`yes`/`no`/`1`/`0` |
+| `security.agent` | string | Agent CLI name or absolute path |
+| `security.ollama_model` | string | Model name |
+| `updates.auto_update` | enum | `"off"`, `"patch"`, `"minor"` |
+| `updates.interval_hours` | number | Positive integer |
+
+**Blocked keys** (with suggested alternative):
+
+- `agent-mode.*` → Use `skilltap config agent-mode`
+- `telemetry.*` → Use `skilltap config telemetry enable/disable`
+- `security.scan`, `security.on_warn`, `security.require_scan`, `security.max_size`, `security.threshold` → Use `skilltap config` interactive wizard
+- `taps` → Use `skilltap tap add/remove`
+
+**Behavior:**
+
+- Silent on success (exit 0, no stdout). Agent-friendly.
+- Invalid key, blocked key, or invalid value: error on stderr, exit 1.
+- For `string[]` type with zero values, sets to empty array.
+
+**Examples:**
+
+```
+$ skilltap config set defaults.scope global
+
+$ skilltap config set defaults.also claude-code cursor
+
+$ skilltap config set defaults.also
+# (clears to empty array)
+
+$ skilltap config set defaults.yes true
+
+$ skilltap config set agent-mode.enabled true
+error: 'agent-mode.enabled' cannot be set via 'config set'
+hint: Use 'skilltap config agent-mode'
+```
 
 ---
 

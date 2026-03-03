@@ -45,6 +45,7 @@ skilltap/
 │   │   │   ├── git.ts          # Git operations (clone, pull, fetch, diff, diffStat)
 │   │   │   ├── scanner.ts      # Skill discovery (find SKILL.md in repos)
 │   │   │   ├── config.ts       # Config read/write (TOML)
+│   │   │   ├── config-keys.ts  # Config get/set helpers (dot-path resolve, coerce, validate)
 │   │   │   ├── install.ts      # Install orchestration
 │   │   │   ├── remove.ts       # Remove skill logic
 │   │   │   ├── update.ts       # Update skill logic (fetch, diff, pull)
@@ -119,7 +120,9 @@ skilltap/
 │   │   │   │   ├── config.ts         # Routes to config/index.ts
 │   │   │   │   ├── config/
 │   │   │   │   │   ├── index.ts      # skilltap config wizard (was config.ts)
-│   │   │   │   │   └── agent-mode.ts # skilltap config agent-mode wizard
+│   │   │   │   │   ├── agent-mode.ts # skilltap config agent-mode wizard
+│   │   │   │   │   ├── get.ts        # skilltap config get — read config values
+│   │   │   │   │   └── set.ts        # skilltap config set — write config values
 │   │   │   │   └── tap/
 │   │   │   │       ├── add.ts
 │   │   │   │       ├── remove.ts
@@ -203,6 +206,8 @@ core → test-utils (dev)
 
 **config.ts** — Reads/writes `~/.config/skilltap/config.toml` and `~/.config/skilltap/installed.json`. Ensures directories exist on first use.
 
+**config-keys.ts** — Pure helpers for `config get`/`config set`: dot-path resolution, value coercion (string→typed), settable key allowlist/blocklist, immutable deep-set, plain-text formatting.
+
 **install.ts** — Orchestrates the install flow. Coordinates git, scanner, security, config, and symlink modules. **remove.ts**, **update.ts**, and **link.ts** handle their respective flows.
 
 **taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps. Supports both git-cloned taps and HTTP registry taps (fetched live).
@@ -211,7 +216,7 @@ core → test-utils (dev)
 
 **npm-registry.ts** — npm registry API client. `parseNpmSource()`, `fetchPackageMetadata()`, `resolveVersion()`, `downloadAndExtract()`. Private registry support via `NPM_CONFIG_REGISTRY` env, `.npmrc`, or `~/.npmrc`.
 
-**skills-registry.ts** — skills.sh public registry client. `searchSkillsRegistry(query, limit?)` hits `https://skills.sh/api/search` and returns `SkillsRegistryResult[]` with `id`, `name`, `installs`, and `source` fields. Used by `find` command to augment tap results with install counts.
+**skills-registry.ts** — Extensible skill registry system. `SkillRegistry` interface with `{ name, search(query, limit) }`. Built-in: `skillsShRegistry` (skills.sh). `createCustomRegistry(name, url)` factory for any URL implementing the search API. `resolveRegistries(config)` reads `[registry].enabled` + `[[registry.sources]]` and returns active registries. `searchRegistries(query, registries, limit?)` queries all in parallel, tagging results with `registryName`.
 
 **validate.ts** — `validateSkill(dir)` → `Result<ValidationResult, UserError>`. Checks SKILL.md exists, frontmatter valid, name matches directory, static security scan, and size limit. Used by `skilltap verify` and as a post-scaffold check in `skilltap create`.
 
