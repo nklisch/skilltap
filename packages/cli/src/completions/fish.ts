@@ -56,6 +56,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from update' -xa '(skilltap --ge
 # find flags
 complete -c skilltap -n '__fish_seen_subcommand_from find' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from find' -s i -d 'Interactive mode'
+complete -c skilltap -n '__fish_seen_subcommand_from find' -s l -l local -d 'Search local taps only'
 
 # link flags
 complete -c skilltap -n '__fish_seen_subcommand_from link' -l global -d 'Global scope'

@@ -49,7 +49,7 @@ _skilltap() {
       fi
       ;;
     find)
-      COMPREPLY=($(compgen -W "--json -i" -- "$cur"))
+      COMPREPLY=($(compgen -W "--json -i -l --local" -- "$cur"))
       ;;
     link)
       case "$prev" in

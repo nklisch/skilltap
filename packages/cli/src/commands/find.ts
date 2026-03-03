@@ -65,9 +65,19 @@ export default defineCommand({
       description: "Output as JSON",
       default: false,
     },
+    local: {
+      type: "boolean",
+      alias: "l",
+      description: "Search local taps only (skip registries)",
+      default: false,
+    },
   },
   async run({ args }) {
-    const query = args.query as string | undefined;
+    // Combine the first positional with any extra words from args._
+    // so "skilltap find git hooks" works without quoting
+    const rest = (args as Record<string, unknown>)._ as string[] | undefined;
+    const parts = [args.query as string | undefined, ...(rest ?? [])].filter(Boolean);
+    const query = parts.length > 0 ? parts.join(" ") : undefined;
 
     const configResult = await loadConfig();
     if (!configResult.ok) {
@@ -76,12 +86,12 @@ export default defineCommand({
     }
     const config = configResult.value;
 
-    const registries = resolveRegistries(config);
+    const registries = args.local ? [] : resolveRegistries(config);
 
     // Collect results: taps + configured registries in parallel
     const [tapsResult, registrySkills] = await Promise.all([
       loadTaps(),
-      query && query.length >= 2
+      query && query.length >= 2 && registries.length > 0
         ? searchRegistries(query, registries, 20)
         : Promise.resolve([] as RegistrySearchResult[]),
     ]);
@@ -187,7 +197,12 @@ function applyFilter(
       }))
     : tapSearchEntries;
 
-  return [...filteredTaps, ...registryEntries];
+  // Sort registry results by install count (most popular first)
+  const sortedRegistry = [...registryEntries].sort(
+    (a, b) => (b.installs ?? 0) - (a.installs ?? 0),
+  );
+
+  return [...filteredTaps, ...sortedRegistry];
 }
 
 function printTable(entries: SearchEntry[]): void {

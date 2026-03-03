@@ -73,7 +73,8 @@ _skilltap() {
         find)
           _arguments \\
             '--json[JSON output]' \\
-            '-i[Interactive mode]'
+            '-i[Interactive mode]' \\
+            '(-l --local)'{-l,--local}'[Search local taps only]'
           ;;
         link)
           _arguments \\
