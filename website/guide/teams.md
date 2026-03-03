@@ -137,11 +137,25 @@ skilltap update --all --yes
 
 This is where skilltap earns its keep for organizations: you control the sources, not just the skills.
 
+### Disable public registries
+
+By default, `skilltap find` includes results from [skills.sh](https://skills.sh) — the public skills registry. For most organizations, you want to turn this off so developers only see your curated catalog:
+
+```toml
+# ~/.config/skilltap/config.toml
+[registry]
+enabled = []
+```
+
+With `enabled = []`, public registry results never appear in `skilltap find`. Developers only see skills from your configured taps. Include this in your team's standard config snippet.
+
+To use your own private registry instead of the public one, see [Custom skill registry](#custom-skill-registry) below.
+
 ### Lock to org taps only
 
-There's no allowlist setting — the simpler model is that developers only add the taps you tell them to. If they only have your company tap registered, `skilltap find` only searches that tap. Nothing from the public ecosystem surfaces unless they explicitly add another tap.
+There's no allowlist setting — the simpler model is that developers only add the taps you tell them to. If they only have your company tap registered and public registries disabled, `skilltap find` only searches that tap. Nothing from the public ecosystem surfaces unless they explicitly add another tap or re-enable a registry.
 
-The onboarding script in the next section shows this clearly: one `tap add` command, and that's the only source.
+The onboarding script in the next section shows this clearly: one `tap add` command, registries disabled, and that's the only source.
 
 ### Recommended org config snippet
 
@@ -151,9 +165,95 @@ Share this in your onboarding docs as the starting config:
 [defaults]
 scope = "global"
 also = ["claude-code"]   # or whichever agents your team uses
+
+[registry]
+# Disable public registry search — only your tap matters
+enabled = []
 ```
 
-Developers paste this into `~/.config/skilltap/config.toml` and they're pointed entirely at your tap.
+Developers paste this into `~/.config/skilltap/config.toml` and they're pointed entirely at your tap, with public registries disabled.
+
+## Custom skill registry
+
+For very large organizations — hundreds of skills, multiple teams contributing, or compliance requirements — a git-based tap can become unwieldy. In these cases, you can run your own **skill registry**: an HTTP service that implements a simple search API.
+
+### When to use a custom registry
+
+- Your catalog has hundreds or thousands of skills
+- You need server-side search, filtering, or access control
+- You want to track install counts or audit usage
+- You need to serve skills from behind SSO or a corporate proxy
+
+### The registry API
+
+A custom registry implements one endpoint:
+
+```
+GET {url}/api/search?q={query}&limit={n}
+
+Response:
+{
+  "skills": [
+    {
+      "id": "unique-identifier",
+      "name": "skill-display-name",
+      "description": "What this skill does",
+      "source": "owner/repo",
+      "installs": 1234
+    }
+  ]
+}
+```
+
+- `source` must be a valid skilltap install ref — an `owner/repo` shorthand, a full git URL, or `npm:package`
+- `installs` can be `0` if you don't track usage
+- `description` can be an empty string
+
+This is the same API that [skills.sh](https://skills.sh) uses, so any implementation compatible with one works with the other.
+
+### Configuring a custom registry
+
+Add it to `config.toml`:
+
+```toml
+[registry]
+enabled = ["acme"]
+
+[[registry.sources]]
+name = "acme"
+url = "https://skills.acme.com"
+```
+
+Now `skilltap find` searches your registry instead of (or in addition to) the public one:
+
+```bash
+$ skilltap find review
+
+  code-reviewer      Security-focused code review    42 installs  [acme]
+  pr-feedback        Inline PR feedback generator    18 installs  [acme]
+```
+
+You can enable multiple registries — results are merged in order:
+
+```toml
+[registry]
+enabled = ["acme", "skills.sh"]
+```
+
+## Using third-party registries
+
+The same mechanism works for public registries run by third parties. As the ecosystem grows, communities and tool vendors may run their own registries. Adding one is the same as adding an org registry:
+
+```toml
+[registry]
+enabled = ["skills.sh", "awesome-skills"]
+
+[[registry.sources]]
+name = "awesome-skills"
+url = "https://awesome-skills.example.com"
+```
+
+Results from all enabled registries appear together in `skilltap find` output, each tagged with their registry name so you know where a skill came from.
 
 ## Security scanning
 

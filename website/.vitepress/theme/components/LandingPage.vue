@@ -67,7 +67,7 @@ const teamFeatures = [
     icon: "🎛️",
     title: "Your catalog, your rules",
     description:
-      "Disable npm with one config line. Developers search only the taps you've registered — point them at your company tap and nothing else surfaces.",
+      "Disable public registries with one config line, or run your own custom registry. Developers search only the sources you've registered — your company tap, your registry, nothing else.",
   },
 ];
 </script>
