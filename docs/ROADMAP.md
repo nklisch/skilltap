@@ -259,7 +259,7 @@ Homebrew formula, install script, GitHub Releases CI.
 
 ## v0.3 — Authoring + Polish
 
-### Phase 16 — Create and Verify
+### Phase 16 — Create and Verify ✓
 
 > Design doc: [DESIGN-PUBLISH.md](./DESIGN-PUBLISH.md)
 
@@ -297,7 +297,7 @@ Diagnostic command that checks environment, config, and state integrity.
 
 ---
 
-### Phase 18 — Shell Completions
+### Phase 18 — Shell Completions ✓
 
 > Design doc: [DESIGN-COMPLETIONS.md](./DESIGN-COMPLETIONS.md)
 
@@ -327,6 +327,16 @@ Finalize for v0.3 release.
 - [x] **19.5** README update with v0.3 features
 
 **Exit criteria:** All docs reflect the current state. End-to-end workflow works across all new features.
+
+---
+
+### Post-v0.3 Additions ✓
+
+Features shipped after the v0.3 release:
+
+- [x] **P1** Custom skill registry system — `[registry]` config section with `enabled` list and `[[registry.sources]]` for custom HTTP registries; built-in skills.sh registry included by default; config wizard updated with "Search public registries?" prompt
+- [x] **P2** `skilltap find` improvements — multi-word query support (any token must match), results sorted by install count descending, `--local` flag to skip registry searches, `preSelectedSkill` for auto-selection from skills.sh results
+- [x] **P3** `skilltap config get` and `skilltap config set` — non-interactive config read/write; settable key allowlist (preference keys only); blocked keys show hints; agent-friendly (silent on success, exit codes)
 
 ---
 

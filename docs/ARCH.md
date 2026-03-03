@@ -44,6 +44,7 @@ skilltap/
 │   │   │   ├── paths.ts        # skillInstallDir, skillCacheDir, findProjectRoot
 │   │   │   ├── git.ts          # Git operations (clone, pull, fetch, diff, diffStat)
 │   │   │   ├── scanner.ts      # Skill discovery (find SKILL.md in repos)
+│   │   │   ├── frontmatter.ts  # parseSkillFrontmatter() — shared YAML-style frontmatter parser
 │   │   │   ├── config.ts       # Config read/write (TOML)
 │   │   │   ├── config-keys.ts  # Config get/set helpers (dot-path resolve, coerce, validate)
 │   │   │   ├── install.ts      # Install orchestration
@@ -199,6 +200,8 @@ core → test-utils (dev)
 - `log(dir, n)` — last n commits
 
 **scanner.ts** — Finds SKILL.md files in a directory tree. Returns structured results with name, description (from frontmatter), and path. See [SPEC.md — Skill Discovery](./SPEC.md#skill-discovery) for the scanning algorithm.
+
+**frontmatter.ts** — `parseSkillFrontmatter(content)` parses YAML-style `---` frontmatter blocks into a plain object. Shared by scanner.ts and validate.ts.
 
 **security/static.ts** — Layer 1 pattern matching. Takes file contents, returns warnings with line numbers, category, and raw/visible text. Uses `anti-trojan-source` and `out-of-character` for Unicode detection, regex for everything else. See [SPEC.md — Layer 1](./SPEC.md#layer-1-static-analysis) for detection categories.
 
