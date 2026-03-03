@@ -180,6 +180,36 @@ When `allow_npm = false`:
 
 ---
 
+## `[updates]`
+
+Controls how skilltap checks for and applies CLI updates.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `auto_update` | `"off"` \| `"patch"` \| `"minor"` | `"off"` | Automatically install updates on startup. `"patch"` applies patch releases silently; `"minor"` applies patch and minor releases. Major releases are always notify-only regardless of this setting. Only applies to compiled binaries. |
+| `interval_hours` | integer | `24` | How often (in hours) to check GitHub for a new release. The check is non-blocking — it fires in the background and updates a local cache for the next run. Set to `0` to check on every invocation. |
+
+### Example
+
+```toml
+[updates]
+# Automatically apply patch releases on startup
+auto_update = "patch"
+# Check every 12 hours instead of the default 24
+interval_hours = 12
+```
+
+When `auto_update` triggers, you'll see on stderr:
+
+```
+⟳  Auto-updating skilltap 0.3.1 → 0.3.2 (patch)…
+✓  Updated to v0.3.2. Changes take effect next run.
+```
+
+Run `skilltap self-update` at any time to force an immediate check and update.
+
+---
+
 ## `[[taps]]`
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
@@ -254,6 +284,11 @@ scope = "project"
 # Registry access controls
 [registry]
 allow_npm = true
+
+# CLI update settings
+[updates]
+auto_update = "patch"
+interval_hours = 24
 
 # Tap definitions
 [[taps]]

@@ -1291,6 +1291,56 @@ Sends `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. Th
 
 ---
 
+## self-update
+
+```
+skilltap self-update [--force]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--force` | boolean | false | Re-install even if already on the latest version |
+
+### Behavior
+
+1. Forces a fresh fetch to `https://api.github.com/repos/nklisch/skilltap/releases/latest` (bypasses cache interval)
+2. If `isCompiledBinary()` returns false (binary name is `bun` or `bun.exe`): print instructions to use `bun update -g skilltap` or `npm install -g skilltap`; exit 0
+3. Determine platform asset name: `skilltap-linux-x64`, `skilltap-linux-arm64`, `skilltap-darwin-x64`, `skilltap-darwin-arm64`. Unsupported platform → error
+4. Download asset from `https://github.com/nklisch/skilltap/releases/download/v{version}/{asset}` with 60s timeout
+5. Write to `{process.execPath}.update`, `chmod +x`, atomically `mv` over `process.execPath`
+6. Write updated version to `~/.config/skilltap/update-check.json`
+
+### Startup Update Check
+
+Runs on every invocation except for the args in `SKIP_STARTUP_ARGS` (`--version`, `--help`, `-h`, `self-update`, `telemetry`, `status`) and when agent mode is enabled.
+
+**Algorithm:**
+
+1. Read `~/.config/skilltap/update-check.json` (cache of last known latest version)
+2. If cache is stale (`now - checkedAt > interval_hours * 3600000`): fire-and-forget fetch to GitHub API to refresh cache for the next run; do not block
+3. If cache has a newer version than current: check `updates.auto_update` config:
+   - If `auto_update` covers the update type (`"patch"` for patch; `"minor"` for patch+minor) and binary is compiled: call `downloadAndInstall()` silently, print result to stderr
+   - Otherwise: print update notice to stderr (severity-colored; major = yellow bold, minor = bold, patch = dim)
+4. Major releases are never auto-installed regardless of `auto_update`
+
+### `[updates]` Config Keys
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `auto_update` | `"off"` \| `"patch"` \| `"minor"` | `"off"` | Automatically apply updates on startup. `"patch"` auto-installs patch releases; `"minor"` auto-installs patch and minor releases. Major releases are always notify-only. |
+| `interval_hours` | integer | `24` | How often (in hours) to check GitHub for a new release. Set to `0` to check on every run. |
+
+### Exit Codes
+
+| Code | Condition |
+|------|-----------|
+| 0 | Updated successfully, already current, or dev install (manual update instructed) |
+| 1 | Download failed, platform not supported, or binary replacement failed |
+
+---
+
 ## Configuration
 
 ### File Location
@@ -1371,6 +1421,15 @@ scope = "project"
 # Useful for air-gapped environments or org policies restricting external package sources.
 # Default: true (npm allowed)
 allow_npm = true
+
+# CLI update check / auto-update settings
+[updates]
+# "off" = notify only; "patch" = auto-install patch releases;
+# "minor" = auto-install patch + minor releases.
+# Major releases are always notify-only.
+auto_update = "off"
+# How often to check GitHub for a new release (hours). 0 = every run.
+interval_hours = 24
 
 # Tap definitions (repeatable section)
 # [[taps]]

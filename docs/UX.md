@@ -1421,6 +1421,70 @@ Exit codes: 0 = pass/warnings only, 1 = any failures
 
 ---
 
+## self-update
+
+```
+skilltap self-update [--force]
+```
+
+### Flags
+
+```
+--force    Re-install even if already on the latest version
+```
+
+### Behavior
+
+1. Forces a fresh GitHub API check for the latest release (bypasses the background cache)
+2. If running from source (`bun run` or npm link), prints instructions to update via the package manager instead and exits
+3. If running as a compiled binary: downloads the platform-specific release asset from GitHub Releases, writes it to `{execPath}.update`, `chmod +x`s it, then atomically renames it over the running binary
+4. Updates the local update-check cache to the installed version
+
+**Startup notification** — on every CLI invocation skilltap checks a local cache for a newer version. If stale (older than `updates.interval_hours`), it fires a background fetch that updates the cache for the next run. The notice is printed to stderr:
+
+- Patch: `↑  skilltap 0.3.1 → 0.3.2 available. Run: skilltap self-update`
+- Minor: `↑  Update available: v0.3.1 → v0.4.0 (minor) Run: skilltap self-update`
+- Major: `⚠  Major update available: v0.3.1 → v1.0.0  Breaking changes may apply. Run: skilltap self-update`
+
+Major releases are never auto-updated regardless of `auto_update` setting.
+
+**`auto_update` behavior** (configured via `[updates]`) — if `auto_update = "patch"` (or `"minor"`), qualifying updates apply silently in the background on startup:
+
+```
+⟳  Auto-updating skilltap 0.3.1 → 0.3.2 (patch)…
+✓  Updated to v0.3.2. Changes take effect next run.
+```
+
+**Startup skipped for:** `--version`, `--help`, `self-update`, `telemetry`, `status`, and agent mode.
+
+### Examples
+
+```
+$ skilltap self-update
+
+┌ skilltap self-update
+│
+◇ Update available: v0.3.1 → v0.4.0 (minor)
+◇ Downloading v0.4.0…
+│  ✓ Updated to v0.4.0
+└ Changes take effect on the next run.
+```
+
+Already up to date:
+
+```
+$ skilltap self-update
+
+┌ skilltap self-update
+│
+◇ ✓ Already on the latest version (v0.4.0)
+└ Nothing to do.
+```
+
+Exit codes: 0 = success or already current, 1 = download or replacement failure
+
+---
+
 ## completions
 
 ```

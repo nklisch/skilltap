@@ -1019,3 +1019,47 @@ skilltap completions bash
 ```
 
 See the [Shell Completions guide](/guide/shell-completions) for setup details and troubleshooting.
+
+---
+
+## skilltap self-update
+
+Update the skilltap binary to the latest GitHub release.
+
+```
+skilltap self-update [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--force` | boolean | `false` | Re-install even if already on the latest version |
+
+### Behavior
+
+Fetches the latest release from GitHub and replaces the running binary in-place. Only works when running as a compiled binary (installed via the install script or downloaded directly). If you installed via npm or are running from source, it prints the appropriate update command instead.
+
+**Platform support:** Linux x64/arm64 and macOS x64/arm64.
+
+### Startup Notifications
+
+skilltap checks for updates in the background on every command (except `self-update`, `status`, `--version`, `--help`, and agent mode). It reads a local cache so the check never blocks startup. When an update is found, a notice is printed to stderr:
+
+| Type | Message |
+|------|---------|
+| patch | `↑  skilltap 0.3.1 → 0.3.2 available. Run: skilltap self-update` (dim) |
+| minor | `↑  Update available: v0.3.1 → v0.4.0 (minor) Run: skilltap self-update` (bold) |
+| major | `⚠  Major update available: v0.3.1 → v1.0.0  Breaking changes may apply.` (yellow) |
+
+Configure automatic updates via the `[updates]` config section — see [Configuration Options](/reference/config-options#updates).
+
+### Examples
+
+```bash
+# Check and update to the latest release
+skilltap self-update
+
+# Re-install the current latest (useful after manual binary tampering)
+skilltap self-update --force
+```
