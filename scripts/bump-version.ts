@@ -46,8 +46,10 @@ for (const path of PACKAGES) {
   console.log(`  updated ${path}`);
 }
 
-// Commit and tag
+// Commit, tag, and push
 const tag = `v${next}`;
 await $`git commit -am "Release ${tag}"`;
 await $`git tag ${tag}`;
-console.log(`\nTagged ${tag}. Push with: git push --follow-tags`);
+await $`git push`;
+await $`git push origin ${tag}`;
+console.log(`\nReleased ${tag}.`);
