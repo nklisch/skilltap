@@ -289,39 +289,36 @@ skilltap find [query] [flags]
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `query` | No | Search term (fuzzy matched against name, description, tags). If omitted, lists all skills. |
+| `query` | No | Search term (matched against name, description, tags). If omitted, lists all skills. |
 
 ### Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-i` | boolean | `false` | Interactive fuzzy finder mode |
+| `-i` | boolean | `false` | Interactive search — uses fzf when available, otherwise a text prompt + clack select. Enter on a result installs it. |
 | `--json` | boolean | `false` | Output as JSON |
-| `--npm` | boolean | `false` | Search npm registry instead of taps. Uses the positional `query` arg as the search term. Cannot be combined with `-i`. Blocked when `registry.allow_npm = false` in config. |
+| `--npm` | boolean | `false` | Search npm registry **only** (skips taps). Blocked when `registry.allow_npm = false` in config. When `allow_npm = true`, npm results are included automatically in the default search — no flag required. |
 
 ### Examples
 
 ```bash
-# Search for skills matching "review"
+# Search taps + npm together (default when allow_npm = true)
 skilltap find review
 
-# List all skills from all taps
+# List all skills from taps + npm
 skilltap find
 
-# Interactive fuzzy finder (type to filter, arrow keys, Enter to install)
+# Interactive fuzzy finder (fzf or text+select fallback)
 skilltap find -i
 
-# Search npm registry for skills matching "commit"
+# Search npm only
 skilltap find commit --npm
-
-# Search all npm packages with agent-skill keyword
-skilltap find --npm
 
 # Machine-readable output
 skilltap find --json
 ```
 
-If no taps are configured: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and npm is disabled: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 
@@ -989,12 +986,12 @@ skilltap completions zsh > ~/.zfunc/_skilltap
 
 ### With `--install`
 
-Writes to the standard location for each shell and prints activation instructions:
+Writes to the standard location for each shell and prints activation instructions. If `$SHELL` doesn't match the specified shell, a hint is printed to stderr.
 
 | Shell | Writes to |
 |-------|-----------|
 | bash | `~/.local/share/bash-completion/completions/skilltap` |
-| zsh | `~/.zfunc/_skilltap` |
+| zsh | `~/.zfunc/_skilltap` (also patches `~/.zshrc` with `fpath` setup if missing) |
 | fish | `~/.config/fish/completions/skilltap.fish` |
 
 ### Dynamic Completions
@@ -1019,6 +1016,60 @@ skilltap completions bash
 ```
 
 See the [Shell Completions guide](/guide/shell-completions) for setup details and troubleshooting.
+
+---
+
+## skilltap telemetry
+
+Manage anonymous usage telemetry.
+
+```
+skilltap telemetry <subcommand>
+```
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `status` | Show current telemetry state and what is collected |
+| `enable` | Opt in to anonymous telemetry |
+| `disable` | Opt out of telemetry |
+
+### Behavior
+
+Telemetry preference is stored in `config.toml` under `[telemetry]`. Two environment variables always override the config:
+
+| Variable | Effect |
+|----------|--------|
+| `DO_NOT_TRACK=1` | Disables telemetry regardless of config |
+| `SKILLTAP_TELEMETRY_DISABLED=1` | Disables telemetry regardless of config |
+
+**What is collected:** OS, architecture, CLI version, command name, success/failure, error type, installed skill count, command duration. No skill names, paths, repo URLs, or personal information are ever collected.
+
+**`telemetry status` output (example):**
+```
+Telemetry: enabled
+Anonymous ID: a3f8c1d2-...
+
+What's collected: OS, arch, CLI version, command success/failure,
+error type, skill count, duration. No skill names, paths, or personal info.
+Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.
+```
+
+**Startup notice:** On first run (before the preference is recorded), a banner is printed to stderr prompting the user to opt in. Set `DO_NOT_TRACK=1` to silence it without opting in. The `telemetry` and `status` commands never trigger the startup notice.
+
+### Examples
+
+```bash
+# Check current state
+skilltap telemetry status
+
+# Opt in
+skilltap telemetry enable
+
+# Opt out
+skilltap telemetry disable
+```
 
 ---
 

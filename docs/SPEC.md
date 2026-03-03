@@ -286,34 +286,35 @@ If not found anywhere, exit 1 with: `Skill 'name' not found. Try 'skilltap find 
 
 ### `skilltap find [query]`
 
-Search for skills across all configured taps.
+Search for skills across all configured taps. When `registry.allow_npm = true` (the default), npm registry results are included automatically alongside tap results.
 
 **Arguments:**
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `query` | No | Search term (fuzzy matched against name, description, tags) |
+| `query` | No | Search term (matched against name, description, tags) |
 
 **Options:**
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-i` | boolean | false | Interactive fuzzy finder mode |
+| `-i` | boolean | false | Interactive search mode — uses fzf when available, otherwise a text prompt + select |
 | `--json` | boolean | false | Output as JSON |
-| `--npm` | string | — | Search npm registry instead of taps (value: search query) |
+| `--npm` | boolean | false | Search npm registry **only** (skip taps). Blocked when `registry.allow_npm = false`. |
 
 **Output:**
 
 ```
 $ skilltap find review
 
-  code-review        Thorough code review with security focus   [home]
-  termtube-review    Termtube review checklist                  [home]
+  code-review        Thorough code review with security focus   ● publisher    [home]
+  termtube-review    Termtube review checklist                  ◆ curated      [home]
+  @acme/code-review  AI-powered code review skill               ● publisher    1.0.3  [npm]
 ```
 
-Interactive mode (`-i`) opens a fullscreen fuzzy finder using @clack/prompts. Type to filter, arrow keys to navigate, Enter to select (then install).
+Interactive mode (`-i`) uses fzf when available for live fuzzy filtering. Without fzf, prompts for a search term then shows a clack select list. Enter on a result immediately proceeds to install.
 
-If no taps configured, print: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and npm is disabled: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 
@@ -1177,13 +1178,16 @@ Authentication token resolved from `_authToken` field in `.npmrc` or environment
 
 npm-sourced skills update via version comparison (not SHA). `skilltap update` fetches latest metadata and compares the installed version string to the latest resolved version.
 
-### find --npm
+### find and npm
+
+By default `skilltap find` merges tap and npm results when `registry.allow_npm = true`. Use `--npm` to restrict results to npm only.
 
 ```bash
-skilltap find --npm <query>
+skilltap find review        # taps + npm merged
+skilltap find --npm review  # npm only
 ```
 
-Searches the npm registry for packages with the `agent-skill` keyword. Returns name, version, description, and weekly downloads.
+Searches the npm registry for packages with the `agent-skill` keyword. Returns name, version, description. npm auto-search is controlled by `registry.allow_npm` in config (set via `skilltap config`).
 
 ---
 
@@ -1288,6 +1292,60 @@ Sends `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. Th
 - `tap list`: shows type column (`git`/`http`) and live skill count for HTTP taps
 - `tap update`: no-op for HTTP taps (always live, fetched fresh each time)
 - HTTP taps have no local clone; metadata is fetched on demand
+
+---
+
+## telemetry
+
+```
+skilltap telemetry <subcommand>
+```
+
+Subcommands: `status`, `enable`, `disable`. Skipped in `SKIP_STARTUP_ARGS` (no update check, no telemetry notice).
+
+### Behavior
+
+**`telemetry status`**
+1. If `DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1`: print `Telemetry: disabled (<VAR>=1 overrides config)` and return
+2. If `config.telemetry.enabled`: print enabled status + `anonymous_id`
+3. Otherwise: print disabled status + opt-in hint
+4. Always print the collected-data summary
+
+**`telemetry enable`**
+1. Load config
+2. If `config.telemetry.anonymous_id` is empty, generate `crypto.randomUUID()`
+3. Set `enabled = true`, save config
+4. Print confirmation with the anonymous ID
+
+**`telemetry disable`**
+1. Load config
+2. Set `enabled = false`, save config
+3. Print confirmation
+
+### Storage
+
+Stored in `[telemetry]` section of `config.toml`:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `enabled` | boolean | `false` | Telemetry active |
+| `anonymous_id` | string | `""` | Random UUID assigned on enable; never changes |
+| `notice_shown` | boolean | `false` | Internal — set when startup banner has been displayed |
+
+### Environment Overrides
+
+`DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1` suppress telemetry and silence the startup notice regardless of config.
+
+### What Is Collected
+
+OS, architecture, CLI version, command name, success/failure, error type, installed skill count, command duration. No skill names, repo URLs, paths, or personally identifiable information.
+
+### Exit Codes
+
+| Code | Condition |
+|------|-----------|
+| 0 | All subcommands |
+| 1 | Config load/save failure |
 
 ---
 
@@ -1417,7 +1475,7 @@ scope = "project"
 # Registry access controls
 [registry]
 # Set to false to disable npm registry installs (skilltap install npm:...)
-# and search (skilltap find --npm).
+# and search (skilltap find merges npm results automatically when true).
 # Useful for air-gapped environments or org policies restricting external package sources.
 # Default: true (npm allowed)
 allow_npm = true

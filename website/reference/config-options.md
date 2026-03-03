@@ -164,7 +164,7 @@ Controls access to external package registries.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `allow_npm` | boolean | `true` | Allow installing skills from the npm registry (`skilltap install npm:...`) and searching it (`skilltap find --npm`). Set to `false` for air-gapped environments or org policies that restrict external package sources. |
+| `allow_npm` | boolean | `true` | Allow installing skills from the npm registry (`skilltap install npm:...`). When `true`, `skilltap find` automatically includes npm results alongside tap results. Set to `false` for air-gapped environments or org policies that restrict external package sources. |
 
 ### Example
 
@@ -176,6 +176,7 @@ allow_npm = false
 When `allow_npm = false`:
 - `skilltap install npm:any-package` exits with an error
 - `skilltap find --npm` exits with an error
+- `skilltap find` shows tap results only (npm results excluded)
 - Git, local, and tap sources are unaffected
 
 ---
@@ -207,6 +208,28 @@ When `auto_update` triggers, you'll see on stderr:
 ```
 
 Run `skilltap self-update` at any time to force an immediate check and update.
+
+---
+
+## `[telemetry]`
+
+Anonymous usage telemetry. Managed by `skilltap telemetry enable` / `skilltap telemetry disable`. You can also edit these keys directly, but prefer the subcommands.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether telemetry is active. |
+| `anonymous_id` | string | `""` | A random UUID assigned on `telemetry enable`. Never tied to a user or machine identity. |
+| `notice_shown` | boolean | `false` | Internal flag — set to `true` once the startup opt-in banner has been displayed. Do not edit. |
+
+**Environment overrides:** `DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1` disable telemetry regardless of these config values.
+
+### Example
+
+```toml
+[telemetry]
+enabled = true
+anonymous_id = "a3f8c1d2-4b5e-6f7a-8c9d-0e1f2a3b4c5d"
+```
 
 ---
 
@@ -289,6 +312,10 @@ allow_npm = true
 [updates]
 auto_update = "patch"
 interval_hours = 24
+
+# Telemetry (managed via `skilltap telemetry enable/disable`)
+[telemetry]
+enabled = false
 
 # Tap definitions
 [[taps]]
