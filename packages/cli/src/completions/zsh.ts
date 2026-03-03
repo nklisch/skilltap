@@ -72,7 +72,6 @@ _skilltap() {
           ;;
         find)
           _arguments \\
-            '--npm[Search npm registry]' \\
             '--json[JSON output]' \\
             '-i[Interactive mode]'
           ;;
@@ -103,7 +102,19 @@ _skilltap() {
           _arguments '--json[JSON output]'
           ;;
         config)
-          _arguments '1:subcommand:(agent-mode telemetry)'
+          local -a config_commands
+          config_commands=('agent-mode:Configure agent mode' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value')
+          _arguments -C '1:subcommand:->config_cmd' '*::arg:->config_args'
+          case $state in
+            config_cmd) _describe 'subcommand' config_commands ;;
+            config_args)
+              case $words[1] in
+                get)
+                  _arguments '--json[Output as JSON]'
+                  ;;
+              esac
+              ;;
+          esac
           ;;
         tap)
           local -a tap_commands

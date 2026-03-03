@@ -213,63 +213,6 @@ The `repo` field stores `npm:<package>` (not the tarball URL). This is used by `
 
 Since npm packages aren't git repos, diff-based scanning uses direct file comparison rather than `git diff`. Compare file lists and content between installed and new versions.
 
-## `skilltap find --npm`
-
-Search the npm registry for skill packages.
-
-```bash
-skilltap find --npm review
-skilltap find --npm code-review --json
-```
-
-### Search API
-
-```
-GET https://registry.npmjs.org/-/v1/search?text=keywords:agent-skill+review&size=20
-```
-
-The npm search API supports `keywords:` filtering. Skill packages should use the `agent-skill` keyword in their `package.json`.
-
-Response (relevant fields):
-
-```json
-{
-  "objects": [
-    {
-      "package": {
-        "name": "@acme/code-review",
-        "version": "1.2.0",
-        "description": "Thorough code review skill",
-        "keywords": ["agent-skill", "review", "security"],
-        "publisher": { "username": "acme", "email": "..." },
-        "links": { "npm": "https://www.npmjs.com/package/@acme/code-review" }
-      },
-      "score": {
-        "final": 0.85,
-        "detail": { "quality": 0.9, "popularity": 0.7, "maintenance": 0.95 }
-      }
-    }
-  ],
-  "total": 42
-}
-```
-
-### Output
-
-```
-$ skilltap find --npm review
-
-  @acme/code-review    1.2.0   Thorough code review skill         [npm]
-  review-helper        0.3.1   Quick PR review checklist           [npm]
-
-$ skilltap find --npm review --json
-[{"name":"@acme/code-review","version":"1.2.0","description":"...","source":"npm"}]
-```
-
-### Integration with Tap Search
-
-`skilltap find review` (without `--npm`) searches taps only — existing behavior unchanged. The `--npm` flag explicitly opts into npm registry search. A future enhancement could search both simultaneously.
-
 ## Tap References to npm Sources
 
 Taps can reference npm packages as skill sources:
@@ -330,9 +273,6 @@ fetchPackageMetadata(name: string, registryUrl?: string): Promise<Result<NpmPack
 // Resolve a specific version (exact or dist-tag)
 resolveVersion(metadata: NpmPackageMetadata, version: string): Result<NpmVersionInfo, UserError>
 
-// Search for packages by keyword
-searchPackages(query: string, options?: { keywords?: string[], size?: number }): Promise<Result<NpmSearchResult[], NetworkError>>
-
 // Download and extract a tarball to a temp directory
 downloadAndExtract(tarballUrl: string, dest: string, integrity?: string): Promise<Result<string, NetworkError>>
 ```
@@ -356,14 +296,6 @@ interface NpmVersionInfo {
   };
 }
 
-interface NpmSearchResult {
-  name: string;
-  version: string;
-  description: string;
-  keywords: string[];
-  publisher: string;
-  score: number;
-}
 ```
 
 ## Integrity Verification
@@ -391,14 +323,6 @@ No changes to flags. The `source` argument now accepts `npm:` prefix — the ada
 skilltap install https://github.com/acme/code-review
 skilltap install acme/code-review
 skilltap install npm:@acme/code-review
-```
-
-### `find` command
-
-New `--npm` flag:
-
-```
---npm              Search npm registry instead of taps
 ```
 
 ### `info` command
@@ -435,5 +359,4 @@ $ skilltap info code-review
 - **Unit tests**: version parsing (scoped, unscoped, with/without version)
 - **Unit tests**: tarball extraction and SKILL.md discovery
 - **Integration test**: install from a real npm package (or local Verdaccio)
-- **Integration test**: `find --npm` search
 - **Test fixture**: npm package tarball with known structure (pre-built `.tgz` in test-utils)

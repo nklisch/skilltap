@@ -279,7 +279,7 @@ skilltap update --strict
 
 ## skilltap find
 
-Search for skills across all configured taps.
+Search for skills across configured taps and the [skills.sh](https://skills.sh) public registry.
 
 ```
 skilltap find [query] [flags]
@@ -289,7 +289,7 @@ skilltap find [query] [flags]
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `query` | No | Search term (matched against name, description, tags). If omitted, lists all skills. |
+| `query` | No | Search term. If omitted, lists skills from configured taps only. |
 
 ### Flags
 
@@ -297,28 +297,31 @@ skilltap find [query] [flags]
 |------|------|---------|-------------|
 | `-i` | boolean | `false` | Interactive search with type-ahead filtering. Enter on a result installs it. |
 | `--json` | boolean | `false` | Output as JSON |
-| `--npm` | boolean | `false` | Search npm registry **only** (skips taps). Blocked when `registry.allow_npm = false` in config. When `allow_npm = true`, npm results are included automatically in the default search — no flag required. |
+
+### Behavior
+
+- **No query**: lists all skills from configured taps.
+- **With query** (≥ 2 chars): searches taps locally, then appends results from the skills.sh registry (up to 20 results sorted by install count).
+- Install counts are shown for skills.sh results (e.g., `184.5K installs`).
+- For skills.sh multi-skill repos, the specific skill is auto-selected during install — no extra prompt.
 
 ### Examples
 
 ```bash
-# Search taps + npm together (default when allow_npm = true)
-skilltap find review
+# Search taps + skills.sh registry
+skilltap find react
 
-# List all skills from taps + npm
+# List all skills from configured taps
 skilltap find
 
 # Interactive search — type to filter, Enter to install
 skilltap find -i
 
-# Search npm only
-skilltap find commit --npm
-
 # Machine-readable output
 skilltap find --json
 ```
 
-If no taps are configured and npm is disabled: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and no query is given: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 
@@ -478,8 +481,7 @@ The wizard prompts for:
 3. Security scan level (static / static + semantic / off)
 4. Agent CLI for scanning (if semantic selected)
 5. Behavior when security warnings are found (ask / always block)
-6. Allow npm registry (yes / no)
-7. Anonymous usage telemetry (yes / no)
+6. Anonymous usage telemetry (yes / no)
 
 Writes the result to `~/.config/skilltap/config.toml`.
 

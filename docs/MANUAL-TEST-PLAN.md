@@ -671,21 +671,7 @@ st find --json
 ```
 **Expect:** Valid JSON array. Parseable with `jq`.
 
-### 9.6 Find --npm (npm registry search)
-
-```bash
-st find --npm agent-skill
-```
-**Expect:** Results from npm with "agent-skill" keyword filter. Shows name, version, description.
-
-### 9.7 Find --npm --json
-
-```bash
-st find --npm agent-skill --json
-```
-**Expect:** JSON array of npm search results.
-
-### 9.8 Find -i (interactive mode)
+### 9.6 Find -i (interactive mode)
 
 ```bash
 st find -i
@@ -1562,7 +1548,7 @@ st install USER/REPO --yes
 | Link / Unlink | |
 | List (scopes, --json) | |
 | Info (installed, linked, available, --json) | |
-| Find (tap search, npm search, -i, --json) | |
+| Find (tap search, -i, --json) | |
 | Tap (add, remove, list, update, init) | |
 | Config wizard (prompts, --reset, non-TTY error) | |
 | Config agent-mode (enable/disable, non-TTY error) | |

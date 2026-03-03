@@ -21,15 +21,6 @@ export interface NpmPackageMetadata {
   versions: Record<string, NpmVersionInfo>;
 }
 
-export interface NpmSearchResult {
-  name: string;
-  version: string;
-  description: string;
-  keywords: string[];
-  publisher: string;
-  score: number;
-}
-
 /** Parse `npm:<package>[@version]` into package name and version. */
 export function parseNpmSource(source: string): { name: string; version: string } {
   const s = source.startsWith("npm:") ? source.slice(4) : source;
@@ -154,63 +145,6 @@ export function resolveVersion(
   }
 
   return ok(info);
-}
-
-/** Search the npm registry for packages matching the query. */
-export async function searchPackages(
-  query: string,
-  options?: { keywords?: string[]; size?: number },
-): Promise<Result<NpmSearchResult[], NetworkError>> {
-  const registryUrl = await getRegistryUrl();
-  const keywords = options?.keywords ?? ["agent-skill"];
-  const size = options?.size ?? 20;
-
-  const keywordFilter = keywords.map((k) => `keywords:${k}`).join("+");
-  const text = encodeURIComponent([keywordFilter, query].filter(Boolean).join(" "));
-  const url = `${registryUrl.replace(/\/$/, "")}/-/v1/search?text=${text}&size=${size}`;
-
-  let response: Response;
-  try {
-    response = await fetch(url);
-  } catch {
-    return err(new NetworkError("Could not reach npm registry. Check your connection."));
-  }
-
-  if (!response.ok) {
-    return err(new NetworkError(`npm registry returned HTTP ${response.status}`));
-  }
-
-  let data: unknown;
-  try {
-    data = await response.json();
-  } catch {
-    return err(new NetworkError("Invalid response from npm registry."));
-  }
-
-  const raw = data as { objects?: unknown[] };
-  const objects = raw.objects ?? [];
-
-  const results: NpmSearchResult[] = objects
-    .map((obj) => {
-      const o = obj as Record<string, unknown>;
-      const pkg = (o.package as Record<string, unknown>) ?? {};
-      const score = o.score as Record<string, unknown>;
-      const publisher =
-        ((pkg.publisher as Record<string, string>) ?? {}).username ?? "";
-
-      return {
-        name: (pkg.name as string) ?? "",
-        version: (pkg.version as string) ?? "",
-        description: (pkg.description as string) ?? "",
-        keywords: (pkg.keywords as string[]) ?? [],
-        publisher,
-        score: (score?.final as number) ?? 0,
-      };
-    })
-    .filter((r) => r.name !== "")
-    .sort((a, b) => b.score - a.score);
-
-  return ok(results);
 }
 
 /**

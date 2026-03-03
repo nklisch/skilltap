@@ -209,7 +209,9 @@ core → test-utils (dev)
 
 **symlink.ts** — Creates and removes symlinks for agent-specific directories. Knows the path conventions for each supported agent.
 
-**npm-registry.ts** — npm registry API client. `parseNpmSource()`, `fetchPackageMetadata()`, `resolveVersion()`, `searchPackages()`, `downloadAndExtract()`. Private registry support via `NPM_CONFIG_REGISTRY` env, `.npmrc`, or `~/.npmrc`.
+**npm-registry.ts** — npm registry API client. `parseNpmSource()`, `fetchPackageMetadata()`, `resolveVersion()`, `downloadAndExtract()`. Private registry support via `NPM_CONFIG_REGISTRY` env, `.npmrc`, or `~/.npmrc`.
+
+**skills-registry.ts** — skills.sh public registry client. `searchSkillsRegistry(query, limit?)` hits `https://skills.sh/api/search` and returns `SkillsRegistryResult[]` with `id`, `name`, `installs`, and `source` fields. Used by `find` command to augment tap results with install counts.
 
 **validate.ts** — `validateSkill(dir)` → `Result<ValidationResult, UserError>`. Checks SKILL.md exists, frontmatter valid, name matches directory, static security scan, and size limit. Used by `skilltap verify` and as a post-scaffold check in `skilltap create`.
 

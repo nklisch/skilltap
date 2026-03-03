@@ -34,7 +34,7 @@ After scaffolding, the command prints next steps — how to test locally, verify
 
 ### The `npm` template
 
-The npm template is for publishing skills to the npm registry. It generates a `package.json` pre-configured with the `agent-skill` keyword so your skill is discoverable via `skilltap find --npm`, and a `.github/workflows/publish.yml` that publishes with npm provenance on every release tag:
+The npm template is for publishing skills to the npm registry. It generates a `package.json` pre-configured with the `agent-skill` keyword, and a `.github/workflows/publish.yml` that publishes with npm provenance on every release tag:
 
 ```bash
 skilltap create my-skill --template npm

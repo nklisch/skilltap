@@ -78,11 +78,19 @@ enabled = false
 # Values: "global", "project"
 scope = "project"
 
-# Registry access controls
+# Registry search settings
 [registry]
-# Set to false to disable npm registry installs and search.
-# Useful for air-gapped environments or org policies restricting external package sources.
-allow_npm = true
+# Which skill registries to search when running 'skilltap find <query>'.
+# Built-in registry: "skills.sh" (https://skills.sh). Set to [] to disable all.
+enabled = ["skills.sh"]
+
+# Custom registries implementing the skills.sh search API:
+#   GET {url}/api/search?q={query}&limit={n}
+#   Response: { "skills": [{ "id", "name", "description", "source", "installs" }] }
+# Add to enabled[] above to activate.
+# [[registry.sources]]
+# name = "my-org"
+# url = "https://skills.example.com"
 
 # Tap definitions (repeatable section)
 # [[taps]]

@@ -52,7 +52,6 @@ skilltap update
 | `list` | List installed skills |
 | `info <name>` | Show details about a skill (installed or available in taps) |
 | `find [query]` | Search skills across configured taps |
-| `find --npm <query>` | Search npm registry for skills |
 | `link <path>` | Link a local skill directory |
 | `unlink <name>` | Remove a linked skill |
 | `create [name]` | Scaffold a new skill from a template |

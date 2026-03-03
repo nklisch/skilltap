@@ -69,8 +69,6 @@ export type InstallOptions = {
   onAlreadyInstalled?: (name: string) => Promise<"update" | "abort">;
   /** Called when deep scan is triggered (no SKILL.md at standard paths). Return false to cancel. */
   onDeepScan?: (count: number) => Promise<boolean>;
-  /** Whether npm registry installs are allowed (default true). Set to false for air-gapped/enterprise environments. */
-  allowNpm?: boolean;
 };
 
 export type InstallResult = {
@@ -230,9 +228,7 @@ export async function installSkill(
   const effectiveRef = tapResult.value?.ref ?? options.ref;
 
   // 2. Resolve source
-  const resolvedResult = await resolveSource(effectiveSource, {
-    allowNpm: options.allowNpm ?? true,
-  });
+  const resolvedResult = await resolveSource(effectiveSource);
   if (!resolvedResult.ok) return resolvedResult;
 
   // For npm, the adapter resolves the version — use it as the ref if none was specified

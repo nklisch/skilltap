@@ -137,18 +137,6 @@ skilltap update --all --yes
 
 This is where skilltap earns its keep for organizations: you control the sources, not just the skills.
 
-### Disable npm
-
-By default, `skilltap find` includes npm results and `skilltap install npm:...` works. For most organizations, you want to turn this off so developers only see your curated catalog:
-
-```toml
-# ~/.config/skilltap/config.toml
-[registry]
-allow_npm = false
-```
-
-With `allow_npm = false`, `skilltap install npm:...` exits with an error and npm results never appear in `skilltap find`. Include this in your team's standard config snippet.
-
 ### Lock to org taps only
 
 There's no allowlist setting — the simpler model is that developers only add the taps you tell them to. If they only have your company tap registered, `skilltap find` only searches that tap. Nothing from the public ecosystem surfaces unless they explicitly add another tap.
@@ -163,12 +151,9 @@ Share this in your onboarding docs as the starting config:
 [defaults]
 scope = "global"
 also = ["claude-code"]   # or whichever agents your team uses
-
-[registry]
-allow_npm = false
 ```
 
-Developers paste this into `~/.config/skilltap/config.toml` and they're pointed entirely at your tap, with npm disabled.
+Developers paste this into `~/.config/skilltap/config.toml` and they're pointed entirely at your tap.
 
 ## Security scanning
 
@@ -227,7 +212,6 @@ echo "Skills installed. Run 'skilltap find' to browse the full catalog."
 - [ ] Create a tap repo on your git host
 - [ ] Add skills to `tap.json`
 - [ ] Share the `tap add` command and recommended config snippet in your onboarding docs
-- [ ] Set `allow_npm = false` in the recommended config if you want npm disabled
 - [ ] Document how to run `skilltap update --all` when skills are updated
 
 ## Related

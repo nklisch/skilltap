@@ -59,6 +59,13 @@ export function successLine(msg: string): void {
   process.stdout.write(`${ansi.green("✓")} ${msg}\n`);
 }
 
+/** Format install count as "1.2K" or "1.2M" */
+export function formatInstallCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M installs`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}K installs`;
+  return `${count} install${count === 1 ? "" : "s"}`;
+}
+
 /** "abc1234 → def5678" using 7-char short SHAs */
 export function formatShaChange(from: string, to: string): string {
   return `${from.slice(0, 7)} → ${to.slice(0, 7)}`;

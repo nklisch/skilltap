@@ -18,16 +18,7 @@ const ADAPTERS: SourceAdapter[] = [gitAdapter, npmAdapter, httpAdapter, localAda
 
 export async function resolveSource(
   source: string,
-  opts?: { allowNpm?: boolean },
 ): Promise<Result<ResolvedSource, UserError>> {
-  if (opts?.allowNpm === false && source.startsWith("npm:")) {
-    return err(
-      new UserError(
-        `npm registry is disabled by config (registry.allow_npm = false).`,
-        `To allow npm installs, set allow_npm = true in the [registry] section of config.toml.`,
-      ),
-    );
-  }
   for (const adapter of ADAPTERS) {
     if (adapter.canHandle(source)) return adapter.resolve(source);
   }

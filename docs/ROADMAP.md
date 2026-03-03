@@ -182,13 +182,12 @@ Install skills published as npm packages. Opens access to the 69K+ skills alread
 - [x] **12.5** Implement tarball integrity verification (SHA-512 SRI hash)
 - [x] **12.6** Handle npm-sourced skill updates (version comparison instead of SHA, file-level diff)
 - [x] **12.7** Private registry support — read registry URL and auth from `.npmrc` and env vars
-- [x] **12.8** `skilltap find --npm <query>` — search npm registry API with `keywords:agent-skill` filter
-- [x] **12.9** Allow `npm:` sources in tap.json `repo` field
-- [x] **12.10** Unit tests: adapter canHandle/resolve, version parsing, tarball extraction
-- [ ] **12.11** Integration tests: install from npm, find --npm, update npm-sourced skill
-- [ ] **12.12** Test fixture: pre-built npm tarball with known skill structure
+- [x] **12.8** Allow `npm:` sources in tap.json `repo` field
+- [x] **12.9** Unit tests: adapter canHandle/resolve, version parsing, tarball extraction
+- [ ] **12.10** Integration tests: install from npm, update npm-sourced skill
+- [ ] **12.11** Test fixture: pre-built npm tarball with known skill structure
 
-**Exit criteria:** `skilltap install npm:@scope/name` works end-to-end. `skilltap find --npm` searches the npm registry. Taps can reference npm sources.
+**Exit criteria:** `skilltap install npm:@scope/name` works end-to-end. Taps can reference npm sources.
 
 ---
 
@@ -323,7 +322,7 @@ Finalize for v0.3 release.
 
 - [x] **19.1** Update SPEC.md with npm adapter, HTTP registry, trust signals, create, verify, doctor, completions
 - [x] **19.2** Update ARCH.md with new modules (trust/, registry/, templates/, doctor, completions)
-- [x] **19.3** Update UX.md with new commands (create, verify, doctor, completions, find --npm)
+- [x] **19.3** Update UX.md with new commands (create, verify, doctor, completions)
 - [x] **19.4** End-to-end test: create → verify → doctor → completions (`e2e-phase19.test.ts`, 15 tests)
 - [x] **19.5** README update with v0.3 features
 

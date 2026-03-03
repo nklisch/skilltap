@@ -59,7 +59,7 @@ afterEach(async () => {
 });
 
 function env() {
-  return { SKILLTAP_HOME: homeDir, XDG_CONFIG_HOME: configDir };
+  return { SKILLTAP_HOME: homeDir, XDG_CONFIG_HOME: configDir, DO_NOT_TRACK: "1" };
 }
 
 // ---------------------------------------------------------------------------

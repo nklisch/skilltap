@@ -78,10 +78,10 @@ Flags per command:
 ```
 skilltap install --<TAB>
   --project  --global  --also  --ref  --yes  --strict
-  --no-strict  --semantic  --skip-scan  --npm
+  --no-strict  --semantic  --skip-scan
 
 skilltap find --<TAB>
-  --npm  --json  -i
+  --json  -i
 
 skilltap list --<TAB>
   --global  --project  --json
@@ -89,8 +89,8 @@ skilltap list --<TAB>
 skilltap doctor --<TAB>
   --json  --fix
 
-skilltap publish --<TAB>
-  --npm  --dry-run  --tag  --access
+skilltap verify --<TAB>
+  --json
 
 skilltap create --<TAB>
   --template  --dir

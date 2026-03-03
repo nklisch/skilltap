@@ -516,10 +516,6 @@ The `npm:` prefix downloads the tarball from the npm registry and verifies its S
 
 **Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
 
-::: tip Finding npm skills
-When `registry.allow_npm = true` (the default), `skilltap find` automatically includes npm results alongside tap results. Use `--npm` to search npm only. Toggle this setting in `skilltap config`.
-:::
-
 ## Scope: global vs project
 
 Every skill is installed to either a **global** or **project** scope.
@@ -806,7 +802,7 @@ After scaffolding, the command prints next steps — how to test locally, verify
 
 ### The `npm` template
 
-The npm template is for publishing skills to the npm registry. It generates a `package.json` pre-configured with the `agent-skill` keyword so your skill is discoverable via `skilltap find --npm`, and a `.github/workflows/publish.yml` that publishes with npm provenance on every release tag:
+The npm template is for publishing skills to the npm registry. It generates a `package.json` pre-configured with the `agent-skill` keyword, and a `.github/workflows/publish.yml` that publishes with npm provenance on every release tag:
 
 ```bash
 skilltap create my-skill --template npm
@@ -1617,16 +1613,6 @@ Settings applied when an AI agent runs skilltap.
 
 Agent mode inherits `defaults.also` and `security.scan` from the corresponding sections — there are no separate agent-mode overrides for those fields.
 
-### `[registry]`
-
-Controls access to external package registries.
-
-| Key         | Type    | Default | Description                                                   |
-| ----------- | ------- | ------- | ------------------------------------------------------------- |
-| `allow_npm` | boolean | `true`  | Allow npm registry installs and search. Set to `false` for air-gapped or restricted environments. |
-
-When `allow_npm = false`, `skilltap install npm:...` and `skilltap find --npm` exit with an error, and npm results are excluded from the default `skilltap find` output.
-
 ## How config and flags compose
 
 When a CLI flag and a config value conflict, the **most restrictive** option wins:
@@ -1657,9 +1643,6 @@ threshold = 5
 [agent-mode]
 enabled = false
 scope = "project"
-
-[registry]
-allow_npm = true
 ```
 
 For the full list of options and their allowed values, see the [Config Options Reference](/reference/config-options).
@@ -2290,7 +2273,7 @@ skilltap update --strict
 
 ## skilltap find
 
-Search for skills across all configured taps.
+Search for skills across configured taps and the [skills.sh](https://skills.sh) public registry.
 
 ```
 skilltap find [query] [flags]
@@ -2300,7 +2283,7 @@ skilltap find [query] [flags]
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `query` | No | Search term (matched against name, description, tags). If omitted, lists all skills. |
+| `query` | No | Search term. If omitted, lists skills from configured taps only. |
 
 ### Flags
 
@@ -2308,28 +2291,31 @@ skilltap find [query] [flags]
 |------|------|---------|-------------|
 | `-i` | boolean | `false` | Interactive search with type-ahead filtering. Enter on a result installs it. |
 | `--json` | boolean | `false` | Output as JSON |
-| `--npm` | boolean | `false` | Search npm registry **only** (skips taps). Blocked when `registry.allow_npm = false` in config. When `allow_npm = true`, npm results are included automatically in the default search — no flag required. |
+
+### Behavior
+
+- **No query**: lists all skills from configured taps.
+- **With query** (≥ 2 chars): searches taps locally, then appends results from the skills.sh registry (up to 20 results sorted by install count).
+- Install counts are shown for skills.sh results (e.g., `184.5K installs`).
+- For skills.sh multi-skill repos, the specific skill is auto-selected during install — no extra prompt.
 
 ### Examples
 
 ```bash
-# Search taps + npm together (default when allow_npm = true)
-skilltap find review
+# Search taps + skills.sh registry
+skilltap find react
 
-# List all skills from taps + npm
+# List all skills from configured taps
 skilltap find
 
 # Interactive search — type to filter, Enter to install
 skilltap find -i
 
-# Search npm only
-skilltap find commit --npm
-
 # Machine-readable output
 skilltap find --json
 ```
 
-If no taps are configured and npm is disabled: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and no query is given: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 
@@ -2489,6 +2475,7 @@ The wizard prompts for:
 3. Security scan level (static / static + semantic / off)
 4. Agent CLI for scanning (if semantic selected)
 5. Behavior when security warnings are found (ask / always block)
+6. Anonymous usage telemetry (yes / no)
 
 Writes the result to `~/.config/skilltap/config.toml`.
 
@@ -3030,12 +3017,12 @@ See the [Shell Completions guide](/guide/shell-completions) for setup details an
 
 ---
 
-## skilltap telemetry
+## skilltap config telemetry
 
-Manage anonymous usage telemetry.
+Manage anonymous usage telemetry. Subcommand of `skilltap config`.
 
 ```
-skilltap telemetry <subcommand>
+skilltap config telemetry <subcommand>
 ```
 
 ### Subcommands
@@ -3057,7 +3044,7 @@ Telemetry preference is stored in `config.toml` under `[telemetry]`. Two environ
 
 **What is collected:** OS, architecture, CLI version, command name, success/failure, error type, installed skill count, command duration. No skill names, paths, repo URLs, or personal information are ever collected.
 
-**`telemetry status` output (example):**
+**`config telemetry status` output (example):**
 ```
 Telemetry: enabled
 Anonymous ID: a3f8c1d2-...
@@ -3067,19 +3054,23 @@ error type, skill count, duration. No skill names, paths, or personal info.
 Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.
 ```
 
-**Startup notice:** On first run (before the preference is recorded), a banner is printed to stderr prompting the user to opt in. Set `DO_NOT_TRACK=1` to silence it without opting in. The `telemetry` and `status` commands never trigger the startup notice.
+**First-run consent prompt:** On the first interactive run (before a preference is recorded), skilltap asks via a yes/no prompt whether you want to share anonymous usage data. Answering yes enables telemetry and fires a one-time `skilltap_installed` event recording that you installed the tool. In non-interactive environments (piped input, CI), a one-time informational banner is printed to stderr instead, and telemetry remains disabled.
+
+Running `skilltap config` also includes a telemetry opt-in/out question.
+
+Set `DO_NOT_TRACK=1` to skip the prompt entirely without opting in. The `config telemetry` and `status` commands never trigger the prompt.
 
 ### Examples
 
 ```bash
 # Check current state
-skilltap telemetry status
+skilltap config telemetry status
 
 # Opt in
-skilltap telemetry enable
+skilltap config telemetry enable
 
 # Opt out
-skilltap telemetry disable
+skilltap config telemetry disable
 ```
 
 ---
@@ -3796,29 +3787,6 @@ User action required: review warnings and install manually with
 
 ---
 
-## `[registry]`
-
-Controls access to external package registries.
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `allow_npm` | boolean | `true` | Allow installing skills from the npm registry (`skilltap install npm:...`). When `true`, `skilltap find` automatically includes npm results alongside tap results. Set to `false` for air-gapped environments or org policies that restrict external package sources. |
-
-### Example
-
-```toml
-[registry]
-allow_npm = false
-```
-
-When `allow_npm = false`:
-- `skilltap install npm:any-package` exits with an error
-- `skilltap find --npm` exits with an error
-- `skilltap find` shows tap results only (npm results excluded)
-- Git, local, and tap sources are unaffected
-
----
-
 ## `[updates]`
 
 Controls how skilltap checks for and applies CLI updates.
@@ -3941,10 +3909,6 @@ ollama_model = ""
 [agent-mode]
 enabled = false
 scope = "project"
-
-# Registry access controls
-[registry]
-allow_npm = true
 
 # CLI update settings
 [updates]

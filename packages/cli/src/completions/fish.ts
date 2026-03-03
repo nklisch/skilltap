@@ -54,7 +54,6 @@ complete -c skilltap -n '__fish_seen_subcommand_from update' -l skip-scan -d 'Sk
 complete -c skilltap -n '__fish_seen_subcommand_from update' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 
 # find flags
-complete -c skilltap -n '__fish_seen_subcommand_from find' -l npm -d 'Search npm registry'
 complete -c skilltap -n '__fish_seen_subcommand_from find' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from find' -s i -d 'Interactive mode'
 
@@ -78,8 +77,11 @@ complete -c skilltap -n '__fish_seen_subcommand_from create' -l dir -d 'Target d
 complete -c skilltap -n '__fish_seen_subcommand_from verify' -l json -d 'JSON output'
 
 # config subcommands
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry' -a 'agent-mode' -d 'Configure agent mode'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry' -a 'telemetry' -d 'Manage telemetry settings'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'agent-mode' -d 'Configure agent mode'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'telemetry' -d 'Manage telemetry settings'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'get' -d 'Get a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'set' -d 'Set a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get' -l json -d 'Output as JSON'
 
 # tap subcommands
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'add' -d 'Add a tap'

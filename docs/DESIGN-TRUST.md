@@ -340,11 +340,6 @@ $ skilltap find review
 
   code-review        Thorough code review     ◆ verified     [home]
   termtube-review    Review checklist          ◆ curated      [home]
-
-$ skilltap find --npm review
-
-  @acme/code-review  1.2.0   Thorough code review     ✓ provenance   [npm]
-  review-helper      0.3.1   Quick PR review           ● publisher    [npm]
 ```
 
 ## Verification Timing

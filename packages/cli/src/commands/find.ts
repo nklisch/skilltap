@@ -1,16 +1,24 @@
 import { autocomplete, isCancel, outro, spinner } from "@clack/prompts";
-import type { Config, NpmSearchResult, ScannedSkill, StaticWarning, TapEntry } from "@skilltap/core";
+import type {
+  Config,
+  RegistrySearchResult,
+  ScannedSkill,
+  StaticWarning,
+  TapEntry,
+} from "@skilltap/core";
 import {
   installSkill,
   loadConfig,
   loadTaps,
-  searchPackages,
+  resolveRegistries,
+  searchRegistries,
   searchTaps,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
   ansi,
   errorLine,
+  formatInstallCount,
   successLine,
   table,
   termWidth,
@@ -24,18 +32,20 @@ import { formatTapTrust } from "../ui/trust";
 type SearchEntry = {
   name: string;
   description: string;
-  /** Tap name or "npm" */
+  /** Tap name or "skills.sh" */
   source: string;
-  /** Passed to installSkill (skill name or "npm:package") */
+  /** Passed to installSkill (skill name or "owner/repo") */
   installRef: string;
-  version?: string;
+  /** Pre-selected skill name for multi-skill repos */
+  preSelectedSkill?: string;
+  installs?: number;
   trustLabel?: string;
 };
 
 export default defineCommand({
   meta: {
     name: "find",
-    description: "Search taps for skills",
+    description: "Search taps and skills.sh for skills",
   },
   args: {
     query: {
@@ -55,11 +65,6 @@ export default defineCommand({
       description: "Output as JSON",
       default: false,
     },
-    npm: {
-      type: "boolean",
-      description: "Search npm registry only (auto-included when registry.allow_npm = true)",
-      default: false,
-    },
   },
   async run({ args }) {
     const query = args.query as string | undefined;
@@ -71,27 +76,14 @@ export default defineCommand({
     }
     const config = configResult.value;
 
-    // --npm flag: search npm only
-    if (args.npm) {
-      if (!config.registry.allow_npm) {
-        errorLine(
-          "npm registry search is disabled by config (registry.allow_npm = false).",
-          "To allow npm search, set allow_npm = true via 'skilltap config'.",
-        );
-        process.exit(1);
-      }
-      const entries = await fetchNpmEntries(query ?? "");
-      const filtered = query ? filterEntries(entries, query) : entries;
-      outputResults(filtered, query, args.json as boolean);
-      return;
-    }
+    const registries = resolveRegistries(config);
 
-    // Collect results: taps always, npm when allow_npm = true
-    const [tapsResult, npmResult] = await Promise.all([
+    // Collect results: taps + configured registries in parallel
+    const [tapsResult, registrySkills] = await Promise.all([
       loadTaps(),
-      config.registry.allow_npm
-        ? searchPackages(query ?? "", { keywords: ["agent-skill"] })
-        : Promise.resolve(null),
+      query && query.length >= 2
+        ? searchRegistries(query, registries, 20)
+        : Promise.resolve([] as RegistrySearchResult[]),
     ]);
 
     if (!tapsResult.ok) {
@@ -100,36 +92,37 @@ export default defineCommand({
     }
 
     const tapEntries = tapsResult.value;
-    const npmEntries: SearchEntry[] =
-      npmResult && npmResult.ok ? npmToEntries(npmResult.value) : [];
+    const registryEntries: SearchEntry[] = registryToEntries(registrySkills);
 
-    const tapSearchEntries: SearchEntry[] = tapEntries.map(({ tapName, skill }) => ({
-      name: skill.name,
-      description: skill.description,
-      source: tapName,
-      installRef: skill.name,
-      trustLabel: formatTapTrust(skill.trust),
-    }));
+    const tapSearchEntries: SearchEntry[] = tapEntries.map(
+      ({ tapName, skill }) => ({
+        name: skill.name,
+        description: skill.description,
+        source: tapName,
+        installRef: skill.name,
+        trustLabel: formatTapTrust(skill.trust),
+      }),
+    );
 
-    const hasNpm = npmEntries.length > 0;
-
-    if (tapEntries.length === 0 && !hasNpm) {
+    if (tapEntries.length === 0 && !query) {
       process.stdout.write(
         `No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n`,
       );
-      if (!config.registry.allow_npm) {
-        process.stdout.write(
-          `Tip: enable npm registry search via 'skilltap config'.\n`,
-        );
-      }
+      process.stdout.write(
+        `Tip: search the skills.sh registry with 'skilltap find <query>'.\n`,
+      );
       process.exit(0);
     }
 
-    // Apply text filter if query given
-    const filtered = applyFilter(tapEntries, tapSearchEntries, npmEntries, query);
+    // Apply text filter to taps; registry results are already filtered by query
+    const filtered = applyFilter(tapEntries, tapSearchEntries, registryEntries, query);
 
     if (filtered.length === 0) {
-      process.stdout.write(`No skills found matching '${query}'.\n`);
+      process.stdout.write(
+        query
+          ? `No skills found matching '${query}'.\n`
+          : "No skills found.\n",
+      );
       process.exit(0);
     }
 
@@ -141,7 +134,8 @@ export default defineCommand({
             description: e.description,
             source: e.source,
             installRef: e.installRef,
-            ...(e.version ? { version: e.version } : {}),
+            ...(e.preSelectedSkill ? { skill: e.preSelectedSkill } : {}),
+            ...(e.installs !== undefined ? { installs: e.installs } : {}),
           })),
           null,
           2,
@@ -160,40 +154,27 @@ export default defineCommand({
   },
 });
 
-function npmToEntries(packages: NpmSearchResult[]): SearchEntry[] {
-  return packages.map((p) => ({
-    name: p.name,
-    description: p.description,
-    source: "npm",
-    installRef: `npm:${p.name}`,
-    version: p.version,
-    trustLabel: ansi.dim("● publisher"),
-  }));
-}
-
-async function fetchNpmEntries(query: string): Promise<SearchEntry[]> {
-  const result = await searchPackages(query, { keywords: ["agent-skill"] });
-  if (!result.ok) {
-    errorLine(result.error.message, result.error.hint);
-    process.exit(1);
-  }
-  return npmToEntries(result.value);
-}
-
-function filterEntries(entries: SearchEntry[], query: string): SearchEntry[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return entries;
-  return entries.filter(
-    (e) =>
-      e.name.toLowerCase().includes(q) ||
-      e.description.toLowerCase().includes(q),
-  );
+function registryToEntries(results: RegistrySearchResult[]): SearchEntry[] {
+  return results.map((r) => {
+    // Extract skill name from id when id = "{source}/{skill-name}"
+    const skillName = r.id.startsWith(r.source + "/")
+      ? r.id.slice(r.source.length + 1)
+      : undefined;
+    return {
+      name: r.name,
+      description: r.description,
+      source: r.registryName,
+      installRef: r.source,
+      preSelectedSkill: skillName,
+      installs: r.installs,
+    };
+  });
 }
 
 function applyFilter(
   tapEntries: TapEntry[],
   tapSearchEntries: SearchEntry[],
-  npmEntries: SearchEntry[],
+  registryEntries: SearchEntry[],
   query: string | undefined,
 ): SearchEntry[] {
   const filteredTaps = query
@@ -206,48 +187,22 @@ function applyFilter(
       }))
     : tapSearchEntries;
 
-  const filteredNpm = query ? filterEntries(npmEntries, query) : npmEntries;
-
-  return [...filteredTaps, ...filteredNpm];
+  return [...filteredTaps, ...registryEntries];
 }
 
 function printTable(entries: SearchEntry[]): void {
   const width = termWidth();
-  const descWidth = Math.max(20, width - 60);
+  const descWidth = Math.max(20, width - 66);
   const rows = entries.map((e) => [
     ansi.bold(e.name),
     truncate(e.description, descWidth),
-    e.trustLabel ?? "",
-    e.version ? ansi.dim(e.version) : "",
+    e.installs !== undefined ? ansi.dim(formatInstallCount(e.installs)) : (e.trustLabel ?? ""),
     ansi.dim(`[${e.source}]`),
   ]);
 
   process.stdout.write("\n");
   process.stdout.write(table(rows));
   process.stdout.write("\n\n");
-}
-
-function outputResults(
-  entries: SearchEntry[],
-  query: string | undefined,
-  json: boolean,
-): void {
-  if (entries.length === 0) {
-    process.stdout.write(
-      query
-        ? `No packages found matching '${query}'.\n`
-        : "No packages found with the 'agent-skill' keyword.\n",
-    );
-    process.exit(0);
-  }
-
-  if (json) {
-    process.stdout.write(JSON.stringify(entries, null, 2));
-    process.stdout.write("\n");
-    return;
-  }
-
-  printTable(entries);
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +218,7 @@ async function runInteractive(
     options: entries.map((entry, i) => ({
       value: i,
       label: entry.name,
-      hint: `${entry.description}  [${entry.source}]${entry.version ? `  ${entry.version}` : ""}`,
+      hint: `${entry.description || entry.source}  [${entry.source}]${entry.installs !== undefined ? `  ${formatInstallCount(entry.installs)}` : ""}`,
     })),
     placeholder: "Type to filter…",
   });
@@ -305,6 +260,11 @@ async function installChosen(
   const selectSkillsCallback = async (
     skills_list: ScannedSkill[],
   ): Promise<string[]> => {
+    // If we know which skill to install (from registry search), auto-select it
+    if (chosen.preSelectedSkill) {
+      const match = skills_list.find((sk) => sk.name === chosen.preSelectedSkill);
+      if (match) return [match.name];
+    }
     if (skills_list.length === 1) return skills_list.map((sk) => sk.name);
     s.stop();
     const selected = await selectSkills(skills_list);

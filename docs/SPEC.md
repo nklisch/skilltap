@@ -286,7 +286,7 @@ If not found anywhere, exit 1 with: `Skill 'name' not found. Try 'skilltap find 
 
 ### `skilltap find [query]`
 
-Search for skills across all configured taps. When `registry.allow_npm = true` (the default), npm registry results are included automatically alongside tap results.
+Search for skills across all configured taps and the skills.sh public registry.
 
 **Arguments:**
 
@@ -300,21 +300,26 @@ Search for skills across all configured taps. When `registry.allow_npm = true` (
 |------|------|---------|-------------|
 | `-i` | boolean | false | Interactive search mode with type-ahead filtering |
 | `--json` | boolean | false | Output as JSON |
-| `--npm` | boolean | false | Search npm registry **only** (skip taps). Blocked when `registry.allow_npm = false`. |
+
+**Behavior:**
+
+- Without a query: lists all skills from configured taps (no registry fetch).
+- With a query (≥ 2 characters): searches taps locally AND fetches results from the skills.sh registry (`https://skills.sh/api/search?q=...&limit=20`). Registry results are appended after tap results.
+- Install counts from skills.sh are shown in the results table.
 
 **Output:**
 
 ```
-$ skilltap find review
+$ skilltap find react
 
-  code-review        Thorough code review with security focus   ● publisher    [home]
-  termtube-review    Termtube review checklist                  ◆ curated      [home]
-  @acme/code-review  AI-powered code review skill               ● publisher    1.0.3  [npm]
+  vercel-react-best-practices    184.5K installs  [skills.sh]
+  react-native-best-practices    6.8K installs    [skills.sh]
+  code-review                    ◆ curated        [home]
 ```
 
-Interactive mode (`-i`) shows a clack autocomplete prompt with type-ahead filtering. Enter on a result immediately proceeds to install.
+Interactive mode (`-i`) shows a clack autocomplete prompt with type-ahead filtering. Enter on a result immediately proceeds to install. For skills.sh results, the specific skill is auto-selected during install (no multi-skill prompt).
 
-If no taps are configured and npm is disabled: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and no query given: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 
@@ -1192,17 +1197,6 @@ Authentication token resolved from `_authToken` field in `.npmrc` or environment
 
 npm-sourced skills update via version comparison (not SHA). `skilltap update` fetches latest metadata and compares the installed version string to the latest resolved version.
 
-### find and npm
-
-By default `skilltap find` merges tap and npm results when `registry.allow_npm = true`. Use `--npm` to restrict results to npm only.
-
-```bash
-skilltap find review        # taps + npm merged
-skilltap find --npm review  # npm only
-```
-
-Searches the npm registry for packages with the `agent-skill` keyword. Returns name, version, description. npm auto-search is controlled by `registry.allow_npm` in config (set via `skilltap config`).
-
 ---
 
 ## Trust Signals
@@ -1501,14 +1495,6 @@ enabled = false
 # Values: "global", "project"
 scope = "project"
 
-# Registry access controls
-[registry]
-# Set to false to disable npm registry installs (skilltap install npm:...)
-# and search (skilltap find merges npm results automatically when true).
-# Useful for air-gapped environments or org policies restricting external package sources.
-# Default: true (npm allowed)
-allow_npm = true
-
 # CLI update check / auto-update settings
 [updates]
 # "off" = notify only; "patch" = auto-install patch releases;
@@ -1790,14 +1776,11 @@ Features:
 
 ### v0.2 — Adapters + Ecosystem
 
-Commands added: `find --npm`
-
 Features:
 - npm adapter (`npm:@scope/name[@version]`) with SHA-512 integrity verification
 - npm private registry support (env, `.npmrc`)
 - HTTP registry tap type (auto-detected, bearer auth)
 - Community trust signals (provenance via Sigstore/SLSA, publisher, curated, unverified tiers)
-- npm registry search (`find --npm`)
 
 ### v0.3 — Authoring + Polish
 

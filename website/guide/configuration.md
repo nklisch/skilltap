@@ -70,16 +70,6 @@ Settings applied when an AI agent runs skilltap.
 
 Agent mode inherits `defaults.also` and `security.scan` from the corresponding sections — there are no separate agent-mode overrides for those fields.
 
-### `[registry]`
-
-Controls access to external package registries.
-
-| Key         | Type    | Default | Description                                                   |
-| ----------- | ------- | ------- | ------------------------------------------------------------- |
-| `allow_npm` | boolean | `true`  | Allow npm registry installs and search. Set to `false` for air-gapped or restricted environments. |
-
-When `allow_npm = false`, `skilltap install npm:...` and `skilltap find --npm` exit with an error, and npm results are excluded from the default `skilltap find` output.
-
 ## How config and flags compose
 
 When a CLI flag and a config value conflict, the **most restrictive** option wins:
@@ -110,9 +100,6 @@ threshold = 5
 [agent-mode]
 enabled = false
 scope = "project"
-
-[registry]
-allow_npm = true
 ```
 
 For the full list of options and their allowed values, see the [Config Options Reference](/reference/config-options).

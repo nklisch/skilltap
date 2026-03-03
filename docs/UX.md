@@ -445,16 +445,15 @@ skilltap find [query] [flags]
 ```
 -i                 Interactive search with type-ahead filtering
 --json             Output as JSON
---npm              Search npm registry only (skip taps)
 ```
 
 ### Examples
 
 ```
-$ skilltap find review
-# Taps + npm merged (when allow_npm = true)
-  code-review        Thorough code review with security focus   ◆ curated    [home]
-  @acme/code-review  AI-powered code review skill               ● publisher  1.0.3  [npm]
+$ skilltap find react
+
+  vercel-react-best-practices    184.5K installs  [skills.sh]
+  react-native-best-practices    6.8K installs    [skills.sh]
 
 $ skilltap find git
 
@@ -465,33 +464,27 @@ $ skilltap find -i
 # Opens autocomplete prompt — type to filter, ↑↓ to navigate, Enter to install
 
 $ skilltap find
-# No query: lists all skills from all taps + npm
+# No query: lists all skills from configured taps only
 
 $ skilltap find --json
-[{"name":"commit-helper","description":"...","source":"home","installRef":"commit-helper"}]
-
-$ skilltap find --npm review
-# Search npm only
-  @acme/code-review    1.0.3    AI-powered code review skill    [npm]
-  @user/pr-review      2.1.0    Pull request review checklist   [npm]
-
-$ skilltap find --npm review  # when registry.allow_npm = false in config
-error: npm registry search is disabled by config (registry.allow_npm = false).
-hint: To allow npm search, set allow_npm = true via 'skilltap config'.
-```
-
-Empty state (no taps, npm disabled):
+[{"name":"commit-helper","description":"...","source":"home","installRef":"commit-helper"},
+ {"name":"vercel-react-best-practices","source":"skills.sh","installRef":"vercel-labs/agent-skills","skill":"vercel-react-best-practices","installs":184435}]
 
 ```
-$ skilltap find review
+
+Empty state (no taps, no query):
+
+```
+$ skilltap find
 No taps configured. Run 'skilltap tap add <name> <url>' to add one.
+Tip: search the skills.sh registry with 'skilltap find <query>'.
 ```
 
 No results:
 
 ```
 $ skilltap find nonexistent
-No skills matching 'nonexistent' found across 2 taps (15 skills).
+No skills found matching 'nonexistent'.
 ```
 
 ---

@@ -21,15 +21,25 @@ export const UpdatesConfigSchema = z.object({
   interval_hours: z.number().int().default(24),
 });
 
-export const RegistryConfigSchema = z.object({
-  allow_npm: z.boolean().default(true),
-});
-
 export const TelemetryConfigSchema = z.object({
   enabled: z.boolean().default(false),
   notice_shown: z.boolean().default(false),
   anonymous_id: z.string().default(""),
 });
+
+export const RegistrySourceSchema = z.object({
+  name: z.string(),
+  url: z.string(),
+});
+
+export const RegistryConfigSchema = z.object({
+  /** Which registries to search (in order). Built-in: "skills.sh". */
+  enabled: z.array(z.string()).default(["skills.sh"]),
+  /** Custom registry sources implementing the skills.sh search API. */
+  sources: z.array(RegistrySourceSchema).default([]),
+  /** @deprecated Use enabled = [] to disable all registries instead. */
+  allow_npm: z.boolean().default(true),
+}).prefault({});
 
 export const ConfigSchema = z.object({
   defaults: z
@@ -42,7 +52,7 @@ export const ConfigSchema = z.object({
     .prefault({}),
   security: SecurityConfigSchema.prefault({}),
   "agent-mode": AgentModeSchema.prefault({}),
-  registry: RegistryConfigSchema.prefault({}),
+  registry: RegistryConfigSchema,
   taps: z
     .array(
       z.object({
@@ -61,6 +71,7 @@ export const ConfigSchema = z.object({
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type AgentMode = z.infer<typeof AgentModeSchema>;
 export type UpdatesConfig = z.infer<typeof UpdatesConfigSchema>;
-export type RegistryConfig = z.infer<typeof RegistryConfigSchema>;
 export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
+export type RegistryConfig = z.infer<typeof RegistryConfigSchema>;
+export type RegistrySource = z.infer<typeof RegistrySourceSchema>;
 export type Config = z.infer<typeof ConfigSchema>;

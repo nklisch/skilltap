@@ -137,7 +137,6 @@ async function runAgentMode(
     also,
     ref: args.ref,
     skipScan: false,
-    allowNpm: config.registry.allow_npm,
     onWarnings: async (
       warnings: StaticWarning[],
     ): Promise<boolean> => {
@@ -378,7 +377,6 @@ async function runInteractiveMode(
     also,
     ref: args.ref,
     skipScan,
-    allowNpm: config.registry.allow_npm,
     onWarnings: skipScan ? undefined : warningsCallback,
     onSelectSkills: selectSkillsCallback,
     onSelectTap: selectTapCallback,

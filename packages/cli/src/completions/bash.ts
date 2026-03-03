@@ -49,7 +49,7 @@ _skilltap() {
       fi
       ;;
     find)
-      COMPREPLY=($(compgen -W "--npm --json -i" -- "$cur"))
+      COMPREPLY=($(compgen -W "--json -i" -- "$cur"))
       ;;
     link)
       case "$prev" in
@@ -83,7 +83,16 @@ _skilltap() {
       COMPREPLY=($(compgen -W "--json" -- "$cur"))
       ;;
     config)
-      COMPREPLY=($(compgen -W "agent-mode telemetry" -- "$cur"))
+      case "\${COMP_WORDS[2]}" in
+        get)
+          COMPREPLY=($(compgen -W "--json" -- "$cur"))
+          ;;
+        set|agent-mode|telemetry)
+          ;;
+        *)
+          COMPREPLY=($(compgen -W "agent-mode telemetry get set" -- "$cur"))
+          ;;
+      esac
       ;;
     tap)
       case "\${COMP_WORDS[2]}" in

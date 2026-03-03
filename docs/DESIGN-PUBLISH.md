@@ -97,7 +97,7 @@ my-skill/
 }
 ```
 
-The `keywords: ["agent-skill"]` ensures the package is discoverable via `skilltap find --npm` (see [DESIGN-NPM-ADAPTER.md](./DESIGN-NPM-ADAPTER.md)).
+The `keywords: ["agent-skill"]` follows npm convention for agent skill packages.
 
 `.github/workflows/publish.yml`:
 

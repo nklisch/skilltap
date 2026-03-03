@@ -28,6 +28,8 @@ export default defineCommand({
   subCommands: {
     "agent-mode": () => import("./config/agent-mode").then((m) => m.default),
     telemetry: () => import("./config/telemetry").then((m) => m.default),
+    get: () => import("./config/get").then((m) => m.default),
+    set: () => import("./config/set").then((m) => m.default),
   },
   async run({ args }) {
     if (!process.stdin.isTTY) {
@@ -117,12 +119,6 @@ export default defineCommand({
             initialValue: existing.security.on_warn,
           }),
 
-        allowNpm: () =>
-          confirm({
-            message: "Allow installing skills from npm registry?",
-            initialValue: existing.registry.allow_npm,
-          }),
-
         telemetry: () =>
           confirm({
             message:
@@ -155,10 +151,6 @@ export default defineCommand({
         scan: result.scan as "static" | "semantic" | "off",
         on_warn: result.onWarn as "prompt" | "fail",
         agent: result.agent as string,
-      },
-      registry: {
-        ...existing.registry,
-        allow_npm: result.allowNpm as boolean,
       },
       telemetry: {
         ...existing.telemetry,
