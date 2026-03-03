@@ -122,15 +122,16 @@ You can add as many taps as you want -- your own, a friend's, a team's.
 
 ## Search and install from a tap
 
-Browse available skills:
+Search for skills:
 
 ```bash
 skilltap find
 ```
 
-```
-  skilltap        Manage agent skills with the skilltap CLI   [skilltap]
-  skilltap-find   Discover and search for agent skills        [skilltap]
+This opens an interactive search — type a query, browse results, and press Enter to install. You can also search directly:
+
+```bash
+skilltap find review
 ```
 
 Install by name:

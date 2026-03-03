@@ -304,10 +304,13 @@ Search for skills across all configured taps and the skills.sh public registry.
 
 **Behavior:**
 
-- Without a query: lists all skills from configured taps (no registry fetch).
-- With a query (≥ 2 characters): searches taps locally AND fetches results from the skills.sh registry (`https://skills.sh/api/search?q=...&limit=20`). Registry results are sorted by install count (descending) and appended after tap results.
-- With `--local`: skips all registry searches, only shows tap results.
+- **TTY, no query**: enters interactive search mode — prompts for a search term (min 2 chars), shows spinner while searching taps + registries, then opens autocomplete picker. Enter on a result installs it.
+- **Non-TTY, no query**: lists all skills from configured taps as a table (no registry fetch). If no taps configured: prints hint message.
+- **With query**: searches taps locally AND fetches results from the skills.sh registry (`https://skills.sh/api/search?q=...&limit=20`). Registry results are sorted by install count (descending) and appended after tap results. Outputs table.
+- **With `-i`**: forces interactive mode regardless of TTY. If a query is also provided, skips the search prompt and goes straight to the autocomplete picker with results.
+- **With `--local`**: skips all registry searches, only shows tap results.
 - Install counts from skills.sh are shown in the results table.
+- Autocomplete picker hints are adaptive to terminal width.
 
 **Output:**
 
@@ -319,9 +322,9 @@ $ skilltap find react
   code-review                    ◆ curated        [home]
 ```
 
-Interactive mode (`-i`) shows a clack autocomplete prompt with type-ahead filtering. Enter on a result immediately proceeds to install. For skills.sh results, the specific skill is auto-selected during install (no multi-skill prompt).
+For skills.sh results, the specific skill is auto-selected during install (no multi-skill prompt).
 
-If no taps are configured and no query given: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and no query given (non-TTY): `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 

@@ -77,6 +77,12 @@ skilltap find --local <query>
 For interactive selection (pick a result and install it directly):
 
 ```bash
+skilltap find -i
+```
+
+If you already have a query, pass it to skip the search prompt:
+
+```bash
 skilltap find -i <query>
 ```
 

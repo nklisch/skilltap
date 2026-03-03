@@ -452,6 +452,18 @@ Multiple words can be given without quoting — they are joined into a single qu
 --json             Output as JSON
 ```
 
+### TTY behavior
+
+On a TTY, `skilltap find` with no query enters interactive search mode:
+
+1. Prompts for a search term (`text()` with min 2 chars)
+2. Searches taps + registries with a spinner
+3. Opens autocomplete picker — type to filter, ↑↓ to navigate, Enter to install
+
+`-i` forces interactive mode even when a query is provided or stdout is not a TTY.
+
+Non-TTY (piped / scripted): no query lists all tap skills as a table; no taps prints the empty-state message.
+
 ### Examples
 
 ```
@@ -468,11 +480,15 @@ $ skilltap find git
 $ skilltap find git hooks
 # Multi-word query — no quoting needed
 
-$ skilltap find -i
-# Opens autocomplete prompt — type to filter, ↑↓ to navigate, Enter to install
-
 $ skilltap find
-# No query: lists all skills from configured taps only
+# TTY: prompts for search term → autocomplete picker
+# Non-TTY: lists all skills from configured taps
+
+$ skilltap find -i
+# Forces interactive mode (prompt → search → picker)
+
+$ skilltap find react -i
+# Skips search prompt, goes straight to picker with results
 
 $ skilltap find --local react
 # Search taps only, skip registries
@@ -483,7 +499,7 @@ $ skilltap find --json
 
 ```
 
-Empty state (no taps, no query):
+Empty state (non-TTY, no taps, no query):
 
 ```
 $ skilltap find

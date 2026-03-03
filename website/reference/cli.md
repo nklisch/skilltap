@@ -289,23 +289,26 @@ skilltap find [query...] [flags]
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `query` | No | Search term. Multiple words can be given without quoting. If omitted, lists skills from configured taps only. |
+| `query` | No | Search term. Multiple words can be given without quoting. |
 
 ### Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `-i` | boolean | `false` | Interactive search with type-ahead filtering. Enter on a result installs it. |
+| `-i` | boolean | `false` | Force interactive search mode. Prompts for query if not given, then shows autocomplete picker. |
 | `-l, --local` | boolean | `false` | Search local taps only (skip registries) |
 | `--json` | boolean | `false` | Output as JSON |
 
 ### Behavior
 
-- **No query**: lists all skills from configured taps.
+- **No query, TTY**: enters interactive search — prompts for a search term, searches taps + registries, then shows an autocomplete picker. Enter on a result installs it.
+- **No query, non-TTY**: lists all skills from configured taps as a table.
 - **With query** (≥ 2 chars): searches taps locally, then appends results from the skills.sh registry (up to 20 results, sorted by install count descending).
+- **`-i` with query**: skips the search prompt, goes straight to the autocomplete picker with results.
 - **With `--local`**: skips all registry searches, only shows tap results.
 - Install counts are shown for skills.sh results (e.g., `184.5K installs`).
 - For skills.sh multi-skill repos, the specific skill is auto-selected during install — no extra prompt.
+- Picker hints adapt to terminal width — descriptions are truncated to fit.
 
 ### Examples
 
@@ -319,17 +322,17 @@ skilltap find git hooks
 # Search taps only, skip registries
 skilltap find --local react
 
-# List all skills from configured taps
+# Interactive search — prompts for query, then autocomplete picker
 skilltap find
 
-# Interactive search — type to filter, Enter to install
-skilltap find -i
+# Force interactive with a pre-filled query
+skilltap find react -i
 
 # Machine-readable output
 skilltap find --json
 ```
 
-If no taps are configured and no query is given: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+If no taps are configured and no query is given (non-TTY): `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
 ---
 
