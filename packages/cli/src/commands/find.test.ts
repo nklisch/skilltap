@@ -158,7 +158,7 @@ describe("find — with taps", () => {
     try {
       await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
       const { exitCode, stdout } = await runCli(
-        ["find", "zzznomatch"],
+        ["find", "zzznomatch", "--local"],
         homeDir,
         configDir,
       );
