@@ -95,6 +95,7 @@ describe("completions — bash script", () => {
   test("script covers all top-level commands", async () => {
     const { stdout } = await runCompletions(["bash"], homeDir, configDir);
     const commands = [
+      "status",
       "install",
       "remove",
       "list",
@@ -109,6 +110,8 @@ describe("completions — bash script", () => {
       "tap",
       "doctor",
       "completions",
+      "telemetry",
+      "self-update",
     ];
     for (const cmd of commands) {
       expect(stdout).toContain(cmd);
@@ -149,6 +152,7 @@ describe("completions — zsh script", () => {
   test("script covers all top-level commands", async () => {
     const { stdout } = await runCompletions(["zsh"], homeDir, configDir);
     for (const cmd of [
+      "status",
       "install",
       "remove",
       "list",
@@ -157,6 +161,8 @@ describe("completions — zsh script", () => {
       "tap",
       "doctor",
       "completions",
+      "telemetry",
+      "self-update",
     ]) {
       expect(stdout).toContain(cmd);
     }
@@ -191,6 +197,7 @@ describe("completions — fish script", () => {
   test("script covers all top-level commands", async () => {
     const { stdout } = await runCompletions(["fish"], homeDir, configDir);
     for (const cmd of [
+      "status",
       "install",
       "remove",
       "list",
@@ -199,6 +206,8 @@ describe("completions — fish script", () => {
       "tap",
       "doctor",
       "completions",
+      "telemetry",
+      "self-update",
     ]) {
       expect(stdout).toContain(`-a ${cmd}`);
     }

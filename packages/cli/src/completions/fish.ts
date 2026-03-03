@@ -6,6 +6,7 @@ export function generateFishCompletions(): string {
 complete -c skilltap -f
 
 # Top-level commands
+complete -c skilltap -n '__fish_use_subcommand' -a status -d 'Show agent mode configuration'
 complete -c skilltap -n '__fish_use_subcommand' -a install -d 'Install a skill'
 complete -c skilltap -n '__fish_use_subcommand' -a remove -d 'Remove an installed skill'
 complete -c skilltap -n '__fish_use_subcommand' -a list -d 'List installed skills'
@@ -20,6 +21,8 @@ complete -c skilltap -n '__fish_use_subcommand' -a config -d 'Interactive setup 
 complete -c skilltap -n '__fish_use_subcommand' -a tap -d 'Manage taps'
 complete -c skilltap -n '__fish_use_subcommand' -a doctor -d 'Check environment and state'
 complete -c skilltap -n '__fish_use_subcommand' -a completions -d 'Generate shell completions'
+complete -c skilltap -n '__fish_use_subcommand' -a telemetry -d 'Manage telemetry settings'
+complete -c skilltap -n '__fish_use_subcommand' -a self-update -d 'Update the skilltap binary'
 
 # install flags
 complete -c skilltap -n '__fish_seen_subcommand_from install' -l project -d 'Install to project scope'
@@ -91,5 +94,14 @@ complete -c skilltap -n '__fish_seen_subcommand_from doctor' -l json -d 'JSON ou
 complete -c skilltap -n '__fish_seen_subcommand_from doctor' -l fix -d 'Auto-fix issues'
 
 # completions shells
-complete -c skilltap -n '__fish_seen_subcommand_from completions' -xa 'bash zsh fish'`;
+complete -c skilltap -n '__fish_seen_subcommand_from completions' -xa 'bash zsh fish'
+
+# status flags
+complete -c skilltap -n '__fish_seen_subcommand_from status' -l json -d 'Output as JSON'
+
+# telemetry subcommands
+complete -c skilltap -n '__fish_seen_subcommand_from telemetry; and not __fish_seen_subcommand_from status enable disable' -xa 'status enable disable'
+
+# self-update flags
+complete -c skilltap -n '__fish_seen_subcommand_from self-update' -l force -d 'Re-install even if already on latest version'`;
 }

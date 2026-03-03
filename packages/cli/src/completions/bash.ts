@@ -8,7 +8,7 @@ _skilltap() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="install remove list update find link unlink info create verify config tap doctor completions"
+  local commands="status install remove list update find link unlink info create verify config tap doctor completions telemetry self-update"
   local tap_commands="add remove list update init"
   local agents="claude-code cursor codex gemini windsurf"
   local templates="basic npm multi"
@@ -102,6 +102,15 @@ _skilltap() {
       ;;
     completions)
       COMPREPLY=($(compgen -W "bash zsh fish" -- "$cur"))
+      ;;
+    status)
+      COMPREPLY=($(compgen -W "--json" -- "$cur"))
+      ;;
+    telemetry)
+      COMPREPLY=($(compgen -W "status enable disable" -- "$cur"))
+      ;;
+    self-update)
+      COMPREPLY=($(compgen -W "--force" -- "$cur"))
       ;;
     "")
       COMPREPLY=($(compgen -W "$commands" -- "$cur"))

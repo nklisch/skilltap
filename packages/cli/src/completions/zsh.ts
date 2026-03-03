@@ -4,6 +4,7 @@ export function generateZshCompletions(): string {
 _skilltap() {
   local -a commands
   commands=(
+    'status:Show agent mode configuration'
     'install:Install a skill'
     'remove:Remove an installed skill'
     'list:List installed skills'
@@ -18,6 +19,8 @@ _skilltap() {
     'tap:Manage taps'
     'doctor:Check environment and state'
     'completions:Generate shell completions'
+    'telemetry:Manage telemetry settings'
+    'self-update:Update the skilltap binary'
   )
 
   _arguments -C \\
@@ -127,6 +130,15 @@ _skilltap() {
           ;;
         completions)
           _arguments '1:shell:(bash zsh fish)'
+          ;;
+        status)
+          _arguments '--json[Output as JSON]'
+          ;;
+        telemetry)
+          _arguments '1:subcommand:(status enable disable)'
+          ;;
+        self-update)
+          _arguments '--force[Re-install even if already on latest version]'
           ;;
       esac
       ;;
