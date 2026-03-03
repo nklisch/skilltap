@@ -24,16 +24,7 @@ skilltap fills that gap.
 
 ## How it works
 
-```
-Git host (any)          skilltap           Your machine
-┌──────────┐           ┌────────┐         ┌────────────────────┐
-│ Gitea    │──clone──▶ │ scan   │──────▶  │ ~/.agents/skills/  │
-│ GitHub   │           │ install│         │                    │
-│ GitLab   │           │ link   │         │ optional symlinks: │
-│ Your own │           └────────┘         │ ~/.claude/skills/  │
-└──────────┘                              │ ~/.cursor/skills/  │
-                                          └────────────────────┘
-```
+Your team maintains skills in repos on any git host. skilltap clones, scans, and installs them — then symlinks to whichever agents you use.
 
 1. **Clone** the skill repo to a temp directory
 2. **Scan** all files for security issues (invisible Unicode, hidden instructions, suspicious URLs, and more)
@@ -95,3 +86,4 @@ skilltap install code-reviewer
 - [Getting Started](./getting-started) -- install skilltap and your first skill
 - [Installing Skills](./installing-skills) -- all the ways to install, with flags and options
 - [Creating Skills](./creating-skills) -- write and publish your own skills
+- [Teams & Organizations](./teams) -- share skills across your whole team with a private tap

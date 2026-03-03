@@ -133,6 +133,7 @@ gtag('config', 'G-P45TWRKXC4');`],
             { text: "Installing Skills", link: "/guide/installing-skills" },
             { text: "Creating Skills", link: "/guide/creating-skills" },
             { text: "Taps", link: "/guide/taps" },
+            { text: "Teams & Organizations", link: "/guide/teams" },
           ],
         },
         {

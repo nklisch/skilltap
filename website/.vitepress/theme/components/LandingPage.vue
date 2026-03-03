@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from "vue";
 import { useData } from "vitepress";
 import TerminalDemo from "./TerminalDemo.vue";
 import SecurityScanDemo from "./SecurityScanDemo.vue";
@@ -7,6 +8,8 @@ import FlowDiagram from "./FlowDiagram.vue";
 import InstallTabs from "./InstallTabs.vue";
 
 const { site } = useData();
+
+const demoTab = ref("individual");
 
 const features = [
   {
@@ -46,6 +49,27 @@ const features = [
       "Safe headless operation for AI agents. Security issues block with machine-readable stop directives.",
   },
 ];
+
+const teamFeatures = [
+  {
+    icon: "📚",
+    title: "Central skill catalog",
+    description:
+      "Maintain one tap repo on any git host. Every developer runs `skilltap tap add` once, then installs and updates by name — no URL wrangling, no copy-paste.",
+  },
+  {
+    icon: "🔀",
+    title: "Every agent, zero friction",
+    description:
+      "Claude Code, Cursor, Codex, Gemini, Windsurf — everyone installs from the same tap. One source serves every agent your team uses, with no per-agent setup.",
+  },
+  {
+    icon: "🎛️",
+    title: "Your catalog, your rules",
+    description:
+      "Disable npm with one config line. Developers search only the taps you've registered — point them at your company tap and nothing else surfaces.",
+  },
+];
 </script>
 
 <template>
@@ -73,7 +97,7 @@ const features = [
           </h1>
           <p class="hero-tagline">Agent skills, on tap.</p>
           <p class="hero-subtitle">
-            Install SKILL.md files from any git host. Works with every agent.
+            Install SKILL.md files from any git host. Works with every agent — solo or across your whole team.
           </p>
           <div class="hero-actions">
             <a href="/guide/getting-started" class="btn btn-primary">Get Started</a>
@@ -116,6 +140,28 @@ const features = [
       </div>
     </section>
 
+    <!-- For teams -->
+    <section class="teams-section">
+      <div class="section-inner">
+        <h2 class="section-title">Built for teams</h2>
+        <p class="section-subtitle">
+          One tap repo. Every developer. Every agent. Share and standardize skills across your organization.
+        </p>
+        <div class="features-grid">
+          <FeatureCard
+            v-for="f in teamFeatures"
+            :key="f.title"
+            :icon="f.icon"
+            :title="f.title"
+            :description="f.description"
+          />
+        </div>
+        <div class="teams-cta">
+          <a href="/guide/teams" class="teams-link">Learn how to set up a team tap →</a>
+        </div>
+      </div>
+    </section>
+
     <!-- How it works -->
     <section class="how-section">
       <div class="section-inner">
@@ -130,15 +176,27 @@ const features = [
     <!-- Quick demo -->
     <section class="demo-section">
       <div class="section-inner">
-        <h2 class="section-title">Five minutes to your first skill</h2>
+        <h2 class="section-title">See it in action</h2>
         <div class="demo-code">
+          <div class="demo-tab-bar">
+            <button
+              class="demo-tab"
+              :class="{ active: demoTab === 'individual' }"
+              @click="demoTab = 'individual'"
+            >Individual</button>
+            <button
+              class="demo-tab"
+              :class="{ active: demoTab === 'team' }"
+              @click="demoTab = 'team'"
+            >Team</button>
+          </div>
           <div class="code-window">
             <div class="code-bar">
               <span class="dot red"></span>
               <span class="dot yellow"></span>
               <span class="dot green"></span>
             </div>
-            <pre class="code-body"><code><span class="c-comment"># Add a tap (registry of skills)</span>
+            <pre v-if="demoTab === 'individual'" class="code-body"><code><span class="c-comment"># Add a tap (registry of skills)</span>
 <span class="c-prompt">$</span> skilltap tap add community https://github.com/example/skills-tap
 
 <span class="c-comment"># Search for skills</span>
@@ -146,11 +204,29 @@ const features = [
 <span class="c-dim">  community/code-reviewer  Review code for bugs and style issues</span>
 <span class="c-dim">  community/pr-review      Generate PR review comments</span>
 
-<span class="c-comment"># Install one</span>
+<span class="c-comment"># Install with agent symlink</span>
 <span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
 <span class="c-comment"># That's it. Your agent can use it now.</span></code></pre>
+            <pre v-else class="code-body"><code><span class="c-comment"># Engineering lead: create and share a company tap</span>
+<span class="c-prompt">$</span> skilltap tap init acme-skills
+<span class="c-prompt">$</span> <span class="c-dim"># add skills to tap.json, push to your git host</span>
+
+<span class="c-comment"># Every developer: add the tap once during onboarding</span>
+<span class="c-prompt">$</span> skilltap tap add acme https://gitea.acme.com/eng/acme-skills
+
+<span class="c-comment"># Search and install from the company catalog</span>
+<span class="c-prompt">$</span> skilltap find
+<span class="c-dim">  acme/code-reviewer    Review code for bugs and style</span>
+<span class="c-dim">  acme/pr-helper        Draft PR descriptions</span>
+<span class="c-dim">  acme/commit-helper    Write conventional commits</span>
+<span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
+<span class="c-success">◆  Installed code-reviewer</span>
+
+<span class="c-comment"># When skills are updated centrally, everyone pulls</span>
+<span class="c-prompt">$</span> skilltap update --all
+<span class="c-success">◆  Updated code-reviewer  (2 files changed)</span></code></pre>
           </div>
         </div>
       </div>
@@ -397,15 +473,38 @@ const features = [
   margin-top: 40px;
 }
 
+/* For teams */
+.teams-section {
+  padding: 80px 24px;
+  background: rgba(28, 25, 23, 0.5);
+}
+
+.teams-cta {
+  text-align: center;
+  margin-top: 32px;
+}
+
+.teams-link {
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  color: #a8a29e;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.teams-link:hover {
+  color: #fbbf24;
+}
+
 /* How it works */
 .how-section {
   padding: 80px 24px;
-  background: rgba(28, 25, 23, 0.5);
 }
 
 /* Demo */
 .demo-section {
   padding: 80px 24px;
+  background: rgba(28, 25, 23, 0.5);
 }
 
 .demo-code {
@@ -413,10 +512,42 @@ const features = [
   margin: 0 auto;
 }
 
+.demo-tab-bar {
+  display: flex;
+  gap: 0;
+  background: #1c1917;
+  border: 1px solid #292524;
+  border-bottom: none;
+  border-radius: 12px 12px 0 0;
+  overflow: hidden;
+}
+
+.demo-tab {
+  background: none;
+  border: none;
+  color: #a8a29e;
+  font-family: var(--vp-font-family-mono);
+  font-size: 13px;
+  padding: 10px 20px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.demo-tab:hover {
+  color: #f5f5f4;
+}
+
+.demo-tab.active {
+  color: #fbbf24;
+  border-bottom-color: #f59e0b;
+}
+
 .code-window {
   background: #1c1917;
-  border-radius: 12px;
+  border-radius: 0 12px 12px 12px;
   border: 1px solid #292524;
+  border-top: none;
   overflow: hidden;
 }
 
