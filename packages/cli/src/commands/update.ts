@@ -28,7 +28,7 @@ import {
   resolveAgentInteractive,
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
-import { sendEvent } from "../telemetry";
+import { sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -119,14 +119,11 @@ async function runAgentModeUpdate(
 
   if (!result.ok) {
     sendEvent(config, "update", {
-      os: process.platform,
-      arch: process.arch,
+      ...telemetryBase(true),
       success: false,
       error_category: result.error.constructor.name,
       updated_count: 0,
       up_to_date_count: 0,
-      agent_mode: true,
-      ci: Boolean(process.env.CI),
     });
     agentError(result.error.message);
     process.exit(1);
@@ -135,13 +132,10 @@ async function runAgentModeUpdate(
   const { updated, skipped, upToDate } = result.value;
 
   sendEvent(config, "update", {
-    os: process.platform,
-    arch: process.arch,
+    ...telemetryBase(true),
     success: true,
     updated_count: updated.length,
     up_to_date_count: upToDate.length,
-    agent_mode: true,
-    ci: Boolean(process.env.CI),
   });
 
   for (const skillName of updated) {
@@ -233,14 +227,11 @@ async function runInteractiveUpdate(
 
   if (!result.ok) {
     sendEvent(config, "update", {
-      os: process.platform,
-      arch: process.arch,
+      ...telemetryBase(false),
       success: false,
       error_category: result.error.constructor.name,
       updated_count: 0,
       up_to_date_count: 0,
-      agent_mode: false,
-      ci: Boolean(process.env.CI),
     });
     errorLine(result.error.message, result.error.hint);
     process.exit(1);
@@ -249,13 +240,10 @@ async function runInteractiveUpdate(
   const { updated, skipped, upToDate } = result.value;
 
   sendEvent(config, "update", {
-    os: process.platform,
-    arch: process.arch,
+    ...telemetryBase(false),
     success: true,
     updated_count: updated.length,
     up_to_date_count: upToDate.length,
-    agent_mode: false,
-    ci: Boolean(process.env.CI),
   });
 
   for (const skillName of updated) {

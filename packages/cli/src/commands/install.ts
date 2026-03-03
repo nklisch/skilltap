@@ -39,7 +39,7 @@ import {
   resolveScope,
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
-import { inferAdapter, sendEvent } from "../telemetry";
+import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -163,31 +163,25 @@ async function runAgentMode(
 
   if (!result.ok) {
     sendEvent(config, "install", {
-      os: process.platform,
-      arch: process.arch,
+      ...telemetryBase(true),
       adapter: inferAdapter(args.source),
       success: false,
       error_category: result.error.constructor.name,
       skill_count: 0,
       scan_mode: policy.scanMode,
       scope,
-      agent_mode: true,
-      ci: Boolean(process.env.CI),
     });
     agentError(result.error.message);
     process.exit(1);
   }
 
   sendEvent(config, "install", {
-    os: process.platform,
-    arch: process.arch,
+    ...telemetryBase(true),
     adapter: inferAdapter(args.source),
     success: true,
     skill_count: result.value.records.length,
     scan_mode: policy.scanMode,
     scope,
-    agent_mode: true,
-    ci: Boolean(process.env.CI),
   });
 
   for (const record of result.value.records) {
@@ -277,22 +271,27 @@ async function runInteractiveMode(
   const autoSelectAll = policy.yes;
 
   // Callbacks
-  const warningsCallback = async (
-    warnings: StaticWarning[],
-    skillName: string,
-  ): Promise<boolean> =>
-    withSpinnerPaused(async () => {
-      printWarnings(warnings, skillName);
-      if (onWarn === "fail") {
-        errorLine(
-          `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
-        );
-        process.exit(1);
-      }
-      const proceed = await confirmInstall(skillName);
-      if (isCancel(proceed) || proceed === false) process.exit(2);
-      return true;
-    });
+  function makeWarnCallback<W>(
+    printFn: (warnings: W[], skillName: string) => void,
+    failMsg: (skillName: string) => string,
+  ): (warnings: W[], skillName: string) => Promise<boolean> {
+    return async (warnings, skillName) =>
+      withSpinnerPaused(async () => {
+        printFn(warnings, skillName);
+        if (onWarn === "fail") {
+          errorLine(failMsg(skillName));
+          process.exit(1);
+        }
+        const proceed = await confirmInstall(skillName);
+        if (isCancel(proceed) || proceed === false) process.exit(2);
+        return true;
+      });
+  }
+
+  const warningsCallback = makeWarnCallback(
+    printWarnings,
+    (name) => `Security warnings found in ${name} — aborting (--strict / on_warn=fail)`,
+  );
 
   const selectSkillsCallback = async (
     skills: ScannedSkill[],
@@ -319,22 +318,10 @@ async function runInteractiveMode(
       return chosen as TapEntry;
     });
 
-  const semanticWarningsCallback = async (
-    warnings: SemanticWarning[],
-    skillName: string,
-  ): Promise<boolean> =>
-    withSpinnerPaused(async () => {
-      printSemanticWarnings(warnings, skillName);
-      if (onWarn === "fail") {
-        errorLine(
-          `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
-        );
-        process.exit(1);
-      }
-      const proceed = await confirmInstall(skillName);
-      if (isCancel(proceed) || proceed === false) process.exit(2);
-      return true;
-    });
+  const semanticWarningsCallback = makeWarnCallback(
+    printSemanticWarnings,
+    (name) => `Semantic warnings found in ${name} — aborting (--strict / on_warn=fail)`,
+  );
 
   const offerSemanticCallback = async (): Promise<boolean> => {
     if (!agent) return false;
@@ -409,31 +396,25 @@ async function runInteractiveMode(
   if (!result.ok) {
     s.stop("Failed.", 1);
     sendEvent(config, "install", {
-      os: process.platform,
-      arch: process.arch,
+      ...telemetryBase(false),
       adapter: inferAdapter(args.source),
       success: false,
       error_category: result.error.constructor.name,
       skill_count: 0,
       scan_mode: policy.scanMode,
       scope,
-      agent_mode: false,
-      ci: Boolean(process.env.CI),
     });
     errorLine(result.error.message, result.error.hint);
     process.exit(1);
   }
 
   sendEvent(config, "install", {
-    os: process.platform,
-    arch: process.arch,
+    ...telemetryBase(false),
     adapter: inferAdapter(args.source),
     success: true,
     skill_count: result.value.records.length,
     scan_mode: policy.scanMode,
     scope,
-    agent_mode: false,
-    ci: Boolean(process.env.CI),
   });
 
   s.stop("Done.");

@@ -6,7 +6,7 @@ import { errorLine, successLine } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import { confirmRemove } from "../ui/prompts";
 import { getInstalledSkillOrExit } from "../ui/resolve";
-import { sendEvent } from "../telemetry";
+import { sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -46,24 +46,18 @@ export default defineCommand({
       const result = await removeSkill(args.name, { scope });
       if (!result.ok) {
         sendEvent(config, "remove", {
-          os: process.platform,
-          arch: process.arch,
+          ...telemetryBase(true),
           success: false,
           error_category: result.error.constructor.name,
           scope,
-          agent_mode: true,
-          ci: Boolean(process.env.CI),
         });
         agentError(result.error.message);
         process.exit(1);
       }
       sendEvent(config, "remove", {
-        os: process.platform,
-        arch: process.arch,
+        ...telemetryBase(true),
         success: true,
         scope,
-        agent_mode: true,
-        ci: Boolean(process.env.CI),
       });
       process.stdout.write(`OK: Removed ${args.name}\n`);
       return;
@@ -83,25 +77,19 @@ export default defineCommand({
     if (!result.ok) {
       s.stop("Failed.", 1);
       sendEvent(config, "remove", {
-        os: process.platform,
-        arch: process.arch,
+        ...telemetryBase(false),
         success: false,
         error_category: result.error.constructor.name,
         scope,
-        agent_mode: false,
-        ci: Boolean(process.env.CI),
       });
       errorLine(result.error.message, result.error.hint);
       process.exit(1);
     }
 
     sendEvent(config, "remove", {
-      os: process.platform,
-      arch: process.arch,
+      ...telemetryBase(false),
       success: true,
       scope,
-      agent_mode: false,
-      ci: Boolean(process.env.CI),
     });
     s.stop("Removed.");
     successLine(`Removed ${args.name}`);

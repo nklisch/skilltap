@@ -143,6 +143,17 @@ async function runUpdateSemanticScan(
   return false;
 }
 
+function patchRecord(
+  installed: { skills: InstalledSkill[] },
+  record: InstalledSkill,
+  updates: Partial<InstalledSkill>,
+): void {
+  const idx = installed.skills.indexOf(record);
+  if (idx !== -1) {
+    installed.skills[idx] = { ...record, ...updates };
+  }
+}
+
 /** Handle updates for npm-sourced skills (version comparison instead of git SHA). */
 async function updateNpmSkill(
   record: InstalledSkill,
@@ -239,16 +250,12 @@ async function updateNpmSkill(
     });
 
     // Update record in place
-    const idx = installed.skills.indexOf(record);
-    if (idx !== -1) {
-      installed.skills[idx] = {
-        ...record,
-        ref: latestVersion,
-        sha: null,
-        updatedAt: new Date().toISOString(),
-        trust: newTrust,
-      };
-    }
+    patchRecord(installed, record, {
+      ref: latestVersion,
+      sha: null,
+      updatedAt: new Date().toISOString(),
+      trust: newTrust,
+    });
 
     result.updated.push(record.name);
     options.onProgress?.(record.name, "updated");
@@ -395,15 +402,11 @@ export async function updateSkill(
     });
 
     // Update the record in place
-    const idx = installed.skills.indexOf(record);
-    if (idx !== -1) {
-      installed.skills[idx] = {
-        ...record,
-        sha: newShaResult.value,
-        updatedAt: new Date().toISOString(),
-        trust: newTrust,
-      };
-    }
+    patchRecord(installed, record, {
+      sha: newShaResult.value,
+      updatedAt: new Date().toISOString(),
+      trust: newTrust,
+    });
 
     await refreshAgentSymlinks(record, options.projectRoot);
 
