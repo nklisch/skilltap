@@ -207,7 +207,8 @@ export async function searchPackages(
         score: (score?.final as number) ?? 0,
       };
     })
-    .filter((r) => r.name !== "");
+    .filter((r) => r.name !== "")
+    .sort((a, b) => b.score - a.score);
 
   return ok(results);
 }
