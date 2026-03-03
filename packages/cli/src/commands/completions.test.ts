@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
@@ -10,6 +9,7 @@ async function runCompletions(
   args: string[],
   homeDir: string,
   configDir: string,
+  extraEnv?: Record<string, string>,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
     ["bun", "run", "--bun", "src/index.ts", "completions", ...args],
@@ -21,6 +21,8 @@ async function runCompletions(
         ...process.env,
         SKILLTAP_HOME: homeDir,
         XDG_CONFIG_HOME: configDir,
+        HOME: homeDir,
+        ...extraEnv,
       },
     },
   );
@@ -399,78 +401,113 @@ describe("--get-completions — with state", () => {
 // ─── --install flag ───────────────────────────────────────────────────────────
 
 describe("completions --install", () => {
-  const home = homedir();
-
   test("--install bash writes file and exits 0", async () => {
     const expectedPath = join(
-      home,
+      homeDir,
       ".local",
       "share",
       "bash-completion",
       "completions",
       "skilltap",
     );
-    try {
-      const { exitCode, stdout } = await runCompletions(
-        ["bash", "--install"],
-        homeDir,
-        configDir,
-      );
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Wrote completions to");
-      expect(stdout).toContain("bash-completion");
+    const { exitCode, stdout } = await runCompletions(
+      ["bash", "--install"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Wrote completions to");
+    expect(stdout).toContain("bash-completion");
 
-      const content = await Bun.file(expectedPath).text().catch(() => null);
-      expect(content).not.toBeNull();
-      expect(content).toContain("_skilltap");
-    } finally {
-      await unlink(expectedPath).catch(() => {});
-    }
+    const content = await Bun.file(expectedPath).text().catch(() => null);
+    expect(content).not.toBeNull();
+    expect(content).toContain("_skilltap");
   });
 
   test("--install zsh writes file to ~/.zfunc/_skilltap", async () => {
-    const expectedPath = join(home, ".zfunc", "_skilltap");
-    try {
-      const { exitCode, stdout } = await runCompletions(
-        ["zsh", "--install"],
-        homeDir,
-        configDir,
-      );
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Wrote completions to");
-      expect(stdout).toContain(".zfunc");
+    const expectedPath = join(homeDir, ".zfunc", "_skilltap");
+    const { exitCode, stdout } = await runCompletions(
+      ["zsh", "--install"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Wrote completions to");
+    expect(stdout).toContain(".zfunc");
 
-      const content = await Bun.file(expectedPath).text().catch(() => null);
-      expect(content).not.toBeNull();
-      expect(content).toContain("#compdef skilltap");
-    } finally {
-      await unlink(expectedPath).catch(() => {});
-    }
+    const content = await Bun.file(expectedPath).text().catch(() => null);
+    expect(content).not.toBeNull();
+    expect(content).toContain("#compdef skilltap");
+  });
+
+  test("--install zsh patches ~/.zshrc with fpath setup", async () => {
+    const zshrcPath = join(homeDir, ".zshrc");
+    await runCompletions(["zsh", "--install"], homeDir, configDir);
+
+    const zshrcContent = await Bun.file(zshrcPath).text().catch(() => null);
+    expect(zshrcContent).not.toBeNull();
+    expect(zshrcContent).toContain("fpath=(~/.zfunc $fpath)");
+    expect(zshrcContent).toContain("autoload -Uz compinit");
+  });
+
+  test("--install zsh does not duplicate fpath when already present", async () => {
+    const zshrcPath = join(homeDir, ".zshrc");
+    await writeFile(
+      zshrcPath,
+      "fpath=(~/.zfunc $fpath)\nautoload -Uz compinit && compinit\n",
+    );
+    const { stdout } = await runCompletions(
+      ["zsh", "--install"],
+      homeDir,
+      configDir,
+    );
+    expect(stdout).toContain("Wrote completions to");
+
+    const zshrcContent = await Bun.file(zshrcPath).text();
+    const matches = zshrcContent.match(/fpath=\(~\/.zfunc/g);
+    expect(matches?.length).toBe(1);
   });
 
   test("--install fish writes file to ~/.config/fish/completions/", async () => {
     const expectedPath = join(
-      home,
+      homeDir,
       ".config",
       "fish",
       "completions",
       "skilltap.fish",
     );
-    try {
-      const { exitCode, stdout } = await runCompletions(
-        ["fish", "--install"],
-        homeDir,
-        configDir,
-      );
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("Wrote completions to");
-      expect(stdout).toContain("fish");
+    const { exitCode, stdout } = await runCompletions(
+      ["fish", "--install"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Wrote completions to");
+    expect(stdout).toContain("fish");
 
-      const content = await Bun.file(expectedPath).text().catch(() => null);
-      expect(content).not.toBeNull();
-      expect(content).toContain("complete -c skilltap");
-    } finally {
-      await unlink(expectedPath).catch(() => {});
-    }
+    const content = await Bun.file(expectedPath).text().catch(() => null);
+    expect(content).not.toBeNull();
+    expect(content).toContain("complete -c skilltap");
+  });
+
+  test("--install warns when shell arg doesn't match $SHELL", async () => {
+    const { exitCode, stderr } = await runCompletions(
+      ["bash", "--install"],
+      homeDir,
+      configDir,
+      { SHELL: "/bin/zsh" },
+    );
+    expect(exitCode).toBe(0);
+    expect(stderr).toContain("zsh");
+  });
+
+  test("--install no warning when shell matches $SHELL", async () => {
+    const { stderr } = await runCompletions(
+      ["bash", "--install"],
+      homeDir,
+      configDir,
+      { SHELL: "/bin/bash" },
+    );
+    expect(stderr).not.toContain("Note:");
   });
 });

@@ -6,6 +6,25 @@ import type { Shell } from "../completions/generate";
 import { generateCompletions } from "../completions/generate";
 import { ansi } from "../ui/format";
 
+async function patchZshrc(home: string): Promise<string> {
+  const zshrcPath = join(home, ".zshrc");
+  let content = "";
+  try {
+    content = await Bun.file(zshrcPath).text();
+  } catch {}
+  if (content.includes(".zfunc")) {
+    return "  Restart your shell to enable completions.";
+  }
+  const setup =
+    "\n# skilltap completions\nfpath=(~/.zfunc $fpath)\nautoload -Uz compinit && compinit\n";
+  try {
+    await writeFile(zshrcPath, content + setup);
+    return "  Added fpath setup to ~/.zshrc\n  Restart your shell to enable completions.";
+  } catch {
+    return "  Add to ~/.zshrc (if not already present):\n    fpath=(~/.zfunc $fpath)\n    autoload -Uz compinit && compinit\n  Then restart your shell.";
+  }
+}
+
 export default defineCommand({
   meta: {
     name: "completions",
@@ -40,7 +59,20 @@ export default defineCommand({
       return;
     }
 
-    const home = homedir();
+    const home = process.env.HOME ?? homedir();
+
+    // Warn if the specified shell doesn't match the running shell
+    const currentShell = (process.env.SHELL ?? "").split("/").pop() ?? "";
+    if (
+      currentShell &&
+      currentShell !== shell &&
+      (["bash", "zsh", "fish"] as string[]).includes(currentShell)
+    ) {
+      process.stderr.write(
+        `${ansi.yellow("Note:")} $SHELL is ${currentShell} — did you mean: skilltap completions ${currentShell} --install?\n`,
+      );
+    }
+
     let targetPath: string;
     let instructions: string;
 
@@ -58,7 +90,7 @@ export default defineCommand({
         break;
       case "zsh":
         targetPath = join(home, ".zfunc", "_skilltap");
-        instructions = `  Add to ~/.zshrc (if not already present):\n    fpath=(~/.zfunc $fpath)\n    autoload -Uz compinit && compinit\n  Then restart your shell.`;
+        instructions = await patchZshrc(home);
         break;
       case "fish":
         targetPath = join(
