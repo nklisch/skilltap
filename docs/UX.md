@@ -126,9 +126,10 @@ source
   │          ├── --global ───→ global
   │          └── neither ────→ prompt "Install to: Global / Project"
   │
-  ├── agents? ┬── --also passed ──→ use flag value
-  │           ├── --yes ──────────→ use config default
-  │           └── neither ────────→ prompt "Which agents?"
+  ├── agents? ┬── --also passed ────────────────→ use flag value
+  │           ├── --yes ──────────────────────→ use config default
+  │           ├── config defaults.also set ───→ use config default (no prompt)
+  │           └── none of the above ──────────→ prompt "Which agents?"
   │
   → resolve → clone
                  │
@@ -1144,10 +1145,11 @@ Every interactive prompt in skilltap, in the order they can appear:
 ```
 install:
   1. Scope selection    (no --project/--global)                "Install to: Global / Project"
-  2. Agent selection    (no --also and no --yes, interactive)  "Which agents?"
+  2. Agent selection    (no --also, no --yes, no config default) "Which agents?"
   [clone happens here]
   3. Skill selection    (multi-skill repo, no --yes)           "Which skills to install?"
   3a. Deep scan confirm (non-standard SKILL.md path)           "Found N SKILL.md at non-standard path. Continue? (Y/n)"
+  3b. Conflict check    (skill already installed, no --yes)    '"{name}" is already installed. Update it instead? (Y/n)'
   4. Static scan result (warnings found, not --strict)         "Install anyway? (y/N)"
   5. Semantic scan offer (static warnings found, no --semantic) "Run semantic scan? (Y/n)"
   6. Agent selection    (first semantic scan, no config)        "Use Claude Code? (↑↓)"
@@ -1170,14 +1172,15 @@ link / unlink:
   (none — always proceeds)
 ```
 
-Prompts skipped by `--yes`: install#3, install#8, remove#1, update#1. `--yes` also skips install#2 (agent selection).
+Prompts skipped by `--yes`: install#3, install#3b (auto-updates), install#8, remove#1, update#1. `--yes` also skips install#2 (agent selection).
 Prompts skipped by `--project` or `--global`: install#1.
 Prompts skipped by `--also <agent>`: install#2.
 Prompts skipped by `--semantic`: install#5 (semantic scan runs automatically, no offer prompt).
 Prompts turned into hard failures by `--strict`: install#4, install#7, update (warnings → skip).
 Prompts that always appear regardless of flags: install#5→#6 (first-use only, when static warnings present and no --semantic).
 **Scope always prompts** unless `--project`/`--global`/config is set. `--yes` does NOT skip scope.
-**install#2** (agent selection) fires when `--also` is not passed and `--yes` is not set. If selection differs from config default, offers to save as default.
+**install#2** (agent selection) fires when `--also` is not passed, `--yes` is not set, **and** `config.defaults.also` is empty. If selection differs from config default, offers to save as default.
+**install#3b** (conflict check) fires when a selected skill is already installed. With `--yes`, the update runs automatically without prompting.
 **Agent mode** (config only, no flags): ALL prompts eliminated. #1 from config (error if unset), #2 from config, #3 auto-selects all, #4/#7 hard fail with stop directive, #5/#6 error if not configured, #8 auto-accept. Toggle with `skilltap config agent-mode`.
 
 ---

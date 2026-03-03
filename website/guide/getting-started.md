@@ -93,7 +93,7 @@ skilltap install user/commit-helper --global
 
 During install, skilltap asks which agents the skill should be visible to. Your selection creates symlinks into agent-specific directories (e.g. `~/.claude/skills/`). You can save your choice as the default for future installs.
 
-To skip the prompt, pass `--also` explicitly:
+The prompt is skipped automatically once you've saved a default (via `skilltap config` or "Save as default?" during a previous install). You can also skip it explicitly:
 
 ```bash
 skilltap install user/commit-helper --global --also claude-code

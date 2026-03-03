@@ -141,7 +141,7 @@ The `--yes` flag does **not** skip the scope prompt. Use `--yes --global` or `--
 During interactive install, skilltap prompts you to choose which agents the skill should be visible to:
 
 ```
-◆ Which agents should this skill be available to?
+◆ Which agents should this skill be available to? (space to toggle, enter to confirm)
 │ ◼ Claude Code
 │ ◻ Cursor
 │ ◻ Codex
@@ -160,7 +160,8 @@ You can select none — the skill will only be installed to `.agents/skills/`.
 
 The agent prompt is **skipped** when:
 - `--also` is passed explicitly (e.g. `--also claude-code`)
-- `--yes` is set (uses config default or none)
+- `--yes` is set
+- `config.defaults.also` is non-empty (you've saved a default via `skilltap config` or a previous install)
 
 You can also specify agents directly via `--also`:
 
@@ -188,7 +189,7 @@ You can set a default agent selection in your config, either via the "Save as de
 also = ["claude-code", "cursor"]
 ```
 
-When defaults are set, the agent selection prompt pre-selects them. With `--yes`, the defaults are used without prompting.
+When defaults are set, the agent selection prompt is skipped entirely — the saved selection is used automatically. To change agents for a single install, pass `--also` explicitly. To change the default permanently, re-run `skilltap config`.
 
 ## Multi-skill repos
 
@@ -279,6 +280,23 @@ skilltap install user/commit-helper --global --yes --strict
 ```
 
 This auto-selects all skills, uses global scope, and aborts if any security issue is found.
+
+## Reinstalling / updating
+
+If you try to install a skill that's already installed, skilltap detects the conflict right after skill selection and asks:
+
+```
+◆ commit-helper is already installed. Update it instead?
+│ Yes
+```
+
+Choosing yes runs `skilltap update` for that skill. With `--yes`, the update happens automatically without prompting.
+
+To force a clean reinstall, remove the skill first:
+
+```bash
+skilltap remove commit-helper && skilltap install user/commit-helper --global
+```
 
 ## Removing skills
 

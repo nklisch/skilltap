@@ -150,7 +150,7 @@ export async function selectAgents(
   currentSelection: string[],
 ): Promise<string[] | symbol> {
   const result = await multiselect({
-    message: "Which agents should this skill be available to?",
+    message: "Which agents should this skill be available to? (space to toggle, enter to confirm)",
     options: VALID_AGENT_IDS.map((id) => ({
       value: id,
       label: AGENT_LABELS[id] ?? id,

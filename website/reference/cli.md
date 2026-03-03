@@ -62,7 +62,7 @@ Source resolution order:
 | `--global` | boolean | `false` | Install to `~/.agents/skills/` |
 | `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. Values: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf` |
 | `--ref <ref>` | string | default branch | Branch or tag to install |
-| `--yes` | boolean | `false` | Auto-select all skills, auto-accept clean installs, skip agent symlink prompt. Security warnings still prompt. |
+| `--yes` | boolean | `false` | Auto-select all skills, auto-accept clean installs, auto-update already-installed skills, skip agent symlink prompt. Security warnings still prompt. |
 | `--strict` | boolean | from config | Abort on any security warning (exit 1) |
 | `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
@@ -70,22 +70,24 @@ Source resolution order:
 
 ### Prompt Behavior
 
-Prompts appear in this order: scope → agents → (clone) → skill selection → scan → install confirm.
+Prompts appear in this order: scope → agents → (clone) → skill selection → conflict check → scan → install confirm.
 
-| Flags | Scope | Agents (--also) | Skill selection | Static warnings | Semantic offer | Install confirm |
-|-------|-------|-----------------|-----------------|-----------------|----------------|-----------------|
-| (none) | Prompt | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
-| `--project` | Project | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
-| `--global` | Global | Prompt | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
-| `--also <agent>` | Prompt | Skipped | Prompt if multiple | Prompt | Offered if warnings | **Prompt (Y/n)** |
-| `--yes` | **Still prompts** | Config default | Auto-select all | **Still prompts** | Offered if warnings | Auto-accept if clean |
-| `--yes --global` | Global | Config default | Auto-select all | **Still prompts** | Offered if warnings | Auto-accept if clean |
-| `--semantic` | Prompt | Prompt | Prompt if multiple | Prompt | **Always auto-runs** | **Prompt (Y/n)** |
-| `--strict` | Prompt | Prompt | Prompt if multiple | **Abort (exit 1)** | -- | -- |
-| `--strict --yes --global` | Global | Config default | Auto-select all | **Abort (exit 1)** | -- | -- |
-| `--skip-scan --yes --global` | Global | Config default | Auto-select all | Skipped | Skipped | Auto-accept |
+| Flags | Scope | Agents (--also) | Skill selection | Already-installed conflict | Static warnings | Install confirm |
+|-------|-------|-----------------|-----------------|---------------------------|-----------------|-----------------|
+| (none) | Prompt | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
+| `--project` | Project | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
+| `--global` | Global | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
+| `--also <agent>` | Prompt | Skipped | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
+| `--yes` | **Still prompts** | Config default | Auto-select all | **Auto-update** | **Still prompts** | Auto-accept if clean |
+| `--yes --global` | Global | Config default | Auto-select all | **Auto-update** | **Still prompts** | Auto-accept if clean |
+| `--semantic` | Prompt | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
+| `--strict` | Prompt | Prompt | Prompt if multiple | Prompt to update | **Abort (exit 1)** | -- |
+| `--strict --yes --global` | Global | Config default | Auto-select all | **Auto-update** | **Abort (exit 1)** | -- |
+| `--skip-scan --yes --global` | Global | Config default | Auto-select all | **Auto-update** | Skipped | Auto-accept |
 
 Notes:
+- **Already-installed conflict**: if a selected skill is already installed, skilltap prompts `"{name}" is already installed. Update it instead?` before running the security scan. With `--yes`, the update runs automatically. Non-conflicting skills install normally.
+- **Agent symlink prompt** (`--also`): skipped when `--also` is passed, `--yes` is set, **or** `config.defaults.also` is non-empty (saved default from `skilltap config`).
 - `--semantic` causes the semantic scan to run automatically without a "Run semantic scan?" prompt.
 - The semantic offer prompt only appears when static warnings are found and `--semantic` was not passed.
 - When the semantic scan runs for the first time and no agent is configured, skilltap prompts to pick an agent CLI. The choice is saved to `config.toml`.
@@ -838,6 +840,59 @@ skilltap verify --json
 # Pre-push git hook
 echo 'skilltap verify' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
 ```
+
+---
+
+## skilltap status
+
+Show agent mode status and current configuration summary. Agents should run this first to verify they are operating in agent mode.
+
+```
+skilltap status [--json]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+**Plain text** (one `key: value` line per field):
+
+```
+agent-mode: enabled
+scope: project
+scan: static
+agent: (none)
+also: claude-code
+taps: 2
+```
+
+**JSON:**
+
+```json
+{
+  "agentMode": true,
+  "scope": "project",
+  "scan": "static",
+  "agent": null,
+  "also": ["claude-code"],
+  "taps": 2
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `agentMode` | Whether agent mode is enabled |
+| `scope` | Default install scope (`project`, `global`, or `null` if unconfigured) |
+| `scan` | Security scan level (`static`, `semantic`, `off`) |
+| `agent` | Configured LLM for semantic scan, or `null` |
+| `also` | Agent directories to symlink into on each install |
+| `taps` | Number of configured taps |
+
+Does not trigger the update check or telemetry notice.
 
 ---
 

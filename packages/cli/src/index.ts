@@ -19,6 +19,7 @@ const SKIP_STARTUP_ARGS = new Set([
   "-h",
   "self-update",
   "telemetry",
+  "status",
 ]);
 const shouldRunStartup = !process.argv.slice(2).some((a) =>
   SKIP_STARTUP_ARGS.has(a),
@@ -134,6 +135,7 @@ const main = defineCommand({
     description: "Install agent skills from any git host",
   },
   subCommands: {
+    status: () => import("./commands/status").then((m) => m.default),
     install: () => import("./commands/install").then((m) => m.default),
     remove: () => import("./commands/remove").then((m) => m.default),
     list: () => import("./commands/list").then((m) => m.default),

@@ -86,11 +86,16 @@ Auto-selecting all (--yes)
    - If single skill found → auto-select
    - If multiple found + `--yes` → auto-select all, print list
    - If multiple found (no `--yes`) → prompt user to choose (1, 2, ..., all)
-4. **Scope resolution:**
+4. **Conflict check:** For each selected skill, check if it is already installed:
+   - If already installed + `--yes` → automatically run `update` for that skill
+   - If already installed (no `--yes`) → prompt: `"{name}" is already installed. Update it instead? (Y/n)`
+     - Yes → run `update` for that skill; it is excluded from the normal install flow
+     - No → skip that skill
+5. **Scope resolution:**
    - `--project` → install to `.agents/skills/` in project
    - `--global` → install to `~/.agents/skills/`
    - Neither flag → prompt: `Install to: (1) Global (~/.agents/skills/) (2) Project (.agents/skills/)`
-5. **Security scan** (unless `--skip-scan`; if `security.require_scan = true` and `--skip-scan` is passed, error and abort):
+6. **Security scan** (unless `--skip-scan`; if `security.require_scan = true` and `--skip-scan` is passed, error and abort):
    - Run Layer 1 static scan on all files in selected skill(s)
    - Display warnings (if any)
    - If `--strict` (or `security.on_warn = "fail"`) and warnings found → print warnings, abort (exit 1)
@@ -99,9 +104,9 @@ Auto-selecting all (--yes)
    - If no warnings (no `--yes`) → prompt `Install? (Y/n)` (default Y)
    - Optionally run Layer 2 semantic scan (if config/flag says so)
    - If strict + semantic flags found → abort (exit 1)
-6. Install to target directory
-7. Update `installed.json`
-8. Create agent symlinks if `--also` or config `defaults.also`
+7. Install to target directory
+8. Update `installed.json`
+9. Create agent symlinks if `--also` or config `defaults.also`
 
 **Exit codes:** 0 success, 1 error, 2 user cancelled
 
@@ -700,6 +705,48 @@ With issues (no `--fix`):
 
 ---
 
+### `skilltap status`
+
+Report agent mode status and current configuration. Designed for use by agents to verify they are operating in agent mode before proceeding.
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output as JSON |
+
+**Plain text output** (one `key: value` line per field):
+
+```
+agent-mode: enabled|disabled
+scope: project|global|(not configured)
+scan: static|semantic|off
+agent: <name>|(none)
+also: <agent1> <agent2>|(none)
+taps: <count>
+```
+
+**JSON output:**
+
+```json
+{
+  "agentMode": true,
+  "scope": "project",
+  "scan": "static",
+  "agent": null,
+  "also": ["claude-code"],
+  "taps": 1
+}
+```
+
+Fields: `agentMode` (boolean), `scope` (string or null), `scan` (string), `agent` (string or null), `also` (array), `taps` (number).
+
+**Exit codes:** 0 success, 1 config load failure.
+
+**Startup skipped:** does not trigger the update check or telemetry notice.
+
+---
+
 ### `skilltap completions <shell>`
 
 Generate a shell completion script for tab-completion.
@@ -828,7 +875,7 @@ Regex patterns for content that renders invisibly but is read by agents:
 
 **Obfuscation**
 
-- Base64 blocks: sequences of 40+ base64 characters. Decode and display.
+- Base64 blocks: sequences of 20+ base64 characters (`[A-Za-z0-9+/]`). Shorter matches (10–19 chars) are flagged only when padded (`=`) or exhibiting base64 traits (contains `+` or digits, or mixed-case non-CamelCase that decodes to printable text). All-lowercase + slash sequences (e.g., `name/description/tags`) are excluded — they cannot be valid base64 (real base64 always contains uppercase A-Z and/or digits). Decoded content shown in warnings.
 - `data:` URIs
 - Hex-encoded strings: `\x48\x65\x6c\x6c\x6f`
 - Variable expansion obfuscation: `c${u}rl`, `e${"va"+"l"}`
@@ -1559,7 +1606,7 @@ All errors include:
 | Clone failed (auth) | `error: Authentication failed for '{url}'. Check your git credentials or SSH keys.` |
 | Clone failed (not found) | `error: Repository not found: '{url}'.` |
 | No SKILL.md found | `error: No SKILL.md found in '{url}'. This repo doesn't contain any skills.` |
-| Skill already installed | `error: Skill '{name}' is already installed. Use 'skilltap update {name}' to update, or 'skilltap remove {name}' first.` |
+| Skill already installed | Prompt: `"{name}" is already installed. Update it instead? (Y/n)`. If yes (or `--yes`), runs `update`. If no, skips that skill. Only a hard error in agent mode: `SKIP: {name} is already installed.` |
 | Tap already exists | `error: Tap '{name}' already exists. Remove it first with 'skilltap tap remove {name}'.` |
 | Invalid tap.json | `error: Invalid tap.json in '{url}': {parse error}` |
 | Invalid SKILL.md frontmatter | `warning: Invalid frontmatter in {path}: {details}. Using directory name as skill name.` |

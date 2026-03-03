@@ -75,7 +75,7 @@ describe("install — standalone skill", () => {
     }
   });
 
-  test("exits 1 when already installed", async () => {
+  test("auto-updates with --yes when already installed", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runInstall(
@@ -83,13 +83,12 @@ describe("install — standalone skill", () => {
         homeDir,
         configDir,
       );
-      const { exitCode, stderr } = await runInstall(
+      const { exitCode } = await runInstall(
         [repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
-      expect(exitCode).toBe(1);
-      expect(stderr).toContain("already installed");
+      expect(exitCode).toBe(0);
     } finally {
       await repo.cleanup();
     }

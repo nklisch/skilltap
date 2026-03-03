@@ -65,6 +65,8 @@ export type InstallOptions = {
   onSemanticProgress?: (completed: number, total: number) => void;
   /** Called after all scans pass cleanly, before placement. Return false to cancel. */
   onConfirmInstall?: (skillNames: string[]) => Promise<boolean>;
+  /** Called when a skill is already installed. Return "update" to update it instead, or "abort" to cancel. */
+  onAlreadyInstalled?: (name: string) => Promise<"update" | "abort">;
   /** Called when deep scan is triggered (no SKILL.md at standard paths). Return false to cancel. */
   onDeepScan?: (count: number) => Promise<boolean>;
   /** Whether npm registry installs are allowed (default true). Set to false for air-gapped/enterprise environments. */
@@ -75,6 +77,8 @@ export type InstallResult = {
   records: InstalledSkill[];
   warnings: StaticWarning[];
   semanticWarnings: SemanticWarning[];
+  /** Names of skills that were already installed and the user chose to update instead. */
+  updates: string[];
 };
 
 function looksLikeTapName(source: string): boolean {
@@ -294,7 +298,7 @@ export async function installSkill(
     if (!selectedNames && options.onSelectSkills) {
       selectedNames = await options.onSelectSkills(scanned);
     }
-    const selected: ScannedSkill[] = selectedNames
+    let selected: ScannedSkill[] = selectedNames
       ? selectedNames.map((name) => {
           const found = scanned.find((s) => s.name === name);
           if (!found)
@@ -304,6 +308,43 @@ export async function installSkill(
           return found;
         })
       : scanned;
+
+    // 6.1. Check for already-installed conflicts — before running security scans
+    const toUpdate: string[] = [];
+    const toInstall: ScannedSkill[] = [];
+    for (const skill of selected) {
+      const conflict = installed.skills.find(
+        (s) => s.name === skill.name && s.scope === options.scope,
+      );
+      if (conflict) {
+        if (options.onAlreadyInstalled) {
+          const action = await options.onAlreadyInstalled(skill.name);
+          if (action === "abort") {
+            return err(
+              new UserError(
+                `Skill '${skill.name}' is already installed.`,
+                `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
+              ),
+            );
+          }
+          toUpdate.push(skill.name);
+        } else {
+          return err(
+            new UserError(
+              `Skill '${skill.name}' is already installed.`,
+              `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
+            ),
+          );
+        }
+      } else {
+        toInstall.push(skill);
+      }
+    }
+    // If every selected skill is already installed, skip the rest and return update list
+    if (toInstall.length === 0) {
+      return ok({ records: [], warnings: [], semanticWarnings: [], updates: toUpdate });
+    }
+    selected = toInstall;
 
     // 6.5. Security scan (unless skipped)
     if (!options.skipScan) {
@@ -342,21 +383,6 @@ export async function installSkill(
     if (allWarnings.length === 0 && allSemanticWarnings.length === 0 && options.onConfirmInstall) {
       const proceed = await options.onConfirmInstall(selected.map((s) => s.name));
       if (!proceed) return err(new UserError("Install cancelled."));
-    }
-
-    // 7. Check for already-installed conflicts
-    for (const skill of selected) {
-      const conflict = installed.skills.find(
-        (s) => s.name === skill.name && s.scope === options.scope,
-      );
-      if (conflict) {
-        return err(
-          new UserError(
-            `Skill '${skill.name}' is already installed.`,
-            `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
-          ),
-        );
-      }
     }
 
     // 7.5. Resolve trust (once per source, before placement)
@@ -480,6 +506,7 @@ export async function installSkill(
       records: newRecords,
       warnings: allWarnings,
       semanticWarnings: allSemanticWarnings,
+      updates: toUpdate,
     });
   } catch (e) {
     if (e instanceof UserError) return err(e);

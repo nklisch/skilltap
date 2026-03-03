@@ -13,6 +13,7 @@ import {
   installSkill,
   saveConfig,
   skillInstallDir,
+  updateSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
@@ -235,8 +236,9 @@ async function runInteractiveMode(
     projectRoot = resolved.projectRoot;
   }
 
-  // Prompt for agent symlinks unless --also was explicitly passed or --yes is set
-  if (!args.also && !policy.yes) {
+  // Prompt for agent symlinks unless --also was explicitly passed, --yes is set,
+  // or the user already has a saved default in config
+  if (!args.also && !policy.yes && !config.defaults.also.length) {
     const selected = await selectAgents(also);
     if (isCancel(selected)) process.exit(2);
     also = selected as string[];
@@ -369,6 +371,20 @@ async function runInteractiveMode(
           return true;
         });
 
+  const alreadyInstalledCallback = async (
+    name: string,
+  ): Promise<"update" | "abort"> => {
+    if (policy.yes) return "update";
+    return withSpinnerPaused(async () => {
+      const proceed = await confirm({
+        message: `${name} is already installed. Update it instead?`,
+        initialValue: true,
+      });
+      if (isCancel(proceed) || proceed === false) return "abort";
+      return "update";
+    });
+  };
+
   const result = await installSkill(args.source, {
     scope,
     projectRoot,
@@ -379,6 +395,7 @@ async function runInteractiveMode(
     onWarnings: skipScan ? undefined : warningsCallback,
     onSelectSkills: selectSkillsCallback,
     onSelectTap: selectTapCallback,
+    onAlreadyInstalled: alreadyInstalledCallback,
     agent,
     semantic: runSemantic,
     threshold: config.security.threshold,
@@ -424,6 +441,18 @@ async function runInteractiveMode(
   for (const record of result.value.records) {
     const installDir = skillInstallDir(record.name, scope, projectRoot);
     successLine(`Installed ${record.name} → ${installDir}`);
+  }
+
+  // Run updates for skills that were already installed
+  for (const name of result.value.updates) {
+    const updateResult = await updateSkill({ name, yes: policy.yes, projectRoot });
+    if (!updateResult.ok) {
+      errorLine(updateResult.error.message, updateResult.error.hint);
+    } else {
+      const { updated, upToDate } = updateResult.value;
+      if (updated.includes(name)) successLine(`Updated ${name}`);
+      else if (upToDate.includes(name)) log.info(`${name} is already up to date.`);
+    }
   }
 
   outro("Complete!");

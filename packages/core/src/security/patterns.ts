@@ -169,6 +169,9 @@ export function detectObfuscation(content: string): PatternMatch[] {
       const hasPadding = base.length < m[0].length;
       // Short matches need extra confirmation to avoid flagging English words
       if (base.length < 20 && !hasPadding && !looksLikeBase64(base)) continue;
+      // All-lowercase + slashes looks like a doc word-list (e.g. "name/description/tags"),
+      // not base64 (real base64 always has uppercase A-Z and/or digits)
+      if (/^[a-z/]+$/.test(base)) continue;
       let decoded: string | undefined;
       try {
         const bytes = Buffer.from(m[0], "base64");
