@@ -265,6 +265,125 @@ async function updateNpmSkill(
   }
 }
 
+/** Handle updates for git-sourced skills (SHA comparison, diff scanning). */
+async function updateGitSkill(
+  record: InstalledSkill,
+  installed: { skills: InstalledSkill[] },
+  options: UpdateOptions,
+  result: UpdateResult,
+): Promise<Result<void, UserError | GitError | ScanError>> {
+  // Standalone: work dir is the install path. Multi-skill: work dir is the cache.
+  const isMulti = record.path !== null;
+  const workDir = isMulti
+    ? skillCacheDir(record.repo!)
+    : skillInstallDir(
+        record.name,
+        record.scope as "global" | "project",
+        options.projectRoot,
+      );
+
+  // For multi-skill, verify cache exists
+  if (isMulti) {
+    const cacheGitExists = await lstat(join(workDir, ".git"))
+      .then(() => true)
+      .catch(() => false);
+    if (!cacheGitExists) {
+      result.skipped.push(record.name);
+      options.onProgress?.(record.name, "skipped");
+      return ok(undefined);
+    }
+  }
+
+  const fetchResult = await fetch(workDir);
+  if (!fetchResult.ok) return fetchResult;
+
+  const localShaResult = await revParse(workDir, "HEAD");
+  if (!localShaResult.ok) return localShaResult;
+  const remoteShaResult = await revParse(workDir, "FETCH_HEAD");
+  if (!remoteShaResult.ok) return remoteShaResult;
+
+  const localSha = localShaResult.value;
+  const remoteSha = remoteShaResult.value;
+
+  if (localSha === remoteSha) {
+    result.upToDate.push(record.name);
+    options.onProgress?.(record.name, "upToDate");
+    return ok(undefined);
+  }
+
+  // Get diff (path-filtered for multi-skill)
+  const pathSpec = record.path ?? undefined;
+  const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+  if (!diffResult.ok) return diffResult;
+  const diffOutput = diffResult.value;
+
+  const statResult = await diffStat(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+  if (!statResult.ok) return statResult;
+  const stat = statResult.value;
+
+  // If skill-specific path has no changes, mark as up to date
+  if (stat.filesChanged === 0) {
+    result.upToDate.push(record.name);
+    options.onProgress?.(record.name, "upToDate");
+    return ok(undefined);
+  }
+
+  options.onDiff?.(record.name, stat, localSha, remoteSha);
+
+  // Security scan on diff + confirmation
+  const warnings = scanDiff(diffOutput);
+  if (await shouldSkipUpdate(warnings, options, record.name)) {
+    result.skipped.push(record.name);
+    options.onProgress?.(record.name, "skipped");
+    return ok(undefined);
+  }
+
+  // Apply update
+  const pullResult = await pull(workDir);
+  if (!pullResult.ok) return pullResult;
+
+  if (isMulti) await recopyMultiSkill(workDir, record, options.projectRoot);
+
+  const installDir = skillInstallDir(
+    record.name,
+    record.scope as "global" | "project",
+    options.projectRoot,
+  );
+
+  // Semantic scan on updated skill directory
+  if (await runUpdateSemanticScan(installDir, record.name, options)) {
+    result.skipped.push(record.name);
+    options.onProgress?.(record.name, "skipped");
+    return ok(undefined);
+  }
+
+  // Get new SHA
+  const newShaResult = await revParse(workDir, "HEAD");
+  if (!newShaResult.ok) return newShaResult;
+
+  // Re-verify trust for the updated skill
+  const newTrust = await resolveTrust({
+    adapter: "git",
+    url: record.repo ?? "",
+    tap: record.tap,
+    skillDir: installDir,
+    githubRepo: record.repo ? parseGitHubRepo(record.repo) : null,
+  });
+
+  // Update the record in place
+  patchRecord(installed, record, {
+    sha: newShaResult.value,
+    updatedAt: new Date().toISOString(),
+    trust: newTrust,
+  });
+
+  await refreshAgentSymlinks(record, options.projectRoot);
+
+  result.updated.push(record.name);
+  options.onProgress?.(record.name, "updated");
+  return ok(undefined);
+}
+
 export async function updateSkill(
   options: UpdateOptions = {},
 ): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
@@ -296,122 +415,14 @@ export async function updateSkill(
 
     options.onProgress?.(record.name, "checking");
 
-    // npm-sourced skills use version comparison instead of git SHA comparison
+    // Dispatch to adapter-specific update handler
     if (record.repo?.startsWith("npm:")) {
       const npmResult = await updateNpmSkill(record, installed, options, result);
       if (!npmResult.ok) return npmResult;
-      continue;
+    } else {
+      const gitResult = await updateGitSkill(record, installed, options, result);
+      if (!gitResult.ok) return gitResult;
     }
-
-    // Standalone: work dir is the install path. Multi-skill: work dir is the cache.
-    const isMulti = record.path !== null;
-    const workDir = isMulti
-      ? skillCacheDir(record.repo!)
-      : skillInstallDir(
-          record.name,
-          record.scope as "global" | "project",
-          options.projectRoot,
-        );
-
-    // For multi-skill, verify cache exists
-    if (isMulti) {
-      const cacheGitExists = await lstat(join(workDir, ".git"))
-        .then(() => true)
-        .catch(() => false);
-      if (!cacheGitExists) {
-        result.skipped.push(record.name);
-        options.onProgress?.(record.name, "skipped");
-        continue;
-      }
-    }
-
-    const fetchResult = await fetch(workDir);
-    if (!fetchResult.ok) return fetchResult;
-
-    const localShaResult = await revParse(workDir, "HEAD");
-    if (!localShaResult.ok) return localShaResult;
-    const remoteShaResult = await revParse(workDir, "FETCH_HEAD");
-    if (!remoteShaResult.ok) return remoteShaResult;
-
-    const localSha = localShaResult.value;
-    const remoteSha = remoteShaResult.value;
-
-    if (localSha === remoteSha) {
-      result.upToDate.push(record.name);
-      options.onProgress?.(record.name, "upToDate");
-      continue;
-    }
-
-    // Get diff (path-filtered for multi-skill)
-    const pathSpec = record.path ?? undefined;
-    const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD", pathSpec);
-    if (!diffResult.ok) return diffResult;
-    const diffOutput = diffResult.value;
-
-    const statResult = await diffStat(workDir, "HEAD", "FETCH_HEAD", pathSpec);
-    if (!statResult.ok) return statResult;
-    const stat = statResult.value;
-
-    // If skill-specific path has no changes, mark as up to date
-    if (stat.filesChanged === 0) {
-      result.upToDate.push(record.name);
-      options.onProgress?.(record.name, "upToDate");
-      continue;
-    }
-
-    options.onDiff?.(record.name, stat, localSha, remoteSha);
-
-    // Security scan on diff + confirmation
-    const warnings = scanDiff(diffOutput);
-    if (await shouldSkipUpdate(warnings, options, record.name)) {
-      result.skipped.push(record.name);
-      options.onProgress?.(record.name, "skipped");
-      continue;
-    }
-
-    // Apply update
-    const pullResult = await pull(workDir);
-    if (!pullResult.ok) return pullResult;
-
-    if (isMulti) await recopyMultiSkill(workDir, record, options.projectRoot);
-
-    const installDir = skillInstallDir(
-      record.name,
-      record.scope as "global" | "project",
-      options.projectRoot,
-    );
-
-    // Semantic scan on updated skill directory
-    if (await runUpdateSemanticScan(installDir, record.name, options)) {
-      result.skipped.push(record.name);
-      options.onProgress?.(record.name, "skipped");
-      continue;
-    }
-
-    // Get new SHA
-    const newShaResult = await revParse(workDir, "HEAD");
-    if (!newShaResult.ok) return newShaResult;
-
-    // Re-verify trust for the updated skill
-    const newTrust = await resolveTrust({
-      adapter: "git",
-      url: record.repo ?? "",
-      tap: record.tap,
-      skillDir: installDir,
-      githubRepo: record.repo ? parseGitHubRepo(record.repo) : null,
-    });
-
-    // Update the record in place
-    patchRecord(installed, record, {
-      sha: newShaResult.value,
-      updatedAt: new Date().toISOString(),
-      trust: newTrust,
-    });
-
-    await refreshAgentSymlinks(record, options.projectRoot);
-
-    result.updated.push(record.name);
-    options.onProgress?.(record.name, "updated");
   }
 
   const saveResult = await saveInstalled(installed);

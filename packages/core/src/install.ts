@@ -173,6 +173,142 @@ async function runSecurityScan(
   return ok(allWarnings);
 }
 
+type Placement = {
+  skill: ScannedSkill;
+  srcPath: string;
+  relPath: string | null;
+  destDir: string;
+  useMove: boolean;
+};
+
+async function buildPlacements(params: {
+  isStandalone: boolean;
+  adapter: string;
+  selected: ScannedSkill[];
+  contentDir: string;
+  resolvedUrl: string;
+  scope: "global" | "project";
+  projectRoot?: string;
+}): Promise<Placement[]> {
+  const { isStandalone, adapter, selected, contentDir, resolvedUrl, scope, projectRoot } = params;
+  const placements: Placement[] = [];
+
+  if (isStandalone) {
+    // biome-ignore lint/style/noNonNullAssertion: isStandalone guarantees exactly one selected skill
+    const skill = selected[0]!;
+    placements.push({
+      skill,
+      srcPath: contentDir,
+      relPath: null,
+      destDir: skillInstallDir(skill.name, scope, projectRoot),
+      useMove: true,
+    });
+  } else if (adapter === "npm" || adapter === "http") {
+    // npm/http multi-skill: copy directly from extracted package (no git cache)
+    for (const skill of selected) {
+      placements.push({
+        skill,
+        srcPath: skill.path,
+        relPath: relative(contentDir, skill.path),
+        destDir: skillInstallDir(skill.name, scope, projectRoot),
+        useMove: false,
+      });
+    }
+  } else {
+    // git multi-skill: move clone to cache first, then copy selected skills
+    const cacheRoot = skillCacheDir(resolvedUrl);
+    await mkdir(dirname(cacheRoot), { recursive: true });
+    await $`mv ${contentDir} ${cacheRoot}`.quiet();
+    for (const skill of selected) {
+      const skillSrcInCache = skill.path.replace(contentDir, cacheRoot);
+      placements.push({
+        skill,
+        srcPath: skillSrcInCache,
+        relPath: relative(cacheRoot, skillSrcInCache),
+        destDir: skillInstallDir(skill.name, scope, projectRoot),
+        useMove: false,
+      });
+    }
+  }
+
+  return placements;
+}
+
+async function executePlacements(params: {
+  placements: Placement[];
+  resolved: ResolvedSource;
+  sha: string | null;
+  options: InstallOptions;
+  also: string[];
+  now: string;
+  effectiveTap: string | null;
+  finalRef: string | undefined;
+  trust: TrustInfo | undefined;
+  sourceKey: string | undefined;
+}): Promise<InstalledSkill[]> {
+  const { placements, resolved, sha, options, also, now, effectiveTap, finalRef, trust, sourceKey } = params;
+  const records: InstalledSkill[] = [];
+
+  for (const { skill, srcPath, relPath, destDir, useMove } of placements) {
+    await mkdir(dirname(destDir), { recursive: true });
+    if (useMove) {
+      await $`mv ${srcPath} ${destDir}`.quiet();
+    } else {
+      await $`cp -r ${srcPath} ${destDir}`.quiet();
+    }
+    await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot);
+    records.push(
+      makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey),
+    );
+  }
+
+  return records;
+}
+
+async function resolveInstallTrust(params: {
+  tapResult: Result<TapResolution | null, UserError>;
+  effectiveTap: string | null;
+  effectiveSource: string;
+  resolved: ResolvedSource;
+  tmpDir: string;
+  contentDir: string;
+  finalRef: string | undefined;
+}): Promise<TrustInfo | undefined> {
+  const { tapResult, effectiveTap, effectiveSource, resolved, tmpDir, contentDir, finalRef } = params;
+
+  let tapSkillEntry: TapEntry | undefined;
+  if (tapResult.ok && tapResult.value) {
+    const tapsResult = await loadTaps();
+    if (tapsResult.ok) {
+      tapSkillEntry = tapsResult.value.find(
+        (e) => e.tapName === effectiveTap && e.skill.repo === effectiveSource,
+      );
+    }
+  }
+  const npmInfo =
+    resolved.adapter === "npm"
+      ? parseNpmSource(effectiveSource)
+      : undefined;
+  return resolveTrust({
+    adapter: resolved.adapter,
+    url: effectiveSource,
+    tap: effectiveTap,
+    tapSkill: tapSkillEntry?.skill,
+    tarballPath:
+      resolved.adapter === "npm"
+        ? join(tmpDir, "_pkg.tgz")
+        : undefined,
+    npmPackageName: npmInfo?.name,
+    npmVersion: finalRef ?? undefined,
+    npmPublisher: resolved.npmPublisher,
+    skillDir: resolved.adapter !== "npm" ? contentDir : undefined,
+    githubRepo:
+      resolved.adapter !== "npm"
+        ? parseGitHubRepo(resolved.url)
+        : undefined,
+  });
+}
+
 function makeRecord(
   skill: ScannedSkill,
   resolved: ResolvedSource,
@@ -382,116 +518,26 @@ export async function installSkill(
     }
 
     // 7.5. Resolve trust (once per source, before placement)
-    let trust: TrustInfo | undefined;
-    {
-      let tapSkillEntry: TapEntry | undefined;
-      if (tapResult.value) {
-        const tapsResult = await loadTaps();
-        if (tapsResult.ok) {
-          tapSkillEntry = tapsResult.value.find(
-            (e) => e.tapName === effectiveTap && e.skill.repo === effectiveSource,
-          );
-        }
-      }
-      const npmInfo =
-        resolved.adapter === "npm"
-          ? parseNpmSource(effectiveSource)
-          : undefined;
-      trust = await resolveTrust({
-        adapter: resolved.adapter,
-        url: effectiveSource,
-        tap: effectiveTap,
-        tapSkill: tapSkillEntry?.skill,
-        tarballPath:
-          resolved.adapter === "npm"
-            ? join(tmpDir, "_pkg.tgz")
-            : undefined,
-        npmPackageName: npmInfo?.name,
-        npmVersion: finalRef ?? undefined,
-        npmPublisher: resolved.npmPublisher,
-        skillDir: resolved.adapter !== "npm" ? contentDir : undefined,
-        githubRepo:
-          resolved.adapter !== "npm"
-            ? parseGitHubRepo(resolved.url)
-            : undefined,
-      });
-    }
+    const trust = await resolveInstallTrust({
+      tapResult, effectiveTap, effectiveSource, resolved, tmpDir, contentDir, finalRef,
+    });
 
-    // 8. Determine standalone vs multi-skill
-    // Standalone: single skill at content root (skill.path === contentDir)
+    // 8. Build and execute placements
     const isStandalone = scanned.length === 1 && scanned[0]?.path === contentDir;
-
-    // sourceKey: identifier stored as `repo` in the installed record.
-    // For npm and http, store the original source string (not the tarball URL).
     const sourceKey =
       resolved.adapter === "npm" || resolved.adapter === "http"
         ? effectiveSource
         : undefined;
-
-    // 9. Place skills
     const now = new Date().toISOString();
-    const newRecords: InstalledSkill[] = [];
 
-    // Pre-compute placements: each entry captures the source path, destination, and copy strategy.
-    // git multi-skill: move the clone to cache before building placements.
-    const placements: Array<{
-      skill: ScannedSkill;
-      srcPath: string;
-      relPath: string | null;
-      destDir: string;
-      useMove: boolean;
-    }> = [];
-
-    if (isStandalone) {
-      // biome-ignore lint/style/noNonNullAssertion: isStandalone guarantees exactly one selected skill
-      const skill = selected[0]!;
-      placements.push({
-        skill,
-        srcPath: contentDir,
-        relPath: null,
-        destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
-        useMove: true,
-      });
-    } else if (resolved.adapter === "npm" || resolved.adapter === "http") {
-      // npm/http multi-skill: copy directly from extracted package (no git cache)
-      for (const skill of selected) {
-        placements.push({
-          skill,
-          srcPath: skill.path,
-          relPath: relative(contentDir, skill.path),
-          destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
-          useMove: false,
-        });
-      }
-    } else {
-      // git multi-skill: move clone to cache first, then copy selected skills
-      const cacheRoot = skillCacheDir(resolved.url);
-      await mkdir(dirname(cacheRoot), { recursive: true });
-      await $`mv ${contentDir} ${cacheRoot}`.quiet();
-      for (const skill of selected) {
-        const skillSrcInCache = skill.path.replace(contentDir, cacheRoot);
-        placements.push({
-          skill,
-          srcPath: skillSrcInCache,
-          relPath: relative(cacheRoot, skillSrcInCache),
-          destDir: skillInstallDir(skill.name, options.scope, options.projectRoot),
-          useMove: false,
-        });
-      }
-    }
-
-    for (const { skill, srcPath, relPath, destDir, useMove } of placements) {
-      await mkdir(dirname(destDir), { recursive: true });
-      if (useMove) {
-        await $`mv ${srcPath} ${destDir}`.quiet();
-      } else {
-        await $`cp -r ${srcPath} ${destDir}`.quiet();
-      }
-      await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot);
-      newRecords.push(
-        makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey),
-      );
-    }
+    const placements = await buildPlacements({
+      isStandalone, adapter: resolved.adapter, selected, contentDir,
+      resolvedUrl: resolved.url, scope: options.scope, projectRoot: options.projectRoot,
+    });
+    const newRecords = await executePlacements({
+      placements, resolved, sha, options, also, now,
+      effectiveTap, finalRef, trust, sourceKey,
+    });
 
     // 10. Save installed.json
     installed.skills.push(...newRecords);

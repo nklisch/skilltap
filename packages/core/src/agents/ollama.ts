@@ -1,7 +1,6 @@
 import { $ } from "bun";
-import { err, ok, ScanError } from "../types";
-import { extractAgentResponse } from "./extract";
 import type { AgentAdapter } from "./types";
+import { wrapInvoke } from "./factory";
 
 export function createOllamaAdapter(model: string): AgentAdapter {
   return {
@@ -21,24 +20,12 @@ export function createOllamaAdapter(model: string): AgentAdapter {
       }
     },
 
-    async invoke(prompt) {
-      try {
-        const effectiveModel = model || "llama3";
-        const whichResult = await $`which ollama`.quiet();
-        const ollamaPath = whichResult.stdout.toString().trim();
-        const result = await $`${ollamaPath} run ${effectiveModel} ${prompt}`.quiet();
-        const raw = result.stdout.toString().trim();
-        const parsed = extractAgentResponse(raw);
-        if (!parsed)
-          return ok({ score: 0, reason: "Could not parse agent response" });
-        return ok(parsed);
-      } catch (e) {
-        return err(
-          new ScanError(
-            `Ollama invocation failed: ${e instanceof Error ? e.message : String(e)}`,
-          ),
-        );
-      }
-    },
+    invoke: wrapInvoke("Ollama", async (prompt) => {
+      const effectiveModel = model || "llama3";
+      const whichResult = await $`which ollama`.quiet();
+      const ollamaPath = whichResult.stdout.toString().trim();
+      const result = await $`${ollamaPath} run ${effectiveModel} ${prompt}`.quiet();
+      return result.stdout.toString().trim();
+    }),
   };
 }

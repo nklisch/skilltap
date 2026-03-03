@@ -1,11 +1,11 @@
 import { $ } from "bun";
-import { err, ok, ScanError } from "../types";
-import { extractAgentResponse } from "./extract";
 import type { AgentAdapter } from "./types";
+import { wrapInvoke } from "./factory";
 
 export function createCustomAdapter(binaryPath: string): AgentAdapter {
+  const name = `Custom (${binaryPath})`;
   return {
-    name: `Custom (${binaryPath})`,
+    name,
     cliName: binaryPath,
 
     async detect() {
@@ -17,21 +17,9 @@ export function createCustomAdapter(binaryPath: string): AgentAdapter {
       }
     },
 
-    async invoke(prompt) {
-      try {
-        const result = await $`echo ${prompt} | ${binaryPath}`.quiet();
-        const raw = result.stdout.toString().trim();
-        const parsed = extractAgentResponse(raw);
-        if (!parsed)
-          return ok({ score: 0, reason: "Could not parse agent response" });
-        return ok(parsed);
-      } catch (e) {
-        return err(
-          new ScanError(
-            `Custom agent invocation failed: ${e instanceof Error ? e.message : String(e)}`,
-          ),
-        );
-      }
-    },
+    invoke: wrapInvoke(name, async (prompt) => {
+      const result = await $`echo ${prompt} | ${binaryPath}`.quiet();
+      return result.stdout.toString().trim();
+    }),
   };
 }

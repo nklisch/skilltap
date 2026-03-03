@@ -1,4 +1,4 @@
-import { confirm, intro, isCancel, log, outro, spinner } from "@clack/prompts";
+import { intro, isCancel, log, outro, spinner } from "@clack/prompts";
 import type {
   AgentAdapter,
   Config,
@@ -22,15 +22,11 @@ import {
   agentSuccess,
 } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
+import { createInstallCallbacks } from "../ui/install-callbacks";
 import { loadPolicyOrExit } from "../ui/policy";
 import {
-  confirmInstall,
-  confirmReadyInstall,
   confirmSaveDefault,
-  offerSemanticScan,
   selectAgents,
-  selectSkills,
-  selectTap,
 } from "../ui/prompts";
 import {
   parseAlsoFlag,
@@ -38,7 +34,6 @@ import {
   resolveAgentInteractive,
   resolveScope,
 } from "../ui/resolve";
-import { printSemanticWarnings, printWarnings } from "../ui/scan";
 import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
@@ -255,121 +250,9 @@ async function runInteractiveMode(
   const s = spinner();
   s.start(`Cloning ${args.source}...`);
 
-  async function withSpinnerPaused<T>(
-    fn: () => Promise<T>,
-    resumeMsg = "Installing...",
-  ): Promise<T> {
-    s.stop();
-    try {
-      return await fn();
-    } finally {
-      s.start(resumeMsg);
-    }
-  }
-
-  const autoSelectAll = policy.yes;
-
-  // Callbacks
-  function makeWarnCallback<W>(
-    printFn: (warnings: W[], skillName: string) => void,
-    failMsg: (skillName: string) => string,
-  ): (warnings: W[], skillName: string) => Promise<boolean> {
-    return async (warnings, skillName) =>
-      withSpinnerPaused(async () => {
-        printFn(warnings, skillName);
-        if (onWarn === "fail") {
-          errorLine(failMsg(skillName));
-          process.exit(1);
-        }
-        const proceed = await confirmInstall(skillName);
-        if (isCancel(proceed) || proceed === false) process.exit(2);
-        return true;
-      });
-  }
-
-  const warningsCallback = makeWarnCallback(
-    printWarnings,
-    (name) => `Security warnings found in ${name} — aborting (--strict / on_warn=fail)`,
-  );
-
-  const selectSkillsCallback = async (
-    skills: ScannedSkill[],
-  ): Promise<string[]> => {
-    if (autoSelectAll || skills.length === 1) {
-      if (autoSelectAll && skills.length > 1) {
-        s.message(`Auto-selecting all ${skills.length} skills (--yes)`);
-      }
-      return skills.map((sk) => sk.name);
-    }
-    return withSpinnerPaused(async () => {
-      const selected = await selectSkills(skills);
-      if (isCancel(selected)) process.exit(2);
-      return selected as string[];
-    });
-  };
-
-  const selectTapCallback = async (
-    matches: TapEntry[],
-  ): Promise<TapEntry | null> =>
-    withSpinnerPaused(async () => {
-      const chosen = await selectTap(matches);
-      if (isCancel(chosen)) process.exit(2);
-      return chosen as TapEntry;
-    });
-
-  const semanticWarningsCallback = makeWarnCallback(
-    printSemanticWarnings,
-    (name) => `Semantic warnings found in ${name} — aborting (--strict / on_warn=fail)`,
-  );
-
-  const offerSemanticCallback = async (): Promise<boolean> => {
-    if (!agent) return false;
-    return withSpinnerPaused(async () => {
-      const answer = await offerSemanticScan();
-      if (isCancel(answer)) return false;
-      return answer as boolean;
-    }, "Running semantic scan...");
-  };
-
-  const semanticProgressCallback = (
-    completed: number,
-    total: number,
-  ): void => {
-    s.message(`Scanning chunk ${completed}/${total}...`);
-  };
-
-  const deepScanCallback = async (count: number): Promise<boolean> =>
-    withSpinnerPaused(async () => {
-      const proceed = await confirm({
-        message: `Found ${count} SKILL.md at non-standard path(s). Continue?`,
-        initialValue: true,
-      });
-      if (isCancel(proceed) || proceed === false) process.exit(2);
-      return true;
-    });
-
-  const confirmInstallCallback = policy.yes
-    ? undefined
-    : async (skillNames: string[]): Promise<boolean> =>
-        withSpinnerPaused(async () => {
-          const proceed = await confirmReadyInstall(skillNames);
-          if (isCancel(proceed) || proceed === false) process.exit(2);
-          return true;
-        });
-
-  const alreadyInstalledCallback = async (
-    name: string,
-  ): Promise<"update" | "abort"> => {
-    if (policy.yes) return "update";
-    return withSpinnerPaused(async () => {
-      const proceed = await confirm({
-        message: `${name} is already installed. Update it instead?`,
-        initialValue: true,
-      });
-      if (isCancel(proceed) || proceed === false) return "abort";
-      return "update";
-    });
-  };
+  const callbacks = createInstallCallbacks({
+    spinner: s, onWarn, skipScan, agent, yes: policy.yes,
+  });
 
   const result = await installSkill(args.source, {
     scope,
@@ -377,18 +260,10 @@ async function runInteractiveMode(
     also,
     ref: args.ref,
     skipScan,
-    onWarnings: skipScan ? undefined : warningsCallback,
-    onSelectSkills: selectSkillsCallback,
-    onSelectTap: selectTapCallback,
-    onAlreadyInstalled: alreadyInstalledCallback,
     agent,
     semantic: runSemantic,
     threshold: config.security.threshold,
-    onSemanticWarnings: agent ? semanticWarningsCallback : undefined,
-    onOfferSemantic: agent ? offerSemanticCallback : undefined,
-    onSemanticProgress: agent ? semanticProgressCallback : undefined,
-    onConfirmInstall: confirmInstallCallback,
-    onDeepScan: deepScanCallback,
+    ...callbacks,
   });
 
   if (!result.ok) {
