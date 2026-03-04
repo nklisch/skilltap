@@ -15,7 +15,7 @@ export default defineCommand({
   args: {
     name: {
       type: "positional",
-      description: "Name(s) of installed skills to remove",
+      description: "Name(s) of installed skills to remove (required in agent mode)",
       required: false,
     },
     project: {

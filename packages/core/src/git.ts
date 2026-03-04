@@ -59,6 +59,14 @@ export async function clone(
         ),
       );
     }
+    if (stderr.includes("Permission denied") || stderr.includes("Could not read from remote repository")) {
+      return err(
+        new GitError(
+          `Repository not found or SSH access denied: '${url}'.`,
+          "Check that the repository exists and your SSH key is configured correctly.",
+        ),
+      );
+    }
     if (stderr.includes("not found") || stderr.includes("does not exist")) {
       return err(new GitError(`Repository not found: '${url}'.`));
     }

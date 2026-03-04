@@ -1,15 +1,17 @@
 import {
   coerceValue,
+  formatConfigValue,
   loadConfig,
   saveConfig,
   setConfigValue,
   validateSetKey,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { agentError } from "../../ui/agent-out";
 
 export default defineCommand({
   meta: {
-    name: "set",
+    name: "skilltap config set",
     description: "Set a config value",
   },
   args: {
@@ -17,6 +19,11 @@ export default defineCommand({
       type: "positional",
       description: "Config key in dot notation (e.g., defaults.scope)",
       required: true,
+    },
+    value: {
+      type: "positional",
+      description: "New value to set",
+      required: false,
     },
   },
   async run({ args }) {
@@ -28,44 +35,51 @@ export default defineCommand({
     const afterSet = process.argv.slice(setIdx + 1).filter((a) => !a.startsWith("-"));
     const values = afterSet.slice(1); // everything after the key
 
+    // Load config first so we can check agent mode for error formatting
+    const configResult = await loadConfig();
+    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+
+    const writeError = (msg: string, hint?: string) => {
+      if (agentMode) {
+        agentError(msg);
+      } else {
+        process.stderr.write(`ERROR: ${msg}\n`);
+        if (hint) process.stderr.write(`  hint: ${hint}\n`);
+      }
+    };
+
+    if (!configResult.ok) {
+      writeError(configResult.error.message);
+      process.exit(1);
+    }
+
     // Validate the key is in the allowlist
     const keyResult = validateSetKey(key);
     if (!keyResult.ok) {
-      process.stderr.write(`error: ${keyResult.error.message}\n`);
-      if (keyResult.error.hint) process.stderr.write(`hint: ${keyResult.error.hint}\n`);
+      writeError(keyResult.error.message, keyResult.error.hint);
       process.exit(1);
     }
 
     // For non-array types, require at least one value
     if (values.length === 0 && keyResult.value.type !== "string[]") {
-      process.stderr.write("error: Missing value\n");
-      process.stderr.write("hint: Usage: skilltap config set <key> <value>\n");
+      writeError("Missing value", "Usage: skilltap config set <key> <value>");
       process.exit(1);
     }
 
     // Coerce string values to the target type
     const coerced = coerceValue(values, keyResult.value);
     if (!coerced.ok) {
-      process.stderr.write(`error: ${coerced.error.message}\n`);
-      if (coerced.error.hint) process.stderr.write(`hint: ${coerced.error.hint}\n`);
-      process.exit(1);
-    }
-
-    // Load, set, save
-    const configResult = await loadConfig();
-    if (!configResult.ok) {
-      process.stderr.write(`error: ${configResult.error.message}\n`);
+      writeError(coerced.error.message, coerced.error.hint);
       process.exit(1);
     }
 
     const updated = setConfigValue(configResult.value, key, coerced.value);
     const saveResult = await saveConfig(updated);
     if (!saveResult.ok) {
-      process.stderr.write(`error: ${saveResult.error.message}\n`);
+      writeError(saveResult.error.message);
       process.exit(1);
     }
 
-    // Silent on success — agent-friendly
-    process.exit(0);
+    process.stdout.write(`OK: ${key} = ${formatConfigValue(coerced.value)}\n`);
   },
 });

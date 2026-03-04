@@ -1,7 +1,8 @@
 import { intro, outro, spinner } from "@clack/prompts";
-import { validateSkill, scan } from "@skilltap/core";
+import { validateSkill, scan, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { resolve, basename, join } from "node:path";
+import { agentError } from "../ui/agent-out";
 import { ansi, errorLine, successLine } from "../ui/format";
 
 export default defineCommand({
@@ -28,6 +29,8 @@ export default defineCommand({
   },
   async run({ args }) {
     const useJson = args.json as boolean;
+    const configResult = await loadConfig();
+    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
 
     if (args.all) {
       await runAll(useJson);
@@ -50,6 +53,18 @@ export default defineCommand({
 
     if (useJson) {
       await runJson(skillPath, skillName);
+      return;
+    }
+
+    if (agentMode) {
+      const result = await validateSkill(skillPath);
+      if (!result.ok) {
+        agentError(result.error.message);
+        process.exit(1);
+      }
+      const { valid, issues } = result.value;
+      process.stdout.write(`${JSON.stringify({ name: skillName, valid, issues }, null, 2)}\n`);
+      if (!valid) process.exit(1);
       return;
     }
 

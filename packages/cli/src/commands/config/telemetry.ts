@@ -5,7 +5,7 @@ import { isTelemetryEnabled } from "../../telemetry";
 
 const status = defineCommand({
   meta: {
-    name: "status",
+    name: "skilltap config telemetry status",
     description: "Show telemetry status",
   },
   async run() {
@@ -41,7 +41,7 @@ const status = defineCommand({
 
 const enable = defineCommand({
   meta: {
-    name: "enable",
+    name: "skilltap config telemetry enable",
     description: "Opt in to anonymous telemetry",
   },
   async run() {
@@ -71,7 +71,7 @@ const enable = defineCommand({
 
 const disable = defineCommand({
   meta: {
-    name: "disable",
+    name: "skilltap config telemetry disable",
     description: "Opt out of telemetry",
   },
   async run() {
@@ -99,7 +99,7 @@ const disable = defineCommand({
 
 export default defineCommand({
   meta: {
-    name: "telemetry",
+    name: "skilltap config telemetry",
     description: "Manage anonymous usage telemetry",
   },
   subCommands: { status, enable, disable },

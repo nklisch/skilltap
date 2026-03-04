@@ -4,11 +4,12 @@ import {
   loadConfig,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { agentError } from "../../ui/agent-out";
 import { errorLine } from "../../ui/format";
 
 export default defineCommand({
   meta: {
-    name: "get",
+    name: "skilltap config get",
     description: "Get a config value",
   },
   args: {
@@ -43,8 +44,13 @@ export default defineCommand({
 
     const result = getConfigValue(config, key);
     if (!result.ok) {
-      process.stderr.write(`error: ${result.error.message}\n`);
-      if (result.error.hint) process.stderr.write(`hint: ${result.error.hint}\n`);
+      const isAgentMode = config["agent-mode"].enabled;
+      if (isAgentMode) {
+        agentError(result.error.message);
+      } else {
+        process.stderr.write(`error: ${result.error.message}\n`);
+        if (result.error.hint) process.stderr.write(`  hint: ${result.error.hint}\n`);
+      }
       process.exit(1);
     }
 

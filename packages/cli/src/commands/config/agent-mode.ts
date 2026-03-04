@@ -15,7 +15,7 @@ import { selectAgentForConfig } from "../../ui/prompts";
 
 export default defineCommand({
   meta: {
-    name: "agent-mode",
+    name: "skilltap config agent-mode",
     description: "Enable or disable agent mode (interactive only)",
   },
   async run() {

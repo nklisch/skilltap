@@ -67,7 +67,7 @@ export default defineCommand({
     },
     "skip-scan": {
       type: "boolean",
-      description: "Skip security scanning",
+      description: "Skip security scanning (not available in agent mode)",
       default: false,
     },
     yes: {

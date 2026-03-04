@@ -57,6 +57,11 @@ export default defineCommand({
       description: "Run semantic scan on updated skills",
       default: false,
     },
+    json: {
+      type: "boolean",
+      description: "Output result as JSON",
+      default: false,
+    },
   },
   async run({ args }) {
     const name = args.name as string | undefined;
@@ -70,7 +75,7 @@ export default defineCommand({
     const projectRoot = await findProjectRoot().catch(() => undefined);
 
     if (policy.agentMode) {
-      return runAgentModeUpdate(name, config, policy, projectRoot);
+      return runAgentModeUpdate(name, config, policy, projectRoot, args.json);
     }
     return runInteractiveUpdate(name, args, config, policy, projectRoot);
   },
@@ -83,6 +88,7 @@ async function runAgentModeUpdate(
   config: Config,
   policy: EffectivePolicy,
   projectRoot: string | undefined,
+  useJson = false,
 ): Promise<void> {
   let agent: AgentAdapter | undefined;
   if (policy.scanMode === "semantic") {
@@ -142,6 +148,13 @@ async function runAgentModeUpdate(
     updated_count: updated.length,
     up_to_date_count: upToDate.length,
   });
+
+  if (useJson) {
+    process.stdout.write(
+      `${JSON.stringify({ updated, skipped, upToDate }, null, 2)}\n`,
+    );
+    return;
+  }
 
   for (const skillName of updated) {
     process.stdout.write(`OK: Updated ${skillName}\n`);

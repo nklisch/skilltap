@@ -42,7 +42,7 @@ describe("skilltap config set", () => {
   test("sets a string enum and reads it back", async () => {
     const set = await runCmd("set", ["defaults.scope", "global"], configDir);
     expect(set.exitCode).toBe(0);
-    expect(set.stdout).toBe(""); // silent on success
+    expect(set.stdout).toBe("OK: defaults.scope = global\n");
 
     const get = await runCmd("get", ["defaults.scope"], configDir);
     expect(get.exitCode).toBe(0);

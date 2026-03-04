@@ -215,7 +215,16 @@ function applyFilter(
       }))
     : tapSearchEntries;
 
-  const sortedRegistry = [...registryEntries].sort(
+  const filteredRegistry = query
+    ? registryEntries.filter((e) => {
+        const terms = [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))];
+        const name = e.name.toLowerCase();
+        const desc = e.description.toLowerCase();
+        return terms.some((t) => name.includes(t) || desc.includes(t));
+      })
+    : registryEntries;
+
+  const sortedRegistry = [...filteredRegistry].sort(
     (a, b) => (b.installs ?? 0) - (a.installs ?? 0),
   );
 

@@ -1,31 +1,45 @@
 import { BUILTIN_TAP, loadConfig, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { agentError } from "../../ui/agent-out";
 import { ansi, errorLine, table } from "../../ui/format";
 
 export default defineCommand({
   meta: {
-    name: "list",
+    name: "skilltap tap list",
     description: "List configured taps",
   },
-  async run() {
+  args: {
+    json: {
+      type: "boolean",
+      description: "Output as JSON",
+      default: false,
+    },
+  },
+  async run({ args }) {
     const configResult = await loadConfig();
     if (!configResult.ok) {
       errorLine(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
+    const agentMode = config["agent-mode"].enabled;
 
     const hasBuiltin = config.builtin_tap !== false;
     if (!hasBuiltin && config.taps.length === 0) {
-      process.stdout.write(
-        `No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n`,
-      );
+      if (args.json) {
+        process.stdout.write("[]\n");
+      } else {
+        process.stdout.write(
+          `No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n`,
+        );
+      }
       process.exit(0);
     }
 
     const tapsResult = await loadTaps();
     if (!tapsResult.ok) {
-      errorLine(tapsResult.error.message, tapsResult.error.hint);
+      if (agentMode) agentError(tapsResult.error.message);
+      else errorLine(tapsResult.error.message, tapsResult.error.hint);
       process.exit(1);
     }
 
@@ -33,6 +47,30 @@ export default defineCommand({
     const counts: Record<string, number> = {};
     for (const entry of tapsResult.value) {
       counts[entry.tapName] = (counts[entry.tapName] ?? 0) + 1;
+    }
+
+    if (args.json) {
+      const tapList = [];
+      if (hasBuiltin) {
+        tapList.push({
+          name: BUILTIN_TAP.name,
+          type: "git",
+          url: BUILTIN_TAP.url,
+          builtin: true,
+          skillCount: counts[BUILTIN_TAP.name] ?? 0,
+        });
+      }
+      for (const tap of config.taps) {
+        tapList.push({
+          name: tap.name,
+          type: tap.type,
+          url: tap.url,
+          builtin: false,
+          skillCount: counts[tap.name] ?? 0,
+        });
+      }
+      process.stdout.write(`${JSON.stringify(tapList, null, 2)}\n`);
+      return;
     }
 
     const rows: string[][] = [];

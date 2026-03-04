@@ -5,7 +5,7 @@ import { ansi, errorLine, successLine } from "../../ui/format";
 
 export default defineCommand({
   meta: {
-    name: "update",
+    name: "skilltap tap update",
     description: "Update tap repo(s)",
   },
   args: {

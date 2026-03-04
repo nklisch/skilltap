@@ -5,7 +5,7 @@ import { errorLine, successLine } from "../../ui/format";
 
 export default defineCommand({
   meta: {
-    name: "remove",
+    name: "skilltap tap remove",
     description: "Remove a tap",
   },
   args: {

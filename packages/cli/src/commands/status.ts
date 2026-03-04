@@ -1,4 +1,4 @@
-import { loadConfig } from "@skilltap/core";
+import { BUILTIN_TAP, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 
 export default defineCommand({
@@ -24,7 +24,8 @@ export default defineCommand({
     const agentMode = config["agent-mode"];
     const security = config.security;
     const defaults = config.defaults;
-    const tapCount = config.taps.length;
+    const hasBuiltin = config.builtin_tap !== false;
+    const tapCount = config.taps.length + (hasBuiltin ? 1 : 0);
 
     if (args.json) {
       process.stdout.write(

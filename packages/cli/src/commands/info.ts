@@ -1,7 +1,8 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { AGENT_PATHS, findProjectRoot, globalBase, loadInstalled, loadTaps } from "@skilltap/core";
+import { AGENT_PATHS, findProjectRoot, globalBase, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { agentError } from "../ui/agent-out";
 import { ansi, errorLine } from "../ui/format";
 import { formatTrustLabel, formatTrustTier } from "../ui/trust";
 
@@ -23,10 +24,18 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const configResult = await loadConfig();
+    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+
+    const writeError = (msg: string, hint?: string) => {
+      if (agentMode) agentError(msg);
+      else errorLine(msg, hint);
+    };
+
     // Try installed first (global + project)
     const globalInstalledResult = await loadInstalled();
     if (!globalInstalledResult.ok) {
-      errorLine(globalInstalledResult.error.message);
+      writeError(globalInstalledResult.error.message);
       process.exit(1);
     }
 
@@ -135,7 +144,7 @@ export default defineCommand({
       }
     }
 
-    errorLine(
+    writeError(
       `Skill '${args.name}' is not installed`,
       `Run 'skilltap find ${args.name}' to search`,
     );

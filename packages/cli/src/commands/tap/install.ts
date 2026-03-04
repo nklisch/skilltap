@@ -19,7 +19,7 @@ import { searchPrompt } from "../../ui/search-prompt";
 
 export default defineCommand({
   meta: {
-    name: "install",
+    name: "skilltap tap install",
     description: "Install skills from your configured taps",
   },
   args: {

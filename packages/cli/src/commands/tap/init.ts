@@ -4,7 +4,7 @@ import { errorLine, successLine } from "../../ui/format";
 
 export default defineCommand({
   meta: {
-    name: "init",
+    name: "skilltap tap init",
     description: "Create a new tap repo",
   },
   args: {
