@@ -173,6 +173,7 @@ async function search(
       description: skill.description,
       source: tapName,
       installRef: skill.name,
+      preSelectedSkill: skill.name,
       trustLabel: formatTapTrust(skill.trust),
     }),
   );
@@ -209,6 +210,7 @@ function applyFilter(
         description: skill.description,
         source: tapName,
         installRef: skill.name,
+        preSelectedSkill: skill.name,
         trustLabel: formatTapTrust(skill.trust),
       }))
     : tapSearchEntries;

@@ -28,11 +28,12 @@ export interface SearchPromptOptions<T> {
   placeholder?: string;
   /** Called on every query change (debounced for async). Return items to display. */
   source: (query: string, signal: AbortSignal) => T[] | Promise<T[]>;
-  /** Render a single option line. `positions` contains fzf match char indices. */
+  /** Render a single option line. `positions` contains fzf match char indices. `selected` is true when the item is in the multiselect set. */
   renderItem: (
     item: T,
     active: boolean,
     matchPositions?: Set<number>,
+    selected?: boolean,
   ) => string;
   /** String selector for fzf matching. Defaults to `String(item)`. */
   selector?: (item: T) => string;
@@ -42,6 +43,8 @@ export interface SearchPromptOptions<T> {
   initialQuery?: string;
   /** Max visible options before scrolling. */
   maxItems?: number;
+  /** Enable multi-select mode (Space to toggle, Enter to confirm). Returns T[]. */
+  multiselect?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +84,9 @@ class SearchPromptImpl<T> extends Prompt<T> {
   private fzfInstance: Fzf<T> | null = null;
   private optionsCursor = 0;
 
+  // Multiselect state
+  private _selectedMap = new Map<string, T>();
+
   // Async state
   private isLoading = false;
   private spinnerFrame = 0;
@@ -103,6 +109,10 @@ class SearchPromptImpl<T> extends Prompt<T> {
         },
         initialUserInput: opts.initialQuery,
         validate: (value: T | undefined) => {
+          if (opts.multiselect) {
+            if (instance._selectedMap.size === 0) return "Select at least one item";
+            return undefined;
+          }
           if (value === undefined) return "No skill selected";
         },
       },
@@ -146,6 +156,12 @@ class SearchPromptImpl<T> extends Prompt<T> {
     // class fires userInput which may have already called scheduleFetch, but
     // calling it again just aborts+restarts (idempotent).
     this.scheduleFetch(this.userInput || "");
+    if (this.opts.multiselect) {
+      return result.then((r) => {
+        if (r === undefined || typeof r === "symbol") return r;
+        return Array.from(this._selectedMap.values()) as unknown as T;
+      });
+    }
     return result;
   }
 
@@ -153,7 +169,27 @@ class SearchPromptImpl<T> extends Prompt<T> {
   protected _isActionKey(char: string | undefined, _key: Key): boolean {
     // Only tab is an "action key" (deleted from readline buffer).
     // Arrow keys are escape sequences and don't insert into readline.
+    if (char === " " && this.opts.multiselect) {
+      this.toggleSelection();
+      return true;
+    }
     return char === "\t";
+  }
+
+  private getKey(item: T): string {
+    return this.opts.selector ? this.opts.selector(item) : String(item);
+  }
+
+  private toggleSelection(): void {
+    const result = this.fzfResults[this.optionsCursor];
+    if (!result) return;
+    const key = this.getKey(result.item);
+    if (this._selectedMap.has(key)) {
+      this._selectedMap.delete(key);
+    } else {
+      this._selectedMap.set(key, result.item);
+    }
+    this.rerender();
   }
 
   // ---------------------------------------------------------------------------
@@ -319,6 +355,13 @@ class SearchPromptImpl<T> extends Prompt<T> {
 
     switch (this.state) {
       case "submit": {
+        if (this.opts.multiselect) {
+          const count = this._selectedMap.size;
+          return [
+            `${symbol(this.state)}  ${this.opts.message}`,
+            `${bar}  ${pc.dim(`${count} selected`)}`,
+          ].join("\n");
+        }
         const selected = this.value;
         const label = selected
           ? this.opts.selector
@@ -392,11 +435,19 @@ class SearchPromptImpl<T> extends Prompt<T> {
           lines.push(`${cBar}  ${pc.dim("Searching…")}`);
         } else if (this.fzfResults.length > 0) {
           // Help + footer lines (for rowPadding calculation)
-          const helpParts = [
-            `${pc.dim("↑/↓")} to select`,
-            `${pc.dim("Enter:")} install`,
-            `${pc.dim("Type:")} to search`,
-          ];
+          const selectedCount = this._selectedMap.size;
+          const helpParts = this.opts.multiselect
+            ? [
+                `${pc.dim("↑/↓")} navigate`,
+                `${pc.dim("Space:")} select`,
+                `${pc.dim("Enter:")} install${selectedCount > 0 ? ` (${selectedCount} selected)` : ""}`,
+                `${pc.dim("Type:")} search`,
+              ]
+            : [
+                `${pc.dim("↑/↓")} to select`,
+                `${pc.dim("Enter:")} install`,
+                `${pc.dim("Type:")} to search`,
+              ];
           const footerLines = [
             `${cBar}  ${helpParts.join(" \u2022 ")}`,
             cBarEnd,
@@ -415,6 +466,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
                 fzfResult.positions.size > 0
                   ? fzfResult.positions
                   : undefined,
+                this._selectedMap.has(this.getKey(fzfResult.item)),
               ),
           });
 
@@ -439,7 +491,13 @@ class SearchPromptImpl<T> extends Prompt<T> {
 // ---------------------------------------------------------------------------
 
 export function searchPrompt<T>(
+  opts: SearchPromptOptions<T> & { multiselect: true },
+): Promise<T[] | symbol>;
+export function searchPrompt<T>(
+  opts: SearchPromptOptions<T> & { multiselect?: false },
+): Promise<T | symbol>;
+export function searchPrompt<T>(
   opts: SearchPromptOptions<T>,
-): Promise<T | symbol> {
-  return new SearchPromptImpl(opts).prompt() as Promise<T | symbol>;
+): Promise<T | T[] | symbol> {
+  return new SearchPromptImpl(opts).prompt() as Promise<T | T[] | symbol>;
 }
