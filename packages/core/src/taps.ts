@@ -11,6 +11,12 @@ import type { Tap, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
 import { err, type GitError, ok, type Result, UserError } from "./types";
 
+/** The built-in tap — always available unless explicitly opted out via config. */
+export const BUILTIN_TAP = {
+  name: "skilltap-skills",
+  url: "https://github.com/nklisch/skilltap-skills.git",
+} as const;
+
 export type TapEntry = { tapName: string; skill: TapSkill };
 
 export type UpdateTapResult = {
@@ -93,6 +99,27 @@ export function parseGitHubTapShorthand(
   };
 }
 
+/** Returns true if the built-in tap is already cloned locally. */
+export async function isBuiltinTapCloned(): Promise<boolean> {
+  return Bun.file(join(tapDir(BUILTIN_TAP.name), "tap.json")).exists();
+}
+
+/**
+ * Ensure the built-in tap is cloned locally. Idempotent — no-op if already present.
+ * Returns ok(undefined) whether freshly cloned or already present.
+ */
+export async function ensureBuiltinTap(): Promise<Result<void, UserError | GitError>> {
+  const dir = tapDir(BUILTIN_TAP.name);
+  const exists = await Bun.file(join(dir, "tap.json")).exists();
+  if (exists) return ok(undefined);
+
+  const gitCheck = await checkGitInstalled();
+  if (!gitCheck.ok) return gitCheck;
+
+  const cloneResult = await clone(BUILTIN_TAP.url, dir, { depth: 1 });
+  return cloneResult;
+}
+
 export async function addTap(
   name: string,
   url: string,
@@ -101,6 +128,15 @@ export async function addTap(
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
   const config = configResult.value;
+
+  if (name === BUILTIN_TAP.name && config.builtin_tap !== false) {
+    return err(
+      new UserError(
+        `'${BUILTIN_TAP.name}' is the built-in tap and is already included.`,
+        "To disable it, set 'builtin_tap = false' in your config.toml.",
+      ),
+    );
+  }
 
   if (config.taps.some((t) => t.name === name)) {
     return err(
@@ -153,6 +189,23 @@ export async function removeTap(
   if (!configResult.ok) return configResult;
   const config = configResult.value;
 
+  // Special case: disable the built-in tap
+  if (name === BUILTIN_TAP.name) {
+    if (config.builtin_tap === false) {
+      return err(
+        new UserError(
+          `Built-in tap '${BUILTIN_TAP.name}' is already disabled.`,
+          "Set 'builtin_tap = true' in config.toml to re-enable it.",
+        ),
+      );
+    }
+    config.builtin_tap = false;
+    const saveResult = await saveConfig(config);
+    if (!saveResult.ok) return saveResult;
+    await rm(tapDir(name), { recursive: true, force: true });
+    return ok(undefined);
+  }
+
   const idx = config.taps.findIndex((t) => t.name === name);
   if (idx === -1) {
     return err(
@@ -182,6 +235,46 @@ export async function updateTap(
   if (!configResult.ok) return configResult;
   const config = configResult.value;
 
+  const updated: Record<string, number> = {};
+  const http: string[] = [];
+
+  // Handle built-in tap: update if enabled and requested
+  if (name === BUILTIN_TAP.name) {
+    if (config.builtin_tap === false) {
+      return err(
+        new UserError(
+          `Tap '${BUILTIN_TAP.name}' is not configured.`,
+          "Set 'builtin_tap = true' in config.toml to re-enable it.",
+        ),
+      );
+    }
+    const dir = tapDir(BUILTIN_TAP.name);
+    if (!(await Bun.file(join(dir, "tap.json")).exists())) {
+      return err(
+        new UserError(
+          `Built-in tap '${BUILTIN_TAP.name}' is not yet cloned.`,
+          "Run 'skilltap tap install' to set it up.",
+        ),
+      );
+    }
+    const pullResult = await pull(dir);
+    if (!pullResult.ok) return pullResult;
+    const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
+    updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
+    return ok({ updated, http });
+  }
+
+  // Update all: include built-in tap if enabled and cloned
+  if (!name && config.builtin_tap !== false) {
+    const dir = tapDir(BUILTIN_TAP.name);
+    if (await Bun.file(join(dir, "tap.json")).exists()) {
+      const pullResult = await pull(dir);
+      if (!pullResult.ok) return pullResult;
+      const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
+      updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
+    }
+  }
+
   const targets = name
     ? config.taps.filter((t) => t.name === name)
     : config.taps;
@@ -194,9 +287,6 @@ export async function updateTap(
       ),
     );
   }
-
-  const updated: Record<string, number> = {};
-  const http: string[] = [];
 
   for (const tap of targets) {
     if (tap.type === "http") {
@@ -222,6 +312,17 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
   const config = configResult.value;
 
   const entries: TapEntry[] = [];
+
+  // Load built-in tap first (if enabled and already cloned)
+  if (config.builtin_tap !== false) {
+    const dir = tapDir(BUILTIN_TAP.name);
+    const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
+    if (tapResult.ok) {
+      for (const skill of tapResult.value.skills) {
+        entries.push({ tapName: BUILTIN_TAP.name, skill });
+      }
+    }
+  }
 
   for (const tap of config.taps) {
     if (tap.type === "http") {

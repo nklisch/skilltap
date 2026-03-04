@@ -53,6 +53,8 @@ export const ConfigSchema = z.object({
   security: SecurityConfigSchema.prefault({}),
   "agent-mode": AgentModeSchema.prefault({}),
   registry: RegistryConfigSchema,
+  /** Whether the built-in skilltap-skills tap is enabled. Set to false to opt out. */
+  builtin_tap: z.boolean().default(true),
   taps: z
     .array(
       z.object({

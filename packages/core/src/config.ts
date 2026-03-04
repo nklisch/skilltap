@@ -92,7 +92,11 @@ enabled = ["skills.sh"]
 # name = "my-org"
 # url = "https://skills.example.com"
 
-# Tap definitions (repeatable section)
+# Built-in tap: the official skilltap-skills collection.
+# Set to false to opt out of the built-in tap entirely.
+builtin_tap = true
+
+# Additional tap definitions (repeatable section)
 # [[taps]]
 # name = "home"
 # url = "https://gitea.example.com/nathan/my-skills-tap"

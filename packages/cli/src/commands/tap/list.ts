@@ -1,4 +1,4 @@
-import { loadConfig, loadTaps } from "@skilltap/core";
+import { BUILTIN_TAP, loadConfig, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine, table } from "../../ui/format";
 
@@ -15,7 +15,8 @@ export default defineCommand({
     }
     const config = configResult.value;
 
-    if (config.taps.length === 0) {
+    const hasBuiltin = config.builtin_tap !== false;
+    if (!hasBuiltin && config.taps.length === 0) {
       process.stdout.write(
         `No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n`,
       );
@@ -34,12 +35,25 @@ export default defineCommand({
       counts[entry.tapName] = (counts[entry.tapName] ?? 0) + 1;
     }
 
-    const rows = config.taps.map((tap) => [
-      ansi.bold(tap.name),
-      tap.type === "http" ? ansi.dim("http") : ansi.dim("git"),
-      tap.url,
-      `${counts[tap.name] ?? 0} skills`,
-    ]);
+    const rows: string[][] = [];
+
+    if (hasBuiltin) {
+      rows.push([
+        ansi.bold(BUILTIN_TAP.name) + ansi.dim(" (built-in)"),
+        ansi.dim("git"),
+        BUILTIN_TAP.url,
+        `${counts[BUILTIN_TAP.name] ?? 0} skills`,
+      ]);
+    }
+
+    for (const tap of config.taps) {
+      rows.push([
+        ansi.bold(tap.name),
+        tap.type === "http" ? ansi.dim("http") : ansi.dim("git"),
+        tap.url,
+        `${counts[tap.name] ?? 0} skills`,
+      ]);
+    }
 
     process.stdout.write("\n");
     process.stdout.write(table(rows));

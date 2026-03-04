@@ -439,7 +439,10 @@ describe("updateSkill — npm", () => {
           integrity: v2.integrity,
         });
 
-        const result = await updateSkill({ yes: true });
+        const result = await updateSkill(
+          { yes: true },
+          async () => ({ tier: "unverified" as const }),
+        );
         expect(result.ok).toBe(true);
         if (!result.ok) return;
 
@@ -464,5 +467,5 @@ describe("updateSkill — npm", () => {
       await removeTmpDir(tgzDir1);
       await removeTmpDir(tgzDir2);
     }
-  });
+  }, 30_000);
 });

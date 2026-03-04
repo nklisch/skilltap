@@ -1,7 +1,10 @@
 import { intro, isCancel, outro, spinner } from "@clack/prompts";
 import type { TapEntry } from "@skilltap/core";
 import {
+  ensureBuiltinTap,
   installSkill,
+  isBuiltinTapCloned,
+  loadConfig,
   loadTaps,
   searchTaps,
   skillInstallDir,
@@ -74,6 +77,22 @@ export default defineCommand({
       global: args.global,
     });
 
+    // Ensure the built-in tap is cloned (only show spinner on first clone)
+    const configResult = await loadConfig();
+    if (configResult.ok && configResult.value.builtin_tap !== false) {
+      const alreadyCloned = await isBuiltinTapCloned();
+      if (!alreadyCloned) {
+        const s = spinner();
+        s.start("Fetching built-in skills tap…");
+        const ensureResult = await ensureBuiltinTap();
+        if (!ensureResult.ok) {
+          s.stop("Could not reach built-in tap — continuing without it.");
+        } else {
+          s.stop("Built-in tap ready.");
+        }
+      }
+    }
+
     // Load all tap entries
     const tapsResult = await loadTaps();
     if (!tapsResult.ok) {
@@ -85,8 +104,8 @@ export default defineCommand({
 
     if (tapEntries.length === 0) {
       errorLine(
-        "No taps configured.",
-        "Run 'skilltap tap add <name> <url>' to add one.",
+        "No skills available.",
+        "Check your connection, or add a tap with 'skilltap tap add <name> <url>'.",
       );
       process.exit(1);
     }

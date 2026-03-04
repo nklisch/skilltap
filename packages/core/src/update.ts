@@ -22,6 +22,8 @@ import { scanSemantic } from "./security/semantic";
 import { wrapShell } from "./shell";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import { parseGitHubRepo, resolveTrust } from "./trust";
+
+type ResolveTrustFn = typeof resolveTrust;
 import type { Result } from "./types";
 import {
   err,
@@ -172,6 +174,7 @@ async function updateNpmSkill(
   installed: { skills: InstalledSkill[] },
   options: UpdateOptions,
   result: UpdateResult,
+  _resolveTrust: ResolveTrustFn,
 ): Promise<Result<void, UserError | NetworkError | ScanError>> {
   // biome-ignore lint/style/noNonNullAssertion: caller checks record.repo?.startsWith("npm:")
   const { name: packageName } = parseNpmSource(record.repo!);
@@ -262,7 +265,7 @@ async function updateNpmSkill(
     await refreshAgentSymlinks(record, options.projectRoot);
 
     // Re-verify trust for the new version
-    const newTrust = await resolveTrust({
+    const newTrust = await _resolveTrust({
       adapter: "npm",
       url: record.repo!,
       tap: record.tap,
@@ -294,6 +297,7 @@ async function updateGitSkill(
   installed: { skills: InstalledSkill[] },
   options: UpdateOptions,
   result: UpdateResult,
+  _resolveTrust: ResolveTrustFn,
 ): Promise<Result<void, UserError | GitError | ScanError>> {
   // Standalone: work dir is the install path. Multi-skill: work dir is the cache.
   const isMulti = record.path !== null;
@@ -388,7 +392,7 @@ async function updateGitSkill(
   if (!newShaResult.ok) return newShaResult;
 
   // Re-verify trust for the updated skill
-  const newTrust = await resolveTrust({
+  const newTrust = await _resolveTrust({
     adapter: "git",
     url: record.repo ?? "",
     tap: record.tap,
@@ -412,6 +416,7 @@ async function updateGitSkill(
 
 export async function updateSkill(
   options: UpdateOptions = {},
+  _resolveTrust: ResolveTrustFn = resolveTrust,
 ): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
   debug("updateSkill", { name: options.name ?? "all" });
   const installedResult = await loadInstalled();
@@ -444,10 +449,10 @@ export async function updateSkill(
 
     // Dispatch to adapter-specific update handler
     if (record.repo?.startsWith("npm:")) {
-      const npmResult = await updateNpmSkill(record, installed, options, result);
+      const npmResult = await updateNpmSkill(record, installed, options, result, _resolveTrust);
       if (!npmResult.ok) return npmResult;
     } else {
-      const gitResult = await updateGitSkill(record, installed, options, result);
+      const gitResult = await updateGitSkill(record, installed, options, result, _resolveTrust);
       if (!gitResult.ok) return gitResult;
     }
   }

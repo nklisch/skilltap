@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 setDefaultTimeout(15_000);
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   commitAll,
@@ -8,6 +9,12 @@ import {
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
+
+/** Write a minimal config.toml with builtin_tap = false to keep tests offline. */
+async function disableBuiltinTap(configDir: string): Promise<void> {
+  await mkdir(join(configDir, "skilltap"), { recursive: true });
+  await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+}
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
@@ -132,7 +139,8 @@ describe("tap add", () => {
 });
 
 describe("tap list", () => {
-  test("shows no taps message when empty", async () => {
+  test("shows no taps message when empty and builtin disabled", async () => {
+    await disableBuiltinTap(configDir);
     const { exitCode, stdout } = await runCli(
       ["tap", "list"],
       homeDir,
@@ -140,6 +148,17 @@ describe("tap list", () => {
     );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No taps configured");
+  });
+
+  test("shows built-in tap by default even with no user taps", async () => {
+    const { exitCode, stdout } = await runCli(
+      ["tap", "list"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("skilltap-skills");
+    expect(stdout).toContain("built-in");
   });
 
   test("lists configured taps", async () => {
@@ -177,13 +196,14 @@ describe("tap remove", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Removed tap 'home'");
 
-      // Verify it's gone from list
+      // Verify it's gone from list (built-in tap still shows)
       const { stdout: listOut } = await runCli(
         ["tap", "list"],
         homeDir,
         configDir,
       );
-      expect(listOut).toContain("No taps configured");
+      expect(listOut).not.toContain("home");
+      expect(listOut).toContain("skilltap-skills");
     } finally {
       await tap.cleanup();
     }
@@ -274,14 +294,15 @@ describe("tap init", () => {
 });
 
 describe("tap install", () => {
-  test("exits with error when no taps configured", async () => {
+  test("exits with error when no taps configured and builtin disabled", async () => {
+    await disableBuiltinTap(configDir);
     const { exitCode, stdout, stderr } = await runCli(
       ["tap", "install", "--yes", "--global", "--skip-scan"],
       homeDir,
       configDir,
     );
     expect(exitCode).toBe(1);
-    expect(stdout + stderr).toMatch(/No taps configured/);
+    expect(stdout + stderr).toMatch(/No skills available/);
   });
 
   test("--yes installs all skills from configured tap", async () => {
