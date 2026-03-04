@@ -119,7 +119,7 @@ _skilltap() {
           ;;
         tap)
           local -a tap_commands
-          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'update:Update taps' 'init:Scaffold a tap repo')
+          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'update:Update taps' 'init:Scaffold a tap repo' 'install:Install skills from taps')
           _arguments -C '1:subcommand:->tap_cmd' '*::arg:->tap_args'
           case $state in
             tap_cmd) _describe 'subcommand' tap_commands ;;
@@ -129,6 +129,20 @@ _skilltap() {
                   local -a taps
                   taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
                   _arguments "1:tap:($taps)"
+                  ;;
+                install)
+                  local -a taps
+                  taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
+                  _arguments \\
+                    '--tap[Scope to one tap]:tap:($taps)' \\
+                    '--project[Install to project scope]' \\
+                    '--global[Install to global scope]' \\
+                    '--also[Symlink to agent dir]:agent:(claude-code cursor codex gemini windsurf)' \\
+                    '--yes[Auto-select all and install]' \\
+                    '--strict[Abort on warnings]' \\
+                    '--no-strict[Override strict config]' \\
+                    '--semantic[Force semantic scan]' \\
+                    '--skip-scan[Skip security scan]'
                   ;;
               esac
               ;;
@@ -146,7 +160,7 @@ _skilltap() {
           _arguments '--json[Output as JSON]'
           ;;
         self-update)
-          _arguments '--force[Re-install even if already on latest version]'
+          _arguments '--force[Bypass cache and re-install even if already on latest]'
           ;;
       esac
       ;;

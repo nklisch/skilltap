@@ -3,6 +3,7 @@ setDefaultTimeout(15_000);
 import { join } from "node:path";
 import {
   commitAll,
+  createStandaloneSkillRepo,
   initRepo,
   makeTmpDir,
   removeTmpDir,
@@ -268,6 +269,100 @@ describe("tap init", () => {
       expect(tapJson.skills).toEqual([]);
     } finally {
       await removeTmpDir(workDir);
+    }
+  });
+});
+
+describe("tap install", () => {
+  test("exits with error when no taps configured", async () => {
+    const { exitCode, stdout, stderr } = await runCli(
+      ["tap", "install", "--yes", "--global", "--skip-scan"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(1);
+    expect(stdout + stderr).toMatch(/No taps configured/);
+  });
+
+  test("--yes installs all skills from configured tap", async () => {
+    const skillRepo = await createStandaloneSkillRepo();
+    const tap = await createLocalTap([
+      {
+        name: "standalone-skill",
+        description: "A skill",
+        repo: skillRepo.path,
+      },
+    ]);
+    try {
+      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
+
+      const { exitCode, stdout } = await runCli(
+        ["tap", "install", "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("standalone-skill");
+    } finally {
+      await skillRepo.cleanup();
+      await tap.cleanup();
+    }
+  });
+
+  test("--tap scopes to a single tap", async () => {
+    const skillRepo = await createStandaloneSkillRepo();
+    const tap1 = await createLocalTap([
+      {
+        name: "standalone-skill",
+        description: "From tap1",
+        repo: skillRepo.path,
+      },
+    ]);
+    const tap2 = await createLocalTap([
+      {
+        name: "other-skill",
+        description: "From tap2",
+        repo: "https://example.invalid/other",
+      },
+    ]);
+    try {
+      await runCli(["tap", "add", "tap1", tap1.path], homeDir, configDir);
+      await runCli(["tap", "add", "tap2", tap2.path], homeDir, configDir);
+
+      const { exitCode, stdout } = await runCli(
+        ["tap", "install", "--tap", "tap1", "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("standalone-skill");
+    } finally {
+      await skillRepo.cleanup();
+      await tap1.cleanup();
+      await tap2.cleanup();
+    }
+  });
+
+  test("--tap with unknown tap name exits with error", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "my-skill",
+        description: "A skill",
+        repo: "https://example.invalid/skill",
+      },
+    ]);
+    try {
+      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
+
+      const { exitCode, stdout, stderr } = await runCli(
+        ["tap", "install", "--tap", "nonexistent", "--yes", "--global"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      expect(stdout + stderr).toContain("nonexistent");
+    } finally {
+      await tap.cleanup();
     }
   });
 });

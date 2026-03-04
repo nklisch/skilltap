@@ -9,7 +9,7 @@ _skilltap() {
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
   local commands="status install remove list update find link unlink info create verify config tap doctor completions self-update"
-  local tap_commands="add remove list update init"
+  local tap_commands="add remove list update init install"
   local agents="claude-code cursor codex gemini windsurf"
   local templates="basic npm multi"
 
@@ -100,6 +100,11 @@ _skilltap() {
           local taps
           taps=$(skilltap --get-completions tap-names 2>/dev/null)
           COMPREPLY=($(compgen -W "$taps" -- "$cur"))
+          ;;
+        install)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--tap --project --global --also --yes --strict --no-strict --semantic --skip-scan" -- "$cur"))
+          fi
           ;;
         add|list|init|"")
           COMPREPLY=($(compgen -W "$tap_commands" -- "$cur"))

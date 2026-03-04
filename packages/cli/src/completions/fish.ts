@@ -85,12 +85,22 @@ complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen
 complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get' -l json -d 'Output as JSON'
 
 # tap subcommands
-complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'add' -d 'Add a tap'
-complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'remove' -d 'Remove a tap'
-complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'list' -d 'List taps'
-complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'update' -d 'Update taps'
-complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init' -a 'init' -d 'Scaffold a tap repo'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init install' -a 'add' -d 'Add a tap'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init install' -a 'remove' -d 'Remove a tap'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init install' -a 'list' -d 'List taps'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init install' -a 'update' -d 'Update taps'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init install' -a 'init' -d 'Scaffold a tap repo'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list update init install' -a 'install' -d 'Install skills from taps'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from remove update' -xa '(skilltap --get-completions tap-names 2>/dev/null)'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l tap -xa '(skilltap --get-completions tap-names 2>/dev/null)' -d 'Scope to one tap'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l project -d 'Install to project scope'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l global -d 'Install to global scope'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l also -xa 'claude-code cursor codex gemini windsurf' -d 'Symlink to agent dir'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l yes -d 'Auto-select all and install'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l strict -d 'Abort on warnings'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l no-strict -d 'Override strict config'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l semantic -d 'Force semantic scan'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l skip-scan -d 'Skip security scan'
 
 # doctor flags
 complete -c skilltap -n '__fish_seen_subcommand_from doctor' -l json -d 'JSON output'
@@ -106,5 +116,5 @@ complete -c skilltap -n '__fish_seen_subcommand_from status' -l json -d 'Output 
 complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from telemetry; and not __fish_seen_subcommand_from status enable disable' -xa 'status enable disable'
 
 # self-update flags
-complete -c skilltap -n '__fish_seen_subcommand_from self-update' -l force -d 'Re-install even if already on latest version'`;
+complete -c skilltap -n '__fish_seen_subcommand_from self-update' -l force -d 'Bypass cache and re-install even if already on latest'`;
 }
