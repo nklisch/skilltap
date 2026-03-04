@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
+setDefaultTimeout(15_000);
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {

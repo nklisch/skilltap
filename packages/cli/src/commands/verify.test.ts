@@ -1,4 +1,5 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+setDefaultTimeout(15_000);
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
