@@ -1,4 +1,4 @@
-import { type DoctorCheck, type DoctorIssue, runDoctor } from "@skilltap/core";
+import { type DoctorCheck, type DoctorIssue, findProjectRoot, runDoctor } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine } from "../ui/format";
 
@@ -85,8 +85,10 @@ function printIssue(issue: DoctorIssue, fix: boolean): void {
 async function runInteractive(fix: boolean): Promise<void> {
   process.stdout.write(`\n${ansi.dim("┌")} skilltap doctor\n${ansi.dim("│")}\n`);
 
+  const projectRoot = await findProjectRoot().catch(() => undefined);
   const result = await runDoctor({
     fix,
+    projectRoot,
     onCheck: (check) => printCheck(check, fix),
   });
 
@@ -133,7 +135,8 @@ async function runInteractive(fix: boolean): Promise<void> {
 // ─── JSON output ──────────────────────────────────────────────────────────────
 
 async function runJson(fix: boolean): Promise<void> {
-  const result = await runDoctor({ fix });
+  const projectRoot = await findProjectRoot().catch(() => undefined);
+  const result = await runDoctor({ fix, projectRoot });
 
   const output = {
     ok: result.ok,

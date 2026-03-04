@@ -49,6 +49,7 @@ export interface DoctorResult {
 
 export interface DoctorOptions {
   fix?: boolean;
+  projectRoot?: string;
   onCheck?: (check: DoctorCheck) => void;
 }
 
@@ -257,96 +258,105 @@ async function checkDirs(): Promise<DoctorCheck> {
 
 // ─── Check 4: installed.json ──────────────────────────────────────────────────
 
-async function checkInstalled(): Promise<{
-  check: DoctorCheck;
-  installed: InstalledJson | null;
-}> {
-  const installedFile = join(getConfigDir(), "installed.json");
-
-  if (!(await fileExists(installedFile))) {
-    return {
-      check: {
-        name: "installed",
-        status: "pass",
-        detail: "0 skills (no installed.json)",
-      },
-      installed: { version: 1, skills: [] },
-    };
-  }
+async function readInstalledFile(
+  file: string,
+  label: string,
+  issues: DoctorIssue[],
+): Promise<InstalledJson | null> {
+  if (!(await fileExists(file))) return null;
 
   let raw: unknown;
   try {
-    raw = await Bun.file(installedFile).json();
+    raw = await Bun.file(file).json();
   } catch (e) {
-    const backupFile = `${installedFile}.bak`;
-    return {
-      check: {
-        name: "installed",
-        status: "fail",
-        issues: [
-          {
-            message: `installed.json is corrupt: ${e}`,
-            fixable: true,
-            fixDescription: `backed up to installed.json.bak, created fresh`,
-            fix: async () => {
-              await copyFile(installedFile, backupFile).catch(() => {});
-              await writeFile(
-                installedFile,
-                JSON.stringify({ version: 1, skills: [] }, null, 2),
-              );
-            },
-          },
-        ],
+    const backupFile = `${file}.bak`;
+    const backupName = `${label}.bak`;
+    issues.push({
+      message: `${label} is corrupt: ${e}`,
+      fixable: true,
+      fixDescription: `backed up to ${backupName}, created fresh`,
+      fix: async () => {
+        await copyFile(file, backupFile).catch(() => {});
+        await writeFile(file, JSON.stringify({ version: 1, skills: [] }, null, 2));
       },
-      installed: null,
-    };
+    });
+    return null;
   }
 
   const result = InstalledJsonSchema.safeParse(raw);
   if (!result.success) {
-    const backupFile = `${installedFile}.bak`;
-    return {
-      check: {
-        name: "installed",
-        status: "fail",
-        issues: [
-          {
-            message: `installed.json is invalid: ${z.prettifyError(result.error)}`,
-            fixable: true,
-            fixDescription: `backed up to installed.json.bak, created fresh`,
-            fix: async () => {
-              await copyFile(installedFile, backupFile).catch(() => {});
-              await writeFile(
-                installedFile,
-                JSON.stringify({ version: 1, skills: [] }, null, 2),
-              );
-            },
-          },
-        ],
+    const backupFile = `${file}.bak`;
+    const backupName = `${label}.bak`;
+    issues.push({
+      message: `${label} is invalid: ${z.prettifyError(result.error)}`,
+      fixable: true,
+      fixDescription: `backed up to ${backupName}, created fresh`,
+      fix: async () => {
+        await copyFile(file, backupFile).catch(() => {});
+        await writeFile(file, JSON.stringify({ version: 1, skills: [] }, null, 2));
       },
-      installed: null,
-    };
+    });
+    return null;
   }
 
-  const { skills } = result.data;
-  return {
-    check: {
-      name: "installed",
-      status: "pass",
-      detail: `${skills.length} skill${skills.length === 1 ? "" : "s"}`,
-    },
-    installed: result.data,
-  };
+  return result.data;
+}
+
+async function checkInstalled(projectRoot?: string): Promise<{
+  check: DoctorCheck;
+  installed: InstalledJson | null;
+}> {
+  const globalFile = join(getConfigDir(), "installed.json");
+  const issues: DoctorIssue[] = [];
+
+  const globalInstalled = await readInstalledFile(globalFile, "installed.json", issues);
+  const projectInstalled = projectRoot
+    ? await readInstalledFile(
+        join(projectRoot, ".agents", "installed.json"),
+        ".agents/installed.json",
+        issues,
+      )
+    : null;
+
+  const allSkills = [
+    ...(globalInstalled?.skills ?? []),
+    ...(projectInstalled?.skills ?? []),
+  ];
+  const merged: InstalledJson = { version: 1 as const, skills: allSkills };
+
+  if (issues.length > 0) {
+    return { check: { name: "installed", status: "fail", issues }, installed: merged };
+  }
+
+  const globalCount = globalInstalled?.skills.length ?? 0;
+  const projectCount = projectInstalled?.skills.length ?? 0;
+  const total = allSkills.length;
+
+  let detail: string;
+  if (!globalInstalled && !projectInstalled) {
+    detail = "0 skills (no installed.json)";
+  } else if (projectInstalled !== null) {
+    detail = `${total} skill${total === 1 ? "" : "s"} (${globalCount} global, ${projectCount} project)`;
+  } else {
+    detail = `${total} skill${total === 1 ? "" : "s"}`;
+  }
+
+  return { check: { name: "installed", status: "pass", detail }, installed: merged };
 }
 
 // ─── Check 5: Skills Integrity ────────────────────────────────────────────────
 
-async function checkSkills(installed: InstalledJson): Promise<DoctorCheck> {
+async function checkSkills(installed: InstalledJson, projectRoot?: string): Promise<DoctorCheck> {
   const issues: DoctorIssue[] = [];
-  const trackedNames = new Set<string>();
+  const globalTracked = new Set<string>();
+  const projectTracked = new Set<string>();
 
   for (const skill of installed.skills) {
-    trackedNames.add(skill.name);
+    if (skill.scope === "project") {
+      projectTracked.add(skill.name);
+    } else if (skill.scope !== "linked") {
+      globalTracked.add(skill.name);
+    }
 
     if (skill.scope === "linked") {
       if (skill.path && !(await resolvedDirExists(skill.path))) {
@@ -368,41 +378,69 @@ async function checkSkills(installed: InstalledJson): Promise<DoctorCheck> {
       continue;
     }
 
-    const installDir = skillInstallDir(skill.name, "global");
+    const isProject = skill.scope === "project" && !!projectRoot;
+    const installDir = isProject
+      ? skillInstallDir(skill.name, "project", projectRoot)
+      : skillInstallDir(skill.name, "global");
+
     if (!(await resolvedDirExists(installDir))) {
       const skillName = skill.name;
+      const skillScope = skill.scope as "global" | "project";
+      const capturedRoot = projectRoot;
       issues.push({
         message: `${skillName}: recorded in installed.json but directory missing at ${installDir}`,
         fixable: true,
         fixDescription: `removed from installed.json`,
         fix: async () => {
-          const r = await loadInstalled();
+          const effectiveRoot = skillScope === "project" ? capturedRoot : undefined;
+          const r = await loadInstalled(effectiveRoot);
           if (!r.ok) return;
-          await saveInstalled({
-            ...r.value,
-            skills: r.value.skills.filter((s) => s.name !== skillName),
-          });
+          await saveInstalled(
+            { ...r.value, skills: r.value.skills.filter((s) => s.name !== skillName) },
+            effectiveRoot,
+          );
         },
       });
     }
   }
 
-  // Check for orphan directories
-  const skillsDir = join(globalBase(), ".agents", "skills");
-  if (await resolvedDirExists(skillsDir)) {
+  // Global orphan scan
+  const globalSkillsDir = join(globalBase(), ".agents", "skills");
+  if (await resolvedDirExists(globalSkillsDir)) {
     try {
-      const entries = await readdir(skillsDir, { withFileTypes: true });
+      const entries = await readdir(globalSkillsDir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
-        if (!trackedNames.has(entry.name)) {
+        if (!globalTracked.has(entry.name)) {
           issues.push({
-            message: `${entry.name}: directory exists at ${join(skillsDir, entry.name)} but not tracked in installed.json`,
+            message: `${entry.name}: directory exists at ${join(globalSkillsDir, entry.name)} but not tracked in installed.json`,
             fixable: false,
           });
         }
       }
     } catch {
       // ignore
+    }
+  }
+
+  // Project orphan scan (only when there are project-tracked skills)
+  if (projectRoot && projectTracked.size > 0) {
+    const projectSkillsDir = join(projectRoot, ".agents", "skills");
+    if (await resolvedDirExists(projectSkillsDir)) {
+      try {
+        const entries = await readdir(projectSkillsDir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+          if (!projectTracked.has(entry.name)) {
+            issues.push({
+              message: `${entry.name}: directory exists at ${join(projectSkillsDir, entry.name)} but not tracked in installed.json`,
+              fixable: false,
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -427,7 +465,7 @@ async function checkSkills(installed: InstalledJson): Promise<DoctorCheck> {
 
 // ─── Check 6: Agent Symlinks ──────────────────────────────────────────────────
 
-async function checkSymlinks(installed: InstalledJson): Promise<DoctorCheck> {
+async function checkSymlinks(installed: InstalledJson, projectRoot?: string): Promise<DoctorCheck> {
   const issues: DoctorIssue[] = [];
   let total = 0;
   let valid = 0;
@@ -435,12 +473,17 @@ async function checkSymlinks(installed: InstalledJson): Promise<DoctorCheck> {
   for (const skill of installed.skills) {
     if (skill.also.length === 0) continue;
 
+    const isProject = skill.scope === "project" && !!projectRoot;
+    const expectedTarget = isProject
+      ? skillInstallDir(skill.name, "project", projectRoot)
+      : skillInstallDir(skill.name, "global");
+    const base = isProject ? projectRoot! : globalBase();
+
     for (const agent of skill.also) {
       const agentRelDir = AGENT_PATHS[agent];
       if (!agentRelDir) continue;
 
-      const expectedTarget = skillInstallDir(skill.name, "global");
-      const linkPath = join(globalBase(), agentRelDir, skill.name);
+      const linkPath = join(base, agentRelDir, skill.name);
       total++;
 
       const isLink = await isSymlinkAt(linkPath);
@@ -735,6 +778,7 @@ async function checkNpm(installed: InstalledJson): Promise<DoctorCheck | null> {
 export async function runDoctor(options?: DoctorOptions): Promise<DoctorResult> {
   const fix = options?.fix ?? false;
   const onCheck = options?.onCheck;
+  const projectRoot = options?.projectRoot;
   const checks: DoctorCheck[] = [];
 
   async function emit(check: DoctorCheck): Promise<DoctorCheck> {
@@ -766,17 +810,17 @@ export async function runDoctor(options?: DoctorOptions): Promise<DoctorResult> 
   await emit(await checkDirs());
 
   // 4. installed.json (provides installed for later checks)
-  const { check: installedCheck, installed } = await checkInstalled();
+  const { check: installedCheck, installed } = await checkInstalled(projectRoot);
   await emit(installedCheck);
 
   const safeInstalled = installed ?? { version: 1 as const, skills: [] };
   const safeConfig = config ?? ConfigSchema.parse({});
 
   // 5. Skills integrity
-  await emit(await checkSkills(safeInstalled));
+  await emit(await checkSkills(safeInstalled, projectRoot));
 
   // 6. Agent symlinks
-  await emit(await checkSymlinks(safeInstalled));
+  await emit(await checkSymlinks(safeInstalled, projectRoot));
 
   // 7. Taps
   await emit(await checkTaps(safeConfig));
