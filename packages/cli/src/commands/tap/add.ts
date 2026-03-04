@@ -1,5 +1,5 @@
 import { intro, outro, spinner } from "@clack/prompts";
-import { addTap } from "@skilltap/core";
+import { addTap, parseGitHubTapShorthand } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../../ui/format";
 
@@ -11,13 +11,13 @@ export default defineCommand({
   args: {
     name: {
       type: "positional",
-      description: "Local name for this tap",
+      description: "Tap name or GitHub shorthand (owner/repo)",
       required: true,
     },
     url: {
       type: "positional",
       description: "URL of the tap (git repo or HTTP registry)",
-      required: true,
+      required: false,
     },
     type: {
       type: "string",
@@ -33,10 +33,30 @@ export default defineCommand({
       process.exit(1);
     }
 
+    let tapName: string;
+    let tapUrl: string;
+    const url = args.url as string | undefined;
+
+    if (url) {
+      tapName = args.name;
+      tapUrl = url;
+    } else {
+      const shorthand = parseGitHubTapShorthand(args.name);
+      if (!shorthand) {
+        errorLine(
+          `Cannot parse '${args.name}' as GitHub shorthand.`,
+          "Use 'skilltap tap add <name> <url>' or 'skilltap tap add owner/repo'.",
+        );
+        process.exit(1);
+      }
+      tapName = shorthand.name;
+      tapUrl = shorthand.url;
+    }
+
     const s = spinner();
     s.start("Adding tap...");
 
-    const result = await addTap(args.name, args.url, typeOverride);
+    const result = await addTap(tapName, tapUrl, typeOverride);
 
     if (!result.ok) {
       s.stop("Failed.", 1);
@@ -47,7 +67,7 @@ export default defineCommand({
     s.stop("Done.");
     const typeLabel = result.value.type === "http" ? "HTTP registry" : "git";
     successLine(
-      `Added tap '${args.name}' (${typeLabel}, ${result.value.skillCount} skills)`,
+      `Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)`,
     );
     outro("Complete!");
   },

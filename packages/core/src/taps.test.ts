@@ -9,7 +9,14 @@ import {
 import { loadConfig } from "./config";
 import { installSkill } from "./install";
 import type { TapEntry } from "./taps";
-import { addTap, loadTaps, removeTap, searchTaps, updateTap } from "./taps";
+import {
+  addTap,
+  loadTaps,
+  parseGitHubTapShorthand,
+  removeTap,
+  searchTaps,
+  updateTap,
+} from "./taps";
 
 type Env = {
   SKILLTAP_HOME?: string;
@@ -73,6 +80,61 @@ async function createLocalSkillRepo(
   await commitAll(repoDir);
   return { path: repoDir, cleanup: () => removeTmpDir(repoDir) };
 }
+
+// ─── Unit tests: parseGitHubTapShorthand ───────────────────────────────────
+
+describe("parseGitHubTapShorthand", () => {
+  test("parses owner/repo", () => {
+    expect(parseGitHubTapShorthand("user/my-tap")).toEqual({
+      name: "my-tap",
+      url: "https://github.com/user/my-tap.git",
+    });
+  });
+
+  test("parses github:owner/repo", () => {
+    expect(parseGitHubTapShorthand("github:acme/skills")).toEqual({
+      name: "skills",
+      url: "https://github.com/acme/skills.git",
+    });
+  });
+
+  test("strips @ref suffix", () => {
+    expect(parseGitHubTapShorthand("user/tap@main")).toEqual({
+      name: "tap",
+      url: "https://github.com/user/tap.git",
+    });
+  });
+
+  test("returns null for bare names", () => {
+    expect(parseGitHubTapShorthand("my-tap")).toBeNull();
+  });
+
+  test("returns null for full URLs", () => {
+    expect(
+      parseGitHubTapShorthand("https://github.com/user/repo.git"),
+    ).toBeNull();
+  });
+
+  test("returns null for npm: prefix", () => {
+    expect(parseGitHubTapShorthand("npm:my-package")).toBeNull();
+  });
+
+  test("returns null for local paths", () => {
+    expect(parseGitHubTapShorthand("./local")).toBeNull();
+    expect(parseGitHubTapShorthand("/abs/path")).toBeNull();
+    expect(parseGitHubTapShorthand("~/home")).toBeNull();
+  });
+
+  test("returns null for three-part paths", () => {
+    expect(parseGitHubTapShorthand("a/b/c")).toBeNull();
+  });
+
+  test("returns null for git@ URLs", () => {
+    expect(
+      parseGitHubTapShorthand("git@github.com:user/repo.git"),
+    ).toBeNull();
+  });
+});
 
 // ─── Unit tests: searchTaps ────────────────────────────────────────────────
 

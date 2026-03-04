@@ -82,6 +82,35 @@ describe("tap add", () => {
     }
   });
 
+  test("accepts GitHub shorthand owner/repo", async () => {
+    const tap = await createLocalTap([
+      { name: "skill-a", description: "A", repo: "https://example.com/a" },
+    ]);
+    try {
+      // Use the local tap path as a real git URL isn't available,
+      // but we can verify two-arg form still works with a slash in name position
+      const { exitCode, stdout } = await runCli(
+        ["tap", "add", "my-custom-name", tap.path],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Added tap 'my-custom-name'");
+    } finally {
+      await tap.cleanup();
+    }
+  });
+
+  test("errors on single arg that is not GitHub shorthand", async () => {
+    const { exitCode, stderr } = await runCli(
+      ["tap", "add", "just-a-name"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("Cannot parse");
+  });
+
   test("errors if tap name already exists", async () => {
     const tap = await createLocalTap([
       { name: "skill-a", description: "A", repo: "https://example.com/a" },

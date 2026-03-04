@@ -63,6 +63,36 @@ function registrySourceToRepo(source: RegistrySource): string {
   }
 }
 
+export type GitHubTapShorthand = { name: string; url: string };
+
+const GH_LOCAL_PREFIXES = ["./", "/", "~/"];
+const GH_URL_PROTOCOLS = ["https://", "http://", "git@", "ssh://", "npm:"];
+
+/** Parse GitHub shorthand (owner/repo) into a tap name + clone URL. Returns null if not shorthand. */
+export function parseGitHubTapShorthand(
+  source: string,
+): GitHubTapShorthand | null {
+  let s = source;
+  if (s.startsWith("github:")) s = s.slice("github:".length);
+  else if (!s.includes("/")) return null;
+
+  if (GH_URL_PROTOCOLS.some((p) => s.startsWith(p))) return null;
+  if (GH_LOCAL_PREFIXES.some((p) => s.startsWith(p))) return null;
+
+  // Strip @ref suffix (taps always clone HEAD)
+  const atIdx = s.lastIndexOf("@");
+  if (atIdx !== -1) s = s.slice(0, atIdx);
+
+  const parts = s.split("/").filter(Boolean);
+  if (parts.length !== 2) return null;
+
+  const [owner, repo] = parts;
+  return {
+    name: repo!,
+    url: `https://github.com/${owner}/${repo}.git`,
+  };
+}
+
 export async function addTap(
   name: string,
   url: string,
