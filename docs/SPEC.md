@@ -112,15 +112,15 @@ Auto-selecting all (--yes)
 
 ---
 
-### `skilltap remove <name>`
+### `skilltap remove [name...] [flags]`
 
-Remove an installed skill.
+Remove one or more installed skills.
 
 **Arguments:**
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `name` | Yes | Name of installed skill |
+| `name` | No | Name(s) of installed skills; omit to select interactively |
 
 **Options:**
 
@@ -131,11 +131,12 @@ Remove an installed skill.
 
 **Behavior:**
 
-- Look up skill in `installed.json`
-- Remove agent-specific symlinks first (from `also` list)
-- Remove skill directory from install path
-- Remove cache entry if this was the last skill from a multi-skill repo
-- Update `installed.json`
+- If no names given: show interactive multiselect of all installed skills
+- If names given: validate each exists in `installed.json`; exit 1 on first unknown name
+- Duplicate names are deduplicated
+- For each skill: remove agent-specific symlinks, remove skill directory, remove cache entry if last skill from that repo
+- Update `installed.json` after each removal
+- Confirmation prompt shown once for CLI-supplied names (skipped when multiselect was used or `--yes` is set)
 
 ---
 
@@ -328,7 +329,7 @@ If no taps are configured and no query given (non-TTY): `No taps configured. Run
 
 ---
 
-### `skilltap tap add <name> <url>`
+### `skilltap tap add <name> <url>` / `skilltap tap add <owner/repo>`
 
 Add a tap (a git repo containing `tap.json`).
 
@@ -336,8 +337,10 @@ Add a tap (a git repo containing `tap.json`).
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `name` | Yes | Local name for this tap (used in display and config) |
-| `url` | Yes | Git URL of the tap repo |
+| `name` | Yes | Local name for this tap, or GitHub shorthand (`owner/repo`) |
+| `url` | No | Git URL of the tap repo (required unless GitHub shorthand is used) |
+
+GitHub shorthand: when only one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion. Any `@ref` suffix is stripped (taps always clone HEAD).
 
 **Behavior:**
 

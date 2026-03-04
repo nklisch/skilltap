@@ -18,9 +18,18 @@ Taps solve discovery and curation:
 
 ```bash
 skilltap tap add <name> <url>
+skilltap tap add <owner/repo>
 ```
 
 skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
+
+For GitHub repos, you can use shorthand — the tap name is derived from the repo:
+
+```bash
+skilltap tap add nklisch/skilltap-skills    # name → "skilltap-skills"
+```
+
+Or specify a custom name with the two-arg form:
 
 ```bash
 skilltap tap add skilltap https://github.com/nklisch/skilltap-skills

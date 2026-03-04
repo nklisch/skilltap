@@ -130,17 +130,17 @@ skilltap install some-skill --strict --semantic
 
 ## skilltap remove
 
-Remove an installed skill.
+Remove one or more installed skills.
 
 ```
-skilltap remove <name> [flags]
+skilltap remove [name...] [flags]
 ```
 
 ### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `name` | Yes | Name of installed skill |
+| `name` | No | Name(s) of installed skills; omit to select interactively |
 
 ### Flags
 
@@ -151,7 +151,7 @@ skilltap remove <name> [flags]
 
 ### Behavior
 
-Removes the skill directory, any agent-specific symlinks (from the `also` list), and the cache entry if this was the last skill from a multi-skill repo. Updates `installed.json`.
+When no name is given, shows an interactive multiselect of all installed skills (no separate confirmation step). When names are supplied, validates each exists and exits on the first unknown name; duplicate names are ignored. For each skill, removes the skill directory, any agent-specific symlinks (from the `also` list), and the cache entry if this was the last skill from that repo. Updates `installed.json` after each removal.
 
 ### Examples
 
@@ -164,6 +164,12 @@ skilltap remove commit-helper --yes
 
 # Remove from project scope
 skilltap remove termtube-dev --project
+
+# Remove multiple skills at once
+skilltap remove skill-a skill-b --yes
+
+# Interactive multiselect — pick from all installed skills
+skilltap remove
 ```
 
 ---
@@ -648,20 +654,25 @@ skilltap config agent-mode
 
 ## skilltap tap add
 
-Add a tap. Supports git repos and HTTP registry endpoints.
+Add a tap. Supports git repos, HTTP registry endpoints, and GitHub shorthand.
 
 ```
 skilltap tap add <name> <url>
+skilltap tap add <owner/repo>
 ```
 
 ### Arguments
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `name` | Yes | Local name for this tap |
-| `url` | Yes | Git URL of the tap repo, or HTTP registry base URL |
+| `name` | Yes | Local name for this tap, or GitHub shorthand (`owner/repo`) |
+| `url` | No | Git URL or HTTP registry URL (required unless GitHub shorthand is used) |
 
 ### Behavior
+
+When two positional args are given, the first is the tap name and the second is the URL.
+
+When one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion (e.g. `user/my-tap` → name `my-tap`).
 
 Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates `tap.json`, and records the tap in `config.toml`.
 
@@ -670,9 +681,11 @@ If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove i
 ### Examples
 
 ```bash
-# Git tap
+# GitHub shorthand — name derived from repo
+skilltap tap add someone/awesome-skills-tap
+
+# Explicit name + URL
 skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
-skilltap tap add community https://github.com/someone/awesome-skills-tap
 
 # HTTP registry tap (auto-detected)
 skilltap tap add enterprise https://skills.example.com/api/v1

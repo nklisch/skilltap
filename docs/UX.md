@@ -7,7 +7,7 @@ Dense CLI reference, flag combinations, prompt flows, and workflows.
 ```
 skilltap
 ├── install <source>         Install a skill
-├── remove <name>            Remove an installed skill
+├── remove [name...]         Remove an installed skill (or pick interactively)
 ├── list                     List installed skills
 ├── update [name]            Update installed skill(s)
 ├── find [query]             Search taps for skills
@@ -298,7 +298,7 @@ Running semantic scan (4 chunks)... ✓ No issues
 ## remove
 
 ```
-skilltap remove <name> [flags]
+skilltap remove [name...] [flags]
 ```
 
 ### Flags
@@ -312,18 +312,30 @@ skilltap remove <name> [flags]
 
 ```
 $ skilltap remove commit-helper
-Remove commit-helper (global, v1.2.0)? (y/N): y
+Remove commit-helper? (y/N): y
 ✓ Removed commit-helper
 
 $ skilltap remove commit-helper --yes
 ✓ Removed commit-helper
 
 $ skilltap remove termtube-dev --project
-Remove termtube-dev (project)? (y/N): y
+Remove termtube-dev? (y/N): y
 ✓ Removed termtube-dev
+
+$ skilltap remove skill-a skill-b --yes
+✓ Removed 2 skills
+
+$ skilltap remove
+◆  Which skills to remove?
+│  ○ commit-helper  global
+│  ● code-review    global
+│  ○ termtube-dev   project
+└─
+✓ Removed code-review
 ```
 
 Removes the skill directory and any agent-specific symlinks. Updates `installed.json`.
+Omit the name to choose interactively via multiselect (no separate confirmation needed).
 
 ---
 
@@ -624,6 +636,7 @@ error: Skill 'nonexistent' not found.
 
 ```
 skilltap tap add <name> <url>
+skilltap tap add <owner/repo>
 ```
 
 ```
@@ -631,9 +644,9 @@ $ skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
 Cloning tap...
 ✓ Added tap 'home' (3 skills)
 
-$ skilltap tap add community https://github.com/someone/awesome-skills-tap
+$ skilltap tap add someone/awesome-skills-tap
 Cloning tap...
-✓ Added tap 'community' (12 skills)
+✓ Added tap 'awesome-skills-tap' (12 skills)
 ```
 
 ### tap remove
@@ -1103,6 +1116,12 @@ skilltap list --project
 # Remove from specific scope
 skilltap remove commit-helper           # global
 skilltap remove termtube-dev --project  # project
+
+# Remove multiple at once
+skilltap remove skill-a skill-b skill-c --yes
+
+# Interactive multiselect (no name required)
+skilltap remove
 ```
 
 ### Agent symlinks
