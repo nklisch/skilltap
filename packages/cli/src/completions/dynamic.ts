@@ -1,20 +1,26 @@
-import { loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
+import { findProjectRoot, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
+
+async function loadAllSkills() {
+  const globalResult = await loadInstalled();
+  const projectRoot = await findProjectRoot().catch(() => undefined);
+  const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
+  return [
+    ...(globalResult.ok ? globalResult.value.skills : []),
+    ...(projectResult?.ok ? projectResult.value.skills : []),
+  ];
+}
 
 export async function printCompletions(type: string): Promise<void> {
   switch (type) {
     case "installed-skills": {
-      const installed = await loadInstalled();
-      if (installed.ok) {
-        for (const s of installed.value.skills) console.log(s.name);
-      }
+      const skills = await loadAllSkills();
+      for (const s of skills) console.log(s.name);
       break;
     }
     case "linked-skills": {
-      const installed = await loadInstalled();
-      if (installed.ok) {
-        for (const s of installed.value.skills) {
-          if (s.scope === "linked") console.log(s.name);
-        }
+      const skills = await loadAllSkills();
+      for (const s of skills) {
+        if (s.scope === "linked") console.log(s.name);
       }
       break;
     }

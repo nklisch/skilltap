@@ -314,4 +314,74 @@ describe("updateSkill — multi-skill", () => {
       await repo.cleanup();
     }
   });
+
+  test("both skills from same repo are checked when both installed", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      // Install BOTH skills from the multi-skill repo
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      // Add a commit that changes BOTH skill paths
+      await addFileAndCommit(repo.path, ".agents/skills/skill-a/patch.md", "# Patch A");
+      await addFileAndCommit(repo.path, ".agents/skills/skill-b/patch.md", "# Patch B");
+
+      const result = await updateSkill({ yes: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.updated).toContain("skill-a");
+      expect(result.value.updated).toContain("skill-b");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("skill with no path changes is upToDate even when repo has changes", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      // Install BOTH skills from the multi-skill repo
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      // Add a commit that ONLY changes skill-a's path
+      await addFileAndCommit(repo.path, ".agents/skills/skill-a/only-a.md", "# Only A");
+
+      const result = await updateSkill({ yes: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // skill-a has changes → updated
+      expect(result.value.updated).toContain("skill-a");
+      // skill-b has no path-specific changes → upToDate (not skipped, not updated)
+      expect(result.value.upToDate).toContain("skill-b");
+      expect(result.value.skipped).not.toContain("skill-b");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("updateSkill — project scope", () => {
+  test("updates skills in project installed.json when projectRoot provided", async () => {
+    const repo = await createStandaloneSkillRepo();
+    const projectRoot = await makeTmpDir();
+    try {
+      await installSkill(repo.path, { scope: "project", projectRoot, skipScan: true });
+      await addFileAndCommit(repo.path, "new-file.md", "# New content");
+
+      const result = await updateSkill({ yes: true, projectRoot });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.updated).toContain("standalone-skill");
+
+      // Project installed.json should have updated SHA
+      const projectInstalled = await loadInstalled(projectRoot);
+      expect(projectInstalled.ok).toBe(true);
+      if (!projectInstalled.ok) return;
+      expect(projectInstalled.value.skills[0]?.sha).toBeTruthy();
+    } finally {
+      await repo.cleanup();
+      await removeTmpDir(projectRoot);
+    }
+  });
 });

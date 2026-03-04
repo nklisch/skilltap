@@ -17,7 +17,8 @@ export async function removeSkill(
   options: RemoveOptions = {},
 ): Promise<Result<void, UserError>> {
   debug("removeSkill", { name, scope: options.scope });
-  const installedResult = await loadInstalled();
+  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -79,7 +80,7 @@ export async function removeSkill(
   }
 
   installed.skills.splice(idx, 1);
-  const saveResult = await saveInstalled(installed);
+  const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   return ok(undefined);

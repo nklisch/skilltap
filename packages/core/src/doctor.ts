@@ -346,7 +346,6 @@ async function checkSkills(installed: InstalledJson): Promise<DoctorCheck> {
   const trackedNames = new Set<string>();
 
   for (const skill of installed.skills) {
-    if (skill.scope === "project") continue;
     trackedNames.add(skill.name);
 
     if (skill.scope === "linked") {
@@ -407,7 +406,7 @@ async function checkSkills(installed: InstalledJson): Promise<DoctorCheck> {
     }
   }
 
-  const total = installed.skills.filter((s) => s.scope !== "project").length;
+  const total = installed.skills.length;
   const missing = issues.filter((i) => i.fixable).length;
   const onDisk = total - missing;
 
@@ -434,7 +433,7 @@ async function checkSymlinks(installed: InstalledJson): Promise<DoctorCheck> {
   let valid = 0;
 
   for (const skill of installed.skills) {
-    if (skill.scope === "project" || skill.also.length === 0) continue;
+    if (skill.also.length === 0) continue;
 
     for (const agent of skill.also) {
       const agentRelDir = AGENT_PATHS[agent];

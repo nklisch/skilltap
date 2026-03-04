@@ -3,6 +3,7 @@ import {
   type AgentAdapter,
   type Config,
   type EffectivePolicy,
+  findProjectRoot,
   type SemanticWarning,
   type StaticWarning,
   updateSkill,
@@ -66,10 +67,12 @@ export default defineCommand({
       semantic: args.semantic,
     });
 
+    const projectRoot = await findProjectRoot().catch(() => undefined);
+
     if (policy.agentMode) {
-      return runAgentModeUpdate(name, config, policy);
+      return runAgentModeUpdate(name, config, policy, projectRoot);
     }
-    return runInteractiveUpdate(name, args, config, policy);
+    return runInteractiveUpdate(name, args, config, policy, projectRoot);
   },
 });
 
@@ -79,6 +82,7 @@ async function runAgentModeUpdate(
   name: string | undefined,
   config: Config,
   policy: EffectivePolicy,
+  projectRoot: string | undefined,
 ): Promise<void> {
   let agent: AgentAdapter | undefined;
   if (policy.scanMode === "semantic") {
@@ -92,6 +96,7 @@ async function runAgentModeUpdate(
     agent,
     semantic: policy.scanMode === "semantic",
     threshold: config.security.threshold,
+    projectRoot,
 
     onProgress(skillName, status) {
       if (status === "upToDate") agentUpToDate(skillName);
@@ -158,6 +163,7 @@ async function runInteractiveUpdate(
   args: { strict?: boolean; semantic: boolean },
   config: Config,
   policy: EffectivePolicy,
+  projectRoot: string | undefined,
 ): Promise<void> {
   const runSemantic =
     policy.scanMode === "semantic" || args.semantic;
@@ -177,6 +183,7 @@ async function runInteractiveUpdate(
     agent,
     semantic: runSemantic,
     threshold: config.security.threshold,
+    projectRoot,
 
     onProgress(skillName, status) {
       if (status === "checking") {

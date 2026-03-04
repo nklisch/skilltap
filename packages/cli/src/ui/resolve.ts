@@ -111,17 +111,25 @@ export async function getInstalledSkillOrExit(
     notFoundHint?: string;
   },
 ): Promise<InstalledSkill> {
-  const result = await loadInstalled();
-  if (!result.ok) {
-    errorLine(result.error.message);
+  const globalResult = await loadInstalled();
+  if (!globalResult.ok) {
+    errorLine(globalResult.error.message);
     process.exit(1);
   }
+
+  const projectRoot = await findProjectRoot().catch(() => undefined);
+  const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
+
+  const allSkills = [
+    ...globalResult.value.skills,
+    ...(projectResult?.ok ? projectResult.value.skills : []),
+  ];
 
   const predicate = opts?.filter
     ? (s: InstalledSkill) => s.name === name && opts.filter!(s)
     : (s: InstalledSkill) => s.name === name;
 
-  const skill = result.value.skills.find(predicate);
+  const skill = allSkills.find(predicate);
   if (!skill) {
     errorLine(
       opts?.notFoundMessage ?? `Skill '${name}' is not installed`,

@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { AGENT_PATHS, globalBase, loadInstalled, loadTaps } from "@skilltap/core";
+import { AGENT_PATHS, findProjectRoot, globalBase, loadInstalled, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine } from "../ui/format";
 import { formatTrustLabel, formatTrustTier } from "../ui/trust";
@@ -23,14 +23,22 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    // Try installed first
-    const installedResult = await loadInstalled();
-    if (!installedResult.ok) {
-      errorLine(installedResult.error.message);
+    // Try installed first (global + project)
+    const globalInstalledResult = await loadInstalled();
+    if (!globalInstalledResult.ok) {
+      errorLine(globalInstalledResult.error.message);
       process.exit(1);
     }
 
-    const skill = installedResult.value.skills.find((s) => s.name === args.name);
+    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectInstalledResult = projectRoot ? await loadInstalled(projectRoot) : null;
+
+    const allSkills = [
+      ...globalInstalledResult.value.skills,
+      ...(projectInstalledResult?.ok ? projectInstalledResult.value.skills : []),
+    ];
+
+    const skill = allSkills.find((s) => s.name === args.name);
 
     if (skill) {
       if (args.json) {
@@ -38,7 +46,7 @@ export default defineCommand({
         return;
       }
 
-      const base = skill.scope === "project" ? process.cwd() : globalBase();
+      const base = skill.scope === "project" ? (projectRoot ?? process.cwd()) : globalBase();
       const skillPath = join(base, ".agents", "skills", skill.name);
 
       const agentStatus = await Promise.all(

@@ -164,9 +164,14 @@ export async function saveConfig(config: Config): Promise<Result<void>> {
 
 const _DEFAULT_INSTALLED: InstalledJson = { version: 1, skills: [] };
 
-export async function loadInstalled(): Promise<Result<InstalledJson>> {
-  const dir = getConfigDir();
-  const file = join(dir, "installed.json");
+function getInstalledPath(projectRoot?: string): string {
+  return projectRoot
+    ? join(projectRoot, ".agents", "installed.json")
+    : join(getConfigDir(), "installed.json");
+}
+
+export async function loadInstalled(projectRoot?: string): Promise<Result<InstalledJson>> {
+  const file = getInstalledPath(projectRoot);
 
   const f = Bun.file(file);
   const exists = await f.exists();
@@ -194,12 +199,20 @@ export async function loadInstalled(): Promise<Result<InstalledJson>> {
 
 export async function saveInstalled(
   installed: InstalledJson,
+  projectRoot?: string,
 ): Promise<Result<void>> {
-  const dir = getConfigDir();
-  const file = join(dir, "installed.json");
+  const file = getInstalledPath(projectRoot);
 
-  const dirsResult = await ensureDirs();
-  if (!dirsResult.ok) return dirsResult;
+  if (projectRoot) {
+    try {
+      await mkdir(join(projectRoot, ".agents"), { recursive: true });
+    } catch (e) {
+      return err(new UserError(`Failed to create .agents directory: ${e}`));
+    }
+  } else {
+    const dirsResult = await ensureDirs();
+    if (!dirsResult.ok) return dirsResult;
+  }
 
   try {
     await Bun.write(file, JSON.stringify(installed, null, 2));

@@ -1,5 +1,5 @@
 import { isCancel, spinner } from "@clack/prompts";
-import { type InstalledSkill, loadInstalled, removeSkill } from "@skilltap/core";
+import { findProjectRoot, type InstalledSkill, loadInstalled, removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { agentError } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
@@ -33,13 +33,18 @@ export default defineCommand({
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project });
 
-    const installedResult = await loadInstalled();
-    if (!installedResult.ok) {
-      if (policy.agentMode) agentError(installedResult.error.message);
-      else errorLine(installedResult.error.message);
+    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const globalResult = await loadInstalled();
+    if (!globalResult.ok) {
+      if (policy.agentMode) agentError(globalResult.error.message);
+      else errorLine(globalResult.error.message);
       process.exit(1);
     }
-    const allSkills = installedResult.value.skills;
+    const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
+    const allSkills: InstalledSkill[] = [
+      ...globalResult.value.skills,
+      ...(projectResult?.ok ? projectResult.value.skills : []),
+    ];
 
     let skillsToRemove: InstalledSkill[];
 
@@ -76,7 +81,10 @@ export default defineCommand({
 
     if (policy.agentMode) {
       for (const skill of skillsToRemove) {
-        const result = await removeSkill(skill.name, { scope: scopeOf(skill) });
+        const result = await removeSkill(skill.name, {
+          scope: scopeOf(skill),
+          projectRoot: skill.scope === "project" ? projectRoot : undefined,
+        });
         if (!result.ok) {
           sendEvent(config, "remove", {
             ...telemetryBase(true),
@@ -111,7 +119,10 @@ export default defineCommand({
     s.start(`Removing ${label}...`);
 
     for (const skill of skillsToRemove) {
-      const result = await removeSkill(skill.name, { scope: scopeOf(skill) });
+      const result = await removeSkill(skill.name, {
+        scope: scopeOf(skill),
+        projectRoot: skill.scope === "project" ? projectRoot : undefined,
+      });
       if (!result.ok) {
         s.stop("Failed.", 1);
         sendEvent(config, "remove", {

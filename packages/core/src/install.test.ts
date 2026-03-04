@@ -213,6 +213,59 @@ describe("installSkill — project scope", () => {
       await removeTmpDir(projectRoot);
     }
   });
+
+  test("saves to project installed.json, not global", async () => {
+    const repo = await createStandaloneSkillRepo();
+    const projectRoot = await makeTmpDir();
+    try {
+      await $`git -C ${projectRoot} init`.quiet();
+      await installSkill(repo.path, { scope: "project", projectRoot, skipScan: true });
+
+      // Project file should have the record
+      const projectInstalled = await loadInstalled(projectRoot);
+      expect(projectInstalled.ok).toBe(true);
+      if (!projectInstalled.ok) return;
+      expect(projectInstalled.value.skills.map((s) => s.name)).toContain("standalone-skill");
+
+      // Global file should be empty
+      const globalInstalled = await loadInstalled();
+      expect(globalInstalled.ok).toBe(true);
+      if (!globalInstalled.ok) return;
+      expect(globalInstalled.value.skills).toHaveLength(0);
+    } finally {
+      await repo.cleanup();
+      await removeTmpDir(projectRoot);
+    }
+  });
+
+  test("same skill in two projects coexist independently", async () => {
+    const repo = await createStandaloneSkillRepo();
+    const projectA = await makeTmpDir();
+    const projectB = await makeTmpDir();
+    try {
+      await $`git -C ${projectA} init`.quiet();
+      await $`git -C ${projectB} init`.quiet();
+
+      await installSkill(repo.path, { scope: "project", projectRoot: projectA, skipScan: true });
+      await installSkill(repo.path, { scope: "project", projectRoot: projectB, skipScan: true });
+
+      // Both project files have the record
+      const aInstalled = await loadInstalled(projectA);
+      const bInstalled = await loadInstalled(projectB);
+      expect(aInstalled.ok && aInstalled.value.skills).toHaveLength(1);
+      expect(bInstalled.ok && bInstalled.value.skills).toHaveLength(1);
+
+      // Global file is empty
+      const globalInstalled = await loadInstalled();
+      expect(globalInstalled.ok).toBe(true);
+      if (!globalInstalled.ok) return;
+      expect(globalInstalled.value.skills).toHaveLength(0);
+    } finally {
+      await repo.cleanup();
+      await removeTmpDir(projectA);
+      await removeTmpDir(projectB);
+    }
+  });
 });
 
 describe("removeSkill", () => {

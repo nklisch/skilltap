@@ -14,7 +14,7 @@ import {
   resolveVersion,
 } from "./npm-registry";
 import { skillCacheDir, skillInstallDir } from "./paths";
-import type { InstalledSkill } from "./schemas/installed";
+import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
@@ -41,7 +41,7 @@ export type UpdateOptions = {
   yes?: boolean;
   /** Skip skills that have security warnings in their diff */
   strict?: boolean;
-  /** Project root for project-scoped symlink re-creation */
+  /** Project root — also processes project-scoped skills from {projectRoot}/.agents/installed.json */
   projectRoot?: string;
   onProgress?: (
     skillName: string,
@@ -291,7 +291,7 @@ async function updateNpmSkill(
   }
 }
 
-/** Handle updates for git-sourced skills (SHA comparison, diff scanning). */
+/** Handle updates for standalone git skills (path === null; workDir is the install dir). */
 async function updateGitSkill(
   record: InstalledSkill,
   installed: { skills: InstalledSkill[] },
@@ -299,27 +299,11 @@ async function updateGitSkill(
   result: UpdateResult,
   _resolveTrust: ResolveTrustFn,
 ): Promise<Result<void, UserError | GitError | ScanError>> {
-  // Standalone: work dir is the install path. Multi-skill: work dir is the cache.
-  const isMulti = record.path !== null;
-  const workDir = isMulti
-    ? skillCacheDir(record.repo!)
-    : skillInstallDir(
-        record.name,
-        record.scope as "global" | "project",
-        options.projectRoot,
-      );
-
-  // For multi-skill, verify cache exists
-  if (isMulti) {
-    const cacheGitExists = await lstat(join(workDir, ".git"))
-      .then(() => true)
-      .catch(() => false);
-    if (!cacheGitExists) {
-      result.skipped.push(record.name);
-      options.onProgress?.(record.name, "skipped");
-      return ok(undefined);
-    }
-  }
+  const workDir = skillInstallDir(
+    record.name,
+    record.scope as "global" | "project",
+    options.projectRoot,
+  );
 
   const fetchResult = await fetch(workDir);
   if (!fetchResult.ok) return fetchResult;
@@ -338,69 +322,42 @@ async function updateGitSkill(
     return ok(undefined);
   }
 
-  // Get diff (path-filtered for multi-skill)
-  const pathSpec = record.path ?? undefined;
-  const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+  const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD");
   if (!diffResult.ok) return diffResult;
-  const diffOutput = diffResult.value;
 
-  const statResult = await diffStat(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+  const statResult = await diffStat(workDir, "HEAD", "FETCH_HEAD");
   if (!statResult.ok) return statResult;
   const stat = statResult.value;
 
-  // If skill-specific path has no changes, mark as up to date
-  if (stat.filesChanged === 0) {
-    result.upToDate.push(record.name);
-    options.onProgress?.(record.name, "upToDate");
-    return ok(undefined);
-  }
-
   options.onDiff?.(record.name, stat, localSha, remoteSha);
 
-  // Security scan on diff + confirmation
-  const warnings = scanDiff(diffOutput);
+  const warnings = scanDiff(diffResult.value);
   if (await shouldSkipUpdate(warnings, options, record.name)) {
     result.skipped.push(record.name);
     options.onProgress?.(record.name, "skipped");
     return ok(undefined);
   }
 
-  // Apply update
   const pullResult = await pull(workDir);
   if (!pullResult.ok) return pullResult;
 
-  if (isMulti) {
-    const recopyResult = await recopyMultiSkill(workDir, record, options.projectRoot);
-    if (!recopyResult.ok) return recopyResult;
-  }
-
-  const installDir = skillInstallDir(
-    record.name,
-    record.scope as "global" | "project",
-    options.projectRoot,
-  );
-
-  // Semantic scan on updated skill directory
-  if (await runUpdateSemanticScan(installDir, record.name, options)) {
+  if (await runUpdateSemanticScan(workDir, record.name, options)) {
     result.skipped.push(record.name);
     options.onProgress?.(record.name, "skipped");
     return ok(undefined);
   }
 
-  // Get new SHA
   const newShaResult = await revParse(workDir, "HEAD");
   if (!newShaResult.ok) return newShaResult;
 
-  // Re-verify trust for the updated skill
   const newTrust = await _resolveTrust({
     adapter: "git",
     url: record.repo ?? "",
     tap: record.tap,
-    skillDir: installDir,
+    skillDir: workDir,
     githubRepo: record.repo ? parseGitHubRepo(record.repo) : null,
   });
 
-  // Update the record in place
   patchRecord(installed, record, {
     sha: newShaResult.value,
     updatedAt: new Date().toISOString(),
@@ -414,19 +371,232 @@ async function updateGitSkill(
   return ok(undefined);
 }
 
+/** Handle updates for a group of skills sharing the same multi-skill git repo cache. */
+async function updateGitSkillGroup(
+  repo: string,
+  skills: InstalledSkill[],
+  installed: { skills: InstalledSkill[] },
+  options: UpdateOptions,
+  result: UpdateResult,
+  _resolveTrust: ResolveTrustFn,
+): Promise<Result<void, UserError | GitError | ScanError>> {
+  const workDir = skillCacheDir(repo);
+
+  // Verify cache exists
+  const cacheGitExists = await lstat(join(workDir, ".git"))
+    .then(() => true)
+    .catch(() => false);
+  if (!cacheGitExists) {
+    for (const skill of skills) {
+      result.skipped.push(skill.name);
+      options.onProgress?.(skill.name, "skipped");
+    }
+    return ok(undefined);
+  }
+
+  // Fetch once for the whole group
+  const fetchResult = await fetch(workDir);
+  if (!fetchResult.ok) return fetchResult;
+
+  // Capture SHAs BEFORE any pull
+  const localShaResult = await revParse(workDir, "HEAD");
+  if (!localShaResult.ok) return localShaResult;
+  const remoteShaResult = await revParse(workDir, "FETCH_HEAD");
+  if (!remoteShaResult.ok) return remoteShaResult;
+
+  const localSha = localShaResult.value;
+  const remoteSha = remoteShaResult.value;
+
+  // If the whole repo is up to date, all skills in the group are too
+  if (localSha === remoteSha) {
+    for (const skill of skills) {
+      result.upToDate.push(skill.name);
+      options.onProgress?.(skill.name, "upToDate");
+    }
+    return ok(undefined);
+  }
+
+  // Per-skill: check path-specific diff, scan, confirm
+  const toUpdate: InstalledSkill[] = [];
+  for (const skill of skills) {
+    options.onProgress?.(skill.name, "checking");
+
+    // biome-ignore lint/style/noNonNullAssertion: multi-skill records always have path
+    const pathSpec = skill.path!;
+
+    const statResult = await diffStat(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+    if (!statResult.ok) return statResult;
+    const stat = statResult.value;
+
+    if (stat.filesChanged === 0) {
+      result.upToDate.push(skill.name);
+      options.onProgress?.(skill.name, "upToDate");
+      continue;
+    }
+
+    options.onDiff?.(skill.name, stat, localSha, remoteSha);
+
+    const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD", pathSpec);
+    if (!diffResult.ok) return diffResult;
+
+    const warnings = scanDiff(diffResult.value);
+    if (await shouldSkipUpdate(warnings, options, skill.name)) {
+      result.skipped.push(skill.name);
+      options.onProgress?.(skill.name, "skipped");
+      continue;
+    }
+
+    toUpdate.push(skill);
+  }
+
+  if (toUpdate.length === 0) return ok(undefined);
+
+  // Pull once for the whole group
+  const pullResult = await pull(workDir);
+  if (!pullResult.ok) return pullResult;
+
+  const newShaResult = await revParse(workDir, "HEAD");
+  if (!newShaResult.ok) return newShaResult;
+  const newSha = newShaResult.value;
+
+  // Apply update to each confirmed skill
+  for (const skill of toUpdate) {
+    const recopyResult = await recopyMultiSkill(workDir, skill, options.projectRoot);
+    if (!recopyResult.ok) return recopyResult;
+
+    const installDir = skillInstallDir(
+      skill.name,
+      skill.scope as "global" | "project",
+      options.projectRoot,
+    );
+
+    if (await runUpdateSemanticScan(installDir, skill.name, options)) {
+      result.skipped.push(skill.name);
+      options.onProgress?.(skill.name, "skipped");
+      continue;
+    }
+
+    const newTrust = await _resolveTrust({
+      adapter: "git",
+      url: skill.repo ?? "",
+      tap: skill.tap,
+      skillDir: installDir,
+      githubRepo: skill.repo ? parseGitHubRepo(skill.repo) : null,
+    });
+
+    patchRecord(installed, skill, {
+      sha: newSha,
+      updatedAt: new Date().toISOString(),
+      trust: newTrust,
+    });
+
+    await refreshAgentSymlinks(skill, options.projectRoot);
+
+    result.updated.push(skill.name);
+    options.onProgress?.(skill.name, "updated");
+  }
+
+  return ok(undefined);
+}
+
+type SkillGroup =
+  | { type: "linked"; skill: InstalledSkill }
+  | { type: "npm"; skill: InstalledSkill }
+  | { type: "git-standalone"; skill: InstalledSkill }
+  | { type: "git-multi"; repo: string; skills: InstalledSkill[] };
+
+/** Group skills by update strategy. Multi-skill records sharing a repo cache are grouped together. */
+function groupSkillsByRepo(skills: InstalledSkill[]): SkillGroup[] {
+  const multiGroups = new Map<string, InstalledSkill[]>();
+  const solo: SkillGroup[] = [];
+
+  for (const skill of skills) {
+    if (skill.scope === "linked") {
+      solo.push({ type: "linked", skill });
+      continue;
+    }
+    if (skill.repo?.startsWith("npm:")) {
+      solo.push({ type: "npm", skill });
+      continue;
+    }
+    if (skill.path !== null && skill.repo) {
+      const existing = multiGroups.get(skill.repo);
+      if (existing) {
+        existing.push(skill);
+      } else {
+        multiGroups.set(skill.repo, [skill]);
+      }
+    } else {
+      solo.push({ type: "git-standalone", skill });
+    }
+  }
+
+  const groups: SkillGroup[] = [...solo];
+  for (const [repo, skills] of multiGroups) {
+    groups.push({ type: "git-multi", repo, skills });
+  }
+  return groups;
+}
+
+async function runUpdatePass(
+  skills: InstalledSkill[],
+  installed: InstalledJson,
+  options: UpdateOptions,
+  result: UpdateResult,
+  _resolveTrust: ResolveTrustFn,
+): Promise<Result<void, UserError | GitError | ScanError | NetworkError>> {
+  const groups = groupSkillsByRepo(skills);
+
+  for (const group of groups) {
+    if (group.type === "linked") {
+      options.onProgress?.(group.skill.name, "linked");
+      continue;
+    }
+
+    if (group.type === "npm") {
+      options.onProgress?.(group.skill.name, "checking");
+      const r = await updateNpmSkill(group.skill, installed, options, result, _resolveTrust);
+      if (!r.ok) return r;
+    } else if (group.type === "git-standalone") {
+      options.onProgress?.(group.skill.name, "checking");
+      const r = await updateGitSkill(group.skill, installed, options, result, _resolveTrust);
+      if (!r.ok) return r;
+    } else {
+      const r = await updateGitSkillGroup(group.repo, group.skills, installed, options, result, _resolveTrust);
+      if (!r.ok) return r;
+    }
+  }
+
+  return ok(undefined);
+}
+
 export async function updateSkill(
   options: UpdateOptions = {},
   _resolveTrust: ResolveTrustFn = resolveTrust,
 ): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
   debug("updateSkill", { name: options.name ?? "all" });
-  const installedResult = await loadInstalled();
-  if (!installedResult.ok) return installedResult;
-  const installed = installedResult.value;
 
-  let skills = installed.skills;
+  // Load global installed
+  const globalInstalledResult = await loadInstalled();
+  if (!globalInstalledResult.ok) return globalInstalledResult;
+  const globalInstalled = globalInstalledResult.value;
+
+  // Optionally load project installed
+  let projectInstalled: InstalledJson | null = null;
+  if (options.projectRoot) {
+    const r = await loadInstalled(options.projectRoot);
+    if (!r.ok) return r;
+    projectInstalled = r.value;
+  }
+
+  // Filter by name if specified — check both files
+  let globalSkills = globalInstalled.skills;
+  let projectSkills = projectInstalled?.skills ?? [];
+
   if (options.name) {
-    const found = skills.filter((s) => s.name === options.name);
-    if (found.length === 0) {
+    globalSkills = globalSkills.filter((s) => s.name === options.name);
+    projectSkills = projectSkills.filter((s) => s.name === options.name);
+    if (globalSkills.length === 0 && projectSkills.length === 0) {
       return err(
         new UserError(
           `Skill '${options.name}' is not installed.`,
@@ -434,31 +604,28 @@ export async function updateSkill(
         ),
       );
     }
-    skills = found;
   }
 
   const result: UpdateResult = { updated: [], skipped: [], upToDate: [] };
 
-  for (const record of skills) {
-    if (record.scope === "linked") {
-      options.onProgress?.(record.name, "linked");
-      continue;
-    }
+  // Process global skills
+  const globalPass = await runUpdatePass(globalSkills, globalInstalled, options, result, _resolveTrust);
+  if (!globalPass.ok) return globalPass;
 
-    options.onProgress?.(record.name, "checking");
-
-    // Dispatch to adapter-specific update handler
-    if (record.repo?.startsWith("npm:")) {
-      const npmResult = await updateNpmSkill(record, installed, options, result, _resolveTrust);
-      if (!npmResult.ok) return npmResult;
-    } else {
-      const gitResult = await updateGitSkill(record, installed, options, result, _resolveTrust);
-      if (!gitResult.ok) return gitResult;
-    }
+  // Process project skills
+  if (projectInstalled) {
+    const projectPass = await runUpdatePass(projectSkills, projectInstalled, { ...options, projectRoot: options.projectRoot }, result, _resolveTrust);
+    if (!projectPass.ok) return projectPass;
   }
 
-  const saveResult = await saveInstalled(installed);
-  if (!saveResult.ok) return saveResult;
+  // Save both files
+  const globalSave = await saveInstalled(globalInstalled);
+  if (!globalSave.ok) return globalSave;
+
+  if (projectInstalled && options.projectRoot) {
+    const projectSave = await saveInstalled(projectInstalled, options.projectRoot);
+    if (!projectSave.ok) return projectSave;
+  }
 
   return ok(result);
 }

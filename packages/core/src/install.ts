@@ -365,7 +365,8 @@ export async function installSkill(
   const allSemanticWarnings: SemanticWarning[] = [];
 
   // 1. Check already-installed
-  const installedResult = await loadInstalled();
+  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -563,7 +564,7 @@ export async function installSkill(
 
     // 10. Save installed.json
     installed.skills.push(...newRecords);
-    const saveResult = await saveInstalled(installed);
+    const saveResult = await saveInstalled(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 
     return ok({

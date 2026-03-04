@@ -1,5 +1,5 @@
 import type { InstalledSkill } from "@skilltap/core";
-import { loadInstalled } from "@skilltap/core";
+import { findProjectRoot, loadInstalled } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine, table, termWidth, truncate } from "../ui/format";
 import { formatTrustTier } from "../ui/trust";
@@ -27,13 +27,19 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const result = await loadInstalled();
-    if (!result.ok) {
-      errorLine(result.error.message);
+    const globalResult = await loadInstalled();
+    if (!globalResult.ok) {
+      errorLine(globalResult.error.message);
       process.exit(1);
     }
 
-    let { skills } = result.value;
+    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
+
+    let skills: InstalledSkill[] = [
+      ...globalResult.value.skills,
+      ...(projectResult?.ok ? projectResult.value.skills : []),
+    ];
 
     if (args.json) {
       process.stdout.write(`${JSON.stringify(skills, null, 2)}\n`);

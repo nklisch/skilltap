@@ -38,7 +38,8 @@ export async function linkSkill(
   const skill = scanned[0]!;
 
   // 3. Load installed to check for conflicts
-  const installedResult = await loadInstalled();
+  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -99,7 +100,7 @@ export async function linkSkill(
 
   // 8. Save installed.json
   installed.skills.push(record);
-  const saveResult = await saveInstalled(installed);
+  const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   return ok(record);
