@@ -117,7 +117,7 @@ describe("completions — bash script", () => {
       expect(stdout).toContain(cmd);
     }
     // config subcommands
-    expect(stdout).toContain("agent-mode telemetry get set");
+    expect(stdout).toContain("agent-mode telemetry get set edit");
   });
 
   test("script includes --get-completions dynamic calls", async () => {
@@ -168,7 +168,7 @@ describe("completions — zsh script", () => {
       expect(stdout).toContain(cmd);
     }
     // config subcommands
-    for (const sub of ["agent-mode", "telemetry", "get", "set"]) {
+    for (const sub of ["agent-mode", "telemetry", "get", "set", "edit"]) {
       expect(stdout).toContain(sub);
     }
   });
@@ -219,6 +219,7 @@ describe("completions — fish script", () => {
     expect(stdout).toContain("-a 'telemetry'");
     expect(stdout).toContain("-a 'get'");
     expect(stdout).toContain("-a 'set'");
+    expect(stdout).toContain("-a 'edit'");
   });
 
   test("script includes dynamic completion calls", async () => {

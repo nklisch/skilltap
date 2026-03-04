@@ -105,7 +105,7 @@ _skilltap() {
           ;;
         config)
           local -a config_commands
-          config_commands=('agent-mode:Configure agent mode' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value')
+          config_commands=('agent-mode:Configure agent mode' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value' 'edit:Open config in editor')
           _arguments -C '1:subcommand:->config_cmd' '*::arg:->config_args'
           case $state in
             config_cmd) _describe 'subcommand' config_commands ;;

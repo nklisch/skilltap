@@ -87,10 +87,10 @@ _skilltap() {
         get)
           COMPREPLY=($(compgen -W "--json" -- "$cur"))
           ;;
-        set|agent-mode|telemetry)
+        set|agent-mode|telemetry|edit)
           ;;
         *)
-          COMPREPLY=($(compgen -W "agent-mode telemetry get set" -- "$cur"))
+          COMPREPLY=($(compgen -W "agent-mode telemetry get set edit" -- "$cur"))
           ;;
       esac
       ;;

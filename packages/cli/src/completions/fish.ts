@@ -79,10 +79,11 @@ complete -c skilltap -n '__fish_seen_subcommand_from create' -l dir -d 'Target d
 complete -c skilltap -n '__fish_seen_subcommand_from verify' -l json -d 'JSON output'
 
 # config subcommands
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'agent-mode' -d 'Configure agent mode'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'telemetry' -d 'Manage telemetry settings'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'get' -d 'Get a config value'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set' -a 'set' -d 'Set a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'agent-mode' -d 'Configure agent mode'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'telemetry' -d 'Manage telemetry settings'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'get' -d 'Get a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'set' -d 'Set a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'edit' -d 'Open config in editor'
 complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get' -l json -d 'Output as JSON'
 
 # tap subcommands

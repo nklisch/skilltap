@@ -30,7 +30,7 @@ export interface InteractiveOpts {
   env?: Record<string, string>;
   cols?: number;
   rows?: number;
-  /** Default timeout for waitForText() calls, in ms. Default: 8000 */
+  /** Default timeout for waitForText() calls, in ms. Default: 30000 */
   timeout?: number;
 }
 
@@ -96,7 +96,7 @@ export async function runInteractive(
     env = {},
     cols = 80,
     rows = 24,
-    timeout: defaultTimeout = 8_000,
+    timeout: defaultTimeout = 30_000,
   } = opts;
 
   const [file, ...args] = cmd;

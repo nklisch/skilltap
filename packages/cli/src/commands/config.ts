@@ -30,6 +30,7 @@ export default defineCommand({
     telemetry: () => import("./config/telemetry").then((m) => m.default),
     get: () => import("./config/get").then((m) => m.default),
     set: () => import("./config/set").then((m) => m.default),
+    edit: () => import("./config/edit").then((m) => m.default),
   },
   async run({ args }) {
     if ((args._ as string[])?.length > 0) return;
