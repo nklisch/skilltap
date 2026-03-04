@@ -60,7 +60,7 @@ async function writeCache(configDir: string, latest: string): Promise<void> {
   }
 }
 
-async function fetchLatestVersion(): Promise<string | null> {
+export async function fetchLatestVersion(): Promise<string | null> {
   try {
     const response = await fetch(
       `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,

@@ -1,6 +1,7 @@
 import {
   checkForUpdate,
   downloadAndInstall,
+  fetchLatestVersion,
   isCompiledBinary,
   VERSION,
 } from "@skilltap/core";
@@ -16,7 +17,8 @@ export default defineCommand({
   args: {
     force: {
       type: "boolean",
-      description: "Re-install even if already on the latest version",
+      description:
+        "Bypass cache and re-install even if already on the latest version",
       default: false,
     },
   },
@@ -28,28 +30,40 @@ export default defineCommand({
     const spin = p.spinner();
     spin.start("Checking for latest release…");
 
-    // Force a fresh check by passing interval_hours = 0
-    const result = await checkForUpdate(VERSION, 0);
+    let latest: string;
+    let updateType: string | undefined;
 
-    if (!result && !force) {
+    if (force) {
+      // Bypass cache entirely — fetch from GitHub directly
+      const fetched = await fetchLatestVersion();
+      latest = fetched ?? VERSION;
+      updateType = undefined;
+    } else {
+      // Normal path: check cache, background refresh
+      const result = await checkForUpdate(VERSION, 0);
+
+      if (!result) {
+        spin.stop(`${ansi.green("✓")} Already on the latest version (v${VERSION})`);
+        p.outro("Nothing to do.");
+        return;
+      }
+
+      latest = result.latest;
+      updateType = result.type;
+    }
+
+    if (latest === VERSION && !force) {
       spin.stop(`${ansi.green("✓")} Already on the latest version (v${VERSION})`);
       p.outro("Nothing to do.");
       return;
     }
 
-    const latest = result?.latest ?? VERSION;
-    const updateType = result?.type;
-
-    if (!result) {
-      spin.stop(`No update found — current version is v${VERSION}`);
-      if (!force) {
-        p.outro("Nothing to do.");
-        return;
-      }
-    } else {
+    if (latest !== VERSION) {
       spin.stop(
-        `Update available: ${ansi.dim(`v${VERSION}`)} → ${ansi.bold(`v${latest}`)} ${ansi.dim(`(${updateType})`)}`,
+        `Update available: ${ansi.dim(`v${VERSION}`)} → ${ansi.bold(`v${latest}`)}${updateType ? ` ${ansi.dim(`(${updateType})`)}` : ""}`,
       );
+    } else {
+      spin.stop(`Already on v${VERSION} — reinstalling`);
     }
 
     if (!isCompiledBinary()) {
