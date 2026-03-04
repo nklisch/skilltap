@@ -1,20 +1,45 @@
 # skilltap
 
-**Install agent skills from any git host.** Homebrew taps for AI agent skills — agent-agnostic, multi-source, secure.
+**Homebrew taps for agent skills.** Install, manage, and share AI agent skills from any git host — agent-agnostic, multi-source, secure.
+
+```bash
+curl -fsSL https://skilltap.dev/install.sh | sh
+```
+
+## Why skilltap?
+
+The [SKILL.md format](https://agentskills.io/specification) is supported by 40+ agents — Claude Code, Cursor, Codex CLI, Gemini CLI, and more. Writing skills is easy. Distributing them is not.
+
+skilltap fills that gap:
+
+- **Any git host.** Install from GitHub, GitLab, Gitea, Bitbucket, or a private server. Your SSH keys and credential helpers just work.
+- **Agent-agnostic.** One install lands in `~/.agents/skills/`. Opt in to symlinking to Claude Code, Cursor, Codex, Gemini, or Windsurf with `--also`.
+- **Taps for discovery.** Add curated skill indexes (taps) from any git repo. Search across all of them with `skilltap find`.
+- **Teams & orgs.** Maintain a company tap on your private git host. One command onboards every developer; `skilltap update` keeps everyone in sync.
+- **Security scanning.** Every install runs a static scan (invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, tag injection) before anything lands on disk.
+- **Standalone binary.** One file, no runtime dependencies.
 
 ## Install
 
+**curl (recommended):**
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/nklisch/skilltap/main/install.sh | sh
+curl -fsSL https://skilltap.dev/install.sh | sh
 ```
 
 Installs to `~/.local/bin/skilltap`. Override the install directory:
 
 ```bash
-SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://raw.githubusercontent.com/nklisch/skilltap/main/install.sh | sh
+SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
 ```
 
-**Alternatives:**
+**Homebrew:**
+
+```bash
+brew install skilltap/skilltap/skilltap
+```
+
+**Without installing:**
 
 ```bash
 bunx skilltap --help   # requires Bun
@@ -26,21 +51,58 @@ Or download a binary directly from [GitHub Releases](https://github.com/nklisch/
 ## Quickstart
 
 ```bash
-# 1. Add the official tap (teaches your agent to use skilltap)
-skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
-
-# 2. Browse available skills
+# Browse skills from the built-in community tap
 skilltap find
 
-# 3. Install a skill
-skilltap install skilltap --global
+# Install a skill globally and symlink to Claude Code
+skilltap install commit-helper --global --also claude-code
 
-# 4. List installed skills
+# Install from any git URL
+skilltap install https://github.com/you/my-skill --global
+
+# List installed skills
 skilltap list
 
-# 5. Update all skills
+# Update all skills
 skilltap update
 ```
+
+## Taps
+
+A **tap** is a git repo (or HTTP endpoint) containing a `tap.json` index of skills. Taps make discovery and curation easy.
+
+```bash
+# Add a community or team tap
+skilltap tap add acme https://gitea.acme.com/eng/acme-skills
+
+# Search across all your taps
+skilltap find review
+
+# Install by name from a tap
+skilltap install code-reviewer
+
+# Update all taps
+skilltap tap update
+```
+
+The built-in `skilltap-skills` tap is always available — no setup required.
+
+## Teams & Organizations
+
+Your team maintains one tap repo on your private git host. Every developer adds it once:
+
+```bash
+skilltap tap add acme https://gitea.acme.com/eng/acme-skills
+```
+
+After that, they install and update by name — no URLs to copy-paste:
+
+```bash
+skilltap install code-reviewer --global --also claude-code
+skilltap update --all
+```
+
+Your existing SSH keys and credential helpers handle authentication automatically. See [Teams & Organizations](https://skilltap.dev/guide/teams) for the full onboarding pattern, config snippet, and org security controls.
 
 ## Commands
 
@@ -114,9 +176,6 @@ Key settings: default scope (`global`/`project`), additional agent symlinks (`--
 # Scaffold a new skill interactively
 skilltap create my-skill
 
-# Or non-interactively
-skilltap create my-skill --template basic
-
 # Edit SKILL.md, then test locally
 skilltap link ./my-skill --also claude-code
 
@@ -124,8 +183,6 @@ skilltap link ./my-skill --also claude-code
 skilltap verify my-skill/
 
 # Push to git and share
-git init my-skill && cd my-skill && git add . && git commit -m "Initial skill"
-git remote add origin https://github.com/you/my-skill
 git push -u origin main
 ```
 
@@ -150,38 +207,27 @@ Trust tiers: `provenance` (Sigstore/SLSA verified), `publisher` (npm identity ve
 ## Shell Completions
 
 ```bash
-# bash
 skilltap completions bash --install
-
-# zsh
-skilltap completions zsh --install
-# Add to ~/.zshrc: fpath=(~/.zfunc $fpath) && autoload -Uz compinit && compinit
-
-# fish
+skilltap completions zsh --install    # then: fpath=(~/.zfunc $fpath) && autoload -Uz compinit && compinit
 skilltap completions fish --install
 ```
 
 ## Troubleshooting
 
 ```bash
-# Check environment, config, and installed state
-skilltap doctor
-
-# Auto-repair common issues (broken symlinks, orphan records)
-skilltap doctor --fix
-
-# Machine-readable output for CI
-skilltap doctor --json
+skilltap doctor        # check environment, config, and installed state
+skilltap doctor --fix  # auto-repair common issues (broken symlinks, orphan records)
+skilltap doctor --json # machine-readable output for CI
 ```
 
 ## Gotchas
 
-- **`--yes` does not skip the scope prompt.** You must pass `--global` or `--project` explicitly for a fully non-interactive install. This is intentional — defaulting to the wrong scope quietly is worse than prompting.
-- **`--yes` does not bypass security warnings.** If a static scan finds issues, you'll still be prompted. Use `--strict` to turn warnings into hard failures, or `--skip-scan` to bypass entirely (blocked if `require_scan = true`).
-- **Agent mode must be enabled before invoking from an AI agent.** Run `skilltap config agent-mode` interactively once. Without it, skilltap will prompt for input and hang in non-TTY environments.
-- **Agent symlinks are not automatic.** Installing a skill doesn't add it to any agent unless you pass `--also <agent>` or set defaults in config. The skill lands in `.agents/skills/` regardless; symlinks are opt-in.
+- **`--yes` does not skip the scope prompt.** Pass `--global` or `--project` explicitly for a fully non-interactive install.
+- **`--yes` does not bypass security warnings.** Use `--strict` to turn warnings into hard failures, or `--skip-scan` to bypass entirely (blocked if `require_scan = true`).
+- **Agent mode must be enabled before invoking from an AI agent.** Run `skilltap config agent-mode` interactively once. Without it, skilltap will prompt and hang in non-TTY environments.
+- **Agent symlinks are not automatic.** Pass `--also <agent>` or set defaults in config. The skill always lands in `.agents/skills/` — symlinks are opt-in.
 - **Multi-skill repos require selection.** If a repo contains multiple `SKILL.md` files, skilltap prompts you to choose. With `--yes`, all are auto-selected.
-- **npm installs require the `npm:` prefix.** `skilltap install vibe-rules` searches your configured taps. `skilltap install npm:vibe-rules` hits the npm registry.
+- **npm installs require the `npm:` prefix.** `skilltap install vibe-rules` searches your taps. `skilltap install npm:vibe-rules` hits the npm registry.
 
 ## License
 
