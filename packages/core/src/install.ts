@@ -221,7 +221,10 @@ async function buildPlacements(params: {
     const cacheRoot = skillCacheDir(resolvedUrl);
     await mkdir(dirname(cacheRoot), { recursive: true });
     const mvResult = await wrapShell(
-      () => $`mv ${contentDir} ${cacheRoot}`.quiet().then(() => undefined),
+      () =>
+        $`cp -a ${contentDir} ${cacheRoot} && rm -rf ${contentDir}`
+          .quiet()
+          .then(() => undefined),
       "Failed to move clone to cache",
       "Check disk space and permissions.",
     );
@@ -262,7 +265,9 @@ async function executePlacements(params: {
     const shellResult = await wrapShell(
       () =>
         useMove
-          ? $`mv ${srcPath} ${destDir}`.quiet().then(() => undefined)
+          ? $`cp -a ${srcPath} ${destDir} && rm -rf ${srcPath}`
+              .quiet()
+              .then(() => undefined)
           : $`cp -r ${srcPath} ${destDir}`.quiet().then(() => undefined),
       `Failed to ${op} skill '${skill.name}' to ${destDir}`,
       "Check disk space and permissions.",
