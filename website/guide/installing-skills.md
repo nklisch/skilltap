@@ -300,21 +300,24 @@ skilltap remove commit-helper && skilltap install user/commit-helper --global
 skilltap remove commit-helper
 ```
 
-```
-Remove commit-helper (global, v1.2.0)? (y/N): y
-✓ Removed commit-helper
+This removes the skill directory and any agent symlinks. You'll be asked to confirm unless you pass `--yes`.
+
+Remove multiple skills in one command:
+
+```bash
+skilltap remove skill-a skill-b skill-c --yes
 ```
 
-This removes the skill directory and any agent symlinks. Use `--project` to remove from project scope:
+Or omit the name entirely to pick interactively from all installed skills:
+
+```bash
+skilltap remove
+```
+
+Use `--project` to remove from project scope instead of global:
 
 ```bash
 skilltap remove termtube-dev --project
-```
-
-Skip the confirmation prompt:
-
-```bash
-skilltap remove commit-helper --yes
 ```
 
 ## Linking local skills

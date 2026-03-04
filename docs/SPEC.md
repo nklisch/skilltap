@@ -1476,11 +1476,11 @@ skilltap self-update [--force]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--force` | boolean | false | Re-install even if already on the latest version |
+| `--force` | boolean | false | Bypass cache and re-install even if already on the latest version |
 
 ### Behavior
 
-1. Forces a fresh fetch to `https://api.github.com/repos/nklisch/skilltap/releases/latest` (bypasses cache interval)
+1. Without `--force`: reads cached update info and fires a background refresh if stale (same as startup check with `interval_hours = 0`). With `--force`: fetches `https://api.github.com/repos/nklisch/skilltap/releases/latest` directly, bypassing the cache entirely
 2. If `isCompiledBinary()` returns false (binary name is `bun` or `bun.exe`): print instructions to use `bun update -g skilltap` or `npm install -g skilltap`; exit 0
 3. Determine platform asset name: `skilltap-linux-x64`, `skilltap-linux-arm64`, `skilltap-darwin-x64`, `skilltap-darwin-arm64`. Unsupported platform → error
 4. Download asset from `https://github.com/nklisch/skilltap/releases/download/v{version}/{asset}` with 60s timeout

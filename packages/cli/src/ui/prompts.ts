@@ -6,7 +6,7 @@ import {
   select,
   text,
 } from "@clack/prompts";
-import type { AgentAdapter, ScannedSkill, TapEntry } from "@skilltap/core";
+import type { AgentAdapter, InstalledSkill, ScannedSkill, TapEntry } from "@skilltap/core";
 import { detectAgents, VALID_AGENT_IDS } from "@skilltap/core";
 
 export async function selectSkills(
@@ -93,6 +93,25 @@ export async function selectTap(
   }
   // biome-ignore lint/style/noNonNullAssertion: result is a valid index from the select options
   return matches[result as number]!;
+}
+
+export async function selectSkillsToRemove(
+  skills: InstalledSkill[],
+): Promise<string[] | symbol> {
+  const result = await multiselect({
+    message: "Which skills to remove?",
+    options: skills.map((s) => ({
+      value: s.name,
+      label: s.name,
+      hint: s.scope,
+    })),
+    required: true,
+  });
+  if (isCancel(result)) {
+    cancel("Operation cancelled.");
+    return result;
+  }
+  return result as string[];
 }
 
 export async function confirmRemove(name: string): Promise<boolean | symbol> {

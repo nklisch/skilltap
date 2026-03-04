@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 import { installSkill, loadInstalled } from "@skilltap/core";
 import {
+  createMultiSkillRepo,
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
@@ -56,6 +57,47 @@ afterEach(async () => {
   delete process.env.XDG_CONFIG_HOME;
   await removeTmpDir(homeDir);
   await removeTmpDir(configDir);
+});
+
+describe("remove — multiple names", () => {
+  test("removes multiple skills with --yes", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      const { exitCode, stdout } = await runRemove(
+        ["skill-a", "skill-b", "--yes"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("2 skills");
+
+      const installed = await loadInstalled();
+      expect(installed.ok).toBe(true);
+      if (!installed.ok) return;
+      expect(installed.value.skills).toHaveLength(0);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("exits 1 if any name not found", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      const { exitCode, stderr } = await runRemove(
+        ["standalone-skill", "nonexistent", "--yes"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain("not installed");
+    } finally {
+      await repo.cleanup();
+    }
+  });
 });
 
 describe("remove — not found", () => {

@@ -1,11 +1,10 @@
 import { isCancel, spinner } from "@clack/prompts";
-import { removeSkill } from "@skilltap/core";
+import { type InstalledSkill, loadInstalled, removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { agentError } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
-import { confirmRemove } from "../ui/prompts";
-import { getInstalledSkillOrExit } from "../ui/resolve";
+import { confirmRemove, selectSkillsToRemove } from "../ui/prompts";
 import { sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
@@ -16,8 +15,8 @@ export default defineCommand({
   args: {
     name: {
       type: "positional",
-      description: "Name of installed skill",
-      required: true,
+      description: "Name(s) of installed skills to remove",
+      required: false,
     },
     project: {
       type: "boolean",
@@ -34,64 +33,104 @@ export default defineCommand({
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project });
 
-    const skill = await getInstalledSkillOrExit(args.name, {
-      notFoundHint: "Run 'skilltap list' to see installed skills.",
-    });
+    const installedResult = await loadInstalled();
+    if (!installedResult.ok) {
+      if (policy.agentMode) agentError(installedResult.error.message);
+      else errorLine(installedResult.error.message);
+      process.exit(1);
+    }
+    const allSkills = installedResult.value.skills;
 
-    const scope = args.project
-      ? "project"
-      : (skill.scope as "global" | "project" | "linked");
+    let skillsToRemove: InstalledSkill[];
 
-    if (policy.agentMode) {
-      const result = await removeSkill(args.name, { scope });
-      if (!result.ok) {
-        sendEvent(config, "remove", {
-          ...telemetryBase(true),
-          success: false,
-          error_category: result.error.constructor.name,
-          scope,
-        });
-        agentError(result.error.message);
+    if (!args.name) {
+      if (policy.agentMode) {
+        agentError("Provide skill name(s) as arguments.");
         process.exit(1);
       }
-      sendEvent(config, "remove", {
-        ...telemetryBase(true),
-        success: true,
-        scope,
-      });
-      process.stdout.write(`OK: Removed ${args.name}\n`);
+      if (allSkills.length === 0) {
+        errorLine("No skills installed.");
+        process.exit(1);
+      }
+      const selected = await selectSkillsToRemove(allSkills);
+      if (isCancel(selected)) process.exit(2);
+      const selectedNames = new Set(selected as string[]);
+      skillsToRemove = allSkills.filter((s) => selectedNames.has(s.name));
+    } else {
+      const names = [...new Set([args.name, ...(args._ as string[])])];
+      skillsToRemove = [];
+      for (const name of names) {
+        const skill = allSkills.find((s) => s.name === name);
+        if (!skill) {
+          const msg = `Skill '${name}' is not installed`;
+          if (policy.agentMode) agentError(msg);
+          else errorLine(msg, "Run 'skilltap list' to see installed skills.");
+          process.exit(1);
+        }
+        skillsToRemove.push(skill);
+      }
+    }
+
+    const scopeOf = (skill: InstalledSkill) =>
+      args.project ? "project" : (skill.scope as "global" | "project" | "linked");
+
+    if (policy.agentMode) {
+      for (const skill of skillsToRemove) {
+        const result = await removeSkill(skill.name, { scope: scopeOf(skill) });
+        if (!result.ok) {
+          sendEvent(config, "remove", {
+            ...telemetryBase(true),
+            success: false,
+            error_category: result.error.constructor.name,
+            scope: scopeOf(skill),
+          });
+          agentError(result.error.message);
+          process.exit(1);
+        }
+        process.stdout.write(`OK: Removed ${skill.name}\n`);
+      }
+      sendEvent(config, "remove", { ...telemetryBase(true), success: true });
       return;
     }
 
-    if (!args.yes) {
-      const confirmed = await confirmRemove(args.name);
-      if (isCancel(confirmed) || confirmed === false) {
-        process.exit(2);
+    // Confirm only when names were given via CLI (multiselect is implicit confirmation)
+    if (!args.yes && args.name) {
+      const label =
+        skillsToRemove.length === 1
+          ? skillsToRemove[0]!.name
+          : `${skillsToRemove.length} skills`;
+      const confirmed = await confirmRemove(label);
+      if (isCancel(confirmed) || confirmed === false) process.exit(2);
+    }
+
+    const label =
+      skillsToRemove.length === 1
+        ? skillsToRemove[0]!.name
+        : `${skillsToRemove.length} skills`;
+    const s = spinner();
+    s.start(`Removing ${label}...`);
+
+    for (const skill of skillsToRemove) {
+      const result = await removeSkill(skill.name, { scope: scopeOf(skill) });
+      if (!result.ok) {
+        s.stop("Failed.", 1);
+        sendEvent(config, "remove", {
+          ...telemetryBase(false),
+          success: false,
+          error_category: result.error.constructor.name,
+          scope: scopeOf(skill),
+        });
+        errorLine(result.error.message, result.error.hint);
+        process.exit(1);
       }
     }
 
-    const s = spinner();
-    s.start(`Removing ${args.name}...`);
-
-    const result = await removeSkill(args.name, { scope });
-    if (!result.ok) {
-      s.stop("Failed.", 1);
-      sendEvent(config, "remove", {
-        ...telemetryBase(false),
-        success: false,
-        error_category: result.error.constructor.name,
-        scope,
-      });
-      errorLine(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
-    sendEvent(config, "remove", {
-      ...telemetryBase(false),
-      success: true,
-      scope,
-    });
+    sendEvent(config, "remove", { ...telemetryBase(false), success: true });
     s.stop("Removed.");
-    successLine(`Removed ${args.name}`);
+    if (skillsToRemove.length === 1) {
+      successLine(`Removed ${skillsToRemove[0]!.name}`);
+    } else {
+      successLine(`Removed ${skillsToRemove.length} skills`);
+    }
   },
 });

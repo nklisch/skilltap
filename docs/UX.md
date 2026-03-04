@@ -1530,12 +1530,12 @@ skilltap self-update [--force]
 ### Flags
 
 ```
---force    Re-install even if already on the latest version
+--force    Bypass cache and re-install even if already on the latest version
 ```
 
 ### Behavior
 
-1. Forces a fresh GitHub API check for the latest release (bypasses the background cache)
+1. Without `--force`: reads cached update info (fires background refresh if stale). With `--force`: fetches the latest release from the GitHub API directly, bypassing the cache entirely
 2. If running from source (`bun run` or npm link), prints instructions to update via the package manager instead and exits
 3. If running as a compiled binary: downloads the platform-specific release asset from GitHub Releases, writes it to `{execPath}.update`, `chmod +x`s it, then atomically renames it over the running binary
 4. Updates the local update-check cache to the installed version

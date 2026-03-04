@@ -1204,7 +1204,7 @@ skilltap self-update [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--force` | boolean | `false` | Re-install even if already on the latest version |
+| `--force` | boolean | `false` | Bypass cache and re-install even if already on the latest version |
 
 ### Behavior
 
@@ -1230,6 +1230,6 @@ Configure automatic updates via the `[updates]` config section — see [Configur
 # Check and update to the latest release
 skilltap self-update
 
-# Re-install the current latest (useful after manual binary tampering)
+# Force a fresh fetch from GitHub and re-install (bypasses cache)
 skilltap self-update --force
 ```
