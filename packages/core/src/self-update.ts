@@ -164,7 +164,7 @@ export async function downloadAndInstall(
     const buffer = await response.arrayBuffer();
     await Bun.write(tmpPath, buffer);
     await Bun.$`chmod +x ${tmpPath}`.quiet();
-    await Bun.$`cp -a ${tmpPath} ${execPath} && rm -f ${tmpPath}`.quiet();
+    await Bun.$`mv -f ${tmpPath} ${execPath}`.quiet();
   } catch (e) {
     // Clean up temp file if possible
     Bun.$`rm -f ${tmpPath}`.quiet();
