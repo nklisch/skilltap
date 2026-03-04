@@ -124,12 +124,16 @@ function getPlatformAsset(): string | null {
   return null;
 }
 
+type FetchFn = typeof fetch;
+
 /**
  * Download the specified release from GitHub and atomically replace the
  * running binary. Only works when running as a compiled binary.
  */
 export async function downloadAndInstall(
   version: string,
+  _fetch: FetchFn = fetch,
+  _execPath: string = process.execPath,
 ): Promise<Result<void, UserError>> {
   const asset = getPlatformAsset();
   if (!asset) {
@@ -142,12 +146,11 @@ export async function downloadAndInstall(
   }
 
   const url = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/${asset}`;
-  const execPath = process.execPath;
-  const tmpPath = `${execPath}.update`;
+  const tmpPath = `${_execPath}.update`;
 
   let response: Response;
   try {
-    response = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    response = await _fetch(url, { signal: AbortSignal.timeout(60_000) });
   } catch (e) {
     return err(
       new NetworkError(`Download failed: ${e}`) as unknown as UserError,
@@ -164,7 +167,7 @@ export async function downloadAndInstall(
     const buffer = await response.arrayBuffer();
     await Bun.write(tmpPath, buffer);
     await Bun.$`chmod +x ${tmpPath}`.quiet();
-    await Bun.$`mv -f ${tmpPath} ${execPath}`.quiet();
+    await Bun.$`mv -f ${tmpPath} ${_execPath}`.quiet();
   } catch (e) {
     // Clean up temp file if possible
     Bun.$`rm -f ${tmpPath}`.quiet();
