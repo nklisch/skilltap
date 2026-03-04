@@ -1,12 +1,21 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import {
   addFileAndCommit,
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
+
+setDefaultTimeout(15_000);
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 

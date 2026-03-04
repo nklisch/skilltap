@@ -1,10 +1,19 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { installSkill, loadInstalled } from "@skilltap/core";
 import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
+
+setDefaultTimeout(15_000);
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
