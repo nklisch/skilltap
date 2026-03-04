@@ -1032,9 +1032,9 @@ Doctor runs 9 independent checks and streams each result as it completes:
 | 1 | git | git is on PATH, version ≥ 2.25 |
 | 2 | config | `config.toml` exists, valid TOML, passes schema |
 | 3 | dirs | All required directories exist |
-| 4 | installed.json | State file parses and passes schema validation |
-| 5 | skills | Every `installed.json` entry has a directory on disk |
-| 6 | symlinks | Agent symlinks for `also` entries are valid |
+| 4 | installed | Global `installed.json` and project `.agents/installed.json` (when in a project) parse and pass schema; detail: `"N skills (G global, P project)"` |
+| 5 | skills | Every entry has a directory in the correct scope location (`~/.agents/skills/` or `{project}/.agents/skills/`); orphan dirs in both locations reported |
+| 6 | symlinks | Agent symlinks for `also` entries point to the right scope-aware target |
 | 7 | taps | Each configured tap has a valid local clone |
 | 8 | agents | Detected agent CLIs; configured agent is available |
 | 9 | npm | npm is on PATH and registry reachable (only if npm skills are installed) |

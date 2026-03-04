@@ -755,9 +755,9 @@ Diagnose the skilltap environment and state. Runs 9 checks and reports issues wi
 | git | `git` binary is available on PATH |
 | config | Config file is readable and parses without error |
 | dirs | Required directories exist (`~/.config/skilltap/`, `~/.agents/skills/`) |
-| installed.json | Installed record is valid and parseable |
-| skill integrity | Every skill in installed.json has a SKILL.md at its recorded path |
-| symlinks | Agent-specific symlinks are not broken |
+| installed.json | Global `~/.config/skilltap/installed.json` and project `.agents/installed.json` (when in a project) are valid and parseable; detail shows `"N skills (G global, P project)"` |
+| skill integrity | Every skill in installed.json has a directory at the correct scope-aware path (`~/.agents/skills/` for global, `{projectRoot}/.agents/skills/` for project); orphan dirs in both locations are reported |
+| symlinks | Agent-specific symlinks for global skills point into `~/.agents/skills/`; project-scoped skill symlinks point into `{projectRoot}/.agents/skills/` |
 | taps | Tap directories exist and contain a valid `tap.json` |
 | agents | At least one agent CLI is detected on PATH |
 | npm | `npm` binary is available on PATH (for `npm:` sources) |
@@ -1654,9 +1654,13 @@ User action required: review warnings and install manually with
 
 ### installed.json
 
-Machine-managed. Users should not edit this file.
+Machine-managed. Users should not edit these files directly.
 
-Location: `~/.config/skilltap/installed.json`
+**Global** (scope: `"global"` and `"linked"` skills): `~/.config/skilltap/installed.json`
+
+**Project** (scope: `"project"` skills): `{projectRoot}/.agents/installed.json`
+
+The project file lives inside the repository and **should be committed** alongside the code. Committing it lets teammates run `skilltap install` to restore project skills, and gives `skilltap doctor` the information it needs to verify the project's skill state.
 
 Validated at read/write with `InstalledJsonSchema` (Zod 4). If the file doesn't exist, the default is `{ version: 1, skills: [] }`.
 

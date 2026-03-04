@@ -45,24 +45,24 @@ Checks that all expected directories exist: `~/.config/skilltap/`, `cache/`, `ta
 
 ### 4. installed.json
 
-Validates the state file that tracks installed skills.
+Validates the state files that track installed skills. Doctor checks **both** the global file (`~/.config/skilltap/installed.json`) and the project file (`.agents/installed.json` in the nearest `.git` root) when run inside a project.
 
-- **Fail**: file is corrupt (bad JSON or failed schema validation)
-- **Warn**: file doesn't exist (no skills installed yet — not an error)
+- **Fail**: a file is corrupt (bad JSON or failed schema validation)
+- **Pass** with detail `N skills (G global, P project)` when both files are present
 - **Fix** (`--fix`): backs up the corrupt file to `installed.json.bak` and creates a fresh empty state
 
 ### 5. Skill Integrity
 
-For each entry in `installed.json`, verifies the skill directory actually exists on disk. Also checks for directories in `~/.agents/skills/` that aren't tracked.
+For each entry in either installed.json, verifies the skill directory actually exists on disk in the correct location (`~/.agents/skills/` for global skills, `.agents/skills/` inside the project for project-scoped skills). Also scans each skills directory for untracked entries.
 
 - **Warn — orphan record**: skill is in `installed.json` but directory is missing
 - **Warn — orphan directory**: directory exists on disk but isn't tracked in `installed.json`
 - **Warn — broken link**: a linked skill's target directory no longer exists
-- **Fix** (`--fix`): removes orphan records and broken link entries; does not delete orphan directories (they might be manually placed)
+- **Fix** (`--fix`): removes orphan records and broken link entries from the appropriate `installed.json`; does not delete orphan directories (they might be manually placed)
 
 ### 6. Agent Symlinks
 
-For each skill with `also` entries, checks that symlinks exist at the agent-specific paths and point to the correct target.
+For each skill with `also` entries, checks that symlinks exist and point to the correct target. Global-scoped skills are checked in `~/.claude/skills/` (etc.); project-scoped skills are checked in `{projectRoot}/.claude/skills/` (etc.).
 
 - **Warn**: missing or broken symlink
 - **Fix** (`--fix`): recreates missing or incorrect symlinks
@@ -98,8 +98,8 @@ Only checked if any installed skills use an `npm:` source.
 ◇ git: /usr/bin/git (2.44.0) ✓
 ◇ config: ~/.config/skilltap/config.toml ✓
 ◇ dirs: ~/.config/skilltap/ ✓
-◇ installed.json: 5 skills ✓
-◇ skills: 5 installed, 5 on disk ✓
+◇ installed: 7 skills (2 global, 5 project) ✓
+◇ skills: 7 installed, 7 on disk ✓
 ◇ symlinks: 8 symlinks, 8 valid ✓
 ◇ taps: 2 configured, 2 valid ✓
 ◇ agents: 3 detected (claude, gemini, ollama) ✓
@@ -115,12 +115,12 @@ When issues are found:
 ◇ git: /usr/bin/git (2.44.0) ✓
 ◇ config: ~/.config/skilltap/config.toml ✓
 ◇ dirs: ~/.config/skilltap/ ✓
-◇ installed.json: 5 skills ✓
-⚠ skills: 5 installed, 4 on disk
-│  commit-helper: directory missing at ~/.agents/skills/commit-helper/
+◇ installed: 7 skills (2 global, 5 project) ✓
+⚠ skills: 7 installed, 6 on disk
+│  commit-helper: recorded in installed.json but directory missing at ~/.agents/skills/commit-helper
 ⚠ symlinks: 8 symlinks, 6 valid
-│  commit-helper: missing symlink at ~/.claude/skills/commit-helper/
-│  code-review: symlink points to wrong target
+│  commit-helper: missing symlink at ~/.claude/skills/commit-helper
+│  code-review: symlink at ~/.claude/skills/code-review points to wrong target
 ◇ taps: 2 configured, 2 valid ✓
 ⚠ agents: configured agent 'codex' not found on PATH
 │

@@ -116,6 +116,10 @@ skilltap install commit-helper --project
 
 Installs to `.agents/skills/commit-helper/` inside the current project (determined by the nearest `.git` directory). Only available when working in that project.
 
+::: tip Commit `.agents/installed.json`
+When you install a project-scoped skill, skilltap records it in `.agents/installed.json` at the project root. **Commit this file** — it's the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact.
+:::
+
 ### Prompted scope
 
 If you don't pass `--global` or `--project`, skilltap asks:

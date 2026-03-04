@@ -1445,7 +1445,7 @@ $ skilltap doctor
 ◇ git: available ✓
 ◇ config: readable ✓
 ◇ dirs: all present ✓
-◇ installed.json: valid (3 skills) ✓
+◇ installed: 3 skills (1 global, 2 project) ✓
 ◇ skill integrity: all present ✓
 ◇ symlinks: all valid ✓
 ◇ taps: 2 reachable ✓
@@ -1465,10 +1465,9 @@ $ skilltap doctor
 ◇ git: available ✓
 ◇ config: readable ✓
 ◇ dirs: all present ✓
-⚠ installed.json: valid (2 skills)
-│  broken-skill: missing SKILL.md at ~/.agents/skills/broken-skill/
-⚠ skill integrity
-│  broken-skill: missing SKILL.md
+◇ installed: 2 skills ✓
+⚠ skills: 2 installed, 1 on disk
+│  broken-skill: recorded in installed.json but directory missing at ~/.agents/skills/broken-skill
 ◇ symlinks: all valid ✓
 ◇ taps: 2 reachable ✓
 ◇ agents: claude detected ✓
@@ -1487,8 +1486,9 @@ $ skilltap doctor --fix
 ◇ git: available ✓
 ◇ config: readable ✓
 ◇ dirs: all present ✓
-⚠ skill integrity
-│  broken-skill: missing SKILL.md — orphan record removed ✓
+◇ installed: 2 skills ✓
+⚠ skills: 2 installed, 1 on disk
+│  broken-skill: recorded in installed.json but directory missing — removed from installed.json ✓
 ◇ symlinks: all valid ✓
 ◇ taps: 2 reachable ✓
 ◇ agents: claude detected ✓
@@ -1507,7 +1507,7 @@ $ skilltap doctor --json
     { "name": "git", "status": "pass" },
     { "name": "config", "status": "pass" },
     { "name": "dirs", "status": "pass" },
-    { "name": "installed.json", "status": "pass", "detail": "3 skills" },
+    { "name": "installed", "status": "pass", "detail": "3 skills (1 global, 2 project)" },
     { "name": "skill integrity", "status": "pass" },
     { "name": "symlinks", "status": "pass" },
     { "name": "taps", "status": "pass", "detail": "2 reachable" },
