@@ -8,11 +8,12 @@ const CLI_DIR = `${import.meta.dir}/../..`;
 
 async function runVerify(
   args: string[],
+  cwd: string = CLI_DIR,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "verify", ...args],
+    ["bun", "run", "--bun", `${CLI_DIR}/src/index.ts`, "verify", ...args],
     {
-      cwd: CLI_DIR,
+      cwd,
       stdout: "pipe",
       stderr: "pipe",
       stdin: "pipe",
@@ -151,6 +152,77 @@ name: my-skill
     const parsed = JSON.parse(stdout);
     expect(parsed.valid).toBe(false);
     expect(parsed.issues.length).toBeGreaterThan(0);
+  });
+});
+
+describe("verify — bare name resolution", () => {
+  test("resolves bare name from .agents/skills/<name>", async () => {
+    const skillDir = join(tmpDir, ".agents", "skills", "my-skill");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(join(skillDir, "SKILL.md"), VALID_SKILL_MD);
+
+    const { exitCode, stdout } = await runVerify(["my-skill"], tmpDir);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("SKILL.md found");
+  });
+
+  test("bare name falls back gracefully when not in .agents/skills", async () => {
+    const skillDir = join(tmpDir, "other-skill");
+    await mkdir(skillDir, { recursive: true });
+    // my-skill not in .agents/skills — should fail as usual
+    const { exitCode, stderr } = await runVerify(["my-skill"], tmpDir);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("No SKILL.md found");
+  });
+});
+
+describe("verify --all", () => {
+  test("verifies all skills and exits 0 when all valid", async () => {
+    for (const name of ["skill-a", "skill-b"]) {
+      const skillDir = join(tmpDir, ".agents", "skills", name);
+      await mkdir(skillDir, { recursive: true });
+      const skillMd = `---\nname: ${name}\ndescription: A test skill\nlicense: MIT\n---\n\n## Instructions\n\nDo stuff.\n`;
+      await Bun.write(join(skillDir, "SKILL.md"), skillMd);
+    }
+
+    const { exitCode, stdout } = await runVerify(["--all"], tmpDir);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("skill-a");
+    expect(stdout).toContain("skill-b");
+  });
+
+  test("exits 1 when any skill fails", async () => {
+    const goodDir = join(tmpDir, ".agents", "skills", "good-skill");
+    await mkdir(goodDir, { recursive: true });
+    await Bun.write(join(goodDir, "SKILL.md"), `---\nname: good-skill\ndescription: Good\nlicense: MIT\n---\n\nDo stuff.\n`);
+
+    const badDir = join(tmpDir, ".agents", "skills", "bad-skill");
+    await mkdir(badDir, { recursive: true });
+    await Bun.write(join(badDir, "SKILL.md"), `---\nname: bad-skill\n---\n\nMissing description.\n`);
+
+    const { exitCode, stdout } = await runVerify(["--all"], tmpDir);
+    expect(exitCode).toBe(1);
+    expect(stdout).toContain("good-skill");
+    expect(stdout).toContain("bad-skill");
+  });
+
+  test("exits 1 with error when no skills found", async () => {
+    const { exitCode, stderr } = await runVerify(["--all"], tmpDir);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("No skills found");
+  });
+
+  test("--all --json outputs JSON array", async () => {
+    const skillDir = join(tmpDir, ".agents", "skills", "my-skill");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(join(skillDir, "SKILL.md"), VALID_SKILL_MD);
+
+    const { exitCode, stdout } = await runVerify(["--all", "--json"], tmpDir);
+    expect(exitCode).toBe(0);
+    const parsed = JSON.parse(stdout);
+    expect(Array.isArray(parsed)).toBe(true);
+    expect(parsed[0].name).toBe("my-skill");
+    expect(parsed[0].valid).toBe(true);
   });
 });
 

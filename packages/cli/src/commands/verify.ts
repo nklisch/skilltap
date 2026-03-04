@@ -1,7 +1,7 @@
 import { intro, outro, spinner } from "@clack/prompts";
-import { validateSkill } from "@skilltap/core";
+import { validateSkill, scan } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { resolve, basename } from "node:path";
+import { resolve, basename, join } from "node:path";
 import { ansi, errorLine, successLine } from "../ui/format";
 
 export default defineCommand({
@@ -15,6 +15,11 @@ export default defineCommand({
       description: "Path to skill directory (default: .)",
       required: false,
     },
+    all: {
+      type: "boolean",
+      description: "Verify all skills in the current project",
+      default: false,
+    },
     json: {
       type: "boolean",
       description: "Output as JSON",
@@ -22,9 +27,26 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const skillPath = resolve((args.path as string | undefined) ?? ".");
-    const skillName = basename(skillPath);
     const useJson = args.json as boolean;
+
+    if (args.all) {
+      await runAll(useJson);
+      return;
+    }
+
+    const argPath = (args.path as string | undefined) ?? ".";
+    let skillPath = resolve(argPath);
+
+    // Bare-name fallback: try .agents/skills/<name> if arg has no path separator
+    const isBare = !argPath.includes("/") && !argPath.includes("\\") && argPath !== ".";
+    if (isBare) {
+      const agentsPath = resolve(join(".", ".agents", "skills", argPath));
+      if (await Bun.file(join(agentsPath, "SKILL.md")).exists()) {
+        skillPath = agentsPath;
+      }
+    }
+
+    const skillName = basename(skillPath);
 
     if (useJson) {
       await runJson(skillPath, skillName);
@@ -113,6 +135,72 @@ export default defineCommand({
     }
   },
 });
+
+async function runAll(useJson: boolean): Promise<void> {
+  const skills = await scan(process.cwd());
+
+  if (skills.length === 0) {
+    process.stderr.write("No skills found in current directory.\n");
+    process.exit(1);
+  }
+
+  if (useJson) {
+    const results = await Promise.all(
+      skills.map(async (skill) => {
+        const result = await validateSkill(skill.path);
+        if (!result.ok) {
+          return { name: skill.name, valid: false, error: result.error.message };
+        }
+        const { valid, issues, frontmatter, fileCount, totalBytes } = result.value;
+        return { name: skill.name, valid, issues, frontmatter: frontmatter ?? null, fileCount: fileCount ?? null, totalBytes: totalBytes ?? null };
+      }),
+    );
+    process.stdout.write(JSON.stringify(results, null, 2));
+    process.stdout.write("\n");
+    if (results.some((r) => !r.valid)) process.exit(1);
+    return;
+  }
+
+  intro(`Verifying ${skills.length} ${skills.length === 1 ? "skill" : "skills"}`);
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const skill of skills) {
+    const s = spinner();
+    s.start(skill.name);
+    const result = await validateSkill(skill.path);
+
+    if (!result.ok) {
+      s.stop(`${skill.name} — ${ansi.red("error")}: ${result.error.message}`, 1);
+      failed++;
+      continue;
+    }
+
+    const { valid, issues } = result.value;
+    const errors = issues.filter((i) => i.severity === "error");
+
+    if (valid) {
+      s.stop(`${skill.name} — ${ansi.green("✓ valid")}`);
+      passed++;
+    } else {
+      s.stop(`${skill.name} — ${ansi.red(`✗ ${errors.length} ${errors.length === 1 ? "issue" : "issues"}`)}`);
+      for (const e of errors) {
+        process.stdout.write(`    ${ansi.dim(e.message)}\n`);
+      }
+      failed++;
+    }
+  }
+
+  process.stdout.write("\n");
+
+  if (failed === 0) {
+    outro(`✓ All ${passed} ${passed === 1 ? "skill" : "skills"} valid.`);
+  } else {
+    outro(`${passed} passed, ${ansi.red(`${failed} failed`)}.`);
+    process.exit(1);
+  }
+}
 
 async function runJson(skillPath: string, skillName: string): Promise<void> {
   const result = await validateSkill(skillPath);
