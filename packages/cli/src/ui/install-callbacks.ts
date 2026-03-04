@@ -15,6 +15,10 @@ import {
 } from "./prompts";
 import { printSemanticWarnings, printWarnings } from "./scan";
 
+function truncate(str: string, max: number): string {
+  return str.length <= max ? str : `${str.slice(0, max - 1)}…`;
+}
+
 type Spinner = {
   start: (msg?: string) => void;
   stop: (msg?: string, code?: number) => void;
@@ -72,6 +76,8 @@ export function createInstallCallbacks(
   | "onSemanticWarnings"
   | "onOfferSemantic"
   | "onSemanticProgress"
+  | "onStaticScanStart"
+  | "onSemanticScanStart"
   | "onConfirmInstall"
   | "onDeepScan"
 > {
@@ -92,6 +98,18 @@ export function createInstallCallbacks(
   );
 
   return {
+    onStaticScanStart: skipScan
+      ? undefined
+      : (skillName: string): void => {
+          s.message(`Scanning ${skillName} for security issues...`);
+        },
+
+    onSemanticScanStart: agent
+      ? (skillName: string): void => {
+          s.message(`Starting semantic scan of ${skillName}...`);
+        }
+      : undefined,
+
     onWarnings: skipScan ? undefined : warningsCallback,
 
     onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> => {
@@ -136,13 +154,15 @@ export function createInstallCallbacks(
             const answer = await offerSemanticScan();
             if (isCancel(answer)) return false;
             return answer as boolean;
-          }, "Running semantic scan...");
+          }, "Starting semantic scan...");
         }
       : undefined,
 
     onSemanticProgress: agent
-      ? (completed: number, total: number): void => {
-          s.message(`Scanning chunk ${completed}/${total}...`);
+      ? (completed: number, total: number, score: number, reason: string): void => {
+          const threshold = 5; // mirror default threshold
+          const flag = score >= threshold ? ` — ⚠ ${truncate(reason, 60)}` : "";
+          s.message(`Semantic scan: chunk ${completed}/${total}${flag}`);
         }
       : undefined,
 

@@ -18,7 +18,8 @@ export type SemanticWarning = {
 
 export type SemanticScanOptions = {
   threshold?: number;
-  onProgress?: (completed: number, total: number) => void;
+  onScanStart?: (total: number) => void;
+  onProgress?: (completed: number, total: number, score: number, reason: string) => void;
 };
 
 // ── Constants ──
@@ -141,6 +142,8 @@ export async function scanSemantic(
     const chunks = await chunkSkillDir(dir);
     if (chunks.length === 0) return ok([]);
 
+    opts?.onScanStart?.(chunks.length);
+
     const randomSuffix = randomBytes(4).toString("hex");
     const warnings: SemanticWarning[] = [];
 
@@ -175,10 +178,10 @@ export async function scanSemantic(
         const result = await adapter.invoke(prompt);
 
         completed++;
-        opts?.onProgress?.(completed, chunks.length);
 
         if (result.ok) {
           const { score, reason } = result.value;
+          opts?.onProgress?.(completed, chunks.length, score, reason);
           if (score >= threshold) {
             warnings.push({
               file: chunk.file,
@@ -189,6 +192,9 @@ export async function scanSemantic(
               raw: truncateRaw(chunk.content),
             });
           }
+        } else {
+          // Invoke failed — advance progress with score 0
+          opts?.onProgress?.(completed, chunks.length, 0, "");
         }
         // If invoke fails, treat as score 0 — skip (fail open)
       },

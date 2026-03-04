@@ -63,8 +63,12 @@ export type InstallOptions = {
   ) => Promise<boolean>;
   /** Called after static scan finds warnings — "Run semantic scan?" prompt. */
   onOfferSemantic?: () => Promise<boolean>;
-  /** Called with progress during semantic scan. */
-  onSemanticProgress?: (completed: number, total: number) => void;
+  /** Called when static scan begins for a skill. */
+  onStaticScanStart?: (skillName: string) => void;
+  /** Called when semantic scan begins for a skill. */
+  onSemanticScanStart?: (skillName: string) => void;
+  /** Called after each chunk is evaluated during semantic scan. */
+  onSemanticProgress?: (completed: number, total: number, score: number, reason: string) => void;
   /** Called after all scans pass cleanly, before placement. Return false to cancel. */
   onConfirmInstall?: (skillNames: string[]) => Promise<boolean>;
   /** Called when a skill is already installed. Return "update" to update it instead, or "abort" to cancel. */
@@ -159,9 +163,11 @@ async function resolveTapName(
 async function runSecurityScan(
   selected: ScannedSkill[],
   onWarnings?: InstallOptions["onWarnings"],
+  onStaticScanStart?: InstallOptions["onStaticScanStart"],
 ): Promise<Result<StaticWarning[], ScanError | UserError>> {
   const allWarnings: StaticWarning[] = [];
   for (const skill of selected) {
+    onStaticScanStart?.(skill.name);
     const scanResult = await scanStatic(skill.path);
     if (!scanResult.ok) return scanResult;
     if (scanResult.value.length > 0) {
@@ -501,7 +507,7 @@ export async function installSkill(
 
     // 6.5. Security scan (unless skipped)
     if (!options.skipScan) {
-      const scanResult = await runSecurityScan(selected, options.onWarnings);
+      const scanResult = await runSecurityScan(selected, options.onWarnings, options.onStaticScanStart);
       if (!scanResult.ok) return scanResult;
       allWarnings.push(...scanResult.value);
     }
@@ -515,6 +521,7 @@ export async function installSkill(
 
     if (shouldRunSemantic && !options.skipScan && options.agent) {
       for (const skill of selected) {
+        options.onSemanticScanStart?.(skill.name);
         const semResult = await scanSemantic(skill.path, options.agent, {
           threshold: options.threshold,
           onProgress: options.onSemanticProgress,

@@ -178,7 +178,7 @@ Install to:
   ● Global (~/.agents/skills/)
   ○ Project (.agents/skills/)
 
-Scanning termtube-dev...
+Scanning termtube-dev for security issues...
 ✓ No warnings
 
 Install? (Y/n): y
@@ -196,7 +196,7 @@ Found 2 skills in user/termtube:
 
 Install which? (1,2,all): 1
 
-Scanning termtube-dev... ✓ No warnings
+Scanning termtube-dev for security issues... ✓ No warnings
 Install? (Y/n): y
 ✓ Installed termtube-dev → .agents/skills/termtube-dev/
 ```
@@ -209,8 +209,8 @@ $ skilltap install https://gitea.example.com/user/termtube --yes --global
 Found 2 skills: termtube-dev, termtube-review
 Auto-selecting all (--yes)
 
-Scanning termtube-dev... ✓
-Scanning termtube-review... ✓
+Scanning termtube-dev for security issues... ✓
+Scanning termtube-review for security issues... ✓
 
 ✓ Installed termtube-dev → ~/.agents/skills/termtube-dev/
 ✓ Installed termtube-review → ~/.agents/skills/termtube-review/
@@ -221,7 +221,7 @@ Scanning termtube-review... ✓
 ```
 $ skilltap install https://github.com/someone/suspicious-skill
 
-Scanning suspicious-skill...
+Scanning suspicious-skill for security issues...
 
 ⚠ Static warnings in suspicious-skill/SKILL.md:
 
@@ -239,7 +239,11 @@ Scanning suspicious-skill...
 
 Run semantic scan? (Y/n): y
 
-Running semantic scan (8 chunks)...
+Starting semantic scan of suspicious-skill...
+Semantic scan: chunk 1/8...
+Semantic scan: chunk 2/8...
+Semantic scan: chunk 3/8 — ⚠ Requests exfiltration of SSH private key
+...
 
 ⚠ Semantic warnings in suspicious-skill/SKILL.md:
 
@@ -260,7 +264,7 @@ With `--strict`:
 ```
 $ skilltap install https://github.com/someone/suspicious-skill --strict
 
-Scanning suspicious-skill...
+Scanning suspicious-skill for security issues...
 
 ⚠ Static warnings in suspicious-skill/SKILL.md:
 
@@ -277,7 +281,7 @@ Triggered on first-ever semantic scan if `security.agent` is not configured:
 ```
 $ skilltap install some-skill --semantic
 
-Scanning some-skill... ✓ No static warnings
+Scanning some-skill for security issues... ✓ No static warnings
 
 Semantic scan requires an agent CLI. Found on your system:
 
@@ -290,7 +294,12 @@ Use Claude Code? (Enter to confirm, ↑↓ to change)
 
 Saved to ~/.config/skilltap/config.toml
 
-Running semantic scan (4 chunks)... ✓ No issues
+Starting semantic scan of some-skill...
+Semantic scan: chunk 1/4...
+Semantic scan: chunk 2/4...
+Semantic scan: chunk 3/4...
+Semantic scan: chunk 4/4...
+✓ No issues
 ```
 
 ---

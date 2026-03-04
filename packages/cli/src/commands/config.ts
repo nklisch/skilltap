@@ -32,6 +32,8 @@ export default defineCommand({
     set: () => import("./config/set").then((m) => m.default),
   },
   async run({ args }) {
+    if ((args._ as string[])?.length > 0) return;
+
     if (!process.stdin.isTTY) {
       errorLine("'skilltap config' must be run interactively.");
       process.exit(1);
