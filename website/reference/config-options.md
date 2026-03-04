@@ -160,12 +160,13 @@ User action required: review warnings and install manually with
 
 ## `[updates]`
 
-Controls how skilltap checks for and applies CLI updates.
+Controls how skilltap checks for and applies CLI updates, and how often it checks installed skills for updates in the background.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `auto_update` | `"off"` \| `"patch"` \| `"minor"` | `"off"` | Automatically install updates on startup. `"patch"` applies patch releases silently; `"minor"` applies patch and minor releases. Major releases are always notify-only regardless of this setting. Only applies to compiled binaries. |
-| `interval_hours` | integer | `24` | How often (in hours) to check GitHub for a new release. The check is non-blocking — it fires in the background and updates a local cache for the next run. Set to `0` to check on every invocation. |
+| `interval_hours` | integer | `24` | How often (in hours) to check GitHub for a new skilltap release. The check is non-blocking — it fires in the background and updates a local cache for the next run. Set to `0` to check on every invocation. |
+| `skill_check_interval_hours` | integer | `24` | How often (in hours) to check installed skills for updates in the background. When updates are available, a dim notice is printed to stderr. Use `skilltap update --check` to force an immediate check. |
 
 ### Example
 
@@ -173,8 +174,10 @@ Controls how skilltap checks for and applies CLI updates.
 [updates]
 # Automatically apply patch releases on startup
 auto_update = "patch"
-# Check every 12 hours instead of the default 24
+# Check for a new release every 12 hours
 interval_hours = 12
+# Check installed skills for updates every 6 hours
+skill_check_interval_hours = 6
 ```
 
 When `auto_update` triggers, you'll see on stderr:

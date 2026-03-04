@@ -19,6 +19,7 @@ export const UpdatesConfigSchema = z.object({
   // "off" = notify only, "patch" = auto-update patch releases, "minor" = auto-update patch+minor
   auto_update: z.enum(["off", "patch", "minor"]).default("off"),
   interval_hours: z.number().int().default(24),
+  skill_check_interval_hours: z.number().int().default(24),
 });
 
 export const TelemetryConfigSchema = z.object({

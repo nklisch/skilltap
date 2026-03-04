@@ -185,6 +185,7 @@ Update installed skills.
 |------|------|---------|-------------|
 | `--yes` | boolean | false | Auto-accept updates (security warnings still shown) |
 | `--strict` | boolean | (from config) | Abort update if any security warnings are found in the diff. |
+| `--check` / `-c` | boolean | false | Check for updates without applying them. Runs a fresh remote check, writes the result to the skill update cache, and prints which skills have updates. |
 
 **Behavior (per skill):**
 
@@ -1503,12 +1504,37 @@ Runs on every invocation except for the args in `SKIP_STARTUP_ARGS` (`--version`
    - Otherwise: print update notice to stderr (severity-colored; major = yellow bold, minor = bold, patch = dim)
 4. Major releases are never auto-installed regardless of `auto_update`
 
+### Startup Skill Update Check
+
+Runs immediately after the self-update check on every invocation (same `SKIP_STARTUP_ARGS` exclusions and agent mode suppression).
+
+**Algorithm:**
+
+1. Read `~/.config/skilltap/skills-update-check.json` (cache of last known skill update status)
+2. If cache is stale (`now - checkedAt > skill_check_interval_hours * 3600000`) OR `projectRoot` has changed: fire-and-forget refresh in the background
+3. If cache has entries in `updatesAvailable`: print a dim notice to stderr:
+   - ≤3 skills: `↑  2 skill updates available (skill-a, skill-b). Run: skilltap update`
+   - >3 skills: `↑  5 skill updates available. Run: skilltap update`
+4. Notice is suppressed in agent mode
+
+**Cache refresh algorithm (`fetchSkillUpdateStatus`):**
+
+1. Load all installed skills (global + project if `projectRoot` detected)
+2. Skip linked skills
+3. Group git skills by cache dir (same `repo` URL = one `git fetch`)
+4. For each group: fetch, compare `HEAD` vs `FETCH_HEAD` — add to results if SHAs differ
+5. For npm skills: fetch metadata, compare installed `sha` to latest version
+6. Write results to `~/.config/skilltap/skills-update-check.json` with timestamp and `projectRoot`
+
+**`--check` flag on `skilltap update`:** triggers `fetchSkillUpdateStatus` synchronously (bypasses cache), writes fresh cache on completion, prints results without applying any updates.
+
 ### `[updates]` Config Keys
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
 | `auto_update` | `"off"` \| `"patch"` \| `"minor"` | `"off"` | Automatically apply updates on startup. `"patch"` auto-installs patch releases; `"minor"` auto-installs patch and minor releases. Major releases are always notify-only. |
 | `interval_hours` | integer | `24` | How often (in hours) to check GitHub for a new release. Set to `0` to check on every run. |
+| `skill_check_interval_hours` | integer | `24` | How often (in hours) to check installed skills for updates in the background. Set to `0` to check on every run. |
 
 ### Exit Codes
 
@@ -1600,6 +1626,8 @@ scope = "project"
 auto_update = "off"
 # How often to check GitHub for a new release (hours). 0 = every run.
 interval_hours = 24
+# How often to check installed skills for updates in the background (hours). 0 = every run.
+skill_check_interval_hours = 24
 
 # Tap definitions (repeatable section)
 # [[taps]]

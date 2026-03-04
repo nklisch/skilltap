@@ -41,7 +41,7 @@ _skilltap() {
       ;;
     update)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--yes --strict --no-strict --semantic --skip-scan" -- "$cur"))
+        COMPREPLY=($(compgen -W "--yes --strict --no-strict --semantic --skip-scan --check" -- "$cur"))
       else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)

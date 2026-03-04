@@ -51,6 +51,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from update' -l strict -d 'Abort
 complete -c skilltap -n '__fish_seen_subcommand_from update' -l no-strict -d 'Override strict config'
 complete -c skilltap -n '__fish_seen_subcommand_from update' -l semantic -d 'Force semantic scan'
 complete -c skilltap -n '__fish_seen_subcommand_from update' -l skip-scan -d 'Skip security scan'
+complete -c skilltap -n '__fish_seen_subcommand_from update' -s c -l check -d 'Check for updates without applying'
 complete -c skilltap -n '__fish_seen_subcommand_from update' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 
 # find flags

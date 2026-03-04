@@ -248,6 +248,7 @@ skilltap update [name] [flags]
 | `--strict` | boolean | from config | Skip skills with security warnings in the diff (does not abort; continues to next skill). |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan on diff content |
 | `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
+| `--check` / `-c` | boolean | `false` | Check for updates without applying them. Fetches all remotes, shows which skills have updates, then exits. Refreshes the background update cache. |
 
 ### Behavior
 
@@ -279,6 +280,9 @@ skilltap update commit-helper
 
 # CI: fail on any new warnings
 skilltap update --strict
+
+# Check what's available without updating
+skilltap update --check
 ```
 
 ---
@@ -1221,6 +1225,14 @@ skilltap checks for updates in the background on every command (except `self-upd
 | patch | `↑  skilltap 0.3.1 → 0.3.2 available. Run: skilltap self-update` (dim) |
 | minor | `↑  Update available: v0.3.1 → v0.4.0 (minor) Run: skilltap self-update` (bold) |
 | major | `⚠  Major update available: v0.3.1 → v1.0.0  Breaking changes may apply.` (yellow) |
+
+skilltap also checks installed skills for updates in the background (configurable via `updates.skill_check_interval_hours`, default 24h). When installed skills have updates, a dim notice appears:
+
+```
+↑  2 skill updates available (commit-helper, code-review). Run: skilltap update
+```
+
+Run `skilltap update --check` at any time to force an immediate skill check and refresh the cache.
 
 Configure automatic updates via the `[updates]` config section — see [Configuration Options](/reference/config-options#updates).
 

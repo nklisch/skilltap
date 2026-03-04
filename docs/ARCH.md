@@ -213,6 +213,8 @@ core → test-utils (dev)
 
 **install.ts** — Orchestrates the install flow. Coordinates git, scanner, security, config, and symlink modules. **remove.ts**, **update.ts**, and **link.ts** handle their respective flows.
 
+**skill-check.ts** — Background skill update check. `checkForSkillUpdates(intervalHours, projectRoot)` reads the cache and fires a background refresh if stale. `fetchSkillUpdateStatus(projectRoot)` does the actual network check: groups git skills by cache dir (one `git fetch` per unique repo), compares `HEAD` vs `FETCH_HEAD`; fetches npm metadata for npm skills and compares versions. `writeSkillUpdateCache(updates, projectRoot)` persists results to `~/.config/skilltap/skills-update-check.json`.
+
 **taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps. Supports both git-cloned taps and HTTP registry taps (fetched live).
 
 **symlink.ts** — Creates and removes symlinks for agent-specific directories. Knows the path conventions for each supported agent.

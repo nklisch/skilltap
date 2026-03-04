@@ -27,5 +27,6 @@ export * from "./trust";
 export * from "./policy";
 export * from "./validate";
 export * from "./self-update";
+export * from "./skill-check";
 export * from "./shell";
 export * from "./types";

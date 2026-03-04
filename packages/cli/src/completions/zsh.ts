@@ -68,6 +68,7 @@ _skilltap() {
             '--no-strict[Override strict config]' \\
             '--semantic[Force semantic scan]' \\
             '--skip-scan[Skip security scan]' \\
+            '(-c --check)'{-c,--check}'[Check for updates without applying]' \\
             "1:skill:($skills)"
           ;;
         find)

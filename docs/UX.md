@@ -406,6 +406,7 @@ skilltap update [name] [flags]
 --yes              Auto-accept clean updates (warnings still prompt)
 --strict           Skip skills with security warnings in diff
 --semantic         Force Layer 2 semantic scan on diff
+--check / -c       Check for updates without applying. Refreshes the cache.
 ```
 
 ### Examples
@@ -1563,6 +1564,13 @@ Major releases are never auto-updated regardless of `auto_update` setting.
 ⟳  Auto-updating skilltap 0.3.1 → 0.3.2 (patch)…
 ✓  Updated to v0.3.2. Changes take effect next run.
 ```
+
+**Startup skill update check** — immediately after the self-update check, skilltap checks installed skills for updates using a separate cache (`skills-update-check.json`, default 24h interval configured via `updates.skill_check_interval_hours`). If the cache is stale or the project root changed, a background refresh fires. If updates are cached:
+
+- ≤3 names shown: `↑  2 skill updates available (skill-a, skill-b). Run: skilltap update` (dim)
+- >3 skills: `↑  5 skill updates available. Run: skilltap update` (dim)
+
+Run `skilltap update --check` to force an immediate check and refresh the cache without applying any updates.
 
 **Startup skipped for:** `--version`, `--help`, `self-update`, `telemetry`, `status`, and agent mode.
 

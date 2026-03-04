@@ -30,6 +30,7 @@ const shouldRunStartup = !process.argv.slice(2).some((a) =>
 
 if (shouldRunStartup) {
   await runStartupUpdateCheck();
+  await runStartupSkillUpdateCheck();
   const shouldRunTelemetryNotice = !process.argv.slice(2).some((a) =>
     SKIP_TELEMETRY_NOTICE_ARGS.has(a),
   );
@@ -134,6 +135,38 @@ async function runStartupUpdateCheck(): Promise<void> {
   }
 
   printUpdateNotice(current, latest, type);
+}
+
+async function runStartupSkillUpdateCheck(): Promise<void> {
+  const { checkForSkillUpdates, findProjectRoot, loadConfig } =
+    await import("@skilltap/core");
+
+  const configResult = await loadConfig();
+  const config = configResult.ok ? configResult.value : null;
+
+  if (config?.["agent-mode"]?.enabled) return;
+
+  const intervalHours = config?.updates?.skill_check_interval_hours ?? 24;
+  const projectRoot = await findProjectRoot().catch(() => null);
+
+  const updates = await checkForSkillUpdates(intervalHours, projectRoot);
+  if (!updates || updates.length === 0) return;
+
+  printSkillUpdateNotice(updates);
+}
+
+function printSkillUpdateNotice(names: string[]): void {
+  const DIM = "\x1b[2m";
+  const RESET = "\x1b[0m";
+
+  const nameList =
+    names.length <= 3
+      ? ` (${names.join(", ")})`
+      : "";
+  const count = names.length === 1 ? "1 skill update" : `${names.length} skill updates`;
+  process.stderr.write(
+    `${DIM}↑  ${count} available${nameList}. Run: skilltap update${RESET}\n\n`,
+  );
 }
 
 function printUpdateNotice(

@@ -3,10 +3,12 @@ import {
   type AgentAdapter,
   type Config,
   type EffectivePolicy,
+  fetchSkillUpdateStatus,
   findProjectRoot,
   type SemanticWarning,
   type StaticWarning,
   updateSkill,
+  writeSkillUpdateCache,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
@@ -62,9 +64,20 @@ export default defineCommand({
       description: "Output result as JSON",
       default: false,
     },
+    check: {
+      type: "boolean",
+      alias: "c",
+      description: "Check for updates without applying them. Refreshes the update cache.",
+      default: false,
+    },
   },
   async run({ args }) {
     const name = args.name as string | undefined;
+    const projectRoot = await findProjectRoot().catch(() => undefined);
+
+    if (args.check) {
+      return runCheckMode(projectRoot, args.json);
+    }
 
     const { config, policy } = await loadPolicyOrExit({
       strict: args.strict,
@@ -72,14 +85,46 @@ export default defineCommand({
       semantic: args.semantic,
     });
 
-    const projectRoot = await findProjectRoot().catch(() => undefined);
-
     if (policy.agentMode) {
       return runAgentModeUpdate(name, config, policy, projectRoot, args.json);
     }
     return runInteractiveUpdate(name, args, config, policy, projectRoot);
   },
 });
+
+// ─── Check Mode ───────────────────────────────────────────────────────────────
+
+async function runCheckMode(
+  projectRoot: string | undefined,
+  json = false,
+): Promise<void> {
+  const pr = projectRoot ?? null;
+
+  if (json || !process.stdout.isTTY) {
+    const updates = await fetchSkillUpdateStatus(pr);
+    await writeSkillUpdateCache(updates, pr);
+    process.stdout.write(`${JSON.stringify({ updatesAvailable: updates }, null, 2)}\n`);
+    return;
+  }
+
+  const { spinner } = await import("@clack/prompts");
+  const s = spinner();
+  s.start("Checking skills for updates…");
+  const updates = await fetchSkillUpdateStatus(pr);
+  await writeSkillUpdateCache(updates, pr);
+  s.stop(
+    updates.length === 0
+      ? "All skills are up to date."
+      : `${updates.length} skill update${updates.length === 1 ? "" : "s"} available.`,
+  );
+
+  if (updates.length > 0) {
+    for (const name of updates) {
+      log.step(`${ansi.bold(name)} — update available`);
+    }
+    process.stdout.write(`\nRun ${ansi.bold("skilltap update")} to apply.\n`);
+  }
+}
 
 // ─── Agent Mode ───────────────────────────────────────────────────────────────
 
