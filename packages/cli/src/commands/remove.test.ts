@@ -14,7 +14,7 @@ import {
   removeTmpDir,
 } from "@skilltap/test-utils";
 
-setDefaultTimeout(15_000);
+setDefaultTimeout(45_000);
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 

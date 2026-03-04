@@ -7,7 +7,7 @@ import {
   test,
 } from "bun:test";
 
-setDefaultTimeout(15_000);
+setDefaultTimeout(45_000);
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {

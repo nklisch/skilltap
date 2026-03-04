@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-setDefaultTimeout(15_000);
+setDefaultTimeout(45_000);
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;

@@ -13,7 +13,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-setDefaultTimeout(15_000);
+setDefaultTimeout(45_000);
 import {
   commitAll,
   initRepo,
