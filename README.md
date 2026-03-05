@@ -12,10 +12,10 @@ The [SKILL.md format](https://agentskills.io/specification) is supported by 40+ 
 
 skilltap fills that gap:
 
+- **Host your own tap.** A tap is just a git repo with a JSON index — like a Homebrew formula tap. Stand one up in minutes for your team, your friends, or yourself. No registry account, no upload portal.
 - **Any git host.** Install from GitHub, GitLab, Gitea, Bitbucket, or a private server. Your SSH keys and credential helpers just work.
 - **Agent-agnostic.** One install lands in `~/.agents/skills/`. Opt in to symlinking to Claude Code, Cursor, Codex, Gemini, or Windsurf with `--also`.
-- **Taps for discovery.** Add curated skill indexes (taps) from any git repo. Search across all of them with `skilltap find`.
-- **Teams & orgs.** Maintain a company tap on your private git host. One command onboards every developer; `skilltap update` keeps everyone in sync.
+- **Source-tracked updates.** skilltap remembers where every skill came from. `skilltap update` fetches upstream changes, shows a diff, re-scans changed lines, and asks before applying.
 - **Security scanning.** Every install runs a static scan (invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, tag injection) before anything lands on disk.
 - **Standalone binary.** One file, no runtime dependencies.
 
@@ -69,10 +69,14 @@ skilltap update
 
 ## Taps
 
-A **tap** is a git repo (or HTTP endpoint) containing a `tap.json` index of skills. Taps make discovery and curation easy.
+A **tap** is a git repo (or HTTP endpoint) containing a `tap.json` index of skills. Taps make discovery and curation easy — and anyone can create one.
 
 ```bash
-# Add a community or team tap
+# Create your own tap (a git repo + tap.json index)
+skilltap tap init my-skills
+# push to any git host, then share the URL
+
+# Subscribe to any tap
 skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 
 # Search across all your taps
@@ -87,22 +91,24 @@ skilltap tap update
 
 The built-in `skilltap-skills` tap is always available — no setup required.
 
-## Teams & Organizations
+## Host Your Own Tap
 
-Your team maintains one tap repo on your private git host. Every developer adds it once:
+Whether you're managing skills for a company, a group of friends, or just yourself, a tap is all you need. It's a git repo — host it anywhere you already have git.
 
 ```bash
+# Create the tap once (engineering lead, project owner, whoever)
+skilltap tap init acme-skills
+# add skills to tap.json, push to your git host
+
+# Everyone else adds it once
 skilltap tap add acme https://gitea.acme.com/eng/acme-skills
-```
 
-After that, they install and update by name — no URLs to copy-paste:
-
-```bash
+# Install and update by name from then on — no URLs to copy-paste
 skilltap install code-reviewer --global --also claude-code
 skilltap update --all
 ```
 
-Your existing SSH keys and credential helpers handle authentication automatically. See [Teams & Organizations](https://skilltap.dev/guide/teams) for the full onboarding pattern, config snippet, and org security controls.
+When you update a skill in the tap, every subscriber sees the diff and confirms before it applies. Your existing SSH keys and credential helpers handle authentication. See [Host Your Own Tap](https://skilltap.dev/guide/teams) for the full setup guide and config options.
 
 ## Commands
 

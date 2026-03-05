@@ -28,7 +28,7 @@ const features = [
     icon: "🍺",
     title: "Taps",
     description:
-      "Curated skill indexes from any git repo. Add a friend's tap, your company's tap, the community tap. Search across all of them.",
+      "A tap is a git repo with a JSON index — like a Homebrew formula tap. Stand up your own in minutes, share the URL, and anyone can subscribe. Search across all your taps at once.",
   },
   {
     icon: "🛡️",
@@ -40,34 +40,46 @@ const features = [
     icon: "📊",
     title: "Diff-aware updates",
     description:
-      "skilltap update fetches, diffs, re-scans changed lines, then applies. You see what changed before it lands.",
+      "skilltap tracks every installed skill back to its source. Run `skilltap update` to fetch upstream changes, diff what changed, re-scan, and confirm — before anything touches your system.",
+  },
+  {
+    icon: "📋",
+    title: "Manage what's installed",
+    description:
+      "Track every installed skill with `skilltap list`. Update all at once with `skilltap update`. Health-check your setup with `skilltap doctor`. Clean up with `skilltap remove`.",
   },
   {
     icon: "🤖",
     title: "Agent mode",
     description:
-      "Safe headless operation for AI agents. Security issues block with machine-readable stop directives.",
+      "Safe headless operation from inside AI agents. All prompts suppressed, security issues block with machine-readable stop directives, output is plain text.",
+  },
+  {
+    icon: "✏️",
+    title: "Create & share",
+    description:
+      "Scaffold a new skill with `skilltap create`, link it locally for testing, validate with `skilltap verify`, then push to git. Others install with one command.",
   },
 ];
 
 const teamFeatures = [
   {
-    icon: "📚",
-    title: "Central skill catalog",
+    icon: "📦",
+    title: "A tap is just a git repo",
     description:
-      "Maintain one tap repo on any git host. Every developer runs `skilltap tap add` once, then installs and updates by name — no URL wrangling, no copy-paste.",
+      "Create a tap.json index, push to any git host, and share the URL. Anyone can add it with one command. No account approval, no upload portal — just git.",
   },
   {
-    icon: "🔀",
-    title: "Every agent, zero friction",
+    icon: "🔔",
+    title: "Updates flow from the source",
     description:
-      "Claude Code, Cursor, Codex, Gemini, Windsurf — everyone installs from the same tap. One source serves every agent your team uses, with no per-agent setup.",
+      "When you update a skill in your tap, every subscriber gets the diff on their next `skilltap update`. They see what changed, re-scan, and confirm before applying.",
   },
   {
     icon: "🎛️",
-    title: "Your catalog, your rules",
+    title: "Lock down or open up",
     description:
-      "Disable public registries with one config line, or run your own custom registry. Developers search only the sources you've registered — your company tap, your registry, nothing else.",
+      "Pin to your tap only by disabling public registries with one config line — useful for orgs who want a curated-only catalog. Or leave it open so anyone can pull from anywhere. It's just config.",
   },
 ];
 </script>
@@ -97,7 +109,7 @@ const teamFeatures = [
           </h1>
           <p class="hero-tagline">Agent skills, on tap.</p>
           <p class="hero-subtitle">
-            Install SKILL.md files from any git host. Works with every agent — solo or across your whole team.
+            Homebrew for AI agent skills. Host your own skill tap, install from any git source, and stay in sync as skills update — for yourself, your team, or your friends.
           </p>
           <div class="hero-actions">
             <a href="/guide/getting-started" class="btn btn-primary">Get Started</a>
@@ -113,6 +125,41 @@ const teamFeatures = [
         </div>
         <div class="hero-demo">
           <TerminalDemo />
+        </div>
+      </div>
+    </section>
+
+    <!-- Differentiators -->
+    <section class="pillars-section">
+      <div class="section-inner">
+        <div class="pillars-grid">
+          <div class="pillar">
+            <div class="pillar-num">01</div>
+            <h3 class="pillar-title">Host your own tap</h3>
+            <p class="pillar-desc">
+              A git repo is all it takes. Create a tap for your team, your friends, or just yourself.
+              No registry account, no vendor lock-in — just a JSON index on any git host you already use.
+            </p>
+            <code class="pillar-cmd">skilltap tap init my-skills</code>
+          </div>
+          <div class="pillar">
+            <div class="pillar-num">02</div>
+            <h3 class="pillar-title">Install from anywhere</h3>
+            <p class="pillar-desc">
+              GitHub, GitLab, Gitea, Forgejo, your own server. Your existing SSH keys and credential
+              helpers just work — no new accounts, no tokens to manage.
+            </p>
+            <code class="pillar-cmd">skilltap install user/skill-name</code>
+          </div>
+          <div class="pillar">
+            <div class="pillar-num">03</div>
+            <h3 class="pillar-title">Stay in sync</h3>
+            <p class="pillar-desc">
+              skilltap tracks every skill back to its source. Fetch, diff, re-scan changed lines, then
+              apply — you see exactly what changed before it touches your system.
+            </p>
+            <code class="pillar-cmd">skilltap update --all</code>
+          </div>
         </div>
       </div>
     </section>
@@ -143,9 +190,10 @@ const teamFeatures = [
     <!-- For teams -->
     <section class="teams-section">
       <div class="section-inner">
-        <h2 class="section-title">Built for teams</h2>
+        <h2 class="section-title">Your tap. Your rules.</h2>
         <p class="section-subtitle">
-          One tap repo. Every developer. Every agent. Share and standardize skills across your organization.
+          A tap is just a git repo with a JSON index. Stand one up in minutes — for a group of friends,
+          your whole engineering org, or anything in between. No hosted service required.
         </p>
         <div class="features-grid">
           <FeatureCard
@@ -157,7 +205,7 @@ const teamFeatures = [
           />
         </div>
         <div class="teams-cta">
-          <a href="/guide/teams" class="teams-link">Learn how to set up a team tap →</a>
+          <a href="/guide/teams" class="teams-link">Learn how to create and share a tap →</a>
         </div>
       </div>
     </section>
@@ -188,7 +236,7 @@ const teamFeatures = [
               class="demo-tab"
               :class="{ active: demoTab === 'team' }"
               @click="demoTab = 'team'"
-            >Team</button>
+            >Share a tap</button>
           </div>
           <div class="code-window">
             <div class="code-bar">
@@ -208,15 +256,22 @@ const teamFeatures = [
 <span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
-<span class="c-comment"># That's it. Your agent can use it now.</span></code></pre>
-            <pre v-else class="code-body"><code><span class="c-comment"># Engineering lead: create and share a company tap</span>
-<span class="c-prompt">$</span> skilltap tap init acme-skills
-<span class="c-prompt">$</span> <span class="c-dim"># add skills to tap.json, push to your git host</span>
+<span class="c-comment"># See everything installed on your system</span>
+<span class="c-prompt">$</span> skilltap list
+<span class="c-dim">  code-reviewer  main  git  Review code for bugs and style</span>
+<span class="c-dim">  commit-helper  main  git  Write conventional commits</span>
 
-<span class="c-comment"># Every developer: add the tap once during onboarding</span>
+<span class="c-comment"># Pull updates from the source and review what changed</span>
+<span class="c-prompt">$</span> skilltap update --all
+<span class="c-success">◆  Updated code-reviewer  (2 files changed)</span></code></pre>
+            <pre v-else class="code-body"><code><span class="c-comment"># Anyone can create a tap — friend group, team, org</span>
+<span class="c-prompt">$</span> skilltap tap init my-skills
+<span class="c-dim"># add skills to tap.json, push to any git host</span>
+
+<span class="c-comment"># Subscribers add it once</span>
 <span class="c-prompt">$</span> skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 
-<span class="c-comment"># Search and install from the company catalog</span>
+<span class="c-comment"># Search and install from the catalog by name</span>
 <span class="c-prompt">$</span> skilltap find
 <span class="c-dim">  acme/code-reviewer    Review code for bugs and style</span>
 <span class="c-dim">  acme/pr-helper        Draft PR descriptions</span>
@@ -224,7 +279,7 @@ const teamFeatures = [
 <span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
-<span class="c-comment"># When skills are updated centrally, everyone pulls</span>
+<span class="c-comment"># When skills update at the source, everyone pulls + reviews the diff</span>
 <span class="c-prompt">$</span> skilltap update --all
 <span class="c-success">◆  Updated code-reviewer  (2 files changed)</span></code></pre>
           </div>
@@ -453,6 +508,69 @@ const teamFeatures = [
   margin: 0 0 40px;
 }
 
+/* Pillars */
+.pillars-section {
+  padding: 60px 24px 40px;
+  background: rgba(245, 158, 11, 0.02);
+  border-top: 1px solid #1c1917;
+  border-bottom: 1px solid #1c1917;
+}
+
+.pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  background: #1c1917;
+  border: 1px solid #292524;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.pillar {
+  background: #0c0a09;
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pillar-num {
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: #f59e0b;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pillar-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 20px;
+  font-weight: 700;
+  color: #f5f5f4;
+  margin: 0;
+}
+
+.pillar-desc {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #a8a29e;
+  margin: 0;
+  flex: 1;
+}
+
+.pillar-cmd {
+  display: block;
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+  color: #fbbf24;
+  background: #1c1917;
+  border: 1px solid #292524;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 4px;
+}
+
 /* Install */
 .install-section {
   padding: 40px 24px 80px;
@@ -468,7 +586,7 @@ const teamFeatures = [
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
   margin-top: 40px;
 }
@@ -700,7 +818,15 @@ const teamFeatures = [
   }
 
   .features-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pillars-grid {
     grid-template-columns: 1fr;
+  }
+
+  .pillar {
+    padding: 28px 24px;
   }
 
   .section-title {
@@ -713,6 +839,12 @@ const teamFeatures = [
 
   .nav-links {
     gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .features-grid {
+    grid-template-columns: 1fr;
   }
 }
 

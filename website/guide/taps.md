@@ -1,18 +1,21 @@
 ---
-description: Taps are curated skill registries — git repos or HTTP endpoints listing skills. Add, list, update, and search taps to discover skills across the ecosystem.
+description: Taps are curated skill registries — git repos or HTTP endpoints listing skills. Create your own, add a friend's, or subscribe to a community tap. Add, list, update, and search across all of them.
 ---
 
 # Taps
 
 A **tap** is either a git repository with a `tap.json` file or an HTTP registry endpoint that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
 
+Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
+
 ## Why taps?
 
-Taps solve discovery and curation:
+Taps solve discovery, curation, and sharing:
 
-- **Team collections** -- your organization maintains a tap listing approved internal skills
+- **Host your own catalog** -- create a tap for your team, your friends, your open-source project, or just yourself. A git repo is all it takes.
+- **Team and org collections** -- your organization maintains a tap listing approved internal skills; developers install by name, not by URL
 - **Community indexes** -- open-source tap repos that catalog useful skills across the ecosystem
-- **Personal curation** -- your own tap of skills you use and recommend
+- **Personal curation** -- your own tap of skills you use and recommend, shareable with anyone
 
 ## Adding a tap
 

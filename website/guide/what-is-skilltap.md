@@ -19,6 +19,7 @@ The [SKILL.md format](https://agentskills.io/specification) is standardized acro
 - **skills.sh** only indexes GitHub. If your skills live on Gitea, GitLab, or a private instance, they don't exist.
 - **Agent-specific tools** like Claude Code's plugin marketplace only work within one agent. If you use multiple agents, you need multiple tools.
 - **No universal installer** exists. There's no agent-agnostic, git-native way to install a skill from any source and make it available to any agent.
+- **No self-hosted option.** Want to share skills with your team, your open-source project, or a group of friends? There's no standard way to run your own skill catalog without signing up for a centralized service.
 
 skilltap fills that gap.
 
@@ -35,11 +36,15 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 ## Key features
 
+**Host your own tap.** A tap is just a git repo with a `tap.json` index — stand one up in minutes for your team, your open-source project, or a group of friends. Share the URL and anyone can subscribe. No registry account, no upload portal, no vendor lock-in.
+
 **Git-native.** Install from any git host -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. Point skilltap at any repo with a `SKILL.md` -- no special structure or manifest required. skilltap uses `git clone` under the hood, so your existing SSH keys and credential helpers just work.
 
 **Agent-agnostic.** Installs to the universal `.agents/skills/` directory. Opt in to symlinking to agent-specific directories (Claude Code, Cursor, Codex, Gemini, Windsurf) with a single flag.
 
-**Multi-source taps.** Configure multiple skill indexes (taps) -- your own, a friend's, a community collection. Search across all of them with `skilltap find`.
+**Source-tracked updates.** skilltap remembers where every skill came from. `skilltap update` fetches upstream changes, diffs what changed, re-scans the diff, and asks before applying — you see exactly what's landing on your system.
+
+**Multi-source taps.** Configure multiple skill indexes (taps) — your own, a friend's, a community collection. Search across all of them with `skilltap find`.
 
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
@@ -49,7 +54,7 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Not a package manager.** No dependency trees, no build steps, no install scripts. Skills are static files -- skilltap just puts them in the right place.
 
-**Not a marketplace.** No centralized index. Taps are git repos anyone can create and host wherever they want.
+**Not a marketplace.** No centralized index, no gatekeeper. Taps are git repos anyone can create and host wherever they want — for themselves, their team, their friends, or the world.
 
 **Not a runtime.** Skills are Markdown files that agents read. skilltap doesn't execute anything -- it clones, scans, and places files.
 
@@ -85,5 +90,6 @@ skilltap install code-reviewer
 
 - [Getting Started](./getting-started) -- install skilltap and your first skill
 - [Installing Skills](./installing-skills) -- all the ways to install, with flags and options
+- [Taps](./taps) -- host your own tap and share skills with others
 - [Creating Skills](./creating-skills) -- write and publish your own skills
-- [Teams & Organizations](./teams) -- share skills across your whole team with a private tap
+- [Teams & Organizations](./teams) -- share skills across a team, org, or friend group with a private tap

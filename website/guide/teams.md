@@ -1,23 +1,27 @@
 ---
-description: Share and standardize agent skills across your organization with a private tap. Set up a company catalog, onboard developers, and keep skills up to date.
+description: Share and manage agent skills across any group — a company team, an open-source project, or a circle of friends. Set up a tap, share the URL, and everyone stays in sync.
 ---
 
-# Using skilltap with a Team
+# Sharing Skills with a Team or Group
 
-skilltap is designed to work across teams and organizations, not just individuals. A **tap** — a git repository containing a `tap.json` index — is the primitive that makes this work. You maintain one tap, and every developer on your team installs and updates from it.
+A tap is all you need to share skills with others — whether that's a company engineering team, an open-source project, or a group of friends. It's a git repo on any host you already use. You maintain it, others subscribe, and everyone stays in sync with `skilltap update`.
 
-## The team model
+The same pattern scales from two friends to a thousand developers.
+
+## The shared tap model
 
 The pattern is simple:
 
-1. **You maintain** a tap repo on any git host your team already uses (GitHub, GitLab, Gitea, Bitbucket, self-hosted)
-2. **Developers add** your tap once during onboarding
-3. **Everyone installs** skills by name from the catalog
-4. **When skills change**, developers run `skilltap update --all` to pull the latest
+1. **You create** a tap repo on any git host (GitHub, GitLab, Gitea, Bitbucket, self-hosted, wherever)
+2. **Others add** your tap once with a single command
+3. **Everyone installs** skills by name from your catalog — no URLs to copy-paste
+4. **When skills change**, subscribers run `skilltap update --all` to pull the latest and review what changed
 
 No external dependencies, no centralized service, no per-agent configuration.
 
-## Setting up a company tap
+## Setting up a tap
+
+The steps are the same whether you're setting up a company catalog, an open-source project's shared skills, or a tap to share with friends.
 
 ### Create the tap
 
@@ -26,15 +30,17 @@ skilltap tap init acme-skills
 cd acme-skills
 ```
 
-This creates a directory with an empty `tap.json`. It's just a git repo — initialize it and push it to wherever your team hosts code:
+This creates a directory with an empty `tap.json`. It's just a git repo — initialize it and push it to wherever you host code:
 
 ```bash
 git init
 git add .
 git commit -m "Init tap"
-git remote add origin https://gitea.acme.com/eng/acme-skills
+git remote add origin https://github.com/you/acme-skills   # or any git host
 git push -u origin main
 ```
+
+Share the URL with anyone you want to subscribe.
 
 ### Add skills to the catalog
 
@@ -81,15 +87,15 @@ skilltap verify ./skill-code-reviewer
 
 This checks the SKILL.md frontmatter, runs a static security scan, and prints a snippet ready to paste into `tap.json`.
 
-## Onboarding developers
+## Subscribing to a tap
 
-Give every new developer one command to add the company tap:
+Anyone you share the URL with can add your tap with one command:
 
 ```bash
 skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 ```
 
-After that, they can search and install from your catalog by name — no URLs to copy-paste:
+After that, they install and update from your catalog by name — no URLs to copy-paste, no extra setup:
 
 ```bash
 # Search the catalog
@@ -99,7 +105,7 @@ skilltap find
 skilltap install code-reviewer --global --also claude-code
 ```
 
-Put this in your onboarding docs or team runbook alongside your other dev environment setup.
+For a company or project, put this in your onboarding docs or runbook. For a friend group, just share the one-liner in a message.
 
 ## Private git hosts
 
@@ -119,7 +125,7 @@ If your credential helper is already configured for `git clone`, skilltap requir
 
 ## Keeping skills up to date
 
-When the team updates a skill — bug fix, improved prompt, new capability — developers pull the latest with:
+When skills are updated in the tap — bug fix, improved prompt, new capability — subscribers pull the latest with:
 
 ```bash
 skilltap update --all
@@ -133,9 +139,9 @@ For CI/CD or automated environments:
 skilltap update --all --yes
 ```
 
-## Controlling what developers can install
+## Controlling what gets installed
 
-This is where skilltap earns its keep for organizations: you control the sources, not just the skills.
+For teams and organizations, skilltap lets you control the sources, not just the skills.
 
 ### Disable public registries
 
@@ -289,6 +295,8 @@ The skill is installed once to `~/.agents/skills/` (or project-scoped to `.agent
 
 ## Example: full onboarding script
 
+For companies and projects, this makes a clean onboarding script:
+
 ```bash
 #!/bin/bash
 # onboarding.sh — run this when setting up a new dev machine
@@ -307,12 +315,14 @@ skilltap install commit-helper --global --also claude-code
 echo "Skills installed. Run 'skilltap find' to browse the full catalog."
 ```
 
+For a smaller group, the same three commands in a message or README works just as well.
+
 ## Checklist
 
-- [ ] Create a tap repo on your git host
+- [ ] Create a tap repo on your git host (`skilltap tap init`)
 - [ ] Add skills to `tap.json`
-- [ ] Share the `tap add` command and recommended config snippet in your onboarding docs
-- [ ] Document how to run `skilltap update --all` when skills are updated
+- [ ] Share the `tap add` command with whoever should subscribe
+- [ ] Let subscribers know to run `skilltap update --all` when skills are updated
 
 ## Related
 
