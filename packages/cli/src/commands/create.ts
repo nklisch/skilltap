@@ -1,4 +1,5 @@
-import { cancel, intro, isCancel, outro, select, text } from "@clack/prompts";
+import { cancel, intro, isCancel, outro } from "@clack/prompts";
+import { footerSelect as select, footerText as text } from "../ui/footer";
 import { basicTemplate, multiTemplate, npmTemplate } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { dirname, join, resolve } from "node:path";

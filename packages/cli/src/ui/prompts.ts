@@ -1,13 +1,12 @@
-import {
-  cancel,
-  confirm,
-  isCancel,
-  multiselect,
-  select,
-  text,
-} from "@clack/prompts";
+import { cancel, isCancel } from "@clack/prompts";
 import type { AgentAdapter, InstalledSkill, ScannedSkill, TapEntry } from "@skilltap/core";
 import { detectAgents, VALID_AGENT_IDS } from "@skilltap/core";
+import {
+  footerConfirm as confirm,
+  footerMultiselect as multiselect,
+  footerSelect as select,
+  footerText as text,
+} from "./footer";
 
 export async function selectSkills(
   skills: ScannedSkill[],
@@ -169,7 +168,7 @@ export async function selectAgents(
   currentSelection: string[],
 ): Promise<string[] | symbol> {
   const result = await multiselect({
-    message: "Which agents should this skill be available to? (space to toggle, enter to confirm)",
+    message: "Which agents should this skill be available to?",
     options: VALID_AGENT_IDS.map((id) => ({
       value: id,
       label: AGENT_LABELS[id] ?? id,

@@ -1,4 +1,5 @@
-import { confirm, isCancel } from "@clack/prompts";
+import { isCancel } from "@clack/prompts";
+import { footerConfirm as confirm } from "./footer";
 import type {
   AgentAdapter,
   InstallOptions,

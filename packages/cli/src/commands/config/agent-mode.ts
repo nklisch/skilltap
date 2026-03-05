@@ -1,13 +1,8 @@
+import { cancel, group, intro, isCancel, note, outro } from "@clack/prompts";
 import {
-  cancel,
-  group,
-  intro,
-  isCancel,
-  multiselect,
-  note,
-  outro,
-  select,
-} from "@clack/prompts";
+  footerMultiselect as multiselect,
+  footerSelect as select,
+} from "../../ui/footer";
 import { loadConfig, saveConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine } from "../../ui/format";

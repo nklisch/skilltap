@@ -18,6 +18,7 @@ import { Fzf, byLengthAsc } from "fzf";
 import type { FzfResultItem } from "fzf";
 import pc from "picocolors";
 import type { Key } from "node:readline";
+import { footer } from "./footer";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -147,10 +148,18 @@ class SearchPromptImpl<T> extends Prompt<T> {
       }
     });
 
-    this.on("finalize", () => this.cleanup());
+    this.on("finalize", () => {
+      this.cleanup();
+      const f = footer();
+      if (f.isActive) f.setContext("idle");
+    });
   }
 
   override prompt(): Promise<symbol | T | undefined> {
+    const f = footer();
+    if (f.isActive) {
+      f.setContext(this.opts.multiselect ? "search-multiselect" : "search");
+    }
     const result = super.prompt();
     // Always trigger an initial fetch. When initialQuery is set, the base
     // class fires userInput which may have already called scheduleFetch, but
@@ -434,31 +443,15 @@ class SearchPromptImpl<T> extends Prompt<T> {
         } else if (this.isLoading && this.fzfResults.length === 0) {
           lines.push(`${cBar}  ${pc.dim("Searching…")}`);
         } else if (this.fzfResults.length > 0) {
-          // Help + footer lines (for rowPadding calculation)
-          const selectedCount = this._selectedMap.size;
-          const helpParts = this.opts.multiselect
-            ? [
-                `${pc.dim("↑/↓")} navigate`,
-                `${pc.dim("Space:")} select`,
-                `${pc.dim("Enter:")} install${selectedCount > 0 ? ` (${selectedCount} selected)` : ""}`,
-                `${pc.dim("Type:")} search`,
-              ]
-            : [
-                `${pc.dim("↑/↓")} to select`,
-                `${pc.dim("Enter:")} install`,
-                `${pc.dim("Type:")} to search`,
-              ];
-          const footerLines = [
-            `${cBar}  ${helpParts.join(" \u2022 ")}`,
-            cBarEnd,
-          ];
+          // rowPadding: title lines + closing bar line
+          const footerLineCount = 1; // cBarEnd
 
           const optionLines = limitOptions({
             cursor: this.optionsCursor,
             options: this.fzfResults,
             maxItems: this.opts.maxItems,
             columnPadding: 3, // bar + 2 spaces
-            rowPadding: lines.length + footerLines.length,
+            rowPadding: lines.length + footerLineCount,
             style: (fzfResult: FzfResultItem<T>, active: boolean) =>
               this.opts.renderItem(
                 fzfResult.item,
@@ -474,7 +467,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
             lines.push(`${cBar}  ${line}`);
           }
 
-          lines.push(...footerLines);
+          lines.push(cBarEnd);
           return lines.join("\n");
         }
 

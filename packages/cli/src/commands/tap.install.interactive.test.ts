@@ -127,7 +127,7 @@ describe("tap install — interactive multiselect", () => {
   );
 
   test(
-    "shows Space/Enter help text for multiselect",
+    "shows footer help text for multiselect",
     async () => {
       const tap = await createLocalTap("home", [
         {
@@ -145,8 +145,8 @@ describe("tap install — interactive multiselect", () => {
         );
 
         await session.waitForText("Select tap skills to install:");
-        await session.waitForText("Space:");
-        await session.waitForText("Enter:");
+        await session.waitForText("Space");
+        await session.waitForText("toggle");
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
@@ -198,7 +198,7 @@ describe("tap install — interactive multiselect", () => {
   );
 
   test(
-    "Space toggles selection and updates count in footer",
+    "Space toggles selection marker",
     async () => {
       const tap = await createLocalTap("home", [
         {
@@ -223,10 +223,10 @@ describe("tap install — interactive multiselect", () => {
         await session.waitForText("Select tap skills to install:");
         await session.waitForText("git-hooks");
 
-        // Toggle the first item
+        // Toggle the first item — selection marker should appear
         session.send(" ");
-        // Footer should update to show 1 selected
-        await session.waitForText("1 selected");
+        // The selected item renders with a filled marker (◆ vs ◇)
+        await session.waitForText("◆");
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
@@ -333,7 +333,7 @@ describe("tap install — interactive multiselect", () => {
 
         // Select item then confirm
         session.send(" ");
-        await session.waitForText("1 selected");
+        await session.waitForText("◆");
         session.sendKey("ENTER");
 
         // Should transition to scope prompt

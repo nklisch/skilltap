@@ -1,4 +1,5 @@
-import { cancel, confirm, isCancel } from "@clack/prompts";
+import { cancel, isCancel } from "@clack/prompts";
+import { footerConfirm as confirm } from "../../ui/footer";
 import { removeTap } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine, successLine } from "../../ui/format";

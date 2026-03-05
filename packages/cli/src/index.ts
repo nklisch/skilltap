@@ -11,6 +11,12 @@ if (process.argv.includes("--get-completions")) {
   process.exit(0);
 }
 
+// ─── Footer bar ──────────────────────────────────────────────────────────────
+// Persistent hint bar at the bottom of the terminal. Invisible when idle,
+// auto-updates when any prompt is active. No-op on non-TTY.
+import { footer } from "./ui/footer";
+footer().open();
+
 // ─── Startup checks ───────────────────────────────────────────────────────────
 // Skip for --version, --help, self-update, and telemetry subcommand
 const SKIP_STARTUP_ARGS = new Set([
@@ -34,7 +40,24 @@ if (shouldRunStartup) {
   const shouldRunTelemetryNotice = !process.argv.slice(2).some((a) =>
     SKIP_TELEMETRY_NOTICE_ARGS.has(a),
   );
-  if (shouldRunTelemetryNotice) await runTelemetryNotice();
+  if (shouldRunTelemetryNotice) {
+    await sendFirstRunPing();
+    await runTelemetryNotice();
+  }
+}
+
+async function sendFirstRunPing(): Promise<void> {
+  const { loadConfig } = await import("@skilltap/core");
+  const configResult = await loadConfig();
+  if (!configResult.ok) return;
+  const config = configResult.value;
+
+  // Already shown the notice once — this is not a first run
+  if (config.telemetry.notice_shown) return;
+
+  // Minimal anonymous ping: no client_id, no UUID — just OS/arch/version
+  const { sendFirstRun } = await import("./telemetry");
+  sendFirstRun(VERSION);
 }
 
 async function runTelemetryNotice(): Promise<void> {
@@ -55,7 +78,8 @@ async function runTelemetryNotice(): Promise<void> {
 
   if (process.stdin.isTTY && process.stderr.isTTY) {
     // Interactive: ask the user directly
-    const { confirm, isCancel } = await import("@clack/prompts");
+    const { isCancel } = await import("@clack/prompts");
+    const { footerConfirm: confirm } = await import("./ui/footer");
     process.stderr.write("\n");
     const opted = await confirm({
       message:
