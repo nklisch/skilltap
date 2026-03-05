@@ -50,6 +50,30 @@ export function telemetryBase(agentMode: boolean): {
   };
 }
 
+export function sendFirstRun(version: string): void {
+  if (process.env.DO_NOT_TRACK === "1") return;
+  if (process.env.SKILLTAP_TELEMETRY_DISABLED === "1") return;
+
+  const payload = JSON.stringify({
+    client_id: "anonymous",
+    events: [{
+      name: "first_run",
+      params: {
+        os: process.platform,
+        arch: process.arch,
+        version,
+        engagement_time_msec: 1,
+      },
+    }],
+  });
+
+  fetch(GA4_ENDPOINT, {
+    method: "POST",
+    body: payload,
+    signal: AbortSignal.timeout(3000),
+  }).catch(() => {});
+}
+
 export function inferAdapter(source: string): string {
   if (source.startsWith("npm:")) return "npm";
   if (source.startsWith("github:")) return "github";

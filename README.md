@@ -2,6 +2,8 @@
 
 **Homebrew taps for agent skills.** Install, manage, and share AI agent skills from any git host — agent-agnostic, multi-source, secure.
 
+**[skilltap.dev](https://skilltap.dev)** — docs, guides, and skill discovery.
+
 ```bash
 curl -fsSL https://skilltap.dev/install.sh | sh
 ```

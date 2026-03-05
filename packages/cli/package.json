@@ -20,7 +20,7 @@
     "url": "https://github.com/nklisch/skilltap.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://github.com/nklisch/skilltap#readme",
+  "homepage": "https://skilltap.dev",
   "bugs": "https://github.com/nklisch/skilltap/issues",
   "bin": {
     "skilltap": "./src/index.ts"
