@@ -11,6 +11,8 @@ import {
   runSkilltap,
 } from "@skilltap/test-utils";
 
+const CLI_DIR = `${import.meta.dir}/../..`;
+
 /** Write a minimal config.toml with builtin_tap = false to keep tests offline. */
 async function disableBuiltinTap(configDir: string): Promise<void> {
   await mkdir(join(configDir, "skilltap"), { recursive: true });
