@@ -52,6 +52,7 @@ export type UpdateOptions = {
     stat: DiffStat,
     fromSha: string,
     toSha: string,
+    rawDiff: string,
   ) => void;
   /** Called when warnings are found. Return value only matters in non-strict mode: true = proceed. */
   onShowWarnings?: (warnings: StaticWarning[], skillName: string) => void;
@@ -157,6 +158,16 @@ async function runUpdateSemanticScan(
   return false;
 }
 
+function skipSkill(
+  result: UpdateResult,
+  options: UpdateOptions,
+  name: string,
+): Result<void, never> {
+  result.skipped.push(name);
+  options.onProgress?.(name, "skipped");
+  return ok(undefined);
+}
+
 function patchRecord(
   installed: { skills: InstalledSkill[] },
   record: InstalledSkill,
@@ -182,16 +193,12 @@ async function updateNpmSkill(
   const metaResult = await fetchPackageMetadata(packageName);
   if (!metaResult.ok) {
     // Network failure — skip gracefully rather than hard-failing the whole update
-    result.skipped.push(record.name);
-    options.onProgress?.(record.name, "skipped");
-    return ok(undefined);
+    return skipSkill(result, options, record.name);
   }
 
   const versionResult = resolveVersion(metaResult.value, "latest");
   if (!versionResult.ok) {
-    result.skipped.push(record.name);
-    options.onProgress?.(record.name, "skipped");
-    return ok(undefined);
+    return skipSkill(result, options, record.name);
   }
 
   const latestVersion = versionResult.value.version;
@@ -214,9 +221,7 @@ async function updateNpmSkill(
       info.dist.integrity,
     );
     if (!extractResult.ok) {
-      result.skipped.push(record.name);
-      options.onProgress?.(record.name, "skipped");
-      return ok(undefined);
+      return skipSkill(result, options, record.name);
     }
 
     const pkgDir = extractResult.value;
@@ -229,9 +234,7 @@ async function updateNpmSkill(
     const warnings: StaticWarning[] = scanResult.ok ? scanResult.value : [];
 
     if (await shouldSkipUpdate(warnings, options, record.name)) {
-      result.skipped.push(record.name);
-      options.onProgress?.(record.name, "skipped");
-      return ok(undefined);
+      return skipSkill(result, options, record.name);
     }
 
     // Replace the installed skill directory
@@ -257,9 +260,7 @@ async function updateNpmSkill(
 
     // Semantic scan on updated content
     if (await runUpdateSemanticScan(installDir, record.name, options)) {
-      result.skipped.push(record.name);
-      options.onProgress?.(record.name, "skipped");
-      return ok(undefined);
+      return skipSkill(result, options, record.name);
     }
 
     await refreshAgentSymlinks(record, options.projectRoot);
@@ -329,22 +330,18 @@ async function updateGitSkill(
   if (!statResult.ok) return statResult;
   const stat = statResult.value;
 
-  options.onDiff?.(record.name, stat, localSha, remoteSha);
+  options.onDiff?.(record.name, stat, localSha, remoteSha, diffResult.value);
 
   const warnings = scanDiff(diffResult.value);
   if (await shouldSkipUpdate(warnings, options, record.name)) {
-    result.skipped.push(record.name);
-    options.onProgress?.(record.name, "skipped");
-    return ok(undefined);
+    return skipSkill(result, options, record.name);
   }
 
   const pullResult = await pull(workDir);
   if (!pullResult.ok) return pullResult;
 
   if (await runUpdateSemanticScan(workDir, record.name, options)) {
-    result.skipped.push(record.name);
-    options.onProgress?.(record.name, "skipped");
-    return ok(undefined);
+    return skipSkill(result, options, record.name);
   }
 
   const newShaResult = await revParse(workDir, "HEAD");
@@ -434,10 +431,10 @@ async function updateGitSkillGroup(
       continue;
     }
 
-    options.onDiff?.(skill.name, stat, localSha, remoteSha);
-
     const diffResult = await diff(workDir, "HEAD", "FETCH_HEAD", pathSpec);
     if (!diffResult.ok) return diffResult;
+
+    options.onDiff?.(skill.name, stat, localSha, remoteSha, diffResult.value);
 
     const warnings = scanDiff(diffResult.value);
     if (await shouldSkipUpdate(warnings, options, skill.name)) {

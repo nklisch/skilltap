@@ -24,6 +24,7 @@ export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
   "security.ollama_model": { type: "string" },
   "updates.auto_update": { type: "enum", enum: ["off", "patch", "minor"] },
   "updates.interval_hours": { type: "number" },
+  "updates.show_diff": { type: "enum", enum: ["full", "stat", "none"] },
 };
 
 const BLOCKED_SET_KEYS: Record<string, string> = {

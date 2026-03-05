@@ -15,30 +15,9 @@ import {
   initRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
 
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runCli(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["bun", "run", "--bun", "src/index.ts", ...args], {
-    cwd: CLI_DIR,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      ...process.env,
-      SKILLTAP_HOME: homeDir,
-      XDG_CONFIG_HOME: configDir,
-    },
-  });
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 async function writeConfig(configDir: string, toml: string): Promise<void> {
   const dir = join(configDir, "skilltap");
@@ -81,13 +60,13 @@ afterEach(async () => {
 
 describe("find — no taps configured", () => {
   test("shows no taps message", async () => {
-    const { exitCode, stdout } = await runCli(["find"], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(["find"], homeDir, configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No taps configured");
   });
 
   test("shows skills.sh results for query even with no taps", async () => {
-    const { exitCode, stdout } = await runCli(
+    const { exitCode, stdout } = await runSkilltap(
       ["find", "react"],
       homeDir,
       configDir,
@@ -115,8 +94,8 @@ describe("find — with taps", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(["find"], homeDir, configDir);
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(["find"], homeDir, configDir);
       expect(exitCode).toBe(0);
       expect(stdout).toContain("commit-helper");
       expect(stdout).toContain("code-review");
@@ -142,8 +121,8 @@ describe("find — with taps", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["find", "commit"],
         homeDir,
         configDir,
@@ -165,8 +144,8 @@ describe("find — with taps", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["find", "zzznomatch", "--local"],
         homeDir,
         configDir,
@@ -188,8 +167,8 @@ describe("find — with taps", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["find", "--json"],
         homeDir,
         configDir,
@@ -220,8 +199,8 @@ describe("find — with taps", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["find", "commit", "--json"],
         homeDir,
         configDir,

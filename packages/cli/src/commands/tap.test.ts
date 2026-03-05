@@ -8,6 +8,7 @@ import {
   initRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
 
 /** Write a minimal config.toml with builtin_tap = false to keep tests offline. */
@@ -16,28 +17,6 @@ async function disableBuiltinTap(configDir: string): Promise<void> {
   await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
 }
 
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runCli(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["bun", "run", "--bun", "src/index.ts", ...args], {
-    cwd: CLI_DIR,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: {
-      ...process.env,
-      SKILLTAP_HOME: homeDir,
-      XDG_CONFIG_HOME: configDir,
-    },
-  });
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 async function createLocalTap(
   skills: Array<{ name: string; description: string; repo: string }>,
@@ -77,7 +56,7 @@ describe("tap add", () => {
       },
     ]);
     try {
-      const { exitCode, stdout } = await runCli(
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "add", "home", tap.path],
         homeDir,
         configDir,
@@ -97,7 +76,7 @@ describe("tap add", () => {
     try {
       // Use the local tap path as a real git URL isn't available,
       // but we can verify two-arg form still works with a slash in name position
-      const { exitCode, stdout } = await runCli(
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "add", "my-custom-name", tap.path],
         homeDir,
         configDir,
@@ -110,7 +89,7 @@ describe("tap add", () => {
   });
 
   test("errors on single arg that is not GitHub shorthand", async () => {
-    const { exitCode, stderr } = await runCli(
+    const { exitCode, stderr } = await runSkilltap(
       ["tap", "add", "just-a-name"],
       homeDir,
       configDir,
@@ -124,8 +103,8 @@ describe("tap add", () => {
       { name: "skill-a", description: "A", repo: "https://example.com/a" },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stderr } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stderr } = await runSkilltap(
         ["tap", "add", "home", tap.path],
         homeDir,
         configDir,
@@ -141,7 +120,7 @@ describe("tap add", () => {
 describe("tap list", () => {
   test("shows no taps message when empty and builtin disabled", async () => {
     await disableBuiltinTap(configDir);
-    const { exitCode, stdout } = await runCli(
+    const { exitCode, stdout } = await runSkilltap(
       ["tap", "list"],
       homeDir,
       configDir,
@@ -151,7 +130,7 @@ describe("tap list", () => {
   });
 
   test("shows built-in tap by default even with no user taps", async () => {
-    const { exitCode, stdout } = await runCli(
+    const { exitCode, stdout } = await runSkilltap(
       ["tap", "list"],
       homeDir,
       configDir,
@@ -166,8 +145,8 @@ describe("tap list", () => {
       { name: "skill-a", description: "A", repo: "https://example.com/a" },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "list"],
         homeDir,
         configDir,
@@ -187,8 +166,8 @@ describe("tap remove", () => {
       { name: "skill-a", description: "A", repo: "https://example.com/a" },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "remove", "home", "--yes"],
         homeDir,
         configDir,
@@ -197,7 +176,7 @@ describe("tap remove", () => {
       expect(stdout).toContain("Removed tap 'home'");
 
       // Verify it's gone from list (built-in tap still shows)
-      const { stdout: listOut } = await runCli(
+      const { stdout: listOut } = await runSkilltap(
         ["tap", "list"],
         homeDir,
         configDir,
@@ -210,7 +189,7 @@ describe("tap remove", () => {
   });
 
   test("errors if tap not found", async () => {
-    const { exitCode, stderr } = await runCli(
+    const { exitCode, stderr } = await runSkilltap(
       ["tap", "remove", "nonexistent", "--yes"],
       homeDir,
       configDir,
@@ -226,8 +205,8 @@ describe("tap update", () => {
       { name: "skill-a", description: "A", repo: "https://example.com/a" },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runCli(
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "update", "home"],
         homeDir,
         configDir,
@@ -241,7 +220,7 @@ describe("tap update", () => {
   });
 
   test("errors if named tap not configured", async () => {
-    const { exitCode, stderr } = await runCli(
+    const { exitCode, stderr } = await runSkilltap(
       ["tap", "update", "nonexistent"],
       homeDir,
       configDir,
@@ -296,7 +275,7 @@ describe("tap init", () => {
 describe("tap install", () => {
   test("exits with error when no taps configured and builtin disabled", async () => {
     await disableBuiltinTap(configDir);
-    const { exitCode, stdout, stderr } = await runCli(
+    const { exitCode, stdout, stderr } = await runSkilltap(
       ["tap", "install", "--yes", "--global", "--skip-scan"],
       homeDir,
       configDir,
@@ -315,9 +294,9 @@ describe("tap install", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
 
-      const { exitCode, stdout } = await runCli(
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "install", "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
@@ -347,10 +326,10 @@ describe("tap install", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "tap1", tap1.path], homeDir, configDir);
-      await runCli(["tap", "add", "tap2", tap2.path], homeDir, configDir);
+      await runSkilltap(["tap", "add", "tap1", tap1.path], homeDir, configDir);
+      await runSkilltap(["tap", "add", "tap2", tap2.path], homeDir, configDir);
 
-      const { exitCode, stdout } = await runCli(
+      const { exitCode, stdout } = await runSkilltap(
         ["tap", "install", "--tap", "tap1", "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
@@ -373,9 +352,9 @@ describe("tap install", () => {
       },
     ]);
     try {
-      await runCli(["tap", "add", "home", tap.path], homeDir, configDir);
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
 
-      const { exitCode, stdout, stderr } = await runCli(
+      const { exitCode, stdout, stderr } = await runSkilltap(
         ["tap", "install", "--tap", "nonexistent", "--yes", "--global"],
         homeDir,
         configDir,

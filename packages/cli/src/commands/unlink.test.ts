@@ -13,35 +13,10 @@ import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
 
 setDefaultTimeout(45_000);
-
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runUnlink(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "unlink", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 let homeDir: string;
 let configDir: string;
@@ -62,8 +37,8 @@ afterEach(async () => {
 
 describe("unlink — not found", () => {
   test("exits 1 when skill not linked", async () => {
-    const { exitCode, stderr } = await runUnlink(
-      ["nonexistent"],
+    const { exitCode, stderr } = await runSkilltap(
+      ["unlink", "nonexistent"],
       homeDir,
       configDir,
     );
@@ -90,8 +65,8 @@ describe("unlink — linked skill", () => {
           .catch(() => false),
       ).toBe(true);
 
-      const { exitCode, stdout } = await runUnlink(
-        ["standalone-skill"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["unlink", "standalone-skill"],
         homeDir,
         configDir,
       );
@@ -108,7 +83,7 @@ describe("unlink — linked skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await linkSkill(repo.path, { scope: "global" });
-      await runUnlink(["standalone-skill"], homeDir, configDir);
+      await runSkilltap(["unlink", "standalone-skill"], homeDir, configDir);
 
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);

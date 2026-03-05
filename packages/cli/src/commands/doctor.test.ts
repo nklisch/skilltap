@@ -2,33 +2,7 @@ import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from
 setDefaultTimeout(45_000);
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
-
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runDoctor(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "doctor", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
+import { makeTmpDir, removeTmpDir, runSkilltap } from "@skilltap/test-utils";
 
 let homeDir: string;
 let configDir: string;
@@ -51,13 +25,13 @@ afterEach(async () => {
 
 describe("doctor — healthy environment", () => {
   test("exits 0 on fresh environment", async () => {
-    const { exitCode } = await runDoctor([], homeDir, configDir);
+    const { exitCode } = await runSkilltap(["doctor"], homeDir, configDir);
     // Fresh env has warnings (missing dirs) but no failures
     expect(exitCode).toBe(0);
   });
 
   test("shows check names in output", async () => {
-    const { stdout } = await runDoctor([], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor"], homeDir, configDir);
     expect(stdout).toContain("git");
     expect(stdout).toContain("config");
     expect(stdout).toContain("dirs");
@@ -79,7 +53,7 @@ describe("doctor — healthy environment", () => {
       '[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "prompt"\nrequire_scan = false\nagent = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n["agent-mode"]\nenabled = false\nscope = "project"\n',
     );
 
-    const { exitCode, stdout } = await runDoctor([], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(["doctor"], homeDir, configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Everything looks good!");
   });
@@ -93,13 +67,13 @@ describe("doctor — broken state", () => {
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(join(skilltapDir, "config.toml"), "not valid toml ===\n");
 
-    const { exitCode, stdout } = await runDoctor([], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(["doctor"], homeDir, configDir);
     expect(exitCode).toBe(1);
     expect(stdout).toContain("invalid TOML");
   });
 
   test("shows issue count in summary", async () => {
-    const { stdout } = await runDoctor([], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor"], homeDir, configDir);
     // Fresh env has missing dirs as warnings
     expect(stdout).toMatch(/issue(s)? found/);
   });
@@ -109,7 +83,7 @@ describe("doctor — broken state", () => {
 
 describe("doctor --fix", () => {
   test("creates missing directories", async () => {
-    const { exitCode } = await runDoctor(["--fix"], homeDir, configDir);
+    const { exitCode } = await runSkilltap(["doctor", "--fix"], homeDir, configDir);
     expect(exitCode).toBe(0);
 
     // Verify dirs were created
@@ -122,7 +96,7 @@ describe("doctor --fix", () => {
   });
 
   test("shows fixed issues in output", async () => {
-    const { stdout } = await runDoctor(["--fix"], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor", "--fix"], homeDir, configDir);
     // Should show some fix messages
     expect(stdout).toContain("✓");
   });
@@ -133,7 +107,7 @@ describe("doctor --fix", () => {
     const installedFile = join(skilltapDir, "installed.json");
     await writeFile(installedFile, "not json {{{}}}");
 
-    const { exitCode } = await runDoctor(["--fix"], homeDir, configDir);
+    const { exitCode } = await runSkilltap(["doctor", "--fix"], homeDir, configDir);
     // After fix, the installed.json failure is resolved
     // Still may exit 1 if other failures exist but installed.json itself is now fixed
     const repaired = await Bun.file(installedFile).json().catch(() => null);
@@ -146,7 +120,7 @@ describe("doctor --fix", () => {
 
 describe("doctor --json", () => {
   test("outputs valid JSON", async () => {
-    const { stdout } = await runDoctor(["--json"], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor", "--json"], homeDir, configDir);
     let parsed: unknown;
     expect(() => {
       parsed = JSON.parse(stdout);
@@ -158,7 +132,7 @@ describe("doctor --json", () => {
   });
 
   test("JSON includes all checks", async () => {
-    const { stdout } = await runDoctor(["--json"], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor", "--json"], homeDir, configDir);
     const result = JSON.parse(stdout) as {
       ok: boolean;
       checks: Array<{ name: string; status: string }>;
@@ -176,7 +150,7 @@ describe("doctor --json", () => {
   });
 
   test("JSON check has status field", async () => {
-    const { stdout } = await runDoctor(["--json"], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor", "--json"], homeDir, configDir);
     const result = JSON.parse(stdout) as {
       checks: Array<{ name: string; status: string }>;
     };
@@ -191,7 +165,7 @@ describe("doctor --json", () => {
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(join(skilltapDir, "config.toml"), "not valid toml ===\n");
 
-    const { exitCode, stdout } = await runDoctor(["--json"], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(["doctor", "--json"], homeDir, configDir);
     expect(exitCode).toBe(1);
     const result = JSON.parse(stdout) as { ok: boolean };
     expect(result.ok).toBe(false);
@@ -199,7 +173,7 @@ describe("doctor --json", () => {
 
   test("JSON --fix shows fixed field on issues", async () => {
     // Run with fix on a fresh env (missing dirs are fixable)
-    const { stdout } = await runDoctor(["--json", "--fix"], homeDir, configDir);
+    const { stdout } = await runSkilltap(["doctor", "--json", "--fix"], homeDir, configDir);
     const result = JSON.parse(stdout) as {
       checks: Array<{
         name: string;

@@ -13,35 +13,10 @@ import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
 
 setDefaultTimeout(45_000);
-
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runLink(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "link", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 let homeDir: string;
 let configDir: string;
@@ -64,8 +39,8 @@ describe("link — global scope", () => {
   test("creates symlink at install path", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode, stdout } = await runLink(
-        [repo.path, "--global"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["link", repo.path, "--global"],
         homeDir,
         configDir,
       );
@@ -92,7 +67,7 @@ describe("link — global scope", () => {
   test("records skill with scope=linked in installed.json", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      await runLink([repo.path, "--global"], homeDir, configDir);
+      await runSkilltap(["link", repo.path, "--global"], homeDir, configDir);
 
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);
@@ -112,8 +87,8 @@ describe("link — global scope", () => {
   test("fails when path has no SKILL.md", async () => {
     const tmpDir = await makeTmpDir();
     try {
-      const { exitCode, stderr } = await runLink(
-        [tmpDir, "--global"],
+      const { exitCode, stderr } = await runSkilltap(
+        ["link", tmpDir, "--global"],
         homeDir,
         configDir,
       );

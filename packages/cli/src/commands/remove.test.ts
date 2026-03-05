@@ -12,35 +12,10 @@ import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
 
 setDefaultTimeout(45_000);
-
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runRemove(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "remove", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 let homeDir: string;
 let configDir: string;
@@ -65,8 +40,8 @@ describe("remove — multiple names", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
-      const { exitCode, stdout } = await runRemove(
-        ["skill-a", "skill-b", "--yes"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["remove", "skill-a", "skill-b", "--yes"],
         homeDir,
         configDir,
       );
@@ -87,8 +62,8 @@ describe("remove — multiple names", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
-      const { exitCode, stderr } = await runRemove(
-        ["standalone-skill", "nonexistent", "--yes"],
+      const { exitCode, stderr } = await runSkilltap(
+        ["remove", "standalone-skill", "nonexistent", "--yes"],
         homeDir,
         configDir,
       );
@@ -102,8 +77,8 @@ describe("remove — multiple names", () => {
 
 describe("remove — not found", () => {
   test("exits 1 with error message", async () => {
-    const { exitCode, stderr } = await runRemove(
-      ["nonexistent", "--yes"],
+    const { exitCode, stderr } = await runSkilltap(
+      ["remove", "nonexistent", "--yes"],
       homeDir,
       configDir,
     );
@@ -118,8 +93,8 @@ describe("remove — with --yes flag", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
-      const { exitCode, stdout } = await runRemove(
-        ["standalone-skill", "--yes"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["remove", "standalone-skill", "--yes"],
         homeDir,
         configDir,
       );
@@ -140,8 +115,8 @@ describe("remove — with --yes flag", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runRemove(
-        ["standalone-skill", "--yes"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["remove", "standalone-skill", "--yes"],
         homeDir,
         configDir,
       );

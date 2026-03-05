@@ -11,35 +11,10 @@ import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
 
 setDefaultTimeout(45_000);
-
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runList(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "list", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 let homeDir: string;
 let configDir: string;
@@ -61,7 +36,7 @@ afterEach(async () => {
 
 describe("list — empty state", () => {
   test("exits 0 and prints empty message", async () => {
-    const { exitCode, stdout } = await runList([], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(["list"], homeDir, configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No skills installed");
   });
@@ -72,7 +47,7 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList([], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(["list"], homeDir, configDir);
       expect(exitCode).toBe(0);
       expect(stdout).toContain("standalone-skill");
       expect(stdout).toContain("Global");
@@ -85,8 +60,8 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList(
-        ["--json"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["list", "--json"],
         homeDir,
         configDir,
       );
@@ -103,8 +78,8 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList(
-        ["--global"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["list", "--global"],
         homeDir,
         configDir,
       );
@@ -119,8 +94,8 @@ describe("list — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runList(
-        ["--project"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["list", "--project"],
         homeDir,
         configDir,
       );

@@ -23,6 +23,7 @@ import {
   formatDiffFileLine,
   formatDiffStatSummary,
   formatShaChange,
+  formatUnifiedDiff,
   successLine,
 } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
@@ -253,12 +254,17 @@ async function runInteractiveUpdate(
       }
     },
 
-    onDiff(_skillName, stat, fromSha, toSha) {
+    onDiff(_skillName, stat, fromSha, toSha, rawDiff) {
+      const level = config.updates.show_diff;
+      if (level === "none") return;
       const shaChange = formatShaChange(fromSha, toSha);
       const statSummary = formatDiffStatSummary(stat);
       log.info(`${shaChange} ${ansi.dim(statSummary)}`);
       for (const file of stat.files) {
         process.stdout.write(`${formatDiffFileLine(file)}\n`);
+      }
+      if (level === "full" && rawDiff.trim()) {
+        process.stdout.write(`\n${formatUnifiedDiff(rawDiff)}\n`);
       }
     },
 

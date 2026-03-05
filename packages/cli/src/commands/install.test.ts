@@ -17,33 +17,8 @@ import {
   createStandaloneSkillRepo,
   makeTmpDir,
   removeTmpDir,
+  runSkilltap,
 } from "@skilltap/test-utils";
-
-const CLI_DIR = `${import.meta.dir}/../..`;
-
-async function runInstall(
-  args: string[],
-  homeDir: string,
-  configDir: string,
-): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "install", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
-}
 
 let homeDir: string;
 let configDir: string;
@@ -66,8 +41,8 @@ describe("install — standalone skill", () => {
   test("installs with --yes --global and shows success", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode, stdout } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode, stdout } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -87,13 +62,13 @@ describe("install — standalone skill", () => {
   test("auto-updates with --yes when already installed", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -108,8 +83,8 @@ describe("install — multi-skill repo", () => {
   test("auto-selects all skills with --yes", async () => {
     const repo = await createMultiSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -131,8 +106,8 @@ describe("install — security scanning", () => {
   test("--skip-scan bypasses security check", async () => {
     const repo = await createMaliciousSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -145,8 +120,8 @@ describe("install — security scanning", () => {
   test("--strict aborts on warnings from malicious skill", async () => {
     const repo = await createMaliciousSkillRepo();
     try {
-      const { exitCode, stderr } = await runInstall(
-        [repo.path, "--yes", "--global", "--strict"],
+      const { exitCode, stderr } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--strict"],
         homeDir,
         configDir,
       );
@@ -177,8 +152,8 @@ describe("install — agent selection", () => {
     );
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -201,8 +176,8 @@ describe("install — agent selection", () => {
   test("--also flag creates symlink and skips prompt", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code"],
         homeDir,
         configDir,
       );
@@ -224,8 +199,8 @@ describe("install — agent selection", () => {
   test("--yes without config defaults.also creates no symlinks", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -247,8 +222,8 @@ describe("install — agent selection", () => {
   test("--also with multiple agents creates all symlinks", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code,cursor"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code,cursor"],
         homeDir,
         configDir,
       );
@@ -270,8 +245,8 @@ describe("install — agent selection", () => {
     );
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path, "--yes", "--global", "--skip-scan"],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -306,8 +281,8 @@ describe("install — agent mode", () => {
     await writeAgentModeConfig(configDir);
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode, stdout, stderr } = await runInstall(
-        [repo.path],
+      const { exitCode, stdout, stderr } = await runSkilltap(
+        ["install", repo.path],
         homeDir,
         configDir,
       );
@@ -325,8 +300,8 @@ describe("install — agent mode", () => {
     await writeAgentModeConfig(configDir);
     const repo = await createMaliciousSkillRepo();
     try {
-      const { exitCode, stderr } = await runInstall(
-        [repo.path],
+      const { exitCode, stderr } = await runSkilltap(
+        ["install", repo.path],
         homeDir,
         configDir,
       );
@@ -343,8 +318,8 @@ describe("install — agent mode", () => {
     await writeAgentModeConfig(configDir);
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode, stderr } = await runInstall(
-        [repo.path, "--skip-scan"],
+      const { exitCode, stderr } = await runSkilltap(
+        ["install", repo.path, "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -360,8 +335,8 @@ describe("install — agent mode", () => {
     await writeAgentModeConfig(configDir);
     const repo = await createMultiSkillRepo();
     try {
-      const { exitCode, stdout } = await runInstall(
-        [repo.path],
+      const { exitCode, stdout } = await runSkilltap(
+        ["install", repo.path],
         homeDir,
         configDir,
       );
@@ -377,9 +352,9 @@ describe("install — agent mode", () => {
     await writeAgentModeConfig(configDir);
     const repo = await createStandaloneSkillRepo();
     try {
-      await runInstall([repo.path], homeDir, configDir);
-      const { exitCode, stderr } = await runInstall(
-        [repo.path],
+      await runSkilltap(["install", repo.path], homeDir, configDir);
+      const { exitCode, stderr } = await runSkilltap(
+        ["install", repo.path],
         homeDir,
         configDir,
       );
@@ -397,8 +372,8 @@ describe("install — agent mode", () => {
     );
     const repo = await createStandaloneSkillRepo();
     try {
-      const { exitCode } = await runInstall(
-        [repo.path],
+      const { exitCode } = await runSkilltap(
+        ["install", repo.path],
         homeDir,
         configDir,
       );

@@ -8,6 +8,7 @@ const DIM = "\x1b[2m";
 const RED = "\x1b[31m";
 const YELLOW = "\x1b[33m";
 const GREEN = "\x1b[32m";
+const CYAN = "\x1b[36m";
 
 export const ansi = {
   bold: (s: string) => `${BOLD}${s}${RESET}`,
@@ -15,6 +16,7 @@ export const ansi = {
   red: (s: string) => `${RED}${s}${RESET}`,
   yellow: (s: string) => `${YELLOW}${s}${RESET}`,
   green: (s: string) => `${GREEN}${s}${RESET}`,
+  cyan: (s: string) => `${CYAN}${s}${RESET}`,
 };
 
 export function termWidth(): number {
@@ -98,6 +100,21 @@ export function formatDiffFileLine(file: DiffFileStat): string {
   if (file.deletions > 0) counts.push(`-${file.deletions}`);
   const countStr = counts.length > 0 ? ` (${counts.join(" ")})` : "";
   return `  ${ansi.dim(file.status)} ${file.path}${countStr}`;
+}
+
+/** Colourises a unified diff string for terminal display. */
+export function formatUnifiedDiff(rawDiff: string): string {
+  return rawDiff
+    .split("\n")
+    .map((line) => {
+      if (line.startsWith("+++") || line.startsWith("---")) return ansi.dim(line);
+      if (line.startsWith("+")) return ansi.green(line);
+      if (line.startsWith("-")) return ansi.red(line);
+      if (line.startsWith("@@")) return ansi.cyan(line);
+      if (line.startsWith("diff ") || line.startsWith("index ")) return ansi.dim(line);
+      return line;
+    })
+    .join("\n");
 }
 
 /** Bold+underline characters at fzf match positions. */

@@ -122,6 +122,17 @@ export default defineCommand({
             initialValue: existing.security.on_warn,
           }),
 
+        showDiff: () =>
+          select({
+            message: "Show diff during updates?",
+            options: [
+              { value: "full", label: "Full diff", hint: "coloured unified diff" },
+              { value: "stat", label: "Stat only", hint: "file names and line counts" },
+              { value: "none", label: "None", hint: "skip to confirm prompt" },
+            ],
+            initialValue: existing.updates?.show_diff ?? "full",
+          }),
+
         registries: () =>
           confirm({
             message:
@@ -172,6 +183,10 @@ export default defineCommand({
       registry: {
         ...existing.registry,
         enabled: enabledRegistries,
+      },
+      updates: {
+        ...existing.updates,
+        show_diff: result.showDiff as "full" | "stat" | "none",
       },
       telemetry: {
         ...existing.telemetry,

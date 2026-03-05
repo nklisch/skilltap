@@ -20,6 +20,8 @@ export const UpdatesConfigSchema = z.object({
   auto_update: z.enum(["off", "patch", "minor"]).default("off"),
   interval_hours: z.number().int().default(24),
   skill_check_interval_hours: z.number().int().default(24),
+  // "full" = coloured unified diff, "stat" = file-level counts only, "none" = hide until confirm
+  show_diff: z.enum(["full", "stat", "none"]).default("full"),
 });
 
 export const TelemetryConfigSchema = z.object({
