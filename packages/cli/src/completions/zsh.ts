@@ -1,4 +1,8 @@
+import { TEMPLATE_NAMES, VALID_AGENT_IDS } from "@skilltap/core";
+
 export function generateZshCompletions(): string {
+  const agentSpec = VALID_AGENT_IDS.join(" ");
+  const templateSpec = TEMPLATE_NAMES.join(" ");
   return `#compdef skilltap
 
 _skilltap() {
@@ -36,13 +40,14 @@ _skilltap() {
           _arguments \\
             '--project[Install to project scope]' \\
             '--global[Install to global scope]' \\
-            '--also[Symlink to agent dir]:agent:(claude-code cursor codex gemini windsurf)' \\
+            '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
             '--ref[Branch or tag]:ref:' \\
             '--yes[Auto-accept]' \\
             '--strict[Abort on warnings]' \\
             '--no-strict[Override strict config]' \\
             '--semantic[Force semantic scan]' \\
             '--skip-scan[Skip security scan]' \\
+            '--quiet[Suppress install step details]' \\
             "1:source:($skills)"
           ;;
         remove)
@@ -51,7 +56,7 @@ _skilltap() {
           _arguments \\
             '--project[Remove from project scope]' \\
             '--yes[Skip confirmation]' \\
-            "1:skill:($skills)"
+            "*:skill:($skills)"
           ;;
         list)
           _arguments \\
@@ -65,9 +70,8 @@ _skilltap() {
           _arguments \\
             '--yes[Auto-accept]' \\
             '--strict[Abort on warnings]' \\
-            '--no-strict[Override strict config]' \\
             '--semantic[Force semantic scan]' \\
-            '--skip-scan[Skip security scan]' \\
+            '--json[Output result as JSON]' \\
             '(-c --check)'{-c,--check}'[Check for updates without applying]' \\
             "1:skill:($skills)"
           ;;
@@ -81,7 +85,7 @@ _skilltap() {
           _arguments \\
             '--global[Global scope]' \\
             '--project[Project scope]' \\
-            '--also[Agent symlink]:agent:(claude-code cursor codex gemini windsurf)'
+            '--also[Agent symlink]:agent:(${agentSpec})'
           ;;
         unlink)
           local -a skills
@@ -97,7 +101,7 @@ _skilltap() {
           ;;
         create)
           _arguments \\
-            '--template[Template type]:template:(basic npm multi)' \\
+            '--template[Template type]:template:(${templateSpec})' \\
             '--dir[Target directory]:dir:_files -/'
           ;;
         verify)
@@ -138,7 +142,7 @@ _skilltap() {
                     '--tap[Scope to one tap]:tap:($taps)' \\
                     '--project[Install to project scope]' \\
                     '--global[Install to global scope]' \\
-                    '--also[Symlink to agent dir]:agent:(claude-code cursor codex gemini windsurf)' \\
+                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
                     '--yes[Auto-select all and install]' \\
                     '--strict[Abort on warnings]' \\
                     '--no-strict[Override strict config]' \\

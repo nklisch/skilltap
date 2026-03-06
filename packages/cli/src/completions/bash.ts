@@ -1,4 +1,8 @@
+import { TEMPLATE_NAMES, VALID_AGENT_IDS } from "@skilltap/core";
+
 export function generateBashCompletions(): string {
+  const agents = VALID_AGENT_IDS.join(" ");
+  const templates = TEMPLATE_NAMES.join(" ");
   return `# skilltap bash completions
 # Add to ~/.bashrc:
 #   eval "$(skilltap completions bash)"
@@ -10,8 +14,8 @@ _skilltap() {
 
   local commands="status install remove list update find link unlink info create verify config tap doctor completions self-update"
   local tap_commands="add remove list update init install"
-  local agents="claude-code cursor codex gemini windsurf"
-  local templates="basic npm multi"
+  local agents="${agents}"
+  local templates="${templates}"
 
   case "\${COMP_WORDS[1]}" in
     install)
@@ -20,7 +24,7 @@ _skilltap() {
         --ref) return ;;
       esac
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--project --global --also --ref --yes --strict --no-strict --semantic --skip-scan" -- "$cur"))
+        COMPREPLY=($(compgen -W "--project --global --also --ref --yes --strict --no-strict --semantic --skip-scan --quiet" -- "$cur"))
       else
         local tap_skills
         tap_skills=$(skilltap --get-completions tap-skills 2>/dev/null)
@@ -41,7 +45,7 @@ _skilltap() {
       ;;
     update)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--yes --strict --no-strict --semantic --skip-scan --check" -- "$cur"))
+        COMPREPLY=($(compgen -W "--yes --strict --semantic --json --check" -- "$cur"))
       else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)
