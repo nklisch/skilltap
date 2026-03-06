@@ -11,6 +11,7 @@ import {
   loadConfig,
   loadTaps,
   resolveRegistries,
+  saveConfig,
   searchRegistries,
   searchTaps,
 } from "@skilltap/core";
@@ -26,7 +27,7 @@ import {
   termWidth,
   truncate,
 } from "../ui/format";
-import { confirmInstall, selectSkills, selectTap } from "../ui/prompts";
+import { confirmInstall, confirmSaveDefault, selectAgents, selectSkills, selectTap } from "../ui/prompts";
 import { resolveScope } from "../ui/resolve";
 import { printWarnings } from "../ui/scan";
 import { searchPrompt } from "../ui/search-prompt";
@@ -326,7 +327,21 @@ async function installChosen(
   config: Config,
 ): Promise<void> {
   const { scope, projectRoot } = await resolveScope({}, config);
-  const also = config.defaults.also ?? [];
+  let also = config.defaults.also ?? [];
+
+  if (!config.defaults.also.length) {
+    const selected = await selectAgents(also);
+    if (isCancel(selected)) process.exit(2);
+    also = selected as string[];
+
+    if (also.length) {
+      const save = await confirmSaveDefault("Save agent selection as default?");
+      if (!isCancel(save) && save) {
+        config.defaults.also = also;
+        await saveConfig(config);
+      }
+    }
+  }
 
   const s = spinner();
   s.start(`Installing ${chosen.name}…`);

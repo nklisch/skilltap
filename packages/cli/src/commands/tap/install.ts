@@ -6,6 +6,7 @@ import {
   isBuiltinTapCloned,
   loadConfig,
   loadTaps,
+  saveConfig,
   searchTaps,
   skillInstallDir,
 } from "@skilltap/core";
@@ -14,6 +15,7 @@ import pc from "picocolors";
 import { errorLine, successLine, termWidth, truncate } from "../../ui/format";
 import { createInstallCallbacks } from "../../ui/install-callbacks";
 import { loadPolicyOrExit } from "../../ui/policy";
+import { confirmSaveDefault, selectAgents } from "../../ui/prompts";
 import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
 import { searchPrompt } from "../../ui/search-prompt";
 
@@ -178,7 +180,21 @@ export default defineCommand({
       { project: args.project, global: args.global },
       config,
     );
-    const also = parseAlsoFlag(args.also, config);
+    let also = parseAlsoFlag(args.also, config);
+
+    if (!args.also && !policy.yes && !config.defaults.also.length) {
+      const selected = await selectAgents(also);
+      if (isCancel(selected)) process.exit(2);
+      also = selected as string[];
+
+      if (also.length) {
+        const save = await confirmSaveDefault("Save agent selection as default?");
+        if (!isCancel(save) && save) {
+          config.defaults.also = also;
+          await saveConfig(config);
+        }
+      }
+    }
 
     const errors: { name: string; message: string }[] = [];
 
