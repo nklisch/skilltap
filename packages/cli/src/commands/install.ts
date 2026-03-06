@@ -182,6 +182,20 @@ async function runAgentMode(
     const installDir = skillInstallDir(record.name, scope, projectRoot);
     agentSuccess(record.name, installDir, record.ref, record.trust);
   }
+
+  for (const name of result.value.updates) {
+    const updateResult = await updateSkill({ name, yes: true, projectRoot });
+    if (!updateResult.ok) {
+      agentError(updateResult.error.message);
+      process.exit(1);
+    }
+    const { updated, upToDate } = updateResult.value;
+    if (updated.includes(name)) {
+      process.stdout.write(`OK: Updated ${name}\n`);
+    } else if (upToDate.includes(name)) {
+      process.stdout.write(`OK: ${name} is already up to date.\n`);
+    }
+  }
 }
 
 // ─── Interactive Mode ─────────────────────────────────────────────────────────

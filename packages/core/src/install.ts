@@ -486,15 +486,8 @@ export async function installSkill(
               ),
             );
           }
-          toUpdate.push(skill.name);
-        } else {
-          return err(
-            new UserError(
-              `Skill '${skill.name}' is already installed.`,
-              `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
-            ),
-          );
         }
+        toUpdate.push(skill.name);
       } else {
         toInstall.push(skill);
       }

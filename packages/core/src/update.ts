@@ -204,6 +204,7 @@ async function updateNpmSkill(
   const latestVersion = versionResult.value.version;
 
   if (record.ref === latestVersion) {
+    await refreshAgentSymlinks(record, options.projectRoot);
     result.upToDate.push(record.name);
     options.onProgress?.(record.name, "upToDate");
     return ok(undefined);
@@ -318,6 +319,7 @@ async function updateGitSkill(
   const remoteSha = remoteShaResult.value;
 
   if (localSha === remoteSha) {
+    await refreshAgentSymlinks(record, options.projectRoot);
     result.upToDate.push(record.name);
     options.onProgress?.(record.name, "upToDate");
     return ok(undefined);
@@ -407,6 +409,7 @@ async function updateGitSkillGroup(
   // If the whole repo is up to date, all skills in the group are too
   if (localSha === remoteSha) {
     for (const skill of skills) {
+      await refreshAgentSymlinks(skill, options.projectRoot);
       result.upToDate.push(skill.name);
       options.onProgress?.(skill.name, "upToDate");
     }

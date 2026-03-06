@@ -115,14 +115,15 @@ describe("installSkill — standalone", () => {
     }
   });
 
-  test("fails with UserError when already installed", async () => {
+  test("already installed skill is added to updates list instead of failing", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global" });
       const result = await installSkill(repo.path, { scope: "global" });
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error.message).toContain("already installed");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.updates).toContain("standalone-skill");
+      expect(result.value.records).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }

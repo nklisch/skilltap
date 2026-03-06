@@ -348,18 +348,18 @@ describe("install — agent mode", () => {
     }
   });
 
-  test("already installed returns error", async () => {
+  test("already installed triggers update instead of failing", async () => {
     await writeAgentModeConfig(configDir);
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(["install", repo.path], homeDir, configDir);
-      const { exitCode, stderr } = await runSkilltap(
+      const { exitCode, stdout } = await runSkilltap(
         ["install", repo.path],
         homeDir,
         configDir,
       );
-      expect(exitCode).toBe(1);
-      expect(stderr).toContain("already installed");
+      expect(exitCode).toBe(0);
+      expect(stdout).toMatch(/up to date|Updated/i);
     } finally {
       await repo.cleanup();
     }
