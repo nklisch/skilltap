@@ -66,8 +66,10 @@ export type UpdateOptions = {
   threshold?: number;
   /** Called when semantic warnings are found. */
   onSemanticWarnings?: (warnings: SemanticWarning[], skillName: string) => void;
+  /** Called before starting semantic scan for a skill. */
+  onSemanticScanStart?: (skillName: string) => void;
   /** Called with progress during semantic scan. */
-  onSemanticProgress?: (completed: number, total: number) => void;
+  onSemanticProgress?: (completed: number, total: number, score: number, reason: string) => void;
 };
 
 export type UpdateResult = {
@@ -147,6 +149,7 @@ async function runUpdateSemanticScan(
   options: UpdateOptions,
 ): Promise<boolean> {
   if (!options.semantic || !options.agent) return false;
+  options.onSemanticScanStart?.(skillName);
   const semResult = await scanSemantic(installDir, options.agent, {
     threshold: options.threshold,
     onProgress: options.onSemanticProgress,

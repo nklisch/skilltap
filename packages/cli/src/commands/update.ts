@@ -1,4 +1,4 @@
-import { isCancel, log } from "@clack/prompts";
+import { isCancel, log, spinner } from "@clack/prompts";
 import { footerConfirm as confirm } from "../ui/footer";
 import {
   type AgentAdapter,
@@ -227,6 +227,8 @@ async function runInteractiveUpdate(
 ): Promise<void> {
   const { runSemantic, agent } = await resolveSemanticInteractive(policy, args, config);
 
+  let semSpinner: ReturnType<typeof spinner> | null = null;
+
   const result = await updateSkill({
     name,
     yes: policy.yes,
@@ -237,6 +239,10 @@ async function runInteractiveUpdate(
     projectRoot,
 
     onProgress(skillName, status) {
+      if (semSpinner) {
+        semSpinner.stop();
+        semSpinner = null;
+      }
       if (status === "checking") {
         log.step(`Checking ${ansi.bold(skillName)}...`);
       } else if (status === "upToDate") {
@@ -278,7 +284,21 @@ async function runInteractiveUpdate(
       return answer as boolean;
     },
 
+    onSemanticScanStart(skillName: string) {
+      semSpinner = spinner();
+      semSpinner.start(`Semantic scan of ${ansi.bold(skillName)}...`);
+    },
+
+    onSemanticProgress(completed: number, total: number, score: number, reason: string) {
+      const flag = score >= (config.security.threshold ?? 5) ? ` — ⚠ ${reason.length > 60 ? `${reason.slice(0, 59)}…` : reason}` : "";
+      semSpinner?.message(`Semantic scan: chunk ${completed}/${total}${flag}`);
+    },
+
     onSemanticWarnings(warnings: SemanticWarning[], skillName: string) {
+      if (semSpinner) {
+        semSpinner.stop();
+        semSpinner = null;
+      }
       printSemanticWarnings(warnings, skillName);
       if (policy.onWarn === "fail") {
         log.warn(

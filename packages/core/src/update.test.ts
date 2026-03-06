@@ -7,9 +7,19 @@ import {
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
+import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import { installSkill } from "./install";
 import { updateSkill } from "./update";
+
+function mockAgent(score = 0): AgentAdapter {
+  return {
+    name: "Mock",
+    cliName: "mock",
+    async detect() { return true; },
+    async invoke() { return { ok: true as const, value: { score, reason: "test reason" } }; },
+  };
+}
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
 
@@ -399,6 +409,91 @@ describe("updateSkill — multi-skill", () => {
       // skill-b has no path-specific changes → upToDate (not skipped, not updated)
       expect(result.value.upToDate).toContain("skill-b");
       expect(result.value.skipped).not.toContain("skill-b");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("updateSkill — semantic scan callbacks", () => {
+  test("onSemanticScanStart fires with skill name before scan", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      await addFileAndCommit(repo.path, "new.md", "# New");
+
+      const started: string[] = [];
+      const result = await updateSkill(
+        {
+          yes: true,
+          semantic: true,
+          agent: mockAgent(0),
+          onSemanticScanStart: (name) => started.push(name),
+        },
+        async () => ({ tier: "unverified" as const }),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(started).toContain("standalone-skill");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("onSemanticProgress fires with (completed, total, score, reason)", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      await addFileAndCommit(repo.path, "new.md", "# New");
+
+      const ticks: Array<{ completed: number; total: number; score: number; reason: string }> = [];
+      const result = await updateSkill(
+        {
+          yes: true,
+          semantic: true,
+          agent: mockAgent(3),
+          onSemanticProgress: (completed, total, score, reason) =>
+            ticks.push({ completed, total, score, reason }),
+        },
+        async () => ({ tier: "unverified" as const }),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(ticks.length).toBeGreaterThan(0);
+      const first = ticks[0]!;
+      expect(first.completed).toBeGreaterThan(0);
+      expect(first.total).toBeGreaterThan(0);
+      expect(first.score).toBe(3);
+      expect(first.reason).toBe("test reason");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("onSemanticWarnings fires and skill is skipped in strict mode", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      await addFileAndCommit(repo.path, "new.md", "# New");
+
+      const warnedSkills: string[] = [];
+      const result = await updateSkill(
+        {
+          yes: true,
+          strict: true,
+          semantic: true,
+          threshold: 5,
+          agent: mockAgent(8),
+          onSemanticWarnings: (_warnings, skillName) => warnedSkills.push(skillName),
+        },
+        async () => ({ tier: "unverified" as const }),
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(warnedSkills).toContain("standalone-skill");
+      expect(result.value.skipped).toContain("standalone-skill");
+      expect(result.value.updated).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }
