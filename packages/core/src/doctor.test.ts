@@ -205,6 +205,43 @@ describe("checkSkills", () => {
     );
   });
 
+  test("does not flag a linked skill's install dir as an orphan", async () => {
+    const skilltapDir = join(configDir, "skilltap");
+    await mkdir(skilltapDir, { recursive: true });
+
+    // Simulate linked skill: install path is a symlink in .agents/skills/
+    const localPath = join(homeDir, "local-my-skill");
+    await mkdir(localPath, { recursive: true });
+    const installPath = join(homeDir, ".agents", "skills", "local-my-skill");
+    await mkdir(join(homeDir, ".agents", "skills"), { recursive: true });
+    await symlink(localPath, installPath, "dir");
+
+    await writeFile(
+      join(skilltapDir, "installed.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "local-my-skill",
+              repo: null,
+              scope: "linked",
+              path: installPath,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const result = await runDoctor();
+    const check = result.checks.find((c) => c.name === "skills")!;
+    expect(check.status).toBe("pass");
+    expect(check.issues?.some((i) => i.message.includes("local-my-skill"))).toBeFalsy();
+  });
+
   test("warns on orphan directory (dir on disk but not in installed.json)", async () => {
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });
@@ -362,6 +399,48 @@ describe("checkSymlinks", () => {
     const { lstat: lstatFn } = await import("node:fs/promises");
     const stat = await lstatFn(linkPath);
     expect(stat.isSymbolicLink()).toBe(true);
+  });
+
+  test("passes for linked skill with correct agent symlink", async () => {
+    const skilltapDir = join(configDir, "skilltap");
+    await mkdir(skilltapDir, { recursive: true });
+
+    const localPath = join(homeDir, "local-skill-src");
+    await mkdir(localPath, { recursive: true });
+    const installPath = join(homeDir, ".agents", "skills", "local-skill");
+    await mkdir(join(homeDir, ".agents", "skills"), { recursive: true });
+    await symlink(localPath, installPath, "dir");
+
+    // Create the agent symlink pointing to installPath
+    const linkDir = join(homeDir, ".claude", "skills");
+    await mkdir(linkDir, { recursive: true });
+    await symlink(installPath, join(linkDir, "local-skill"), "dir");
+
+    await writeFile(
+      join(skilltapDir, "installed.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "local-skill",
+              repo: null,
+              scope: "linked",
+              path: installPath,
+              also: ["claude-code"],
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const result = await runDoctor();
+    const check = result.checks.find((c) => c.name === "symlinks")!;
+    expect(check.status).toBe("pass");
+    expect(check.issues?.some((i) => i.message.includes("local-skill"))).toBeFalsy();
   });
 
   test("warns on wrong symlink target", async () => {

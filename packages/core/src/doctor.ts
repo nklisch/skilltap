@@ -354,7 +354,14 @@ async function checkSkills(installed: InstalledJson, projectRoot?: string): Prom
   for (const skill of installed.skills) {
     if (skill.scope === "project") {
       projectTracked.add(skill.name);
-    } else if (skill.scope !== "linked") {
+    } else if (skill.scope === "linked") {
+      // Linked skills create a symlink in .agents/skills/ — track in the appropriate bucket
+      if (projectRoot && skill.path?.startsWith(join(projectRoot, ".agents"))) {
+        projectTracked.add(skill.name);
+      } else {
+        globalTracked.add(skill.name);
+      }
+    } else {
       globalTracked.add(skill.name);
     }
 
@@ -473,10 +480,15 @@ async function checkSymlinks(installed: InstalledJson, projectRoot?: string): Pr
   for (const skill of installed.skills) {
     if (skill.also.length === 0) continue;
 
-    const isProject = skill.scope === "project" && !!projectRoot;
-    const expectedTarget = isProject
-      ? skillInstallDir(skill.name, "project", projectRoot)
-      : skillInstallDir(skill.name, "global");
+    const isLinked = skill.scope === "linked";
+    const isProject =
+      (skill.scope === "project" && !!projectRoot) ||
+      (isLinked && !!projectRoot && !!skill.path?.startsWith(join(projectRoot, ".agents")));
+    const expectedTarget = isLinked
+      ? (skill.path ?? skillInstallDir(skill.name, "global"))
+      : isProject
+        ? skillInstallDir(skill.name, "project", projectRoot)
+        : skillInstallDir(skill.name, "global");
     const base = isProject ? projectRoot! : globalBase();
 
     for (const agent of skill.also) {
