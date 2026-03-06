@@ -83,9 +83,12 @@ export async function fetchLatestVersion(): Promise<string | null> {
  * Read cached update result. Kicks off a background refresh if cache is stale.
  * Never throws — returns null when no update info is available yet.
  */
+type FetchLatestFn = typeof fetchLatestVersion;
+
 export async function checkForUpdate(
   currentVersion: string,
   intervalHours = 24,
+  _fetchLatest: FetchLatestFn = fetchLatestVersion,
 ): Promise<UpdateCheckResult | null> {
   const configDir = getConfigDir();
   const cache = await readCache(configDir);
@@ -96,8 +99,19 @@ export async function checkForUpdate(
       intervalHours * 3_600_000;
 
   if (isStale) {
+    if (intervalHours === 0) {
+      // Caller wants a fresh check — await the fetch instead of fire-and-forget
+      const fetched = await _fetchLatest();
+      if (fetched) {
+        await writeCache(configDir, fetched);
+        const type = getUpdateType(currentVersion, fetched);
+        if (!type) return null;
+        return { current: currentVersion, latest: fetched, type };
+      }
+      return null;
+    }
     // Fire-and-forget — do not block the CLI
-    fetchLatestVersion().then((latest) => {
+    _fetchLatest().then((latest) => {
       if (latest) writeCache(configDir, latest);
     });
   }

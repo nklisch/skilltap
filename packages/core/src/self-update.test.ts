@@ -103,6 +103,26 @@ describe("checkForUpdate", () => {
     expect(result).not.toBeNull();
     expect(result?.type).toBe("major");
   });
+
+  test("intervalHours=0 awaits fetch and detects minor update (no prior cache)", async () => {
+    const mockFetch = async () => "1.1.0";
+    const result = await checkForUpdate("1.0.0", 0, mockFetch);
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("minor");
+    expect(result?.latest).toBe("1.1.0");
+  });
+
+  test("intervalHours=0 returns null when current is already latest", async () => {
+    const mockFetch = async () => "1.0.0";
+    const result = await checkForUpdate("1.0.0", 0, mockFetch);
+    expect(result).toBeNull();
+  });
+
+  test("intervalHours=0 returns null when fetch returns null", async () => {
+    const mockFetch = async () => null;
+    const result = await checkForUpdate("1.0.0", 0, mockFetch);
+    expect(result).toBeNull();
+  });
 });
 
 // ─── isCompiledBinary ─────────────────────────────────────────────────────────
