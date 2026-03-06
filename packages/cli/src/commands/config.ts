@@ -4,10 +4,10 @@ import {
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../ui/footer";
-import { type Config, getConfigDir, loadConfig, saveConfig } from "@skilltap/core";
+import { AGENT_LABELS, type Config, getConfigDir, loadConfig, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine } from "../ui/format";
-import { selectAgentForConfig } from "../ui/prompts";
+import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../ui/prompts";
 
 export default defineCommand({
   meta: {
@@ -72,13 +72,7 @@ export default defineCommand({
         also: () =>
           multiselect({
             message: "Auto-symlink to which agents?",
-            options: [
-              { value: "claude-code", label: "Claude Code" },
-              { value: "cursor", label: "Cursor" },
-              { value: "codex", label: "Codex" },
-              { value: "gemini", label: "Gemini" },
-              { value: "windsurf", label: "Windsurf" },
-            ],
+            options: VALID_AGENT_IDS.map(id => ({ value: id, label: AGENT_LABELS[id] ?? id })),
             initialValues: existing.defaults.also,
             required: false,
           }),
@@ -86,19 +80,7 @@ export default defineCommand({
         scan: () =>
           select({
             message: "Security scan level?",
-            options: [
-              {
-                value: "static",
-                label: "Static only",
-                hint: "fast, catches common attacks",
-              },
-              {
-                value: "semantic",
-                label: "Static + Semantic",
-                hint: "thorough, uses your agent CLI",
-              },
-              { value: "off", label: "Off", hint: "not recommended" },
-            ],
+            options: SCAN_MODE_OPTIONS,
             initialValue: existing.security.scan,
           }),
 

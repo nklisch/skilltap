@@ -322,7 +322,7 @@ describe("find -i — search prompt", () => {
         {
           name: "commit-helper",
           description: "Generates commit messages",
-          repo: "https://example.com/a",
+          repo: "/nonexistent/skilltap-test-path",
         },
       ]);
       try {
@@ -337,8 +337,8 @@ describe("find -i — search prompt", () => {
         await session.waitForText("commit-helper");
         session.sendKey("ENTER"); // select skill — scope and agent prompts both skipped by config
 
-        // Install will fail (fake URL) but agent prompt must never appear
-        await session.waitForText("Failed");
+        // Install will fail (nonexistent path) but agent prompt must never appear
+        await session.waitForText("Failed.");
         expect(session.output()).not.toContain("Which agents should this skill be available to?");
 
         session.kill();

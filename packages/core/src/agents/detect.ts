@@ -28,6 +28,9 @@ const ADAPTER_MAP: Record<string, AgentAdapter> = {
   opencode: opencodeAdapter,
 };
 
+/** All valid values for security.agent in config. */
+export const KNOWN_AGENT_NAMES: readonly string[] = [...Object.keys(ADAPTER_MAP), "ollama"];
+
 /** Verify an adapter is reachable on PATH. Returns ok(adapter) or err with install hint. */
 async function verifyAdapterAvailable(
   adapter: AgentAdapter,
@@ -84,7 +87,7 @@ export async function resolveAgent(
       return err(
         new ScanError(
           `Unknown agent '${agentSetting}' in config.`,
-          "Valid agents: claude, gemini, codex, opencode, ollama, or an absolute path",
+          `Valid agents: ${KNOWN_AGENT_NAMES.join(", ")}, or an absolute path`,
         ),
       );
     }

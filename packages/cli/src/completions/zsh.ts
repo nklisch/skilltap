@@ -124,13 +124,13 @@ _skilltap() {
           ;;
         tap)
           local -a tap_commands
-          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'update:Update taps' 'init:Scaffold a tap repo' 'install:Install skills from taps')
+          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'init:Scaffold a tap repo' 'install:Install skills from taps')
           _arguments -C '1:subcommand:->tap_cmd' '*::arg:->tap_args'
           case $state in
             tap_cmd) _describe 'subcommand' tap_commands ;;
             tap_args)
               case $words[1] in
-                remove|update)
+                remove)
                   local -a taps
                   taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
                   _arguments "1:tap:($taps)"

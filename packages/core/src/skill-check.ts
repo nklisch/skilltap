@@ -6,6 +6,10 @@ import { fetchPackageMetadata, parseNpmSource, resolveVersion } from "./npm-regi
 import { skillCacheDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 
+type GitFetchFn = typeof gitFetch;
+type RevParseFn = typeof revParse;
+type FetchPackageMetadataFn = typeof fetchPackageMetadata;
+
 interface SkillUpdateCache {
   checkedAt: string;
   updatesAvailable: string[];
@@ -53,6 +57,9 @@ export async function writeSkillUpdateCache(
  */
 export async function fetchSkillUpdateStatus(
   projectRoot: string | null,
+  _gitFetch: GitFetchFn = gitFetch,
+  _revParse: RevParseFn = revParse,
+  _fetchPackageMetadata: FetchPackageMetadataFn = fetchPackageMetadata,
 ): Promise<string[]> {
   const globalResult = await loadInstalled();
   const globalSkills = globalResult.ok ? globalResult.value.skills : [];
@@ -89,11 +96,11 @@ export async function fetchSkillUpdateStatus(
       .catch(() => false);
     if (!cacheGitExists) continue;
 
-    const fetchResult = await gitFetch(cacheDir);
+    const fetchResult = await _gitFetch(cacheDir);
     if (!fetchResult.ok) continue; // network error — skip gracefully
 
-    const localResult = await revParse(cacheDir, "HEAD");
-    const remoteResult = await revParse(cacheDir, "FETCH_HEAD");
+    const localResult = await _revParse(cacheDir, "HEAD");
+    const remoteResult = await _revParse(cacheDir, "FETCH_HEAD");
     if (!localResult.ok || !remoteResult.ok) continue;
 
     if (localResult.value !== remoteResult.value) {
@@ -107,7 +114,7 @@ export async function fetchSkillUpdateStatus(
   for (const skill of npmSkills) {
     if (!skill.sha) continue;
     const { name } = parseNpmSource(skill.repo!);
-    const metaResult = await fetchPackageMetadata(name);
+    const metaResult = await _fetchPackageMetadata(name);
     if (!metaResult.ok) continue;
     const versionResult = resolveVersion(metaResult.value, "latest");
     if (!versionResult.ok) continue;

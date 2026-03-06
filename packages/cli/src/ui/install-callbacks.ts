@@ -1,4 +1,4 @@
-import { isCancel } from "@clack/prompts";
+import { isCancel, spinner } from "@clack/prompts";
 import { footerConfirm as confirm } from "./footer";
 import type {
   AgentAdapter,
@@ -15,6 +15,7 @@ import {
   selectTap,
 } from "./prompts";
 import { printSemanticWarnings, printWarnings } from "./scan";
+import type { StepLogger } from "./install-steps";
 
 function truncate(str: string, max: number): string {
   return str.length <= max ? str : `${str.slice(0, max - 1)}…`;
@@ -32,86 +33,116 @@ export type CallbackContext = {
   skipScan: boolean;
   agent: AgentAdapter | undefined;
   yes: boolean;
+  source: string;
+  steps: StepLogger;
 };
 
 async function withSpinnerPaused<T>(
   s: Spinner,
   fn: () => Promise<T>,
-  resumeMsg = "Installing...",
+  resumeMsg?: string,
 ): Promise<T> {
   s.stop();
   try {
     return await fn();
   } finally {
-    s.start(resumeMsg);
+    if (resumeMsg) s.start(resumeMsg);
   }
 }
 
-function makeWarnCallback<W>(
-  s: Spinner,
-  onWarn: string,
-  printFn: (warnings: W[], skillName: string) => void,
-  failMsg: (skillName: string) => string,
-): (warnings: W[], skillName: string) => Promise<boolean> {
-  return async (warnings, skillName) =>
-    withSpinnerPaused(s, async () => {
-      printFn(warnings, skillName);
-      if (onWarn === "fail") {
-        errorLine(failMsg(skillName));
-        process.exit(1);
-      }
-      const proceed = await confirmInstall(skillName);
-      if (isCancel(proceed) || proceed === false) process.exit(2);
-      return true;
-    });
-}
+export function createInstallCallbacks(ctx: CallbackContext): {
+  callbacks: Pick<
+    InstallOptions,
+    | "onWarnings"
+    | "onSelectSkills"
+    | "onSelectTap"
+    | "onAlreadyInstalled"
+    | "onSemanticWarnings"
+    | "onOfferSemantic"
+    | "onSemanticProgress"
+    | "onStaticScanStart"
+    | "onSemanticScanStart"
+    | "onConfirmInstall"
+    | "onDeepScan"
+  >;
+  logScanResults(): void;
+} {
+  const { spinner: s, onWarn, skipScan, agent, yes, source, steps } = ctx;
 
-export function createInstallCallbacks(
-  ctx: CallbackContext,
-): Pick<
-  InstallOptions,
-  | "onWarnings"
-  | "onSelectSkills"
-  | "onSelectTap"
-  | "onAlreadyInstalled"
-  | "onSemanticWarnings"
-  | "onOfferSemantic"
-  | "onSemanticProgress"
-  | "onStaticScanStart"
-  | "onSemanticScanStart"
-  | "onConfirmInstall"
-  | "onDeepScan"
-> {
-  const { spinner: s, onWarn, skipScan, agent, yes } = ctx;
+  let staticStarted = false;
+  let hadStaticWarnings = false;
+  let semanticStarted = false;
+  let hadSemanticWarnings = false;
+  let semSpinner: ReturnType<typeof spinner> | null = null;
 
-  const warningsCallback = makeWarnCallback(
-    s,
-    onWarn,
-    printWarnings,
-    (name) => `Security warnings found in ${name} — aborting (--strict / on_warn=fail)`,
-  );
-
-  const semanticWarningsCallback = makeWarnCallback(
-    s,
-    onWarn,
-    printSemanticWarnings,
-    (name) => `Semantic warnings found in ${name} — aborting (--strict / on_warn=fail)`,
-  );
-
-  return {
+  const callbacks: ReturnType<typeof createInstallCallbacks>["callbacks"] = {
     onStaticScanStart: skipScan
       ? undefined
-      : (skillName: string): void => {
-          s.message(`Scanning ${skillName} for security issues...`);
+      : (_skillName: string): void => {
+          // Fetch phase complete — switch from fetch spinner to scan step
+          s.stop();
+          steps.fetched(source);
+          staticStarted = true;
+        },
+
+    onWarnings: skipScan
+      ? undefined
+      : async (warnings, skillName): Promise<boolean> => {
+          hadStaticWarnings = true;
+          printWarnings(warnings, skillName);
+          if (onWarn === "fail") {
+            errorLine(
+              `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
+            );
+            process.exit(1);
+          }
+          const proceed = await confirmInstall(skillName);
+          if (isCancel(proceed) || proceed === false) process.exit(2);
+          return true;
         },
 
     onSemanticScanStart: agent
       ? (skillName: string): void => {
-          s.message(`Starting semantic scan of ${skillName}...`);
+          // Static scan phase complete — log clean result then start semantic spinner
+          if (!hadStaticWarnings) steps.staticScanClean();
+          semSpinner = spinner();
+          semSpinner.start(
+            `Semantic scan of ${skillName} via ${agent.name}...`,
+          );
+          semanticStarted = true;
         }
       : undefined,
 
-    onWarnings: skipScan ? undefined : warningsCallback,
+    onSemanticProgress: agent
+      ? (completed: number, total: number, score: number, reason: string): void => {
+          const threshold = 5;
+          const flag =
+            score >= threshold ? ` — ⚠ ${truncate(reason, 60)}` : "";
+          semSpinner?.message(
+            `Semantic scan: chunk ${completed}/${total}${flag}`,
+          );
+        }
+      : undefined,
+
+    onSemanticWarnings: agent
+      ? async (warnings, skillName): Promise<boolean> => {
+          hadSemanticWarnings = true;
+          if (semSpinner) {
+            semSpinner.stop();
+            semSpinner = null;
+          }
+          printSemanticWarnings(warnings, skillName);
+          if (onWarn === "fail") {
+            errorLine(
+              `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
+            );
+            process.exit(1);
+          }
+          const proceed = await confirmInstall(skillName);
+          if (isCancel(proceed) || proceed === false) process.exit(2);
+          return true;
+        }
+      : undefined,
 
     onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> => {
       if (yes || skills.length === 1) {
@@ -146,24 +177,17 @@ export function createInstallCallbacks(
       });
     },
 
-    onSemanticWarnings: agent ? semanticWarningsCallback : undefined,
-
     onOfferSemantic: agent
       ? async (): Promise<boolean> => {
-          if (!agent) return false;
-          return withSpinnerPaused(s, async () => {
-            const answer = await offerSemanticScan();
-            if (isCancel(answer)) return false;
-            return answer as boolean;
-          }, "Starting semantic scan...");
-        }
-      : undefined,
-
-    onSemanticProgress: agent
-      ? (completed: number, total: number, score: number, reason: string): void => {
-          const threshold = 5; // mirror default threshold
-          const flag = score >= threshold ? ` — ⚠ ${truncate(reason, 60)}` : "";
-          s.message(`Semantic scan: chunk ${completed}/${total}${flag}`);
+          return withSpinnerPaused(
+            s,
+            async () => {
+              const answer = await offerSemanticScan();
+              if (isCancel(answer)) return false;
+              return answer as boolean;
+            },
+            "Starting semantic scan...",
+          );
         }
       : undefined,
 
@@ -186,4 +210,16 @@ export function createInstallCallbacks(
         return true;
       }),
   };
+
+  function logScanResults(): void {
+    if (semSpinner) {
+      semSpinner.stop();
+      semSpinner = null;
+      if (!hadSemanticWarnings) steps.semanticScanClean(agent!.name);
+    } else if (staticStarted && !hadStaticWarnings && !semanticStarted) {
+      steps.staticScanClean();
+    }
+  }
+
+  return { callbacks, logScanResults };
 }

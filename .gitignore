@@ -7,3 +7,4 @@ website/.vitepress/cache
 website/public/install.sh
 website/.vitepress/dist
 .playwright-mcp
+coverage/

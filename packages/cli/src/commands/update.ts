@@ -9,6 +9,7 @@ import {
   type SemanticWarning,
   type StaticWarning,
   updateSkill,
+  updateTap,
   writeSkillUpdateCache,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
@@ -87,12 +88,36 @@ export default defineCommand({
       semantic: args.semantic,
     });
 
+    await refreshTapIndexes(policy.agentMode);
+
     if (policy.agentMode) {
       return runAgentModeUpdate(name, config, policy, projectRoot, args.json);
     }
     return runInteractiveUpdate(name, args, config, policy, projectRoot);
   },
 });
+
+// ─── Tap Refresh ──────────────────────────────────────────────────────────────
+
+async function refreshTapIndexes(agentMode: boolean): Promise<void> {
+  if (agentMode) {
+    process.stdout.write("Refreshing tap indexes...\n");
+    const result = await updateTap();
+    if (!result.ok) {
+      process.stdout.write(`Warning: Could not refresh tap indexes: ${result.error.message}\n`);
+    }
+    return;
+  }
+
+  const s = spinner();
+  s.start("Refreshing tap indexes...");
+  const result = await updateTap();
+  if (!result.ok) {
+    s.stop(`Could not refresh tap indexes: ${result.error.message}`);
+  } else {
+    s.stop("Tap indexes refreshed.");
+  }
+}
 
 // ─── Check Mode ───────────────────────────────────────────────────────────────
 

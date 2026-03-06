@@ -12,6 +12,14 @@ export const AGENT_PATHS: Record<string, string> = {
   windsurf: ".windsurf/skills",
 };
 
+export const AGENT_LABELS: Record<string, string> = {
+  "claude-code": "Claude Code",
+  cursor: "Cursor",
+  codex: "Codex",
+  gemini: "Gemini",
+  windsurf: "Windsurf",
+};
+
 export const VALID_AGENT_IDS: string[] = Object.keys(AGENT_PATHS);
 
 function symlinkPath(

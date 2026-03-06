@@ -1,6 +1,6 @@
 import { cancel, isCancel } from "@clack/prompts";
 import type { AgentAdapter, InstalledSkill, ScannedSkill, TapEntry } from "@skilltap/core";
-import { detectAgents, VALID_AGENT_IDS } from "@skilltap/core";
+import { AGENT_LABELS, detectAgents, VALID_AGENT_IDS } from "@skilltap/core";
 import {
   footerConfirm as confirm,
   footerMultiselect as multiselect,
@@ -156,14 +156,6 @@ export async function offerSemanticScan(): Promise<boolean | symbol> {
   return result as boolean;
 }
 
-const AGENT_LABELS: Record<string, string> = {
-  "claude-code": "Claude Code",
-  cursor: "Cursor",
-  codex: "Codex",
-  gemini: "Gemini",
-  windsurf: "Windsurf",
-};
-
 export async function selectAgents(
   currentSelection: string[],
 ): Promise<string[] | symbol> {
@@ -182,6 +174,13 @@ export async function selectAgents(
   }
   return result as string[];
 }
+
+/** Shared scan mode select options — used in both config wizards. */
+export const SCAN_MODE_OPTIONS = [
+  { value: "static", label: "Static only", hint: "fast, catches common attacks" },
+  { value: "semantic", label: "Static + Semantic", hint: "thorough, uses your agent CLI" },
+  { value: "off", label: "Off", hint: "not recommended" },
+];
 
 export async function confirmSaveDefault(
   message: string,

@@ -3,3 +3,9 @@ peer = false
 
 [test]
 timeout = 45000
+coverageDir = "coverage"
+coverageSkipTestFiles = true
+
+[test.coverageThreshold]
+line = 90
+function = 90

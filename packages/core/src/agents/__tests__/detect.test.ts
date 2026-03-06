@@ -17,6 +17,7 @@ const DEFAULT_CONFIG: Config = {
   "agent-mode": { enabled: false, scope: "project" },
   registry: { enabled: ["skills.sh"], sources: [], allow_npm: true },
   builtin_tap: true,
+  verbose: true,
   taps: [],
   updates: { auto_update: "off", interval_hours: 24, skill_check_interval_hours: 24, show_diff: "full" },
   telemetry: { enabled: false, notice_shown: false, anonymous_id: "" },

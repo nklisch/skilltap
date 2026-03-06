@@ -1,8 +1,20 @@
 import { z } from "zod/v4";
 
+// ---------------------------------------------------------------------------
+// Enum value constants — single source of truth for all valid enum options.
+// Import these wherever enum values need to be listed (config-keys, wizards, etc.)
+// ---------------------------------------------------------------------------
+
+export const SCAN_MODES = ["static", "semantic", "off"] as const;
+export const ON_WARN_MODES = ["prompt", "fail"] as const;
+export const AGENT_MODE_SCOPES = ["global", "project"] as const;
+export const SCOPE_VALUES = ["", "global", "project"] as const;
+export const AUTO_UPDATE_MODES = ["off", "patch", "minor"] as const;
+export const SHOW_DIFF_MODES = ["full", "stat", "none"] as const;
+
 export const SecurityConfigSchema = z.object({
-  scan: z.enum(["static", "semantic", "off"]).default("static"),
-  on_warn: z.enum(["prompt", "fail"]).default("prompt"),
+  scan: z.enum(SCAN_MODES).default("static"),
+  on_warn: z.enum(ON_WARN_MODES).default("prompt"),
   require_scan: z.boolean().default(false),
   agent: z.string().default(""),
   threshold: z.number().int().min(0).max(10).default(5),
@@ -12,16 +24,16 @@ export const SecurityConfigSchema = z.object({
 
 export const AgentModeSchema = z.object({
   enabled: z.boolean().default(false),
-  scope: z.enum(["global", "project"]).default("project"),
+  scope: z.enum(AGENT_MODE_SCOPES).default("project"),
 });
 
 export const UpdatesConfigSchema = z.object({
   // "off" = notify only, "patch" = auto-update patch releases, "minor" = auto-update patch+minor
-  auto_update: z.enum(["off", "patch", "minor"]).default("off"),
+  auto_update: z.enum(AUTO_UPDATE_MODES).default("off"),
   interval_hours: z.number().int().default(24),
   skill_check_interval_hours: z.number().int().default(24),
   // "full" = coloured unified diff, "stat" = file-level counts only, "none" = hide until confirm
-  show_diff: z.enum(["full", "stat", "none"]).default("full"),
+  show_diff: z.enum(SHOW_DIFF_MODES).default("full"),
 });
 
 export const TelemetryConfigSchema = z.object({
@@ -49,7 +61,7 @@ export const ConfigSchema = z.object({
     .object({
       also: z.array(z.string()).default([]),
       yes: z.boolean().default(false),
-      scope: z.enum(["global", "project", ""]).default(""),
+      scope: z.enum(SCOPE_VALUES).default(""),
     })
     // prefault passes {} through the schema, applying nested defaults (Zod 4 vs Zod 3's default({}))
     .prefault({}),
@@ -58,6 +70,8 @@ export const ConfigSchema = z.object({
   registry: RegistryConfigSchema,
   /** Whether the built-in skilltap-skills tap is enabled. Set to false to opt out. */
   builtin_tap: z.boolean().default(true),
+  /** Show install step details (clone, scan, placement). Disable with verbose = false or --no-verbose. */
+  verbose: z.boolean().default(true),
   taps: z
     .array(
       z.object({

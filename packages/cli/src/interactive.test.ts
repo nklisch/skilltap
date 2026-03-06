@@ -431,3 +431,52 @@ describe("remove — confirm prompt", () => {
     30_000,
   );
 });
+
+// ---------------------------------------------------------------------------
+// install — verbose step output
+// ---------------------------------------------------------------------------
+
+describe("install — verbose step output", () => {
+  test(
+    "shows fetch and scan steps by default",
+    async () => {
+      const repo = await createStandaloneSkillRepo();
+      try {
+        // --yes --global: no prompts, runs clone + static scan unattended
+        const session = await runInteractive(
+          [...CMD, "install", repo.path, "--yes", "--global"],
+          { cwd: CLI_DIR, env: env() },
+        );
+        const { exitCode, output } = await session.finish();
+        expect(exitCode).toBe(0);
+        expect(output).toContain("Fetched");
+        expect(output).toContain("Static scan");
+        expect(output).toContain("standalone-skill");
+      } finally {
+        await repo.cleanup();
+      }
+    },
+    30_000,
+  );
+
+  test(
+    "--no-verbose suppresses step output but still shows installed result",
+    async () => {
+      const repo = await createStandaloneSkillRepo();
+      try {
+        const session = await runInteractive(
+          [...CMD, "install", repo.path, "--yes", "--global", "--quiet"],
+          { cwd: CLI_DIR, env: env() },
+        );
+        const { exitCode, output } = await session.finish();
+        expect(exitCode).toBe(0);
+        expect(output).not.toContain("Fetched");
+        expect(output).not.toContain("Static scan");
+        expect(output).toContain("standalone-skill");
+      } finally {
+        await repo.cleanup();
+      }
+    },
+    30_000,
+  );
+});

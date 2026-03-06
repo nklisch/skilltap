@@ -10,7 +10,8 @@
     "format": "biome format --write packages/",
     "check": "biome check --write packages/",
     "bench": "bun run packages/core/src/benchmarks/scan.bench.ts",
-    "bump": "bun scripts/bump-version.ts"
+    "bump": "bun scripts/bump-version.ts",
+    "coverage": "bun test --coverage --coverage-reporter=text --coverage-reporter=lcov --recursive packages/"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",

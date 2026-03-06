@@ -232,4 +232,13 @@ describe("composePolicy — agent mode", () => {
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("fail");
   });
+
+  test("error when agent-mode.scope is empty and no flag passed", () => {
+    const config = baseConfig();
+    config["agent-mode"] = { enabled: true, scope: "" as "global" };
+    const result = composePolicy(config, {});
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("requires a scope");
+  });
 });

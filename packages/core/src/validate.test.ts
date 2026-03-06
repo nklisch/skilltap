@@ -122,6 +122,36 @@ name: my-skill
     }
   });
 
+  test("scan warnings appear as warning-severity issues", async () => {
+    const parentDir = await makeTmpDir();
+    const dir = join(parentDir, "my-skill");
+    await mkdir(dir, { recursive: true });
+    try {
+      // HTML comment triggers a static scan warning
+      const skillMdWithComment = `---
+name: my-skill
+description: A test skill for validation
+license: MIT
+---
+
+## Instructions
+
+<!-- hidden instruction -->
+Do stuff.
+`;
+      await writeFile(dir, "SKILL.md", skillMdWithComment);
+      const result = await validateSkill(dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const warnings = result.value.issues.filter((i) => i.severity === "warning");
+      expect(warnings.length).toBeGreaterThan(0);
+      // Skill is still valid — scan warnings don't block
+      expect(result.value.valid).toBe(true);
+    } finally {
+      await cleanup(parentDir);
+    }
+  });
+
   test("returns fileCount and totalBytes", async () => {
     const parentDir = await makeTmpDir();
     const dir = join(parentDir, "my-skill");

@@ -1,6 +1,6 @@
 import { cancel, intro, isCancel, outro } from "@clack/prompts";
 import { footerSelect as select, footerText as text } from "../ui/footer";
-import { basicTemplate, multiTemplate, npmTemplate } from "@skilltap/core";
+import { basicTemplate, multiTemplate, npmTemplate, TEMPLATE_NAMES } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { dirname, join, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
@@ -227,8 +227,8 @@ async function runNonInteractive(opts: {
     process.exit(1);
   }
 
-  if (!["basic", "npm", "multi"].includes(template)) {
-    errorLine(`Unknown template '${template}'`, "Use: basic, npm, or multi");
+  if (!(TEMPLATE_NAMES as readonly string[]).includes(template)) {
+    errorLine(`Unknown template '${template}'`, `Use: ${TEMPLATE_NAMES.join(", ")}`);
     process.exit(1);
   }
 

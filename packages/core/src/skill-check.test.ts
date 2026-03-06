@@ -2,26 +2,34 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import type { Result } from "./types";
+import type { GitError, NetworkError } from "./types";
 import {
   checkForSkillUpdates,
   fetchSkillUpdateStatus,
   writeSkillUpdateCache,
 } from "./skill-check";
+import { skillCacheDir } from "./paths";
 
 type Env = { XDG_CONFIG_HOME?: string; SKILLTAP_HOME?: string };
 
 let savedEnv: Env;
+let tmpRoot: string;
 let configDir: string;
+let homeDir: string;
 
 beforeEach(async () => {
   savedEnv = {
     XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
     SKILLTAP_HOME: process.env.SKILLTAP_HOME,
   };
-  configDir = await makeTmpDir();
-  process.env.XDG_CONFIG_HOME = configDir;
-  delete process.env.SKILLTAP_HOME;
+  tmpRoot = await makeTmpDir();
+  configDir = join(tmpRoot, "config");
+  homeDir = join(tmpRoot, "home");
   await mkdir(join(configDir, "skilltap"), { recursive: true });
+  await mkdir(homeDir, { recursive: true });
+  process.env.XDG_CONFIG_HOME = configDir;
+  process.env.SKILLTAP_HOME = homeDir;
 });
 
 afterEach(async () => {
@@ -29,7 +37,7 @@ afterEach(async () => {
   else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
   if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
   else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
-  await removeTmpDir(configDir);
+  await removeTmpDir(tmpRoot);
 });
 
 async function writeRawCache(data: object): Promise<void> {
@@ -158,6 +166,287 @@ describe("fetchSkillUpdateStatus", () => {
       }),
     );
     const result = await fetchSkillUpdateStatus(null);
+    expect(result).toEqual([]);
+  });
+
+  test("skips git skill when cache .git dir does not exist", async () => {
+    const installedDir = join(configDir, "skilltap");
+    const repoUrl = "https://github.com/owner/repo";
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "git-skill",
+            description: "",
+            repo: repoUrl,
+            ref: "main",
+            sha: "abc1234",
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "git-skill"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    // No cache .git dir created → lstat fails → skill skipped
+    const result = await fetchSkillUpdateStatus(null);
+    expect(result).toEqual([]);
+  });
+
+  test("marks git skill as having update when HEAD differs from FETCH_HEAD", async () => {
+    const installedDir = join(configDir, "skilltap");
+    const repoUrl = "https://github.com/owner/repo-update-test";
+    const cacheDir = skillCacheDir(repoUrl);
+
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "git-skill",
+            description: "",
+            repo: repoUrl,
+            ref: "main",
+            sha: "abc1234",
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "git-skill"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    // Create a fake cache dir with .git so the lstat check passes
+    await mkdir(join(cacheDir, ".git"), { recursive: true });
+
+    const mockFetch = async (_dir: string): Promise<Result<void, GitError>> =>
+      ({ ok: true as const, value: undefined });
+    const mockRevParse = async (_dir: string, ref: string): Promise<Result<string, GitError>> => ({
+      ok: true as const,
+      value: ref === "HEAD" ? "abc1234abc1234abc1234" : "def5678def5678def5678",
+    });
+
+    const result = await fetchSkillUpdateStatus(null, mockFetch, mockRevParse);
+    expect(result).toContain("git-skill");
+  });
+
+  test("does not mark git skill when HEAD matches FETCH_HEAD", async () => {
+    const installedDir = join(configDir, "skilltap");
+    const repoUrl = "https://github.com/owner/repo-no-update";
+    const cacheDir = skillCacheDir(repoUrl);
+
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "up-to-date-skill",
+            description: "",
+            repo: repoUrl,
+            ref: "main",
+            sha: "abc1234",
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "up-to-date-skill"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    await mkdir(join(cacheDir, ".git"), { recursive: true });
+
+    const sha = "abc1234abc1234abc1234";
+    const mockFetch = async (_dir: string): Promise<Result<void, GitError>> =>
+      ({ ok: true as const, value: undefined });
+    const mockRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
+      ({ ok: true as const, value: sha });
+
+    const result = await fetchSkillUpdateStatus(null, mockFetch, mockRevParse);
+    expect(result).toEqual([]);
+  });
+
+  test("skips git skill gracefully when fetch fails", async () => {
+    const installedDir = join(configDir, "skilltap");
+    const repoUrl = "https://github.com/owner/repo-fetch-fail";
+    const cacheDir = skillCacheDir(repoUrl);
+
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "net-fail-skill",
+            description: "",
+            repo: repoUrl,
+            ref: "main",
+            sha: "abc1234",
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "net-fail-skill"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    await mkdir(join(cacheDir, ".git"), { recursive: true });
+
+    const mockFetch = async (_dir: string): Promise<Result<void, GitError>> =>
+      ({ ok: false as const, error: { name: "GitError", message: "network error", hint: undefined } });
+    const mockRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
+      ({ ok: true as const, value: "abc" });
+
+    const result = await fetchSkillUpdateStatus(null, mockFetch, mockRevParse);
+    expect(result).toEqual([]);
+  });
+
+  test("marks npm skill as having update when version differs from sha", async () => {
+    const installedDir = join(configDir, "skilltap");
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "npm-skill",
+            description: "",
+            repo: "npm:my-skill-package",
+            ref: null,
+            sha: "1.0.0",
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "npm-skill"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const mockFetchMeta = async (_name: string): Promise<Result<any, NetworkError>> => ({
+      ok: true as const,
+      value: {
+        name: "my-skill-package",
+        description: "",
+        distTags: { latest: "1.1.0" },
+        versions: {
+          "1.1.0": {
+            version: "1.1.0",
+            dist: { tarball: "https://example.com", integrity: "sha512-xxx" },
+          },
+        },
+      },
+    });
+
+    const noopGitFetch = async (_dir: string): Promise<Result<void, GitError>> =>
+      ({ ok: true as const, value: undefined });
+    const noopRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
+      ({ ok: true as const, value: "abc" });
+
+    const result = await fetchSkillUpdateStatus(null, noopGitFetch, noopRevParse, mockFetchMeta);
+    expect(result).toContain("npm-skill");
+  });
+
+  test("does not mark npm skill when version matches sha", async () => {
+    const installedDir = join(configDir, "skilltap");
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "npm-current-skill",
+            description: "",
+            repo: "npm:my-skill-package",
+            ref: null,
+            sha: "1.0.0",
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "npm-current-skill"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const mockFetchMeta = async (_name: string): Promise<Result<any, NetworkError>> => ({
+      ok: true as const,
+      value: {
+        name: "my-skill-package",
+        description: "",
+        distTags: { latest: "1.0.0" },
+        versions: {
+          "1.0.0": {
+            version: "1.0.0",
+            dist: { tarball: "https://example.com", integrity: "sha512-xxx" },
+          },
+        },
+      },
+    });
+
+    const noopGitFetch = async (_dir: string): Promise<Result<void, GitError>> =>
+      ({ ok: true as const, value: undefined });
+    const noopRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
+      ({ ok: true as const, value: "abc" });
+
+    const result = await fetchSkillUpdateStatus(null, noopGitFetch, noopRevParse, mockFetchMeta);
+    expect(result).toEqual([]);
+  });
+
+  test("skips npm skill when sha is null", async () => {
+    const installedDir = join(configDir, "skilltap");
+    await Bun.write(
+      join(installedDir, "installed.json"),
+      JSON.stringify({
+        version: 1,
+        skills: [
+          {
+            name: "npm-no-sha",
+            description: "",
+            repo: "npm:my-skill-package",
+            ref: null,
+            sha: null,
+            scope: "global",
+            path: join(homeDir, ".agents", "skills", "npm-no-sha"),
+            tap: null,
+            also: [],
+            installedAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+
+    const mockFetchMeta = async (_name: string): Promise<Result<any, NetworkError>> => ({
+      ok: true as const,
+      value: { name: "x", description: "", distTags: { latest: "1.0.0" }, versions: {} },
+    });
+
+    const noopGitFetch = async (_dir: string): Promise<Result<void, GitError>> =>
+      ({ ok: true as const, value: undefined });
+    const noopRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
+      ({ ok: true as const, value: "abc" });
+
+    const result = await fetchSkillUpdateStatus(null, noopGitFetch, noopRevParse, mockFetchMeta);
     expect(result).toEqual([]);
   });
 });

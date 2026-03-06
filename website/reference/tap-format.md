@@ -135,7 +135,7 @@ url = "https://github.com/someone/awesome-skills-tap"
 `tap.json` is validated against its Zod schema when:
 
 - A tap is added (`skilltap tap add`)
-- A tap is updated (`skilltap tap update`)
+- A tap is updated (via `skilltap update`, which refreshes all git tap repos before updating skills)
 - Taps are loaded for search or install resolution
 
 If validation fails, skilltap reports a clear parse error with the specific issue:
@@ -153,7 +153,6 @@ Invalid taps are skipped gracefully during `loadTaps()` -- a broken tap does not
 | `skilltap tap add <name> <url>` | Add a tap by cloning its repo |
 | `skilltap tap remove <name>` | Remove a tap (does not uninstall skills from it) |
 | `skilltap tap list` | List configured taps with skill counts |
-| `skilltap tap update [name]` | Pull latest changes for one or all taps |
 | `skilltap tap init <name>` | Scaffold a new tap repo |
 
 ## npm Sources in Taps

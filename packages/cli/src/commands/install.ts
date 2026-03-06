@@ -1,4 +1,5 @@
 import { intro, isCancel, log, outro, spinner } from "@clack/prompts";
+import { createStepLogger } from "../ui/install-steps";
 import type {
   AgentAdapter,
   Config,
@@ -84,6 +85,10 @@ export default defineCommand({
       type: "boolean",
       description: "Override config on_warn=fail for this invocation",
     },
+    quiet: {
+      type: "boolean",
+      description: "Suppress install step details (overrides verbose = true in config)",
+    },
     semantic: {
       type: "boolean",
       description: "Force semantic scan",
@@ -101,10 +106,12 @@ export default defineCommand({
       global: args.global,
     });
 
+    const verbose = args.quiet ? false : config.verbose;
+
     if (policy.agentMode) {
       return runAgentMode(args, config, policy);
     }
-    return runInteractiveMode(args, config, policy);
+    return runInteractiveMode(args, config, policy, verbose);
   },
 });
 
@@ -209,6 +216,7 @@ async function runInteractiveMode(
   },
   config: Config,
   policy: EffectivePolicy,
+  verbose: boolean,
 ): Promise<void> {
   const { onWarn, skipScan } = policy;
   let also = parseAlsoFlag(args.also, config);
@@ -253,10 +261,11 @@ async function runInteractiveMode(
   }
 
   const s = spinner();
-  s.start(`Cloning ${args.source}...`);
+  s.start(`Fetching ${args.source}...`);
 
-  const callbacks = createInstallCallbacks({
-    spinner: s, onWarn, skipScan, agent, yes: policy.yes,
+  const steps = createStepLogger(verbose);
+  const { callbacks, logScanResults } = createInstallCallbacks({
+    spinner: s, onWarn, skipScan, agent, yes: policy.yes, source: args.source, steps,
   });
 
   const result = await installSkill(args.source, {
@@ -272,7 +281,7 @@ async function runInteractiveMode(
   });
 
   if (!result.ok) {
-    s.stop("Failed.");
+    s.stop();
     sendEvent(config, "install", {
       ...telemetryBase(false),
       adapter: inferAdapter(args.source),
@@ -286,6 +295,9 @@ async function runInteractiveMode(
     process.exit(1);
   }
 
+  s.stop();
+  logScanResults();
+
   sendEvent(config, "install", {
     ...telemetryBase(false),
     adapter: inferAdapter(args.source),
@@ -294,8 +306,6 @@ async function runInteractiveMode(
     scan_mode: policy.scanMode,
     scope,
   });
-
-  s.stop("Done.");
 
   for (const record of result.value.records) {
     const installDir = skillInstallDir(record.name, scope, projectRoot);

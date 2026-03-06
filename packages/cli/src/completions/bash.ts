@@ -13,7 +13,7 @@ _skilltap() {
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
   local commands="status install remove list update find link unlink info create verify config tap doctor completions self-update"
-  local tap_commands="add remove list update init install"
+  local tap_commands="add remove list init install"
   local agents="${agents}"
   local templates="${templates}"
 

@@ -201,37 +201,6 @@ describe("tap remove", () => {
   });
 });
 
-describe("tap update", () => {
-  test("updates a tap and reports skill count", async () => {
-    const tap = await createLocalTap([
-      { name: "skill-a", description: "A", repo: "https://example.com/a" },
-    ]);
-    try {
-      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runSkilltap(
-        ["tap", "update", "home"],
-        homeDir,
-        configDir,
-      );
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("home");
-      expect(stdout).toContain("1 skills");
-    } finally {
-      await tap.cleanup();
-    }
-  });
-
-  test("errors if named tap not configured", async () => {
-    const { exitCode, stderr } = await runSkilltap(
-      ["tap", "update", "nonexistent"],
-      homeDir,
-      configDir,
-    );
-    expect(exitCode).not.toBe(0);
-    expect(stderr).toContain("not configured");
-  });
-});
-
 describe("tap init", () => {
   test("creates a new tap directory with tap.json", async () => {
     const workDir = await makeTmpDir();

@@ -256,7 +256,6 @@ const main = defineCommand({
         add: () => import("./commands/tap/add").then((m) => m.default),
         remove: () => import("./commands/tap/remove").then((m) => m.default),
         list: () => import("./commands/tap/list").then((m) => m.default),
-        update: () => import("./commands/tap/update").then((m) => m.default),
         init: () => import("./commands/tap/init").then((m) => m.default),
         install: () =>
           import("./commands/tap/install").then((m) => m.default),

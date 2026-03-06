@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   commitAll,
@@ -6,11 +7,15 @@ import {
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { loadConfig } from "./config";
+import { getConfigDir, loadConfig } from "./config";
 import { installSkill } from "./install";
 import type { TapEntry } from "./taps";
 import {
+  BUILTIN_TAP,
   addTap,
+  ensureBuiltinTap,
+  initTap,
+  isBuiltinTapCloned,
   loadTaps,
   parseGitHubTapShorthand,
   removeTap,
@@ -418,6 +423,230 @@ describe("updateTap", () => {
       expect(result.value.updated.home).toBe(2);
     } finally {
       await tap.cleanup();
+    }
+  });
+});
+
+// ─── Helper: simulate a cloned builtin tap (without hitting network) ────────
+
+async function createClonedBuiltinTap(
+  skills: Array<{ name: string; description: string; repo: string }> = [],
+): Promise<{ sourceDir: string; cleanup: () => Promise<void> }> {
+  // Create a source git repo that acts as the "remote" for the builtin tap
+  const sourceDir = await makeTmpDir();
+  const tapJson = { name: BUILTIN_TAP.name, description: "Built-in tap", skills: skills.map((s) => ({ tags: [], ...s })) };
+  await Bun.write(join(sourceDir, "tap.json"), JSON.stringify(tapJson, null, 2));
+  await initRepo(sourceDir);
+  await commitAll(sourceDir);
+
+  // Clone it to tapDir(BUILTIN_TAP.name) — same path ensureBuiltinTap would use
+  const { $ } = await import("bun");
+  const destDir = join(getConfigDir(), "taps", BUILTIN_TAP.name);
+  await mkdir(join(getConfigDir(), "taps"), { recursive: true });
+  await $`git clone --depth=1 ${sourceDir} ${destDir}`.quiet();
+
+  return { sourceDir, cleanup: () => removeTmpDir(sourceDir) };
+}
+
+// ─── Unit tests: isBuiltinTapCloned / ensureBuiltinTap ───────────────────
+
+describe("isBuiltinTapCloned", () => {
+  test("returns false when builtin tap is not cloned", async () => {
+    expect(await isBuiltinTapCloned()).toBe(false);
+  });
+
+  test("returns true when tap.json exists in builtin tap dir", async () => {
+    const { cleanup } = await createClonedBuiltinTap();
+    try {
+      expect(await isBuiltinTapCloned()).toBe(true);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe("ensureBuiltinTap", () => {
+  test("returns ok(undefined) immediately when already cloned", async () => {
+    const { cleanup } = await createClonedBuiltinTap();
+    try {
+      const result = await ensureBuiltinTap();
+      expect(result.ok).toBe(true);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+// ─── loadTapJson edge cases (via addTap / loadTaps) ─────────────────────────
+
+describe("loadTapJson — invalid tap.json", () => {
+  test("addTap errors when cloned tap.json contains invalid JSON", async () => {
+    const tapDir = await makeTmpDir();
+    await Bun.write(join(tapDir, "tap.json"), "{ not valid json !!!");
+    await initRepo(tapDir);
+    await commitAll(tapDir);
+    try {
+      const result = await addTap("bad-json-tap", tapDir);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("Invalid JSON");
+    } finally {
+      await removeTmpDir(tapDir);
+    }
+  });
+
+  test("addTap errors when cloned tap.json has invalid schema", async () => {
+    const tapDir = await makeTmpDir();
+    await Bun.write(join(tapDir, "tap.json"), JSON.stringify({ unexpected: true }));
+    await initRepo(tapDir);
+    await commitAll(tapDir);
+    try {
+      const result = await addTap("bad-schema-tap", tapDir);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("Invalid tap.json");
+    } finally {
+      await removeTmpDir(tapDir);
+    }
+  });
+});
+
+// ─── addTap: builtin tap name ────────────────────────────────────────────────
+
+describe("addTap — builtin tap name", () => {
+  test("errors when adding a tap with the builtin tap name", async () => {
+    const tap = await createLocalTap([{ name: "skill-a", description: "A", repo: "https://example.com/a" }]);
+    try {
+      const result = await addTap(BUILTIN_TAP.name, tap.path);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain(BUILTIN_TAP.name);
+      expect(result.error.message).toContain("built-in tap");
+    } finally {
+      await tap.cleanup();
+    }
+  });
+});
+
+// ─── removeTap: builtin tap paths ────────────────────────────────────────────
+
+describe("removeTap — builtin tap", () => {
+  test("errors when builtin tap is already disabled", async () => {
+    // Write config with builtin_tap = false
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+    const result = await removeTap(BUILTIN_TAP.name);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("already disabled");
+  });
+
+  test("disables builtin tap and removes local dir when enabled", async () => {
+    const { cleanup } = await createClonedBuiltinTap();
+    try {
+      const result = await removeTap(BUILTIN_TAP.name);
+      expect(result.ok).toBe(true);
+
+      const config = await loadConfig();
+      expect(config.ok).toBe(true);
+      if (!config.ok) return;
+      expect(config.value.builtin_tap).toBe(false);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+// ─── updateTap: builtin tap paths ────────────────────────────────────────────
+
+describe("updateTap — builtin tap", () => {
+  test("errors when updating disabled builtin tap by name", async () => {
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+    const result = await updateTap(BUILTIN_TAP.name);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("not configured");
+  });
+
+  test("errors when builtin tap is not yet cloned", async () => {
+    const result = await updateTap(BUILTIN_TAP.name);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("not yet cloned");
+  });
+
+  test("pulls builtin tap when updating by name", async () => {
+    const { sourceDir, cleanup } = await createClonedBuiltinTap([
+      { name: "skill-a", description: "A", repo: "https://example.com/a" },
+    ]);
+    try {
+      const result = await updateTap(BUILTIN_TAP.name);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.updated[BUILTIN_TAP.name]).toBe(1);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  test("includes builtin tap when updating all and it is cloned", async () => {
+    const { cleanup } = await createClonedBuiltinTap([
+      { name: "skill-x", description: "X", repo: "https://example.com/x" },
+    ]);
+    try {
+      const result = await updateTap();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.updated[BUILTIN_TAP.name]).toBe(1);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+// ─── loadTaps: builtin tap entries ───────────────────────────────────────────
+
+describe("loadTaps — builtin tap", () => {
+  test("includes builtin tap skills when cloned", async () => {
+    const { cleanup } = await createClonedBuiltinTap([
+      { name: "builtin-skill", description: "A builtin skill", repo: "https://example.com/builtin" },
+    ]);
+    try {
+      const result = await loadTaps();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const builtinEntry = result.value.find((e) => e.tapName === BUILTIN_TAP.name);
+      expect(builtinEntry).toBeDefined();
+      expect(builtinEntry?.skill.name).toBe("builtin-skill");
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+// ─── initTap ─────────────────────────────────────────────────────────────────
+
+describe("initTap", () => {
+  test("creates tap directory with tap.json and git repo", async () => {
+    const workDir = await makeTmpDir();
+    const origCwd = process.cwd();
+    process.chdir(workDir);
+    try {
+      const result = await initTap("my-new-tap");
+      expect(result.ok).toBe(true);
+
+      const tapJsonFile = Bun.file(join(workDir, "my-new-tap", "tap.json"));
+      expect(await tapJsonFile.exists()).toBe(true);
+      const tapJson = await tapJsonFile.json();
+      expect(tapJson.name).toBe("my-new-tap");
+      expect(tapJson.skills).toEqual([]);
+
+      // Verify it's a git repo
+      expect(await Bun.file(join(workDir, "my-new-tap", ".git", "HEAD")).exists()).toBe(true);
+    } finally {
+      process.chdir(origCwd);
+      await removeTmpDir(workDir);
     }
   });
 });

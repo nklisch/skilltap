@@ -1,3 +1,4 @@
+import { AUTO_UPDATE_MODES, SCOPE_VALUES, SHOW_DIFF_MODES } from "./schemas/config";
 import type { Config } from "./schemas/config";
 import { err, ok, type Result, UserError } from "./types";
 
@@ -17,14 +18,14 @@ export type SettableKeyDef = {
 // ---------------------------------------------------------------------------
 
 export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
-  "defaults.scope": { type: "enum", enum: ["", "global", "project"] },
+  "defaults.scope": { type: "enum", enum: SCOPE_VALUES },
   "defaults.also": { type: "string[]" },
   "defaults.yes": { type: "boolean" },
   "security.agent": { type: "string" },
   "security.ollama_model": { type: "string" },
-  "updates.auto_update": { type: "enum", enum: ["off", "patch", "minor"] },
+  "updates.auto_update": { type: "enum", enum: AUTO_UPDATE_MODES },
   "updates.interval_hours": { type: "number" },
-  "updates.show_diff": { type: "enum", enum: ["full", "stat", "none"] },
+  "updates.show_diff": { type: "enum", enum: SHOW_DIFF_MODES },
 };
 
 const BLOCKED_SET_KEYS: Record<string, string> = {

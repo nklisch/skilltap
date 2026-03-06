@@ -1,6 +1,7 @@
 import { basename, dirname, join } from "node:path";
 import { parseSkillFrontmatter } from "./frontmatter";
 import { SkillFrontmatterSchema } from "./schemas";
+import { AGENT_PATHS } from "./symlink";
 
 export type ScannedSkill = {
   name: string;
@@ -130,13 +131,8 @@ export async function scan(dir: string, options?: ScanOptions): Promise<ScannedS
   }
 
   // Step 3: Agent-specific paths (scanned in parallel — independent directories)
-  const agentSpecificPatterns = [
-    ".claude/skills/*/SKILL.md",
-    ".cursor/skills/*/SKILL.md",
-    ".codex/skills/*/SKILL.md",
-    ".gemini/skills/*/SKILL.md",
-    ".windsurf/skills/*/SKILL.md",
-  ];
+  // Derived from AGENT_PATHS so adding a new agent automatically includes its directory.
+  const agentSpecificPatterns = Object.values(AGENT_PATHS).map(p => `${p}/*/SKILL.md`);
   const agentSpecificPaths = (
     await Promise.all(
       agentSpecificPatterns.map(async (pattern) => {

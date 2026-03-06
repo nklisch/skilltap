@@ -26,7 +26,8 @@ import {
   termWidth,
   truncate,
 } from "../ui/format";
-import { type CallbackContext, createInstallCallbacks } from "../ui/install-callbacks";
+import { createInstallCallbacks } from "../ui/install-callbacks";
+import { createStepLogger } from "../ui/install-steps";
 import { confirmSaveDefault, selectAgents, selectSkills } from "../ui/prompts";
 import { resolveScope } from "../ui/resolve";
 import { searchPrompt } from "../ui/search-prompt";
@@ -343,22 +344,25 @@ async function installChosen(
   }
 
   const s = spinner();
-  s.start(`Installing ${chosen.name}…`);
+  s.start(`Fetching ${chosen.name}…`);
 
-  const ctx: CallbackContext = {
+  const steps = createStepLogger(config.verbose);
+  const { callbacks, logScanResults } = createInstallCallbacks({
     spinner: s,
     onWarn: config.security.on_warn,
     skipScan: false,
     agent: undefined,
     yes: true, // user already picked from the search picker
-  };
+    source: chosen.name,
+    steps,
+  });
 
   const installResult = await installSkill(chosen.installRef, {
     scope,
     projectRoot,
     also,
     skipScan: false,
-    ...createInstallCallbacks(ctx),
+    ...callbacks,
     onSelectSkills: async (skills_list: ScannedSkill[]): Promise<string[]> => {
       if (chosen.preSelectedSkill) {
         const match = skills_list.find((sk) => sk.name === chosen.preSelectedSkill);
@@ -374,12 +378,13 @@ async function installChosen(
   });
 
   if (!installResult.ok) {
-    s.stop("Failed.");
+    s.stop("Failed.", 1);
     errorLine(installResult.error.message, installResult.error.hint);
     process.exit(1);
   }
 
-  s.stop("Done.");
+  s.stop();
+  logScanResults();
   for (const record of installResult.value.records) {
     successLine(`Installed ${record.name}`);
   }
