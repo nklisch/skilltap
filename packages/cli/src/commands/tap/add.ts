@@ -1,7 +1,7 @@
 import { intro, outro, spinner } from "@clack/prompts";
 import { addTap, loadConfig, parseGitHubTapShorthand } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
+import { agentError, exitWithError } from "../../ui/agent-out";
 import { errorLine, successLine } from "../../ui/format";
 
 export default defineCommand({
@@ -31,9 +31,7 @@ export default defineCommand({
 
     const typeOverride = args.type as "git" | "http" | undefined;
     if (typeOverride && typeOverride !== "git" && typeOverride !== "http") {
-      if (agentMode) agentError(`Invalid tap type '${typeOverride}'. Must be 'git' or 'http'.`);
-      else errorLine(`Invalid tap type '${typeOverride}'. Must be 'git' or 'http'.`);
-      process.exit(1);
+      exitWithError(agentMode, `Invalid tap type '${typeOverride}'. Must be 'git' or 'http'.`);
     }
 
     let tapName: string;
@@ -46,15 +44,11 @@ export default defineCommand({
     } else {
       const shorthand = parseGitHubTapShorthand(args.name);
       if (!shorthand) {
-        if (agentMode) {
-          agentError(`Cannot parse '${args.name}' as GitHub shorthand. Use 'skilltap tap add <name> <url>' or 'skilltap tap add owner/repo'.`);
-        } else {
-          errorLine(
-            `Cannot parse '${args.name}' as GitHub shorthand.`,
-            "Use 'skilltap tap add <name> <url>' or 'skilltap tap add owner/repo'.",
-          );
-        }
-        process.exit(1);
+        exitWithError(
+          agentMode,
+          `Cannot parse '${args.name}' as GitHub shorthand.`,
+          "Use 'skilltap tap add <name> <url>' or 'skilltap tap add owner/repo'.",
+        );
       }
       tapName = shorthand.name;
       tapUrl = shorthand.url;

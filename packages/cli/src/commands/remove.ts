@@ -1,7 +1,7 @@
 import { isCancel, spinner } from "@clack/prompts";
 import { findProjectRoot, type InstalledSkill, loadInstalled, removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../ui/agent-out";
+import { agentError, exitWithError } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../ui/prompts";
@@ -36,9 +36,7 @@ export default defineCommand({
     const projectRoot = await findProjectRoot().catch(() => undefined);
     const globalResult = await loadInstalled();
     if (!globalResult.ok) {
-      if (policy.agentMode) agentError(globalResult.error.message);
-      else errorLine(globalResult.error.message);
-      process.exit(1);
+      exitWithError(policy.agentMode, globalResult.error.message);
     }
     const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
     const allSkills: InstalledSkill[] = [
@@ -67,10 +65,11 @@ export default defineCommand({
       for (const name of names) {
         const skill = allSkills.find((s) => s.name === name);
         if (!skill) {
-          const msg = `Skill '${name}' is not installed`;
-          if (policy.agentMode) agentError(msg);
-          else errorLine(msg, "Run 'skilltap list' to see installed skills.");
-          process.exit(1);
+          exitWithError(
+            policy.agentMode,
+            `Skill '${name}' is not installed`,
+            "Run 'skilltap list' to see installed skills.",
+          );
         }
         skillsToRemove.push(skill);
       }

@@ -30,7 +30,7 @@ import {
 import { loadPolicyOrExit } from "../ui/policy";
 import {
   resolveAgentForAgentMode,
-  resolveAgentInteractive,
+  resolveSemanticInteractive,
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
 import { sendEvent, telemetryBase } from "../telemetry";
@@ -225,16 +225,7 @@ async function runInteractiveUpdate(
   policy: EffectivePolicy,
   projectRoot: string | undefined,
 ): Promise<void> {
-  const runSemantic =
-    policy.scanMode === "semantic" || args.semantic;
-
-  let agent: AgentAdapter | undefined;
-  if (runSemantic) {
-    agent = await resolveAgentInteractive(config);
-    if (!agent) {
-      log.warn("No agent CLI found on PATH. Skipping semantic scan.");
-    }
-  }
+  const { runSemantic, agent } = await resolveSemanticInteractive(policy, args, config);
 
   const result = await updateSkill({
     name,

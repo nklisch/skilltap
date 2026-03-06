@@ -1,6 +1,7 @@
 import type { SemanticWarning, StaticWarning, TrustInfo } from "@skilltap/core";
-import { agentTrustLabel } from "./trust";
+import { errorLine } from "./format";
 import { formatLineRef } from "./scan";
+import { agentTrustLabel } from "./trust";
 
 export function agentSuccess(
   name: string,
@@ -31,6 +32,16 @@ export function agentSkip(name: string, reason: string): void {
 
 export function agentError(message: string): void {
   process.stderr.write(`ERROR: ${message}\n`);
+}
+
+export function exitWithError(
+  agentMode: boolean,
+  message: string,
+  hint?: string,
+): never {
+  if (agentMode) agentError(message);
+  else errorLine(message, hint);
+  process.exit(1);
 }
 
 export function agentUpToDate(name: string): void {

@@ -1,6 +1,6 @@
 import { BUILTIN_TAP, loadConfig, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
+import { exitWithError } from "../../ui/agent-out";
 import { ansi, errorLine, table } from "../../ui/format";
 
 export default defineCommand({
@@ -38,9 +38,7 @@ export default defineCommand({
 
     const tapsResult = await loadTaps();
     if (!tapsResult.ok) {
-      if (agentMode) agentError(tapsResult.error.message);
-      else errorLine(tapsResult.error.message, tapsResult.error.hint);
-      process.exit(1);
+      exitWithError(agentMode, tapsResult.error.message, tapsResult.error.hint);
     }
 
     // Count skills per tap

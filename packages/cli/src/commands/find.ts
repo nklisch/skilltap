@@ -3,7 +3,6 @@ import type {
   Config,
   RegistrySearchResult,
   ScannedSkill,
-  StaticWarning,
   TapEntry,
 } from "@skilltap/core";
 import {
@@ -27,9 +26,9 @@ import {
   termWidth,
   truncate,
 } from "../ui/format";
-import { confirmInstall, confirmSaveDefault, selectAgents, selectSkills, selectTap } from "../ui/prompts";
+import { type CallbackContext, createInstallCallbacks } from "../ui/install-callbacks";
+import { confirmSaveDefault, selectAgents, selectSkills } from "../ui/prompts";
 import { resolveScope } from "../ui/resolve";
-import { printWarnings } from "../ui/scan";
 import { searchPrompt } from "../ui/search-prompt";
 import { formatTapTrust } from "../ui/trust";
 
@@ -346,35 +345,12 @@ async function installChosen(
   const s = spinner();
   s.start(`Installing ${chosen.name}…`);
 
-  const warningsCallback = async (
-    warnings: StaticWarning[],
-    skillName: string,
-  ): Promise<boolean> => {
-    s.stop();
-    printWarnings(warnings, skillName);
-    if (config.security.on_warn === "fail") {
-      errorLine(`Security warnings found in ${skillName} — aborting`);
-      process.exit(1);
-    }
-    const proceed = await confirmInstall(skillName);
-    if (isCancel(proceed) || proceed === false) process.exit(2);
-    s.start("Installing…");
-    return true;
-  };
-
-  const selectSkillsCallback = async (
-    skills_list: ScannedSkill[],
-  ): Promise<string[]> => {
-    if (chosen.preSelectedSkill) {
-      const match = skills_list.find((sk) => sk.name === chosen.preSelectedSkill);
-      if (match) return [match.name];
-    }
-    if (skills_list.length === 1) return skills_list.map((sk) => sk.name);
-    s.stop();
-    const selected = await selectSkills(skills_list);
-    if (isCancel(selected)) process.exit(2);
-    s.start("Installing…");
-    return selected as string[];
+  const ctx: CallbackContext = {
+    spinner: s,
+    onWarn: config.security.on_warn,
+    skipScan: false,
+    agent: undefined,
+    yes: true, // user already picked from the search picker
   };
 
   const installResult = await installSkill(chosen.installRef, {
@@ -382,14 +358,18 @@ async function installChosen(
     projectRoot,
     also,
     skipScan: false,
-    onWarnings: warningsCallback,
-    onSelectSkills: selectSkillsCallback,
-    onSelectTap: async (matches: TapEntry[]) => {
+    ...createInstallCallbacks(ctx),
+    onSelectSkills: async (skills_list: ScannedSkill[]): Promise<string[]> => {
+      if (chosen.preSelectedSkill) {
+        const match = skills_list.find((sk) => sk.name === chosen.preSelectedSkill);
+        if (match) return [match.name];
+      }
+      if (skills_list.length === 1) return skills_list.map((sk) => sk.name);
       s.stop();
-      const selected = await selectTap(matches);
+      const selected = await selectSkills(skills_list);
       if (isCancel(selected)) process.exit(2);
       s.start("Installing…");
-      return selected as TapEntry;
+      return selected as string[];
     },
   });
 

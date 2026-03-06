@@ -31,8 +31,8 @@ import {
 import {
   parseAlsoFlag,
   resolveAgentForAgentMode,
-  resolveAgentInteractive,
   resolveScope,
+  resolveSemanticInteractive,
 } from "../ui/resolve";
 import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
 
@@ -213,16 +213,7 @@ async function runInteractiveMode(
   const { onWarn, skipScan } = policy;
   let also = parseAlsoFlag(args.also, config);
 
-  const runSemantic =
-    policy.scanMode === "semantic" || args.semantic;
-
-  let agent: AgentAdapter | undefined;
-  if (runSemantic || config.security.scan === "semantic") {
-    agent = await resolveAgentInteractive(config);
-    if (!agent && runSemantic) {
-      log.warn("No agent CLI found on PATH. Skipping semantic scan.");
-    }
-  }
+  const { runSemantic, agent } = await resolveSemanticInteractive(policy, args, config);
 
   intro("skilltap");
 

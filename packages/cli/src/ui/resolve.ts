@@ -2,6 +2,7 @@ import { isCancel, log } from "@clack/prompts";
 import {
   type AgentAdapter,
   type Config,
+  type EffectivePolicy,
   type InstalledSkill,
   findProjectRoot,
   loadInstalled,
@@ -67,6 +68,23 @@ export function parseAlsoFlag(
     also.push(agent);
   }
   return also;
+}
+
+/** Resolve whether to run semantic scan and which agent to use, for interactive mode. */
+export async function resolveSemanticInteractive(
+  policy: EffectivePolicy,
+  args: { semantic: boolean },
+  config: Config,
+): Promise<{ runSemantic: boolean; agent: AgentAdapter | undefined }> {
+  const runSemantic = policy.scanMode === "semantic" || args.semantic;
+  let agent: AgentAdapter | undefined;
+  if (runSemantic) {
+    agent = await resolveAgentInteractive(config);
+    if (!agent) {
+      log.warn("No agent CLI found on PATH. Skipping semantic scan.");
+    }
+  }
+  return { runSemantic, agent };
 }
 
 /** Resolve agent for interactive mode: prompt user if needed, save choice to config. */
