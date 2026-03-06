@@ -230,7 +230,7 @@ export async function selectAgentForConfig(
     const path = await text({
       message: "Enter path to agent CLI binary:",
       validate(v) {
-        if (!v.startsWith("/")) return "Must be an absolute path";
+        if (!v || !v.startsWith("/")) return "Must be an absolute path";
       },
     });
     if (isCancel(path)) {

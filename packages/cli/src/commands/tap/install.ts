@@ -225,7 +225,7 @@ export default defineCommand({
       });
 
       if (!result.ok) {
-        s.stop(`Failed.`, 1);
+        s.stop("Failed.");
         errors.push({ name: skillName, message: result.error.message });
       } else {
         s.stop(`Done.`);

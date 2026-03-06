@@ -246,6 +246,7 @@ describe("saveInstalled", () => {
       skills: [
         {
           name: "my-skill",
+          description: "",
           repo: "https://example.com/repo.git",
           ref: "main",
           sha: "deadbeef",

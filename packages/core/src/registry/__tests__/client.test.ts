@@ -1,5 +1,4 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import type { Server } from "bun";
 import { detectTapType, fetchSkillDetail, fetchSkillList } from "../client";
 
 const SKILLS_LIST = {
@@ -26,7 +25,7 @@ const SKILL_DETAIL = {
   source: { type: "git", url: "https://github.com/owner/commit-helper" },
 };
 
-let server: Server;
+let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 let lastAuthHeader: string | null = null;
 

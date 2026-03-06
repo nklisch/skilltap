@@ -15,7 +15,11 @@ const DEFAULT_CONFIG: Config = {
     ollama_model: "",
   },
   "agent-mode": { enabled: false, scope: "project" },
+  registry: { enabled: ["skills.sh"], sources: [], allow_npm: true },
+  builtin_tap: true,
   taps: [],
+  updates: { auto_update: "off", interval_hours: 24, skill_check_interval_hours: 24, show_diff: "full" },
+  telemetry: { enabled: false, notice_shown: false, anonymous_id: "" },
 };
 
 function mockAdapter(name: string, available: boolean): AgentAdapter {

@@ -20,7 +20,19 @@ export * from "./scanner";
 export * from "./schemas";
 export * from "./security";
 export * from "./symlink";
-export * from "./registry";
+// Export registry module — exclude names that conflict with ./schemas and ./skills-registry
+export type {
+  RegistryDetailResponse,
+  RegistryListResponse,
+} from "./registry/types";
+export {
+  RegistryDetailResponseSchema,
+  RegistryListResponseSchema,
+  RegistrySkillSchema,
+  RegistryTrustSchema,
+} from "./registry/types";
+export type { RegistryAuth, FetchSkillListResult } from "./registry/client";
+export { detectTapType, fetchSkillList, fetchSkillDetail } from "./registry/client";
 export * from "./taps";
 export * from "./templates";
 export * from "./trust";

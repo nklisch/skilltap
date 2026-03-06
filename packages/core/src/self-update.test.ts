@@ -118,15 +118,15 @@ describe("isCompiledBinary", () => {
 
 const fakeBinary = new Uint8Array([0x7f, 0x45, 0x4c, 0x46]); // ELF magic bytes
 
-function okFetch(_url: string): Promise<Response> {
+function okFetch(_url: string | URL): Promise<Response> {
   return Promise.resolve(new Response(fakeBinary, { status: 200 }));
 }
 
-function notFoundFetch(_url: string): Promise<Response> {
+function notFoundFetch(_url: string | URL): Promise<Response> {
   return Promise.resolve(new Response(null, { status: 404 }));
 }
 
-function networkErrorFetch(_url: string): Promise<Response> {
+function networkErrorFetch(_url: string | URL): Promise<Response> {
   return Promise.reject(new Error("ECONNREFUSED: connection refused"));
 }
 

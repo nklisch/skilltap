@@ -272,7 +272,7 @@ async function runInteractiveMode(
   });
 
   if (!result.ok) {
-    s.stop("Failed.", 1);
+    s.stop("Failed.");
     sendEvent(config, "install", {
       ...telemetryBase(false),
       adapter: inferAdapter(args.source),

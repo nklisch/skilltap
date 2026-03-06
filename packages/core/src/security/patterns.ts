@@ -1,3 +1,4 @@
+/// <reference path="../anti-trojan-source.d.ts" />
 import { hasConfusables } from "anti-trojan-source";
 import { replace as removeInvisible } from "out-of-character";
 

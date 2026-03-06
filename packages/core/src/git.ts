@@ -26,7 +26,7 @@ async function wrapGit<T>(
     const stderr = extractStderr(e);
     debug(msg, { stderr });
     return err(
-      new GitError(`${msg}: ${stderr}`, hint ? { hint } : undefined),
+      new GitError(`${msg}: ${stderr}`, hint),
     );
   }
 }

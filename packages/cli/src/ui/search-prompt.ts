@@ -77,12 +77,12 @@ function wrapAsResults<T>(items: T[]): FzfResultItem<T>[] {
 // ---------------------------------------------------------------------------
 
 class SearchPromptImpl<T> extends Prompt<T> {
-  private opts: SearchPromptOptions<T>;
+  private _opts: SearchPromptOptions<T>;
 
   // Data
   private allItems: T[] = [];
   private fzfResults: FzfResultItem<T>[] = [];
-  private fzfInstance: Fzf<T> | null = null;
+  private fzfInstance: Fzf<T[]> | null = null;
   private optionsCursor = 0;
 
   // Multiselect state
@@ -120,7 +120,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
       true, // trackValue: sync userInput with readline
     );
     instance = this;
-    this.opts = opts;
+    this._opts = opts;
 
     // Grab the bound render method from the base class (private in TS, exists at runtime)
     this.rerender = (this as any).render.bind(this);
@@ -158,14 +158,14 @@ class SearchPromptImpl<T> extends Prompt<T> {
   override prompt(): Promise<symbol | T | undefined> {
     const f = footer();
     if (f.isActive) {
-      f.setContext(this.opts.multiselect ? "search-multiselect" : "search");
+      f.setContext(this._opts.multiselect ? "search-multiselect" : "search");
     }
     const result = super.prompt();
     // Always trigger an initial fetch. When initialQuery is set, the base
     // class fires userInput which may have already called scheduleFetch, but
     // calling it again just aborts+restarts (idempotent).
     this.scheduleFetch(this.userInput || "");
-    if (this.opts.multiselect) {
+    if (this._opts.multiselect) {
       return result.then((r) => {
         if (r === undefined || typeof r === "symbol") return r;
         return Array.from(this._selectedMap.values()) as unknown as T;
@@ -178,7 +178,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
   protected _isActionKey(char: string | undefined, _key: Key): boolean {
     // Only tab is an "action key" (deleted from readline buffer).
     // Arrow keys are escape sequences and don't insert into readline.
-    if (char === " " && this.opts.multiselect) {
+    if (char === " " && this._opts.multiselect) {
       this.toggleSelection();
       return true;
     }
@@ -186,7 +186,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
   }
 
   private getKey(item: T): string {
-    return this.opts.selector ? this.opts.selector(item) : String(item);
+    return this._opts.selector ? this._opts.selector(item) : String(item);
   }
 
   private toggleSelection(): void {
@@ -237,13 +237,13 @@ class SearchPromptImpl<T> extends Prompt<T> {
     this.setLoading(true);
     this.debounceTimer = setTimeout(() => {
       this.executeFetch(query, controller);
-    }, this.opts.debounce ?? 250);
+    }, this._opts.debounce ?? 250);
   }
 
   private executeFetch(query: string, controller: AbortController): void {
     let result: T[] | Promise<T[]>;
     try {
-      result = this.opts.source(query, controller.signal);
+      result = this._opts.source(query, controller.signal);
     } catch {
       return;
     }
@@ -282,17 +282,21 @@ class SearchPromptImpl<T> extends Prompt<T> {
   // ---------------------------------------------------------------------------
 
   private rebuildFzf(): void {
-    this.fzfInstance = new Fzf(this.allItems, {
-      selector: this.opts.selector ?? ((item: T) => String(item)),
+    // SyncOptionsTuple<T> is a deferred conditional type — bypass with cast
+    const fzfOpts = {
+      selector: this._opts.selector ?? ((item: T) => String(item)),
       limit: 50,
       tiebreakers: [byLengthAsc],
       casing: "case-insensitive",
-    });
+    };
+    this.fzfInstance = new (Fzf as new (list: T[], opts: typeof fzfOpts) => Fzf<T[]>)(
+      this.allItems, fzfOpts,
+    );
   }
 
   private applyFzf(query: string): void {
     if (query && this.fzfInstance) {
-      this.fzfResults = this.fzfInstance.find(query);
+      this.fzfResults = this.fzfInstance.find(query) as FzfResultItem<T>[];
     } else {
       this.fzfResults = wrapAsResults(this.allItems);
     }
@@ -364,27 +368,27 @@ class SearchPromptImpl<T> extends Prompt<T> {
 
     switch (this.state) {
       case "submit": {
-        if (this.opts.multiselect) {
+        if (this._opts.multiselect) {
           const count = this._selectedMap.size;
           return [
-            `${symbol(this.state)}  ${this.opts.message}`,
+            `${symbol(this.state)}  ${this._opts.message}`,
             `${bar}  ${pc.dim(`${count} selected`)}`,
           ].join("\n");
         }
         const selected = this.value;
         const label = selected
-          ? this.opts.selector
-            ? this.opts.selector(selected).split(" ")[0] // name portion
+          ? this._opts.selector
+            ? this._opts.selector(selected).split(" ")[0] // name portion
             : String(selected)
           : "";
         return [
-          `${symbol(this.state)}  ${this.opts.message}`,
+          `${symbol(this.state)}  ${this._opts.message}`,
           `${bar}  ${pc.dim(label)}`,
         ].join("\n");
       }
 
       case "cancel": {
-        const lines = [`${symbol(this.state)}  ${this.opts.message}`];
+        const lines = [`${symbol(this.state)}  ${this._opts.message}`];
         if (this.userInput) {
           lines.push(
             `${bar}  ${pc.strikethrough(pc.dim(this.userInput))}`,
@@ -405,12 +409,12 @@ class SearchPromptImpl<T> extends Prompt<T> {
           ? pc.magenta(SPINNER_FRAMES[this.spinnerFrame])
           : symbol(this.state);
         const lines: string[] = [
-          `${headerSymbol}  ${this.opts.message}`,
+          `${headerSymbol}  ${this._opts.message}`,
           cBar,
         ];
 
         // Search input
-        const placeholder = this.opts.placeholder;
+        const placeholder = this._opts.placeholder;
         const showPlaceholder = !this.userInput && placeholder;
         const inputDisplay = showPlaceholder
           ? ` ${pc.dim(placeholder)}`
@@ -449,11 +453,11 @@ class SearchPromptImpl<T> extends Prompt<T> {
           const optionLines = limitOptions({
             cursor: this.optionsCursor,
             options: this.fzfResults,
-            maxItems: this.opts.maxItems,
+            maxItems: this._opts.maxItems,
             columnPadding: 3, // bar + 2 spaces
             rowPadding: lines.length + footerLineCount,
             style: (fzfResult: FzfResultItem<T>, active: boolean) =>
-              this.opts.renderItem(
+              this._opts.renderItem(
                 fzfResult.item,
                 active,
                 fzfResult.positions.size > 0

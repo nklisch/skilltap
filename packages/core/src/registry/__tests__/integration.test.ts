@@ -2,7 +2,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import type { Server } from "bun";
 import { addTap, loadTaps, removeTap, searchTaps, updateTap } from "../../taps";
 
 // Mock registry data
@@ -38,7 +37,7 @@ const REGISTRY_SKILLS = [
   },
 ];
 
-let server: Server;
+let server: ReturnType<typeof Bun.serve>;
 let baseUrl: string;
 let configDir: string;
 let origXdg: string | undefined;

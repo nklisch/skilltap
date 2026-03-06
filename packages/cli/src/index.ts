@@ -146,7 +146,7 @@ async function runStartupUpdateCheck(): Promise<void> {
     (autoUpdate === "minor" && (type === "patch" || type === "minor"));
 
   // Major releases are never auto-updated — always just notify
-  if (autoUpdateCoversType && type !== "major" && isCompiledBinary()) {
+  if (autoUpdateCoversType && isCompiledBinary()) {
     process.stderr.write(`⟳  Auto-updating skilltap ${current} → ${latest} (${type})…\n`);
     const installResult = await downloadAndInstall(latest);
     if (installResult.ok) {

@@ -289,11 +289,11 @@ function withFooter<T>(ctx: FooterContext, fn: () => T): T {
 }
 
 export function footerSelect<Value>(opts: SelectParams): ReturnType<typeof _select<Value>> {
-  return withFooter("select", () => _select<Value>(opts));
+  return withFooter("select", () => _select<Value>(opts as Parameters<typeof _select<Value>>[0]));
 }
 
 export function footerMultiselect<Value>(opts: MultiselectParams): ReturnType<typeof _multiselect<Value>> {
-  return withFooter("multiselect", () => _multiselect<Value>(opts));
+  return withFooter("multiselect", () => _multiselect<Value>(opts as Parameters<typeof _multiselect<Value>>[0]));
 }
 
 export function footerConfirm(opts: ConfirmParams): ReturnType<typeof _confirm> {

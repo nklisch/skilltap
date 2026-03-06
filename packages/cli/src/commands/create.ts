@@ -8,7 +8,7 @@ import { ansi, errorLine, successLine } from "../ui/format";
 
 const NAME_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
-function validateName(name: string): string | undefined {
+function validateName(name: string | undefined): string | undefined {
   if (!name) return "Skill name is required";
   if (name.length > 64) return "Skill name must be 64 characters or fewer";
   if (!NAME_REGEX.test(name))

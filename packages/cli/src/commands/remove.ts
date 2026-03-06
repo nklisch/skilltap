@@ -123,7 +123,7 @@ export default defineCommand({
         projectRoot: skill.scope === "project" ? projectRoot : undefined,
       });
       if (!result.ok) {
-        s.stop("Failed.", 1);
+        s.stop("Failed.");
         sendEvent(config, "remove", {
           ...telemetryBase(false),
           success: false,

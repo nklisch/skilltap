@@ -28,7 +28,7 @@ type Spinner = {
 
 export type CallbackContext = {
   spinner: Spinner;
-  onWarn: "fail" | "ask" | "skip";
+  onWarn: "fail" | "prompt" | "ask" | "skip";
   skipScan: boolean;
   agent: AgentAdapter | undefined;
   yes: boolean;

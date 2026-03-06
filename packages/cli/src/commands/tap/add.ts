@@ -73,7 +73,7 @@ export default defineCommand({
     const result = await addTap(tapName, tapUrl, typeOverride);
 
     if (!result.ok) {
-      s.stop("Failed.", 1);
+      s.stop("Failed.");
       errorLine(result.error.message, result.error.hint);
       process.exit(1);
     }

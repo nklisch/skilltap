@@ -374,7 +374,7 @@ async function installChosen(
   });
 
   if (!installResult.ok) {
-    s.stop("Failed.", 1);
+    s.stop("Failed.");
     errorLine(installResult.error.message, installResult.error.hint);
     process.exit(1);
   }

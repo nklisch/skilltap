@@ -124,7 +124,7 @@ function getPlatformAsset(): string | null {
   return null;
 }
 
-type FetchFn = typeof fetch;
+type FetchFn = (url: string | URL, init?: { signal?: AbortSignal }) => Promise<Response>;
 
 /**
  * Download the specified release from GitHub and atomically replace the

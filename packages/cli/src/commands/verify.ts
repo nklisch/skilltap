@@ -76,7 +76,7 @@ export default defineCommand({
     const result = await validateSkill(skillPath);
 
     if (!result.ok) {
-      s.stop("Failed.", 1);
+      s.stop("Failed.");
       errorLine(result.error.message, result.error.hint);
       process.exit(1);
     }
@@ -187,7 +187,7 @@ async function runAll(useJson: boolean): Promise<void> {
     const result = await validateSkill(skill.path);
 
     if (!result.ok) {
-      s.stop(`${skill.name} — ${ansi.red("error")}: ${result.error.message}`, 1);
+      s.stop(`${skill.name} — ${ansi.red("error")}: ${result.error.message}`);
       failed++;
       continue;
     }

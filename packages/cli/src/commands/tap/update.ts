@@ -24,7 +24,7 @@ export default defineCommand({
     const result = await updateTap(tapName);
 
     if (!result.ok) {
-      s.stop("Failed.", 1);
+      s.stop("Failed.");
       errorLine(result.error.message, result.error.hint);
       process.exit(1);
     }
