@@ -3,7 +3,8 @@
  *
  * Uses the Node.js PTY bridge to drive the interactive search UI.
  * Tests cover: prompt appearance, typing to filter, arrow navigation,
- * Enter to select, Ctrl+C to cancel, pre-filled queries, and no-match state.
+ * Enter to select, Ctrl+C to cancel, pre-filled queries, no-match state,
+ * and agent selection prompt during install.
  */
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -264,6 +265,83 @@ describe("find -i — search prompt", () => {
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
         expect(exitCode).toBe(2);
+      } finally {
+        await tap.cleanup();
+      }
+    },
+    30_000,
+  );
+
+  test(
+    "shows agent selection prompt during install when no defaults set",
+    async () => {
+      const tap = await createLocalTap([
+        {
+          name: "commit-helper",
+          description: "Generates commit messages",
+          repo: "https://example.com/a",
+        },
+      ]);
+      try {
+        await addTap(tap.path);
+
+        const session = await runInteractive(
+          [...CMD, "find", "-i", "--local"],
+          { cwd: CLI_DIR, env: env() },
+        );
+
+        await session.waitForText("Search for skills:");
+        await session.waitForText("commit-helper");
+        session.sendKey("ENTER"); // select skill
+
+        await session.waitForText("Install to:");
+        session.sendKey("ENTER"); // accept Global scope
+
+        await session.waitForText("Which agents should this skill be available to?");
+
+        session.sendKey("CTRL_C");
+        const { exitCode } = await session.finish();
+        expect(exitCode).toBe(2);
+      } finally {
+        await tap.cleanup();
+      }
+    },
+    30_000,
+  );
+
+  test(
+    "skips agent selection prompt when defaults.also is configured",
+    async () => {
+      await mkdir(join(configDir, "skilltap"), { recursive: true });
+      await Bun.write(
+        join(configDir, "skilltap", "config.toml"),
+        'builtin_tap = false\n[defaults]\nscope = "global"\nalso = ["claude-code"]\n',
+      );
+
+      const tap = await createLocalTap([
+        {
+          name: "commit-helper",
+          description: "Generates commit messages",
+          repo: "https://example.com/a",
+        },
+      ]);
+      try {
+        await addTap(tap.path);
+
+        const session = await runInteractive(
+          [...CMD, "find", "-i", "--local"],
+          { cwd: CLI_DIR, env: env() },
+        );
+
+        await session.waitForText("Search for skills:");
+        await session.waitForText("commit-helper");
+        session.sendKey("ENTER"); // select skill — scope and agent prompts both skipped by config
+
+        // Install will fail (fake URL) but agent prompt must never appear
+        await session.waitForText("Failed");
+        expect(session.output()).not.toContain("Which agents should this skill be available to?");
+
+        session.kill();
       } finally {
         await tap.cleanup();
       }
