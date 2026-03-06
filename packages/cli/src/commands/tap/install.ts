@@ -1,11 +1,14 @@
 import { intro, isCancel, outro, spinner } from "@clack/prompts";
-import type { TapEntry } from "@skilltap/core";
+import type { InstalledSkill, TapEntry } from "@skilltap/core";
 import {
   ensureBuiltinTap,
+  findProjectRoot,
   installSkill,
   isBuiltinTapCloned,
   loadConfig,
+  loadInstalled,
   loadTaps,
+  removeSkill,
   saveConfig,
   searchTaps,
   skillInstallDir,
@@ -14,6 +17,7 @@ import { defineCommand } from "citty";
 import pc from "picocolors";
 import { errorLine, successLine, termWidth, truncate } from "../../ui/format";
 import { createInstallCallbacks } from "../../ui/install-callbacks";
+import { createStepLogger } from "../../ui/install-steps";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmSaveDefault, selectAgents } from "../../ui/prompts";
 import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
@@ -125,6 +129,29 @@ export default defineCommand({
       tapEntries = tapEntries.filter((e) => e.tapName === args.tap);
     }
 
+    // Load installed skills for pre-selection
+    const installedNames = new Set<string>();
+    const installedSkills: InstalledSkill[] = [];
+    const detectedProjectRoot = await findProjectRoot().catch(() => undefined);
+    const globalInstalledResult = await loadInstalled();
+    if (globalInstalledResult.ok) {
+      for (const s of globalInstalledResult.value.skills) {
+        installedNames.add(s.name);
+        installedSkills.push(s);
+      }
+    }
+    const projectInstalledResult = detectedProjectRoot
+      ? await loadInstalled(detectedProjectRoot)
+      : null;
+    if (projectInstalledResult?.ok) {
+      for (const s of projectInstalledResult.value.skills) {
+        if (!installedNames.has(s.name)) {
+          installedNames.add(s.name);
+          installedSkills.push(s);
+        }
+      }
+    }
+
     // Select skills
     let selected: TapEntry[];
 
@@ -134,10 +161,12 @@ export default defineCommand({
       const width = termWidth();
       const maxLabelWidth = Math.max(40, width - 10);
 
-      const result = await searchPrompt({
+      const result = await searchPrompt<TapEntry>({
         message: "Select tap skills to install:",
         placeholder: "type to filter…",
         multiselect: true,
+        allowEmpty: true,
+        initialSelected: (e) => installedNames.has(e.skill.name),
         source: (query, _signal) => {
           if (!query.trim()) return tapEntries;
           return searchTaps(tapEntries, query);
@@ -145,24 +174,35 @@ export default defineCommand({
         selector: (e) =>
           `${e.skill.name} ${e.skill.description} ${e.skill.tags.join(" ")}`,
         renderItem: (entry, active, _positions, selected) => {
-          const checkbox = selected
-            ? pc.green("◆")
-            : active
-              ? pc.cyan("◇")
-              : pc.dim("◇");
+          const isInstalled = installedNames.has(entry.skill.name);
+          const willRemove = isInstalled && !selected;
+          const checkbox = willRemove
+            ? active
+              ? pc.red("◆")
+              : pc.dim(pc.red("◆"))
+            : selected
+              ? pc.green("◆")
+              : active
+                ? pc.cyan("◇")
+                : pc.dim("◇");
           const rawName = truncate(entry.skill.name, 30);
-          const nameStr = active ? pc.cyan(rawName) : pc.dim(rawName);
+          const nameStr = willRemove
+            ? pc.red(rawName)
+            : active
+              ? pc.cyan(rawName)
+              : pc.dim(rawName);
           const source = `[${entry.tapName}]`;
-          const fixedCols = rawName.length + 2 + source.length + 2;
+          const installedTag = isInstalled ? pc.dim(" installed") : "";
+          const fixedCols = rawName.length + 2 + source.length + 2 + (isInstalled ? 10 : 0);
           const descSpace = Math.max(0, maxLabelWidth - fixedCols);
           const desc = entry.skill.description
             ? truncate(entry.skill.description, descSpace)
             : "";
           const pad = Math.max(
             1,
-            maxLabelWidth - rawName.length - desc.length - source.length - 2,
+            maxLabelWidth - rawName.length - desc.length - source.length - 2 - (isInstalled ? 10 : 0),
           );
-          return `${checkbox} ${nameStr}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(source)}`;
+          return `${checkbox} ${nameStr}${installedTag}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(source)}`;
         },
       });
 
@@ -170,45 +210,80 @@ export default defineCommand({
       selected = result as TapEntry[];
     }
 
-    if (selected.length === 0) {
+    // Compute what to install vs remove
+    const selectedNames = new Set(selected.map((e) => e.skill.name));
+    const toInstall = selected.filter((e) => !installedNames.has(e.skill.name));
+    const toRemove = installedSkills.filter(
+      (s) =>
+        tapEntries.some((e) => e.skill.name === s.name) &&
+        !selectedNames.has(s.name),
+    );
+
+    if (toInstall.length === 0 && toRemove.length === 0) {
       process.exit(0);
     }
 
     intro("skilltap");
 
-    const { scope, projectRoot } = await resolveScope(
-      { project: args.project, global: args.global },
-      config,
-    );
-    let also = parseAlsoFlag(args.also, config);
+    const errors: { name: string; message: string }[] = [];
 
-    if (!args.also && !policy.yes && !config.defaults.also.length) {
-      const selected = await selectAgents(also);
-      if (isCancel(selected)) process.exit(2);
-      also = selected as string[];
+    // Resolve scope/also only when there are new skills to install
+    let scope: "global" | "project" = "global";
+    let projectRoot: string | undefined;
+    let also: string[] = [];
 
-      if (also.length) {
-        const save = await confirmSaveDefault("Save agent selection as default?");
-        if (!isCancel(save) && save) {
-          config.defaults.also = also;
-          await saveConfig(config);
+    if (toInstall.length > 0) {
+      ({ scope, projectRoot } = await resolveScope(
+        { project: args.project, global: args.global },
+        config,
+      ));
+      also = parseAlsoFlag(args.also, config);
+
+      if (!args.also && !policy.yes && !config.defaults.also.length) {
+        const agentSelected = await selectAgents(also);
+        if (isCancel(agentSelected)) process.exit(2);
+        also = agentSelected as string[];
+
+        if (also.length) {
+          const save = await confirmSaveDefault("Save agent selection as default?");
+          if (!isCancel(save) && save) {
+            config.defaults.also = also;
+            await saveConfig(config);
+          }
         }
       }
     }
 
-    const errors: { name: string; message: string }[] = [];
+    // Remove deselected skills
+    for (const skill of toRemove) {
+      const s = spinner();
+      s.start(`Removing ${skill.name}…`);
+      const result = await removeSkill(skill.name, {
+        scope: skill.scope,
+        projectRoot: skill.scope === "project" ? detectedProjectRoot : undefined,
+      });
+      s.stop();
+      if (!result.ok) {
+        errors.push({ name: skill.name, message: result.error.message });
+      } else {
+        successLine(`Removed ${skill.name}`);
+      }
+    }
 
-    for (const entry of selected) {
+    for (const entry of toInstall) {
       const skillName = entry.skill.name;
       const s = spinner();
-      s.start(`Installing ${skillName}…`);
+      s.start(`Fetching ${skillName}…`);
 
-      const callbacks = createInstallCallbacks({
+      const steps = createStepLogger(config.verbose);
+      const { callbacks, logScanResults } = createInstallCallbacks({
         spinner: s,
         onWarn: policy.onWarn,
         skipScan: policy.skipScan,
         agent: undefined,
         yes: policy.yes,
+        source: skillName,
+        steps,
       });
 
       const result = await installSkill(skillName, {
@@ -225,10 +300,11 @@ export default defineCommand({
       });
 
       if (!result.ok) {
-        s.stop("Failed.");
+        s.stop();
         errors.push({ name: skillName, message: result.error.message });
       } else {
-        s.stop(`Done.`);
+        s.stop();
+        logScanResults();
         for (const record of result.value.records) {
           successLine(
             `${record.name} → ${skillInstallDir(record.name, scope, projectRoot)}`,

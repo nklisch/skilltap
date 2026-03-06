@@ -67,6 +67,7 @@ Source resolution order:
 | `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
 | `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
+| `--quiet` | boolean | `false` | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
 
 ### Prompt Behavior
 
@@ -251,6 +252,8 @@ skilltap update [name] [flags]
 | `--check` / `-c` | boolean | `false` | Check for updates without applying them. Fetches all remotes, shows which skills have updates, then exits. Refreshes the background update cache. |
 
 ### Behavior
+
+Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. HTTP taps are always live. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
 
 For each skill:
 
@@ -753,28 +756,50 @@ skilltap tap list
 
 ---
 
-## skilltap tap update
+## skilltap tap install
 
-Update tap repos (git pull). HTTP taps are always live — this is a no-op for them.
+Browse and install skills from your configured taps using an interactive picker.
 
 ```
-skilltap tap update [name]
+skilltap tap install [flags]
 ```
 
-### Arguments
+### Flags
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Specific tap to update. If omitted, updates all git taps. |
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--tap <name>` | string | — | Show only skills from this tap |
+| `--project` | boolean | `false` | Install to `.agents/skills/` in current project |
+| `--global` | boolean | `false` | Install to `~/.agents/skills/` |
+| `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. |
+| `--yes` | boolean | `false` | Auto-select and install without prompts |
+| `--strict` | boolean | from config | Abort on any security warning |
+| `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
+| `--semantic` | boolean | `false` | Force Layer 2 semantic scan |
+| `--skip-scan` | boolean | `false` | Skip security scanning |
+
+### Behavior
+
+Opens a searchable multiselect picker over all tap skills. Skills you've already installed are pre-selected and marked `installed`. Deselecting an installed skill removes it.
+
+After confirming the selection:
+- Skills newly selected → installed (same flow as `skilltap install`)
+- Skills deselected (were installed) → removed with `skilltap remove`
+- No changes → exits immediately
+
+Scope and agent symlink prompts only appear when there are skills to install.
 
 ### Examples
 
 ```bash
-# Update all taps
-skilltap tap update
+# Browse all taps
+skilltap tap install
 
-# Update a specific tap
-skilltap tap update home
+# Browse only the "home" tap
+skilltap tap install --tap home
+
+# Non-interactive: install all tap skills, global scope
+skilltap tap install --yes --global
 ```
 
 ---
@@ -1120,7 +1145,7 @@ The completion scripts call `skilltap --get-completions <type>` to provide live 
 - `installed-skills` — for `remove`, `update`, `info`
 - `linked-skills` — for `unlink`
 - `tap-skills` — for `install`
-- `tap-names` — for `tap remove`, `tap update`
+- `tap-names` — for `tap remove`
 
 ### Examples
 

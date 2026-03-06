@@ -256,6 +256,23 @@ enabled = []
 
 ---
 
+## `verbose`
+
+Top-level boolean. Controls whether install step details (fetched, scan clean) are logged during `skilltap install` and `skilltap tap install`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `verbose` | boolean | `true` | Show step-by-step install progress. Set to `false` to suppress. Can also be overridden per-invocation with `--quiet`. |
+
+### Example
+
+```toml
+# Suppress step details during install (show only success/error lines)
+verbose = false
+```
+
+---
+
 ## `[[taps]]`
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
@@ -340,6 +357,9 @@ enabled = ["skills.sh"]
 # Telemetry (managed via `skilltap telemetry enable/disable`)
 [telemetry]
 enabled = false
+
+# Show step details during install (fetched, scan clean). Set false to silence.
+verbose = true
 
 # Tap definitions
 [[taps]]

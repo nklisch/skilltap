@@ -25,6 +25,9 @@ export async function ensureDirs(): Promise<Result<void>> {
 
 // Static template preserves comments for user reference.
 // smol-toml.stringify() strips comments, so saveConfig() will lose them — acceptable.
+// NOTE: valid-values comments below are documentation only. Keep in sync with:
+//   - AGENT_PATHS / AGENT_LABELS in core/src/symlink.ts (for agent IDs)
+//   - SCAN_MODES / ON_WARN_MODES / etc. in core/src/schemas/config.ts (for enum values)
 const DEFAULT_CONFIG_TEMPLATE = `# Default settings for install commands
 [defaults]
 # Agent-specific directories to also symlink to on every install
@@ -55,8 +58,8 @@ on_warn = "prompt"
 require_scan = false
 
 # Agent CLI to use for semantic scanning.
-# Values: "claude", "gemini", "codex", "opencode", "ollama", or an absolute path
-# to a custom binary (e.g. "/usr/local/bin/my-llm").
+# Values: see KNOWN_AGENT_NAMES in core/src/agents/detect.ts (claude, gemini, codex, opencode, ollama)
+# or an absolute path to a custom binary (e.g. "/usr/local/bin/my-llm").
 # Empty string = prompt on first use, then save selection.
 agent = ""
 
@@ -95,6 +98,9 @@ enabled = ["skills.sh"]
 # Built-in tap: the official skilltap-skills collection.
 # Set to false to opt out of the built-in tap entirely.
 builtin_tap = true
+
+# Show step details during install (fetched, scan clean). Set false to silence.
+# verbose = true
 
 # Additional tap definitions (repeatable section)
 # [[taps]]

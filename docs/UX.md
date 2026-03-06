@@ -75,6 +75,7 @@ Source resolution order is defined in [SPEC.md — Source resolution](./SPEC.md#
 --no-strict        Override config on_warn=fail for this invocation
 --semantic         Force Layer 2 semantic scan
 --skip-scan        Skip security scanning (blocked if require_scan=true)
+--quiet            Suppress install step details (overrides verbose=true in config)
 ```
 
 ### Flag Combinations
@@ -698,20 +699,27 @@ $ skilltap tap list
 No taps configured. Run 'skilltap tap add <name> <url>' to add one.
 ```
 
-### tap update
+### tap install
 
 ```
-skilltap tap update [name]
+skilltap tap install [--tap <name>]
 ```
 
-```
-$ skilltap tap update
-Updating home... ✓ (1 new skill)
-Updating community... ✓ (up to date)
+Opens a searchable multiselect picker of all tap skills. Already-installed skills are pre-selected (shown with `installed` tag). Deselecting an installed skill removes it.
 
-$ skilltap tap update home
-Updating home... ✓ (up to date)
 ```
+$ skilltap tap install
+
+  Select tap skills to install (Space to toggle, Enter to confirm):
+  > type to filter…
+  ◆ commit-helper installed  Generates conventional commits    [skilltap-skills]
+  ◇ code-review              AI-powered pull request review    [skilltap-skills]
+  ◇ git-standup              Summarize your git activity       [skilltap-skills]
+```
+
+After selection, installs new picks and removes deselected ones. Scope/agent prompts only appear when installing new skills.
+
+---
 
 ### tap init
 
@@ -1648,7 +1656,7 @@ $ skilltap completions fish --install
 - All commands and subcommands
 - All flags (including `--also` values, `--template` values)
 - Dynamic: installed skill names for `remove`, `update`, `unlink`, `info`
-- Dynamic: tap names for `tap remove`, `tap update`
+- Dynamic: tap names for `tap remove`
 
 ---
 

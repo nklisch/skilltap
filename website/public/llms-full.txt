@@ -1191,19 +1191,9 @@ Shows all registered taps with their names, URLs, type (`git`/`http`), and skill
 
 ## Updating taps
 
-Pull the latest changes for all git taps:
+Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every git tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
 
-```bash
-skilltap tap update
-```
-
-Or update a specific tap:
-
-```bash
-skilltap tap update community
-```
-
-HTTP taps are always live — `tap update` is a no-op for them.
+HTTP taps are always live and need no refresh step.
 
 ## Removing a tap
 
@@ -1241,7 +1231,23 @@ If you already have a query, pass it to skip the search prompt:
 skilltap find -i <query>
 ```
 
-## Installing from a tap
+## Browsing and installing from taps
+
+Run `skilltap tap install` to open an interactive picker over all your configured tap skills:
+
+```bash
+skilltap tap install
+```
+
+Use the search box to filter, Space to toggle selection, Enter to confirm. Skills you've already installed are pre-selected and shown with an `installed` tag — deselecting them will remove them.
+
+To limit the picker to a single tap:
+
+```bash
+skilltap tap install --tap home
+```
+
+## Installing by name
 
 Once you have taps registered, install a skill by name:
 
@@ -1324,7 +1330,7 @@ If the URL returns a valid skill list response, it's registered as an HTTP tap. 
 |  | Git tap | HTTP tap |
 |---|---|---|
 | Storage | Cloned locally | No local clone |
-| Updates | `tap update` to pull | Always live |
+| Updates | Auto on `skilltap update` | Always live |
 | Discovery | Reads local `tap.json` | Queries the API |
 | Auth | Git credentials | Bearer token |
 
@@ -2035,7 +2041,6 @@ These are read from your local state at completion time, so they stay current:
 | `info <TAB>` | Installed skill names + tap skill names |
 | `install <TAB>` | Tap skill names |
 | `tap remove <TAB>` | Configured tap names |
-| `tap update <TAB>` | Configured tap names |
 
 Dynamic completions are fast — they read `installed.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
 
@@ -2133,6 +2138,7 @@ Source resolution order:
 | `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
 | `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
+| `--quiet` | boolean | `false` | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
 
 ### Prompt Behavior
 
@@ -2317,6 +2323,8 @@ skilltap update [name] [flags]
 | `--check` / `-c` | boolean | `false` | Check for updates without applying them. Fetches all remotes, shows which skills have updates, then exits. Refreshes the background update cache. |
 
 ### Behavior
+
+Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. HTTP taps are always live. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
 
 For each skill:
 
@@ -2819,28 +2827,50 @@ skilltap tap list
 
 ---
 
-## skilltap tap update
+## skilltap tap install
 
-Update tap repos (git pull). HTTP taps are always live — this is a no-op for them.
+Browse and install skills from your configured taps using an interactive picker.
 
 ```
-skilltap tap update [name]
+skilltap tap install [flags]
 ```
 
-### Arguments
+### Flags
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Specific tap to update. If omitted, updates all git taps. |
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--tap <name>` | string | — | Show only skills from this tap |
+| `--project` | boolean | `false` | Install to `.agents/skills/` in current project |
+| `--global` | boolean | `false` | Install to `~/.agents/skills/` |
+| `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. |
+| `--yes` | boolean | `false` | Auto-select and install without prompts |
+| `--strict` | boolean | from config | Abort on any security warning |
+| `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
+| `--semantic` | boolean | `false` | Force Layer 2 semantic scan |
+| `--skip-scan` | boolean | `false` | Skip security scanning |
+
+### Behavior
+
+Opens a searchable multiselect picker over all tap skills. Skills you've already installed are pre-selected and marked `installed`. Deselecting an installed skill removes it.
+
+After confirming the selection:
+- Skills newly selected → installed (same flow as `skilltap install`)
+- Skills deselected (were installed) → removed with `skilltap remove`
+- No changes → exits immediately
+
+Scope and agent symlink prompts only appear when there are skills to install.
 
 ### Examples
 
 ```bash
-# Update all taps
-skilltap tap update
+# Browse all taps
+skilltap tap install
 
-# Update a specific tap
-skilltap tap update home
+# Browse only the "home" tap
+skilltap tap install --tap home
+
+# Non-interactive: install all tap skills, global scope
+skilltap tap install --yes --global
 ```
 
 ---
@@ -3186,7 +3216,7 @@ The completion scripts call `skilltap --get-completions <type>` to provide live 
 - `installed-skills` — for `remove`, `update`, `info`
 - `linked-skills` — for `unlink`
 - `tap-skills` — for `install`
-- `tap-names` — for `tap remove`, `tap update`
+- `tap-names` — for `tap remove`
 
 ### Examples
 
@@ -3668,7 +3698,7 @@ url = "https://github.com/someone/awesome-skills-tap"
 `tap.json` is validated against its Zod schema when:
 
 - A tap is added (`skilltap tap add`)
-- A tap is updated (`skilltap tap update`)
+- A tap is updated (via `skilltap update`, which refreshes all git tap repos before updating skills)
 - Taps are loaded for search or install resolution
 
 If validation fails, skilltap reports a clear parse error with the specific issue:
@@ -3686,7 +3716,6 @@ Invalid taps are skipped gracefully during `loadTaps()` -- a broken tap does not
 | `skilltap tap add <name> <url>` | Add a tap by cloning its repo |
 | `skilltap tap remove <name>` | Remove a tap (does not uninstall skills from it) |
 | `skilltap tap list` | List configured taps with skill counts |
-| `skilltap tap update [name]` | Pull latest changes for one or all taps |
 | `skilltap tap init <name>` | Scaffold a new tap repo |
 
 ## npm Sources in Taps
@@ -4080,6 +4109,23 @@ enabled = []
 
 ---
 
+## `verbose`
+
+Top-level boolean. Controls whether install step details (fetched, scan clean) are logged during `skilltap install` and `skilltap tap install`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `verbose` | boolean | `true` | Show step-by-step install progress. Set to `false` to suppress. Can also be overridden per-invocation with `--quiet`. |
+
+### Example
+
+```toml
+# Suppress step details during install (show only success/error lines)
+verbose = false
+```
+
+---
+
 ## `[[taps]]`
 
 Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each entry is a TOML array table.
@@ -4164,6 +4210,9 @@ enabled = ["skills.sh"]
 # Telemetry (managed via `skilltap telemetry enable/disable`)
 [telemetry]
 enabled = false
+
+# Show step details during install (fetched, scan clean). Set false to silence.
+verbose = true
 
 # Tap definitions
 [[taps]]

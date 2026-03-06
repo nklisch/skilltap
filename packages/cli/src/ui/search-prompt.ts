@@ -46,6 +46,10 @@ export interface SearchPromptOptions<T> {
   maxItems?: number;
   /** Enable multi-select mode (Space to toggle, Enter to confirm). Returns T[]. */
   multiselect?: boolean;
+  /** Predicate to pre-select items when first loaded (multiselect only). */
+  initialSelected?: (item: T) => boolean;
+  /** Allow submitting with zero items selected (multiselect only). Defaults to false. */
+  allowEmpty?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +91,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
 
   // Multiselect state
   private _selectedMap = new Map<string, T>();
+  private _initialSelectApplied = false;
 
   // Async state
   private isLoading = false;
@@ -111,7 +116,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
         initialUserInput: opts.initialQuery,
         validate: (value: T | undefined) => {
           if (opts.multiselect) {
-            if (instance._selectedMap.size === 0) return "Select at least one item";
+            if (!opts.allowEmpty && instance._selectedMap.size === 0) return "Select at least one item";
             return undefined;
           }
           if (value === undefined) return "No skill selected";
@@ -272,6 +277,15 @@ class SearchPromptImpl<T> extends Prompt<T> {
 
   private receiveItems(items: T[]): void {
     this.allItems = items;
+    if (!this._initialSelectApplied && this._opts.initialSelected) {
+      this._initialSelectApplied = true;
+      for (const item of items) {
+        if (this._opts.initialSelected(item)) {
+          const key = this.getKey(item);
+          this._selectedMap.set(key, item);
+        }
+      }
+    }
     this.rebuildFzf();
     this.applyFzf(this.userInput);
     this.rerender();

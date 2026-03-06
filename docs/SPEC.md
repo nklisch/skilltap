@@ -27,6 +27,7 @@ Install a skill from a URL, tap name, or local path.
 | `--strict` | boolean | (from config) | Abort install if any security warnings are found. No prompt, just fail. |
 | `--no-strict` | boolean | false | Override `security.on_warn = "fail"` for this invocation |
 | `--yes` | boolean | false | Auto-select all skills and auto-accept install. Security warnings still require confirmation. |
+| `--quiet` | boolean | false | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
 
 **Prompt behavior with flags:**
 
@@ -187,7 +188,11 @@ Update installed skills.
 | `--strict` | boolean | (from config) | Abort update if any security warnings are found in the diff. |
 | `--check` / `-c` | boolean | false | Check for updates without applying them. Runs a fresh remote check, writes the result to the skill update cache, and prints which skills have updates. |
 
-**Behavior (per skill):**
+**Behavior:**
+
+Before updating any skill, `skilltap update` pulls all git tap repos (equivalent to `git pull` in each tap directory) so the tap index is current. HTTP taps are always live; failures are non-fatal (warn and continue). This step is skipped in `--check` mode.
+
+Then, per skill:
 
 1. `git fetch` in installed dir (standalone) or cache dir (multi-skill)
 2. Compare local HEAD SHA to remote
@@ -380,15 +385,35 @@ List configured taps.
 
 ---
 
-### `skilltap tap update [name]`
+### `skilltap tap install`
 
-Update tap repos (git pull).
+Browse and install skills from all configured taps using an interactive picker.
 
-**Arguments:**
+**Options:**
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Specific tap to update. If omitted, update all. |
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--tap <name>` | string | — | Only show skills from a specific tap |
+| `--project` | boolean | false | Install to `.agents/skills/` in current project |
+| `--global` | boolean | false | Install to `~/.agents/skills/` (global) |
+| `--also <agent>` | string | (from config) | Create symlink in agent-specific directory. Repeatable. |
+| `--skip-scan` | boolean | false | Skip security scanning |
+| `--yes` | boolean | false | Auto-select and install (non-interactive) |
+| `--strict` | boolean | (from config) | Abort on any security warning |
+| `--no-strict` | boolean | false | Override `security.on_warn = "fail"` for this invocation |
+| `--semantic` | boolean | false | Force semantic scan |
+
+**Behavior:**
+
+1. Load all tap entries (filtered to `--tap` if given)
+2. Load installed skills (global + project)
+3. Open a searchable multiselect picker — skills already installed are pre-selected and shown with an `installed` tag
+4. User toggles skills: selected = install, deselected = remove
+5. Compute `toInstall` (selected but not installed) and `toRemove` (installed but deselected, from this tap's skill list)
+6. If neither set has entries, exit 0 (no changes)
+7. Remove deselected skills (calls `removeSkill` per skill)
+8. Install newly selected skills (same flow as `skilltap install`)
+9. Scope/agents prompt only shown when there are skills to install
 
 ---
 
@@ -890,7 +915,7 @@ Generate a shell completion script for tab-completion.
 
 **Completions provided:**
 - Static: all commands, subcommands, flags, and flag values (`--also` agents, `--template` types)
-- Dynamic: skill names for `remove`, `update`, `unlink`, `info`; tap names for `tap remove`, `tap update`
+- Dynamic: skill names for `remove`, `update`, `unlink`, `info`; tap names for `tap remove`
 
 Dynamic values are fetched via a hidden `--get-completions <type>` endpoint that reads the local `installed.json` and tap config.
 
@@ -1396,7 +1421,7 @@ Sends `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. Th
 ### Behavior
 
 - `tap list`: shows type column (`git`/`http`) and live skill count for HTTP taps
-- `tap update`: no-op for HTTP taps (always live, fetched fresh each time)
+- HTTP taps: no local clone; metadata fetched live on every operation
 - HTTP taps have no local clone; metadata is fetched on demand
 
 ---
@@ -1886,7 +1911,7 @@ All errors include:
 
 ### v0.1 — Core + Taps
 
-Commands: `install`, `remove`, `list`, `update`, `link`, `unlink`, `info`, `find`, `tap add`, `tap remove`, `tap list`, `tap update`, `tap init`
+Commands: `install`, `remove`, `list`, `update`, `link`, `unlink`, `info`, `find`, `tap add`, `tap remove`, `tap list`, `tap init`
 
 Features:
 - Install from git URL (any host)

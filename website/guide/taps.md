@@ -48,19 +48,9 @@ Shows all registered taps with their names, URLs, type (`git`/`http`), and skill
 
 ## Updating taps
 
-Pull the latest changes for all git taps:
+Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every git tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
 
-```bash
-skilltap tap update
-```
-
-Or update a specific tap:
-
-```bash
-skilltap tap update community
-```
-
-HTTP taps are always live — `tap update` is a no-op for them.
+HTTP taps are always live and need no refresh step.
 
 ## Removing a tap
 
@@ -98,7 +88,23 @@ If you already have a query, pass it to skip the search prompt:
 skilltap find -i <query>
 ```
 
-## Installing from a tap
+## Browsing and installing from taps
+
+Run `skilltap tap install` to open an interactive picker over all your configured tap skills:
+
+```bash
+skilltap tap install
+```
+
+Use the search box to filter, Space to toggle selection, Enter to confirm. Skills you've already installed are pre-selected and shown with an `installed` tag — deselecting them will remove them.
+
+To limit the picker to a single tap:
+
+```bash
+skilltap tap install --tap home
+```
+
+## Installing by name
 
 Once you have taps registered, install a skill by name:
 
@@ -181,7 +187,7 @@ If the URL returns a valid skill list response, it's registered as an HTTP tap. 
 |  | Git tap | HTTP tap |
 |---|---|---|
 | Storage | Cloned locally | No local clone |
-| Updates | `tap update` to pull | Always live |
+| Updates | Auto on `skilltap update` | Always live |
 | Discovery | Reads local `tap.json` | Queries the API |
 | Auth | Git credentials | Bearer token |
 
