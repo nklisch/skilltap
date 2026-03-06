@@ -202,6 +202,12 @@ export class FooterBar {
         const real = self._realRowsValue();
         return self._active ? Math.max(real - FOOTER_HEIGHT, 3) : real;
       },
+      set(value: number) {
+        // Bun's TTY _refreshSize assigns this.rows directly — without a
+        // setter the assignment throws "Attempted to assign to readonly
+        // property". Capture the new real value so the getter stays correct.
+        self._snapshotRows = value;
+      },
       configurable: true,
       enumerable: true,
     });
