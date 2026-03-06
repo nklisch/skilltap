@@ -55,6 +55,51 @@ describe("updateSkill — upToDate", () => {
       await repo.cleanup();
     }
   });
+
+  test("recreates missing symlink for up-to-date standalone skill", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", also: ["claude-code"], skipScan: true });
+
+      const linkPath = join(homeDir, ".claude", "skills", "standalone-skill");
+      // Manually delete the symlink to simulate it going missing
+      await import("node:fs/promises").then((fs) => fs.unlink(linkPath));
+      expect(await import("node:fs/promises").then((fs) => fs.lstat(linkPath).catch(() => null))).toBeNull();
+
+      // Update with no new commits — skill is up-to-date
+      const result = await updateSkill({ yes: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.upToDate).toContain("standalone-skill");
+
+      // Symlink should be restored
+      const target = await import("node:fs/promises").then((fs) => fs.readlink(linkPath));
+      expect(target).toBe(join(homeDir, ".agents", "skills", "standalone-skill"));
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("recreates missing symlink for up-to-date multi-skill group", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", also: ["claude-code"], skipScan: true });
+
+      const linkPath = join(homeDir, ".claude", "skills", "skill-a");
+      await import("node:fs/promises").then((fs) => fs.unlink(linkPath));
+      expect(await import("node:fs/promises").then((fs) => fs.lstat(linkPath).catch(() => null))).toBeNull();
+
+      const result = await updateSkill({ yes: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.upToDate).toContain("skill-a");
+
+      const target = await import("node:fs/promises").then((fs) => fs.readlink(linkPath));
+      expect(target).toBe(join(homeDir, ".agents", "skills", "skill-a"));
+    } finally {
+      await repo.cleanup();
+    }
+  });
 });
 
 describe("updateSkill — updated", () => {

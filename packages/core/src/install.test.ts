@@ -128,6 +128,22 @@ describe("installSkill — standalone", () => {
       await repo.cleanup();
     }
   });
+
+  test("onAlreadyInstalled returning abort still produces an error", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global" });
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        onAlreadyInstalled: async () => "abort",
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("already installed");
+    } finally {
+      await repo.cleanup();
+    }
+  });
 });
 
 describe("installSkill — multi-skill", () => {
@@ -184,6 +200,32 @@ describe("installSkill — multi-skill", () => {
           s.isDirectory(),
         ),
       ).toBe(true);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("partial overlap: new skills install and existing go to updates", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      // Pre-install only skill-a
+      await installSkill(repo.path, { scope: "global", skillNames: ["skill-a"], skipScan: true });
+
+      // Install whole repo — skill-a is already installed, skill-b is new
+      const result = await installSkill(repo.path, { scope: "global", skipScan: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.records.map((r) => r.name)).toContain("skill-b");
+      expect(result.value.records.map((r) => r.name)).not.toContain("skill-a");
+      expect(result.value.updates).toContain("skill-a");
+
+      // Only one entry for skill-a in installed.json (no duplicate)
+      const installed = await loadInstalled();
+      expect(installed.ok).toBe(true);
+      if (!installed.ok) return;
+      const aEntries = installed.value.skills.filter((s) => s.name === "skill-a");
+      expect(aEntries).toHaveLength(1);
     } finally {
       await repo.cleanup();
     }
