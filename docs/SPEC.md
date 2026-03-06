@@ -191,7 +191,7 @@ Update installed skills.
 
 1. `git fetch` in installed dir (standalone) or cache dir (multi-skill)
 2. Compare local HEAD SHA to remote
-3. If identical → `Already up to date.`
+3. If identical → refresh agent symlinks (recreate any that are missing), then `Already up to date.`
 4. If different:
    a. Compute diff (`git diff HEAD..FETCH_HEAD`)
    b. Display summary: files changed, insertions, deletions
@@ -201,7 +201,7 @@ Update installed skills.
    f. If warnings (not strict) → prompt: `Apply update? (y/N)`
    g. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
    h. Update `installed.json` with new SHA and `updatedAt`
-   i. Re-create agent symlinks if target dirs are missing
+   i. Re-create agent symlinks
 
 **Linked skills** (`skilltap link`) are skipped — they're managed by the user.
 
@@ -1867,7 +1867,7 @@ All errors include:
 | Clone failed (auth) | `error: Authentication failed for '{url}'. Check your git credentials or SSH keys.` |
 | Clone failed (not found) | `error: Repository not found: '{url}'.` |
 | No SKILL.md found | `error: No SKILL.md found in '{url}'. This repo doesn't contain any skills.` |
-| Skill already installed | Prompt: `"{name}" is already installed. Update it instead? (Y/n)`. If yes (or `--yes`), runs `update`. If no, skips that skill. Only a hard error in agent mode: `SKIP: {name} is already installed.` |
+| Skill already installed | Prompt: `"{name}" is already installed. Update it instead? (Y/n)`. If yes (or `--yes`, or agent mode), runs `update`. If no, skips that skill. |
 | Tap already exists | `error: Tap '{name}' already exists. Remove it first with 'skilltap tap remove {name}'.` |
 | Invalid tap.json | `error: Invalid tap.json in '{url}': {parse error}` |
 | Invalid SKILL.md frontmatter | `warning: Invalid frontmatter in {path}: {details}. Using directory name as skill name.` |

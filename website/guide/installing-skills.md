@@ -290,7 +290,7 @@ If you try to install a skill that's already installed, skilltap detects the con
 │ Yes
 ```
 
-Choosing yes runs `skilltap update` for that skill. With `--yes`, the update happens automatically without prompting.
+Choosing yes runs `skilltap update` for that skill. With `--yes` or in agent mode, the update happens automatically without prompting.
 
 To force a clean reinstall, remove the skill first:
 
