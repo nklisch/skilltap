@@ -548,6 +548,93 @@ describe("installed.json state integrity", () => {
   });
 });
 
+describe("installSkill — tap name resolution", () => {
+  test("tap name installs only the requested skill from a multi-skill repo", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      // Set up a tap that maps "skill-a" to the multi-skill repo
+      const tapName = "test-tap";
+      const tapsDir = join(configDir, "skilltap", "taps", tapName);
+      await $`mkdir -p ${tapsDir}`.quiet();
+      const tapJson = JSON.stringify({
+        name: tapName,
+        description: "Test tap",
+        skills: [
+          { name: "skill-a", description: "Skill A", repo: repo.path, tags: [] },
+          { name: "skill-b", description: "Skill B", repo: repo.path, tags: [] },
+        ],
+      });
+      await Bun.write(join(tapsDir, "tap.json"), tapJson);
+
+      // Write config with builtin_tap disabled and our test tap
+      const configPath = join(configDir, "skilltap", "config.toml");
+      await Bun.write(configPath, `builtin_tap = false\n\n[[taps]]\nname = "${tapName}"\nurl = "${repo.path}"\n`);
+
+      // Install by tap name — should only install skill-a, not both
+      const result = await installSkill("skill-a", { scope: "global", skipScan: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      expect(result.value.records).toHaveLength(1);
+      expect(result.value.records[0]?.name).toBe("skill-a");
+
+      // skill-b should NOT be installed
+      const skillBDir = join(homeDir, ".agents", "skills", "skill-b");
+      expect(await lstat(skillBDir).catch(() => null)).toBeNull();
+
+      // installed.json should only have skill-a
+      const installedResult = await loadInstalled();
+      expect(installedResult.ok).toBe(true);
+      if (!installedResult.ok) return;
+      expect(installedResult.value.skills).toHaveLength(1);
+      expect(installedResult.value.skills[0]?.name).toBe("skill-a");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("onSelectSkills is NOT called when source resolves via tap", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      const tapName = "test-tap";
+      const tapsDir = join(configDir, "skilltap", "taps", tapName);
+      await $`mkdir -p ${tapsDir}`.quiet();
+      await Bun.write(
+        join(tapsDir, "tap.json"),
+        JSON.stringify({
+          name: tapName,
+          skills: [
+            { name: "skill-a", description: "Skill A", repo: repo.path, tags: [] },
+            { name: "skill-b", description: "Skill B", repo: repo.path, tags: [] },
+          ],
+        }),
+      );
+      await Bun.write(
+        join(configDir, "skilltap", "config.toml"),
+        `builtin_tap = false\n\n[[taps]]\nname = "${tapName}"\nurl = "${repo.path}"\n`,
+      );
+
+      let selectSkillsCalled = false;
+      const result = await installSkill("skill-b", {
+        scope: "global",
+        skipScan: true,
+        onSelectSkills: async (skills) => {
+          selectSkillsCalled = true;
+          return skills.map((s) => s.name);
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(selectSkillsCalled).toBe(false);
+      expect(result.value.records).toHaveLength(1);
+      expect(result.value.records[0]?.name).toBe("skill-b");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
 describe("findProjectRoot", () => {
   test("finds nearest .git directory", async () => {
     const root = await makeTmpDir();

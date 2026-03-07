@@ -100,7 +100,7 @@ function looksLikeTapName(source: string): boolean {
   return true;
 }
 
-type TapResolution = { source: string; tap: string; ref?: string };
+type TapResolution = { source: string; tap: string; skillName: string; ref?: string };
 
 /** If source looks like a tap name (or name@ref), resolve it via configured taps. Returns null if not a tap name. */
 async function resolveTapName(
@@ -156,6 +156,7 @@ async function resolveTapName(
   return ok({
     source: chosen.skill.repo,
     tap: chosen.tapName,
+    skillName: tapName,
     ref: effectiveRef,
   });
 }
@@ -228,7 +229,7 @@ async function buildPlacements(params: {
     await mkdir(dirname(cacheRoot), { recursive: true });
     const mvResult = await wrapShell(
       () =>
-        $`cp -a ${contentDir} ${cacheRoot} && rm -rf ${contentDir}`
+        $`rm -rf ${cacheRoot} && cp -a ${contentDir} ${cacheRoot} && rm -rf ${contentDir}`
           .quiet()
           .then(() => undefined),
       "Failed to move clone to cache",
@@ -453,7 +454,11 @@ export async function installSkill(
     }
 
     // 6. Select skills to install
+    // When resolved via tap, pre-filter to the requested skill name
     let selectedNames: string[] | undefined = options.skillNames;
+    if (!selectedNames && tapResult.ok && tapResult.value) {
+      selectedNames = [tapResult.value.skillName];
+    }
     if (!selectedNames && options.onSelectSkills) {
       selectedNames = await options.onSelectSkills(scanned);
     }
