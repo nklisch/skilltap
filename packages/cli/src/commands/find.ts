@@ -2,7 +2,6 @@ import { isCancel, outro, S_RADIO_ACTIVE, S_RADIO_INACTIVE, spinner } from "@cla
 import type {
   Config,
   RegistrySearchResult,
-  ScannedSkill,
   TapEntry,
 } from "@skilltap/core";
 import {
@@ -29,7 +28,7 @@ import {
 } from "../ui/format";
 import { createInstallCallbacks } from "../ui/install-callbacks";
 import { createStepLogger } from "../ui/install-steps";
-import { confirmSaveDefault, selectAgents, selectSkills } from "../ui/prompts";
+import { confirmSaveDefault, selectAgents } from "../ui/prompts";
 import { resolveScope, resolveSemanticInteractive } from "../ui/resolve";
 import { searchPrompt } from "../ui/search-prompt";
 import { formatTapTrust } from "../ui/trust";
@@ -328,8 +327,8 @@ async function installChosen(
   config: Config,
 ): Promise<void> {
   const policyResult = composePolicy(config, {});
-  // composePolicy({}) cannot fail — no conflicting flags
-  const policy = policyResult.value!;
+  if (!policyResult.ok) throw new Error(policyResult.error.message);
+  const policy = policyResult.value;
   const { agent } = await resolveSemanticInteractive(policy, { semantic: false }, config);
 
   const { scope, projectRoot } = await resolveScope({}, config);
@@ -367,27 +366,16 @@ async function installChosen(
     scope,
     projectRoot,
     also,
+    skillNames: chosen.preSelectedSkill ? [chosen.preSelectedSkill] : undefined,
     skipScan: false,
     agent,
     semantic: policy.scanMode === "semantic",
     threshold: config.security.threshold,
     ...callbacks,
-    onSelectSkills: async (skills_list: ScannedSkill[]): Promise<string[]> => {
-      if (chosen.preSelectedSkill) {
-        const match = skills_list.find((sk) => sk.name === chosen.preSelectedSkill);
-        if (match) return [match.name];
-      }
-      if (skills_list.length === 1) return skills_list.map((sk) => sk.name);
-      s.stop();
-      const selected = await selectSkills(skills_list);
-      if (isCancel(selected)) process.exit(2);
-      s.start("Installing…");
-      return selected as string[];
-    },
   });
 
   if (!installResult.ok) {
-    s.stop("Failed.", 1);
+    s.stop("Failed.");
     errorLine(installResult.error.message, installResult.error.hint);
     process.exit(1);
   }

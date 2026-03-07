@@ -84,7 +84,7 @@ export function formatShaChange(from: string, to: string): string {
 }
 
 /** "(2 files changed, +5 -2)" */
-export function formatDiffStatSummary(stat: DiffStat): string {
+export function formatDiffStatSummary(stat: Pick<DiffStat, "filesChanged" | "insertions" | "deletions">): string {
   const files =
     stat.filesChanged === 1 ? "1 file changed" : `${stat.filesChanged} files changed`;
   const parts = [files];

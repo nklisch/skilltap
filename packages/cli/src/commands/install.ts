@@ -107,18 +107,20 @@ export default defineCommand({
     });
 
     const verbose = args.quiet ? false : config.verbose;
+    const sources = [args.source, ...(args._ as string[])];
 
     if (policy.agentMode) {
-      return runAgentMode(args, config, policy);
+      return runAgentMode(sources, args, config, policy);
     }
-    return runInteractiveMode(args, config, policy, verbose);
+    return runInteractiveMode(sources, args, config, policy, verbose);
   },
 });
 
 // ─── Agent Mode ───────────────────────────────────────────────────────────────
 
 async function runAgentMode(
-  args: { source: string; ref?: string; also?: string },
+  sources: string[],
+  args: { ref?: string; also?: string },
   config: Config,
   policy: EffectivePolicy,
 ): Promise<void> {
@@ -133,85 +135,87 @@ async function runAgentMode(
 
   const also = parseAlsoFlag(args.also, config);
 
-  const result = await installSkill(args.source, {
-    scope,
-    projectRoot,
-    also,
-    ref: args.ref,
-    skipScan: false,
-    onWarnings: async (
-      warnings: StaticWarning[],
-    ): Promise<boolean> => {
-      agentSecurityBlock(warnings, []);
-      process.exit(1);
-      return false;
-    },
-    onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> =>
-      skills.map((s) => s.name),
-    onSelectTap: async (matches: TapEntry[]): Promise<TapEntry | null> =>
-      matches[0] ?? null,
-    agent,
-    semantic: policy.scanMode === "semantic",
-    threshold: config.security.threshold,
-    onSemanticWarnings: async (
-      warnings: SemanticWarning[],
-    ): Promise<boolean> => {
-      agentSecurityBlock([], warnings);
-      process.exit(1);
-      return false;
-    },
-  });
-
-  if (!result.ok) {
-    sendEvent(config, "install", {
-      ...telemetryBase(true),
-      adapter: inferAdapter(args.source),
-      success: false,
-      error_category: result.error.constructor.name,
-      skill_count: 0,
-      scan_mode: policy.scanMode,
+  for (const source of sources) {
+    const result = await installSkill(source, {
       scope,
-    });
-    agentError(result.error.message);
-    process.exit(1);
-  }
-
-  sendEvent(config, "install", {
-    ...telemetryBase(true),
-    adapter: inferAdapter(args.source),
-    success: true,
-    skill_count: result.value.records.length,
-    scan_mode: policy.scanMode,
-    scope,
-  });
-
-  for (const record of result.value.records) {
-    const installDir = skillInstallDir(record.name, scope, projectRoot);
-    agentSuccess(record.name, installDir, record.ref, record.trust);
-  }
-
-  for (const name of result.value.updates) {
-    const updateResult = await updateSkill({
-      name,
-      yes: true,
       projectRoot,
+      also,
+      ref: args.ref,
+      skipScan: false,
+      onWarnings: async (
+        warnings: StaticWarning[],
+      ): Promise<boolean> => {
+        agentSecurityBlock(warnings, []);
+        process.exit(1);
+        return false;
+      },
+      onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> =>
+        skills.map((s) => s.name),
+      onSelectTap: async (matches: TapEntry[]): Promise<TapEntry | null> =>
+        matches[0] ?? null,
       agent,
       semantic: policy.scanMode === "semantic",
       threshold: config.security.threshold,
-      onSemanticWarnings: (warnings) => {
+      onSemanticWarnings: async (
+        warnings: SemanticWarning[],
+      ): Promise<boolean> => {
         agentSecurityBlock([], warnings);
         process.exit(1);
+        return false;
       },
     });
-    if (!updateResult.ok) {
-      agentError(updateResult.error.message);
+
+    if (!result.ok) {
+      sendEvent(config, "install", {
+        ...telemetryBase(true),
+        adapter: inferAdapter(source),
+        success: false,
+        error_category: result.error.constructor.name,
+        skill_count: 0,
+        scan_mode: policy.scanMode,
+        scope,
+      });
+      agentError(result.error.message);
       process.exit(1);
     }
-    const { updated, upToDate } = updateResult.value;
-    if (updated.includes(name)) {
-      process.stdout.write(`OK: Updated ${name}\n`);
-    } else if (upToDate.includes(name)) {
-      process.stdout.write(`OK: ${name} is already up to date.\n`);
+
+    sendEvent(config, "install", {
+      ...telemetryBase(true),
+      adapter: inferAdapter(source),
+      success: true,
+      skill_count: result.value.records.length,
+      scan_mode: policy.scanMode,
+      scope,
+    });
+
+    for (const record of result.value.records) {
+      const installDir = skillInstallDir(record.name, scope, projectRoot);
+      agentSuccess(record.name, installDir, record.ref, record.trust);
+    }
+
+    for (const name of result.value.updates) {
+      const updateResult = await updateSkill({
+        name,
+        yes: true,
+        projectRoot,
+        agent,
+        semantic: policy.scanMode === "semantic",
+        threshold: config.security.threshold,
+        onSemanticWarnings: (warnings) => {
+          agentSecurityBlock([], warnings);
+          process.exit(1);
+        },
+      });
+      if (!updateResult.ok) {
+        agentError(updateResult.error.message);
+        process.exit(1);
+      }
+      const { updated, upToDate } = updateResult.value;
+      if (updated.includes(name)) {
+        process.stdout.write(`OK: Updated ${name}\n`);
+      } else if (upToDate.includes(name)) {
+        process.stdout.write(`OK: ${name} is already up to date.\n`);
+      }
     }
   }
 }
@@ -219,8 +223,8 @@ async function runAgentMode(
 // ─── Interactive Mode ─────────────────────────────────────────────────────────
 
 async function runInteractiveMode(
+  sources: string[],
   args: {
-    source: string;
     ref?: string;
     also?: string;
     semantic: boolean;
@@ -271,75 +275,87 @@ async function runInteractiveMode(
     }
   }
 
-  const s = spinner();
-  s.start(`Fetching ${args.source}...`);
+  const errors: { source: string; message: string; hint?: string }[] = [];
 
-  const steps = createStepLogger(verbose);
-  const { callbacks, logScanResults } = createInstallCallbacks({
-    spinner: s, onWarn, skipScan, agent, yes: policy.yes, source: args.source, steps,
-  });
+  for (const source of sources) {
+    const s = spinner();
+    s.start(`Fetching ${source}...`);
 
-  const result = await installSkill(args.source, {
-    scope,
-    projectRoot,
-    also,
-    ref: args.ref,
-    skipScan,
-    agent,
-    semantic: runSemantic,
-    threshold: config.security.threshold,
-    ...callbacks,
-  });
-
-  if (!result.ok) {
-    s.stop();
-    sendEvent(config, "install", {
-      ...telemetryBase(false),
-      adapter: inferAdapter(args.source),
-      success: false,
-      error_category: result.error.constructor.name,
-      skill_count: 0,
-      scan_mode: policy.scanMode,
-      scope,
+    const steps = createStepLogger(verbose);
+    const { callbacks, logScanResults } = createInstallCallbacks({
+      spinner: s, onWarn, skipScan, agent, yes: policy.yes, source, steps,
     });
-    errorLine(result.error.message, result.error.hint);
-    process.exit(1);
-  }
 
-  s.stop();
-  logScanResults();
-
-  sendEvent(config, "install", {
-    ...telemetryBase(false),
-    adapter: inferAdapter(args.source),
-    success: true,
-    skill_count: result.value.records.length,
-    scan_mode: policy.scanMode,
-    scope,
-  });
-
-  for (const record of result.value.records) {
-    const installDir = skillInstallDir(record.name, scope, projectRoot);
-    successLine(`Installed ${record.name} → ${installDir}`);
-  }
-
-  // Run updates for skills that were already installed
-  for (const name of result.value.updates) {
-    const updateResult = await updateSkill({
-      name,
-      yes: policy.yes,
+    const result = await installSkill(source, {
+      scope,
       projectRoot,
+      also,
+      ref: args.ref,
+      skipScan,
       agent,
       semantic: runSemantic,
       threshold: config.security.threshold,
+      ...callbacks,
     });
-    if (!updateResult.ok) {
-      errorLine(updateResult.error.message, updateResult.error.hint);
-    } else {
-      const { updated, upToDate } = updateResult.value;
-      if (updated.includes(name)) successLine(`Updated ${name}`);
-      else if (upToDate.includes(name)) log.info(`${name} is already up to date.`);
+
+    if (!result.ok) {
+      s.stop();
+      sendEvent(config, "install", {
+        ...telemetryBase(false),
+        adapter: inferAdapter(source),
+        success: false,
+        error_category: result.error.constructor.name,
+        skill_count: 0,
+        scan_mode: policy.scanMode,
+        scope,
+      });
+      errors.push({ source, message: result.error.message, hint: result.error.hint });
+      continue;
     }
+
+    s.stop();
+    logScanResults();
+
+    sendEvent(config, "install", {
+      ...telemetryBase(false),
+      adapter: inferAdapter(source),
+      success: true,
+      skill_count: result.value.records.length,
+      scan_mode: policy.scanMode,
+      scope,
+    });
+
+    for (const record of result.value.records) {
+      const installDir = skillInstallDir(record.name, scope, projectRoot);
+      successLine(`Installed ${record.name} → ${installDir}`);
+    }
+
+    // Run updates for skills that were already installed
+    for (const name of result.value.updates) {
+      const updateResult = await updateSkill({
+        name,
+        yes: policy.yes,
+        projectRoot,
+        agent,
+        semantic: runSemantic,
+        threshold: config.security.threshold,
+      });
+      if (!updateResult.ok) {
+        errorLine(updateResult.error.message, updateResult.error.hint);
+      } else {
+        const { updated, upToDate } = updateResult.value;
+        if (updated.includes(name)) successLine(`Updated ${name}`);
+        else if (upToDate.includes(name)) log.info(`${name} is already up to date.`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    for (const { source, message, hint } of errors) {
+      errorLine(`${source}: ${message}`, hint);
+    }
+    outro("Finished with errors.");
+    process.exit(1);
   }
 
   outro("Complete!");

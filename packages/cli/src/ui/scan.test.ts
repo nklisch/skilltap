@@ -166,6 +166,7 @@ describe("printWarnings", () => {
 
 describe("formatSemanticWarnings", () => {
   const makeWarning = (overrides?: Partial<SemanticWarning>): SemanticWarning => ({
+    file: "SKILL.md",
     chunkIndex: 0,
     lineRange: [10, 15],
     score: 7,
@@ -217,6 +218,7 @@ describe("printSemanticWarnings", () => {
     try {
       const warnings: SemanticWarning[] = [
         {
+          file: "SKILL.md",
           chunkIndex: 0,
           lineRange: [1, 5],
           score: 8,

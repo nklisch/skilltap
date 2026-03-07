@@ -14,7 +14,7 @@ const fakeAgent: AgentAdapter = {
   name: "test-agent",
   cliName: "test-cli",
   detect: async () => true,
-  invoke: async () => ({ ok: true as const, value: "" }),
+  invoke: async () => ({ ok: true as const, value: { score: 0, reason: "" } }),
 };
 
 const baseCtx = {

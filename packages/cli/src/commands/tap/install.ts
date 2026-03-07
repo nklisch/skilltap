@@ -298,10 +298,6 @@ export default defineCommand({
         semantic: policy.scanMode === "semantic" || args.semantic,
         threshold: config.security.threshold,
         ...callbacks,
-        onSelectSkills: async (skills) => {
-          const match = skills.find((sk) => sk.name === skillName);
-          return match ? [match.name] : skills.map((sk) => sk.name);
-        },
         onSelectTap: async (matches) => matches[0] ?? null,
       });
 
