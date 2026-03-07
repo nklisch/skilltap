@@ -96,6 +96,16 @@ The `npm:` prefix downloads the tarball from the npm registry and verifies its S
 
 **Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
 
+### Multiple sources
+
+Install several skills in a single command by listing them as positional arguments:
+
+```bash
+skilltap install skill-a skill-b skill-c --global
+```
+
+Each source is installed in sequence using the same scope, flags, and security policy. Errors are collected and shown together at the end — a failure on one source does not prevent the others from being attempted.
+
 ## Scope: global vs project
 
 Every skill is installed to either a **global** or **project** scope.

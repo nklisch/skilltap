@@ -18,10 +18,10 @@ Complete reference for all skilltap commands, arguments, flags, and behavior.
 
 ## skilltap install
 
-Install a skill from a URL, tap name, or local path.
+Install one or more skills from URLs, tap names, or local paths.
 
 ```
-skilltap install <source> [flags]
+skilltap install <source> [source...] [flags]
 ```
 
 ### Arguments
@@ -29,6 +29,7 @@ skilltap install <source> [flags]
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `source` | Yes | Git URL, `github:owner/repo`, `owner/repo`, tap skill name, `name@ref`, or local path |
+| `[source...]` | No | Additional sources to install in the same invocation |
 
 ### Source Formats
 
@@ -125,6 +126,9 @@ skilltap install my-skill --project --also claude-code --also cursor
 
 # Strict security + semantic scan
 skilltap install some-skill --strict --semantic
+
+# Install multiple skills in one command
+skilltap install skill-a skill-b skill-c --global
 ```
 
 ---

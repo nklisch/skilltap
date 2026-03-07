@@ -4,15 +4,16 @@ This document defines the exact behavior of skilltap — command interface, file
 
 ## CLI Commands
 
-### `skilltap install <source>`
+### `skilltap install <source> [source...]`
 
-Install a skill from a URL, tap name, or local path.
+Install one or more skills from URLs, tap names, or local paths. Multiple sources may be provided as additional positional arguments; each is installed in sequence with the same scope and flags.
 
 **Arguments:**
 
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `source` | Yes | Git URL, `github:owner/repo`, tap skill name, or local path |
+| `[source...]` | No | Additional sources to install in the same invocation |
 
 **Options:**
 
