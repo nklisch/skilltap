@@ -205,6 +205,30 @@ describe("installSkill — multi-skill", () => {
     }
   });
 
+  test("skillNames takes precedence over onSelectSkills", async () => {
+    const repo = await createMultiSkillRepo();
+    try {
+      let selectSkillsCalled = false;
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        skillNames: ["skill-a"],
+        skipScan: true,
+        onSelectSkills: async (skills) => {
+          selectSkillsCalled = true;
+          return skills.map((s) => s.name);
+        },
+      });
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(selectSkillsCalled).toBe(false);
+      expect(result.value.records).toHaveLength(1);
+      expect(result.value.records[0]?.name).toBe("skill-a");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
   test("partial overlap: new skills install and existing go to updates", async () => {
     const repo = await createMultiSkillRepo();
     try {
