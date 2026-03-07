@@ -6,6 +6,7 @@ import type {
   TapEntry,
 } from "@skilltap/core";
 import {
+  composePolicy,
   installSkill,
   loadConfig,
   loadTaps,
@@ -29,7 +30,7 @@ import {
 import { createInstallCallbacks } from "../ui/install-callbacks";
 import { createStepLogger } from "../ui/install-steps";
 import { confirmSaveDefault, selectAgents, selectSkills } from "../ui/prompts";
-import { resolveScope } from "../ui/resolve";
+import { resolveScope, resolveSemanticInteractive } from "../ui/resolve";
 import { searchPrompt } from "../ui/search-prompt";
 import { formatTapTrust } from "../ui/trust";
 
@@ -326,6 +327,11 @@ async function installChosen(
   chosen: SearchEntry,
   config: Config,
 ): Promise<void> {
+  const policyResult = composePolicy(config, {});
+  // composePolicy({}) cannot fail — no conflicting flags
+  const policy = policyResult.value!;
+  const { agent } = await resolveSemanticInteractive(policy, { semantic: false }, config);
+
   const { scope, projectRoot } = await resolveScope({}, config);
   let also = config.defaults.also ?? [];
 
@@ -351,7 +357,7 @@ async function installChosen(
     spinner: s,
     onWarn: config.security.on_warn,
     skipScan: false,
-    agent: undefined,
+    agent,
     yes: true, // user already picked from the search picker
     source: chosen.name,
     steps,
@@ -362,6 +368,9 @@ async function installChosen(
     projectRoot,
     also,
     skipScan: false,
+    agent,
+    semantic: policy.scanMode === "semantic",
+    threshold: config.security.threshold,
     ...callbacks,
     onSelectSkills: async (skills_list: ScannedSkill[]): Promise<string[]> => {
       if (chosen.preSelectedSkill) {

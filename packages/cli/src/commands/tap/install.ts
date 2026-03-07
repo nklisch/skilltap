@@ -20,7 +20,7 @@ import { createInstallCallbacks } from "../../ui/install-callbacks";
 import { createStepLogger } from "../../ui/install-steps";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmSaveDefault, selectAgents } from "../../ui/prompts";
-import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
+import { parseAlsoFlag, resolveScope, resolveSemanticInteractive } from "../../ui/resolve";
 import { searchPrompt } from "../../ui/search-prompt";
 
 export default defineCommand({
@@ -232,7 +232,10 @@ export default defineCommand({
     let projectRoot: string | undefined;
     let also: string[] = [];
 
+    let agent: Awaited<ReturnType<typeof resolveSemanticInteractive>>["agent"];
+
     if (toInstall.length > 0) {
+      ({ agent } = await resolveSemanticInteractive(policy, { semantic: args.semantic }, config));
       ({ scope, projectRoot } = await resolveScope(
         { project: args.project, global: args.global },
         config,
@@ -280,7 +283,7 @@ export default defineCommand({
         spinner: s,
         onWarn: policy.onWarn,
         skipScan: policy.skipScan,
-        agent: undefined,
+        agent,
         yes: policy.yes,
         source: skillName,
         steps,
@@ -291,6 +294,9 @@ export default defineCommand({
         projectRoot,
         also,
         skipScan: policy.skipScan,
+        agent,
+        semantic: policy.scanMode === "semantic" || args.semantic,
+        threshold: config.security.threshold,
         ...callbacks,
         onSelectSkills: async (skills) => {
           const match = skills.find((sk) => sk.name === skillName);

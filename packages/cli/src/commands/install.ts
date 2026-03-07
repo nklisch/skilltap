@@ -191,7 +191,18 @@ async function runAgentMode(
   }
 
   for (const name of result.value.updates) {
-    const updateResult = await updateSkill({ name, yes: true, projectRoot });
+    const updateResult = await updateSkill({
+      name,
+      yes: true,
+      projectRoot,
+      agent,
+      semantic: policy.scanMode === "semantic",
+      threshold: config.security.threshold,
+      onSemanticWarnings: (warnings) => {
+        agentSecurityBlock([], warnings);
+        process.exit(1);
+      },
+    });
     if (!updateResult.ok) {
       agentError(updateResult.error.message);
       process.exit(1);
@@ -314,7 +325,14 @@ async function runInteractiveMode(
 
   // Run updates for skills that were already installed
   for (const name of result.value.updates) {
-    const updateResult = await updateSkill({ name, yes: policy.yes, projectRoot });
+    const updateResult = await updateSkill({
+      name,
+      yes: policy.yes,
+      projectRoot,
+      agent,
+      semantic: runSemantic,
+      threshold: config.security.threshold,
+    });
     if (!updateResult.ok) {
       errorLine(updateResult.error.message, updateResult.error.hint);
     } else {
