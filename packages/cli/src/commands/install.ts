@@ -107,7 +107,7 @@ export default defineCommand({
     });
 
     const verbose = args.quiet ? false : config.verbose;
-    const sources = [args.source, ...(args._ as string[])];
+    const sources = args._ as string[];
 
     if (policy.agentMode) {
       return runAgentMode(sources, args, config, policy);
