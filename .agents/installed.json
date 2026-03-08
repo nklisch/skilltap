@@ -1,4 +1,120 @@
 {
   "version": 1,
-  "skills": []
+  "skills": [
+    {
+      "name": "bun",
+      "description": "Reference for Bun runtime APIs used in this project. Use this skill whenever writing code that runs shell commands (Bun.$ or Bun.spawn), reading/writing files (Bun.file/Bun.write), running tests (bun test), or configuring the monorepo (workspaces, bunfig.toml). Prefer Bun APIs over Node.js equivalents — use Bun.$ instead of child_process, Bun.file() instead of fs.readFile, bun:test instead of jest.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "820ffdbc206eda564184271e19ee12254bf5430a",
+      "scope": "project",
+      "path": ".agents/skills/bun",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-08T18:31:17.023Z",
+      "updatedAt": "2026-03-08T18:31:17.023Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
+    },
+    {
+      "name": "citty",
+      "description": "Reference for the citty CLI framework (UnJS). Use this skill whenever writing CLI commands, defining arguments/options, creating subcommands, or working with any file in packages/cli/. This covers defineCommand, runMain, argument definitions, subcommands, lifecycle hooks, and all citty patterns used in this project.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "820ffdbc206eda564184271e19ee12254bf5430a",
+      "scope": "project",
+      "path": ".agents/skills/citty",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-08T18:31:29.528Z",
+      "updatedAt": "2026-03-08T18:31:29.528Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
+    },
+    {
+      "name": "clack-prompts",
+      "description": "Reference for @clack/prompts terminal UI library. Use this skill whenever building interactive CLI prompts, spinners, select menus, confirmation dialogs, or any terminal UI. Covers text, password, confirm, select, multiselect, spinner, group flows, tasks, logging, and cancel handling. Use this for any file in packages/cli/src/ui/ or any command that needs user interaction.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "820ffdbc206eda564184271e19ee12254bf5430a",
+      "scope": "project",
+      "path": ".agents/skills/clack-prompts",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-08T18:31:36.646Z",
+      "updatedAt": "2026-03-08T18:31:36.646Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
+    },
+    {
+      "name": "smol-toml",
+      "description": "Reference for smol-toml TOML parser/serializer. Use this skill whenever reading, writing, or manipulating TOML files, especially config.toml. Covers parse, stringify, TomlDate, TomlError, and the TOML-to-JavaScript type mapping. Use this for packages/core/src/config.ts or any code touching config.toml.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "820ffdbc206eda564184271e19ee12254bf5430a",
+      "scope": "project",
+      "path": ".agents/skills/smol-toml",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-08T18:31:37.390Z",
+      "updatedAt": "2026-03-08T18:31:37.390Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
+    },
+    {
+      "name": "update-documentation",
+      "description": "Align all documentation layers to code after implementing a feature, adding a config key, new CLI command, new flag, or any other change. Use this skill whenever you've finished writing code and need to make sure docs are complete and consistent — including internal specs (docs/), public website (website/), LLM ingestion files (llms-full.txt), and the project memory file. Invoke proactively after any non-trivial code change, not just when the user asks.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "820ffdbc206eda564184271e19ee12254bf5430a",
+      "scope": "project",
+      "path": ".agents/skills/update-documentation",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-08T18:31:38.129Z",
+      "updatedAt": "2026-03-08T18:31:38.129Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
+    }
+  ]
 }
