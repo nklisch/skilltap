@@ -23,6 +23,11 @@ export default defineCommand({
       description: "Remove from project scope instead of global",
       default: false,
     },
+    global: {
+      type: "boolean",
+      description: "Remove from global scope instead of project",
+      default: false,
+    },
     yes: {
       type: "boolean",
       alias: "y",
@@ -31,7 +36,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project });
+    const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project, global: args.global });
 
     const projectRoot = await findProjectRoot().catch(() => undefined);
     const globalResult = await loadInstalled();
@@ -57,8 +62,8 @@ export default defineCommand({
       }
       const selected = await selectSkillsToRemove(allSkills);
       if (isCancel(selected)) process.exit(2);
-      const selectedNames = new Set(selected as string[]);
-      skillsToRemove = allSkills.filter((s) => selectedNames.has(s.name));
+      const selectedKeys = new Set(selected as string[]);
+      skillsToRemove = allSkills.filter((s) => selectedKeys.has(`${s.name}:${s.scope}`));
     } else {
       const names = [...new Set([args.name, ...(args._ as string[])])];
       skillsToRemove = [];
@@ -75,14 +80,14 @@ export default defineCommand({
       }
     }
 
-    const scopeOf = (skill: InstalledSkill) =>
-      args.project ? "project" : (skill.scope as "global" | "project" | "linked");
+    const scopeOf = (skill: InstalledSkill): "global" | "project" | "linked" =>
+      args.project ? "project" : args.global ? "global" : (skill.scope as "global" | "project" | "linked");
 
     if (policy.agentMode) {
       for (const skill of skillsToRemove) {
         const result = await removeSkill(skill.name, {
           scope: scopeOf(skill),
-          projectRoot: skill.scope === "project" ? projectRoot : undefined,
+          projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
         });
         if (!result.ok) {
           sendEvent(config, "remove", {
@@ -120,7 +125,7 @@ export default defineCommand({
     for (const skill of skillsToRemove) {
       const result = await removeSkill(skill.name, {
         scope: scopeOf(skill),
-        projectRoot: skill.scope === "project" ? projectRoot : undefined,
+        projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
       });
       if (!result.ok) {
         s.stop("Failed.");

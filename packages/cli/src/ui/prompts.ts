@@ -97,12 +97,16 @@ export async function selectTap(
 export async function selectSkillsToRemove(
   skills: InstalledSkill[],
 ): Promise<string[] | symbol> {
+  const nameCounts = new Map<string, number>();
+  for (const s of skills) {
+    nameCounts.set(s.name, (nameCounts.get(s.name) ?? 0) + 1);
+  }
   const result = await multiselect({
     message: "Which skills to remove?",
     options: skills.map((s) => ({
-      value: s.name,
-      label: s.name,
-      hint: s.scope,
+      value: `${s.name}:${s.scope}`,
+      label: (nameCounts.get(s.name) ?? 0) > 1 ? `${s.name} (${s.scope})` : s.name,
+      hint: (nameCounts.get(s.name) ?? 0) > 1 ? undefined : s.scope,
     })),
     required: true,
   });
