@@ -121,7 +121,7 @@ args: {
 - **Kebab-to-camel**: `--dry-run` → `args.dryRun`
 - **Negation**: `--no-color` → `args.color === false` (for booleans with `default: true`)
 - **Equals syntax**: `--output=result.json` works
-- **Rest args**: Unmatched args go to `args._` array
+- **Rest args**: `args._` contains ALL positional args (including the first one captured as a named positional). Do NOT use `[args.source, ...args._]` — that duplicates the first positional. Use `args._ as string[]` directly to get all values.
 
 ## Subcommands
 
