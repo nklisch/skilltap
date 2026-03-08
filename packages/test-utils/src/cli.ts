@@ -1,14 +1,15 @@
-const CLI_DIR = `${import.meta.dir}/../../cli`;
+const CLI_ENTRY = `${import.meta.dir}/../../cli/src/index.ts`;
 
 export async function runSkilltap(
   args: string[],
   homeDir: string,
   configDir: string,
+  cwd: string = homeDir,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", ...args],
+    ["bun", "run", "--bun", CLI_ENTRY, ...args],
     {
-      cwd: CLI_DIR,
+      cwd,
       stdout: "pipe",
       stderr: "pipe",
       env: {

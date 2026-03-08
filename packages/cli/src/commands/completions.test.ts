@@ -4,7 +4,7 @@ import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
-const CLI_DIR = `${import.meta.dir}/../..`;
+const CLI_ENTRY = `${import.meta.dir}/../../src/index.ts`;
 
 async function runCompletions(
   args: string[],
@@ -13,9 +13,9 @@ async function runCompletions(
   extraEnv?: Record<string, string>,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "completions", ...args],
+    ["bun", "run", "--bun", CLI_ENTRY, "completions", ...args],
     {
-      cwd: CLI_DIR,
+      cwd: homeDir,
       stdout: "pipe",
       stderr: "pipe",
       env: {
@@ -39,9 +39,9 @@ async function runGetCompletions(
   configDir: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "--get-completions", type],
+    ["bun", "run", "--bun", CLI_ENTRY, "--get-completions", type],
     {
-      cwd: CLI_DIR,
+      cwd: homeDir,
       stdout: "pipe",
       stderr: "pipe",
       env: {

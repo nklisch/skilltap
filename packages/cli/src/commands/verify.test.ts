@@ -10,22 +10,31 @@ async function runVerify(
   args: string[],
   cwd: string = CLI_DIR,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    ["bun", "run", "--bun", `${CLI_DIR}/src/index.ts`, "verify", ...args],
-    {
-      cwd,
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: "pipe",
-      env: {
-        ...process.env,
+  const homeDir = await makeTmpDir();
+  const configDir = await makeTmpDir();
+  try {
+    const proc = Bun.spawn(
+      ["bun", "run", "--bun", `${CLI_DIR}/src/index.ts`, "verify", ...args],
+      {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+        stdin: "pipe",
+        env: {
+          ...process.env,
+          SKILLTAP_HOME: homeDir,
+          XDG_CONFIG_HOME: configDir,
+        },
       },
-    },
-  );
-  const exitCode = await proc.exited;
-  const stdout = await new Response(proc.stdout).text();
-  const stderr = await new Response(proc.stderr).text();
-  return { exitCode, stdout, stderr };
+    );
+    const exitCode = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    return { exitCode, stdout, stderr };
+  } finally {
+    await removeTmpDir(homeDir);
+    await removeTmpDir(configDir);
+  }
 }
 
 const VALID_SKILL_MD = `---

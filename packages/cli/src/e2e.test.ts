@@ -12,7 +12,7 @@ import {
   removeTmpDir,
 } from "@skilltap/test-utils";
 
-const CLI_DIR = `${import.meta.dir}/..`;
+const CLI_ENTRY = `${import.meta.dir}/../src/index.ts`;
 
 let homeDir: string;
 let configDir: string;
@@ -22,8 +22,8 @@ let tapRepo: { path: string; cleanup: () => Promise<void> };
 async function run(
   args: string[],
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["bun", "run", "--bun", "src/index.ts", ...args], {
-    cwd: CLI_DIR,
+  const proc = Bun.spawn(["bun", "run", "--bun", CLI_ENTRY, ...args], {
+    cwd: homeDir,
     stdout: "pipe",
     stderr: "pipe",
     env: {
