@@ -50,7 +50,7 @@ describe("doctor — healthy environment", () => {
     await mkdir(join(homeDir, ".agents", "skills"), { recursive: true });
     await writeFile(
       join(skilltapDir, "config.toml"),
-      '[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "prompt"\nrequire_scan = false\nagent = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n["agent-mode"]\nenabled = false\nscope = "project"\n',
+      'builtin_tap = false\n[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "prompt"\nrequire_scan = false\nagent = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n["agent-mode"]\nenabled = false\nscope = "project"\n',
     );
 
     const { exitCode, stdout } = await runSkilltap(["doctor"], homeDir, configDir);

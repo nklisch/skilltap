@@ -768,6 +768,84 @@ skilltap tap list
 
 ---
 
+## skilltap tap update
+
+Pull the latest `tap.json` for all (or one) git tap.
+
+```
+skilltap tap update [name]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Tap to update. Omit to update all configured taps. |
+
+### Behavior
+
+For each git tap:
+
+1. If the local clone is missing → clone fresh from the URL stored in config (self-heal)
+2. If the local clone exists → sync the remote URL (`git remote set-url origin <config-url>`) then `git pull`
+
+This means fixing a tap URL in `config.toml` and running `skilltap tap update <name>` is sufficient to recover — no manual directory deletion required.
+
+HTTP taps are always live and are skipped (no local clone). The built-in `skilltap-skills` tap is included in an all-taps run.
+
+### Examples
+
+```bash
+# Update all taps
+skilltap tap update
+
+# Update one tap
+skilltap tap update home
+```
+
+---
+
+## skilltap tap info
+
+Show details for a configured tap.
+
+```
+skilltap tap info <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Tap name (use `skilltap-skills` for the built-in tap) |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+| Field | Description |
+|-------|-------------|
+| `name` | Tap name |
+| `type` | `git`, `http`, or `builtin` |
+| `url` | Configured URL |
+| `path` | Local clone path (git/builtin only) |
+| `last fetched` | ISO date of the most recent commit in the local clone (git/builtin only) |
+| `skills` | Number of skills in this tap |
+
+### Examples
+
+```bash
+skilltap tap info home
+skilltap tap info skilltap-skills
+skilltap tap info home --json
+```
+
+---
+
 ## skilltap tap install
 
 Browse and install skills from your configured taps using an interactive picker.

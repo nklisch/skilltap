@@ -569,11 +569,14 @@ describe("updateTap — builtin tap", () => {
     expect(result.error.message).toContain("not configured");
   });
 
-  test("errors when builtin tap is not yet cloned", async () => {
+  test("attempts clone when builtin tap dir is missing (self-heal)", async () => {
+    // No tap directory exists. updateTap should attempt a clone rather than
+    // returning a UserError about "not yet cloned". The result is either ok
+    // (network available) or a GitError — never a "not yet cloned" UserError.
     const result = await updateTap(BUILTIN_TAP.name);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toContain("not yet cloned");
+    if (!result.ok) {
+      expect(result.error.constructor.name).not.toBe("UserError");
+    }
   });
 
   test("pulls builtin tap when updating by name", async () => {

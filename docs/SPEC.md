@@ -363,6 +363,53 @@ GitHub shorthand: when only one positional arg is given and it matches `owner/re
 
 If tap name already exists, exit 1 with: `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
 
+If the tap's destination directory already exists (from a previous failed clone), `git clone` will fail. Recovery: `rm -rf ~/.config/skilltap/taps/<name>` then retry.
+
+---
+
+### `skilltap tap update [name]`
+
+Pull the latest `tap.json` for all (or one) git tap.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Name of a specific tap to update (default: all) |
+
+**Behavior (per git tap):**
+
+1. If tap directory is missing → clone fresh from the URL in config (self-heal)
+2. If tap directory exists → `git remote set-url origin <config-url>` (sync URL in case config changed), then `git pull`
+
+HTTP taps are always live — they are noted in the `http` result field and skipped (no local clone to update).
+
+The built-in tap (`skilltap-skills`) is included in an "update all" run if enabled.
+
+**Result fields:**
+- `updated` — map of tap name → skill count for taps that were pulled or cloned
+- `http` — list of HTTP tap names (no-op)
+
+---
+
+### `skilltap tap info <name>`
+
+Show details for a configured tap.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Tap name (or `skilltap-skills` for the built-in tap) |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | JSON output |
+
+**Output fields:** `name`, `type` (`git`/`http`/`builtin`), `url`, `path` (git taps only — local clone path), `last-fetched` (git taps only — ISO date from `git log -1`), `skills` (count).
+
 ---
 
 ### `skilltap tap remove <name>`
@@ -790,7 +837,7 @@ Diagnose the skilltap environment and state. Runs 9 checks and reports issues wi
 | installed.json | Global `~/.config/skilltap/installed.json` and project `.agents/installed.json` (when in a project) are valid and parseable; detail shows `"N skills (G global, P project)"` |
 | skill integrity | Every skill in installed.json has a directory at the correct scope-aware path (`~/.agents/skills/` for global, `{projectRoot}/.agents/skills/` for project); orphan dirs in both locations are reported |
 | symlinks | Agent-specific symlinks for global skills point into `~/.agents/skills/`; project-scoped skill symlinks point into `{projectRoot}/.agents/skills/` |
-| taps | Tap directories exist and contain a valid `tap.json` |
+| taps | Configured taps (including built-in `skilltap-skills`) have valid directories and `tap.json`; per-tap pass/fail status shown as info lines |
 | agents | At least one agent CLI is detected on PATH |
 | npm | `npm` binary is available on PATH (for `npm:` sources) |
 
@@ -815,7 +862,7 @@ Diagnose the skilltap environment and state. Runs 9 checks and reports issues wi
 ◇ installed.json: valid (3 skills) ✓
 ◇ skill integrity: all present ✓
 ◇ symlinks: all valid ✓
-◇ taps: 2 reachable ✓
+◇ taps: 3 configured, 3 valid ✓
 ◇ agents: claude detected ✓
 ◇ npm: available ✓
 │

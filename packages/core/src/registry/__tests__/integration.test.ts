@@ -249,8 +249,7 @@ describe("updateTap with HTTP registry", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.http).toContain("http-tap");
-    expect(result.value.http).toHaveLength(1);
-    expect(Object.keys(result.value.updated)).toHaveLength(0);
+    expect(result.value.updated["http-tap"]).toBeUndefined();
   });
 });
 

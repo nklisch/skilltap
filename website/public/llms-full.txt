@@ -1200,11 +1200,30 @@ skilltap tap list
 
 Shows all registered taps with their names, URLs, type (`git`/`http`), and skill count.
 
+## Inspecting a tap
+
+```bash
+skilltap tap info <name>
+```
+
+Shows the tap's URL, local clone path, when it was last fetched, and how many skills it contains. Useful for diagnosing stale clones or verifying the URL that will be used when cloning.
+
+```bash
+skilltap tap info home --json   # machine-readable
+```
+
 ## Updating taps
+
+```bash
+skilltap tap update             # all taps
+skilltap tap update home        # one tap
+```
 
 Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every git tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
 
 HTTP taps are always live and need no refresh step.
+
+`tap update` is self-healing: if the local clone is missing it re-clones automatically, and it syncs the remote URL from config before pulling. This means you can fix a URL in `config.toml` and run `skilltap tap update <name>` — no manual directory deletion needed.
 
 ## Removing a tap
 
@@ -1360,6 +1379,20 @@ auth_env = "SKILLS_REGISTRY_TOKEN"
 `auth_env` names an environment variable that holds the bearer token. Prefer it over `auth_token` (which embeds the token directly in config).
 
 See the [tap-format reference](/reference/tap-format#http-registry-api) for the full HTTP registry API spec.
+
+## Auth errors and URL rewrites
+
+When a clone or install fails with an auth or permission error, the URL shown is what was passed to `git clone`. Git applies `url.insteadOf` rewrites transparently before connecting, so the actual connection may use a different URL (for example, SSH instead of HTTPS). Use `skilltap tap info <name>` to see what URL is configured.
+
+For repos where `git clone` can't succeed due to complex auth, custom URL schemes, or a private server, use `skilltap link` to symlink a local clone instead:
+
+```bash
+# Clone manually however your auth requires
+git clone git@internal.corp:team/my-skill ~/dev/my-skill
+
+# Then link the local clone — no cloning through skilltap
+skilltap link ~/dev/my-skill
+```
 
 ---
 
@@ -2846,6 +2879,84 @@ If no taps configured: `No taps configured. Run 'skilltap tap add <name> <url>' 
 
 ```bash
 skilltap tap list
+```
+
+---
+
+## skilltap tap update
+
+Pull the latest `tap.json` for all (or one) git tap.
+
+```
+skilltap tap update [name]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Tap to update. Omit to update all configured taps. |
+
+### Behavior
+
+For each git tap:
+
+1. If the local clone is missing → clone fresh from the URL stored in config (self-heal)
+2. If the local clone exists → sync the remote URL (`git remote set-url origin <config-url>`) then `git pull`
+
+This means fixing a tap URL in `config.toml` and running `skilltap tap update <name>` is sufficient to recover — no manual directory deletion required.
+
+HTTP taps are always live and are skipped (no local clone). The built-in `skilltap-skills` tap is included in an all-taps run.
+
+### Examples
+
+```bash
+# Update all taps
+skilltap tap update
+
+# Update one tap
+skilltap tap update home
+```
+
+---
+
+## skilltap tap info
+
+Show details for a configured tap.
+
+```
+skilltap tap info <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Tap name (use `skilltap-skills` for the built-in tap) |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+| Field | Description |
+|-------|-------------|
+| `name` | Tap name |
+| `type` | `git`, `http`, or `builtin` |
+| `url` | Configured URL |
+| `path` | Local clone path (git/builtin only) |
+| `last fetched` | ISO date of the most recent commit in the local clone (git/builtin only) |
+| `skills` | Number of skills in this tap |
+
+### Examples
+
+```bash
+skilltap tap info home
+skilltap tap info skilltap-skills
+skilltap tap info home --json
 ```
 
 ---

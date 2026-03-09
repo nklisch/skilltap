@@ -46,11 +46,30 @@ skilltap tap list
 
 Shows all registered taps with their names, URLs, type (`git`/`http`), and skill count.
 
+## Inspecting a tap
+
+```bash
+skilltap tap info <name>
+```
+
+Shows the tap's URL, local clone path, when it was last fetched, and how many skills it contains. Useful for diagnosing stale clones or verifying the URL that will be used when cloning.
+
+```bash
+skilltap tap info home --json   # machine-readable
+```
+
 ## Updating taps
+
+```bash
+skilltap tap update             # all taps
+skilltap tap update home        # one tap
+```
 
 Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every git tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
 
 HTTP taps are always live and need no refresh step.
+
+`tap update` is self-healing: if the local clone is missing it re-clones automatically, and it syncs the remote URL from config before pulling. This means you can fix a URL in `config.toml` and run `skilltap tap update <name>` — no manual directory deletion needed.
 
 ## Removing a tap
 
@@ -206,3 +225,17 @@ auth_env = "SKILLS_REGISTRY_TOKEN"
 `auth_env` names an environment variable that holds the bearer token. Prefer it over `auth_token` (which embeds the token directly in config).
 
 See the [tap-format reference](/reference/tap-format#http-registry-api) for the full HTTP registry API spec.
+
+## Auth errors and URL rewrites
+
+When a clone or install fails with an auth or permission error, the URL shown is what was passed to `git clone`. Git applies `url.insteadOf` rewrites transparently before connecting, so the actual connection may use a different URL (for example, SSH instead of HTTPS). Use `skilltap tap info <name>` to see what URL is configured.
+
+For repos where `git clone` can't succeed due to complex auth, custom URL schemes, or a private server, use `skilltap link` to symlink a local clone instead:
+
+```bash
+# Clone manually however your auth requires
+git clone git@internal.corp:team/my-skill ~/dev/my-skill
+
+# Then link the local clone — no cloning through skilltap
+skilltap link ~/dev/my-skill
+```

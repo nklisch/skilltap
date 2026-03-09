@@ -4,7 +4,7 @@ import { $ } from "bun";
 import { z } from "zod/v4";
 import { getConfigDir, loadConfig, saveConfig } from "./config";
 import { extractStderr } from "./shell";
-import { checkGitInstalled, clone, pull } from "./git";
+import { checkGitInstalled, clone, log, pull, syncRemoteUrl } from "./git";
 import type { RegistrySource } from "./registry";
 import { detectTapType, fetchSkillList } from "./registry";
 import type { Tap, TapSkill } from "./schemas/tap";
@@ -249,27 +249,31 @@ export async function updateTap(
       );
     }
     const dir = tapDir(BUILTIN_TAP.name);
+    const gitCheck = await checkGitInstalled();
+    if (!gitCheck.ok) return gitCheck;
     if (!(await Bun.file(join(dir, "tap.json")).exists())) {
-      return err(
-        new UserError(
-          `Built-in tap '${BUILTIN_TAP.name}' is not yet cloned.`,
-          "Run 'skilltap tap install' to set it up.",
-        ),
-      );
+      // Self-heal: clone fresh
+      const cloneResult = await clone(BUILTIN_TAP.url, dir, { depth: 1 });
+      if (!cloneResult.ok) return cloneResult;
+    } else {
+      const pullResult = await pull(dir);
+      if (!pullResult.ok) return pullResult;
     }
-    const pullResult = await pull(dir);
-    if (!pullResult.ok) return pullResult;
     const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
     updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
     return ok({ updated, http });
   }
 
-  // Update all: include built-in tap if enabled and cloned
+  // Update all: include built-in tap if enabled
   if (!name && config.builtin_tap !== false) {
     const dir = tapDir(BUILTIN_TAP.name);
-    if (await Bun.file(join(dir, "tap.json")).exists()) {
-      const pullResult = await pull(dir);
-      if (!pullResult.ok) return pullResult;
+    const gitCheck = await checkGitInstalled();
+    if (gitCheck.ok) {
+      if (!(await Bun.file(join(dir, "tap.json")).exists())) {
+        await clone(BUILTIN_TAP.url, dir, { depth: 1 });
+      } else {
+        await pull(dir);
+      }
       const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
       updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
     }
@@ -294,10 +298,20 @@ export async function updateTap(
       continue;
     }
 
-    // Git tap: pull and count skills
     const dir = tapDir(tap.name);
-    const pullResult = await pull(dir);
-    if (!pullResult.ok) return pullResult;
+    const gitCheck = await checkGitInstalled();
+    if (!gitCheck.ok) return gitCheck;
+
+    if (!(await Bun.file(join(dir, "tap.json")).exists())) {
+      // Self-heal: clone fresh from config URL
+      const cloneResult = await clone(tap.url, dir, { depth: 1 });
+      if (!cloneResult.ok) return cloneResult;
+    } else {
+      // Sync remote URL to match config (handles URL changes), then pull
+      await syncRemoteUrl(dir, tap.url);
+      const pullResult = await pull(dir);
+      if (!pullResult.ok) return pullResult;
+    }
 
     const tapResult = await loadTapJson(dir, tap.name);
     updated[tap.name] = tapResult.ok ? tapResult.value.skills.length : 0;
@@ -403,6 +417,65 @@ export function searchTaps(skills: TapEntry[], query: string): TapEntry[] {
   }
 
   return scored.sort((a, b) => b.score - a.score).map((s) => s.entry);
+}
+
+export type TapInfo = {
+  name: string;
+  type: "git" | "http" | "builtin";
+  url: string;
+  localPath?: string;
+  lastFetched?: string;
+  skillCount: number;
+};
+
+export async function getTapInfo(
+  name: string,
+): Promise<Result<TapInfo, UserError | GitError>> {
+  const configResult = await loadConfig();
+  if (!configResult.ok) return configResult;
+  const config = configResult.value;
+
+  if (name === BUILTIN_TAP.name) {
+    if (config.builtin_tap === false) {
+      return err(new UserError(`Built-in tap '${BUILTIN_TAP.name}' is disabled.`));
+    }
+    const dir = tapDir(BUILTIN_TAP.name);
+    const tapResult = await loadTapJson(dir, name);
+    const skillCount = tapResult.ok ? tapResult.value.skills.length : 0;
+    let lastFetched: string | undefined;
+    const logResult = await log(dir, 1);
+    if (logResult.ok && logResult.value.length > 0) {
+      lastFetched = logResult.value[0]!.date;
+    }
+    return ok({ name: BUILTIN_TAP.name, type: "builtin", url: BUILTIN_TAP.url, localPath: dir, lastFetched, skillCount });
+  }
+
+  const tap = config.taps.find((t) => t.name === name);
+  if (!tap) {
+    return err(
+      new UserError(
+        `Tap '${name}' is not configured.`,
+        `Run 'skilltap tap list' to see configured taps.`,
+      ),
+    );
+  }
+
+  if (tap.type === "http") {
+    const auth = { token: tap.auth_token, envVar: tap.auth_env };
+    const listResult = await fetchSkillList(tap.url, tap.name, auth);
+    const skillCount = listResult.ok ? listResult.value.skills.length : 0;
+    return ok({ name: tap.name, type: "http", url: tap.url, skillCount });
+  }
+
+  const dir = tapDir(tap.name);
+  const tapResult = await loadTapJson(dir, tap.name);
+  const skillCount = tapResult.ok ? tapResult.value.skills.length : 0;
+  let lastFetched: string | undefined;
+  const logResult = await log(dir, 1);
+  if (logResult.ok && logResult.value.length > 0) {
+    lastFetched = logResult.value[0]!.date;
+  }
+  return ok({ name: tap.name, type: "git", url: tap.url, localPath: dir, lastFetched, skillCount });
 }
 
 export async function initTap(name: string): Promise<Result<void, UserError>> {

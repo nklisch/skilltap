@@ -60,6 +60,12 @@ function printCheck(check: DoctorCheck, fix: boolean): void {
       printIssue(issue, fix);
     }
   }
+
+  if (check.info) {
+    for (const line of check.info) {
+      process.stdout.write(`${issuePrefix()}  ${ansi.dim(line)}\n`);
+    }
+  }
 }
 
 function printIssue(issue: DoctorIssue, fix: boolean): void {

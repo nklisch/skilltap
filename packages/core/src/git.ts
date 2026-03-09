@@ -47,6 +47,8 @@ export async function clone(
   debug("git clone", { url, dest, branch: opts?.branch });
   const flags: string[] = ["--depth", String(opts?.depth ?? 1)];
   if (opts?.branch) flags.push("--branch", opts.branch);
+  const linkHint =
+    "The URL shown is what was passed to git; url.insteadOf rewrites are applied by git before connecting. For repos with complex auth, use 'skilltap link <local-path>' to symlink a local clone instead.";
   try {
     await $`git clone ${flags} -- ${url} ${dest}`.quiet();
     return ok(undefined);
@@ -56,6 +58,7 @@ export async function clone(
       return err(
         new GitError(
           `Authentication failed for '${url}'. Check your git credentials or SSH keys.`,
+          linkHint,
         ),
       );
     }
@@ -63,7 +66,7 @@ export async function clone(
       return err(
         new GitError(
           `Repository not found or SSH access denied: '${url}'.`,
-          "Check that the repository exists and your SSH key is configured correctly.",
+          `Check that the repository exists and your SSH key is configured correctly. ${linkHint}`,
         ),
       );
     }
@@ -77,6 +80,13 @@ export async function clone(
       ),
     );
   }
+}
+
+export async function syncRemoteUrl(dir: string, url: string): Promise<Result<void, GitError>> {
+  return wrapGit(
+    () => $`git -C ${dir} remote set-url origin ${url}`.quiet().then(() => undefined),
+    "git remote set-url failed",
+  );
 }
 
 export async function pull(dir: string): Promise<Result<void, GitError>> {

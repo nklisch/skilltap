@@ -495,7 +495,9 @@ describe("checkSymlinks", () => {
 // ─── Taps check ───────────────────────────────────────────────────────────────
 
 describe("checkTaps", () => {
-  test("passes with no taps configured", async () => {
+  test("passes with no taps configured (builtin disabled)", async () => {
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await writeFile(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "taps")!;
     expect(check.status).toBe("pass");

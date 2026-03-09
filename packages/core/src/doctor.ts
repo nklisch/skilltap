@@ -24,6 +24,7 @@ import type { InstalledJson } from "./schemas/installed";
 import { InstalledJsonSchema } from "./schemas/installed";
 import { TapSchema } from "./schemas/tap";
 import { AGENT_PATHS } from "./symlink";
+import { BUILTIN_TAP } from "./taps";
 
 export interface DoctorIssue {
   message: string;
@@ -40,6 +41,8 @@ export interface DoctorCheck {
   status: "pass" | "warn" | "fail";
   detail?: string;
   issues?: DoctorIssue[];
+  /** Informational per-item status lines shown after issues (e.g. per-tap health). */
+  info?: string[];
 }
 
 export interface DoctorResult {
@@ -563,35 +566,48 @@ async function checkSymlinks(installed: InstalledJson, projectRoot?: string): Pr
 // ─── Check 7: Taps ───────────────────────────────────────────────────────────
 
 async function checkTaps(config: Config): Promise<DoctorCheck> {
-  if (config.taps.length === 0) {
+  const issues: DoctorIssue[] = [];
+  const info: string[] = [];
+  let validCount = 0;
+
+  const hasBuiltin = config.builtin_tap !== false;
+  const allTaps: Array<{ name: string; url: string; type: "git" | "http" | "builtin" }> = [];
+
+  if (hasBuiltin) {
+    allTaps.push({ name: BUILTIN_TAP.name, url: BUILTIN_TAP.url, type: "builtin" });
+  }
+  for (const tap of config.taps) {
+    allTaps.push({ name: tap.name, url: tap.url, type: tap.type });
+  }
+
+  if (allTaps.length === 0) {
     return { name: "taps", status: "pass", detail: "0 configured" };
   }
 
-  const issues: DoctorIssue[] = [];
-  let validCount = 0;
-
-  for (const tap of config.taps) {
+  for (const tap of allTaps) {
     if (tap.type === "http") {
       validCount++;
+      info.push(`${tap.name} (http): ok`);
       continue;
     }
 
-    const tapDir = join(getConfigDir(), "taps", tap.name);
+    const dir = join(getConfigDir(), "taps", tap.name);
+    const label = tap.type === "builtin" ? `${tap.name} (built-in)` : tap.name;
 
-    if (!(await resolvedDirExists(tapDir))) {
+    if (!(await resolvedDirExists(dir))) {
       const tapUrl = tap.url;
       issues.push({
         message: `tap '${tap.name}': directory missing. Run 'skilltap tap update ${tap.name}' to re-clone.`,
         fixable: true,
         fixDescription: "re-cloned tap",
         fix: async () => {
-          await clone(tapUrl, tapDir, { depth: 1 });
+          await clone(tapUrl, dir, { depth: 1 });
         },
       });
       continue;
     }
 
-    const tapJsonFile = join(tapDir, "tap.json");
+    const tapJsonFile = join(dir, "tap.json");
     if (!(await fileExists(tapJsonFile))) {
       issues.push({
         message: `tap '${tap.name}': tap.json is missing`,
@@ -620,7 +636,7 @@ async function checkTaps(config: Config): Promise<DoctorCheck> {
       continue;
     }
 
-    const gitDir = join(tapDir, ".git");
+    const gitDir = join(dir, ".git");
     if (!(await resolvedDirExists(gitDir))) {
       issues.push({
         message: `tap '${tap.name}': .git directory missing (not a git repo)`,
@@ -630,20 +646,25 @@ async function checkTaps(config: Config): Promise<DoctorCheck> {
     }
 
     validCount++;
+    info.push(`${label}: ok (${tapResult.data.skills.length} skills)`);
   }
+
+  const total = allTaps.length;
 
   if (issues.length === 0) {
     return {
       name: "taps",
       status: "pass",
-      detail: `${config.taps.length} configured, ${validCount} valid`,
+      detail: `${total} configured, ${validCount} valid`,
+      info,
     };
   }
   return {
     name: "taps",
     status: "warn",
-    detail: `${config.taps.length} configured, ${validCount} valid`,
+    detail: `${total} configured, ${validCount} valid`,
     issues,
+    info,
   };
 }
 

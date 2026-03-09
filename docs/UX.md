@@ -713,6 +713,52 @@ $ skilltap tap list
 No taps configured. Run 'skilltap tap add <name> <url>' to add one.
 ```
 
+### tap update
+
+```
+skilltap tap update [name]
+```
+
+Self-healing: re-clones if the local directory is missing; syncs the remote URL from config before pulling (so a URL fix in `config.toml` takes effect automatically).
+
+```
+$ skilltap tap update
+✓ Updated 2 taps (home: 4 skills, skilltap-skills: 47 skills)
+
+$ skilltap tap update home
+✓ Updated tap 'home' (4 skills)
+```
+
+---
+
+### tap info
+
+```
+skilltap tap info <name> [--json]
+```
+
+```
+$ skilltap tap info home
+
+  name          home
+  type          git
+  url           https://gitea.example.com/nathan/my-skills-tap
+  path          /home/user/.config/skilltap/taps/home
+  last fetched  2025-10-15 09:42:11 +0000
+  skills        4
+
+$ skilltap tap info skilltap-skills
+
+  name          skilltap-skills (built-in)
+  type          builtin
+  url           https://github.com/nklisch/skilltap-skills.git
+  path          /home/user/.config/skilltap/taps/skilltap-skills
+  last fetched  2025-10-14 12:00:00 +0000
+  skills        47
+```
+
+---
+
 ### tap install
 
 ```
@@ -1480,7 +1526,10 @@ $ skilltap doctor
 ◇ installed: 3 skills (1 global, 2 project) ✓
 ◇ skill integrity: all present ✓
 ◇ symlinks: all valid ✓
-◇ taps: 2 reachable ✓
+◇ taps: 3 configured, 3 valid ✓
+│  skilltap-skills (built-in): ok (47 skills)
+│  home: ok (4 skills)
+│  community: ok (12 skills)
 ◇ agents: claude detected ✓
 ◇ npm: available ✓
 │
@@ -1501,7 +1550,10 @@ $ skilltap doctor
 ⚠ skills: 2 installed, 1 on disk
 │  broken-skill: recorded in installed.json but directory missing at ~/.agents/skills/broken-skill
 ◇ symlinks: all valid ✓
-◇ taps: 2 reachable ✓
+⚠ taps: 3 configured, 2 valid
+│  tap 'source-delve': directory missing. Run 'skilltap tap update source-delve' to re-clone.
+│  skilltap-skills (built-in): ok (47 skills)
+│  community: ok (12 skills)
 ◇ agents: claude detected ✓
 ◇ npm: available ✓
 │
