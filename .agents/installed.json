@@ -115,6 +115,52 @@
         },
         "tap": "skills"
       }
+    },
+    {
+      "name": "zod-v4",
+      "description": "Zod v4 validation library reference. Auto-loads when working with Zod schemas, validation, z.object, z.string, z.infer, safeParse, transforms, discriminatedUnion.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "ab8cea75d374eef68008f777df05b1093a71bc88",
+      "scope": "project",
+      "path": ".agents/skills/zod-v4",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-09T04:14:41.389Z",
+      "updatedAt": "2026-03-09T04:14:41.389Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
+    },
+    {
+      "name": "biome-v2",
+      "description": "Biome v2 linter/formatter reference. Auto-loads when working with biome.json, biome config, linting rules, formatting, import organization, biome check.",
+      "repo": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "sha": "ab8cea75d374eef68008f777df05b1093a71bc88",
+      "scope": "project",
+      "path": ".agents/skills/biome-v2",
+      "tap": "skills",
+      "also": [
+        "claude-code"
+      ],
+      "installedAt": "2026-03-09T04:14:42.127Z",
+      "updatedAt": "2026-03-09T04:14:42.127Z",
+      "trust": {
+        "tier": "publisher",
+        "publisher": {
+          "name": "nklisch",
+          "platform": "github"
+        },
+        "tap": "skills"
+      }
     }
   ]
 }
