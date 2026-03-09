@@ -33,7 +33,7 @@ _skilltap() {
       ;;
     remove)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--project --yes" -- "$cur"))
+        COMPREPLY=($(compgen -W "--project --global --yes" -- "$cur"))
       else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)

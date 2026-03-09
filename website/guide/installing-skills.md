@@ -328,10 +328,11 @@ Or omit the name entirely to pick interactively from all installed skills:
 skilltap remove
 ```
 
-Use `--project` to remove from project scope instead of global:
+Use `--project` or `--global` to target a specific scope:
 
 ```bash
 skilltap remove termtube-dev --project
+skilltap remove commit-helper --global
 ```
 
 ## Linking local skills

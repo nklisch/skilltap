@@ -55,6 +55,7 @@ _skilltap() {
           skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
             '--project[Remove from project scope]' \\
+            '--global[Remove from global scope]' \\
             '--yes[Skip confirmation]' \\
             "*:skill:($skills)"
           ;;

@@ -315,6 +315,7 @@ skilltap remove [name...] [flags]
 
 ```
 --project          Remove from project scope instead of global
+--global           Remove from global scope (explicit for scripts)
 --yes              Skip confirmation
 ```
 
@@ -335,6 +336,10 @@ Remove termtube-dev? (y/N): y
 $ skilltap remove skill-a skill-b --yes
 ✓ Removed 2 skills
 
+$ skilltap remove commit-helper --global
+Remove commit-helper? (y/N): y
+✓ Removed commit-helper
+
 $ skilltap remove
 ◆  Which skills to remove?
 │  ○ commit-helper  global
@@ -346,6 +351,15 @@ $ skilltap remove
 
 Removes the skill directory and any agent-specific symlinks. Updates `installed.json`.
 Omit the name to choose interactively via multiselect (no separate confirmation needed).
+
+When a skill is installed at both global and project scopes, the picker shows disambiguated entries:
+```
+◆  Which skills to remove?
+│  ○ commit-helper (global)
+│  ○ commit-helper (project)
+│  ○ code-review    global
+└─
+```
 
 ---
 
@@ -1132,8 +1146,8 @@ skilltap list --global
 skilltap list --project
 
 # Remove from specific scope
-skilltap remove commit-helper           # global
-skilltap remove termtube-dev --project  # project
+skilltap remove commit-helper --global   # explicit global
+skilltap remove termtube-dev --project   # project
 
 # Remove multiple at once
 skilltap remove skill-a skill-b skill-c --yes

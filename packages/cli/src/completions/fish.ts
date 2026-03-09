@@ -42,6 +42,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from install' -xa '(skilltap --g
 
 # remove flags
 complete -c skilltap -n '__fish_seen_subcommand_from remove' -l project -d 'Remove from project scope'
+complete -c skilltap -n '__fish_seen_subcommand_from remove' -l global -d 'Remove from global scope'
 complete -c skilltap -n '__fish_seen_subcommand_from remove' -l yes -d 'Skip confirmation'
 complete -c skilltap -n '__fish_seen_subcommand_from remove' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 

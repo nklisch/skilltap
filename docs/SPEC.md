@@ -129,13 +129,16 @@ Remove one or more installed skills.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--project` | boolean | false | Remove from project scope instead of global |
+| `--global` | boolean | false | Remove from global scope (explicit for scripts) |
 | `--yes` | boolean | false | Skip confirmation prompt |
 
 **Behavior:**
 
 - If no names given: show interactive multiselect of all installed skills
+- If a skill is installed at both global and project scopes, the picker shows `name (global)` / `name (project)` as distinct entries
 - If names given: validate each exists in `installed.json`; exit 1 on first unknown name
 - Duplicate names are deduplicated
+- `--global`/`--project` overrides the stored `scope` when resolving where to remove from
 - For each skill: remove agent-specific symlinks, remove skill directory, remove cache entry if last skill from that repo
 - Update `installed.json` after each removal
 - Confirmation prompt shown once for CLI-supplied names (skipped when multiselect was used or `--yes` is set)

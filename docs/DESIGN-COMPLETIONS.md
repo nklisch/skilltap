@@ -191,7 +191,7 @@ _skilltap() {
       ;;
     remove)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--project --yes" -- "$cur"))
+        COMPREPLY=($(compgen -W "--project --global --yes" -- "$cur"))
       else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)
@@ -270,6 +270,7 @@ _skilltap() {
         remove)
           _arguments \
             '--project[Remove from project scope]' \
+            '--global[Remove from global scope]' \
             '--yes[Skip confirmation]' \
             '1:skill:->installed-skills'
           [[ $state == installed-skills ]] && {
