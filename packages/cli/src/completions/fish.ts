@@ -57,6 +57,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from update' -l strict -d 'Abort
 complete -c skilltap -n '__fish_seen_subcommand_from update' -l semantic -d 'Force semantic scan'
 complete -c skilltap -n '__fish_seen_subcommand_from update' -l json -d 'Output result as JSON'
 complete -c skilltap -n '__fish_seen_subcommand_from update' -s c -l check -d 'Check for updates without applying'
+complete -c skilltap -n '__fish_seen_subcommand_from update' -s f -l force -d 'Force update even if already up to date'
 complete -c skilltap -n '__fish_seen_subcommand_from update' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 
 # find flags

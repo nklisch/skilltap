@@ -74,6 +74,7 @@ _skilltap() {
             '--semantic[Force semantic scan]' \\
             '--json[Output result as JSON]' \\
             '(-c --check)'{-c,--check}'[Check for updates without applying]' \\
+            '(-f --force)'{-f,--force}'[Force update even if already up to date]' \\
             "1:skill:($skills)"
           ;;
         find)

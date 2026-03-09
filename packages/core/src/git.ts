@@ -86,6 +86,16 @@ export async function pull(dir: string): Promise<Result<void, GitError>> {
   );
 }
 
+export async function resetHard(
+  dir: string,
+  sha: string,
+): Promise<Result<void, GitError>> {
+  return wrapGit(
+    () => $`git -C ${dir} reset --hard ${sha}`.quiet().then(() => undefined),
+    "git reset failed",
+  );
+}
+
 export async function fetch(dir: string): Promise<Result<void, GitError>> {
   return wrapGit(
     () => $`git -C ${dir} fetch`.quiet().then(() => undefined),

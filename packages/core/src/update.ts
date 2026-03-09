@@ -6,7 +6,7 @@ import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import type { DiffStat } from "./git";
-import { diff, diffStat, fetch, pull, revParse } from "./git";
+import { diff, diffStat, fetch, pull, resetHard, revParse } from "./git";
 import {
   downloadAndExtract,
   fetchPackageMetadata,
@@ -70,6 +70,8 @@ export type UpdateOptions = {
   onSemanticScanStart?: (skillName: string) => void;
   /** Called with progress during semantic scan. */
   onSemanticProgress?: (completed: number, total: number, score: number, reason: string) => void;
+  /** Force re-apply the update even if the skill appears up to date (same SHA / version). */
+  force?: boolean;
 };
 
 export type UpdateResult = {
@@ -206,7 +208,7 @@ async function updateNpmSkill(
 
   const latestVersion = versionResult.value.version;
 
-  if (record.ref === latestVersion) {
+  if (record.ref === latestVersion && !options.force) {
     await refreshAgentSymlinks(record, options.projectRoot);
     result.upToDate.push(record.name);
     options.onProgress?.(record.name, "upToDate");
@@ -321,7 +323,7 @@ async function updateGitSkill(
   const localSha = localShaResult.value;
   const remoteSha = remoteShaResult.value;
 
-  if (localSha === remoteSha) {
+  if (localSha === remoteSha && !options.force) {
     await refreshAgentSymlinks(record, options.projectRoot);
     result.upToDate.push(record.name);
     options.onProgress?.(record.name, "upToDate");
@@ -346,6 +348,8 @@ async function updateGitSkill(
   if (!pullResult.ok) return pullResult;
 
   if (await runUpdateSemanticScan(workDir, record.name, options)) {
+    // Reset to pre-pull state so the next run re-detects the pending update
+    await resetHard(workDir, localSha);
     return skipSkill(result, options, record.name);
   }
 
@@ -410,7 +414,7 @@ async function updateGitSkillGroup(
   const remoteSha = remoteShaResult.value;
 
   // If the whole repo is up to date, all skills in the group are too
-  if (localSha === remoteSha) {
+  if (localSha === remoteSha && !options.force) {
     for (const skill of skills) {
       await refreshAgentSymlinks(skill, options.projectRoot);
       result.upToDate.push(skill.name);
@@ -431,7 +435,7 @@ async function updateGitSkillGroup(
     if (!statResult.ok) return statResult;
     const stat = statResult.value;
 
-    if (stat.filesChanged === 0) {
+    if (stat.filesChanged === 0 && !options.force) {
       result.upToDate.push(skill.name);
       options.onProgress?.(skill.name, "upToDate");
       continue;
@@ -463,7 +467,19 @@ async function updateGitSkillGroup(
   const newSha = newShaResult.value;
 
   // Apply update to each confirmed skill
+  let anySemanticBlocked = false;
   for (const skill of toUpdate) {
+    // biome-ignore lint/style/noNonNullAssertion: multi-skill records always have path
+    const skillCacheSubdir = join(workDir, skill.path!);
+
+    // Semantic scan on cache subdir BEFORE recopy so we can roll back cleanly on failure
+    if (await runUpdateSemanticScan(skillCacheSubdir, skill.name, options)) {
+      result.skipped.push(skill.name);
+      options.onProgress?.(skill.name, "skipped");
+      anySemanticBlocked = true;
+      continue;
+    }
+
     const recopyResult = await recopyMultiSkill(workDir, skill, options.projectRoot);
     if (!recopyResult.ok) return recopyResult;
 
@@ -472,12 +488,6 @@ async function updateGitSkillGroup(
       skill.scope as "global" | "project",
       options.projectRoot,
     );
-
-    if (await runUpdateSemanticScan(installDir, skill.name, options)) {
-      result.skipped.push(skill.name);
-      options.onProgress?.(skill.name, "skipped");
-      continue;
-    }
 
     const newTrust = await _resolveTrust({
       adapter: "git",
@@ -497,6 +507,12 @@ async function updateGitSkillGroup(
 
     result.updated.push(skill.name);
     options.onProgress?.(skill.name, "updated");
+  }
+
+  // If any skills were blocked by semantic scan, reset the cache so the next
+  // run re-detects the pending update instead of showing "up to date"
+  if (anySemanticBlocked) {
+    await resetHard(workDir, localSha);
   }
 
   return ok(undefined);

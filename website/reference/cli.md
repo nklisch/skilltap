@@ -258,6 +258,7 @@ skilltap update [name] [flags]
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan on diff content |
 | `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
 | `--check` / `-c` | boolean | `false` | Check for updates without applying them. Fetches all remotes, shows which skills have updates, then exits. Refreshes the background update cache. |
+| `--force` / `-f` | boolean | `false` | Force update even if skill appears up to date. Re-applies, re-scans, and refreshes `updatedAt`. |
 
 ### Behavior
 
@@ -294,6 +295,9 @@ skilltap update --strict
 
 # Check what's available without updating
 skilltap update --check
+
+# Force re-apply even if already up to date (re-runs security scan)
+skilltap update --force
 ```
 
 ---

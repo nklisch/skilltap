@@ -73,6 +73,12 @@ export default defineCommand({
       description: "Check for updates without applying them. Refreshes the update cache.",
       default: false,
     },
+    force: {
+      type: "boolean",
+      alias: "f",
+      description: "Force update even if skill appears up to date (re-applies and re-scans).",
+      default: false,
+    },
   },
   async run({ args }) {
     const name = args.name as string | undefined;
@@ -91,9 +97,9 @@ export default defineCommand({
     await refreshTapIndexes(policy.agentMode);
 
     if (policy.agentMode) {
-      return runAgentModeUpdate(name, config, policy, projectRoot, args.json);
+      return runAgentModeUpdate(name, config, policy, projectRoot, args.json, args.force);
     }
-    return runInteractiveUpdate(name, args, config, policy, projectRoot);
+    return runInteractiveUpdate(name, args, config, policy, projectRoot, args.force);
   },
 });
 
@@ -161,6 +167,7 @@ async function runAgentModeUpdate(
   policy: EffectivePolicy,
   projectRoot: string | undefined,
   useJson = false,
+  force = false,
 ): Promise<void> {
   let agent: AgentAdapter | undefined;
   if (policy.scanMode === "semantic") {
@@ -171,6 +178,7 @@ async function runAgentModeUpdate(
     name,
     yes: true,
     strict: true,
+    force,
     agent,
     semantic: policy.scanMode === "semantic",
     threshold: config.security.threshold,
@@ -249,6 +257,7 @@ async function runInteractiveUpdate(
   config: Config,
   policy: EffectivePolicy,
   projectRoot: string | undefined,
+  force = false,
 ): Promise<void> {
   const { runSemantic, agent } = await resolveSemanticInteractive(policy, args, config);
 
@@ -258,6 +267,7 @@ async function runInteractiveUpdate(
     name,
     yes: policy.yes,
     strict: policy.onWarn === "fail",
+    force,
     agent,
     semantic: runSemantic,
     threshold: config.security.threshold,

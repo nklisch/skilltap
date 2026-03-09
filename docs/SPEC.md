@@ -191,6 +191,7 @@ Update installed skills.
 | `--yes` | boolean | false | Auto-accept updates (security warnings still shown) |
 | `--strict` | boolean | (from config) | Abort update if any security warnings are found in the diff. |
 | `--check` / `-c` | boolean | false | Check for updates without applying them. Runs a fresh remote check, writes the result to the skill update cache, and prints which skills have updates. |
+| `--force` / `-f` | boolean | false | Force update even if the skill appears up to date (same SHA or version). Re-applies the update, re-runs security scanning, and refreshes `updatedAt`. |
 
 **Behavior:**
 
@@ -200,17 +201,18 @@ Then, per skill:
 
 1. `git fetch` in installed dir (standalone) or cache dir (multi-skill)
 2. Compare local HEAD SHA to remote
-3. If identical → refresh agent symlinks (recreate any that are missing), then `Already up to date.`
-4. If different:
+3. If identical and not `--force` → refresh agent symlinks (recreate any that are missing), then `Already up to date.`
+4. If different (or `--force`):
    a. Compute diff (`git diff HEAD..FETCH_HEAD`)
    b. Display summary: files changed, insertions, deletions
    c. Run Layer 1 static scan on **changed content only**
    d. Display warnings (if any)
-   e. If `--strict` (or `security.on_warn = "fail"`) and warnings → print warnings, skip this skill (continue to next)
+   e. If `--strict` (or `security.on_warn = "fail"`) and warnings → print warnings, skip this skill (continue to next); git HEAD is reset to pre-fetch state so the next run re-detects the pending update
    f. If warnings (not strict) → prompt: `Apply update? (y/N)`
    g. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
-   h. Update `installed.json` with new SHA and `updatedAt`
-   i. Re-create agent symlinks
+   h. If semantic scan blocks after pull → reset git HEAD to pre-pull state so the next run re-detects the pending update
+   i. Update `installed.json` with new SHA and `updatedAt`
+   j. Re-create agent symlinks
 
 **Linked skills** (`skilltap link`) are skipped — they're managed by the user.
 
