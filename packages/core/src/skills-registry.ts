@@ -46,10 +46,22 @@ export type SkillRegistry = {
 
 const SKILLS_SH_BASE = "https://skills.sh";
 
+const REGISTRY_FETCH_TIMEOUT_MS = 8000;
+
+async function fetchWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REGISTRY_FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function searchSkillsSh(query: string, limit: number): Promise<RegistrySkill[]> {
   try {
     const url = `${SKILLS_SH_BASE}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
-    const res = await fetch(url);
+    const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
     const data = (await res.json()) as RegistryApiResponse;
     if (!data.skills || !Array.isArray(data.skills)) return [];
@@ -86,7 +98,7 @@ export function createCustomRegistry(name: string, baseUrl: string): SkillRegist
     async search(query: string, limit: number): Promise<RegistrySkill[]> {
       try {
         const url = `${base}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
-        const res = await fetch(url);
+        const res = await fetchWithTimeout(url);
         if (!res.ok) return [];
         const data = (await res.json()) as RegistryApiResponse;
         if (!data.skills || !Array.isArray(data.skills)) return [];
