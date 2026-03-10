@@ -30,9 +30,9 @@ const SKIP_STARTUP_ARGS = new Set([
 
 // These commands handle telemetry consent themselves — skip the startup prompt for them
 const SKIP_TELEMETRY_NOTICE_ARGS = new Set([...SKIP_STARTUP_ARGS, "config"]);
-const shouldRunStartup = !process.argv.slice(2).some((a) =>
-  SKIP_STARTUP_ARGS.has(a),
-);
+const shouldRunStartup =
+  !process.env.SKILLTAP_NO_STARTUP &&
+  !process.argv.slice(2).some((a) => SKIP_STARTUP_ARGS.has(a));
 
 if (shouldRunStartup) {
   await runStartupUpdateCheck();

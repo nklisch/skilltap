@@ -24,6 +24,7 @@ async function runVerify(
           ...process.env,
           SKILLTAP_HOME: homeDir,
           XDG_CONFIG_HOME: configDir,
+          SKILLTAP_NO_STARTUP: "1",
         },
       },
     );
