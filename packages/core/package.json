@@ -1,6 +1,6 @@
 {
   "name": "@skilltap/core",
-  "version": "0.7.12",
+  "version": "0.7.13",
   "description": "Core library for skilltap — agent skill management",
   "type": "module",
   "license": "MIT",
