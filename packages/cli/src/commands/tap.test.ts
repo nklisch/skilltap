@@ -243,6 +243,59 @@ describe("tap init", () => {
   });
 });
 
+describe("tap info", () => {
+  test("shows details for a configured tap", async () => {
+    const tap = await createLocalTap([
+      { name: "skill-a", description: "A", repo: "https://example.com/a" },
+      { name: "skill-b", description: "B", repo: "https://example.com/b" },
+    ]);
+    try {
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["tap", "info", "home"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("home");
+      expect(stdout).toContain("2");
+    } finally {
+      await tap.cleanup();
+    }
+  });
+
+  test("errors if tap not found", async () => {
+    await disableBuiltinTap(configDir);
+    const { exitCode, stderr } = await runSkilltap(
+      ["tap", "info", "nonexistent"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("nonexistent");
+  });
+
+  test("--json outputs JSON", async () => {
+    const tap = await createLocalTap([
+      { name: "skill-a", description: "A", repo: "https://example.com/a" },
+    ]);
+    try {
+      await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["tap", "info", "home", "--json"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      const json = JSON.parse(stdout);
+      expect(json.name).toBe("home");
+      expect(json.skillCount).toBe(1);
+    } finally {
+      await tap.cleanup();
+    }
+  });
+});
+
 describe("tap install", () => {
   test("exits with error when no taps configured and builtin disabled", async () => {
     await disableBuiltinTap(configDir);
