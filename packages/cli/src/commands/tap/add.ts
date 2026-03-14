@@ -42,7 +42,10 @@ export default defineCommand({
       tapName = args.name;
       tapUrl = url;
     } else {
-      const shorthand = parseGitHubTapShorthand(args.name);
+      const shorthand = parseGitHubTapShorthand(
+        args.name,
+        configResult.ok ? configResult.value.default_git_host : undefined,
+      );
       if (!shorthand) {
         exitWithError(
           agentMode,

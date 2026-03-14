@@ -95,6 +95,21 @@ describe("ConfigSchema", () => {
     expect(result["agent-mode"].enabled).toBe(false);
     expect(result["agent-mode"].scope).toBe("project");
     expect(result.taps).toEqual([]);
+    expect(result.default_git_host).toBe("https://github.com");
+  });
+
+  test("default_git_host defaults to https://github.com", () => {
+    const result = ConfigSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.default_git_host).toBe("https://github.com");
+  });
+
+  test("default_git_host accepts custom URL", () => {
+    const result = ConfigSchema.safeParse({ default_git_host: "https://gitea.example.com" });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.default_git_host).toBe("https://gitea.example.com");
   });
 
   test("accepts full valid config", () => {

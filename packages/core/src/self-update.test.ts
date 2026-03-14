@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
-import { checkForUpdate, downloadAndInstall, isCompiledBinary } from "./self-update";
+import { checkForUpdate, downloadAndInstall, fetchLatestVersion, isCompiledBinary } from "./self-update";
+import { err, GitError, ok, UserError } from "./types";
 
 type Env = { XDG_CONFIG_HOME?: string };
 
@@ -125,6 +126,34 @@ describe("checkForUpdate", () => {
   });
 });
 
+// ─── fetchLatestVersion ───────────────────────────────────────────────────────
+
+describe("fetchLatestVersion", () => {
+  test("returns highest semver from tags", async () => {
+    const mockLsRemote = async () => ok(["v0.9.0", "v1.2.0", "v1.0.0"]);
+    const result = await fetchLatestVersion(mockLsRemote);
+    expect(result).toBe("1.2.0");
+  });
+
+  test("returns null when ls-remote fails", async () => {
+    const mockLsRemote = async () => err(new GitError("failed"));
+    const result = await fetchLatestVersion(mockLsRemote);
+    expect(result).toBeNull();
+  });
+
+  test("returns null when no tags exist", async () => {
+    const mockLsRemote = async () => ok([]);
+    const result = await fetchLatestVersion(mockLsRemote);
+    expect(result).toBeNull();
+  });
+
+  test("ignores malformed tags", async () => {
+    const mockLsRemote = async () => ok(["v1.0.0", "release-candidate", "v2.0.0"]);
+    const result = await fetchLatestVersion(mockLsRemote);
+    expect(result).toBe("2.0.0");
+  });
+});
+
 // ─── isCompiledBinary ─────────────────────────────────────────────────────────
 
 describe("isCompiledBinary", () => {
@@ -240,5 +269,35 @@ describe("downloadAndInstall", () => {
 
     // tmpPath = ${execPath}.update — write failed (EACCES), so it should not exist
     expect(await Bun.file(`${execPath}.update`).exists()).toBe(false);
+  });
+
+  test("uses gh when available — fetch is not called", async () => {
+    const execPath = join(tmpDir, "skilltap-gh");
+    await Bun.write(execPath, "old");
+
+    let fetchCalled = false;
+    const mockFetch = async () => {
+      fetchCalled = true;
+      return new Response(fakeBinary, { status: 200 });
+    };
+
+    const mockGh = async (_version: string, _asset: string, destPath: string) => {
+      await Bun.write(destPath, fakeBinary);
+      return ok(undefined);
+    };
+
+    const result = await downloadAndInstall("9.9.9", mockFetch, execPath, mockGh);
+    expect(result.ok).toBe(true);
+    expect(fetchCalled).toBe(false);
+  });
+
+  test("falls back to fetch when gh fails", async () => {
+    const execPath = join(tmpDir, "skilltap-fallback");
+    await Bun.write(execPath, "old");
+
+    const mockGh = async () => err(new UserError("gh not found"));
+
+    const result = await downloadAndInstall("9.9.9", okFetch, execPath, mockGh);
+    expect(result.ok).toBe(true);
   });
 });

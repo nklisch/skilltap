@@ -85,6 +85,8 @@ export const ConfigSchema = z.object({
     .default([]),
   updates: UpdatesConfigSchema.prefault({}),
   telemetry: TelemetryConfigSchema.prefault({}),
+  /** Default git host for owner/repo shorthand. Defaults to "https://github.com". */
+  default_git_host: z.string().default("https://github.com"),
 });
 
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;

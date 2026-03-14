@@ -77,7 +77,9 @@ const GH_URL_PROTOCOLS = ["https://", "http://", "git@", "ssh://", "npm:"];
 /** Parse GitHub shorthand (owner/repo) into a tap name + clone URL. Returns null if not shorthand. */
 export function parseGitHubTapShorthand(
   source: string,
+  gitHost = "https://github.com",
 ): GitHubTapShorthand | null {
+  const host = gitHost.replace(/\/$/, "");
   let s = source;
   if (s.startsWith("github:")) s = s.slice("github:".length);
   else if (!s.includes("/")) return null;
@@ -95,7 +97,7 @@ export function parseGitHubTapShorthand(
   const [owner, repo] = parts;
   return {
     name: repo!,
-    url: `https://github.com/${owner}/${repo}.git`,
+    url: `${host}/${owner}/${repo}.git`,
   };
 }
 

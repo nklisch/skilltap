@@ -142,6 +142,7 @@ async function runAgentMode(
       also,
       ref: args.ref,
       skipScan: false,
+      gitHost: config.default_git_host,
       onWarnings: async (
         warnings: StaticWarning[],
       ): Promise<boolean> => {
@@ -292,6 +293,7 @@ async function runInteractiveMode(
       also,
       ref: args.ref,
       skipScan,
+      gitHost: config.default_git_host,
       agent,
       semantic: runSemantic,
       threshold: config.security.threshold,

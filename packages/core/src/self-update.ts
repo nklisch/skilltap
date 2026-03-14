@@ -1,5 +1,6 @@
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { getConfigDir } from "./config";
+import { lsRemoteTags } from "./git";
 import { extractStderr } from "./shell";
 import { err, NetworkError, ok, type Result, UserError } from "./types";
 
@@ -16,8 +17,7 @@ interface UpdateCache {
   latest: string;
 }
 
-const GITHUB_OWNER = "nklisch";
-const GITHUB_REPO = "skilltap";
+const RELEASE_REPO_URL = "https://github.com/nklisch/skilltap.git";
 const CACHE_FILE = "update-check.json";
 
 function parseVersion(v: string): [number, number, number] | null {
@@ -60,23 +60,36 @@ async function writeCache(configDir: string, latest: string): Promise<void> {
   }
 }
 
-export async function fetchLatestVersion(): Promise<string | null> {
-  try {
-    const response = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`,
-      {
-        headers: { Accept: "application/vnd.github.v3+json" },
-        signal: AbortSignal.timeout(5000),
-      },
-    );
-    if (!response.ok) return null;
-    const data = (await response.json()) as { tag_name?: string };
-    const tag = data.tag_name;
-    if (!tag) return null;
-    return tag.startsWith("v") ? tag.slice(1) : tag;
-  } catch {
-    return null;
+type LsRemoteTagsFn = typeof lsRemoteTags;
+
+export async function fetchLatestVersion(
+  _lsRemoteTags: LsRemoteTagsFn = lsRemoteTags,
+): Promise<string | null> {
+  const result = await _lsRemoteTags(RELEASE_REPO_URL, "v*");
+  if (!result.ok) return null;
+
+  const tags = result.value;
+  if (tags.length === 0) return null;
+
+  let best: [number, number, number] | null = null;
+  let bestTag = "";
+
+  for (const tag of tags) {
+    const parsed = parseVersion(tag);
+    if (!parsed) continue;
+    if (
+      !best ||
+      parsed[0] > best[0] ||
+      (parsed[0] === best[0] && parsed[1] > best[1]) ||
+      (parsed[0] === best[0] && parsed[1] === best[1] && parsed[2] > best[2])
+    ) {
+      best = parsed;
+      bestTag = tag;
+    }
   }
+
+  if (!bestTag) return null;
+  return bestTag.startsWith("v") ? bestTag.slice(1) : bestTag;
 }
 
 /**
@@ -140,14 +153,40 @@ function getPlatformAsset(): string | null {
 
 type FetchFn = (url: string | URL, init?: { signal?: AbortSignal }) => Promise<Response>;
 
+async function ghDownload(
+  version: string,
+  asset: string,
+  destPath: string,
+): Promise<Result<void, UserError>> {
+  try {
+    const whichResult = await Bun.$`which gh`.quiet();
+    const ghPath = whichResult.stdout.toString().trim();
+    if (!ghPath) return err(new UserError("gh not found"));
+
+    await Bun.$`${ghPath} release download v${version} --repo nklisch/skilltap --pattern ${asset} --dir ${dirname(destPath)} --clobber`.quiet();
+
+    const downloadedPath = join(dirname(destPath), asset);
+    if (downloadedPath !== destPath) {
+      await Bun.$`mv -f ${downloadedPath} ${destPath}`.quiet();
+    }
+    return ok(undefined);
+  } catch (e) {
+    return err(new UserError(`gh download failed: ${extractStderr(e)}`));
+  }
+}
+
+type GhDownloadFn = typeof ghDownload;
+
 /**
  * Download the specified release from GitHub and atomically replace the
  * running binary. Only works when running as a compiled binary.
+ * Tries gh CLI first (inherits auth), falls back to direct HTTP fetch.
  */
 export async function downloadAndInstall(
   version: string,
   _fetch: FetchFn = fetch,
   _execPath: string = process.execPath,
+  _ghDownload: GhDownloadFn = ghDownload,
 ): Promise<Result<void, UserError>> {
   const asset = getPlatformAsset();
   if (!asset) {
@@ -159,31 +198,45 @@ export async function downloadAndInstall(
     );
   }
 
-  const url = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases/download/v${version}/${asset}`;
   const tmpPath = `${_execPath}.update`;
 
-  let response: Response;
-  try {
-    response = await _fetch(url, { signal: AbortSignal.timeout(60_000) });
-  } catch (e) {
-    return err(
-      new NetworkError(`Download failed: ${e}`) as unknown as UserError,
-    );
-  }
+  const ghResult = await _ghDownload(version, asset, tmpPath);
 
-  if (!response.ok) {
-    return err(
-      new UserError(`Failed to download v${version}: HTTP ${response.status}`),
-    );
-  }
+  if (!ghResult.ok) {
+    const url = `https://github.com/nklisch/skilltap/releases/download/v${version}/${asset}`;
+    let response: Response;
+    try {
+      response = await _fetch(url, { signal: AbortSignal.timeout(60_000) });
+    } catch (e) {
+      return err(
+        new NetworkError(`Download failed: ${e}`) as unknown as UserError,
+      );
+    }
 
-  try {
+    if (!response.ok) {
+      return err(
+        new UserError(`Failed to download v${version}: HTTP ${response.status}`),
+      );
+    }
+
     const buffer = await response.arrayBuffer();
-    await Bun.write(tmpPath, buffer);
+    try {
+      await Bun.write(tmpPath, buffer);
+    } catch (e) {
+      Bun.$`rm -f ${tmpPath}`.quiet();
+      return err(
+        new UserError(
+          `Failed to replace binary: ${extractStderr(e)}`,
+          "Try running with sudo, or install via npm: npm install -g skilltap",
+        ),
+      );
+    }
+  }
+
+  try {
     await Bun.$`chmod +x ${tmpPath}`.quiet();
     await Bun.$`mv -f ${tmpPath} ${_execPath}`.quiet();
   } catch (e) {
-    // Clean up temp file if possible
     Bun.$`rm -f ${tmpPath}`.quiet();
     return err(
       new UserError(

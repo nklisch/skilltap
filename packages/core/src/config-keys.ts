@@ -26,6 +26,7 @@ export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
   "updates.auto_update": { type: "enum", enum: AUTO_UPDATE_MODES },
   "updates.interval_hours": { type: "number" },
   "updates.show_diff": { type: "enum", enum: SHOW_DIFF_MODES },
+  default_git_host: { type: "string" },
 };
 
 const BLOCKED_SET_KEYS: Record<string, string> = {
@@ -174,7 +175,13 @@ export function setConfigValue(
   key: string,
   value: unknown,
 ): Config {
-  const [section, field] = key.split(".");
+  const dotIdx = key.indexOf(".");
+  if (dotIdx === -1) {
+    // Top-level key (no dot)
+    return { ...config, [key]: value };
+  }
+  const section = key.slice(0, dotIdx);
+  const field = key.slice(dotIdx + 1);
   // biome-ignore lint/suspicious/noExplicitAny: building a dynamic config update
   const sectionObj = { ...(config as any)[section], [field]: value };
   return { ...config, [section]: sectionObj };

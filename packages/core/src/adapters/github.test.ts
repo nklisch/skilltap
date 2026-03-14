@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { githubAdapter } from "./github";
+import { createGithubAdapter, githubAdapter } from "./github";
 
 describe("githubAdapter.canHandle", () => {
   test("accepts github: prefixed shorthand", () => {
@@ -89,5 +89,31 @@ describe("githubAdapter.resolve", () => {
     if (!result.ok) {
       expect(result.error.message).toContain("Invalid GitHub source");
     }
+  });
+});
+
+describe("createGithubAdapter", () => {
+  test("resolves with custom host", async () => {
+    const adapter = createGithubAdapter("https://gitea.example.com");
+    const result = await adapter.resolve("owner/repo");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://gitea.example.com/owner/repo.git");
+  });
+
+  test("strips trailing slash from host", async () => {
+    const adapter = createGithubAdapter("https://gitea.example.com/");
+    const result = await adapter.resolve("owner/repo");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://gitea.example.com/owner/repo.git");
+  });
+
+  test("default github.com host works", async () => {
+    const adapter = createGithubAdapter("https://github.com");
+    const result = await adapter.resolve("user/repo");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://github.com/user/repo.git");
   });
 });

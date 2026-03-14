@@ -216,6 +216,25 @@ export async function revParse(
   );
 }
 
+export async function lsRemoteTags(
+  url: string,
+  pattern?: string,
+): Promise<Result<string[], GitError>> {
+  const args = pattern ? [pattern] : [];
+  return wrapGit(async () => {
+    const result = await $`git ls-remote --tags --refs ${url} ${args}`.quiet();
+    const output = result.stdout.toString().trim();
+    if (!output) return [];
+    return output
+      .split("\n")
+      .map((line) => {
+        const ref = line.split("\t")[1] ?? "";
+        return ref.replace("refs/tags/", "");
+      })
+      .filter(Boolean);
+  }, "git ls-remote failed");
+}
+
 export async function log(
   dir: string,
   n = 10,

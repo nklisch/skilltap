@@ -40,6 +40,8 @@ export type InstallOptions = {
   also?: string[];
   ref?: string;
   tap?: string | null;
+  /** Default git host for owner/repo shorthand resolution. */
+  gitHost?: string;
   skipScan?: boolean;
   /** Called before placement if warnings are found. Return true to proceed, false to abort. */
   onWarnings?: (
@@ -390,7 +392,7 @@ export async function installSkill(
   const effectiveRef = tapResult.value?.ref ?? options.ref;
 
   // 2. Resolve source
-  const resolvedResult = await resolveSource(effectiveSource);
+  const resolvedResult = await resolveSource(effectiveSource, options.gitHost);
   if (!resolvedResult.ok) return resolvedResult;
 
   // For npm, the adapter resolves the version — use it as the ref if none was specified
