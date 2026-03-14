@@ -16,11 +16,10 @@ curl -fsSL https://skilltap.dev/install.sh | sh
 
 This puts the `skilltap` binary on your PATH. No runtime dependencies required.
 
-Alternatively, if you use Bun or Node:
+Alternatively, if you have [Bun](https://bun.sh) installed:
 
 ```bash
-bunx skilltap    # Bun
-npx skilltap     # Node
+bunx skilltap
 ```
 
 Verify the install:

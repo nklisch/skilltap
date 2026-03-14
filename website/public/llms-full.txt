@@ -1,7 +1,7 @@
 # skilltap — Complete Documentation
 
 > Source: https://skilltap.dev/llms-full.txt
-> Generated: 2026-03-09
+> Generated: 2026-03-14
 >
 > This file contains the complete skilltap documentation as a single Markdown document
 > for AI coding assistant ingestion. For a navigable index see https://skilltap.dev/llms.txt.
@@ -121,11 +121,10 @@ curl -fsSL https://skilltap.dev/install.sh | sh
 
 This puts the `skilltap` binary on your PATH. No runtime dependencies required.
 
-Alternatively, if you use Bun or Node:
+Alternatively, if you have [Bun](https://bun.sh) installed:
 
 ```bash
-bunx skilltap    # Bun
-npx skilltap     # Node
+bunx skilltap
 ```
 
 Verify the install:
@@ -370,17 +369,9 @@ If you have [Bun](https://bun.sh) installed, you can run skilltap without instal
 bunx skilltap --help
 ```
 
-## Via npx
-
-If you have npm and Bun on your PATH:
-
-```bash
-npx skilltap --help
-```
-
 ## Direct binary download
 
-Pre-built binaries are available on the [GitHub Releases](https://github.com/skilltap/skilltap/releases) page for every supported platform:
+Pre-built binaries are available on the [GitHub Releases](https://github.com/nklisch/skilltap/releases) page for every supported platform:
 
 | Platform     | Architecture |
 | ------------ | ------------ |

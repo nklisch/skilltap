@@ -1,5 +1,5 @@
 ---
-description: Install skilltap via curl, Homebrew, bunx, npx, or direct binary download. Available on Linux and macOS (x64 and ARM64). No runtime dependencies required.
+description: Install skilltap via curl, Homebrew, bunx, or direct binary download. Available on Linux and macOS (x64 and ARM64). No runtime dependencies required.
 ---
 
 # Installation
@@ -38,17 +38,9 @@ If you have [Bun](https://bun.sh) installed, you can run skilltap without instal
 bunx skilltap --help
 ```
 
-## Via npx
-
-If you have npm and Bun on your PATH:
-
-```bash
-npx skilltap --help
-```
-
 ## Direct binary download
 
-Pre-built binaries are available on the [GitHub Releases](https://github.com/skilltap/skilltap/releases) page for every supported platform:
+Pre-built binaries are available on the [GitHub Releases](https://github.com/nklisch/skilltap/releases) page for every supported platform:
 
 | Platform     | Architecture |
 | ------------ | ------------ |

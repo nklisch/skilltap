@@ -13,7 +13,7 @@ scan sends skill content to your local AI agent CLI for intent review.
 
 - [What is skilltap?](https://skilltap.dev/guide/what-is-skilltap): Overview, how it works, and what it is not
 - [Getting Started](https://skilltap.dev/guide/getting-started): Install skilltap and add your first skill in minutes
-- [Installation](https://skilltap.dev/guide/installation): All install methods — curl, npm, Bun, and binary download
+- [Installation](https://skilltap.dev/guide/installation): All install methods — curl, Homebrew, Bun, and binary download
 - [Installing Skills](https://skilltap.dev/guide/installing-skills): Git URLs, npm, SSH, tap names, scopes, agent symlinks, and all flags
 - [Creating Skills](https://skilltap.dev/guide/creating-skills): Scaffold, author, verify, and publish a SKILL.md skill
 - [Taps](https://skilltap.dev/guide/taps): Create and manage skill registries (taps) for discoverability
