@@ -133,6 +133,26 @@ describe("skilltap config set", () => {
     expect(set.stderr).toContain("cannot be set");
   });
 
+  test("sets default_git_host and reads it back", async () => {
+    const set = await runCmd(
+      "set",
+      ["default_git_host", "https://gitea.example.com"],
+      configDir,
+    );
+    expect(set.exitCode).toBe(0);
+    expect(set.stdout).toContain("OK: default_git_host = https://gitea.example.com");
+
+    const get = await runCmd("get", ["default_git_host"], configDir);
+    expect(get.exitCode).toBe(0);
+    expect(get.stdout.trim()).toBe("https://gitea.example.com");
+  });
+
+  test("default_git_host defaults to https://github.com", async () => {
+    const get = await runCmd("get", ["default_git_host"], configDir);
+    expect(get.exitCode).toBe(0);
+    expect(get.stdout.trim()).toBe("https://github.com");
+  });
+
   test("rejects unknown key", async () => {
     const set = await runCmd("set", ["foo.bar", "baz"], configDir);
     expect(set.exitCode).toBe(1);

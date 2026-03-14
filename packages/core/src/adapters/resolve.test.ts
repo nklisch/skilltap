@@ -46,6 +46,36 @@ describe("resolveSource", () => {
     }
   });
 
+  test("routes owner/repo to custom git host when gitHost provided", async () => {
+    const result = await resolveSource("user/repo", "https://gitea.example.com");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.adapter).toBe("github");
+      expect(result.value.url).toBe("https://gitea.example.com/user/repo.git");
+    }
+  });
+
+  test("routes github: prefix to custom git host", async () => {
+    const result = await resolveSource("github:user/repo", "https://forgejo.local");
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.adapter).toBe("github");
+      expect(result.value.url).toBe("https://forgejo.local/user/repo.git");
+    }
+  });
+
+  test("full https:// URL ignores custom git host", async () => {
+    const result = await resolveSource(
+      "https://github.com/user/repo.git",
+      "https://gitea.example.com",
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.adapter).toBe("git");
+      expect(result.value.url).toBe("https://github.com/user/repo.git");
+    }
+  });
+
   describe("local path routing", () => {
     let tmpDir: string;
 

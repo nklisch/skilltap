@@ -139,6 +139,24 @@ describe("parseGitHubTapShorthand", () => {
       parseGitHubTapShorthand("git@github.com:user/repo.git"),
     ).toBeNull();
   });
+
+  test("uses custom git host when provided", () => {
+    expect(
+      parseGitHubTapShorthand("user/my-tap", "https://gitea.example.com"),
+    ).toEqual({
+      name: "my-tap",
+      url: "https://gitea.example.com/user/my-tap.git",
+    });
+  });
+
+  test("strips trailing slash from custom git host", () => {
+    expect(
+      parseGitHubTapShorthand("user/repo", "https://gitea.example.com/"),
+    ).toEqual({
+      name: "repo",
+      url: "https://gitea.example.com/user/repo.git",
+    });
+  });
 });
 
 // ─── Unit tests: searchTaps ────────────────────────────────────────────────

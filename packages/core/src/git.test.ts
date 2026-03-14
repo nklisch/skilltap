@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createStandaloneSkillRepo } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { makeTmpDir, removeTmpDir } from "./fs";
-import { checkGitInstalled, clone, diff, fetch, log, pull, revParse } from "./git";
+import { checkGitInstalled, clone, diff, fetch, log, lsRemoteTags, pull, revParse } from "./git";
 
 describe("checkGitInstalled", () => {
   test("returns ok when git is on PATH", async () => {
@@ -180,6 +180,61 @@ describe("pull and fetch", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("git fetch failed");
+  });
+});
+
+describe("lsRemoteTags", () => {
+  let repo: { path: string; cleanup: () => Promise<void> } | null = null;
+
+  afterEach(async () => {
+    if (repo) {
+      await repo.cleanup();
+      repo = null;
+    }
+  });
+
+  test("lists tags from a local repo", async () => {
+    repo = await createStandaloneSkillRepo();
+    // Create tags in the fixture repo
+    await $`git -C ${repo.path} tag v1.0.0`.quiet();
+    await $`git -C ${repo.path} tag v2.0.0`.quiet();
+    await $`git -C ${repo.path} tag unrelated`.quiet();
+
+    const result = await lsRemoteTags(repo.path, "v*");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toContain("v1.0.0");
+    expect(result.value).toContain("v2.0.0");
+    expect(result.value).not.toContain("unrelated");
+  });
+
+  test("returns all tags when no pattern given", async () => {
+    repo = await createStandaloneSkillRepo();
+    await $`git -C ${repo.path} tag v1.0.0`.quiet();
+    await $`git -C ${repo.path} tag release-1`.quiet();
+
+    const result = await lsRemoteTags(repo.path);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toContain("v1.0.0");
+    expect(result.value).toContain("release-1");
+  });
+
+  test("returns empty array when no tags match pattern", async () => {
+    repo = await createStandaloneSkillRepo();
+    await $`git -C ${repo.path} tag unrelated`.quiet();
+
+    const result = await lsRemoteTags(repo.path, "v*");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value).toEqual([]);
+  });
+
+  test("returns GitError for unreachable URL", async () => {
+    const result = await lsRemoteTags("https://invalid.invalid/no-repo.git");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("git ls-remote failed");
   });
 });
 
