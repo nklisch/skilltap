@@ -147,24 +147,24 @@ You can also pin a version:
 skilltap install skilltap@v1.0.0 --global
 ```
 
-## List installed skills
+## View installed skills
 
 ```bash
-skilltap list
+skilltap skills
 ```
 
 ```
-Global (1 skill)
-  Name       Ref     Source                                  Trust          Description
-  ──────────────────────────────────────────────────────────────────────────────────────────────────
-  skilltap   main    https://github.com/nklisch/skilltap-…   ○ unverified   Manage agent skills
+Global (.agents/skills/) — 1 skill
+  Name       Status   Agents       Source
+  skilltap   managed  claude-code  https://github.com/nklisch/skilltap-skills
 ```
 
-Filter by scope:
+This shows all skills across all locations — managed, linked, and unmanaged. Filter by scope or status:
 
 ```bash
-skilltap list --global     # only global skills
-skilltap list --project    # only project-scoped skills
+skilltap skills --global       # only global skills
+skilltap skills --project      # only project-scoped skills
+skilltap skills --unmanaged    # only unmanaged skills (not tracked by skilltap)
 ```
 
 ## Update skills

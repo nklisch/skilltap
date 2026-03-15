@@ -7,13 +7,15 @@ Dense CLI reference, flag combinations, prompt flows, and workflows.
 ```
 skilltap
 ├── install <source>         Install a skill
-├── remove [name...]         Remove an installed skill (or pick interactively)
-├── list                     List installed skills
 ├── update [name]            Update installed skill(s)
 ├── find [query]             Search taps for skills
-├── link <path>              Symlink a local skill
-├── unlink <name>            Remove a linked skill
-├── info <name>              Show skill details
+├── skills                   Manage installed skills (unified view)
+│   ├── info <name>          Show skill details
+│   ├── remove [name...]     Remove a skill (managed or unmanaged)
+│   ├── link <path>          Symlink a local skill
+│   ├── unlink <name>        Remove a linked skill
+│   ├── adopt [name...]      Adopt unmanaged skills into skilltap management
+│   └── move <name>          Move a skill between scopes
 ├── create [name]            Scaffold a new skill from a template
 ├── verify [path]            Validate a skill before sharing
 ├── doctor                   Check environment and state
@@ -29,6 +31,13 @@ skilltap
     ├── list                 List taps
     ├── update [name]        Update tap(s)
     └── init <name>          Create a new tap repo
+
+Silent aliases (backwards compatibility):
+  skilltap list     → skilltap skills
+  skilltap remove   → skilltap skills remove
+  skilltap info     → skilltap skills info
+  skilltap link     → skilltap skills link
+  skilltap unlink   → skilltap skills unlink
 ```
 
 ## Global Behavior
@@ -306,11 +315,13 @@ Semantic scan: chunk 4/4...
 
 ---
 
-## remove
+## skills remove
 
 ```
-skilltap remove [name...] [flags]
+skilltap skills remove [name...] [flags]
 ```
+
+> Also available as `skilltap remove` (silent alias).
 
 ### Flags
 
@@ -351,6 +362,7 @@ $ skilltap remove
 ```
 
 Removes the skill directory and any agent-specific symlinks. Updates `installed.json`.
+Handles both managed and unmanaged skills — if a skill isn't in `installed.json` but exists on disk (e.g. manually placed in `~/.claude/skills/`), it can still be removed.
 Omit the name to choose interactively via multiselect (no separate confirmation needed).
 
 When a skill is installed at both global and project scopes, the picker shows disambiguated entries:
@@ -364,48 +376,138 @@ When a skill is installed at both global and project scopes, the picker shows di
 
 ---
 
-## list
+## skills
 
 ```
-skilltap list [flags]
+skilltap skills [flags]
 ```
+
+> Also available as `skilltap list` (silent alias).
+
+The unified view shows **all** skills across all locations — `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, etc. — at both global and project scope. Skills are classified as managed (tracked by skilltap), linked, or unmanaged (manually placed, not in `installed.json`).
 
 ### Flags
 
 ```
 --global           Show only global skills
 --project          Show only project skills
+--unmanaged        Show only unmanaged skills
 --json             Output as JSON
 ```
 
 ### Examples
 
 ```
-$ skilltap list
+$ skilltap skills
 
-Global:
-  commit-helper      v1.2.0   home    Conventional commit messages
-  code-review        v2.0.0   home    Thorough code review
+Global (.agents/skills/) — 23 skills
+  Name                  Status   Agents       Source
+  design                managed  claude-code  nklisch/skills
+  implement             managed  claude-code  nklisch/skills
+  spectator             linked   —            ~/dev/spectator
 
-Project (/home/nathan/dev/termtube):
-  termtube-dev       main     local   Development workflow
-  termtube-review    main     local   Code review checklist
+Global — unmanaged (13 skills)
+  Name                  Status     Source
+  seo                   unmanaged  (local)
+  seo-audit             unmanaged  (local)
 
-$ skilltap list --global
+Project (.agents/skills/) — 5 skills
+  Name           Status   Agents       Source
+  bun            managed  claude-code  nklisch/skills
 
-Global:
-  commit-helper      v1.2.0   home    Conventional commit messages
-  code-review        v2.0.0   home    Thorough code review
+Project — unmanaged (2 skills)
+  Name                Status     Source
+  patterns            unmanaged  git@github.com:user/repo
+  update-completions  unmanaged  (local)
 
-$ skilltap list --json
-[{"name":"commit-helper","ref":"v1.2.0","scope":"global","tap":"home",...}]
+$ skilltap skills --unmanaged
+
+Global — unmanaged (13 skills)
+  Name                  Status     Source
+  seo                   unmanaged  (local)
+  ...
+
+$ skilltap skills --json
+[{"name":"design","managed":true,"locations":[...],"record":{...},"gitRemote":null,"description":"..."},...]
 ```
 
 Empty state:
 
 ```
-$ skilltap list
-No skills installed. Run 'skilltap install <url>' to get started.
+$ skilltap skills
+No skills found. Run 'skilltap install <source>' to get started.
+```
+
+---
+
+## skills adopt
+
+```
+skilltap skills adopt [name...] [flags]
+```
+
+Adopt unmanaged skills into skilltap management. By default, moves the skill to `.agents/skills/` and creates a symlink from its original location.
+
+### Flags
+
+```
+--global           Adopt into global scope (default)
+--project          Adopt into project scope
+--track-in-place   Track at current location instead of moving
+--also <agent>     Also symlink to agent-specific directory
+--skip-scan        Skip security scan
+--yes              Auto-accept all prompts
+```
+
+### Examples
+
+```
+$ skilltap skills adopt seo --yes
+✓ Adopted seo → ~/.agents/skills/seo
+  Symlink: ~/.claude/skills/seo → ~/.agents/skills/seo
+
+$ skilltap skills adopt seo seo-audit --yes
+✓ Adopted seo → ~/.agents/skills/seo
+✓ Adopted seo-audit → ~/.agents/skills/seo-audit
+
+$ skilltap skills adopt --track-in-place seo
+✓ Adopted seo (tracked in-place at ~/.claude/skills/seo)
+
+$ skilltap skills adopt
+◆  Select unmanaged skills to adopt:
+│  ○ seo           ~/.claude/skills/seo          (local)
+│  ○ seo-audit     ~/.claude/skills/seo-audit    (local)
+│  ● patterns      .agents/skills/patterns       (git@github.com:user/repo)
+└─
+✓ Adopted patterns → ~/.agents/skills/patterns
+```
+
+---
+
+## skills move
+
+```
+skilltap skills move <name> [flags]
+```
+
+Move a managed skill between scopes (global ↔ project). Updates installed.json, moves the skill directory, and recreates agent symlinks at the new scope.
+
+### Flags
+
+```
+--global           Move to global scope
+--project          Move to project scope
+--also <agent>     Also symlink to agent-specific directory
+```
+
+### Examples
+
+```
+$ skilltap skills move patterns --global
+✓ Moved patterns: .agents/skills/patterns (project) → ~/.agents/skills/patterns (global)
+
+$ skilltap skills move commit-helper --project
+✓ Moved commit-helper: ~/.agents/skills/commit-helper (global) → .agents/skills/commit-helper (project)
 ```
 
 ---
@@ -556,10 +658,14 @@ No skills found matching 'nonexistent'.
 
 ## link / unlink
 
+## skills link / skills unlink
+
 ```
-skilltap link <path> [flags]
-skilltap unlink <name>
+skilltap skills link <path> [flags]
+skilltap skills unlink <name>
 ```
+
+> Also available as `skilltap link` / `skilltap unlink` (silent aliases).
 
 ### Link Flags
 
@@ -591,11 +697,13 @@ Link creates a symlink (no clone). Unlink removes the symlink but does **not** d
 
 ---
 
-## info
+## skills info
 
 ```
-skilltap info <name>
+skilltap skills info <name>
 ```
+
+> Also available as `skilltap info` (silent alias).
 
 ### Examples
 

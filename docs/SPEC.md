@@ -116,9 +116,11 @@ Auto-selecting all (--yes)
 
 ---
 
-### `skilltap remove [name...] [flags]`
+### `skilltap skills remove [name...] [flags]`
 
-Remove one or more installed skills.
+> Also available as `skilltap remove` (silent alias).
+
+Remove one or more skills (managed or unmanaged).
 
 **Arguments:**
 
@@ -138,7 +140,7 @@ Remove one or more installed skills.
 
 - If no names given: show interactive multiselect of all installed skills
 - If a skill is installed at both global and project scopes, the picker shows `name (global)` / `name (project)` as distinct entries
-- If names given: validate each exists in `installed.json`; exit 1 on first unknown name
+- If names given: first check `installed.json`; if not found, discover on disk via `discoverSkills()` — if found as unmanaged, remove via `removeAnySkill()`; if not found anywhere, exit 1
 - Duplicate names are deduplicated
 - `--global`/`--project` overrides the stored `scope` when resolving where to remove from
 - For each skill: remove agent-specific symlinks, remove skill directory, remove cache entry if last skill from that repo
@@ -147,9 +149,13 @@ Remove one or more installed skills.
 
 ---
 
-### `skilltap list`
+### `skilltap skills`
 
-List installed skills.
+> Also available as `skilltap list` (silent alias).
+
+Unified view of all skills across all locations — `.agents/skills/` and every agent-specific directory (`.claude/skills/`, `.cursor/skills/`, etc.) at both global and project scope. Shows managed, linked, and unmanaged skills.
+
+Uses `discoverSkills()` to scan disk and correlate with `installed.json`.
 
 **Options:**
 
@@ -157,22 +163,93 @@ List installed skills.
 |------|------|---------|-------------|
 | `--global` | boolean | false | Show only global skills |
 | `--project` | boolean | false | Show only project skills |
+| `--unmanaged` | boolean | false | Show only unmanaged skills |
 | `--json` | boolean | false | Output as JSON |
 
 **Output format (default):**
 
 ```
-Global:
-  commit-helper      v1.2.0   home    Conventional commit messages
-  code-review        v2.0.0   home    Thorough code review
+Global (.agents/skills/) — 23 skills
+  Name                  Status   Agents       Source
+  design                managed  claude-code  nklisch/skills
+  spectator             linked   —            ~/dev/spectator
 
-Project (/home/nathan/dev/termtube):
-  termtube-dev       main     local   Development workflow
+Global — unmanaged (13 skills)
+  Name                  Status     Source
+  seo                   unmanaged  (local)
+
+Project (.agents/skills/) — 5 skills
+  Name           Status   Agents       Source
+  bun            managed  claude-code  nklisch/skills
 ```
 
-Columns: name, ref, source (tap name or "local"/"url"), description (truncated to fit terminal width).
+Columns: name, status (managed/linked/unmanaged), agents (for managed), source. Managed and agent-specific sections are shown separately; agent-specific sections only appear if they contain unmanaged skills.
 
-If no skills installed, print: `No skills installed. Run 'skilltap install <url>' to get started.`
+If no skills found, print: `No skills found. Run 'skilltap install <source>' to get started.`
+
+---
+
+### `skilltap skills adopt [name...] [flags]`
+
+Adopt unmanaged skills into skilltap management. Default behavior: move to `.agents/skills/` and create symlinks from original locations.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Name(s) of unmanaged skills; omit to select interactively |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--global` | boolean | false | Adopt into global scope |
+| `--project` | boolean | false | Adopt into project scope |
+| `--track-in-place` | boolean | false | Track at current location instead of moving to `.agents/` |
+| `--also <agent>` | string | — | Also symlink to agent-specific directory |
+| `--skip-scan` | boolean | false | Skip security scan |
+| `--yes` | boolean | false | Auto-accept all prompts |
+
+**Behavior:**
+
+1. Discover unmanaged skills via `discoverSkills({ unmanagedOnly: true })`
+2. If no names: interactive multiselect (agent mode requires names)
+3. For each selected skill, call `adoptSkill()`:
+   - **Move mode** (default): move dir to `.agents/skills/<name>`, create symlinks from original locations
+   - **Track-in-place mode** (`--track-in-place`): create "linked" record without moving
+4. Run static security scan (unless `--skip-scan`); `onWarnings` prompts user (or auto-accepts with `--yes`)
+5. Record git remote/ref/sha if the skill is a git repo
+6. Write record to `installed.json`
+
+---
+
+### `skilltap skills move <name> [flags]`
+
+Move a managed skill between scopes (global ↔ project).
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Name of skill to move |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--global` | boolean | false | Move to global scope |
+| `--project` | boolean | false | Move to project scope |
+| `--also <agent>` | string | — | Also symlink to agent-specific directory |
+
+**Behavior:**
+
+1. Require exactly one of `--global` or `--project`
+2. Look up skill in `installed.json` (global + project)
+3. Error if skill not found or already in target scope
+4. Remove old agent symlinks
+5. Move skill directory to new scope's `.agents/skills/`
+6. Create new agent symlinks (preserving existing `also` + new)
+7. Update `installed.json` records (remove from source, add to target)
 
 ---
 
@@ -220,7 +297,9 @@ Then, per skill:
 
 ---
 
-### `skilltap link <path>`
+### `skilltap skills link <path>`
+
+> Also available as `skilltap link` (silent alias).
 
 Symlink a local skill directory into the install path. For development workflows.
 
@@ -248,7 +327,9 @@ Symlink a local skill directory into the install path. For development workflows
 
 ---
 
-### `skilltap unlink <name>`
+### `skilltap skills unlink <name>`
+
+> Also available as `skilltap unlink` (silent alias).
 
 Remove a linked skill.
 
@@ -269,7 +350,9 @@ Does **not** delete the original skill directory.
 
 ---
 
-### `skilltap info <name>`
+### `skilltap skills info <name>`
+
+> Also available as `skilltap info` (silent alias).
 
 Show details about an installed or available skill.
 

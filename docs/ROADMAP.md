@@ -337,6 +337,7 @@ Features shipped after the v0.3 release:
 - [x] **P1** Custom skill registry system — `[registry]` config section with `enabled` list and `[[registry.sources]]` for custom HTTP registries; built-in skills.sh registry included by default; config wizard updated with "Search public registries?" prompt
 - [x] **P2** `skilltap find` improvements — multi-word query support (any token must match), results sorted by install count descending, `--local` flag to skip registry searches, `preSelectedSkill` for auto-selection from skills.sh results
 - [x] **P3** `skilltap config get` and `skilltap config set` — non-interactive config read/write; settable key allowlist (preference keys only); blocked keys show hints; agent-friendly (silent on success, exit codes)
+- [x] **P4** `skilltap skills` command group — unified skill view showing managed + unmanaged skills across all locations (`.agents/`, `.claude/`, `.cursor/`, etc.); `skills adopt` to bring unmanaged skills under management (move + symlink or track-in-place); `skills move` for global↔project migration; existing `list`/`remove`/`info`/`link`/`unlink` moved under `skills` with silent top-level aliases for backwards compatibility
 
 ---
 

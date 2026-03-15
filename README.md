@@ -62,8 +62,8 @@ skilltap install commit-helper --global --also claude-code
 # Install from any git URL
 skilltap install https://github.com/you/my-skill --global
 
-# List installed skills
-skilltap list
+# View all skills (managed + unmanaged)
+skilltap skills
 
 # Update all skills
 skilltap update
@@ -203,11 +203,12 @@ To publish to npm (with provenance), use `--template npm`. The generated GitHub 
 Skills from npm show provenance status when installed:
 
 ```
-$ skilltap list
+$ skilltap skills
 
-Global:
-  my-npm-skill   1.2.3   npm   Helpful skill   provenance
-  git-skill      main    home  Another skill   curated
+Global (.agents/skills/) — 2 skills
+  Name           Status   Agents       Source
+  my-npm-skill   managed  claude-code  npm:@user/my-npm-skill
+  git-skill      managed  claude-code  home
 ```
 
 Trust tiers: `provenance` (Sigstore/SLSA verified), `publisher` (npm identity verified), `curated` (tap-verified), `unverified`.

@@ -243,19 +243,18 @@ Trust verification runs automatically at install time and is re-verified on ever
 
 ### Where trust is shown
 
-Trust tier appears as a column in `skilltap list`, a row in `skilltap info`, and a column in `skilltap find`:
+Trust tier appears in `skilltap skills` (unified view), `skilltap skills info`, and `skilltap find`:
 
 ```
-$ skilltap list
-Global (2 skills)
-  Name             Ref     Source                                  Trust          Description
-  ───────────────────────────────────────────────────────────────────────────────────────────
-  commit-helper    v1.2.0  npm:@user/commit-helper                 ✓ provenance   Conventional commit messages
-  my-local-skill   main    local                                   ○ unverified   My development skill
+$ skilltap skills
+Global (.agents/skills/) — 2 skills
+  Name             Status   Agents       Source
+  commit-helper    managed  claude-code  npm:@user/commit-helper
+  my-local-skill   managed  —            local
 ```
 
 ```
-$ skilltap info commit-helper
+$ skilltap skills info commit-helper
 name:          commit-helper
 description:   Generates conventional commit messages
 scope:         global

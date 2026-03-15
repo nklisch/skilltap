@@ -48,8 +48,11 @@ skilltap/
 │   │   │   ├── config.ts       # Config read/write (TOML)
 │   │   │   ├── config-keys.ts  # Config get/set helpers (dot-path resolve, coerce, validate)
 │   │   │   ├── install.ts      # Install orchestration
-│   │   │   ├── remove.ts       # Remove skill logic
+│   │   │   ├── remove.ts       # Remove skill logic + removeAnySkill (managed + unmanaged)
 │   │   │   ├── update.ts       # Update skill logic (fetch, diff, pull)
+│   │   │   ├── discover.ts     # Scan all skill dirs, correlate with installed.json
+│   │   │   ├── adopt.ts        # Adopt unmanaged skills (move + symlink or track-in-place)
+│   │   │   ├── move.ts         # Move skills between global/project scopes
 │   │   │   ├── link.ts         # Link/symlink local skill
 │   │   │   ├── taps.ts         # Tap management (add, remove, update, search)
 │   │   │   ├── symlink.ts      # Agent-specific symlink creation
@@ -107,13 +110,8 @@ skilltap/
 │   │   │   ├── index.ts        # Entry point (runMain)
 │   │   │   ├── commands/
 │   │   │   │   ├── install.ts
-│   │   │   │   ├── remove.ts
-│   │   │   │   ├── list.ts
 │   │   │   │   ├── update.ts
 │   │   │   │   ├── find.ts
-│   │   │   │   ├── link.ts
-│   │   │   │   ├── unlink.ts
-│   │   │   │   ├── info.ts
 │   │   │   │   ├── create.ts         # skilltap create — scaffold new skills
 │   │   │   │   ├── verify.ts         # skilltap verify — validate skills before sharing
 │   │   │   │   ├── doctor.ts         # skilltap doctor — environment diagnostics
@@ -124,6 +122,14 @@ skilltap/
 │   │   │   │   │   ├── agent-mode.ts # skilltap config agent-mode wizard
 │   │   │   │   │   ├── get.ts        # skilltap config get — read config values
 │   │   │   │   │   └── set.ts        # skilltap config set — write config values
+│   │   │   │   ├── skills/
+│   │   │   │   │   ├── index.ts      # skilltap skills — unified skill view
+│   │   │   │   │   ├── adopt.ts      # skilltap skills adopt — adopt unmanaged skills
+│   │   │   │   │   ├── move.ts       # skilltap skills move — move between scopes
+│   │   │   │   │   ├── remove.ts     # skilltap skills remove — remove any skill
+│   │   │   │   │   ├── info.ts       # skilltap skills info — show skill details
+│   │   │   │   │   ├── link.ts       # skilltap skills link — symlink local skill
+│   │   │   │   │   └── unlink.ts     # skilltap skills unlink — remove linked skill
 │   │   │   │   └── tap/
 │   │   │   │       ├── add.ts
 │   │   │   │       ├── remove.ts
@@ -212,6 +218,12 @@ core → test-utils (dev)
 **config-keys.ts** — Pure helpers for `config get`/`config set`: dot-path resolution, value coercion (string→typed), settable key allowlist/blocklist, immutable deep-set, plain-text formatting.
 
 **install.ts** — Orchestrates the install flow. Coordinates git, scanner, security, config, and symlink modules. **remove.ts**, **update.ts**, and **link.ts** handle their respective flows.
+
+**discover.ts** — `discoverSkills(options?)` scans all skill directories (`.agents/skills/` and every agent-specific dir from `AGENT_PATHS`) at both global and project scope. Detects symlinks, cross-references with `installed.json` to classify skills as managed or unmanaged, reads SKILL.md frontmatter for descriptions, and detects git remotes on unmanaged skills. Returns `DiscoverResult` with a unified skill inventory.
+
+**adopt.ts** — `adoptSkill(skill, options?)` brings an unmanaged `DiscoveredSkill` under skilltap management. Two modes: `move` (default) moves the skill dir to `.agents/skills/` and creates symlinks from original locations, `track-in-place` creates a "linked" record without moving. Runs static security scan, detects git remote/ref/sha, writes to `installed.json`.
+
+**move.ts** — `moveSkill(name, options)` moves a managed skill between scopes (global ↔ project). Handles symlink cleanup and recreation, installed.json record transfer across files, and linked→managed conversion.
 
 **skill-check.ts** — Background skill update check. `checkForSkillUpdates(intervalHours, projectRoot)` reads the cache and fires a background refresh if stale. `fetchSkillUpdateStatus(projectRoot)` does the actual network check: groups git skills by cache dir (one `git fetch` per unique repo), compares `HEAD` vs `FETCH_HEAD`; fetches npm metadata for npm skills and compares versions. `writeSkillUpdateCache(updates, projectRoot)` persists results to `~/.config/skilltap/skills-update-check.json`.
 
