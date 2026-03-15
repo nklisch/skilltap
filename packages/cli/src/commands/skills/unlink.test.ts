@@ -35,10 +35,10 @@ afterEach(async () => {
   await removeTmpDir(configDir);
 });
 
-describe("unlink — not found", () => {
+describe("skills unlink — not found", () => {
   test("exits 1 when skill not linked", async () => {
     const { exitCode, stderr } = await runSkilltap(
-      ["unlink", "nonexistent"],
+      ["skills", "unlink", "nonexistent"],
       homeDir,
       configDir,
     );
@@ -47,7 +47,7 @@ describe("unlink — not found", () => {
   });
 });
 
-describe("unlink — linked skill", () => {
+describe("skills unlink — linked skill", () => {
   test("removes the symlink", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
@@ -66,7 +66,7 @@ describe("unlink — linked skill", () => {
       ).toBe(true);
 
       const { exitCode, stdout } = await runSkilltap(
-        ["unlink", "standalone-skill"],
+        ["skills", "unlink", "standalone-skill"],
         homeDir,
         configDir,
       );
@@ -83,12 +83,30 @@ describe("unlink — linked skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await linkSkill(repo.path, { scope: "global" });
-      await runSkilltap(["unlink", "standalone-skill"], homeDir, configDir);
+      await runSkilltap(["skills", "unlink", "standalone-skill"], homeDir, configDir);
 
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills).toHaveLength(0);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("aliases", () => {
+  test("skilltap unlink routes to skills unlink", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await linkSkill(repo.path, { scope: "global" });
+      const { exitCode, stdout } = await runSkilltap(
+        ["unlink", "standalone-skill"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Unlinked");
     } finally {
       await repo.cleanup();
     }

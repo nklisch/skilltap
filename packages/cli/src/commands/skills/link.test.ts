@@ -35,12 +35,12 @@ afterEach(async () => {
   await removeTmpDir(configDir);
 });
 
-describe("link — global scope", () => {
+describe("skills link — global scope", () => {
   test("creates symlink at install path", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode, stdout } = await runSkilltap(
-        ["link", repo.path, "--global"],
+        ["skills", "link", repo.path, "--global"],
         homeDir,
         configDir,
       );
@@ -67,7 +67,7 @@ describe("link — global scope", () => {
   test("records skill with scope=linked in installed.json", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      await runSkilltap(["link", repo.path, "--global"], homeDir, configDir);
+      await runSkilltap(["skills", "link", repo.path, "--global"], homeDir, configDir);
 
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);
@@ -88,7 +88,7 @@ describe("link — global scope", () => {
     const tmpDir = await makeTmpDir();
     try {
       const { exitCode, stderr } = await runSkilltap(
-        ["link", tmpDir, "--global"],
+        ["skills", "link", tmpDir, "--global"],
         homeDir,
         configDir,
       );
@@ -96,6 +96,23 @@ describe("link — global scope", () => {
       expect(stderr).toContain("SKILL.md");
     } finally {
       await removeTmpDir(tmpDir);
+    }
+  });
+});
+
+describe("aliases", () => {
+  test("skilltap link routes to skills link", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      const { exitCode, stdout } = await runSkilltap(
+        ["link", repo.path, "--global"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Linked");
+    } finally {
+      await repo.cleanup();
     }
   });
 });

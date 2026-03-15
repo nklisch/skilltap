@@ -17,6 +17,7 @@ _skilltap() {
     'link:Symlink a local skill'
     'unlink:Remove a linked skill'
     'info:Show skill details'
+    'skills:Manage installed skills'
     'create:Create a new skill'
     'verify:Validate a skill'
     'config:Interactive setup wizard'
@@ -100,6 +101,68 @@ _skilltap() {
           local -a skills
           skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments "1:skill:($skills)"
+          ;;
+        skills)
+          local -a skills_commands
+          skills_commands=('info:Show skill details' 'remove:Remove a skill' 'link:Symlink a local skill' 'unlink:Remove a linked skill' 'adopt:Adopt unmanaged skills' 'move:Move a skill between scopes')
+          _arguments -C '1:subcommand:->skills_cmd' '*::arg:->skills_args'
+          case $state in
+            skills_cmd) _describe 'subcommand' skills_commands ;;
+            skills_args)
+              case $words[1] in
+                info)
+                  local -a skills
+                  skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  _arguments "1:skill:($skills)"
+                  ;;
+                remove)
+                  local -a skills
+                  skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  _arguments \\
+                    '--project[Remove from project scope]' \\
+                    '--global[Remove from global scope]' \\
+                    '--yes[Skip confirmation]' \\
+                    "*:skill:($skills)"
+                  ;;
+                link)
+                  _arguments \\
+                    '--global[Global scope]' \\
+                    '--project[Project scope]' \\
+                    '--also[Agent symlink]:agent:(${agentSpec})'
+                  ;;
+                unlink)
+                  local -a skills
+                  skills=(\${(f)"\$(skilltap --get-completions linked-skills 2>/dev/null)"})
+                  _arguments "1:skill:($skills)"
+                  ;;
+                adopt)
+                  _arguments \\
+                    '--global[Adopt into global scope]' \\
+                    '--project[Adopt into project scope]' \\
+                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
+                    '--track-in-place[Track at current location]' \\
+                    '--skip-scan[Skip security scan]' \\
+                    '--yes[Auto-accept]'
+                  ;;
+                move)
+                  local -a skills
+                  skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  _arguments \\
+                    '--global[Move to global scope]' \\
+                    '--project[Move to project scope]' \\
+                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
+                    "1:skill:($skills)"
+                  ;;
+                *)
+                  _arguments \\
+                    '--global[Global skills only]' \\
+                    '--project[Project skills only]' \\
+                    '--unmanaged[Unmanaged skills only]' \\
+                    '--json[JSON output]'
+                  ;;
+              esac
+              ;;
+          esac
           ;;
         create)
           _arguments \\

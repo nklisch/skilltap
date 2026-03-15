@@ -6,6 +6,8 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { join } from "node:path";
+import { mkdir } from "node:fs/promises";
 import { installSkill, loadInstalled } from "@skilltap/core";
 import {
   createMultiSkillRepo,
@@ -34,14 +36,14 @@ afterEach(async () => {
   await removeTmpDir(configDir);
 });
 
-describe("remove — multiple names", () => {
+describe("skills remove — multiple names", () => {
   test("removes multiple skills with --yes", async () => {
     const repo = await createMultiSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const { exitCode, stdout } = await runSkilltap(
-        ["remove", "skill-a", "skill-b", "--yes"],
+        ["skills", "remove", "skill-a", "skill-b", "--yes"],
         homeDir,
         configDir,
       );
@@ -63,7 +65,7 @@ describe("remove — multiple names", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const { exitCode, stderr } = await runSkilltap(
-        ["remove", "standalone-skill", "nonexistent", "--yes"],
+        ["skills", "remove", "standalone-skill", "nonexistent", "--yes"],
         homeDir,
         configDir,
       );
@@ -75,10 +77,10 @@ describe("remove — multiple names", () => {
   });
 });
 
-describe("remove — not found", () => {
+describe("skills remove — not found", () => {
   test("exits 1 with error message", async () => {
     const { exitCode, stderr } = await runSkilltap(
-      ["remove", "nonexistent", "--yes"],
+      ["skills", "remove", "nonexistent", "--yes"],
       homeDir,
       configDir,
     );
@@ -87,14 +89,14 @@ describe("remove — not found", () => {
   });
 });
 
-describe("remove — with --yes flag", () => {
+describe("skills remove — with --yes flag", () => {
   test("removes the skill without prompt", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const { exitCode, stdout } = await runSkilltap(
-        ["remove", "standalone-skill", "--yes"],
+        ["skills", "remove", "standalone-skill", "--yes"],
         homeDir,
         configDir,
       );
@@ -116,6 +118,24 @@ describe("remove — with --yes flag", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       const { exitCode, stdout } = await runSkilltap(
+        ["skills", "remove", "standalone-skill", "--yes"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("Removed");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("aliases", () => {
+  test("skilltap remove routes to skills remove", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      const { exitCode, stdout } = await runSkilltap(
         ["remove", "standalone-skill", "--yes"],
         homeDir,
         configDir,
@@ -125,5 +145,25 @@ describe("remove — with --yes flag", () => {
     } finally {
       await repo.cleanup();
     }
+  });
+});
+
+describe("skills remove — unmanaged skill", () => {
+  test("removes an unmanaged skill from disk with --yes", async () => {
+    // Create unmanaged skill in global .agents/skills/
+    const skillDir = join(homeDir, ".agents", "skills", "unmanaged-test");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      "---\nname: unmanaged-test\ndescription: An unmanaged skill\n---\n# Test\n",
+    );
+
+    const { exitCode, stdout } = await runSkilltap(
+      ["skills", "remove", "unmanaged-test", "--yes"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("Removed");
   });
 });

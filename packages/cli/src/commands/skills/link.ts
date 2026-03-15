@@ -1,9 +1,9 @@
 import { resolve } from "node:path";
 import { linkSkill, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../ui/agent-out";
-import { errorLine, successLine } from "../ui/format";
-import { parseAlsoFlag, resolveScope } from "../ui/resolve";
+import { agentError } from "../../ui/agent-out";
+import { errorLine, successLine } from "../../ui/format";
+import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
 
 export default defineCommand({
   meta: {

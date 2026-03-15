@@ -2,9 +2,9 @@ import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { AGENT_PATHS, findProjectRoot, globalBase, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../ui/agent-out";
-import { ansi, errorLine } from "../ui/format";
-import { formatTrustLabel, formatTrustTier } from "../ui/trust";
+import { agentError } from "../../ui/agent-out";
+import { ansi, errorLine } from "../../ui/format";
+import { formatTrustLabel, formatTrustTier } from "../../ui/trust";
 
 export default defineCommand({
   meta: {

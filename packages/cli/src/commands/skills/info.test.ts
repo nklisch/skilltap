@@ -19,7 +19,7 @@ import {
 
 setDefaultTimeout(45_000);
 
-const CLI_DIR = `${import.meta.dir}/../..`;
+const CLI_DIR = `${import.meta.dir}/../../..`;
 
 let homeDir: string;
 let configDir: string;
@@ -38,10 +38,10 @@ afterEach(async () => {
   await removeTmpDir(configDir);
 });
 
-describe("info — not found", () => {
+describe("skills info — not found", () => {
   test("exits 1 with error message", async () => {
     const { exitCode, stderr } = await runSkilltap(
-      ["info", "nonexistent-skill"],
+      ["skills", "info", "nonexistent-skill"],
       homeDir,
       configDir,
     );
@@ -50,13 +50,13 @@ describe("info — not found", () => {
   });
 });
 
-describe("info — installed skill", () => {
+describe("skills info — installed skill", () => {
   test("shows skill details", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       const { exitCode, stdout } = await runSkilltap(
-        ["info", "standalone-skill"],
+        ["skills", "info", "standalone-skill"],
         homeDir,
         configDir,
       );
@@ -73,7 +73,7 @@ describe("info — installed skill", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       const { exitCode, stdout } = await runSkilltap(
-        ["info", "standalone-skill"],
+        ["skills", "info", "standalone-skill"],
         homeDir,
         configDir,
       );
@@ -89,7 +89,7 @@ describe("info — installed skill", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       const { exitCode, stdout } = await runSkilltap(
-        ["info", "standalone-skill", "--json"],
+        ["skills", "info", "standalone-skill", "--json"],
         homeDir,
         configDir,
       );
@@ -103,7 +103,7 @@ describe("info — installed skill", () => {
   });
 });
 
-describe("info — linked skill with deleted source", () => {
+describe("skills info — linked skill with deleted source", () => {
   test("shows skill info without crash when symlink target no longer exists", async () => {
     const repo = await createStandaloneSkillRepo();
     // Link the skill (scope: global, no also)
@@ -112,7 +112,7 @@ describe("info — linked skill with deleted source", () => {
     await removeTmpDir(repo.path);
 
     const { exitCode, stdout } = await runSkilltap(
-      ["info", "standalone-skill"],
+      ["skills", "info", "standalone-skill"],
       homeDir,
       configDir,
     );
@@ -122,7 +122,7 @@ describe("info — linked skill with deleted source", () => {
   });
 });
 
-describe("info — tap-available skill", () => {
+describe("skills info — tap-available skill", () => {
   async function createLocalTap() {
     const tapDir = await makeTmpDir();
     const tapJson = {
@@ -158,7 +158,7 @@ describe("info — tap-available skill", () => {
       );
       await proc.exited;
 
-      const { exitCode, stdout } = await runSkilltap(["info", "tap-only-skill"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(["skills", "info", "tap-only-skill"], homeDir, configDir);
       expect(exitCode).toBe(0);
       expect(stdout).toContain("(available)");
       expect(stdout).toContain("tap-only-skill");
@@ -182,7 +182,7 @@ describe("info — tap-available skill", () => {
       await proc.exited;
 
       const { exitCode, stdout } = await runSkilltap(
-        ["info", "tap-only-skill", "--json"],
+        ["skills", "info", "tap-only-skill", "--json"],
         homeDir,
         configDir,
       );
@@ -193,6 +193,24 @@ describe("info — tap-available skill", () => {
       expect(parsed.tap).toBe("test-tap");
     } finally {
       await tap.cleanup();
+    }
+  });
+});
+
+describe("aliases", () => {
+  test("skilltap info routes to skills info", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+      const { exitCode, stdout } = await runSkilltap(
+        ["info", "standalone-skill"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("standalone-skill");
+    } finally {
+      await repo.cleanup();
     }
   });
 });

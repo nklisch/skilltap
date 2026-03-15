@@ -1,7 +1,7 @@
 import { removeSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../ui/format";
-import { getInstalledSkillOrExit } from "../ui/resolve";
+import { errorLine, successLine } from "../../ui/format";
+import { getInstalledSkillOrExit } from "../../ui/resolve";
 
 export default defineCommand({
   meta: {

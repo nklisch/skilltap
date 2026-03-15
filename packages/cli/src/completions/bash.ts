@@ -12,8 +12,9 @@ _skilltap() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="status install remove list update find link unlink info create verify config tap doctor completions self-update"
+  local commands="status install remove list update find skills link unlink info create verify config tap doctor completions self-update"
   local tap_commands="add remove list info init install"
+  local skills_commands="info remove link unlink adopt move"
   local agents="${agents}"
   local templates="${templates}"
 
@@ -42,6 +43,66 @@ _skilltap() {
       ;;
     list)
       COMPREPLY=($(compgen -W "--global --project --json" -- "$cur"))
+      ;;
+    skills)
+      case "\${COMP_WORDS[2]}" in
+        info)
+          if [[ "$cur" != -* ]]; then
+            local skills
+            skills=$(skilltap --get-completions installed-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
+        remove)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--project --global --yes" -- "$cur"))
+          else
+            local skills
+            skills=$(skilltap --get-completions installed-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
+        link)
+          case "$prev" in
+            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+          esac
+          COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
+          ;;
+        unlink)
+          if [[ "$cur" != -* ]]; then
+            local skills
+            skills=$(skilltap --get-completions linked-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
+        adopt)
+          case "$prev" in
+            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+          esac
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--global --project --also --track-in-place --skip-scan --yes" -- "$cur"))
+          fi
+          ;;
+        move)
+          case "$prev" in
+            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+          esac
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
+          else
+            local skills
+            skills=$(skilltap --get-completions installed-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
+        ""|*)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--global --project --unmanaged --json" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$skills_commands" -- "$cur"))
+          fi
+          ;;
+      esac
       ;;
     update)
       if [[ "$cur" == -* ]]; then

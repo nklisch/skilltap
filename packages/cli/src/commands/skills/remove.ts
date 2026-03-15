@@ -1,11 +1,18 @@
 import { isCancel, spinner } from "@clack/prompts";
-import { findProjectRoot, type InstalledSkill, loadInstalled, removeSkill } from "@skilltap/core";
+import {
+  discoverSkills,
+  findProjectRoot,
+  type InstalledSkill,
+  loadInstalled,
+  removeAnySkill,
+  removeSkill,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError, exitWithError } from "../ui/agent-out";
-import { errorLine, successLine } from "../ui/format";
-import { loadPolicyOrExit } from "../ui/policy";
-import { confirmRemove, selectSkillsToRemove } from "../ui/prompts";
-import { sendEvent, telemetryBase } from "../telemetry";
+import { agentError, exitWithError } from "../../ui/agent-out";
+import { errorLine, successLine } from "../../ui/format";
+import { loadPolicyOrExit } from "../../ui/policy";
+import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
+import { sendEvent, telemetryBase } from "../../telemetry";
 
 export default defineCommand({
   meta: {
@@ -70,10 +77,46 @@ export default defineCommand({
       for (const name of names) {
         const skill = allSkills.find((s) => s.name === name);
         if (!skill) {
+          // Check if it's an unmanaged skill on disk
+          const discoverResult = await discoverSkills({ unmanagedOnly: true });
+          if (discoverResult.ok) {
+            const discovered = discoverResult.value.skills.find((s) => s.name === name);
+            if (discovered) {
+              // Confirm and remove unmanaged skill
+              if (policy.agentMode) {
+                const rmResult = await removeAnySkill({ skill: discovered, removeAll: true });
+                if (!rmResult.ok) {
+                  agentError(rmResult.error.message);
+                  process.exit(1);
+                }
+                process.stdout.write(`OK: Removed ${name}\n`);
+                sendEvent(config, "remove", { ...telemetryBase(true), success: true });
+                return;
+              } else {
+                if (!args.yes) {
+                  const confirmed = await confirmRemove(name);
+                  if (isCancel(confirmed) || confirmed === false) process.exit(2);
+                }
+                const s = spinner();
+                s.start(`Removing ${name}...`);
+                const rmResult = await removeAnySkill({ skill: discovered, removeAll: true });
+                if (!rmResult.ok) {
+                  s.stop("Failed.");
+                  errorLine(rmResult.error.message, rmResult.error.hint);
+                  process.exit(1);
+                }
+                s.stop("Removed.");
+                successLine(`Removed ${name}`);
+                sendEvent(config, "remove", { ...telemetryBase(false), success: true });
+                return;
+              }
+            }
+          }
+
           exitWithError(
             policy.agentMode,
             `Skill '${name}' is not installed`,
-            "Run 'skilltap list' to see installed skills.",
+            "Run 'skilltap skills' to see installed skills.",
           );
         }
         skillsToRemove.push(skill);

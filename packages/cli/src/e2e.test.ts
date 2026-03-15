@@ -76,7 +76,7 @@ describe("E2E lifecycle", () => {
   test("1. list — empty state", async () => {
     const { exitCode, stdout } = await run(["list"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("No skills installed");
+    expect(stdout).toContain("No skills found");
     expect(stdout).toContain("to get started");
   });
 
@@ -160,7 +160,7 @@ describe("E2E lifecycle", () => {
   test("11. list — empty again", async () => {
     const { exitCode, stdout } = await run(["list"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("No skills installed");
+    expect(stdout).toContain("No skills found");
   });
 
   test("12. tap remove — removes tap", async () => {
