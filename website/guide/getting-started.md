@@ -211,10 +211,28 @@ This walks you through:
 
 - Default install scope (global, project, or ask each time)
 - Which agents to auto-symlink to on every install
-- Security scan level (static only, static + semantic, or off)
-- What to do when security warnings are found
 
 Your settings are saved to `~/.config/skilltap/config.toml`. See the [Configuration](/guide/configuration) guide for the full reference.
+
+## Configure security
+
+skilltap scans every skill for suspicious content before installing. You can fine-tune security with the dedicated wizard:
+
+```bash
+skilltap config security
+```
+
+This lets you choose a preset (none, relaxed, standard, strict) or configure scan mode, warning behavior, and required scans individually -- with independent settings for human and agent modes. You can also set up per-tap trust overrides for internal taps you trust completely.
+
+For non-interactive use (CI, scripting):
+
+```bash
+skilltap config security --preset strict
+skilltap config security --mode agent --preset none
+skilltap config security --trust tap:my-company=none
+```
+
+See the [Security](/guide/security) guide for full details.
 
 ## Next steps
 
