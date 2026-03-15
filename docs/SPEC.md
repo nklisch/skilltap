@@ -84,7 +84,7 @@ Auto-selecting all (--yes)
 
 **Behavior:**
 
-1. Clone source to temp directory
+1. Clone source to temp directory (with [protocol fallback](#git-url-protocol-fallback) on auth failure)
 2. Scan for SKILL.md files (see [Skill Discovery](#skill-discovery))
 3. **Skill selection:**
    - If single skill found → auto-select
@@ -2006,6 +2006,33 @@ Symlinks point to the canonical `.agents/skills/{name}/` directory. Parent direc
 
 ---
 
+## Git URL Protocol Fallback
+
+When a `git clone` fails due to authentication or access denial, skilltap automatically retries with the alternate URL protocol before reporting an error:
+
+- **HTTPS → SSH**: `https://github.com/owner/repo.git` retries as `git@github.com:owner/repo.git`
+- **SSH → HTTPS**: `git@github.com:owner/repo.git` retries as `https://github.com/owner/repo.git`
+- **SSH URL → HTTPS**: `ssh://git@host/path.git` retries as `https://host/path.git`
+
+**Trigger conditions** — fallback fires only for auth-related failures:
+- `Authentication failed` (HTTPS credential rejection)
+- `Permission denied` (SSH key rejection)
+- `Could not read from remote repository` (SSH access denied)
+- `terminal prompts disabled` (credential helper can't prompt)
+
+Non-auth errors (e.g. "repository not found") do **not** trigger fallback.
+
+**URL persistence** — when fallback succeeds, the working URL is persisted:
+- `installed.json` records the effective URL in the `repo` field
+- `config.toml` tap entries are updated to the working URL (via `tap add` and `tap update` self-heal)
+- Trust resolution and tap matching continue using the original canonical URL
+
+**Scope** — fallback applies to all `git clone` operations: skill installs, tap cloning (`tap add`, `tap update` self-heal), built-in tap bootstrap, and doctor self-heal.
+
+If both protocols fail, the original error is returned (the user-configured URL's error is more informative).
+
+---
+
 ## Error Handling
 
 ### Exit Codes
@@ -2037,7 +2064,7 @@ All errors include:
 | Condition | Message |
 |-----------|---------|
 | Git not installed | `error: git is not installed or not on PATH.` |
-| Clone failed (auth) | `error: Authentication failed for '{url}'. Check your git credentials or SSH keys.` |
+| Clone failed (auth) | Automatic HTTPS↔SSH fallback attempted. If both fail: `error: Authentication failed for '{url}'. Check your git credentials or SSH keys.` |
 | Clone failed (not found) | `error: Repository not found: '{url}'.` |
 | No SKILL.md found | `error: No SKILL.md found in '{url}'. This repo doesn't contain any skills.` |
 | Skill already installed | Prompt: `"{name}" is already installed. Update it instead? (Y/n)`. If yes (or `--yes`, or agent mode), runs `update`. If no, skips that skill. |

@@ -226,11 +226,17 @@ auth_env = "SKILLS_REGISTRY_TOKEN"
 
 See the [tap-format reference](/reference/tap-format#http-registry-api) for the full HTTP registry API spec.
 
-## Auth errors and URL rewrites
+## Auth errors and URL fallback
 
-When a clone or install fails with an auth or permission error, the URL shown is what was passed to `git clone`. Git applies `url.insteadOf` rewrites transparently before connecting, so the actual connection may use a different URL (for example, SSH instead of HTTPS). Use `skilltap tap info <name>` to see what URL is configured.
+When a `git clone` fails due to authentication, skilltap automatically retries with the alternate URL protocol -- HTTPS switches to SSH, and SSH switches to HTTPS. If the fallback succeeds, the working URL is saved to your config so future operations use it directly.
 
-For repos where `git clone` can't succeed due to complex auth, custom URL schemes, or a private server, use `skilltap link` to symlink a local clone instead:
+This means you can add a tap with an HTTPS URL, and if your machine only has SSH keys configured (no HTTPS credentials), skilltap will transparently fall back to SSH and remember the SSH URL.
+
+::: tip URL rewrites
+Git also applies `url.insteadOf` rewrites transparently before connecting, so the actual connection may use a different URL than what you configured. Use `skilltap tap info <name>` to see what URL is stored.
+:::
+
+For repos where neither HTTPS nor SSH can succeed through skilltap (e.g. complex auth, custom URL schemes, VPN-only servers), use `skilltap link` to symlink a local clone instead:
 
 ```bash
 # Clone manually however your auth requires

@@ -39,17 +39,30 @@ async function wrapGit<T>(
 }
 ```
 
-### Example 3: Simple void operation (clone)
-**File**: `packages/core/src/git.ts:39`
+### Example 3: Clone with protocol fallback
+**File**: `packages/core/src/git.ts`
 ```typescript
-export async function clone(url: string, dest: string, opts?: CloneOptions): Promise<Result<void, GitError>> {
+// tryClone is private — the raw clone operation
+async function tryClone(url: string, dest: string, opts?: CloneOptions): Promise<Result<void, GitError>> {
   const flags: string[] = ["--depth", String(opts?.depth ?? 1)];
   if (opts?.branch) flags.push("--branch", opts.branch);
-  return wrapGit(
-    () => $`git clone ${flags} -- ${url} ${dest}`.quiet().then(() => undefined),
-    "git clone failed",
-    "Check that the URL is correct and you have access.",
-  );
+  try {
+    await $`git clone ${flags} -- ${url} ${dest}`.quiet();
+    return ok(undefined);
+  } catch (e) { /* ... categorized GitError ... */ }
+}
+
+// clone() wraps tryClone with HTTPS↔SSH fallback on auth failure
+export async function clone(url: string, dest: string, opts?: CloneOptions): Promise<Result<CloneResult, GitError>> {
+  const result = await tryClone(url, dest, opts);
+  if (result.ok) return ok({ effectiveUrl: url });
+  if (!isAuthError(result.error)) return result;
+  const alt = flipUrlProtocol(url);
+  if (!alt) return result;
+  await rm(dest, { recursive: true, force: true }).catch(() => {});
+  const retryResult = await tryClone(alt, dest, opts);
+  if (retryResult.ok) return ok({ effectiveUrl: alt });
+  return result; // both failed — return original error
 }
 ```
 

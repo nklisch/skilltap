@@ -23,15 +23,18 @@ export function err<E>(error: E): Result<never, E> {
 ```
 
 ### Example 2: Function returning Result
-**File**: `packages/core/src/git.ts:26`
+**File**: `packages/core/src/git.ts`
 ```typescript
-export async function clone(url: string, dest: string, opts: CloneOptions = {}): Promise<Result<void, GitError>> {
-  try {
-    await $`git clone ${flags} -- ${url} ${dest}`.quiet()
-    return ok(undefined)
-  } catch (e) {
-    return err(new GitError(`git clone failed: ${extractStderr(e)}`))
-  }
+export async function clone(url: string, dest: string, opts?: CloneOptions): Promise<Result<CloneResult, GitError>> {
+  const result = await tryClone(url, dest, opts);
+  if (result.ok) return ok({ effectiveUrl: url });
+  if (!isAuthError(result.error)) return result;
+  const alt = flipUrlProtocol(url);
+  if (!alt) return result;
+  await rm(dest, { recursive: true, force: true }).catch(() => {});
+  const retryResult = await tryClone(alt, dest, opts);
+  if (retryResult.ok) return ok({ effectiveUrl: alt });
+  return result;
 }
 ```
 

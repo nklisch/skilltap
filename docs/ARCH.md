@@ -198,7 +198,8 @@ core → test-utils (dev)
 ### Core Modules
 
 **git.ts** — Thin wrapper around the `git` CLI. All git operations go through here.
-- `clone(url, dest, opts)` — `git clone --depth 1` (shallow by default)
+- `clone(url, dest, opts)` → `Result<CloneResult, GitError>` — shallow clone with automatic HTTPS↔SSH protocol fallback on auth failure. Returns `{ effectiveUrl }` so callers can persist the URL that actually worked.
+- `flipUrlProtocol(url)` — converts between HTTPS and SSH git URL forms (e.g. `https://github.com/o/r.git` ↔ `git@github.com:o/r.git`). Returns `null` for unrecognized patterns.
 - `pull(dir)` — `git pull`
 - `fetch(dir)` — `git fetch`
 - `diff(dir, from, to)` — `git diff from..to`

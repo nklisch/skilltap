@@ -33,6 +33,10 @@ skilltap install ssh://git@gitlab.com/team/code-review.git
 
 Uses your existing SSH keys. No extra configuration needed.
 
+::: tip Automatic protocol fallback
+If an HTTPS URL fails due to authentication, skilltap automatically retries with SSH (and vice versa). The URL that works is saved to `installed.json` so future updates use it directly.
+:::
+
 ### GitHub shorthand
 
 If the source contains a `/` and no protocol, skilltap treats it as a GitHub repo:
