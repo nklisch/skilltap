@@ -14,7 +14,7 @@ import { $ } from "bun";
 import { parse } from "smol-toml";
 import { z } from "zod/v4";
 import { detectAgents } from "./agents/detect";
-import { getConfigDir, loadInstalled, saveInstalled } from "./config";
+import { getConfigDir, loadInstalled, migrateSecurityConfig, saveInstalled } from "./config";
 import { globalBase } from "./fs";
 import { clone } from "./git";
 import { skillInstallDir } from "./paths";
@@ -204,7 +204,8 @@ async function checkConfig(): Promise<{
     };
   }
 
-  const result = ConfigSchema.safeParse(raw);
+  const migrated = migrateSecurityConfig(raw as Record<string, unknown>);
+  const result = ConfigSchema.safeParse(migrated);
   if (!result.success) {
     return {
       check: {
@@ -672,7 +673,7 @@ async function checkTaps(config: Config): Promise<DoctorCheck> {
 
 async function checkAgents(config: Config): Promise<DoctorCheck> {
   const available = await detectAgents();
-  const configuredAgent = config.security.agent;
+  const configuredAgent = config.security.agent_cli;
 
   if (configuredAgent) {
     const isAbsPath = configuredAgent.startsWith("/");

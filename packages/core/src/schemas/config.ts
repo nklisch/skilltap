@@ -6,20 +6,73 @@ import { z } from "zod/v4";
 // ---------------------------------------------------------------------------
 
 export const SCAN_MODES = ["static", "semantic", "off"] as const;
-export const ON_WARN_MODES = ["prompt", "fail"] as const;
+export const ON_WARN_MODES = ["prompt", "fail", "allow"] as const;
 export const AGENT_MODE_SCOPES = ["global", "project"] as const;
 export const SCOPE_VALUES = ["", "global", "project"] as const;
 export const AUTO_UPDATE_MODES = ["off", "patch", "minor"] as const;
 export const SHOW_DIFF_MODES = ["full", "stat", "none"] as const;
+export const SECURITY_PRESETS = ["none", "relaxed", "standard", "strict"] as const;
+export const SOURCE_TYPES = ["tap", "git", "npm", "local"] as const;
 
-export const SecurityConfigSchema = z.object({
+// ---------------------------------------------------------------------------
+// Preset definitions — maps preset name to concrete SecurityMode values.
+// Single source of truth; derive UI labels and override resolution from this.
+// ---------------------------------------------------------------------------
+
+export const PRESET_VALUES: Record<
+  (typeof SECURITY_PRESETS)[number],
+  { scan: "static" | "semantic" | "off"; on_warn: "prompt" | "fail" | "allow"; require_scan: boolean }
+> = {
+  none:     { scan: "off",      on_warn: "allow",  require_scan: false },
+  relaxed:  { scan: "static",   on_warn: "allow",  require_scan: false },
+  standard: { scan: "static",   on_warn: "prompt", require_scan: false },
+  strict:   { scan: "semantic", on_warn: "fail",   require_scan: true  },
+};
+
+// ---------------------------------------------------------------------------
+// Per-mode security settings — used independently for human and agent modes.
+// ---------------------------------------------------------------------------
+
+export const SecurityModeSchema = z.object({
   scan: z.enum(SCAN_MODES).default("static"),
   on_warn: z.enum(ON_WARN_MODES).default("prompt"),
   require_scan: z.boolean().default(false),
-  agent: z.string().default(""),
+});
+
+// ---------------------------------------------------------------------------
+// Per-trust-tier override — maps a named tap or source type to a preset.
+// ---------------------------------------------------------------------------
+
+export const TrustOverrideSchema = z.object({
+  /** Named tap or source type this override applies to */
+  match: z.string(),
+  /** What kind of match: a specific tap name, or a source type */
+  kind: z.enum(["tap", "source"]),
+  /** Security preset to apply for this tier */
+  preset: z.enum(SECURITY_PRESETS),
+});
+
+// ---------------------------------------------------------------------------
+// Top-level security config schema
+// ---------------------------------------------------------------------------
+
+export const SecurityConfigSchema = z.object({
+  // Per-mode settings
+  human: SecurityModeSchema.prefault({}),
+  agent: SecurityModeSchema.prefault({
+    scan: "static",
+    on_warn: "fail",
+    require_scan: true,
+  }),
+
+  // Shared settings (not per-mode)
+  agent_cli: z.string().default(""),
   threshold: z.number().int().min(0).max(10).default(5),
   max_size: z.number().int().default(51200),
   ollama_model: z.string().default(""),
+
+  // Trust tier overrides — evaluated in order, first match wins
+  overrides: z.array(TrustOverrideSchema).default([]),
 });
 
 export const AgentModeSchema = z.object({
@@ -89,6 +142,8 @@ export const ConfigSchema = z.object({
   default_git_host: z.string().default("https://github.com"),
 });
 
+export type SecurityMode = z.infer<typeof SecurityModeSchema>;
+export type TrustOverride = z.infer<typeof TrustOverrideSchema>;
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
 export type AgentMode = z.infer<typeof AgentModeSchema>;
 export type UpdatesConfig = z.infer<typeof UpdatesConfigSchema>;

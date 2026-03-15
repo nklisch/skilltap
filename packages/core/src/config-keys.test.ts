@@ -90,8 +90,10 @@ describe("validateSetKey", () => {
       "defaults.scope",
       "defaults.also",
       "defaults.yes",
-      "security.agent",
+      "security.agent_cli",
       "security.ollama_model",
+      "security.threshold",
+      "security.max_size",
       "updates.auto_update",
       "updates.interval_hours",
     ];
@@ -115,19 +117,45 @@ describe("validateSetKey", () => {
     expect(r.error.hint).toContain("telemetry");
   });
 
-  test("rejects security policy keys", () => {
+  test("rejects new per-mode security keys with config security hint", () => {
     for (const key of [
-      "security.scan",
-      "security.on_warn",
-      "security.require_scan",
-      "security.max_size",
-      "security.threshold",
+      "security.human.scan",
+      "security.human.on_warn",
+      "security.human.require_scan",
+      "security.agent.scan",
+      "security.agent.on_warn",
+      "security.agent.require_scan",
     ]) {
       const r = validateSetKey(key);
       expect(r.ok).toBe(false);
       if (r.ok) return;
-      expect(r.error.hint).toContain("interactive wizard");
+      expect(r.error.hint).toContain("config security");
     }
+  });
+
+  test("rejects security.overrides with trust hint", () => {
+    const r = validateSetKey("security.overrides");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("--trust");
+  });
+
+  test("rejects old v1 security keys with migration hint", () => {
+    const r1 = validateSetKey("security.scan");
+    expect(r1.ok).toBe(false);
+    if (r1.ok) return;
+    expect(r1.error.hint).toContain("config security");
+
+    const r2 = validateSetKey("security.on_warn");
+    expect(r2.ok).toBe(false);
+
+    const r3 = validateSetKey("security.require_scan");
+    expect(r3.ok).toBe(false);
+
+    const r4 = validateSetKey("security.agent");
+    expect(r4.ok).toBe(false);
+    if (r4.ok) return;
+    expect(r4.error.hint).toContain("agent_cli");
   });
 
   test("rejects taps with hint", () => {

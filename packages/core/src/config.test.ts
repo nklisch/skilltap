@@ -6,6 +6,7 @@ import {
   ensureDirs,
   loadConfig,
   loadInstalled,
+  migrateSecurityConfig,
   saveConfig,
   saveInstalled,
 } from "./config";
@@ -84,7 +85,7 @@ describe("loadConfig", () => {
       expect(result.value.defaults.also).toEqual([]);
       expect(result.value.defaults.yes).toBe(false);
       expect(result.value.defaults.scope).toBe("");
-      expect(result.value.security.scan).toBe("static");
+      expect(result.value.security.human.scan).toBe("static");
       expect(result.value["agent-mode"].enabled).toBe(false);
       expect(result.value.taps).toEqual([]);
     }
@@ -112,7 +113,7 @@ threshold = 8
       expect(result.value.defaults.yes).toBe(true);
       expect(result.value.defaults.scope).toBe("global");
       expect(result.value.defaults.also).toEqual(["claude-code"]);
-      expect(result.value.security.scan).toBe("semantic");
+      expect(result.value.security.human.scan).toBe("semantic");
       expect(result.value.security.threshold).toBe(8);
     }
   });
@@ -152,7 +153,7 @@ describe("saveConfig", () => {
   test("round-trip: save then load produces equivalent config", async () => {
     const config = ConfigSchema.parse({
       defaults: { also: ["cursor"], yes: true, scope: "project" },
-      security: { scan: "static", threshold: 3 },
+      security: { threshold: 3 },
     });
     await saveConfig(config);
     const loaded = await loadConfig();
@@ -227,6 +228,107 @@ describe("loadInstalled", () => {
     expect(result.ok).toBe(false);
     if (!result.ok)
       expect(result.error.message).toContain("Invalid installed.json");
+  });
+});
+
+describe("migrateSecurityConfig", () => {
+  test("migrates v1 flat config to v2 per-mode", () => {
+    const raw = {
+      security: {
+        scan: "static",
+        on_warn: "prompt",
+        require_scan: false,
+        agent: "claude",
+        threshold: 7,
+      },
+    };
+    const result = migrateSecurityConfig(raw);
+    const sec = result.security as Record<string, unknown>;
+    const human = sec.human as Record<string, unknown>;
+    const agent = sec.agent as Record<string, unknown>;
+
+    expect(human.scan).toBe("static");
+    expect(human.on_warn).toBe("prompt");
+    expect(human.require_scan).toBe(false);
+    expect(agent.on_warn).toBe("fail");
+    expect(agent.require_scan).toBe(true);
+    expect(sec.agent_cli).toBe("claude");
+    expect(sec.threshold).toBe(7);
+    // Old flat fields should be gone
+    expect(sec.scan).toBeUndefined();
+    expect(sec.on_warn).toBeUndefined();
+    expect(sec.require_scan).toBeUndefined();
+  });
+
+  test("migrates v1 with scan=off — agent gets static, not off", () => {
+    const raw = { security: { scan: "off", on_warn: "prompt", require_scan: false } };
+    const result = migrateSecurityConfig(raw);
+    const sec = result.security as Record<string, unknown>;
+    const agent = sec.agent as Record<string, unknown>;
+    expect(agent.scan).toBe("static");
+  });
+
+  test("v2 config passes through unchanged", () => {
+    const raw = {
+      security: {
+        human: { scan: "static", on_warn: "prompt", require_scan: false },
+        agent: { scan: "semantic", on_warn: "fail", require_scan: true },
+        agent_cli: "claude",
+      },
+    };
+    const result = migrateSecurityConfig(raw);
+    const sec = result.security as Record<string, unknown>;
+    // Already v2 — no flat scan key
+    expect((sec.human as Record<string, unknown>).scan).toBe("static");
+    expect((sec.agent as Record<string, unknown>).scan).toBe("semantic");
+  });
+
+  test("missing security section passes through unchanged", () => {
+    const raw = { defaults: { yes: false } };
+    const result = migrateSecurityConfig(raw);
+    expect(result).toEqual(raw);
+  });
+
+  test("empty security section passes through (no v1 fields)", () => {
+    const raw = { security: {} };
+    const result = migrateSecurityConfig(raw);
+    // No flat scan key — treated as v2
+    expect((result.security as Record<string, unknown>).scan).toBeUndefined();
+  });
+
+  test("idempotent — running twice produces same result", () => {
+    const raw = {
+      security: {
+        scan: "semantic",
+        on_warn: "fail",
+        require_scan: true,
+        agent: "",
+      },
+    };
+    const once = migrateSecurityConfig(raw);
+    const twice = migrateSecurityConfig(once);
+    expect(twice).toEqual(once);
+  });
+});
+
+describe("loadConfig — migration integration", () => {
+  test("loads v1 config.toml and migrates to v2", async () => {
+    const configDir = join(tmpDir, "skilltap");
+    await ensureDirs();
+    await Bun.write(
+      join(configDir, "config.toml"),
+      `[security]\nscan = "semantic"\non_warn = "fail"\nrequire_scan = true\nagent = "claude"\nthreshold = 8\n`,
+    );
+    const result = await loadConfig();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.security.human.scan).toBe("semantic");
+    expect(result.value.security.human.on_warn).toBe("fail");
+    expect(result.value.security.human.require_scan).toBe(true);
+    expect(result.value.security.agent.on_warn).toBe("fail");
+    expect(result.value.security.agent.require_scan).toBe(true);
+    expect(result.value.security.agent_cli).toBe("claude");
+    expect(result.value.security.threshold).toBe(8);
   });
 });
 

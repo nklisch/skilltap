@@ -60,8 +60,8 @@ describe("skilltap config get", () => {
     expect(stdout.trim()).toBe("24");
   });
 
-  test("gets security.scan default", async () => {
-    const { exitCode, stdout } = await runGet(["security.scan"], configDir);
+  test("gets security.human.scan default", async () => {
+    const { exitCode, stdout } = await runGet(["security.human.scan"], configDir);
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("static");
   });
@@ -94,6 +94,6 @@ describe("skilltap config get", () => {
     const { exitCode, stdout } = await runGet([], configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("defaults.scope =");
-    expect(stdout).toContain("security.scan = static");
+    expect(stdout).toContain("security.threshold = 5");
   });
 });

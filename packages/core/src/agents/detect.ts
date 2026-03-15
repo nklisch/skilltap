@@ -41,7 +41,7 @@ async function verifyAdapterAvailable(
     return err(
       new ScanError(
         `Configured agent '${configuredName}' not found on PATH.`,
-        `Install ${adapter.name} or change security.agent in config.toml`,
+        `Install ${adapter.name} or change security.agent_cli in config.toml`,
       ),
     );
   }
@@ -71,7 +71,7 @@ export async function resolveAgent(
   config: Config,
   onSelectAgent?: (detected: AgentAdapter[]) => Promise<AgentAdapter | null>,
 ): Promise<Result<AgentAdapter | null, ScanError>> {
-  const agentSetting = config.security.agent;
+  const agentSetting = config.security.agent_cli;
 
   // 1. Known adapter name
   if (agentSetting && !agentSetting.startsWith("/")) {

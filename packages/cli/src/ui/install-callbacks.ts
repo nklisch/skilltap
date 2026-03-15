@@ -29,7 +29,7 @@ type Spinner = {
 
 export type CallbackContext = {
   spinner: Spinner;
-  onWarn: "fail" | "prompt" | "ask" | "skip";
+  onWarn: "fail" | "prompt" | "allow" | "ask" | "skip";
   skipScan: boolean;
   agent: AgentAdapter | undefined;
   yes: boolean;
@@ -96,6 +96,10 @@ export function createInstallCallbacks(ctx: CallbackContext): {
             );
             process.exit(1);
           }
+          if (onWarn === "allow") {
+            // Warnings logged for visibility; auto-continue
+            return true;
+          }
           const proceed = await confirmInstall(skillName);
           if (isCancel(proceed) || proceed === false) process.exit(2);
           return true;
@@ -137,6 +141,10 @@ export function createInstallCallbacks(ctx: CallbackContext): {
               `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
             );
             process.exit(1);
+          }
+          if (onWarn === "allow") {
+            // Warnings logged for visibility; auto-continue
+            return true;
           }
           const proceed = await confirmInstall(skillName);
           if (isCancel(proceed) || proceed === false) process.exit(2);

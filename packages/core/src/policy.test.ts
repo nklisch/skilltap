@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ConfigSchema } from "./schemas/config";
-import { composePolicy } from "./policy";
+import { composePolicy, composePolicyForSource, resolveOverride } from "./policy";
 
 const baseConfig = () => ConfigSchema.parse({});
 
@@ -26,34 +26,43 @@ describe("composePolicy — normal mode", () => {
     expect(result.value.onWarn).toBe("fail");
   });
 
-  test("config on_warn=fail applies without flags", () => {
+  test("config human.on_warn=fail applies without flags", () => {
     const config = baseConfig();
-    config.security.on_warn = "fail";
+    config.security.human.on_warn = "fail";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("fail");
   });
 
-  test("--no-strict overrides config on_warn=fail", () => {
+  test("config human.on_warn=allow propagates", () => {
     const config = baseConfig();
-    config.security.on_warn = "fail";
+    config.security.human.on_warn = "allow";
+    const result = composePolicy(config, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.onWarn).toBe("allow");
+  });
+
+  test("--no-strict overrides config human.on_warn=fail", () => {
+    const config = baseConfig();
+    config.security.human.on_warn = "fail";
     const result = composePolicy(config, { noStrict: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("prompt");
   });
 
-  test("require_scan=true blocks --skip-scan", () => {
+  test("human.require_scan=true blocks --skip-scan", () => {
     const config = baseConfig();
-    config.security.require_scan = true;
+    config.security.human.require_scan = true;
     const result = composePolicy(config, { skipScan: true });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("require_scan");
   });
 
-  test("--skip-scan passes when require_scan=false", () => {
+  test("--skip-scan passes when human.require_scan=false", () => {
     const result = composePolicy(baseConfig(), { skipScan: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -115,18 +124,18 @@ describe("composePolicy — normal mode", () => {
     expect(result.value.scanMode).toBe("semantic");
   });
 
-  test("config scan=semantic without flag", () => {
+  test("config human.scan=semantic without flag", () => {
     const config = baseConfig();
-    config.security.scan = "semantic";
+    config.security.human.scan = "semantic";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.scanMode).toBe("semantic");
   });
 
-  test("config scan=off without --semantic stays off", () => {
+  test("config human.scan=off without --semantic stays off", () => {
     const config = baseConfig();
-    config.security.scan = "off";
+    config.security.human.scan = "off";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -150,10 +159,11 @@ describe("composePolicy — agent mode", () => {
     return config;
   };
 
-  test("forces yes=true, onWarn=fail, requireScan=true", () => {
+  test("uses agent.on_warn and agent.require_scan from config", () => {
     const result = composePolicy(agentConfig(), {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
+    // Default agent config is: on_warn=fail, require_scan=true
     expect(result.value.yes).toBe(true);
     expect(result.value.onWarn).toBe("fail");
     expect(result.value.requireScan).toBe(true);
@@ -161,12 +171,41 @@ describe("composePolicy — agent mode", () => {
     expect(result.value.agentMode).toBe(true);
   });
 
-  test("blocks --skip-scan", () => {
+  test("agent mode with on_warn=allow config uses allow", () => {
+    const config = agentConfig();
+    config.security.agent.on_warn = "allow";
+    config.security.agent.require_scan = false;
+    const result = composePolicy(config, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.onWarn).toBe("allow");
+    expect(result.value.requireScan).toBe(false);
+  });
+
+  test("agent mode with scan=off config uses off (no enforced floor)", () => {
+    const config = agentConfig();
+    config.security.agent.scan = "off";
+    const result = composePolicy(config, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.scanMode).toBe("off");
+  });
+
+  test("blocks --skip-scan when agent.require_scan=true", () => {
     const result = composePolicy(agentConfig(), { skipScan: true });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("Agent mode");
     expect(result.error.message).toContain("--skip-scan");
+  });
+
+  test("allows --skip-scan when agent.require_scan=false", () => {
+    const config = agentConfig();
+    config.security.agent.require_scan = false;
+    const result = composePolicy(config, { skipScan: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.skipScan).toBe(true);
   });
 
   test("uses agent-mode.scope when no flag", () => {
@@ -192,18 +231,9 @@ describe("composePolicy — agent mode", () => {
     expect(result.value.scope).toBe("project");
   });
 
-  test("promotes scan=off to static", () => {
+  test("preserves agent.scan=semantic", () => {
     const config = agentConfig();
-    config.security.scan = "off";
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.scanMode).toBe("static");
-  });
-
-  test("preserves scan=semantic", () => {
-    const config = agentConfig();
-    config.security.scan = "semantic";
+    config.security.agent.scan = "semantic";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -219,18 +249,20 @@ describe("composePolicy — agent mode", () => {
     expect(result.value.also).toEqual(["claude-code"]);
   });
 
-  test("ignores --strict flag (already forced)", () => {
-    const result = composePolicy(agentConfig(), { strict: true });
+  test("--strict still forces onWarn=fail", () => {
+    const config = agentConfig();
+    config.security.agent.on_warn = "allow";
+    const result = composePolicy(config, { strict: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("fail");
   });
 
-  test("ignores --no-strict flag (agent mode overrides)", () => {
+  test("--no-strict overrides agent.on_warn=fail", () => {
     const result = composePolicy(agentConfig(), { noStrict: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.onWarn).toBe("fail");
+    expect(result.value.onWarn).toBe("prompt");
   });
 
   test("error when agent-mode.scope is empty and no flag passed", () => {
@@ -240,5 +272,124 @@ describe("composePolicy — agent mode", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("requires a scope");
+  });
+});
+
+describe("resolveOverride", () => {
+  test("returns null when no overrides", () => {
+    const result = resolveOverride([], { sourceType: "git" });
+    expect(result).toBeNull();
+  });
+
+  test("returns null when no match", () => {
+    const result = resolveOverride(
+      [{ match: "my-tap", kind: "tap", preset: "none" }],
+      { sourceType: "npm" },
+    );
+    expect(result).toBeNull();
+  });
+
+  test("matches tap by name", () => {
+    const result = resolveOverride(
+      [{ match: "my-tap", kind: "tap", preset: "none" }],
+      { tapName: "my-tap", sourceType: "tap" },
+    );
+    expect(result).toBe("none");
+  });
+
+  test("matches source type", () => {
+    const result = resolveOverride(
+      [{ match: "npm", kind: "source", preset: "strict" }],
+      { sourceType: "npm" },
+    );
+    expect(result).toBe("strict");
+  });
+
+  test("named tap match beats source type match", () => {
+    const result = resolveOverride(
+      [
+        { match: "npm", kind: "source", preset: "strict" },
+        { match: "my-tap", kind: "tap", preset: "none" },
+      ],
+      { tapName: "my-tap", sourceType: "npm" },
+    );
+    // tap match wins even though source match also applies
+    expect(result).toBe("none");
+  });
+
+  test("falls back to source match when no tap match", () => {
+    const result = resolveOverride(
+      [
+        { match: "other-tap", kind: "tap", preset: "strict" },
+        { match: "npm", kind: "source", preset: "relaxed" },
+      ],
+      { tapName: "my-tap", sourceType: "npm" },
+    );
+    expect(result).toBe("relaxed");
+  });
+});
+
+describe("composePolicyForSource", () => {
+  const baseWithOverrides = () => {
+    const config = baseConfig();
+    config.security.overrides = [
+      { match: "trusted-tap", kind: "tap", preset: "none" },
+      { match: "npm", kind: "source", preset: "strict" },
+    ];
+    return config;
+  };
+
+  test("no override falls back to base policy", () => {
+    const config = baseWithOverrides();
+    const result = composePolicyForSource(config, {}, { sourceType: "git" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // no override for git → human defaults
+    expect(result.value.scanMode).toBe("static");
+    expect(result.value.onWarn).toBe("prompt");
+  });
+
+  test("tap override applies preset values", () => {
+    const config = baseWithOverrides();
+    const result = composePolicyForSource(config, {}, {
+      tapName: "trusted-tap",
+      sourceType: "tap",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // "none" preset: scan=off, on_warn=allow, require_scan=false
+    expect(result.value.scanMode).toBe("off");
+    expect(result.value.onWarn).toBe("allow");
+    expect(result.value.requireScan).toBe(false);
+  });
+
+  test("source override applies preset values", () => {
+    const config = baseWithOverrides();
+    const result = composePolicyForSource(config, {}, { sourceType: "npm" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // "strict" preset: scan=semantic, on_warn=fail, require_scan=true
+    expect(result.value.scanMode).toBe("semantic");
+    expect(result.value.onWarn).toBe("fail");
+    expect(result.value.requireScan).toBe(true);
+  });
+
+  test("CLI --strict overrides trust tier preset", () => {
+    const config = baseWithOverrides();
+    // trusted-tap has "none" preset, but --strict should still set fail
+    const result = composePolicyForSource(config, { strict: true }, {
+      tapName: "trusted-tap",
+      sourceType: "tap",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.onWarn).toBe("fail");
+  });
+
+  test("--skip-scan rejected when override preset has require_scan=true", () => {
+    const config = baseWithOverrides();
+    const result = composePolicyForSource(config, { skipScan: true }, { sourceType: "npm" });
+    // "strict" has require_scan=true
+    expect(result.ok).toBe(false);
   });
 });

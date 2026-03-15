@@ -6,13 +6,13 @@ import type { AgentAdapter } from "../types";
 const DEFAULT_CONFIG: Config = {
   defaults: { also: [], yes: false, scope: "" },
   security: {
-    scan: "static",
-    on_warn: "prompt",
-    require_scan: false,
-    agent: "",
+    human: { scan: "static", on_warn: "prompt", require_scan: false },
+    agent: { scan: "static", on_warn: "fail", require_scan: true },
+    agent_cli: "",
     threshold: 5,
     max_size: 51200,
     ollama_model: "",
+    overrides: [],
   },
   "agent-mode": { enabled: false, scope: "project" },
   registry: { enabled: ["skills.sh"], sources: [], allow_npm: true },
@@ -21,6 +21,7 @@ const DEFAULT_CONFIG: Config = {
   taps: [],
   updates: { auto_update: "off", interval_hours: 24, skill_check_interval_hours: 24, show_diff: "full" },
   telemetry: { enabled: false, notice_shown: false, anonymous_id: "" },
+  default_git_host: "https://github.com",
 };
 
 function mockAdapter(name: string, available: boolean): AgentAdapter {
@@ -42,7 +43,7 @@ describe("resolveAgent", () => {
     // which may not be true — but it tests the empty-config path at least
     const config = {
       ...DEFAULT_CONFIG,
-      security: { ...DEFAULT_CONFIG.security, agent: "" },
+      security: { ...DEFAULT_CONFIG.security, agent_cli: "" },
     };
     const result = await resolveAgent(config);
     expect(result.ok).toBe(true);
@@ -52,7 +53,7 @@ describe("resolveAgent", () => {
   test("returns error for unknown agent name", async () => {
     const config = {
       ...DEFAULT_CONFIG,
-      security: { ...DEFAULT_CONFIG.security, agent: "nonexistent-agent" },
+      security: { ...DEFAULT_CONFIG.security, agent_cli: "nonexistent-agent" },
     };
     const result = await resolveAgent(config);
     expect(result.ok).toBe(false);
@@ -63,7 +64,7 @@ describe("resolveAgent", () => {
   test("returns custom adapter for absolute path", async () => {
     const config = {
       ...DEFAULT_CONFIG,
-      security: { ...DEFAULT_CONFIG.security, agent: "/usr/bin/my-agent" },
+      security: { ...DEFAULT_CONFIG.security, agent_cli: "/usr/bin/my-agent" },
     };
     const result = await resolveAgent(config);
     expect(result.ok).toBe(true);
