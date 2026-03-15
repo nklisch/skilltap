@@ -17,7 +17,7 @@ import { detectAgents } from "./agents/detect";
 import { getConfigDir, loadInstalled, migrateSecurityConfig, saveInstalled } from "./config";
 import { globalBase } from "./fs";
 import { clone } from "./git";
-import { skillInstallDir } from "./paths";
+import { skillDisabledDir, skillInstallDir } from "./paths";
 import type { Config } from "./schemas/config";
 import { ConfigSchema } from "./schemas/config";
 import type { InstalledJson } from "./schemas/installed";
@@ -390,9 +390,9 @@ async function checkSkills(installed: InstalledJson, projectRoot?: string): Prom
     }
 
     const isProject = skill.scope === "project" && !!projectRoot;
-    const installDir = isProject
-      ? skillInstallDir(skill.name, "project", projectRoot)
-      : skillInstallDir(skill.name, "global");
+    const installDir = skill.active === false
+      ? (isProject ? skillDisabledDir(skill.name, "project", projectRoot) : skillDisabledDir(skill.name, "global"))
+      : (isProject ? skillInstallDir(skill.name, "project", projectRoot) : skillInstallDir(skill.name, "global"));
 
     if (!(await resolvedDirExists(installDir))) {
       const skillName = skill.name;
@@ -422,6 +422,7 @@ async function checkSkills(installed: InstalledJson, projectRoot?: string): Prom
       const entries = await readdir(globalSkillsDir, { withFileTypes: true });
       for (const entry of entries) {
         if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+        if (entry.name === ".disabled") continue;
         if (!globalTracked.has(entry.name)) {
           issues.push({
             message: `${entry.name}: directory exists at ${join(globalSkillsDir, entry.name)} but not tracked in installed.json`,
@@ -442,6 +443,7 @@ async function checkSkills(installed: InstalledJson, projectRoot?: string): Prom
         const entries = await readdir(projectSkillsDir, { withFileTypes: true });
         for (const entry of entries) {
           if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+          if (entry.name === ".disabled") continue;
           if (!projectTracked.has(entry.name)) {
             issues.push({
               message: `${entry.name}: directory exists at ${join(projectSkillsDir, entry.name)} but not tracked in installed.json`,

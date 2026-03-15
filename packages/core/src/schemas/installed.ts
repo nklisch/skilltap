@@ -14,6 +14,7 @@ export const InstalledSkillSchema = z.object({
   installedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime().default("1970-01-01T00:00:00.000Z"),
   trust: TrustInfoSchema.optional(),
+  active: z.boolean().default(true),
 });
 
 export const InstalledJsonSchema = z.object({

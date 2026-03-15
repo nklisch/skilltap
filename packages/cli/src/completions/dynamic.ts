@@ -24,6 +24,20 @@ export async function printCompletions(type: string): Promise<void> {
       }
       break;
     }
+    case "active-skills": {
+      const skills = await loadAllSkills();
+      for (const s of skills) {
+        if (s.active !== false) console.log(s.name);
+      }
+      break;
+    }
+    case "disabled-skills": {
+      const skills = await loadAllSkills();
+      for (const s of skills) {
+        if (s.active === false) console.log(s.name);
+      }
+      break;
+    }
     case "tap-skills": {
       const taps = await loadTaps();
       if (taps.ok) {

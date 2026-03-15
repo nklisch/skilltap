@@ -623,6 +623,9 @@ export async function updateSkill(
         ),
       );
     }
+  } else {
+    globalSkills = globalSkills.filter((s) => s.active !== false);
+    projectSkills = projectSkills.filter((s) => s.active !== false);
   }
 
   const result: UpdateResult = { updated: [], skipped: [], upToDate: [] };

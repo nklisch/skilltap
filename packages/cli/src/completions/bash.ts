@@ -14,7 +14,7 @@ _skilltap() {
 
   local commands="status install remove list update find skills link unlink info create verify config tap doctor completions self-update"
   local tap_commands="add remove list info init install"
-  local skills_commands="info remove link unlink adopt move"
+  local skills_commands="info remove link unlink adopt move disable enable"
   local agents="${agents}"
   local templates="${templates}"
 
@@ -95,9 +95,27 @@ _skilltap() {
             COMPREPLY=($(compgen -W "$skills" -- "$cur"))
           fi
           ;;
+        disable)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--project --global" -- "$cur"))
+          else
+            local skills
+            skills=$(skilltap --get-completions active-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
+        enable)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--project --global" -- "$cur"))
+          else
+            local skills
+            skills=$(skilltap --get-completions disabled-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
         ""|*)
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--global --project --unmanaged --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "--global --project --unmanaged --json --disabled --active" -- "$cur"))
           else
             COMPREPLY=($(compgen -W "$skills_commands" -- "$cur"))
           fi

@@ -13,6 +13,8 @@ export default defineCommand({
     project: { type: "boolean", description: "Show only project skills", default: false },
     unmanaged: { type: "boolean", description: "Show only unmanaged skills", default: false },
     json: { type: "boolean", description: "Output as JSON", default: false },
+    disabled: { type: "boolean", description: "Show only disabled skills", default: false },
+    active: { type: "boolean", description: "Show only active skills", default: false },
   },
   subCommands: {
     info: () => import("./info").then((m) => m.default),
@@ -21,6 +23,8 @@ export default defineCommand({
     unlink: () => import("./unlink").then((m) => m.default),
     adopt: () => import("./adopt").then((m) => m.default),
     move: () => import("./move").then((m) => m.default),
+    disable: () => import("./disable").then((m) => m.default),
+    enable: () => import("./enable").then((m) => m.default),
   },
   async run({ args }) {
     // If a subcommand was matched, citty still calls this run — bail out
@@ -44,7 +48,13 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const { skills } = discoverResult.value;
+    let { skills } = discoverResult.value;
+
+    if (args.disabled) {
+      skills = skills.filter((s) => s.record?.active === false);
+    } else if (args.active) {
+      skills = skills.filter((s) => s.record?.active !== false);
+    }
 
     if (args.json) {
       process.stdout.write(`${JSON.stringify(skills, null, 2)}\n`);
@@ -63,9 +73,11 @@ export default defineCommand({
         const primaryLoc = skill.locations[0];
         if (!primaryLoc) continue;
         const scope = primaryLoc.source.scope.toUpperCase();
-        const status = skill.managed
-          ? skill.record?.scope === "linked" ? "linked" : "managed"
-          : "unmanaged";
+        const status = skill.record?.active === false
+          ? "disabled"
+          : skill.managed
+            ? skill.record?.scope === "linked" ? "linked" : "managed"
+            : "unmanaged";
         const agent =
           primaryLoc.source.type === "agent-specific"
             ? primaryLoc.source.agent.toUpperCase().replace(/-/g, "_")
@@ -104,10 +116,13 @@ export default defineCommand({
       const SRC_W = width < 60 ? 16 : 24;
 
       const rows = section.map((s) => {
+        const isDisabled = s.record?.active === false;
         const isLinked = s.record?.scope === "linked";
-        const statusLabel = isLinked
-          ? ansi.cyan("linked")
-          : ansi.green("managed");
+        const statusLabel = isDisabled
+          ? ansi.dim("disabled")
+          : isLinked
+            ? ansi.cyan("linked")
+            : ansi.green("managed");
         const agents = s.record?.also && s.record.also.length > 0
           ? s.record.also.join(", ")
           : "—";

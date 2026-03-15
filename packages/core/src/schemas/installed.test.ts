@@ -73,6 +73,18 @@ describe("InstalledSkillSchema", () => {
     ).toBe(false);
   });
 
+  test("defaults active to true when field is missing", () => {
+    const result = InstalledSkillSchema.safeParse(VALID_SKILL);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.active).toBe(true);
+  });
+
+  test("preserves active: false through round-trip", () => {
+    const result = InstalledSkillSchema.safeParse({ ...VALID_SKILL, active: false });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.active).toBe(false);
+  });
+
   test("accepts multi-skill path", () => {
     const result = InstalledSkillSchema.safeParse({
       ...VALID_SKILL,

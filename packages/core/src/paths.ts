@@ -24,6 +24,16 @@ export function skillInstallDir(
   return join(base, ".agents", "skills", name);
 }
 
+export function skillDisabledDir(
+  name: string,
+  scope: "global" | "project",
+  projectRoot?: string,
+): string {
+  const base =
+    scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
+  return join(base, ".agents", "skills", ".disabled", name);
+}
+
 export function skillCacheDir(repoUrl: string): string {
   const hash = Bun.hash(repoUrl).toString(16);
   return join(getConfigDir(), "cache", hash);

@@ -16,6 +16,7 @@ export * from "./skills-registry";
 export * from "./paths";
 export * from "./remove";
 export * from "./discover";
+export * from "./disable";
 export * from "./adopt";
 export * from "./move";
 export * from "./update";

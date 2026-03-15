@@ -104,7 +104,7 @@ _skilltap() {
           ;;
         skills)
           local -a skills_commands
-          skills_commands=('info:Show skill details' 'remove:Remove a skill' 'link:Symlink a local skill' 'unlink:Remove a linked skill' 'adopt:Adopt unmanaged skills' 'move:Move a skill between scopes')
+          skills_commands=('info:Show skill details' 'remove:Remove a skill' 'link:Symlink a local skill' 'unlink:Remove a linked skill' 'adopt:Adopt unmanaged skills' 'move:Move a skill between scopes' 'disable:Disable a skill' 'enable:Enable a skill')
           _arguments -C '1:subcommand:->skills_cmd' '*::arg:->skills_args'
           case $state in
             skills_cmd) _describe 'subcommand' skills_commands ;;
@@ -153,12 +153,30 @@ _skilltap() {
                     '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
                     "1:skill:($skills)"
                   ;;
+                disable)
+                  local -a skills
+                  skills=(\${(f)"\$(skilltap --get-completions active-skills 2>/dev/null)"})
+                  _arguments \\
+                    '--global[Disable global skill]' \\
+                    '--project[Disable project skill]' \\
+                    "1:skill:($skills)"
+                  ;;
+                enable)
+                  local -a skills
+                  skills=(\${(f)"\$(skilltap --get-completions disabled-skills 2>/dev/null)"})
+                  _arguments \\
+                    '--global[Enable global skill]' \\
+                    '--project[Enable project skill]' \\
+                    "1:skill:($skills)"
+                  ;;
                 *)
                   _arguments \\
                     '--global[Global skills only]' \\
                     '--project[Project skills only]' \\
                     '--unmanaged[Unmanaged skills only]' \\
-                    '--json[JSON output]'
+                    '--json[JSON output]' \\
+                    '--disabled[Show only disabled skills]' \\
+                    '--active[Show only active skills]'
                   ;;
               esac
               ;;

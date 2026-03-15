@@ -3,7 +3,7 @@ import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
-import { skillCacheDir, skillInstallDir } from "./paths";
+import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
@@ -52,11 +52,17 @@ export async function removeSkill(
   const installPath =
     record.scope === "linked" && record.path !== null
       ? record.path
-      : skillInstallDir(
-          record.name,
-          record.scope === "linked" ? "global" : record.scope,
-          options.projectRoot,
-        );
+      : record.active === false
+        ? skillDisabledDir(
+            record.name,
+            record.scope === "linked" ? "global" : record.scope,
+            options.projectRoot,
+          )
+        : skillInstallDir(
+            record.name,
+            record.scope === "linked" ? "global" : record.scope,
+            options.projectRoot,
+          );
   const rmResult = await wrapShell(
     () => $`rm -rf ${installPath}`.quiet().then(() => undefined),
     `Failed to remove skill directory '${name}'`,
