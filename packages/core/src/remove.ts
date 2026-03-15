@@ -1,6 +1,8 @@
+import { unlink } from "node:fs/promises";
 import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
+import type { DiscoveredSkill, SkillLocation } from "./discover";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
@@ -82,6 +84,54 @@ export async function removeSkill(
   installed.skills.splice(idx, 1);
   const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
+
+  return ok(undefined);
+}
+
+export type RemoveAnyOptions = {
+  skill: DiscoveredSkill;
+  removeAll?: boolean;
+  locations?: SkillLocation[];
+};
+
+export async function removeAnySkill(
+  options: RemoveAnyOptions,
+): Promise<Result<void, UserError>> {
+  const { skill } = options;
+
+  if (skill.managed && skill.record) {
+    return removeSkill(skill.name, { scope: skill.record.scope });
+  }
+
+  // Determine which locations to remove
+  let locs: SkillLocation[];
+  if (options.locations) {
+    locs = options.locations;
+  } else if (options.removeAll) {
+    locs = skill.locations;
+  } else {
+    // Default: remove only the first non-symlink location
+    const primary = skill.locations.find((l) => !l.isSymlink);
+    locs = primary ? [primary] : skill.locations.slice(0, 1);
+  }
+
+  for (const loc of locs) {
+    if (loc.isSymlink) {
+      try {
+        await unlink(loc.path);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        return err(new UserError(`Failed to remove symlink '${loc.path}': ${msg}`));
+      }
+    } else {
+      const rmResult = await wrapShell(
+        () => $`rm -rf ${loc.path}`.quiet().then(() => undefined),
+        `Failed to remove skill directory '${loc.path}'`,
+        "Check file permissions.",
+      );
+      if (!rmResult.ok) return rmResult;
+    }
+  }
 
   return ok(undefined);
 }
