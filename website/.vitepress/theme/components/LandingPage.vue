@@ -44,9 +44,9 @@ const features = [
   },
   {
     icon: "📋",
-    title: "Manage what's installed",
+    title: "Manage everything",
     description:
-      "Track every installed skill with `skilltap list`. Update all at once with `skilltap update`. Health-check your setup with `skilltap doctor`. Clean up with `skilltap remove`.",
+      "View all skills — managed and unmanaged — with `skilltap skills`. Adopt orphaned skills into management with `skills adopt`. Move between global and project scopes with `skills move`. Update, health-check with `doctor`, and remove with one command.",
   },
   {
     icon: "🤖",
@@ -231,7 +231,12 @@ const teamFeatures = [
               class="demo-tab"
               :class="{ active: demoTab === 'individual' }"
               @click="demoTab = 'individual'"
-            >Individual</button>
+            >Install</button>
+            <button
+              class="demo-tab"
+              :class="{ active: demoTab === 'adopt' }"
+              @click="demoTab = 'adopt'"
+            >Adopt existing</button>
             <button
               class="demo-tab"
               :class="{ active: demoTab === 'team' }"
@@ -256,14 +261,31 @@ const teamFeatures = [
 <span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
-<span class="c-comment"># See everything installed on your system</span>
-<span class="c-prompt">$</span> skilltap list
-<span class="c-dim">  code-reviewer  main  git  Review code for bugs and style</span>
-<span class="c-dim">  commit-helper  main  git  Write conventional commits</span>
+<span class="c-comment"># See everything installed — managed and unmanaged</span>
+<span class="c-prompt">$</span> skilltap skills
+<span class="c-dim">  code-reviewer  managed  claude-code  https://github.com/example/skills-tap</span>
+<span class="c-dim">  commit-helper  managed  claude-code  https://github.com/user/commit-helper</span>
 
 <span class="c-comment"># Pull updates from the source and review what changed</span>
 <span class="c-prompt">$</span> skilltap update --all
 <span class="c-success">◆  Updated code-reviewer  (2 files changed)</span></code></pre>
+            <pre v-else-if="demoTab === 'adopt'" class="code-body"><code><span class="c-comment"># Skills you've placed manually are visible but unmanaged</span>
+<span class="c-prompt">$</span> skilltap skills --unmanaged
+<span class="c-dim">  commit-helper   unmanaged  —  ~/.agents/skills/commit-helper/</span>
+<span class="c-dim">  code-standards  unmanaged  —  .agents/skills/code-standards/</span>
+
+<span class="c-comment"># Adopt them into skilltap management (interactive)</span>
+<span class="c-prompt">$</span> skilltap skills adopt
+<span class="c-dim">  ◆ Which skills would you like to adopt?</span>
+<span class="c-dim">  ◼ commit-helper</span>
+<span class="c-dim">  ◼ code-standards</span>
+<span class="c-success">◆  Adopted commit-helper → tracked globally</span>
+<span class="c-success">◆  Adopted code-standards → tracked in project</span>
+
+<span class="c-comment"># Now they get updates, security scans, and full tracking</span>
+<span class="c-prompt">$</span> skilltap skills
+<span class="c-dim">  commit-helper   managed  claude-code  https://github.com/user/commit-helper</span>
+<span class="c-dim">  code-standards  managed  claude-code  (local)</span></code></pre>
             <pre v-else class="code-body"><code><span class="c-comment"># Anyone can create a tap — friend group, team, org</span>
 <span class="c-prompt">$</span> skilltap tap init my-skills
 <span class="c-dim"># add skills to tap.json, push to any git host</span>

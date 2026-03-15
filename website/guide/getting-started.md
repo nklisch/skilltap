@@ -167,6 +167,51 @@ skilltap skills --project      # only project-scoped skills
 skilltap skills --unmanaged    # only unmanaged skills (not tracked by skilltap)
 ```
 
+## Adopt existing skills
+
+If you've placed skills manually — copied them from a colleague, cloned them yourself, or inherited them from a project — they show up as **unmanaged** in `skilltap skills`:
+
+```bash
+skilltap skills --unmanaged
+```
+
+```
+Global (.agents/skills/) — 1 unmanaged skill
+  Name           Status      Agents  Source
+  commit-helper  unmanaged   —       ~/.agents/skills/commit-helper/
+```
+
+Unmanaged skills aren't source-tracked: skilltap can't update them, re-scan them, or tell where they came from. Use `skills adopt` to bring them under management:
+
+```bash
+skilltap skills adopt
+```
+
+skilltap shows an interactive picker of all unmanaged skills. Select which ones to adopt, then choose how to handle them:
+
+- **Move to `~/.agents/skills/`** (default) — relocates files and records them with full source tracking
+- **Track in place** (`--track-in-place`) — records the skill at its current location without moving it
+
+```bash
+# Adopt all unmanaged skills non-interactively
+skilltap skills adopt --yes
+
+# Track a skill at its current path without moving it
+skilltap skills adopt my-skill --track-in-place
+```
+
+Once adopted, skills appear as managed in `skilltap skills` and are eligible for updates and security scans.
+
+### Move between scopes
+
+Move a skill from project scope to global (or vice versa):
+
+```bash
+skilltap skills move commit-helper --global
+```
+
+This relocates the files, updates `installed.json` in both scopes, and refreshes any agent symlinks.
+
 ## Update skills
 
 Update all installed skills:
@@ -241,3 +286,4 @@ See the [Security](/guide/security) guide for full details.
 - [Taps](./taps) -- create and manage skill indexes
 - [Security](./security) -- how scanning works and how to configure it
 - [Configuration](./configuration) -- full config file reference
+- [CLI Reference](/reference/cli) -- every command, flag, and option

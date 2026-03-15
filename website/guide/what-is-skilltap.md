@@ -20,6 +20,7 @@ The [SKILL.md format](https://agentskills.io/specification) is standardized acro
 - **Agent-specific tools** like Claude Code's plugin marketplace only work within one agent. If you use multiple agents, you need multiple tools.
 - **No universal installer** exists. There's no agent-agnostic, git-native way to install a skill from any source and make it available to any agent.
 - **No self-hosted option.** Want to share skills with your team, your open-source project, or a group of friends? There's no standard way to run your own skill catalog without signing up for a centralized service.
+- **No management layer.** Skills you've placed manually, cloned yourself, or inherited from teammates live outside any tracking system. There's no way to see what's installed, which ones are orphaned, or update them safely.
 
 skilltap fills that gap.
 
@@ -41,6 +42,8 @@ Skills are never written to disk until they pass scanning. You always see what w
 **Git-native.** Install from any git host -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. Point skilltap at any repo with a `SKILL.md` -- no special structure or manifest required. skilltap uses `git clone` under the hood, so your existing SSH keys and credential helpers just work.
 
 **Agent-agnostic.** Installs to the universal `.agents/skills/` directory. Opt in to symlinking to agent-specific directories (Claude Code, Cursor, Codex, Gemini, Windsurf) with a single flag.
+
+**Unified skill management.** `skilltap skills` shows every skill on your system — managed and unmanaged — across global and project scopes. Bring orphaned skills under management with `skilltap skills adopt`. Move a skill between global and project scope with `skilltap skills move`. Once adopted, skills get full source tracking, security scanning, and safe updates.
 
 **Source-tracked updates.** skilltap remembers where every skill came from. `skilltap update` fetches upstream changes, diffs what changed, re-scans the diff, and asks before applying — you see exactly what's landing on your system.
 
@@ -86,9 +89,21 @@ Install by name from a tap:
 skilltap install code-reviewer
 ```
 
+View all skills on your system — managed and unmanaged:
+
+```bash
+skilltap skills
+```
+
+Adopt skills you've placed manually into skilltap management:
+
+```bash
+skilltap skills adopt
+```
+
 ## Next steps
 
-- [Getting Started](./getting-started) -- install skilltap and your first skill
+- [Getting Started](./getting-started) -- install skilltap, your first skill, and adopt existing skills
 - [Installing Skills](./installing-skills) -- all the ways to install, with flags and options
 - [Taps](./taps) -- host your own tap and share skills with others
 - [Creating Skills](./creating-skills) -- write and publish your own skills
