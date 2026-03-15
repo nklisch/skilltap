@@ -153,13 +153,7 @@ describe("skilltap skills", () => {
     }
   });
 
-  test.skip("shows disabled skills with 'disabled' status label", async () => {
-    // TODO: spec violation — discoverSkills() does not scan into .agents/skills/.disabled/,
-    // so disabled skills (whose files were moved there) are not surfaced in the skills list.
-    // Fix: discoverSkills() should also scan .disabled/<name>/ entries and inject them as
-    // managed skills using the installed.json record. Until then, the list command only shows
-    // the .disabled directory itself as an orphaned unmanaged entry.
-    // Tracking: DESIGN-DISABLE-ENABLE.md Unit 9 — "Disabled skills sort to the bottom of their section"
+  test("shows disabled skills with 'disabled' status label", async () => {
     await saveInstalled({
       version: 1,
       skills: [
@@ -191,12 +185,7 @@ describe("skilltap skills", () => {
     expect(stdout.toLowerCase()).toContain("disabled");
   });
 
-  test.skip("--disabled flag filters to only disabled skills", async () => {
-    // TODO: spec violation — discoverSkills() does not scan .agents/skills/.disabled/,
-    // so disabled skills do not appear in discover results, and the --disabled filter
-    // returns an empty list instead of showing disabled skills.
-    // Fix: discoverSkills() must scan .disabled/ and inject managed entries from installed.json
-    // for skills whose active === false. See DESIGN-DISABLE-ENABLE.md Unit 9.
+  test("--disabled flag filters to only disabled skills", async () => {
     const activeSkillDir = join(homeDir, ".agents", "skills", "active-skill");
     await mkdir(activeSkillDir, { recursive: true });
     await Bun.write(join(activeSkillDir, "SKILL.md"), "---\nname: active-skill\n---\n");

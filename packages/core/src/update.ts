@@ -13,7 +13,7 @@ import {
   parseNpmSource,
   resolveVersion,
 } from "./npm-registry";
-import { skillCacheDir, skillInstallDir } from "./paths";
+import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
@@ -126,12 +126,13 @@ async function recopyMultiSkill(
   );
 }
 
-/** Remove and re-create agent symlinks for a skill (idempotent). */
+/** Remove and re-create agent symlinks for a skill (idempotent). Skips disabled skills. */
 async function refreshAgentSymlinks(
   record: InstalledSkill,
   projectRoot?: string,
 ): Promise<void> {
   if (record.also.length === 0) return;
+  if (record.active === false) return;
   const scope = record.scope as "global" | "project";
   await removeAgentSymlinks(record.name, record.also, scope, projectRoot);
   const installDir = skillInstallDir(record.name, scope, projectRoot);
@@ -244,11 +245,10 @@ async function updateNpmSkill(
     }
 
     // Replace the installed skill directory
-    const installDir = skillInstallDir(
-      record.name,
-      record.scope as "global" | "project",
-      options.projectRoot,
-    );
+    const npmEffectiveScope = record.scope as "global" | "project";
+    const installDir = record.active === false
+      ? skillDisabledDir(record.name, npmEffectiveScope, options.projectRoot)
+      : skillInstallDir(record.name, npmEffectiveScope, options.projectRoot);
     const rmResult = await wrapShell(
       () => $`rm -rf ${installDir}`.quiet().then(() => undefined),
       `Failed to remove old skill directory '${record.name}'`,
@@ -306,11 +306,10 @@ async function updateGitSkill(
   result: UpdateResult,
   _resolveTrust: ResolveTrustFn,
 ): Promise<Result<void, UserError | GitError | ScanError>> {
-  const workDir = skillInstallDir(
-    record.name,
-    record.scope as "global" | "project",
-    options.projectRoot,
-  );
+  const effectiveScope = record.scope as "global" | "project";
+  const workDir = record.active === false
+    ? skillDisabledDir(record.name, effectiveScope, options.projectRoot)
+    : skillInstallDir(record.name, effectiveScope, options.projectRoot);
 
   const fetchResult = await fetch(workDir);
   if (!fetchResult.ok) return fetchResult;

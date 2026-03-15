@@ -166,12 +166,7 @@ describe("skilltap skills disable/enable — full E2E roundtrip", () => {
     expect(loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active).toBe(true);
   });
 
-  test.skip("list shows 'disabled' after disable and 'managed' after enable", async () => {
-    // TODO: spec violation — discoverSkills() does not scan .agents/skills/.disabled/,
-    // so disabled skills don't appear in the `skills` list output. The list shows `.disabled`
-    // as an orphaned unmanaged entry rather than showing `roundtrip-skill` with disabled status.
-    // Fix: discoverSkills() must inject installed.json records with active=false into results.
-    // See DESIGN-DISABLE-ENABLE.md Unit 9.
+  test("list shows 'disabled' after disable and 'managed' after enable", async () => {
     await seedGlobalSkill("roundtrip-skill");
 
     const listBefore = await runSkilltap(["skills"], homeDir, configDir);

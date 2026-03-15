@@ -209,7 +209,18 @@ export async function discoverSkills(
     const agentsDir = join(base, ".agents", "skills");
     const agentsEntries = await readDirSafe(agentsDir);
     for (const name of agentsEntries) {
+      if (name === ".disabled") continue;
       await processEntry(name, join(agentsDir, name), {
+        type: "agents",
+        scope: "global",
+      });
+    }
+
+    // Scan .agents/skills/.disabled/ for disabled skills
+    const disabledDir = join(agentsDir, ".disabled");
+    const disabledEntries = await readDirSafe(disabledDir);
+    for (const name of disabledEntries) {
+      await processEntry(name, join(disabledDir, name), {
         type: "agents",
         scope: "global",
       });
@@ -237,7 +248,18 @@ export async function discoverSkills(
     const agentsDir = join(base, ".agents", "skills");
     const agentsEntries = await readDirSafe(agentsDir);
     for (const name of agentsEntries) {
+      if (name === ".disabled") continue;
       await processEntry(name, join(agentsDir, name), {
+        type: "agents",
+        scope: "project",
+      });
+    }
+
+    // Scan .agents/skills/.disabled/ for disabled skills
+    const disabledDir = join(agentsDir, ".disabled");
+    const disabledEntries = await readDirSafe(disabledDir);
+    for (const name of disabledEntries) {
+      await processEntry(name, join(disabledDir, name), {
         type: "agents",
         scope: "project",
       });
