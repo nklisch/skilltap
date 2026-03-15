@@ -78,6 +78,41 @@ describe("getConfigValue", () => {
     const r = getConfigValue(DEFAULT_CONFIG, "defaults.scope.deep");
     expect(r.ok).toBe(false);
   });
+
+  test("gets security.human section", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.human");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toEqual({ scan: "static", on_warn: "prompt", require_scan: false });
+  });
+
+  test("gets security.agent section", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.agent");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toEqual({ scan: "static", on_warn: "fail", require_scan: true });
+  });
+
+  test("gets security.agent.scan", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.agent.scan");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toBe("static");
+  });
+
+  test("gets security.overrides (empty array)", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.overrides");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toEqual([]);
+  });
+
+  test("gets security.agent_cli", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.agent_cli");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toBe("");
+  });
 });
 
 // ---------------------------------------------------------------------------

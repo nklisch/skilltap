@@ -65,4 +65,23 @@ describe("describeSecurityMode", () => {
       expect(desc).toStartWith(preset);
     }
   });
+
+  test("near-miss: strict but require_scan=false is custom", () => {
+    const result = describeSecurityMode({ scan: "semantic", on_warn: "fail", require_scan: false });
+    expect(result).toStartWith("custom");
+    expect(result).toContain("semantic");
+    expect(result).toContain("fail");
+    expect(result).not.toContain("require scan");
+  });
+
+  test("near-miss: standard but on_warn=fail is custom", () => {
+    const result = describeSecurityMode({ scan: "static", on_warn: "fail", require_scan: false });
+    expect(result).toStartWith("custom");
+  });
+
+  test("near-miss: relaxed but require_scan=true is custom", () => {
+    const result = describeSecurityMode({ scan: "static", on_warn: "allow", require_scan: true });
+    expect(result).toStartWith("custom");
+    expect(result).toContain("require scan");
+  });
 });

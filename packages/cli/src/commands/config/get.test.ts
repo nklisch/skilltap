@@ -96,4 +96,39 @@ describe("skilltap config get", () => {
     expect(stdout).toContain("defaults.scope =");
     expect(stdout).toContain("security.threshold = 5");
   });
+
+  test("gets security.agent.on_warn default", async () => {
+    const { exitCode, stdout } = await runGet(["security.agent.on_warn"], configDir);
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("fail");
+  });
+
+  test("gets security.agent.require_scan default", async () => {
+    const { exitCode, stdout } = await runGet(["security.agent.require_scan"], configDir);
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("true");
+  });
+
+  test("gets security.human.on_warn default", async () => {
+    const { exitCode, stdout } = await runGet(["security.human.on_warn"], configDir);
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("prompt");
+  });
+
+  test("gets security.agent_cli default", async () => {
+    const { exitCode, stdout } = await runGet(["security.agent_cli"], configDir);
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("");
+  });
+
+  test("gets security section as object", async () => {
+    const { exitCode, stdout } = await runGet(["security", "--json"], configDir);
+    expect(exitCode).toBe(0);
+    const sec = JSON.parse(stdout);
+    expect(sec.human).toBeDefined();
+    expect(sec.agent).toBeDefined();
+    expect(sec.human.scan).toBe("static");
+    expect(sec.agent.on_warn).toBe("fail");
+    expect(sec.overrides).toEqual([]);
+  });
 });

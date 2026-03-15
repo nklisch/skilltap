@@ -153,4 +153,86 @@ describe("skilltap config security (non-interactive)", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("No trust override found");
   });
+
+  test("--preset none --mode human only changes human mode", async () => {
+    const result = await runSecurity(["--preset", "none", "--mode", "human"], configDir);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("security.human = none");
+    expect(result.stdout).not.toContain("security.agent");
+
+    // Human should be none
+    expect(await runGet("security.human.scan", configDir)).toBe("off");
+    expect(await runGet("security.human.on_warn", configDir)).toBe("allow");
+    // Agent should still be default (strict-like defaults)
+    expect(await runGet("security.agent.on_warn", configDir)).toBe("fail");
+    expect(await runGet("security.agent.require_scan", configDir)).toBe("true");
+  });
+
+  test("--require-scan flag sets require_scan", async () => {
+    const result = await runSecurity(
+      ["--mode", "human", "--require-scan"],
+      configDir,
+    );
+    expect(result.exitCode).toBe(0);
+    expect(await runGet("security.human.require_scan", configDir)).toBe("true");
+  });
+
+  test("invalid --scan value exits 1", async () => {
+    const result = await runSecurity(["--scan", "turbo"], configDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Invalid scan");
+  });
+
+  test("invalid --on-warn value exits 1", async () => {
+    const result = await runSecurity(["--on-warn", "yolo"], configDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Invalid on-warn");
+  });
+
+  test("--trust with invalid preset in trust string exits 1", async () => {
+    const result = await runSecurity(["--trust", "tap:foo=bogus"], configDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Invalid --trust format");
+  });
+
+  test("--trust with invalid source type exits 1", async () => {
+    const result = await runSecurity(["--trust", "source:invalid=none"], configDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("Invalid --trust format");
+  });
+
+  test("--preset with --scan applies preset then overrides scan", async () => {
+    // Set relaxed first, then override scan to semantic
+    const result = await runSecurity(
+      ["--preset", "relaxed", "--scan", "semantic", "--mode", "human"],
+      configDir,
+    );
+    expect(result.exitCode).toBe(0);
+    // scan should be semantic (flag overrides preset), on_warn should be allow (from relaxed)
+    expect(await runGet("security.human.scan", configDir)).toBe("semantic");
+    expect(await runGet("security.human.on_warn", configDir)).toBe("allow");
+  });
+
+  test("multiple trust overrides can be added sequentially", async () => {
+    await runSecurity(["--trust", "tap:corp=none"], configDir);
+    await runSecurity(["--trust", "source:npm=strict"], configDir);
+
+    const { stdout } = await runGet("security", "--json", configDir) as unknown as { stdout: string };
+    // Verify via config get --json that both exist
+    const proc = Bun.spawn(
+      ["bun", "run", "--bun", "src/index.ts", "config", "get", "security", "--json"],
+      {
+        cwd: CLI_DIR,
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, XDG_CONFIG_HOME: configDir },
+      },
+    );
+    await proc.exited;
+    const secJson = JSON.parse(await new Response(proc.stdout).text());
+    expect(secJson.overrides).toHaveLength(2);
+    expect(secJson.overrides[0].match).toBe("corp");
+    expect(secJson.overrides[1].match).toBe("npm");
+  });
 });

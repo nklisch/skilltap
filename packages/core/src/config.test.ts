@@ -309,6 +309,34 @@ describe("migrateSecurityConfig", () => {
     const twice = migrateSecurityConfig(once);
     expect(twice).toEqual(once);
   });
+
+  test("partial v1 fields — only scan set, others get defaults", () => {
+    const raw = { security: { scan: "semantic" } };
+    const result = migrateSecurityConfig(raw);
+    const sec = result.security as Record<string, unknown>;
+    const human = sec.human as Record<string, unknown>;
+    // scan migrates, missing v1 fields don't block migration
+    expect(human.scan).toBe("semantic");
+  });
+
+  test("preserves non-security fields during migration", () => {
+    const raw = {
+      defaults: { yes: true, scope: "global" },
+      security: { scan: "static", on_warn: "prompt", require_scan: false },
+    };
+    const result = migrateSecurityConfig(raw);
+    expect((result.defaults as Record<string, unknown>).yes).toBe(true);
+    expect((result.defaults as Record<string, unknown>).scope).toBe("global");
+  });
+
+  test("v1 agent field with empty string moves to agent_cli", () => {
+    const raw = { security: { scan: "static", agent: "" } };
+    const result = migrateSecurityConfig(raw);
+    const sec = result.security as Record<string, unknown>;
+    expect(sec.agent_cli).toBe("");
+    // Old agent key (now used for per-mode config) should not be the empty string
+    expect(typeof sec.agent).not.toBe("string");
+  });
 });
 
 describe("loadConfig — migration integration", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ConfigSchema } from "./schemas/config";
-import { composePolicy, composePolicyForSource, resolveOverride } from "./policy";
+import { composePolicy, composePolicyForSource, mapAdapterToSourceType, resolveOverride } from "./policy";
 
 const baseConfig = () => ConfigSchema.parse({});
 
@@ -327,6 +327,37 @@ describe("resolveOverride", () => {
     );
     expect(result).toBe("relaxed");
   });
+
+  test("matches source type when no tapName provided", () => {
+    const result = resolveOverride(
+      [{ match: "git", kind: "source", preset: "relaxed" }],
+      { sourceType: "git" },
+    );
+    expect(result).toBe("relaxed");
+  });
+
+  test("first tap match wins when multiple tap overrides exist", () => {
+    const result = resolveOverride(
+      [
+        { match: "my-tap", kind: "tap", preset: "none" },
+        { match: "my-tap", kind: "tap", preset: "strict" },
+      ],
+      { tapName: "my-tap", sourceType: "tap" },
+    );
+    expect(result).toBe("none");
+  });
+
+  test("tap override ignores source type match for same source", () => {
+    // Has both a tap match and a source:tap match — tap name wins
+    const result = resolveOverride(
+      [
+        { match: "tap", kind: "source", preset: "strict" },
+        { match: "my-tap", kind: "tap", preset: "none" },
+      ],
+      { tapName: "my-tap", sourceType: "tap" },
+    );
+    expect(result).toBe("none");
+  });
 });
 
 describe("composePolicyForSource", () => {
@@ -391,5 +422,97 @@ describe("composePolicyForSource", () => {
     const result = composePolicyForSource(config, { skipScan: true }, { sourceType: "npm" });
     // "strict" has require_scan=true
     expect(result.ok).toBe(false);
+  });
+
+  test("--semantic flag overrides override preset scan=off", () => {
+    const config = baseWithOverrides();
+    // trusted-tap has "none" preset (scan=off), but --semantic should upgrade
+    const result = composePolicyForSource(config, { semantic: true }, {
+      tapName: "trusted-tap",
+      sourceType: "tap",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.scanMode).toBe("semantic");
+  });
+
+  test("--no-strict overrides override preset on_warn=fail", () => {
+    const config = baseWithOverrides();
+    // npm has "strict" preset (on_warn=fail), but --no-strict should override
+    const result = composePolicyForSource(config, { noStrict: true }, { sourceType: "npm" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.onWarn).toBe("prompt");
+  });
+
+  test("works in agent mode with override", () => {
+    const config = baseWithOverrides();
+    config["agent-mode"] = { enabled: true, scope: "project" };
+    // Agent mode + trusted-tap "none" override
+    const result = composePolicyForSource(config, {}, {
+      tapName: "trusted-tap",
+      sourceType: "tap",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // "none" preset from override: scan=off, on_warn=allow
+    expect(result.value.scanMode).toBe("off");
+    expect(result.value.onWarn).toBe("allow");
+    expect(result.value.agentMode).toBe(true);
+    expect(result.value.yes).toBe(true);
+  });
+
+  test("agent mode without override uses agent mode defaults", () => {
+    const config = baseWithOverrides();
+    config["agent-mode"] = { enabled: true, scope: "project" };
+    // "git" has no override
+    const result = composePolicyForSource(config, {}, { sourceType: "git" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Falls back to agent mode config: on_warn=fail, require_scan=true
+    expect(result.value.onWarn).toBe("fail");
+    expect(result.value.requireScan).toBe(true);
+  });
+
+  test("--skip-scan allowed when override preset has require_scan=false", () => {
+    const config = baseWithOverrides();
+    // trusted-tap has "none" preset (require_scan=false)
+    const result = composePolicyForSource(config, { skipScan: true }, {
+      tapName: "trusted-tap",
+      sourceType: "tap",
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.skipScan).toBe(true);
+  });
+});
+
+describe("mapAdapterToSourceType", () => {
+  test("npm adapter maps to npm", () => {
+    expect(mapAdapterToSourceType("npm")).toBe("npm");
+  });
+
+  test("local adapter maps to local", () => {
+    expect(mapAdapterToSourceType("local")).toBe("local");
+  });
+
+  test("tap adapter maps to tap", () => {
+    expect(mapAdapterToSourceType("tap")).toBe("tap");
+  });
+
+  test("git adapter maps to git", () => {
+    expect(mapAdapterToSourceType("git")).toBe("git");
+  });
+
+  test("github adapter maps to git", () => {
+    expect(mapAdapterToSourceType("github")).toBe("git");
+  });
+
+  test("http adapter maps to git", () => {
+    expect(mapAdapterToSourceType("http")).toBe("git");
+  });
+
+  test("unknown adapter maps to git (default)", () => {
+    expect(mapAdapterToSourceType("anything-else")).toBe("git");
   });
 });
