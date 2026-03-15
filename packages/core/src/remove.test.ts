@@ -9,7 +9,9 @@ import {
 } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
+import { disableSkill } from "./disable";
 import { installSkill } from "./install";
+import { skillDisabledDir } from "./paths";
 import { removeSkill } from "./remove";
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
@@ -187,6 +189,37 @@ describe("removeSkill — error cases", () => {
       const loaded = await loadInstalled();
       if (!loaded.ok) return;
       expect(loaded.value.skills).toHaveLength(1);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+});
+
+describe("removeSkill — disabled skill", () => {
+  test("removes a disabled skill (finds files in .disabled/, clears record)", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      // Disable it — moves files to .disabled/standalone-skill
+      const disableResult = await disableSkill("standalone-skill");
+      expect(disableResult.ok).toBe(true);
+
+      const disabledDir = skillDisabledDir("standalone-skill", "global");
+      expect(await lstat(disabledDir).then((s) => s.isDirectory())).toBe(true);
+
+      // Remove the (disabled) skill
+      const result = await removeSkill("standalone-skill", { scope: "global" });
+      expect(result.ok).toBe(true);
+
+      // .disabled/<name> directory is gone
+      expect(await lstat(disabledDir).catch(() => null)).toBeNull();
+
+      // Record removed from installed.json
+      const loaded = await loadInstalled();
+      expect(loaded.ok).toBe(true);
+      if (!loaded.ok) return;
+      expect(loaded.value.skills).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }

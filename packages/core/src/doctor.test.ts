@@ -168,6 +168,110 @@ describe("checkSkills", () => {
     expect(check.status).toBe("pass");
   });
 
+  test("does not false-positive on disabled skill (files in .disabled/, active=false)", async () => {
+    const skilltapDir = join(configDir, "skilltap");
+    await mkdir(skilltapDir, { recursive: true });
+
+    // Create the .disabled/<name> directory (where disabled skill files live)
+    const disabledDir = join(homeDir, ".agents", "skills", ".disabled", "my-skill");
+    await mkdir(disabledDir, { recursive: true });
+
+    await writeFile(
+      join(skilltapDir, "installed.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              name: "my-skill",
+              description: "",
+              repo: "https://github.com/example/my-skill",
+              ref: null,
+              sha: null,
+              scope: "global",
+              path: null,
+              tap: null,
+              also: [],
+              installedAt: "2024-01-01T00:00:00.000Z",
+              updatedAt: "2024-01-01T00:00:00.000Z",
+              active: false,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const result = await runDoctor();
+    const check = result.checks.find((c) => c.name === "skills")!;
+    // Disabled skill with correct .disabled/ dir should not trigger any issues
+    expect(check.status).toBe("pass");
+    expect(check.issues?.some((i) => i.message.includes("my-skill"))).toBeFalsy();
+  });
+
+  test("warns when disabled skill's .disabled/ directory is missing", async () => {
+    const skilltapDir = join(configDir, "skilltap");
+    await mkdir(skilltapDir, { recursive: true });
+
+    // Do NOT create the .disabled/<name> directory
+    await writeFile(
+      join(skilltapDir, "installed.json"),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              name: "missing-disabled",
+              description: "",
+              repo: "https://github.com/example/missing-disabled",
+              ref: null,
+              sha: null,
+              scope: "global",
+              path: null,
+              tap: null,
+              also: [],
+              installedAt: "2024-01-01T00:00:00.000Z",
+              updatedAt: "2024-01-01T00:00:00.000Z",
+              active: false,
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+    );
+
+    const result = await runDoctor();
+    const check = result.checks.find((c) => c.name === "skills")!;
+    // Disabled skill with missing .disabled/ dir should be flagged
+    expect(check.status).toBe("warn");
+    expect(check.issues?.some((i) => i.message.includes("missing-disabled"))).toBe(true);
+  });
+
+  test("does not report .disabled directory itself as an orphan in global skills dir", async () => {
+    const skilltapDir = join(configDir, "skilltap");
+    await mkdir(skilltapDir, { recursive: true });
+    await writeFile(
+      join(skilltapDir, "installed.json"),
+      JSON.stringify({ version: 1, skills: [] }, null, 2),
+    );
+
+    // Create .disabled/ inside .agents/skills/ — should not be flagged as an orphan
+    const disabledContainer = join(homeDir, ".agents", "skills", ".disabled");
+    await mkdir(disabledContainer, { recursive: true });
+    // Also put a skill inside .disabled/ to ensure the subdirectory isn't flagged
+    await mkdir(join(disabledContainer, "some-disabled-skill"), { recursive: true });
+
+    const result = await runDoctor();
+    const check = result.checks.find((c) => c.name === "skills")!;
+    // .disabled is excluded from orphan scan — should not appear as an issue
+    const orphanIssues = check.issues?.filter((i) =>
+      i.message.includes(".disabled"),
+    ) ?? [];
+    expect(orphanIssues).toHaveLength(0);
+  });
+
   test("warns on orphan record (skill in installed.json but not on disk)", async () => {
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });

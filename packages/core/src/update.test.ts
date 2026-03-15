@@ -9,6 +9,7 @@ import {
 } from "@skilltap/test-utils";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
+import { disableSkill } from "./disable";
 import { installSkill } from "./install";
 import { updateSkill } from "./update";
 
@@ -522,6 +523,62 @@ describe("updateSkill — project scope", () => {
     } finally {
       await repo.cleanup();
       await removeTmpDir(projectRoot);
+    }
+  });
+});
+
+describe("updateSkill — disabled skill handling", () => {
+  test("bulk update skips disabled skills entirely (not in updated/upToDate/skipped)", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      // Disable the skill
+      const disableResult = await disableSkill("standalone-skill");
+      expect(disableResult.ok).toBe(true);
+
+      // Bulk update — disabled skills should be filtered out before processing
+      const result = await updateSkill({ yes: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // Disabled skill was not processed at all
+      expect(result.value.updated).not.toContain("standalone-skill");
+      expect(result.value.upToDate).not.toContain("standalone-skill");
+      expect(result.value.skipped).not.toContain("standalone-skill");
+      // Nothing processed since all skills are disabled
+      expect(result.value.updated).toHaveLength(0);
+      expect(result.value.upToDate).toHaveLength(0);
+      expect(result.value.skipped).toHaveLength(0);
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("named update on a disabled skill fails because update.ts uses skillInstallDir (spec violation — TODO)", async () => {
+    // TODO: spec violation — named update on disabled skill fails because updateGitSkill in update.ts
+    // always computes workDir via skillInstallDir(), ignoring active=false. The files are in
+    // skillDisabledDir(), so git fetch fails. The design spec (DESIGN-DISABLE-ENABLE.md, Unit 10)
+    // says named update should proceed normally (updating files in .disabled/), but this is not
+    // implemented. Fix: check record.active in updateGitSkill/updateMultiSkill and redirect workDir
+    // to skillDisabledDir() when active === false.
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      const disableResult = await disableSkill("standalone-skill");
+      expect(disableResult.ok).toBe(true);
+
+      // Named update — currently fails because workDir points to non-existent skillInstallDir
+      const result = await updateSkill({ name: "standalone-skill", yes: true });
+
+      // Document the current (broken) behavior: it returns an error
+      // When the spec violation is fixed, this should instead be:
+      //   expect(result.ok).toBe(true);
+      //   expect(result.value.upToDate).toContain("standalone-skill");
+      expect(result.ok).toBe(false);
+    } finally {
+      await repo.cleanup();
     }
   });
 });

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { loadInstalled, saveInstalled } from "./config";
 import { disableSkill, enableSkill } from "./disable";
+import { skillDisabledDir, skillInstallDir } from "./paths";
 import { createAgentSymlinks } from "./symlink";
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
@@ -230,5 +231,115 @@ describe("enableSkill", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("not installed");
+  });
+});
+
+describe("disableSkill — project scope", () => {
+  test("disables a project-scoped skill — moves within project .agents/skills/.disabled/", async () => {
+    const projectRoot = await makeTmpDir();
+    try {
+      const skillDir = join(projectRoot, ".agents", "skills", "proj-skill");
+      await mkdir(skillDir, { recursive: true });
+      await Bun.write(join(skillDir, "SKILL.md"), "---\nname: proj-skill\n---\n");
+      await saveInstalled(
+        {
+          version: 1,
+          skills: [
+            {
+              name: "proj-skill",
+              description: "",
+              repo: "https://github.com/example/repo",
+              ref: "main",
+              sha: null,
+              scope: "project",
+              path: null,
+              tap: null,
+              also: [],
+              installedAt: NOW,
+              updatedAt: NOW,
+              active: true,
+            },
+          ],
+        },
+        projectRoot,
+      );
+
+      const result = await disableSkill("proj-skill", { scope: "project", projectRoot });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+
+      // Files moved to project .disabled/
+      expect(await lstat(skillDir).catch(() => null)).toBeNull();
+      const disabledDir = skillDisabledDir("proj-skill", "project", projectRoot);
+      expect(await lstat(disabledDir).then((s) => s.isDirectory())).toBe(true);
+
+      // Record updated
+      const loaded = await loadInstalled(projectRoot);
+      expect(loaded.ok).toBe(true);
+      if (!loaded.ok) return;
+      const record = loaded.value.skills.find((s) => s.name === "proj-skill");
+      expect(record?.active).toBe(false);
+    } finally {
+      await removeTmpDir(projectRoot);
+    }
+  });
+});
+
+describe("enableSkill — project scope", () => {
+  test("enables a disabled project-scoped skill — moves back from project .disabled/", async () => {
+    const projectRoot = await makeTmpDir();
+    try {
+      const skillDir = join(projectRoot, ".agents", "skills", "proj-skill");
+      await mkdir(skillDir, { recursive: true });
+      await Bun.write(join(skillDir, "SKILL.md"), "---\nname: proj-skill\n---\n");
+      await saveInstalled(
+        {
+          version: 1,
+          skills: [
+            {
+              name: "proj-skill",
+              description: "",
+              repo: "https://github.com/example/repo",
+              ref: "main",
+              sha: null,
+              scope: "project",
+              path: null,
+              tap: null,
+              also: [],
+              installedAt: NOW,
+              updatedAt: NOW,
+              active: true,
+            },
+          ],
+        },
+        projectRoot,
+      );
+
+      // First disable
+      const disableResult = await disableSkill("proj-skill", { scope: "project", projectRoot });
+      expect(disableResult.ok).toBe(true);
+
+      const disabledDir = skillDisabledDir("proj-skill", "project", projectRoot);
+      expect(await lstat(disabledDir).catch(() => null)).not.toBeNull();
+      expect(await lstat(skillDir).catch(() => null)).toBeNull();
+
+      // Now enable
+      const enableResult = await enableSkill("proj-skill", { scope: "project", projectRoot });
+      expect(enableResult.ok).toBe(true);
+      if (!enableResult.ok) return;
+
+      // Files moved back
+      expect(await lstat(skillDir).then((s) => s.isDirectory())).toBe(true);
+      expect(await lstat(disabledDir).catch(() => null)).toBeNull();
+
+      // Record updated
+      const loaded = await loadInstalled(projectRoot);
+      expect(loaded.ok).toBe(true);
+      if (!loaded.ok) return;
+      const record = loaded.value.skills.find((s) => s.name === "proj-skill");
+      expect(record?.active).toBe(true);
+    } finally {
+      await removeTmpDir(projectRoot);
+    }
   });
 });
