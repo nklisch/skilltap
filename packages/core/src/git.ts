@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { $ } from "bun";
 import { debug } from "./debug";
 import { extractStderr } from "./shell";
@@ -14,6 +15,47 @@ export type CloneOptions = {
   branch?: string;
   depth?: number;
 };
+
+export type CloneResult = {
+  /** The URL that was actually used to clone (may differ from input if fallback succeeded). */
+  effectiveUrl: string;
+};
+
+export function flipUrlProtocol(url: string): string | null {
+  // HTTPS → SSH scp-style
+  const httpsMatch = url.match(/^https:\/\/([^/]+)\/(.+?)(?:\.git)?$/);
+  if (httpsMatch) {
+    const [, host, path] = httpsMatch;
+    return `git@${host}:${path}.git`;
+  }
+
+  // SSH scp-style → HTTPS
+  const sshScpMatch = url.match(/^git@([^:]+):(.+?)(?:\.git)?$/);
+  if (sshScpMatch) {
+    const [, host, path] = sshScpMatch;
+    return `https://${host}/${path}.git`;
+  }
+
+  // SSH URL → HTTPS
+  const sshUrlMatch = url.match(/^ssh:\/\/git@([^/]+)\/(.+?)(?:\.git)?$/);
+  if (sshUrlMatch) {
+    const [, host, path] = sshUrlMatch;
+    return `https://${host}/${path}.git`;
+  }
+
+  return null;
+}
+
+const AUTH_PATTERNS = [
+  "Authentication failed",
+  "Permission denied",
+  "Could not read from remote repository",
+  "terminal prompts disabled",
+];
+
+function isAuthError(error: GitError): boolean {
+  return AUTH_PATTERNS.some((p) => error.message.includes(p));
+}
 
 async function wrapGit<T>(
   fn: () => Promise<T>,
@@ -39,7 +81,7 @@ export async function checkGitInstalled(): Promise<Result<void, GitError>> {
   );
 }
 
-export async function clone(
+async function tryClone(
   url: string,
   dest: string,
   opts?: CloneOptions,
@@ -80,6 +122,31 @@ export async function clone(
       ),
     );
   }
+}
+
+export async function clone(
+  url: string,
+  dest: string,
+  opts?: CloneOptions,
+): Promise<Result<CloneResult, GitError>> {
+  const result = await tryClone(url, dest, opts);
+  if (result.ok) return ok({ effectiveUrl: url });
+
+  if (!isAuthError(result.error)) return result;
+
+  const alt = flipUrlProtocol(url);
+  if (!alt) return result;
+
+  debug("auth failed, retrying with alternate URL", { original: url, fallback: alt });
+
+  // Clean partial clone before retry
+  await rm(dest, { recursive: true, force: true }).catch(() => {});
+
+  const retryResult = await tryClone(alt, dest, opts);
+  if (retryResult.ok) return ok({ effectiveUrl: alt });
+
+  // Both failed — return original error (more informative)
+  return result;
 }
 
 export async function syncRemoteUrl(dir: string, url: string): Promise<Result<void, GitError>> {

@@ -266,8 +266,9 @@ async function executePlacements(params: {
   finalRef: string | undefined;
   trust: TrustInfo | undefined;
   sourceKey: string | undefined;
+  cloneUrl?: string;
 }): Promise<InstalledSkill[]> {
-  const { placements, resolved, sha, options, also, now, effectiveTap, finalRef, trust, sourceKey } = params;
+  const { placements, resolved, sha, options, also, now, effectiveTap, finalRef, trust, sourceKey, cloneUrl } = params;
   const records: InstalledSkill[] = [];
 
   for (const { skill, srcPath, relPath, destDir, useMove } of placements) {
@@ -286,7 +287,7 @@ async function executePlacements(params: {
     if (!shellResult.ok) throw shellResult.error;
     await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot);
     records.push(
-      makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey),
+      makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey, cloneUrl),
     );
   }
 
@@ -349,11 +350,12 @@ function makeRecord(
   effectiveRef: string | undefined,
   trust: TrustInfo | undefined,
   sourceKey?: string,
+  repoUrl?: string,
 ): InstalledSkill {
   return {
     name: skill.name,
     description: skill.description,
-    repo: sourceKey ?? resolved.url,
+    repo: sourceKey ?? repoUrl ?? resolved.url,
     ref: effectiveRef ?? null,
     sha,
     scope: options.scope,
@@ -416,6 +418,7 @@ export async function installSkill(
     // contentDir: actual root of skill content (differs for npm due to package/ subdir)
     let contentDir: string;
     let sha: string | null;
+    let cloneUrl: string | undefined;
 
     if (resolved.adapter === "npm" || resolved.adapter === "http") {
       const extractResult = await downloadAndExtract(
@@ -432,6 +435,7 @@ export async function installSkill(
         depth: 1,
       });
       if (!cloneResult.ok) return cloneResult;
+      cloneUrl = cloneResult.value.effectiveUrl;
       contentDir = tmpDir;
 
       const shaResult = await revParse(tmpDir);
@@ -566,7 +570,7 @@ export async function installSkill(
     });
     const newRecords = await executePlacements({
       placements, resolved, sha, options, also, now,
-      effectiveTap, finalRef, trust, sourceKey,
+      effectiveTap, finalRef, trust, sourceKey, cloneUrl,
     });
 
     debug("placements complete", { installed: newRecords.map((r) => r.name) });

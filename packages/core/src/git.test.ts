@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { createStandaloneSkillRepo } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { makeTmpDir, removeTmpDir } from "./fs";
-import { checkGitInstalled, clone, diff, fetch, log, lsRemoteTags, pull, revParse } from "./git";
+import { checkGitInstalled, clone, diff, fetch, flipUrlProtocol, log, lsRemoteTags, pull, revParse } from "./git";
 
 describe("checkGitInstalled", () => {
   test("returns ok when git is on PATH", async () => {
@@ -36,6 +36,8 @@ describe("clone", () => {
 
     const result = await clone(repo.path, `${dest}/clone`);
     expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.effectiveUrl).toBe(repo.path);
 
     const skillMd = Bun.file(`${dest}/clone/SKILL.md`);
     expect(await skillMd.exists()).toBe(true);
@@ -269,5 +271,53 @@ describe("diff", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toBe("");
+  });
+});
+
+describe("flipUrlProtocol", () => {
+  test("converts HTTPS to SSH scp-style", () => {
+    expect(flipUrlProtocol("https://github.com/owner/repo.git")).toBe(
+      "git@github.com:owner/repo.git",
+    );
+  });
+
+  test("converts HTTPS without .git suffix and adds .git", () => {
+    expect(flipUrlProtocol("https://github.com/owner/repo")).toBe(
+      "git@github.com:owner/repo.git",
+    );
+  });
+
+  test("converts SSH scp-style to HTTPS", () => {
+    expect(flipUrlProtocol("git@github.com:owner/repo.git")).toBe(
+      "https://github.com/owner/repo.git",
+    );
+  });
+
+  test("converts SSH URL (ssh://git@...) to HTTPS", () => {
+    expect(flipUrlProtocol("ssh://git@github.com/owner/repo.git")).toBe(
+      "https://github.com/owner/repo.git",
+    );
+  });
+
+  test("handles GitLab nested group path", () => {
+    expect(flipUrlProtocol("https://gitlab.com/group/sub/repo.git")).toBe(
+      "git@gitlab.com:group/sub/repo.git",
+    );
+    expect(flipUrlProtocol("git@gitlab.com:group/sub/repo.git")).toBe(
+      "https://gitlab.com/group/sub/repo.git",
+    );
+  });
+
+  test("returns null for local paths", () => {
+    expect(flipUrlProtocol("/local/path/repo")).toBeNull();
+    expect(flipUrlProtocol("./relative/repo")).toBeNull();
+  });
+
+  test("returns null for npm: sources", () => {
+    expect(flipUrlProtocol("npm:@scope/pkg")).toBeNull();
+  });
+
+  test("returns null for http:// URLs", () => {
+    expect(flipUrlProtocol("http://example.com/repo.git")).toBeNull();
   });
 });

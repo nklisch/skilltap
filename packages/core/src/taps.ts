@@ -119,7 +119,8 @@ export async function ensureBuiltinTap(): Promise<Result<void, UserError | GitEr
   if (!gitCheck.ok) return gitCheck;
 
   const cloneResult = await clone(BUILTIN_TAP.url, dir, { depth: 1 });
-  return cloneResult;
+  if (!cloneResult.ok) return cloneResult;
+  return ok(undefined);
 }
 
 export async function addTap(
@@ -170,6 +171,7 @@ export async function addTap(
   const dest = tapDir(name);
   const cloneResult = await clone(url, dest, { depth: 1 });
   if (!cloneResult.ok) return cloneResult;
+  const effectiveUrl = cloneResult.value.effectiveUrl;
 
   const tapResult = await loadTapJson(dest, name);
   if (!tapResult.ok) {
@@ -177,7 +179,7 @@ export async function addTap(
     return tapResult;
   }
 
-  config.taps.push({ name, url, type: "git" });
+  config.taps.push({ name, url: effectiveUrl, type: "git" });
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) return saveResult;
 
@@ -308,6 +310,10 @@ export async function updateTap(
       // Self-heal: clone fresh from config URL
       const cloneResult = await clone(tap.url, dir, { depth: 1 });
       if (!cloneResult.ok) return cloneResult;
+      if (cloneResult.value.effectiveUrl !== tap.url) {
+        tap.url = cloneResult.value.effectiveUrl;
+        await saveConfig(config);
+      }
     } else {
       // Sync remote URL to match config (handles URL changes), then pull
       await syncRemoteUrl(dir, tap.url);
