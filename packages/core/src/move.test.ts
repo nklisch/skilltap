@@ -186,6 +186,38 @@ describe("moveSkill", () => {
     }
   });
 
+  test("merges existing also with new also option", async () => {
+    const repo = await createStandaloneSkillRepo();
+    const projectRoot = await makeTmpDir();
+    try {
+      await $`git -C ${projectRoot} init`.quiet();
+
+      // Install globally with also: ["claude-code"]
+      const installResult = await installSkill(repo.path, {
+        scope: "global",
+        skipScan: true,
+        also: ["claude-code"],
+      });
+      expect(installResult.ok).toBe(true);
+
+      // Move to project, adding "cursor" to also
+      const moveResult = await moveSkill("standalone-skill", {
+        to: { scope: "project", projectRoot },
+        also: ["cursor"],
+      });
+
+      expect(moveResult.ok).toBe(true);
+      if (!moveResult.ok) return;
+
+      // The merged also should contain both agents
+      expect(moveResult.value.record.also).toContain("claude-code");
+      expect(moveResult.value.record.also).toContain("cursor");
+    } finally {
+      await repo.cleanup();
+      await removeTmpDir(projectRoot);
+    }
+  });
+
   test("errors if already in target scope", async () => {
     const repo = await createStandaloneSkillRepo();
     try {

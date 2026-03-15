@@ -305,4 +305,73 @@ describe("discoverSkills", () => {
       await removeTmpDir(projectRoot);
     }
   });
+
+  test("detects git remote on unmanaged skill", async () => {
+    const skillDir = join(homeDir, ".agents", "skills", "git-skill");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      `---\nname: git-skill\ndescription: A git skill\n---\n# Git Skill\n`,
+    );
+    await $`git -C ${skillDir} init`.quiet();
+    await $`git -C ${skillDir} remote add origin https://github.com/test/repo.git`.quiet();
+
+    const result = await discoverSkills({ global: true, project: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const skill = result.value.skills.find((s) => s.name === "git-skill");
+    expect(skill).toBeDefined();
+    expect(skill?.gitRemote).toBe("https://github.com/test/repo.git");
+  });
+
+  test("populates symlinkTarget for symlinked locations", async () => {
+    const realDir = join(homeDir, ".agents", "skills", "foo");
+    await mkdir(realDir, { recursive: true });
+    await Bun.write(
+      join(realDir, "SKILL.md"),
+      `---\nname: foo\ndescription: Foo skill\n---\n# Foo\n`,
+    );
+
+    const claudeSkillsDir = join(homeDir, ".claude", "skills");
+    await mkdir(claudeSkillsDir, { recursive: true });
+    const linkPath = join(claudeSkillsDir, "foo");
+    await symlink(realDir, linkPath, "dir");
+
+    const result = await discoverSkills({ global: true, project: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const skill = result.value.skills.find((s) => s.name === "foo");
+    expect(skill).toBeDefined();
+    if (!skill) return;
+
+    const symlinkLoc = skill.locations.find((l) => l.isSymlink);
+    expect(symlinkLoc).toBeDefined();
+    expect(symlinkLoc?.symlinkTarget).toBe(realDir);
+  });
+
+  test("returns empty result when no skills exist", async () => {
+    const result = await discoverSkills({ global: true, project: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.skills).toEqual([]);
+    expect(result.value.managed).toBe(0);
+    expect(result.value.unmanaged).toBe(0);
+  });
+
+  test("parses description from SKILL.md without frontmatter", async () => {
+    const skillDir = join(homeDir, ".agents", "skills", "no-frontmatter");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(join(skillDir, "SKILL.md"), `# My Skill\n\nSome content.\n`);
+
+    const result = await discoverSkills({ global: true, project: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const skill = result.value.skills.find((s) => s.name === "no-frontmatter");
+    expect(skill).toBeDefined();
+    expect(skill?.description).toBe("");
+  });
 });

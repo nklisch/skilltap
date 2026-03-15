@@ -8,7 +8,8 @@ import {
 } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { installSkill } from "@skilltap/core";
+import { installSkill, loadInstalled } from "@skilltap/core";
+import { $ } from "bun";
 import {
   createStandaloneSkillRepo,
   makeTmpDir,
@@ -46,6 +47,44 @@ async function createUnmanagedSkill(home: string, name: string) {
 }
 
 describe("skilltap skills", () => {
+  test("shows empty state message when no skills", async () => {
+    const { exitCode, stdout } = await runSkilltap(["skills"], homeDir, configDir);
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("No skills found");
+  });
+
+  test("--project shows only project skills", async () => {
+    const repo = await createStandaloneSkillRepo();
+    const projectRoot = await makeTmpDir();
+    try {
+      await $`git -C ${projectRoot} init`.quiet();
+
+      // Install global skill
+      await installSkill(repo.path, { scope: "global", skipScan: true });
+
+      // Create an unmanaged project-scoped skill
+      const projectSkillDir = join(projectRoot, ".agents", "skills", "project-only");
+      await mkdir(projectSkillDir, { recursive: true });
+      await Bun.write(
+        join(projectSkillDir, "SKILL.md"),
+        `---\nname: project-only\ndescription: A project skill\n---\n# Project Only\n`,
+      );
+
+      const { exitCode, stdout } = await runSkilltap(
+        ["skills", "--project"],
+        homeDir,
+        configDir,
+        projectRoot,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("project-only");
+      expect(stdout).not.toContain("standalone-skill");
+    } finally {
+      await repo.cleanup();
+      await removeTmpDir(projectRoot);
+    }
+  });
+
   test("shows unified view with managed and unmanaged skills", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
@@ -111,6 +150,31 @@ describe("skilltap skills adopt", () => {
     expect(exitCode).toBe(0);
     expect(stdout).toContain("Adopted");
     expect(stdout).toContain("adopt-me");
+  });
+
+  test("--track-in-place creates linked record", async () => {
+    const skillDir = join(homeDir, ".claude", "skills", "track-me");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      `---\nname: track-me\ndescription: A track-in-place skill\n---\n# Track Me\n`,
+    );
+
+    const { exitCode, stdout } = await runSkilltap(
+      ["skills", "adopt", "track-me", "--global", "--track-in-place", "--skip-scan"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout).toContain("track-me");
+
+    // Verify installed.json has a linked record
+    const loaded = await loadInstalled();
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    const record = loaded.value.skills.find((s) => s.name === "track-me");
+    expect(record).toBeDefined();
+    expect(record?.scope).toBe("linked");
   });
 });
 
