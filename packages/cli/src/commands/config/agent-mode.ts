@@ -3,11 +3,25 @@ import {
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../../ui/footer";
-import { AGENT_LABELS, loadConfig, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
+import { AGENT_LABELS, loadConfig, PRESET_VALUES, SECURITY_PRESETS, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
 import { SCAN_MODE_OPTIONS } from "../../ui/prompts";
 import { defineCommand } from "citty";
 import { errorLine } from "../../ui/format";
 import { selectAgentForConfig } from "../../ui/prompts";
+
+const PRESET_OPTIONS = [
+  { value: "none", label: "None", hint: "no scanning" },
+  { value: "relaxed", label: "Relaxed", hint: "static scan, ignore warnings" },
+  { value: "standard", label: "Standard", hint: "static scan, ask on warnings (Recommended)" },
+  { value: "strict", label: "Strict", hint: "static + semantic scan, block on warnings" },
+  { value: "custom", label: "Custom", hint: "set individual options" },
+];
+
+const ON_WARN_OPTIONS = [
+  { value: "prompt", label: "Ask me (prompt)" },
+  { value: "fail", label: "Always block (fail)" },
+  { value: "allow", label: "Ignore warnings (allow)" },
+];
 
 export default defineCommand({
   meta: {
@@ -35,9 +49,8 @@ export default defineCommand({
     note(
       "Agent mode changes how skilltap behaves when called by AI agents:\n" +
         "  - All prompts auto-accept or hard-fail (no interactive input)\n" +
-        "  - Security warnings always block installation\n" +
-        "  - Security scanning cannot be skipped\n" +
-        "  - Output is plain text (no colors or spinners)",
+        "  - Output is plain text (no colors or spinners)\n" +
+        "  - Security behavior is governed by the agent security profile",
       "What is agent mode?",
     );
 
@@ -91,18 +104,49 @@ export default defineCommand({
             required: false,
           }),
 
-        scan: () =>
+        preset: () =>
           select({
-            message: "Security scan level for agent installs?",
-            options: SCAN_MODE_OPTIONS.filter(o => o.value !== "off"),
-            initialValue:
-              config.security.scan === "off" ? "static" : config.security.scan,
+            message: "Security preset for agent mode?",
+            options: PRESET_OPTIONS,
+            initialValue: "strict",
           }),
 
-        agent: ({ results }) => {
-          if (results.scan !== "semantic")
-            return Promise.resolve(config.security.agent);
-          return selectAgentForConfig(config.security.agent);
+        scan: ({ results }) => {
+          if (results.preset !== "custom") return Promise.resolve(undefined);
+          return select({
+            message: "Scan level for agent installs?",
+            options: SCAN_MODE_OPTIONS,
+            initialValue: config.security.agent.scan,
+          });
+        },
+
+        onWarn: ({ results }) => {
+          if (results.preset !== "custom") return Promise.resolve(undefined);
+          return select({
+            message: "When warnings are found?",
+            options: ON_WARN_OPTIONS,
+            initialValue: config.security.agent.on_warn,
+          });
+        },
+
+        requireScan: ({ results }) => {
+          if (results.preset !== "custom") return Promise.resolve(undefined);
+          return select({
+            message: "Require scanning? (block --skip-scan)",
+            options: [
+              { value: true, label: "Yes" },
+              { value: false, label: "No" },
+            ],
+            initialValue: config.security.agent.require_scan,
+          });
+        },
+
+        agentCli: ({ results }) => {
+          const needsSemantic =
+            results.preset === "strict" ||
+            (results.preset === "custom" && results.scan === "semantic");
+          if (!needsSemantic) return Promise.resolve(config.security.agent_cli);
+          return selectAgentForConfig(config.security.agent_cli);
         },
       },
       {
@@ -118,8 +162,19 @@ export default defineCommand({
       scope: settings.scope as "global" | "project",
     };
     config.defaults.also = settings.also as string[];
-    config.security.scan = settings.scan as "static" | "semantic";
-    if (settings.agent) config.security.agent = settings.agent as string;
+
+    if (settings.preset !== "custom") {
+      const preset = settings.preset as (typeof SECURITY_PRESETS)[number];
+      config.security.agent = { ...PRESET_VALUES[preset] };
+    } else {
+      config.security.agent = {
+        scan: settings.scan as "static" | "semantic" | "off",
+        on_warn: settings.onWarn as "prompt" | "fail" | "allow",
+        require_scan: settings.requireScan as boolean,
+      };
+    }
+
+    if (settings.agentCli) config.security.agent_cli = settings.agentCli as string;
 
     const saveResult = await saveConfig(config);
     if (!saveResult.ok) {
@@ -127,10 +182,12 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const scanLabel =
-      settings.scan === "semantic" ? "static + semantic" : "static";
+    const preset = settings.preset as string;
+    const scanLabel = preset !== "custom"
+      ? preset
+      : `${settings.scan as string}`;
     outro(
-      `Agent mode enabled\n  Scope: ${settings.scope}\n  Security: ${scanLabel}, strict`,
+      `Agent mode enabled\n  Scope: ${settings.scope as string}\n  Security: ${scanLabel}`,
     );
   },
 });

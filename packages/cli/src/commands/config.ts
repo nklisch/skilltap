@@ -1,13 +1,12 @@
-import { cancel, group, intro, isCancel, outro } from "@clack/prompts";
+import { cancel, group, intro, isCancel, note, outro } from "@clack/prompts";
 import {
   footerConfirm as confirm,
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../ui/footer";
-import { AGENT_LABELS, type Config, getConfigDir, loadConfig, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
+import { AGENT_LABELS, type Config, describeSecurityMode, getConfigDir, loadConfig, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { errorLine } from "../ui/format";
-import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../ui/prompts";
 
 export default defineCommand({
   meta: {
@@ -23,6 +22,7 @@ export default defineCommand({
   },
   subCommands: {
     "agent-mode": () => import("./config/agent-mode").then((m) => m.default),
+    security: () => import("./config/security").then((m) => m.default),
     telemetry: () => import("./config/telemetry").then((m) => m.default),
     get: () => import("./config/get").then((m) => m.default),
     set: () => import("./config/set").then((m) => m.default),
@@ -56,6 +56,13 @@ export default defineCommand({
 
     intro("Welcome to skilltap setup!");
 
+    note(
+      `Human: ${describeSecurityMode(existing.security.human)}\n` +
+        `Agent: ${describeSecurityMode(existing.security.agent)}\n` +
+        `Run 'skilltap config security' to change.`,
+      "Security",
+    );
+
     const result = await group(
       {
         scope: () =>
@@ -75,29 +82,6 @@ export default defineCommand({
             options: VALID_AGENT_IDS.map(id => ({ value: id, label: AGENT_LABELS[id] ?? id })),
             initialValues: existing.defaults.also,
             required: false,
-          }),
-
-        scan: () =>
-          select({
-            message: "Security scan level?",
-            options: SCAN_MODE_OPTIONS,
-            initialValue: existing.security.scan,
-          }),
-
-        agent: ({ results }) => {
-          if (results.scan !== "semantic")
-            return Promise.resolve(existing.security.agent);
-          return selectAgentForConfig(existing.security.agent);
-        },
-
-        onWarn: () =>
-          select({
-            message: "When security warnings are found?",
-            options: [
-              { value: "prompt", label: "Ask me to decide" },
-              { value: "fail", label: "Always block (strict)" },
-            ],
-            initialValue: existing.security.on_warn,
           }),
 
         showDiff: () =>
@@ -151,12 +135,6 @@ export default defineCommand({
         ...existing.defaults,
         scope: result.scope as "" | "global" | "project",
         also: result.also as string[],
-      },
-      security: {
-        ...existing.security,
-        scan: result.scan as "static" | "semantic" | "off",
-        on_warn: result.onWarn as "prompt" | "fail",
-        agent: result.agent as string,
       },
       registry: {
         ...existing.registry,
