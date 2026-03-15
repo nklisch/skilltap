@@ -569,7 +569,7 @@ skilltap config get defaults.also
 skilltap config get --json
 # → { "defaults": { ... }, "security": { ... }, ... }
 
-skilltap config get security.scan --json
+skilltap config get security.human.scan --json
 # → "static"
 ```
 
@@ -583,7 +583,7 @@ Set config values. Non-interactive — safe for agents and scripts.
 skilltap config set <key> <value...>
 ```
 
-Only preference keys are settable. Security policy keys (`security.scan`, `security.on_warn`, `security.require_scan`, `security.max_size`, `security.threshold`), agent mode keys, and telemetry keys are blocked with hints pointing to the appropriate command.
+Only preference keys are settable. Per-mode security policy keys (`security.human.*`, `security.agent.*`), trust overrides, agent mode, and telemetry keys are blocked with hints pointing to the appropriate command.
 
 ### Settable Keys
 
@@ -592,10 +592,13 @@ Only preference keys are settable. Security policy keys (`security.scan`, `secur
 | `defaults.scope` | enum | `""`, `"global"`, `"project"` |
 | `defaults.also` | string[] | Agent names (variadic; omit values to clear) |
 | `defaults.yes` | boolean | `true`/`false`/`yes`/`no`/`1`/`0` |
-| `security.agent` | string | Agent CLI name or absolute path |
+| `security.agent_cli` | string | Agent CLI name or absolute path |
 | `security.ollama_model` | string | Model name |
+| `security.threshold` | number | 0-10 |
+| `security.max_size` | number | Positive integer |
 | `updates.auto_update` | enum | `"off"`, `"patch"`, `"minor"` |
 | `updates.interval_hours` | number | Positive integer |
+| `updates.show_diff` | enum | `"full"`, `"stat"`, `"none"` |
 
 ### Behavior
 
@@ -616,6 +619,57 @@ skilltap config set updates.auto_update patch
 skilltap config set agent-mode.enabled true
 # error: 'agent-mode.enabled' cannot be set via 'config set'
 # hint: Use 'skilltap config agent-mode'
+
+skilltap config set security.human.scan off
+# error: 'security.human.scan' cannot be set via 'config set'
+# hint: Use 'skilltap config security'
+```
+
+---
+
+## skilltap config security
+
+Configure security settings per mode (human/agent) with optional trust tier overrides.
+
+```
+skilltap config security [flags]
+```
+
+**Interactive** (no flags, requires TTY): Walks through mode selection, preset or custom settings, trust overrides, and a summary before saving.
+
+**Non-interactive** (flags provided): Applies settings directly.
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--preset` | string | Apply a named preset: `none`, `relaxed`, `standard`, `strict` |
+| `--mode` | string | Which mode to configure: `human`, `agent`, `both` (default: `both`) |
+| `--scan` | string | Scan level: `static`, `semantic`, `off` |
+| `--on-warn` | string | Warning behavior: `prompt`, `fail`, `allow` |
+| `--require-scan` | boolean | Block `--skip-scan` |
+| `--trust` | string | Add trust override: `tap:<name>=<preset>` or `source:<type>=<preset>` |
+| `--remove-trust` | string | Remove a trust override by match name |
+
+### Examples
+
+```bash
+# Interactive wizard
+skilltap config security
+
+# Apply preset to both modes
+skilltap config security --preset standard
+
+# Apply preset to agent mode only
+skilltap config security --preset strict --mode agent
+
+# Set individual fields
+skilltap config security --mode human --scan off --on-warn allow
+
+# Trust overrides
+skilltap config security --trust tap:my-company=none
+skilltap config security --trust source:npm=strict
+skilltap config security --remove-trust my-company
 ```
 
 ---
@@ -637,7 +691,7 @@ The wizard prompts for:
 1. Enable or disable agent mode
 2. Default scope for agent installs (project recommended / global)
 3. Auto-symlink agent selection
-4. Security scan level (static / static + semantic; "off" is not offered)
+4. Security preset for agent mode (none / relaxed / standard / strict / custom)
 5. Agent CLI for scanning (if semantic selected)
 
 ### What Agent Mode Does
@@ -645,12 +699,11 @@ The wizard prompts for:
 When enabled, all skilltap commands behave differently:
 
 - All prompts auto-accept or hard-fail (no interactive input)
-- Security warnings always block installation (`on_warn = "fail"`)
-- Security scanning cannot be skipped (`require_scan = true`)
+- Uses `[security.agent]` settings (fully configurable, defaults to strict)
 - Output is plain text (no colors, spinners, or Unicode)
 - Security failures emit a directive message telling the agent to stop
 
-These constraints are **not overridable** via CLI flags.
+Agent mode toggling is **not overridable** via CLI flags. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
 
 ### Non-TTY Error
 

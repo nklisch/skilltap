@@ -247,12 +247,12 @@ st install USER/REPO --global --yes --skip-scan
 ```bash
 # First set require_scan=true in config
 # Edit $XDG_CONFIG_HOME/skilltap/config.toml:
-# [security]
+# [security.human]
 # require_scan = true
 
 st install USER/REPO --global --yes --skip-scan
 ```
-**Expect:** Error: `--skip-scan is not allowed when security.require_scan is enabled`.
+**Expect:** Error: `--skip-scan is not allowed when require_scan is enabled`.
 
 ### 3.4 Static scan with warnings — prompt to proceed
 
@@ -310,18 +310,18 @@ st install /tmp/injected-skill --global --semantic
 ```
 **Expect:** Tag injection flagged at score 10/10. Hard block with security directive.
 
-### 3.9 security.scan="semantic" in config
+### 3.9 security.human.scan="semantic" in config
 
 ```bash
-# Set scan = "semantic" in config
+# Set security.human.scan = "semantic" in config
 st install USER/REPO --global --yes
 ```
 **Expect:** Runs both static and semantic automatically.
 
-### 3.10 security.on_warn="fail" in config
+### 3.10 security.human.on_warn="fail" in config
 
 ```bash
-# Set on_warn = "fail" in config
+# Set security.human.on_warn = "fail" in config
 st install /tmp/warned-skill --global --yes
 ```
 **Expect:** Hard failure on any warning without prompting. Exit 1.
@@ -1411,7 +1411,7 @@ st install USER/REPO    # should not prompt
 ### 19.2 --no-strict overrides config on_warn=fail
 
 ```bash
-# Set on_warn = "fail" in config
+# Set security.human.on_warn = "fail" in config
 st install /tmp/warned-skill --global --no-strict
 ```
 **Expect:** Warning shown but prompts to continue rather than hard-failing.
@@ -1419,7 +1419,7 @@ st install /tmp/warned-skill --global --no-strict
 ### 19.3 --strict overrides config on_warn=prompt
 
 ```bash
-# Set on_warn = "prompt" in config
+# Set security.human.on_warn = "prompt" in config
 st install /tmp/warned-skill --global --strict
 ```
 **Expect:** Hard failure, no prompt.

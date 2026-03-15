@@ -140,7 +140,7 @@ When issues are found:
 │  code-review: recreated symlink ✓
 ◇ taps: 2 configured, 2 valid ✓
 ⚠ agents: configured agent 'codex' not found on PATH
-│  (cannot auto-fix — install codex or change security.agent in config)
+│  (cannot auto-fix — install codex or change security.agent_cli in config)
 │
 └ ✓ Fixed 3 of 4 issues. 1 requires manual action.
 ```

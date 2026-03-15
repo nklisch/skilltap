@@ -94,7 +94,7 @@ export async function resolveAgentInteractive(
   const agentResult = await resolveAgent(config, async (detected) => {
     const chosen = await selectAgent(detected);
     if (isCancel(chosen)) return null;
-    config.security.agent = (chosen as AgentAdapter).cliName;
+    config.security.agent_cli = (chosen as AgentAdapter).cliName;
     await saveConfig(config);
     return chosen as AgentAdapter;
   });
@@ -113,7 +113,7 @@ export async function resolveAgentForAgentMode(
   const agentResult = await resolveAgent(config);
   if (!agentResult.ok || !agentResult.value) {
     agentError(
-      "Agent mode requires security.agent to be set for semantic scanning. Run 'skilltap config' to configure.",
+      "Agent mode requires security.agent_cli to be set for semantic scanning. Run 'skilltap config' to configure.",
     );
     process.exit(1);
   }

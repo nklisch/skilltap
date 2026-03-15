@@ -117,16 +117,66 @@ Tag-injected chunks (auto-flagged at 10) are still reported even if the agent ca
 
 ## Configuration
 
+Security settings are configured per mode — **human** (when you run skilltap) and **agent** (when AI agents run skilltap). Each mode has independent scan level, warning behavior, and scan requirements.
+
 ```toml
 [security]
-scan = "static"        # "static" | "semantic" | "off"
-on_warn = "prompt"     # "prompt" | "fail" | "allow"
-require_scan = false   # true blocks --skip-scan
-agent = ""             # "claude" | "gemini" | "codex" | "/path/to/binary"
+agent_cli = ""         # "claude" | "gemini" | "codex" | "/path/to/binary"
 threshold = 5          # flag semantic chunks scoring >= this (0–10)
 max_size = 51200       # total skill dir size limit in bytes (50KB)
 ollama_model = ""      # model name when using Ollama
+
+[security.human]
+scan = "static"        # "static" | "semantic" | "off"
+on_warn = "prompt"     # "prompt" | "fail" | "allow"
+require_scan = false   # true blocks --skip-scan
+
+[security.agent]
+scan = "static"        # "static" | "semantic" | "off"
+on_warn = "fail"       # "prompt" | "fail" | "allow"
+require_scan = true    # true blocks --skip-scan
+
+# Trust tier overrides — per-tap or per-source-type security levels
+# [[security.overrides]]
+# match = "my-company-tap"
+# kind = "tap"           # "tap" or "source"
+# preset = "none"        # "none" | "relaxed" | "standard" | "strict"
 ```
+
+### Presets
+
+Named presets set scan + on_warn + require_scan atomically:
+
+| Preset | Scan | On Warn | Require Scan | Description |
+|---|---|---|---|---|
+| `none` | off | allow | false | No scanning at all |
+| `relaxed` | static | allow | false | Static scan, ignore warnings |
+| `standard` | static | prompt | false | Static scan, ask on warnings (default for human) |
+| `strict` | semantic | fail | true | Full scanning, block on warnings (default for agent) |
+
+Apply via: `skilltap config security --preset strict --mode agent`
+
+### Trust tier overrides
+
+Override security per source. Named tap overrides take priority over source-type overrides, and both override the mode default.
+
+```toml
+# Trust your company tap — no scanning
+[[security.overrides]]
+match = "my-company-tap"
+kind = "tap"
+preset = "none"
+
+# Require strict scanning for npm packages
+[[security.overrides]]
+match = "npm"
+kind = "source"
+preset = "strict"
+```
+
+Source types: `tap`, `git`, `npm`, `local`. The `github` and `http` adapters map to `git`.
+
+Manage via: `skilltap config security --trust tap:my-corp=none` / `--remove-trust my-corp`
 
 ### Supported agents for semantic scan
 
@@ -145,13 +195,11 @@ Agent is auto-detected if not configured. First semantic scan prompts for select
 
 ## Agent mode
 
-When agent mode is enabled (`skilltap config agent-mode`), security is tightened:
+When agent mode is enabled (`skilltap config agent-mode`), skilltap uses the `[security.agent]` settings. Agent mode is fully configurable — there are no enforced minimums. The defaults are strict (`on_warn = "fail"`, `require_scan = true`), but can be changed to any level including `none`.
 
-- `on_warn` is forced to `"fail"` — any warning blocks installation
-- `require_scan` is forced to `true` — `--skip-scan` is rejected
-- Security blocks emit a machine-readable stop message directing the agent not to proceed
+Agent mode also sets `yes = true` (auto-accept prompts) and `agentMode = true` (plain text output).
 
-These constraints are not overridable via CLI flags in agent mode.
+Security blocks emit a machine-readable stop message directing the agent not to proceed.
 
 ---
 
@@ -162,6 +210,6 @@ These constraints are not overridable via CLI flags in agent mode.
 | `--skip-scan` | Skip static and semantic scan entirely | Trusted sources, CI/CD with pre-vetted skills |
 | `--strict` | Treat any warning as a block (like `on_warn = "fail"`) | Extra caution |
 | `--semantic` | Enable semantic scan for this install/update | One-off deeper check |
-| `security.scan = "off"` | Disable scanning globally | Fully trusted environment |
+| `security.human.scan = "off"` | Disable scanning for human mode | Fully trusted environment |
 
-`--skip-scan` is rejected when `security.require_scan = true` or in agent mode.
+`--skip-scan` is rejected when the effective `require_scan` is true (from mode config or trust tier override).

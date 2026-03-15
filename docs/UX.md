@@ -20,6 +20,7 @@ skilltap
 ├── completions <shell>      Generate shell completion script
 ├── config                   Interactive setup wizard
 │   ├── agent-mode           Toggle agent mode (human-only)
+│   ├── security             Configure security settings (wizard + flags)
 │   ├── get [key]            Get a config value
 │   └── set <key> <value>    Set a config value
 └── tap                      Manage taps
@@ -277,7 +278,7 @@ error: Security warnings found (strict mode). Aborting install.
 
 ### First Semantic Scan (Agent Selection)
 
-Triggered on first-ever semantic scan if `security.agent` is not configured:
+Triggered on first-ever semantic scan if `security.agent_cli` is not configured:
 
 ```
 $ skilltap install some-skill --semantic
@@ -949,7 +950,7 @@ $ skilltap config get
 defaults.scope = global
 defaults.also = claude-code cursor
 defaults.yes = false
-security.scan = static
+security.human.scan = static
 ...
 ```
 
@@ -971,9 +972,9 @@ $ skilltap config set agent-mode.enabled true
 error: 'agent-mode.enabled' cannot be set via 'config set'
 hint: Use 'skilltap config agent-mode'
 
-$ skilltap config set security.scan off
-error: 'security.scan' cannot be set via 'config set'
-hint: Use 'skilltap config' interactive wizard
+$ skilltap config set security.human.scan off
+error: 'security.human.scan' cannot be set via 'config set'
+hint: Use 'skilltap config security'
 ```
 
 ---
@@ -1231,9 +1232,11 @@ See [SPEC.md — Configuration](./SPEC.md#configuration) for the full config sch
 ### Key rules
 
 - Config + CLI flags compose; the most restrictive setting wins
-- `--strict` / `--no-strict` override `security.on_warn` per invocation
-- `security.require_scan = true` blocks `--skip-scan` entirely
-- Agent mode forces `yes=true`, `on_warn="fail"`, `require_scan=true` — no CLI override
+- Security settings are per-mode: `[security.human]` and `[security.agent]` with independent scan/on_warn/require_scan
+- `--strict` / `--no-strict` override the active mode's `on_warn` per invocation
+- `require_scan = true` in the active mode blocks `--skip-scan` entirely
+- Agent mode uses `[security.agent]` settings (fully configurable, defaults to strict)
+- Trust tier overrides (`[[security.overrides]]`) can set per-tap or per-source-type security presets
 
 ### defaults.yes + defaults.scope
 
@@ -1258,12 +1261,14 @@ yes = true
 scope = "global"
 
 [security]
+agent_cli = "claude"
+threshold = 3
+max_size = 102400
+
+[security.human]
 scan = "semantic"
 on_warn = "fail"
 require_scan = true
-agent = "claude"
-threshold = 3
-max_size = 102400
 ```
 
 ```
@@ -1271,10 +1276,10 @@ skilltap install <url>
   → auto-select all skills (from defaults.yes)
   → scope=global, no prompt (from defaults.scope)
   → --also claude-code --also cursor (from defaults.also)
-  → Layer 1 + Layer 2 scan (from security.scan)
-  → Abort on any warning (from security.on_warn)
-  → --skip-scan blocked (from security.require_scan)
-  → Use claude for semantic scan (from security.agent)
+  → Layer 1 + Layer 2 scan (from security.human.scan)
+  → Abort on any warning (from security.human.on_warn)
+  → --skip-scan blocked (from security.human.require_scan)
+  → Use claude for semantic scan (from security.agent_cli)
   → Flag chunks scoring >= 3 (from security.threshold)
   → Warn on skills > 100KB (from security.max_size)
 
@@ -1295,10 +1300,17 @@ skilltap install <url> --project
 also = ["claude-code"]
 
 [security]
-scan = "static"
-agent = "claude"
+agent_cli = "claude"
 
-[agent-mode]
+[security.human]
+scan = "static"
+
+[security.agent]
+scan = "static"
+on_warn = "fail"
+require_scan = true
+
+["agent-mode"]
 enabled = true
 scope = "project"
 ```
@@ -1308,9 +1320,9 @@ skilltap install <url>
   → auto-select all (forced by agent mode)
   → scope=project (from agent-mode.scope)
   → --also claude-code (from defaults.also)
-  → Layer 1 scan (from security.scan)
-  → Any warning = SECURITY ISSUE FOUND directive + exit 1
-  → --skip-scan blocked (forced by agent mode)
+  → Layer 1 scan (from security.agent.scan)
+  → Any warning = SECURITY ISSUE FOUND directive + exit 1 (from security.agent.on_warn = "fail")
+  → --skip-scan blocked (from security.agent.require_scan = true)
   → Plain text output, no colors
 ```
 

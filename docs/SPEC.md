@@ -23,10 +23,10 @@ Install one or more skills from URLs, tap names, or local paths. Multiple source
 | `--global` | boolean | false | Install to `~/.agents/skills/` (global, explicit for scripts) |
 | `--also <agent>` | string | (from config) | Create symlink in agent-specific directory. Repeatable. |
 | `--ref <ref>` | string | default branch | Branch or tag to install |
-| `--skip-scan` | boolean | false | Skip security scanning (not recommended). Blocked if `security.require_scan = true` in config. |
+| `--skip-scan` | boolean | false | Skip security scanning (not recommended). Blocked if `require_scan = true` in the active security mode config. |
 | `--semantic` | boolean | (from config) | Force semantic scan regardless of config |
 | `--strict` | boolean | (from config) | Abort install if any security warnings are found. No prompt, just fail. |
-| `--no-strict` | boolean | false | Override `security.on_warn = "fail"` for this invocation |
+| `--no-strict` | boolean | false | Override `on_warn = "fail"` for this invocation |
 | `--yes` | boolean | false | Auto-select all skills and auto-accept install. Security warnings still require confirmation. |
 | `--quiet` | boolean | false | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
 
@@ -49,18 +49,20 @@ Scope always prompts unless `--project` or `--global` is explicitly passed. Even
 
 Security scanning is a hard gate — `--yes` does **not** bypass it. `--strict` goes further: any warning is a hard failure with no prompt. The only way to skip scanning entirely is `--skip-scan`, which is deliberately separate and discouraged.
 
-`--strict` can be set permanently via config (`security.on_warn = "fail"`), making it the default for all installs and updates. The CLI flag overrides the config in either direction: `--strict` enables it, `--no-strict` disables it for that invocation.
+`--strict` can be set permanently via config (`security.human.on_warn = "fail"` or `security.agent.on_warn = "fail"`), making it the default for all installs and updates in that mode. The CLI flag overrides the config in either direction: `--strict` enables it, `--no-strict` disables it for that invocation.
 
-**Security policy composition** — config options compose with CLI flags, most restrictive wins:
+**Security policy composition** — per-mode config options compose with CLI flags. Trust tier overrides replace mode defaults when a matching tap or source type is configured:
 
 ```
-Config: security.on_warn = "prompt"  +  --strict         → strict (flag wins)
-Config: security.on_warn = "fail"    +  (no flag)        → strict (config wins)
-Config: security.on_warn = "fail"    +  --no-strict      → prompt (flag overrides)
-Config: security.require_scan = true +  --skip-scan      → ERROR (config blocks)
-Config: security.scan = "semantic"   +  (no flag)        → Layer 1 + Layer 2
-Config: security.scan = "static"    +  --semantic        → Layer 1 + Layer 2 (flag adds)
-Config: security.scan = "off"       +  --semantic        → Layer 2 only
+Config: security.human.on_warn = "prompt"  +  --strict         → strict (flag wins)
+Config: security.human.on_warn = "fail"    +  (no flag)        → strict (config wins)
+Config: security.human.on_warn = "fail"    +  --no-strict      → prompt (flag overrides)
+Config: security.human.require_scan = true +  --skip-scan      → ERROR (config blocks)
+Config: security.human.scan = "semantic"   +  (no flag)        → Layer 1 + Layer 2
+Config: security.human.scan = "static"    +  --semantic        → Layer 1 + Layer 2 (flag adds)
+Config: security.human.scan = "off"       +  --semantic        → Layer 2 only
+Trust override: tap "my-corp" = "none"    +  install from my-corp → no scanning
+Trust override: source "npm" = "strict"   +  install from npm     → Layer 1 + Layer 2
 ```
 
 When `--yes` is passed with a multi-skill repo: all discovered skills are selected without prompting. The output still lists what was selected:
@@ -97,10 +99,10 @@ Auto-selecting all (--yes)
    - `--project` → install to `.agents/skills/` in project
    - `--global` → install to `~/.agents/skills/`
    - Neither flag → prompt: `Install to: (1) Global (~/.agents/skills/) (2) Project (.agents/skills/)`
-6. **Security scan** (unless `--skip-scan`; if `security.require_scan = true` and `--skip-scan` is passed, error and abort):
+6. **Security scan** (unless `--skip-scan`; if `require_scan = true` in the active mode config and `--skip-scan` is passed, error and abort):
    - Run Layer 1 static scan on all files in selected skill(s)
    - Display warnings (if any)
-   - If `--strict` (or `security.on_warn = "fail"`) and warnings found → print warnings, abort (exit 1)
+   - If `--strict` (or `on_warn = "fail"` in config) and warnings found → print warnings, abort (exit 1)
    - If warnings found (not strict) → prompt `Install anyway? (y/N)` (**always**, even with `--yes`)
    - If no warnings + `--yes` → proceed without prompting
    - If no warnings (no `--yes`) → prompt `Install? (Y/n)` (default Y)
@@ -207,7 +209,7 @@ Then, per skill:
    b. Display summary: files changed, insertions, deletions
    c. Run Layer 1 static scan on **changed content only**
    d. Display warnings (if any)
-   e. If `--strict` (or `security.on_warn = "fail"`) and warnings → print warnings, skip this skill (continue to next); git HEAD is reset to pre-fetch state so the next run re-detects the pending update
+   e. If `--strict` (or `on_warn = "fail"` in config) and warnings → print warnings, skip this skill (continue to next); git HEAD is reset to pre-fetch state so the next run re-detects the pending update
    f. If warnings (not strict) → prompt: `Apply update? (y/N)`
    g. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
    h. If semantic scan blocks after pull → reset git HEAD to pre-pull state so the next run re-detects the pending update
@@ -453,7 +455,7 @@ Browse and install skills from all configured taps using an interactive picker.
 | `--skip-scan` | boolean | false | Skip security scanning |
 | `--yes` | boolean | false | Auto-select and install (non-interactive) |
 | `--strict` | boolean | (from config) | Abort on any security warning |
-| `--no-strict` | boolean | false | Override `security.on_warn = "fail"` for this invocation |
+| `--no-strict` | boolean | false | Override `on_warn = "fail"` for this invocation |
 | `--semantic` | boolean | false | Force semantic scan |
 
 **Behavior:**
@@ -585,7 +587,7 @@ global
 $ skilltap config get defaults.also
 claude-code cursor
 
-$ skilltap config get security.scan --json
+$ skilltap config get security.human.scan --json
 "static"
 
 $ skilltap config get --json
@@ -605,16 +607,21 @@ Set config values. Non-interactive — safe for agents and scripts. Only prefere
 | `defaults.scope` | enum | `""`, `"global"`, `"project"` |
 | `defaults.also` | string[] | Agent names (variadic; omit values to clear) |
 | `defaults.yes` | boolean | `true`/`false`/`yes`/`no`/`1`/`0` |
-| `security.agent` | string | Agent CLI name or absolute path |
+| `security.agent_cli` | string | Agent CLI name or absolute path for semantic scanning |
 | `security.ollama_model` | string | Model name |
+| `security.threshold` | number | 0–10, flag semantic chunks scoring >= this |
+| `security.max_size` | number | Max skill dir size in bytes |
 | `updates.auto_update` | enum | `"off"`, `"patch"`, `"minor"` |
 | `updates.interval_hours` | number | Positive integer |
+| `updates.show_diff` | enum | `"full"`, `"stat"`, `"none"` |
 
 **Blocked keys** (with suggested alternative):
 
 - `agent-mode.*` → Use `skilltap config agent-mode`
 - `telemetry.*` → Use `skilltap config telemetry enable/disable`
-- `security.scan`, `security.on_warn`, `security.require_scan`, `security.max_size`, `security.threshold` → Use `skilltap config` interactive wizard
+- `security.human.*`, `security.agent.*` → Use `skilltap config security`
+- `security.overrides` → Use `skilltap config security --trust`
+- `security.scan`, `security.on_warn`, `security.require_scan` → Migrated to per-mode settings; use `skilltap config security`
 - `taps` → Use `skilltap tap add/remove`
 
 **Behavior:**
@@ -1035,7 +1042,7 @@ If frontmatter is missing or Zod validation fails, the skill is flagged with a w
 
 ### Layer 1: Static Analysis
 
-Runs on every install and update (unless `--skip-scan` or `security.scan = "off"`). Scans all files in the skill directory, not just SKILL.md.
+Runs on every install and update (unless `--skip-scan` or the active mode's `scan = "off"`). Scans all files in the skill directory, not just SKILL.md.
 
 #### Detection Categories
 
@@ -1144,7 +1151,7 @@ Each warning includes:
 
 Opt-in scan using the user's own agent CLI. Triggered when:
 - Layer 1 found warnings and user accepts the prompt "Run semantic scan?"
-- Config has `security.scan = "semantic"` (auto-run on every install)
+- Config has `security.human.scan = "semantic"` or `security.agent.scan = "semantic"` (auto-run on every install)
 - User passes `--semantic` flag
 
 #### Chunking
@@ -1256,7 +1263,7 @@ interface AgentAdapter {
 3. If this is the first semantic scan (no prior agent selection):
    a. Show interactive prompt listing detected agents
    b. Include "Other — enter path to CLI" option
-   c. Save selection to config.toml (security.agent)
+   c. Save selection to config.toml (security.agent_cli)
    d. Use selected adapter
 4. If no agents detected and no custom path provided:
    → Skip semantic scan, warn user
@@ -1651,25 +1658,12 @@ yes = false
 # Values: "global", "project", or "" (prompt)
 scope = ""
 
-# Security scanning settings
+# Security settings — per-mode (human vs agent) with optional trust overrides
 [security]
-# Scan mode: "static" (Layer 1 only), "semantic" (Layer 1 + Layer 2), "off"
-scan = "static"
-
-# What to do when security warnings are found:
-#   "prompt" = show warnings and ask user (default)
-#   "fail"   = abort immediately, no prompt (same as --strict)
-on_warn = "prompt"
-
-# Prevent --skip-scan from being used. When true, security scanning
-# cannot be bypassed via CLI flags. Useful for org/machine-level policy.
-require_scan = false
-
 # Agent CLI to use for semantic scanning.
-# Values: "claude", "gemini", "codex", "opencode", "ollama", or an absolute path
-# to a custom binary (e.g. "/usr/local/bin/my-llm").
+# Values: "claude", "gemini", "codex", "opencode", "ollama", or an absolute path.
 # Empty string = prompt on first use, then save selection.
-agent = ""
+agent_cli = ""
 
 # Risk threshold for semantic scan (0-10, chunks scoring >= this are flagged)
 threshold = 5
@@ -1680,13 +1674,32 @@ max_size = 51200
 # Ollama model for semantic scanning (if using ollama adapter)
 ollama_model = ""
 
+# Human mode security (when you run skilltap)
+[security.human]
+scan = "static"      # "static" | "semantic" | "off"
+on_warn = "prompt"   # "prompt" | "fail" | "allow"
+require_scan = false  # true blocks --skip-scan
+
+# Agent mode security (when AI agents run skilltap)
+[security.agent]
+scan = "static"      # "static" | "semantic" | "off"
+on_warn = "fail"     # "prompt" | "fail" | "allow"
+require_scan = true   # true blocks --skip-scan
+
+# Trust tier overrides — per-tap or per-source security presets.
+# Evaluated in order; first match wins. Tap matches beat source matches.
+# Presets: "none", "relaxed", "standard", "strict"
+# [[security.overrides]]
+# match = "my-company-tap"
+# kind = "tap"
+# preset = "none"
+
 # Agent mode — for when skilltap is invoked by an AI agent, not a human.
-# When enabled, all behavior becomes non-interactive with strict security.
-[agent-mode]
+# When enabled, uses [security.agent] settings and non-interactive output.
+["agent-mode"]
 # Enable agent mode. When true:
 #   - All prompts auto-accept or hard-fail (no interactive input)
-#   - Security warnings are hard failures (on_warn forced to "fail")
-#   - Security scanning cannot be skipped (require_scan forced to true)
+#   - Uses [security.agent] settings (fully configurable, defaults to strict)
 #   - Output is plain text (no colors, spinners, or Unicode decorations)
 #   - Security failures emit a directive message telling the agent to stop
 #   - Scope must be set (error if not configured or flagged)
@@ -1713,14 +1726,13 @@ skill_check_interval_hours = 24
 # url = "https://gitea.example.com/nathan/my-skills-tap"
 ```
 
-When `agent-mode.enabled = true`, the following are **inherent and not overridable**:
+When `agent-mode.enabled = true`:
 - `defaults.yes` is forced to `true`
-- `security.on_warn` is forced to `"fail"`
-- `security.require_scan` is forced to `true`
+- Security settings are read from `[security.agent]` (fully configurable, defaults to strict)
 - Output is plain text, no ANSI escapes
 - Security failures emit an agent-directed stop message
 
-Agent mode has **no CLI flag override**. It can only be toggled through `skilltap config agent-mode`, which requires an interactive terminal. This is intentional — an agent cannot enable or disable its own safety constraints.
+Agent mode has **no CLI flag override** for toggling. It can only be enabled/disabled through `skilltap config agent-mode`, which requires an interactive terminal. This is intentional — an agent cannot enable or disable its own safety constraints. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
 
 #### Agent Mode Output
 
@@ -1759,7 +1771,7 @@ User action required: review warnings and install manually with
 | Condition | Message |
 |-----------|---------|
 | Scope not set | `ERROR: Agent mode requires a scope. Set agent-mode.scope in config or pass --project / --global.` |
-| Semantic agent not configured | `ERROR: Agent mode requires security.agent to be set for semantic scanning. Run 'skilltap config' to configure.` |
+| Semantic agent not configured | `ERROR: Agent mode requires security.agent_cli to be set for semantic scanning. Run 'skilltap config security' to configure.` |
 
 ### installed.json
 

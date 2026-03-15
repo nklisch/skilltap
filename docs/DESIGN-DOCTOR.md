@@ -129,7 +129,7 @@ For each tap in config:
 
 - Run detection for all known agent adapters (same as `detectAgents()`)
 - Show which are available and their paths
-- If `security.agent` is configured, verify that specific agent is available
+- If `security.agent_cli` is configured, verify that specific agent is available
 - **Warn**: configured agent not found → `⚠ Configured agent 'claude' not found on PATH. Semantic scan will fail.`
 - **Warn**: no agents found → `⚠ No agent CLIs found. Semantic scanning unavailable.` (informational — not everyone uses semantic scan)
 
@@ -209,7 +209,7 @@ $ skilltap doctor --fix
 │  code-review: recreated symlink ✓
 ◇ taps: 2 configured, 2 valid ✓
 ⚠ agents: configured agent 'codex' not found on PATH
-│  (cannot auto-fix — install codex or change security.agent in config)
+│  (cannot auto-fix — install codex or change security.agent_cli in config)
 │
 └ ✓ Fixed 3 of 4 issues. 1 requires manual action.
 ```

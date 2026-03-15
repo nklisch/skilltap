@@ -1,4 +1,4 @@
-import { BUILTIN_TAP, loadConfig } from "@skilltap/core";
+import { BUILTIN_TAP, describeSecurityMode, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 
 export default defineCommand({
@@ -35,8 +35,11 @@ export default defineCommand({
             scope: agentMode.enabled
               ? agentMode.scope
               : (defaults.scope || null),
-            scan: security.scan,
-            agent: security.agent || null,
+            security: {
+              human: security.human,
+              agent: security.agent,
+              agent_cli: security.agent_cli || null,
+            },
             also: defaults.also,
             taps: tapCount,
           },
@@ -55,8 +58,9 @@ export default defineCommand({
       [
         `agent-mode: ${agentMode.enabled ? "enabled" : "disabled"}`,
         `scope: ${scope}`,
-        `scan: ${security.scan}`,
-        `agent: ${security.agent || "(none)"}`,
+        `security.human: ${describeSecurityMode(security.human)}`,
+        `security.agent: ${describeSecurityMode(security.agent)}`,
+        `agent_cli: ${security.agent_cli || "(none)"}`,
         `also: ${defaults.also.length > 0 ? defaults.also.join(" ") : "(none)"}`,
         `taps: ${tapCount}`,
       ].join("\n") + "\n",

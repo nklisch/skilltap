@@ -53,29 +53,66 @@ CLI flags always override config: `--project` overrides `scope`, `--yes` overrid
 
 ## `[security]`
 
-Security scanning settings for install and update commands.
+Shared security scanning settings plus per-mode (human/agent) configuration. Configure via `skilltap config security` (interactive wizard or flags).
+
+### Shared Settings
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `scan` | `"static"` \| `"semantic"` \| `"off"` | `"static"` | Scan mode. `"static"` = Layer 1 pattern matching. `"semantic"` = Layer 1 + Layer 2 AI-powered analysis. `"off"` = no scanning. |
-| `on_warn` | `"prompt"` \| `"fail"` | `"prompt"` | What to do when security warnings are found. `"prompt"` = show warnings and ask. `"fail"` = abort immediately (same as `--strict`). |
-| `require_scan` | boolean | `false` | When `true`, blocks `--skip-scan` from being used. Useful for org or machine-level security policy. |
-| `agent` | string | `""` | Agent CLI for semantic scanning. Values: `"claude"`, `"gemini"`, `"codex"`, `"opencode"`, `"ollama"`, or an absolute path to a custom binary. Empty string = prompt on first use, then save selection. |
+| `agent_cli` | string | `""` | Agent CLI for semantic scanning. Values: `"claude"`, `"gemini"`, `"codex"`, `"opencode"`, `"ollama"`, or an absolute path. Empty = prompt on first use. |
 | `threshold` | integer 0-10 | `5` | Risk threshold for semantic scan. Chunks scoring at or above this value are flagged. |
 | `max_size` | integer (bytes) | `51200` | Max total skill directory size before warning. Default is 50 KB. |
-| `ollama_model` | string | `""` | Model name when using the Ollama adapter. Required when `agent = "ollama"`. |
+| `ollama_model` | string | `""` | Model name when using the Ollama adapter. Required when `agent_cli = "ollama"`. |
+
+### Per-Mode Settings: `[security.human]` / `[security.agent]`
+
+| Option | Type | Human Default | Agent Default | Description |
+|--------|------|---------------|---------------|-------------|
+| `scan` | `"static"` \| `"semantic"` \| `"off"` | `"static"` | `"static"` | Scan mode. |
+| `on_warn` | `"prompt"` \| `"fail"` \| `"allow"` | `"prompt"` | `"fail"` | What to do when warnings are found. `"allow"` logs but proceeds. |
+| `require_scan` | boolean | `false` | `true` | When `true`, blocks `--skip-scan`. |
+
+### Trust Tier Overrides: `[[security.overrides]]`
+
+Override security per source. Named tap overrides take priority over source-type overrides.
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `match` | string | Tap name or source type (`tap`, `git`, `npm`, `local`) |
+| `kind` | `"tap"` \| `"source"` | What `match` refers to |
+| `preset` | `"none"` \| `"relaxed"` \| `"standard"` \| `"strict"` | Security preset to apply |
+
+### Presets
+
+| Preset | Scan | On Warn | Require Scan |
+|--------|------|---------|--------------|
+| `none` | off | allow | false |
+| `relaxed` | static | allow | false |
+| `standard` | static | prompt | false |
+| `strict` | semantic | fail | true |
 
 ### Example
 
 ```toml
 [security]
+agent_cli = "claude"
+threshold = 5
+max_size = 51200
+
+[security.human]
 scan = "semantic"
 on_warn = "fail"
 require_scan = true
-agent = "claude"
-threshold = 5
-max_size = 51200
-ollama_model = ""
+
+[security.agent]
+scan = "static"
+on_warn = "fail"
+require_scan = true
+
+[[security.overrides]]
+match = "my-company-tap"
+kind = "tap"
+preset = "none"
 ```
 
 ### Supported Agents
@@ -95,35 +132,32 @@ All agents are invoked without tool access -- they can only produce text output,
 
 ## `[agent-mode]`
 
-Agent mode settings. When enabled, all skilltap commands become non-interactive with strict security. Toggle with `skilltap config agent-mode` (interactive, human-only).
+Agent mode settings. When enabled, all skilltap commands become non-interactive. Toggle with `skilltap config agent-mode` (interactive, human-only).
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable agent mode. |
 | `scope` | `"global"` \| `"project"` | `"project"` | Default scope for agent installs. Required when agent mode is enabled. |
-| `also` | array of strings | from `[defaults]` | Agent-specific symlinks for agent mode installs. If not set, falls back to `defaults.also`. |
-| `scan` | `"static"` \| `"semantic"` | from `[security]` | Scan level for agent mode. `"off"` is not available -- scanning is always required. If not set, falls back to `security.scan` (promoted to `"static"` if `"off"`). |
 
 ### Example
 
 ```toml
-[agent-mode]
+["agent-mode"]
 enabled = true
 scope = "project"
 ```
 
-### Forced Overrides
+### Behavior When Enabled
 
-When `agent-mode.enabled = true`, the following are **inherent and not overridable** via CLI flags:
+When `agent-mode.enabled = true`:
 
-| Setting | Forced Value | Effect |
-|---------|-------------|--------|
+| Setting | Value | Effect |
+|---------|-------|--------|
 | `yes` | `true` | All prompts auto-accept or hard-fail |
-| `on_warn` | `"fail"` | Any security warning blocks installation |
-| `require_scan` | `true` | `--skip-scan` is rejected |
+| Security | from `[security.agent]` | Uses per-mode agent security settings (fully configurable) |
 | Output format | Plain text | No ANSI colors, spinners, or Unicode decorations |
 
-Agent mode has **no CLI flag** to toggle it. It can only be enabled or disabled through `skilltap config agent-mode`, which requires an interactive terminal.
+Agent mode has **no CLI flag** to toggle it. It can only be enabled or disabled through `skilltap config agent-mode`, which requires an interactive terminal. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
 
 ### Agent Mode Output
 
@@ -321,26 +355,33 @@ also = ["claude-code", "cursor"]
 # Auto-accept clean installs (security warnings still prompt).
 yes = false
 
-# Security scanning settings
+# Security settings — per-mode with trust overrides
+# Configure via: skilltap config security
 [security]
-# Scan mode: "static" (fast), "semantic" (thorough), "off" (not recommended)
-scan = "static"
-# On warnings: "prompt" (ask user) or "fail" (abort, same as --strict)
-on_warn = "prompt"
-# Block --skip-scan entirely. For org-level security policy.
-require_scan = false
-# Agent CLI for semantic scan. "" = prompt on first use.
-agent = ""
-# Flag semantic chunks scoring >= this value (0-10)
+agent_cli = ""
 threshold = 5
-# Warn if skill directory exceeds this size in bytes (default 50KB)
 max_size = 51200
-# Required when agent = "ollama"
 ollama_model = ""
+
+[security.human]
+scan = "static"
+on_warn = "prompt"
+require_scan = false
+
+[security.agent]
+scan = "static"
+on_warn = "fail"
+require_scan = true
+
+# Trust overrides — per-tap or per-source-type presets
+# [[security.overrides]]
+# match = "my-company-tap"
+# kind = "tap"
+# preset = "none"
 
 # Agent mode -- for when skilltap is invoked by AI agents.
 # Toggle with: skilltap config agent-mode
-[agent-mode]
+["agent-mode"]
 enabled = false
 scope = "project"
 
@@ -371,11 +412,11 @@ url = "https://gitea.example.com/nathan/my-skills-tap"
 
 ## Policy Composition Rules
 
-Config options and CLI flags compose together. The general rule: **most restrictive wins**.
+Per-mode config options and CLI flags compose together. The active mode (`[security.human]` or `[security.agent]`) is selected based on whether agent mode is enabled. Trust tier overrides replace mode defaults when a matching tap or source type is configured.
 
 ### Flag Overrides
 
-| Config | CLI Flag | Result |
+| Config (active mode) | CLI Flag | Result |
 |--------|----------|--------|
 | `on_warn = "prompt"` | `--strict` | strict (flag wins) |
 | `on_warn = "fail"` | (none) | strict (config wins) |
@@ -387,17 +428,19 @@ Config options and CLI flags compose together. The general rule: **most restrict
 | `yes = false` | `--yes` | yes (flag wins) |
 | `scope = "global"` | `--project` | project (flag overrides) |
 
-### Agent Mode Overrides
+### Agent Mode Behavior
 
-When `agent-mode.enabled = true`, the following are forced regardless of other config or flags:
+When `agent-mode.enabled = true`:
 
-- `yes` = `true`
-- `on_warn` = `"fail"`
-- `require_scan` = `true`
-- `scan = "off"` is promoted to `"static"`
-- `--skip-scan` is rejected with an error
+- `yes` = `true` (all prompts auto-accept or hard-fail)
+- Security uses `[security.agent]` settings (fully configurable)
+- Output is plain text (no ANSI, spinners, or Unicode)
 
-These cannot be overridden by CLI flags. Agent mode can only be toggled interactively via `skilltap config agent-mode`.
+Agent mode can only be toggled interactively via `skilltap config agent-mode`. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
+
+### Trust Tier Override Resolution
+
+Override priority: named tap match > source type match > mode default. CLI flags still override on top of trust tier settings.
 
 ### Worked Example: Power User
 

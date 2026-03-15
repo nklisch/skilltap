@@ -71,7 +71,7 @@ export async function resolveAgent(
   config: Config,
   onSelectAgent?: (detected: AgentAdapter[]) => Promise<AgentAdapter | null>,
 ): Promise<Result<AgentAdapter | null, ScanError>> {
-  const agentSetting = config.security.agent;
+  const agentSetting = config.security.agent_cli;
 
   // 1. Known adapter name in config
   if (agentSetting && !agentSetting.startsWith("/")) { /* lookup + detect */ }

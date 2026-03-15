@@ -23,7 +23,7 @@ export type CliFlags = {
 
 export type EffectivePolicy = {
   yes: boolean;
-  onWarn: "prompt" | "fail";
+  onWarn: "prompt" | "fail" | "allow";
   requireScan: boolean;
   skipScan: boolean;
   scanMode: "static" | "semantic" | "off";
@@ -42,15 +42,19 @@ export function composePolicy(
 ): Result<EffectivePolicy, UserError> {
   const agentMode = config["agent-mode"].enabled;
 
+  // Select per-mode settings: security.agent when agent mode, security.human otherwise
+  const modeSec = agentMode ? config.security.agent : config.security.human;
+
   if (agentMode) {
-    // Agent mode: forces yes=true, onWarn="fail", requireScan=true
-    // Blocks --skip-scan, promotes scan "off" → "static"
-    if (flags.skipScan) return err(new UserError("Agent mode requires security scanning."));
-    return ok({ yes: true, onWarn: "fail", requireScan: true, ... });
+    // Agent mode: forces yes=true, reads scan/onWarn/requireScan from config.security.agent
+    if (flags.skipScan && modeSec.require_scan) {
+      return err(new UserError("Security scanning is required by config."));
+    }
+    return ok({ yes: true, onWarn: modeSec.on_warn, requireScan: modeSec.require_scan, ... });
   }
 
-  // Normal mode: CLI flags > config > defaults
-  if (flags.skipScan && config.security.require_scan) {
+  // Normal mode: CLI flags > config.security.human > defaults
+  if (flags.skipScan && modeSec.require_scan) {
     return err(new UserError("Security scanning is required by config."));
   }
   // ...compose remaining fields with precedence rules

@@ -56,7 +56,7 @@ The "Run semantic scan?" prompt only appears when **static warnings are found** 
 Or set it permanently in your config:
 
 ```toml
-[security]
+[security.human]
 scan = "semantic"
 ```
 
@@ -132,14 +132,34 @@ With `--strict`, any warning skips the prompt and aborts immediately.
 
 ## Configuring security behavior
 
+Security settings are configured independently for **human mode** (when you run skilltap) and **agent mode** (when AI agents run skilltap). Use `skilltap config security` for an interactive wizard, or pass flags for scripting.
+
+### Presets
+
+The fastest way to configure security is with presets:
+
+```bash
+skilltap config security --preset standard              # both modes
+skilltap config security --preset strict --mode agent    # agent mode only
+skilltap config security --preset none --mode human      # human mode only
+```
+
+| Preset | Scan | On Warn | Require Scan |
+|--------|------|---------|--------------|
+| `none` | off | allow | no |
+| `relaxed` | static | allow | no |
+| `standard` | static | prompt | no |
+| `strict` | semantic | fail | yes |
+
 ### Warning behavior
 
 Control what happens when a scan finds warnings:
 
 ```toml
-[security]
+[security.human]
 on_warn = "prompt"   # show warnings and ask (default)
 # on_warn = "fail"   # block installation immediately
+# on_warn = "allow"  # log warnings but install anyway
 ```
 
 Override per-command with flags:
@@ -154,11 +174,37 @@ skilltap install some-skill --no-strict   # override on_warn=fail for this run
 Prevent anyone from bypassing the security scan:
 
 ```toml
-[security]
+[security.human]
 require_scan = true
 ```
 
 With this set, `--skip-scan` is rejected.
+
+### Trust tier overrides
+
+Configure different security levels per source. This is useful for trusting your own internal taps while keeping strict scanning for everything else:
+
+```toml
+# No scanning for skills from your company tap
+[[security.overrides]]
+match = "my-company-tap"
+kind = "tap"
+preset = "none"
+
+# Strict scanning for npm packages
+[[security.overrides]]
+match = "npm"
+kind = "source"
+preset = "strict"
+```
+
+Named tap overrides take priority over source-type overrides. Manage via CLI:
+
+```bash
+skilltap config security --trust tap:my-corp=none
+skilltap config security --trust source:npm=strict
+skilltap config security --remove-trust my-corp
+```
 
 ### Skipping scans
 
@@ -168,7 +214,7 @@ For sources you trust completely, bypass scanning:
 skilltap install trusted-skill --skip-scan
 ```
 
-This skips both static and semantic scans. Blocked if `require_scan` is enabled.
+This skips both static and semantic scans. Blocked if `require_scan` is enabled in the active mode.
 
 ## Trust signals
 
@@ -228,9 +274,12 @@ updated:       2026-02-28T12:00:00.000Z
 
 ## Agent mode
 
-When [agent mode](./configuration.md) is enabled, security behavior is hardened automatically:
+When [agent mode](./configuration.md) is enabled, skilltap uses the `[security.agent]` settings. The defaults are strict (scan=static, on_warn=fail, require_scan=true), but agent mode is fully configurable — you can set any security level including `none`.
 
-- Warnings always cause installation to fail (no prompting)
-- Scan bypass (`--skip-scan`) is blocked
-- If `scan` is set to `"off"`, it is promoted to `"static"`
-- Output is machine-readable with a stop directive telling the calling agent not to proceed
+Configure agent security independently:
+
+```bash
+skilltap config security --preset strict --mode agent
+```
+
+Output in agent mode is machine-readable. Security failures emit a stop directive telling the calling agent not to proceed.

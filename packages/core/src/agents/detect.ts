@@ -28,7 +28,7 @@ const ADAPTER_MAP: Record<string, AgentAdapter> = {
   opencode: opencodeAdapter,
 };
 
-/** All valid values for security.agent in config. */
+/** All valid values for security.agent_cli in config. */
 export const KNOWN_AGENT_NAMES: readonly string[] = [...Object.keys(ADAPTER_MAP), "ollama"];
 
 /** Verify an adapter is reachable on PATH. Returns ok(adapter) or err with install hint. */
@@ -63,8 +63,8 @@ export async function detectAgents(): Promise<AgentAdapter[]> {
  * Resolve which agent to use for semantic scanning.
  *
  * Priority:
- * 1. config.security.agent set to known name → find matching adapter, verify detect()
- * 2. config.security.agent is absolute path → createCustomAdapter(path)
+ * 1. config.security.agent_cli set to known name → find matching adapter, verify detect()
+ * 2. config.security.agent_cli is absolute path → createCustomAdapter(path)
  * 3. Empty → detectAgents() → if none found, return ok(null) → if found and onSelectAgent provided, call it
  */
 export async function resolveAgent(
