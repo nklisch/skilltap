@@ -112,6 +112,10 @@ gtag('config', 'G-B0D0L2YB0N');`],
         activeMatch: "/reference/",
       },
       {
+        text: "Changelog",
+        link: "/changelog",
+      },
+      {
         text: "GitHub",
         link: "https://github.com/nklisch/skilltap",
       },
