@@ -102,6 +102,7 @@ describe("completions — bash script", () => {
       "list",
       "update",
       "find",
+      "skills",
       "link",
       "unlink",
       "info",
@@ -118,6 +119,8 @@ describe("completions — bash script", () => {
     }
     // config subcommands
     expect(stdout).toContain("agent-mode security telemetry get set edit");
+    // skills subcommands
+    expect(stdout).toContain("info remove link unlink adopt move");
   });
 
   test("script includes --get-completions dynamic calls", async () => {
@@ -160,6 +163,7 @@ describe("completions — zsh script", () => {
       "list",
       "update",
       "find",
+      "skills",
       "tap",
       "doctor",
       "completions",
@@ -169,6 +173,10 @@ describe("completions — zsh script", () => {
     }
     // config subcommands
     for (const sub of ["agent-mode", "security", "telemetry", "get", "set", "edit"]) {
+      expect(stdout).toContain(sub);
+    }
+    // skills subcommands
+    for (const sub of ["info", "remove", "link", "unlink", "adopt", "move"]) {
       expect(stdout).toContain(sub);
     }
   });
@@ -208,6 +216,7 @@ describe("completions — fish script", () => {
       "list",
       "update",
       "find",
+      "skills",
       "tap",
       "doctor",
       "completions",
@@ -221,6 +230,10 @@ describe("completions — fish script", () => {
     expect(stdout).toContain("-a 'get'");
     expect(stdout).toContain("-a 'set'");
     expect(stdout).toContain("-a 'edit'");
+    // skills subcommands
+    for (const sub of ["info", "remove", "link", "unlink", "adopt", "move"]) {
+      expect(stdout).toContain(sub);
+    }
   });
 
   test("script includes dynamic completion calls", async () => {
