@@ -152,10 +152,13 @@ _skilltap() {
         get)
           COMPREPLY=($(compgen -W "--json" -- "$cur"))
           ;;
+        security)
+          COMPREPLY=($(compgen -W "--preset --mode --scan --on-warn --require-scan --trust --remove-trust" -- "$cur"))
+          ;;
         set|agent-mode|telemetry|edit)
           ;;
         *)
-          COMPREPLY=($(compgen -W "agent-mode telemetry get set edit" -- "$cur"))
+          COMPREPLY=($(compgen -W "agent-mode security telemetry get set edit" -- "$cur"))
           ;;
       esac
       ;;

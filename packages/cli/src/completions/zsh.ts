@@ -174,7 +174,7 @@ _skilltap() {
           ;;
         config)
           local -a config_commands
-          config_commands=('agent-mode:Configure agent mode' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value' 'edit:Open config in editor')
+          config_commands=('agent-mode:Configure agent mode' 'security:Configure security settings' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value' 'edit:Open config in editor')
           _arguments -C '1:subcommand:->config_cmd' '*::arg:->config_args'
           case $state in
             config_cmd) _describe 'subcommand' config_commands ;;
@@ -182,6 +182,16 @@ _skilltap() {
               case $words[1] in
                 get)
                   _arguments '--json[Output as JSON]'
+                  ;;
+                security)
+                  _arguments \\
+                    '--preset[Apply a named preset]:preset:(none relaxed standard strict)' \\
+                    '--mode[Which mode to configure]:mode:(human agent both)' \\
+                    '--scan[Scan level]:scan:(static semantic off)' \\
+                    '--on-warn[Warning behavior]:on_warn:(prompt fail allow)' \\
+                    '--require-scan[Block --skip-scan]' \\
+                    '--trust[Add trust override]' \\
+                    '--remove-trust[Remove a trust override]'
                   ;;
               esac
               ;;

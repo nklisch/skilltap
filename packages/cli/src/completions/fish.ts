@@ -117,12 +117,20 @@ complete -c skilltap -n '__fish_seen_subcommand_from create' -l dir -d 'Target d
 complete -c skilltap -n '__fish_seen_subcommand_from verify' -l json -d 'JSON output'
 
 # config subcommands
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'agent-mode' -d 'Configure agent mode'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'telemetry' -d 'Manage telemetry settings'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'get' -d 'Get a config value'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'set' -d 'Set a config value'
-complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode telemetry get set edit' -a 'edit' -d 'Open config in editor'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'agent-mode' -d 'Configure agent mode'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'security' -d 'Configure security settings'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'telemetry' -d 'Manage telemetry settings'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'get' -d 'Get a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'set' -d 'Set a config value'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'edit' -d 'Open config in editor'
 complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get' -l json -d 'Output as JSON'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l preset -xa 'none relaxed standard strict' -d 'Apply a named preset'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l mode -xa 'human agent both' -d 'Which mode to configure'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l scan -xa 'static semantic off' -d 'Scan level'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l on-warn -xa 'prompt fail allow' -d 'Warning behavior'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l require-scan -d 'Block --skip-scan'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l trust -d 'Add trust override'
+complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from security' -l remove-trust -d 'Remove a trust override'
 
 # tap subcommands
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list info init install' -a 'add' -d 'Add a tap'
