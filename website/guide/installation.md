@@ -25,7 +25,7 @@ SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
 On macOS and Linux with [Homebrew](https://brew.sh):
 
 ```bash
-brew install skilltap/skilltap/skilltap
+brew install nklisch/skilltap/skilltap
 ```
 
 This installs a pre-built binary and keeps it up to date with `brew upgrade`.

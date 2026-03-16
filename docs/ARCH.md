@@ -25,7 +25,7 @@ This document describes how skilltap is built internally — module boundaries, 
 1. `bunx skilltap` — for Bun users
 2. `npx skilltap` — for Node users (Bun packages work on npm)
 3. Standalone binary via `bun build --compile` — no runtime dependency
-4. Homebrew: `brew install skilltap/skilltap/skilltap`
+4. Homebrew: `brew install nklisch/skilltap/skilltap`
 5. Install script: `curl -fsSL https://raw.githubusercontent.com/nklisch/skilltap/main/install.sh | sh`
 
 GitHub Actions release workflow (`.github/workflows/release.yml`) builds 4 platform binaries (linux-x64, linux-arm64, darwin-x64, darwin-arm64) on `v*` tag push, attests each binary with `actions/attest-build-provenance`, generates `checksums.txt`, and publishes `skilltap` and `@skilltap/core` to npm with `--provenance`. A `repository_dispatch` event then triggers the Homebrew formula update in `homebrew-skilltap/`.

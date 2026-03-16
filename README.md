@@ -38,7 +38,7 @@ SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
 **Homebrew:**
 
 ```bash
-brew install skilltap/skilltap/skilltap
+brew install nklisch/skilltap/skilltap
 ```
 
 **Without installing:**

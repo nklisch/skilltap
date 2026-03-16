@@ -153,14 +153,14 @@ skilltap/homebrew-skilltap/
 Users install with:
 
 ```bash
-brew tap skilltap/skilltap
+brew tap nklisch/skilltap
 brew install skilltap
 ```
 
 Or one-liner:
 
 ```bash
-brew install skilltap/skilltap/skilltap
+brew install nklisch/skilltap/skilltap
 ```
 
 ### Formula
@@ -256,7 +256,7 @@ notify-homebrew:
     - uses: peter-evans/repository-dispatch@v3
       with:
         token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        repository: skilltap/homebrew-skilltap
+        repository: nklisch/homebrew-skilltap
         event-type: release
         client-payload: '{"version": "${{ github.ref_name }}"}'
 ```
