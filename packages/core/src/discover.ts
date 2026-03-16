@@ -1,4 +1,4 @@
-import { lstat, readdir, readlink } from "node:fs/promises";
+import { lstat, readdir, readlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { $ } from "bun";
 import { loadInstalled } from "./config";
@@ -45,9 +45,21 @@ export type DiscoverResult = {
 async function readDirSafe(dir: string): Promise<string[]> {
   try {
     const entries = await readdir(dir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isDirectory() || e.isSymbolicLink())
-      .map((e) => e.name);
+    const names: string[] = [];
+    for (const e of entries) {
+      if (e.isDirectory()) {
+        names.push(e.name);
+      } else if (e.isSymbolicLink()) {
+        // Skip broken symlinks — stat() follows the link and throws if target is missing
+        try {
+          await stat(join(dir, e.name));
+          names.push(e.name);
+        } catch {
+          // broken symlink, skip
+        }
+      }
+    }
+    return names;
   } catch {
     return [];
   }
