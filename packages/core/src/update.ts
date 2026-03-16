@@ -312,7 +312,15 @@ async function updateGitSkill(
     : skillInstallDir(record.name, effectiveScope, options.projectRoot);
 
   const fetchResult = await fetch(workDir);
-  if (!fetchResult.ok) return fetchResult;
+  if (!fetchResult.ok) {
+    // Old local-path installs may have a deleted source. Gracefully skip.
+    if (record.repo?.startsWith("/")) {
+      result.upToDate.push(record.name);
+      options.onProgress?.(record.name, "local");
+      return ok(undefined);
+    }
+    return fetchResult;
+  }
 
   const localShaResult = await revParse(workDir, "HEAD");
   if (!localShaResult.ok) return localShaResult;

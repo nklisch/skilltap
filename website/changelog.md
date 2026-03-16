@@ -5,6 +5,11 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.6
+- Fixed `skilltap update` crashing on skills installed from local git paths whose source directory was later deleted. Records with a local filesystem path as `repo` now gracefully skip with `"local"` status instead of hard-failing on git fetch.
+
+---
+
 ## v0.9.5
 - Fixed `skilltap install` erroring on conflict when no `onAlreadyInstalled` callback is provided; previously silently swallowed the conflict. Callers must now explicitly handle the case via the callback. Agent mode now auto-updates on reinstall (matching `--yes` behavior).
 - Fixed `skilltap install <local-path>` failing when the path is not a git repository. Non-git local directories are now copied directly and recorded with `repo: null` (skipped during update). Git-based local paths continue to clone and support updates.

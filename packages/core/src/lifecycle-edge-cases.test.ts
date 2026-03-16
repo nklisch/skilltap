@@ -18,7 +18,8 @@ import {
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { loadInstalled } from "./config";
+import { $ } from "bun";
+import { loadInstalled, saveInstalled } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { installSkill } from "./install";
 import { linkSkill } from "./link";
@@ -191,6 +192,94 @@ describe("error recovery", () => {
 
     const loaded = await loadInstalled();
     expect(loaded.ok).toBe(false);
+  });
+
+  test("old-style local install with repo path survives update", async () => {
+    // Simulate an installed.json from an older version where local installs
+    // stored the filesystem path as `repo` instead of null
+    const skillDir = join(homeDir, ".agents", "skills", "old-local-skill");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      "---\nname: old-local-skill\ndescription: test\n---\n# Skill\n",
+    );
+
+    await saveInstalled({
+      version: 1,
+      skills: [
+        {
+          name: "old-local-skill",
+          description: "test",
+          repo: "/tmp/deleted-source-path",
+          ref: null,
+          sha: null,
+          scope: "global",
+          path: null,
+          tap: null,
+          also: [],
+          installedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    // Update should skip this gracefully (not crash with git fetch error)
+    const progressStatuses: string[] = [];
+    const up = await updateSkill({
+      yes: true,
+      onProgress(name, status) {
+        if (name === "old-local-skill") progressStatuses.push(status);
+      },
+    });
+    expect(up.ok).toBe(true);
+    expect(progressStatuses).toContain("local");
+    expect(up.ok && up.value.upToDate).toContain("old-local-skill");
+  });
+
+  test("old-style git clone install with deleted source path survives update", async () => {
+    // Simulate: user ran `skilltap install /tmp/repo`, the clone is at the
+    // install dir with .git remote pointing to a now-deleted path
+    const skillDir = join(homeDir, ".agents", "skills", "dead-remote-skill");
+    await mkdir(skillDir, { recursive: true });
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      "---\nname: dead-remote-skill\ndescription: test\n---\n# Skill\n",
+    );
+    // Make it a git repo with a remote pointing to a nonexistent path
+    await initRepo(skillDir);
+    await commitAll(skillDir);
+    await $`git -C ${skillDir} remote add origin /tmp/skilltap-definitely-deleted-12345`.quiet();
+
+    await saveInstalled({
+      version: 1,
+      skills: [
+        {
+          name: "dead-remote-skill",
+          description: "test",
+          repo: "/tmp/skilltap-definitely-deleted-12345",
+          ref: null,
+          sha: "abc123",
+          scope: "global",
+          path: null,
+          tap: null,
+          also: [],
+          installedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ],
+    });
+
+    const progressStatuses: string[] = [];
+    const up = await updateSkill({
+      yes: true,
+      onProgress(name, status) {
+        if (name === "dead-remote-skill") progressStatuses.push(status);
+      },
+    });
+    expect(up.ok).toBe(true);
+    // Should gracefully skip, not crash with git fetch error
+    expect(progressStatuses).toContain("local");
+    expect(up.ok && up.value.upToDate).toContain("dead-remote-skill");
   });
 
   test("pre-existing file at target path does not block install", async () => {
