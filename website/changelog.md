@@ -5,6 +5,13 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.2
+- Fixed `skills adopt` (and skill discovery in general) crashing with ENOENT when a
+  broken symlink exists in an agent skills directory. Broken symlinks are now silently
+  skipped during discovery.
+
+---
+
 ## v0.9.1
 - Fixed symlink creation to gracefully handle existing paths: replaces stale symlinks
   pointing to the wrong target, real directories, and leftover files — instead of
