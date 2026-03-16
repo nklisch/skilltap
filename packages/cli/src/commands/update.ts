@@ -187,6 +187,7 @@ async function runAgentModeUpdate(
     onProgress(skillName, status) {
       if (status === "upToDate") agentUpToDate(skillName);
       else if (status === "linked") agentSkip(skillName, "is linked.");
+      else if (status === "local") agentSkip(skillName, "is local (no remote).");
     },
 
     onDiff(skillName, stat, fromSha, toSha) {
@@ -284,6 +285,8 @@ async function runInteractiveUpdate(
         log.info("Already up to date.");
       } else if (status === "linked") {
         log.info("Skipped (linked).");
+      } else if (status === "local") {
+        log.info("Skipped (local, no remote).");
       }
     },
 

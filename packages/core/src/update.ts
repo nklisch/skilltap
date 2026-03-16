@@ -45,7 +45,7 @@ export type UpdateOptions = {
   projectRoot?: string;
   onProgress?: (
     skillName: string,
-    status: "checking" | "upToDate" | "updated" | "skipped" | "linked",
+    status: "checking" | "upToDate" | "updated" | "skipped" | "linked" | "local",
   ) => void;
   onDiff?: (
     skillName: string,
@@ -519,6 +519,7 @@ async function updateGitSkillGroup(
 
 type SkillGroup =
   | { type: "linked"; skill: InstalledSkill }
+  | { type: "local"; skill: InstalledSkill }
   | { type: "npm"; skill: InstalledSkill }
   | { type: "git-standalone"; skill: InstalledSkill }
   | { type: "git-multi"; repo: string; skills: InstalledSkill[] };
@@ -533,11 +534,15 @@ function groupSkillsByRepo(skills: InstalledSkill[]): SkillGroup[] {
       solo.push({ type: "linked", skill });
       continue;
     }
-    if (skill.repo?.startsWith("npm:")) {
+    if (!skill.repo) {
+      solo.push({ type: "local", skill });
+      continue;
+    }
+    if (skill.repo.startsWith("npm:")) {
       solo.push({ type: "npm", skill });
       continue;
     }
-    if (skill.path !== null && skill.repo) {
+    if (skill.path !== null) {
       const existing = multiGroups.get(skill.repo);
       if (existing) {
         existing.push(skill);
@@ -568,6 +573,11 @@ async function runUpdatePass(
   for (const group of groups) {
     if (group.type === "linked") {
       options.onProgress?.(group.skill.name, "linked");
+      continue;
+    }
+
+    if (group.type === "local") {
+      options.onProgress?.(group.skill.name, "local");
       continue;
     }
 
