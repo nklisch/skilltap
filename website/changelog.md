@@ -5,6 +5,12 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.4
+- Fixed `skilltap update` erroring with "git fetch failed: fatal: not a git repository" on adopted local skills that have no git remote. These skills are now silently skipped during update with a "local (no remote)" status.
+- Fixed Homebrew tap name in install instructions.
+
+---
+
 ## v0.9.3
 - Fixed `install`, `find`, `tap list`, and `skills info` failing with "No taps
   configured" on a fresh install. The built-in tap is now cloned on first use
