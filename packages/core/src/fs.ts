@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { lstat, stat } from "node:fs/promises";
 import { $ } from "bun";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
@@ -23,5 +24,29 @@ export async function removeTmpDir(dir: string): Promise<void> {
     await $`rm -rf ${dir}`.quiet();
   } catch {
     // ignore
+  }
+}
+
+export async function resolvedDirExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export async function fileExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export async function isSymlinkAt(path: string): Promise<boolean> {
+  try {
+    return (await lstat(path)).isSymbolicLink();
+  } catch {
+    return false;
   }
 }
