@@ -5,6 +5,13 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.5
+- Fixed `skilltap install` erroring on conflict when no `onAlreadyInstalled` callback is provided; previously silently swallowed the conflict. Callers must now explicitly handle the case via the callback. Agent mode now auto-updates on reinstall (matching `--yes` behavior).
+- Fixed `skilltap install <local-path>` failing when the path is not a git repository. Non-git local directories are now copied directly and recorded with `repo: null` (skipped during update). Git-based local paths continue to clone and support updates.
+- Added comprehensive lifecycle test suite (24 tests) covering the full skill journey — install → update → disable → enable → move → remove — across git, npm, local, adopted, and linked sources.
+
+---
+
 ## v0.9.4
 - Fixed `skilltap update` erroring with "git fetch failed: fatal: not a git repository" on adopted local skills that have no git remote. These skills are now silently skipped during update with a "local (no remote)" status.
 - Fixed Homebrew tap name in install instructions.
