@@ -5,6 +5,13 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.3
+- Fixed `install`, `find`, `tap list`, and `skills info` failing with "No taps
+  configured" on a fresh install. The built-in tap is now cloned on first use
+  in all commands that resolve tap names, not just `tap install`.
+
+---
+
 ## v0.9.2
 - Fixed `skills adopt` (and skill discovery in general) crashing with ENOENT when a
   broken symlink exists in an agent skills directory. Broken symlinks are now silently
