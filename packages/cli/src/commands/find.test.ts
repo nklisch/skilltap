@@ -65,7 +65,7 @@ describe("find — no taps configured", () => {
     expect(stdout).toContain("No taps configured");
   });
 
-  test("shows skills.sh results for query even with no taps", async () => {
+  test.skipIf(!process.env.SKILLTAP_IT)("shows skills.sh results for query even with no taps", async () => {
     const { exitCode, stdout } = await runSkilltap(
       ["find", "react"],
       homeDir,
