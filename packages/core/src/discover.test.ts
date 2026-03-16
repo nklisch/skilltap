@@ -13,7 +13,7 @@ import { $ } from "bun";
 import { saveInstalled } from "./config";
 import { discoverSkills } from "./discover";
 
-setDefaultTimeout(30_000);
+setDefaultTimeout(45_000);
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
 

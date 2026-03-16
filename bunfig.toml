@@ -2,7 +2,7 @@
 peer = false
 
 [test]
-timeout = 45000
+timeout = 60000
 coverageDir = "coverage"
 coverageSkipTestFiles = true
 

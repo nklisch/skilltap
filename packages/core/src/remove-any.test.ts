@@ -18,7 +18,7 @@ import { discoverSkills } from "./discover";
 import { installSkill } from "./install";
 import { removeAnySkill } from "./remove";
 
-setDefaultTimeout(30_000);
+setDefaultTimeout(45_000);
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
 

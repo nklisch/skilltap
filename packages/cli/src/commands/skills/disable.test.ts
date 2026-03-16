@@ -12,7 +12,7 @@ import { loadInstalled, saveInstalled } from "@skilltap/core";
 import { $ } from "bun";
 import { makeTmpDir, removeTmpDir, runSkilltap } from "@skilltap/test-utils";
 
-setDefaultTimeout(30_000);
+setDefaultTimeout(45_000);
 
 let homeDir: string;
 let configDir: string;

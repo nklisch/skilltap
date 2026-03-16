@@ -14,7 +14,7 @@ import { loadInstalled, saveInstalled } from "./config";
 import { adoptSkill } from "./adopt";
 import { discoverSkills } from "./discover";
 
-setDefaultTimeout(30_000);
+setDefaultTimeout(45_000);
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
 

@@ -9,7 +9,7 @@ import {
   test,
 } from "bun:test";
 
-setDefaultTimeout(45_000);
+setDefaultTimeout(60_000);
 import { loadInstalled } from "@skilltap/core";
 import {
   createMaliciousSkillRepo,

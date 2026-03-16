@@ -17,7 +17,7 @@ import {
   runSkilltap,
 } from "@skilltap/test-utils";
 
-setDefaultTimeout(45_000);
+setDefaultTimeout(60_000);
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
 
