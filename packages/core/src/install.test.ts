@@ -115,11 +115,28 @@ describe("installSkill — standalone", () => {
     }
   });
 
-  test("already installed skill is added to updates list instead of failing", async () => {
+  test("already installed skill errors without onAlreadyInstalled callback", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global" });
       const result = await installSkill(repo.path, { scope: "global" });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("already installed");
+      expect(result.error.hint).toContain("update");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("already installed skill with onAlreadyInstalled=update goes to updates list", async () => {
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await installSkill(repo.path, { scope: "global" });
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        onAlreadyInstalled: async () => "update",
+      });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.updates).toContain("standalone-skill");
@@ -236,7 +253,11 @@ describe("installSkill — multi-skill", () => {
       await installSkill(repo.path, { scope: "global", skillNames: ["skill-a"], skipScan: true });
 
       // Install whole repo — skill-a is already installed, skill-b is new
-      const result = await installSkill(repo.path, { scope: "global", skipScan: true });
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        skipScan: true,
+        onAlreadyInstalled: async () => "update",
+      });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 

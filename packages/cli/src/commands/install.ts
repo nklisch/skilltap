@@ -164,6 +164,7 @@ async function runAgentMode(
         skills.map((s) => s.name),
       onSelectTap: async (matches: TapEntry[]): Promise<TapEntry | null> =>
         matches[0] ?? null,
+      onAlreadyInstalled: async () => "update" as const,
       agent,
       semantic: policy.scanMode === "semantic",
       threshold: config.security.threshold,

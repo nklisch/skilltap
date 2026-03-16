@@ -40,3 +40,41 @@ export const createMultiSkillRepo = () => createFixtureRepo("multi-skill-repo");
 export const createSampleTap = () => createFixtureRepo("sample-tap");
 export const createMaliciousSkillRepo = () =>
   createFixtureRepo("malicious-skill");
+
+/**
+ * Creates a bare skill directory (not a git repo) with a SKILL.md file.
+ * Useful for adopt and link tests where no git history is needed.
+ */
+export async function createSkillDir(
+  baseDir: string,
+  name: string,
+  content?: string,
+): Promise<string> {
+  const { mkdir } = await import("node:fs/promises");
+  const skillDir = join(baseDir, name);
+  await mkdir(skillDir, { recursive: true });
+  const md =
+    content ??
+    `---\nname: ${name}\ndescription: A test skill\n---\n# ${name}\nTest content.\n`;
+  await Bun.write(join(skillDir, "SKILL.md"), md);
+  return skillDir;
+}
+
+/**
+ * Creates an adoptable skill: a git clone inside `homeDir/.claude/skills/<name>/`
+ * whose origin points to `remoteRepoPath` (a fixture repo). This enables adopt
+ * tests where the adopted skill has a fetchable remote for subsequent updates.
+ */
+export async function createAdoptableSkill(
+  homeDir: string,
+  skillName: string,
+  remoteRepoPath: string,
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const { mkdir } = await import("node:fs/promises");
+  const { $ } = await import("bun");
+  const claudeSkillsDir = join(homeDir, ".claude", "skills");
+  await mkdir(claudeSkillsDir, { recursive: true });
+  const skillDir = join(claudeSkillsDir, skillName);
+  await $`git clone ${remoteRepoPath} ${skillDir}`.quiet();
+  return { path: skillDir, cleanup: () => removeTmpDir(skillDir) };
+}

@@ -216,8 +216,8 @@ async function buildPlacements(params: {
       destDir: skillInstallDir(skill.name, scope, projectRoot),
       useMove: true,
     });
-  } else if (adapter === "npm" || adapter === "http") {
-    // npm/http multi-skill: copy directly from extracted package (no git cache)
+  } else if (adapter === "npm" || adapter === "http" || adapter === "local") {
+    // npm/http/local multi-skill: copy directly from content (no git cache)
     for (const skill of selected) {
       placements.push({
         skill,
@@ -355,7 +355,7 @@ function makeRecord(
   return {
     name: skill.name,
     description: skill.description,
-    repo: sourceKey ?? repoUrl ?? resolved.url,
+    repo: resolved.adapter === "local" && !repoUrl ? null : (sourceKey ?? repoUrl ?? resolved.url),
     ref: effectiveRef ?? null,
     sha,
     scope: options.scope,
@@ -429,6 +429,31 @@ export async function installSkill(
       if (!extractResult.ok) return extractResult;
       contentDir = extractResult.value;
       sha = null;
+    } else if (resolved.adapter === "local") {
+      // Local paths: try git clone first (preserves update capability), fall back to cp
+      const isGitRepo = await $`git -C ${resolved.url} rev-parse --git-dir`.quiet().then(() => true).catch(() => false);
+      if (isGitRepo) {
+        const cloneResult = await clone(resolved.url, tmpDir, {
+          branch: effectiveRef,
+          depth: 1,
+        });
+        if (!cloneResult.ok) return cloneResult;
+        cloneUrl = cloneResult.value.effectiveUrl;
+        contentDir = tmpDir;
+        const shaResult = await revParse(tmpDir);
+        if (!shaResult.ok) return shaResult;
+        sha = shaResult.value;
+      } else {
+        // Non-git local dir: copy directly
+        const cpResult = await wrapShell(
+          () => $`cp -a ${resolved.url}/. ${tmpDir}`.quiet().then(() => undefined),
+          `Failed to copy local skill from "${resolved.url}"`,
+          "Check that the path exists and is readable.",
+        );
+        if (!cpResult.ok) return cpResult;
+        contentDir = tmpDir;
+        sha = null;
+      }
     } else {
       const cloneResult = await clone(resolved.url, tmpDir, {
         branch: effectiveRef,
@@ -489,16 +514,22 @@ export async function installSkill(
         (s) => s.name === skill.name && s.scope === options.scope,
       );
       if (conflict) {
-        if (options.onAlreadyInstalled) {
-          const action = await options.onAlreadyInstalled(skill.name);
-          if (action === "abort") {
-            return err(
-              new UserError(
-                `Skill '${skill.name}' is already installed.`,
-                `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
-              ),
-            );
-          }
+        if (!options.onAlreadyInstalled) {
+          return err(
+            new UserError(
+              `Skill '${skill.name}' is already installed.`,
+              `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
+            ),
+          );
+        }
+        const action = await options.onAlreadyInstalled(skill.name);
+        if (action === "abort") {
+          return err(
+            new UserError(
+              `Skill '${skill.name}' is already installed.`,
+              `Use 'skilltap update ${skill.name}' to update, or 'skilltap remove ${skill.name}' first.`,
+            ),
+          );
         }
         toUpdate.push(skill.name);
       } else {
@@ -564,8 +595,10 @@ export async function installSkill(
         : undefined;
     const now = new Date().toISOString();
 
+    // For placement strategy: local git repos use the git cache path (not the npm/http copy path)
+    const placementAdapter = resolved.adapter === "local" && cloneUrl ? "git" : resolved.adapter;
     const placements = await buildPlacements({
-      isStandalone, adapter: resolved.adapter, selected, contentDir,
+      isStandalone, adapter: placementAdapter, selected, contentDir,
       resolvedUrl: resolved.url, scope: options.scope, projectRoot: options.projectRoot,
     });
     const newRecords = await executePlacements({

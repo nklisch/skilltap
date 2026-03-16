@@ -572,11 +572,13 @@ async function runUpdatePass(
 
   for (const group of groups) {
     if (group.type === "linked") {
+      result.upToDate.push(group.skill.name);
       options.onProgress?.(group.skill.name, "linked");
       continue;
     }
 
     if (group.type === "local") {
+      result.upToDate.push(group.skill.name);
       options.onProgress?.(group.skill.name, "local");
       continue;
     }
