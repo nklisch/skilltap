@@ -6,7 +6,9 @@ import type {
 } from "@skilltap/core";
 import {
   composePolicy,
+  ensureBuiltinTap,
   installSkill,
+  isBuiltinTapCloned,
   loadConfig,
   loadTaps,
   resolveRegistries,
@@ -89,6 +91,14 @@ export default defineCommand({
       process.exit(1);
     }
     const config = configResult.value;
+
+    // Ensure built-in tap is cloned before searching
+    if (config.builtin_tap !== false) {
+      const alreadyCloned = await isBuiltinTapCloned();
+      if (!alreadyCloned) {
+        await ensureBuiltinTap();
+      }
+    }
 
     const isTTY = process.stdout.isTTY === true;
     const wantInteractive = args.interactive || (!query && !args.json && isTTY);

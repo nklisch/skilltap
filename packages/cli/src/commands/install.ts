@@ -10,8 +10,10 @@ import type {
   TapEntry,
 } from "@skilltap/core";
 import {
+  ensureBuiltinTap,
   findProjectRoot,
   installSkill,
+  isBuiltinTapCloned,
   saveConfig,
   skillInstallDir,
   updateSkill,
@@ -105,6 +107,14 @@ export default defineCommand({
       project: args.project,
       global: args.global,
     });
+
+    // Ensure built-in tap is cloned before resolving tap names
+    if (config.builtin_tap !== false) {
+      const alreadyCloned = await isBuiltinTapCloned();
+      if (!alreadyCloned) {
+        await ensureBuiltinTap();
+      }
+    }
 
     const verbose = args.quiet ? false : config.verbose;
     const sources = args._ as string[];

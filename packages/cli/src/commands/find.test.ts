@@ -60,6 +60,9 @@ afterEach(async () => {
 
 describe("find — no taps configured", () => {
   test("shows no taps message", async () => {
+    // Disable built-in tap to test the truly-no-taps path
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
     const { exitCode, stdout } = await runSkilltap(["find"], homeDir, configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No taps configured");
@@ -158,6 +161,9 @@ describe("find — with taps", () => {
   });
 
   test("--json outputs valid JSON", async () => {
+    // Disable built-in tap so only the custom tap's skills appear
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
     const tap = await createLocalTap([
       {
         name: "commit-helper",

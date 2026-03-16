@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { AGENT_PATHS, findProjectRoot, globalBase, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
+import { AGENT_PATHS, ensureBuiltinTap, findProjectRoot, globalBase, isBuiltinTapCloned, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { agentError } from "../../ui/agent-out";
 import { ansi, errorLine } from "../../ui/format";
@@ -107,6 +107,14 @@ export default defineCommand({
         process.stdout.write(`${ansi.dim(key.padEnd(13))} ${val}\n`);
       }
       return;
+    }
+
+    // Ensure built-in tap is cloned before checking taps
+    if (configResult.ok && configResult.value.builtin_tap !== false) {
+      const alreadyCloned = await isBuiltinTapCloned();
+      if (!alreadyCloned) {
+        await ensureBuiltinTap();
+      }
     }
 
     // Not installed — check taps

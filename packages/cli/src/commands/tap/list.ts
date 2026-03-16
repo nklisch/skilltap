@@ -1,4 +1,4 @@
-import { BUILTIN_TAP, loadConfig, loadTaps } from "@skilltap/core";
+import { BUILTIN_TAP, ensureBuiltinTap, isBuiltinTapCloned, loadConfig, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { exitWithError } from "../../ui/agent-out";
 import { ansi, errorLine, table } from "../../ui/format";
@@ -25,6 +25,15 @@ export default defineCommand({
     const agentMode = config["agent-mode"].enabled;
 
     const hasBuiltin = config.builtin_tap !== false;
+
+    // Ensure built-in tap is cloned before listing
+    if (hasBuiltin) {
+      const alreadyCloned = await isBuiltinTapCloned();
+      if (!alreadyCloned) {
+        await ensureBuiltinTap();
+      }
+    }
+
     if (!hasBuiltin && config.taps.length === 0) {
       if (args.json) {
         process.stdout.write("[]\n");
