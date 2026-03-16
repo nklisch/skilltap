@@ -1,10 +1,11 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { AGENT_PATHS, ensureBuiltinTap, findProjectRoot, globalBase, isBuiltinTapCloned, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
+import { AGENT_PATHS, ensureBuiltinTap, globalBase, isBuiltinTapCloned, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
-import { ansi, errorLine } from "../../ui/format";
+import { exitWithError, outputJson } from "../../ui/agent-out";
+import { ansi } from "../../ui/format";
 import { formatTrustLabel, formatTrustTier } from "../../ui/trust";
+import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -27,19 +28,13 @@ export default defineCommand({
     const configResult = await loadConfig();
     const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
 
-    const writeError = (msg: string, hint?: string) => {
-      if (agentMode) agentError(msg);
-      else errorLine(msg, hint);
-    };
-
     // Try installed first (global + project)
     const globalInstalledResult = await loadInstalled();
     if (!globalInstalledResult.ok) {
-      writeError(globalInstalledResult.error.message);
-      process.exit(1);
+      exitWithError(agentMode, globalInstalledResult.error.message, globalInstalledResult.error.hint);
     }
 
-    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectRoot = await tryFindProjectRoot();
     const projectInstalledResult = projectRoot ? await loadInstalled(projectRoot) : null;
 
     const allSkills = [
@@ -51,7 +46,7 @@ export default defineCommand({
 
     if (skill) {
       if (args.json) {
-        process.stdout.write(`${JSON.stringify(skill, null, 2)}\n`);
+        outputJson(skill);
         return;
       }
 
@@ -123,9 +118,7 @@ export default defineCommand({
       const tapEntry = tapsResult.value.find((e) => e.skill.name === args.name);
       if (tapEntry) {
         if (args.json) {
-          process.stdout.write(
-            `${JSON.stringify({ ...tapEntry.skill, tap: tapEntry.tapName, status: "available" }, null, 2)}\n`,
-          );
+          outputJson({ ...tapEntry.skill, tap: tapEntry.tapName, status: "available" });
           return;
         }
 
@@ -152,10 +145,10 @@ export default defineCommand({
       }
     }
 
-    writeError(
+    exitWithError(
+      agentMode,
       `Skill '${args.name}' is not installed`,
       `Run 'skilltap find ${args.name}' to search`,
     );
-    process.exit(1);
   },
 });

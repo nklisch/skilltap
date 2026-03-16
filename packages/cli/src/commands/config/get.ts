@@ -4,7 +4,7 @@ import {
   loadConfig,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
+import { exitWithError, outputJson } from "../../ui/agent-out";
 import { errorLine } from "../../ui/format";
 
 export default defineCommand({
@@ -35,7 +35,7 @@ export default defineCommand({
 
     if (!key) {
       if (args.json) {
-        process.stdout.write(`${JSON.stringify(config, null, 2)}\n`);
+        outputJson(config);
       } else {
         printFlat(config);
       }
@@ -43,19 +43,10 @@ export default defineCommand({
     }
 
     const result = getConfigValue(config, key);
-    if (!result.ok) {
-      const isAgentMode = config["agent-mode"].enabled;
-      if (isAgentMode) {
-        agentError(result.error.message);
-      } else {
-        process.stderr.write(`error: ${result.error.message}\n`);
-        if (result.error.hint) process.stderr.write(`  hint: ${result.error.hint}\n`);
-      }
-      process.exit(1);
-    }
+    if (!result.ok) exitWithError(config["agent-mode"].enabled, result.error.message, result.error.hint);
 
     if (args.json) {
-      process.stdout.write(`${JSON.stringify(result.value, null, 2)}\n`);
+      outputJson(result.value);
     } else {
       process.stdout.write(`${formatConfigValue(result.value)}\n`);
     }

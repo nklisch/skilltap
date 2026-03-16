@@ -1,7 +1,8 @@
-import { getTapInfo, loadConfig } from "@skilltap/core";
+import { getTapInfo } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
-import { ansi, errorLine, table } from "../../ui/format";
+import { exitWithError, outputJson } from "../../ui/agent-out";
+import { ansi, table } from "../../ui/format";
+import { isAgentMode } from "../../ui/policy";
 
 export default defineCommand({
   meta: {
@@ -21,23 +22,15 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode = await isAgentMode();
 
     const result = await getTapInfo(args.name);
-    if (!result.ok) {
-      if (agentMode) {
-        agentError(result.error.message);
-        process.exit(1);
-      }
-      errorLine(result.error.message, result.error.hint);
-      process.exit(1);
-    }
+    if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
 
     const info = result.value;
 
     if (args.json) {
-      process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
+      outputJson(info);
       return;
     }
 

@@ -1,9 +1,10 @@
 import { intro, outro, spinner } from "@clack/prompts";
-import { validateSkill, scan, loadConfig } from "@skilltap/core";
+import { validateSkill, scan } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { resolve, basename, join } from "node:path";
-import { agentError } from "../ui/agent-out";
+import { agentError, outputJson } from "../ui/agent-out";
 import { ansi, errorLine, successLine } from "../ui/format";
+import { isAgentMode } from "../ui/policy";
 
 export default defineCommand({
   meta: {
@@ -29,8 +30,7 @@ export default defineCommand({
   },
   async run({ args }) {
     const useJson = args.json as boolean;
-    const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode = await isAgentMode();
 
     if (args.all) {
       await runAll(useJson);
@@ -63,7 +63,7 @@ export default defineCommand({
         process.exit(1);
       }
       const { valid, issues } = result.value;
-      process.stdout.write(`${JSON.stringify({ name: skillName, valid, issues }, null, 2)}\n`);
+      outputJson({ name: skillName, valid, issues });
       if (!valid) process.exit(1);
       return;
     }
@@ -170,8 +170,7 @@ async function runAll(useJson: boolean): Promise<void> {
         return { name: skill.name, valid, issues, frontmatter: frontmatter ?? null, fileCount: fileCount ?? null, totalBytes: totalBytes ?? null };
       }),
     );
-    process.stdout.write(JSON.stringify(results, null, 2));
-    process.stdout.write("\n");
+    outputJson(results);
     if (results.some((r) => !r.valid)) process.exit(1);
     return;
   }
@@ -221,30 +220,20 @@ async function runJson(skillPath: string, skillName: string): Promise<void> {
   const result = await validateSkill(skillPath);
 
   if (!result.ok) {
-    process.stdout.write(
-      JSON.stringify({ name: skillName, valid: false, error: result.error.message }, null, 2),
-    );
-    process.stdout.write("\n");
+    outputJson({ name: skillName, valid: false, error: result.error.message });
     process.exit(1);
   }
 
   const { valid, issues, frontmatter, fileCount, totalBytes } = result.value;
 
-  process.stdout.write(
-    JSON.stringify(
-      {
-        name: skillName,
-        valid,
-        issues,
-        frontmatter: frontmatter ?? null,
-        fileCount: fileCount ?? null,
-        totalBytes: totalBytes ?? null,
-      },
-      null,
-      2,
-    ),
-  );
-  process.stdout.write("\n");
+  outputJson({
+    name: skillName,
+    valid,
+    issues,
+    frontmatter: frontmatter ?? null,
+    fileCount: fileCount ?? null,
+    totalBytes: totalBytes ?? null,
+  });
 
   if (!valid) process.exit(1);
 }

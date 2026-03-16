@@ -8,6 +8,11 @@ import {
 import { agentError } from "./agent-out";
 import { errorLine } from "./format";
 
+export async function isAgentMode(): Promise<boolean> {
+  const configResult = await loadConfig();
+  return configResult.ok && configResult.value["agent-mode"].enabled;
+}
+
 export async function loadPolicyOrExit(
   flags: CliFlags,
 ): Promise<{ config: Config; policy: EffectivePolicy }> {

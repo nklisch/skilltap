@@ -48,6 +48,10 @@ export function agentUpToDate(name: string): void {
   process.stdout.write(`OK: ${name} is already up to date.\n`);
 }
 
+export function outputJson(data: unknown): void {
+  process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
+}
+
 export function agentSecurityBlock(
   staticWarnings: StaticWarning[],
   semanticWarnings: SemanticWarning[],

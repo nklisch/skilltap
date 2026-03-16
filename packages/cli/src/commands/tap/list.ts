@@ -1,6 +1,6 @@
 import { BUILTIN_TAP, ensureBuiltinTap, isBuiltinTapCloned, loadConfig, loadTaps } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError } from "../../ui/agent-out";
+import { exitWithError, outputJson } from "../../ui/agent-out";
 import { ansi, errorLine, table } from "../../ui/format";
 
 export default defineCommand({
@@ -76,7 +76,7 @@ export default defineCommand({
           skillCount: counts[tap.name] ?? 0,
         });
       }
-      process.stdout.write(`${JSON.stringify(tapList, null, 2)}\n`);
+      outputJson(tapList);
       return;
     }
 

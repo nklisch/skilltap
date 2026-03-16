@@ -2,7 +2,6 @@ import { intro, isCancel, outro, spinner } from "@clack/prompts";
 import type { InstalledSkill, TapEntry } from "@skilltap/core";
 import {
   ensureBuiltinTap,
-  findProjectRoot,
   installSkill,
   isBuiltinTapCloned,
   loadConfig,
@@ -20,7 +19,7 @@ import { createInstallCallbacks } from "../../ui/install-callbacks";
 import { createStepLogger } from "../../ui/install-steps";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmSaveDefault, selectAgents } from "../../ui/prompts";
-import { parseAlsoFlag, resolveScope, resolveSemanticInteractive } from "../../ui/resolve";
+import { parseAlsoFlag, resolveScope, resolveSemanticInteractive, tryFindProjectRoot } from "../../ui/resolve";
 import { searchPrompt } from "../../ui/search-prompt";
 
 export default defineCommand({
@@ -132,7 +131,7 @@ export default defineCommand({
     // Load installed skills for pre-selection
     const installedNames = new Set<string>();
     const installedSkills: InstalledSkill[] = [];
-    const detectedProjectRoot = await findProjectRoot().catch(() => undefined);
+    const detectedProjectRoot = await tryFindProjectRoot();
     const globalInstalledResult = await loadInstalled();
     if (globalInstalledResult.ok) {
       for (const s of globalInstalledResult.value.skills) {

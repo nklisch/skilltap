@@ -10,6 +10,10 @@ import {
   saveConfig,
   VALID_AGENT_IDS,
 } from "@skilltap/core";
+
+export async function tryFindProjectRoot(): Promise<string | undefined> {
+  return findProjectRoot().catch(() => undefined);
+}
 import { agentError } from "./agent-out";
 import { errorLine } from "./format";
 import { selectAgent, selectScope } from "./prompts";
@@ -135,7 +139,7 @@ export async function getInstalledSkillOrExit(
     process.exit(1);
   }
 
-  const projectRoot = await findProjectRoot().catch(() => undefined);
+  const projectRoot = await tryFindProjectRoot();
   const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
 
   const allSkills = [

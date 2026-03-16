@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
 import { VERSION } from "@skilltap/core";
+import { tryFindProjectRoot } from "./ui/resolve";
 
 // Handle --get-completions before citty takes over — fast path for tab completion
 if (process.argv.includes("--get-completions")) {
@@ -162,7 +163,7 @@ async function runStartupUpdateCheck(): Promise<void> {
 }
 
 async function runStartupSkillUpdateCheck(): Promise<void> {
-  const { checkForSkillUpdates, findProjectRoot, loadConfig } =
+  const { checkForSkillUpdates, loadConfig } =
     await import("@skilltap/core");
 
   const configResult = await loadConfig();
@@ -171,7 +172,7 @@ async function runStartupSkillUpdateCheck(): Promise<void> {
   if (config?.["agent-mode"]?.enabled) return;
 
   const intervalHours = config?.updates?.skill_check_interval_hours ?? 24;
-  const projectRoot = await findProjectRoot().catch(() => null);
+  const projectRoot = await tryFindProjectRoot();
 
   const updates = await checkForSkillUpdates(intervalHours, projectRoot);
   if (!updates || updates.length === 0) return;

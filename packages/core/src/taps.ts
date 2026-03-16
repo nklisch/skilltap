@@ -1,7 +1,6 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { $ } from "bun";
-import { z } from "zod/v4";
 import { getConfigDir, loadConfig, saveConfig } from "./config";
 import { extractStderr } from "./shell";
 import { checkGitInstalled, clone, log, pull, syncRemoteUrl } from "./git";
@@ -9,6 +8,7 @@ import type { RegistrySource } from "./registry";
 import { detectTapType, fetchSkillList } from "./registry";
 import type { Tap, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
+import { parseWithResult } from "./schemas/index";
 import { err, type GitError, ok, type Result, UserError } from "./types";
 
 /** The built-in tap — always available unless explicitly opted out via config. */
@@ -45,14 +45,7 @@ async function loadTapJson(
   } catch (e) {
     return err(new UserError(`Invalid JSON in tap.json in ${label}: ${e}`));
   }
-  const result = TapSchema.safeParse(raw);
-  if (!result.success) {
-    const details = z.prettifyError(result.error);
-    return err(
-      new UserError(`Invalid tap.json in ${label}: ${details}`),
-    );
-  }
-  return ok(result.data);
+  return parseWithResult(TapSchema, raw, `tap.json in ${label}`);
 }
 
 /** Map a registry source to a TapSkill repo string usable by the source adapter chain. */

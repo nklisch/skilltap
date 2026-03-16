@@ -1,7 +1,6 @@
 import { isCancel, spinner } from "@clack/prompts";
 import {
   discoverSkills,
-  findProjectRoot,
   type InstalledSkill,
   loadInstalled,
   removeAnySkill,
@@ -12,6 +11,7 @@ import { agentError, exitWithError } from "../../ui/agent-out";
 import { errorLine, successLine } from "../../ui/format";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
+import { tryFindProjectRoot } from "../../ui/resolve";
 import { sendEvent, telemetryBase } from "../../telemetry";
 
 export default defineCommand({
@@ -45,7 +45,7 @@ export default defineCommand({
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project, global: args.global });
 
-    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectRoot = await tryFindProjectRoot();
     const globalResult = await loadInstalled();
     if (!globalResult.ok) {
       exitWithError(policy.agentMode, globalResult.error.message);

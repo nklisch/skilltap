@@ -1,6 +1,8 @@
-import { type DoctorCheck, type DoctorIssue, findProjectRoot, runDoctor } from "@skilltap/core";
+import { type DoctorCheck, type DoctorIssue, runDoctor } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { outputJson } from "../ui/agent-out";
 import { ansi, errorLine } from "../ui/format";
+import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -91,7 +93,7 @@ function printIssue(issue: DoctorIssue, fix: boolean): void {
 async function runInteractive(fix: boolean): Promise<void> {
   process.stdout.write(`\n${ansi.dim("┌")} skilltap doctor\n${ansi.dim("│")}\n`);
 
-  const projectRoot = await findProjectRoot().catch(() => undefined);
+  const projectRoot = await tryFindProjectRoot();
   const result = await runDoctor({
     fix,
     projectRoot,
@@ -141,7 +143,7 @@ async function runInteractive(fix: boolean): Promise<void> {
 // ─── JSON output ──────────────────────────────────────────────────────────────
 
 async function runJson(fix: boolean): Promise<void> {
-  const projectRoot = await findProjectRoot().catch(() => undefined);
+  const projectRoot = await tryFindProjectRoot();
   const result = await runDoctor({ fix, projectRoot });
 
   const output = {
@@ -162,8 +164,7 @@ async function runJson(fix: boolean): Promise<void> {
     })),
   };
 
-  process.stdout.write(JSON.stringify(output, null, 2));
-  process.stdout.write("\n");
+  outputJson(output);
 
   if (!result.ok) process.exit(1);
 }

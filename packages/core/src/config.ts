@@ -2,9 +2,9 @@ import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
-import { z } from "zod/v4";
 import { type Config, ConfigSchema } from "./schemas/config";
 import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
+import { parseWithResult } from "./schemas/index";
 import { err, ok, type Result, UserError } from "./types";
 
 /**
@@ -203,14 +203,7 @@ export async function loadConfig(): Promise<Result<Config>> {
   // Migrate v1 flat security config to v2 per-mode structure before validation
   const migrated = migrateSecurityConfig(raw as Record<string, unknown>);
 
-  const result = ConfigSchema.safeParse(migrated);
-  if (!result.success) {
-    return err(
-      new UserError(`Invalid config.toml: ${z.prettifyError(result.error)}`),
-    );
-  }
-
-  return ok(result.data);
+  return parseWithResult(ConfigSchema, migrated, "config.toml");
 }
 
 export async function saveConfig(config: Config): Promise<Result<void>> {
@@ -255,14 +248,7 @@ export async function loadInstalled(projectRoot?: string): Promise<Result<Instal
     return err(new UserError(`Invalid JSON in installed.json: ${e}`));
   }
 
-  const result = InstalledJsonSchema.safeParse(raw);
-  if (!result.success) {
-    return err(
-      new UserError(`Invalid installed.json: ${z.prettifyError(result.error)}`),
-    );
-  }
-
-  return ok(result.data);
+  return parseWithResult(InstalledJsonSchema, raw, "installed.json");
 }
 
 export async function saveInstalled(

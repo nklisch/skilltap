@@ -1,8 +1,9 @@
 import { resolve } from "node:path";
-import { linkSkill, loadConfig } from "@skilltap/core";
+import { linkSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
-import { errorLine, successLine } from "../../ui/format";
+import { exitWithError } from "../../ui/agent-out";
+import { successLine } from "../../ui/format";
+import { isAgentMode } from "../../ui/policy";
 import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
 
 export default defineCommand({
@@ -32,8 +33,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode = await isAgentMode();
 
     // Resolve the local path (expand ~ and relative paths)
     const rawPath = args.path.replace(/^~/, process.env.HOME ?? "~");
@@ -43,14 +43,7 @@ export default defineCommand({
     const also = parseAlsoFlag(args.also);
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
-    if (!result.ok) {
-      if (agentMode) {
-        agentError(result.error.message);
-      } else {
-        errorLine(result.error.message, result.error.hint);
-      }
-      process.exit(1);
-    }
+    if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
 
     const skill = result.value;
     if (agentMode) {

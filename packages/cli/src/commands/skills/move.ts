@@ -1,8 +1,8 @@
-import { findProjectRoot, loadConfig, moveSkill } from "@skilltap/core";
+import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
-import { errorLine, successLine } from "../../ui/format";
-import { parseAlsoFlag } from "../../ui/resolve";
+import { exitWithError } from "../../ui/agent-out";
+import { successLine } from "../../ui/format";
+import { parseAlsoFlag, tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
   meta: { name: "move", description: "Move a skill between scopes" },
@@ -17,17 +17,11 @@ export default defineCommand({
     const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
 
     if (!args.global && !args.project) {
-      const msg = "Specify target scope: --global or --project";
-      if (agentMode) agentError(msg);
-      else errorLine(msg);
-      process.exit(1);
+      exitWithError(agentMode, "Specify target scope: --global or --project");
     }
 
     if (args.global && args.project) {
-      const msg = "Cannot specify both --global and --project";
-      if (agentMode) agentError(msg);
-      else errorLine(msg);
-      process.exit(1);
+      exitWithError(agentMode, "Cannot specify both --global and --project");
     }
 
     const also = parseAlsoFlag(args.also, configResult.ok ? configResult.value : undefined);
@@ -38,24 +32,17 @@ export default defineCommand({
     if (args.global) {
       to = { scope: "global" };
       // fromProjectRoot: try to find it for moving from project scope
-      fromProjectRoot = await findProjectRoot().catch(() => undefined);
+      fromProjectRoot = await tryFindProjectRoot();
     } else {
-      const projectRoot = await findProjectRoot().catch(() => undefined);
+      const projectRoot = await tryFindProjectRoot();
       if (!projectRoot) {
-        const msg = "No project root found. Run from inside a project directory.";
-        if (agentMode) agentError(msg);
-        else errorLine(msg);
-        process.exit(1);
+        exitWithError(agentMode, "No project root found. Run from inside a project directory.");
       }
       to = { scope: "project", projectRoot };
     }
 
     const result = await moveSkill(args.name, { to, fromProjectRoot, also });
-    if (!result.ok) {
-      if (agentMode) agentError(result.error.message);
-      else errorLine(result.error.message, result.error.hint);
-      process.exit(1);
-    }
+    if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
 
     const { from, to: destPath, record } = result.value;
     const fromScope = from.includes("/.agents/skills/") ? "global" : "project";

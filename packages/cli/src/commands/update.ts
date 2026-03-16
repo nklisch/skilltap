@@ -5,7 +5,6 @@ import {
   type Config,
   type EffectivePolicy,
   fetchSkillUpdateStatus,
-  findProjectRoot,
   type SemanticWarning,
   type StaticWarning,
   updateSkill,
@@ -18,6 +17,7 @@ import {
   agentSecurityBlock,
   agentSkip,
   agentUpToDate,
+  outputJson,
 } from "../ui/agent-out";
 import {
   ansi,
@@ -32,6 +32,7 @@ import { loadPolicyOrExit } from "../ui/policy";
 import {
   resolveAgentForAgentMode,
   resolveSemanticInteractive,
+  tryFindProjectRoot,
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
 import { sendEvent, telemetryBase } from "../telemetry";
@@ -82,7 +83,7 @@ export default defineCommand({
   },
   async run({ args }) {
     const name = args.name as string | undefined;
-    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectRoot = await tryFindProjectRoot();
 
     if (args.check) {
       return runCheckMode(projectRoot, args.json);
@@ -136,7 +137,7 @@ async function runCheckMode(
   if (json || !process.stdout.isTTY) {
     const updates = await fetchSkillUpdateStatus(pr);
     await writeSkillUpdateCache(updates, pr);
-    process.stdout.write(`${JSON.stringify({ updatesAvailable: updates }, null, 2)}\n`);
+    outputJson({ updatesAvailable: updates });
     return;
   }
 
@@ -231,9 +232,7 @@ async function runAgentModeUpdate(
   });
 
   if (useJson) {
-    process.stdout.write(
-      `${JSON.stringify({ updated, skipped, upToDate }, null, 2)}\n`,
-    );
+    outputJson({ updated, skipped, upToDate });
     return;
   }
 

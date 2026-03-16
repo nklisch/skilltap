@@ -1,9 +1,9 @@
 import { isCancel, multiselect } from "@clack/prompts";
-import { adoptSkill, discoverSkills, findProjectRoot, loadConfig } from "@skilltap/core";
+import { adoptSkill, discoverSkills, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
-import { errorLine, successLine } from "../../ui/format";
-import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
+import { agentError, exitWithError } from "../../ui/agent-out";
+import { successLine } from "../../ui/format";
+import { parseAlsoFlag, resolveScope, tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
   meta: { name: "adopt", description: "Adopt unmanaged skills into skilltap management" },
@@ -24,7 +24,7 @@ export default defineCommand({
     const configResult = await loadConfig();
     const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
 
-    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectRoot = await tryFindProjectRoot();
 
     // Discover unmanaged skills
     const discoverOpts = args.global
@@ -35,11 +35,7 @@ export default defineCommand({
 
     const discoverResult = await discoverSkills(discoverOpts);
 
-    if (!discoverResult.ok) {
-      if (agentMode) agentError(discoverResult.error.message);
-      else errorLine(discoverResult.error.message);
-      process.exit(1);
-    }
+    if (!discoverResult.ok) exitWithError(agentMode, discoverResult.error.message, discoverResult.error.hint);
 
     const unmanaged = discoverResult.value.skills;
 
@@ -75,9 +71,7 @@ export default defineCommand({
     const skillsToAdopt = namesToAdopt.map((name) => {
       const skill = unmanaged.find((s) => s.name === name);
       if (!skill) {
-        if (agentMode) agentError(`Unmanaged skill '${name}' not found.`);
-        else errorLine(`Unmanaged skill '${name}' not found.`, "Run 'skilltap skills --unmanaged' to see unmanaged skills.");
-        process.exit(1);
+        exitWithError(agentMode, `Unmanaged skill '${name}' not found.`, "Run 'skilltap skills --unmanaged' to see unmanaged skills.");
       }
       return skill;
     });
@@ -110,11 +104,7 @@ export default defineCommand({
             },
       });
 
-      if (!result.ok) {
-        if (agentMode) agentError(result.error.message);
-        else errorLine(result.error.message, result.error.hint);
-        process.exit(1);
-      }
+      if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
 
       const { record, symlinksCreated } = result.value;
       const destPath = record.path ?? `~/.agents/skills/${skill.name}`;

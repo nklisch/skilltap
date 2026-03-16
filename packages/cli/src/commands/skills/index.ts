@@ -1,7 +1,10 @@
 import { defineCommand } from "citty";
-import { discoverSkills, findProjectRoot, loadConfig } from "@skilltap/core";
+import { discoverSkills } from "@skilltap/core";
 import type { DiscoveredSkill } from "@skilltap/core";
+import { outputJson } from "../../ui/agent-out";
 import { ansi, table, termWidth, truncate } from "../../ui/format";
+import { isAgentMode } from "../../ui/policy";
+import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -23,17 +26,16 @@ export default defineCommand({
     unlink: () => import("./unlink").then((m) => m.default),
     adopt: () => import("./adopt").then((m) => m.default),
     move: () => import("./move").then((m) => m.default),
-    disable: () => import("./disable").then((m) => m.default),
-    enable: () => import("./enable").then((m) => m.default),
+    disable: () => import("./toggle").then((m) => m.disableCommand),
+    enable: () => import("./toggle").then((m) => m.enableCommand),
   },
   async run({ args }) {
     // If a subcommand was matched, citty still calls this run — bail out
     if ((args._ as string[])?.length > 0) return;
 
-    const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode = await isAgentMode();
 
-    const projectRoot = await findProjectRoot().catch(() => undefined);
+    const projectRoot = await tryFindProjectRoot();
 
     const discoverOpts = args.global
       ? { global: true as const, projectRoot, unmanagedOnly: args.unmanaged }
@@ -57,7 +59,7 @@ export default defineCommand({
     }
 
     if (args.json) {
-      process.stdout.write(`${JSON.stringify(skills, null, 2)}\n`);
+      outputJson(skills);
       return;
     }
 
