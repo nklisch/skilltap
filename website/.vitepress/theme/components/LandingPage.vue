@@ -345,14 +345,18 @@ const teamFeatures = [
     <footer class="landing-footer">
       <div class="footer-inner">
         <span class="footer-text">skilltap — MIT License</span>
-        <a
-          href="https://github.com/nklisch/skilltap"
-          target="_blank"
-          rel="noopener"
-          class="footer-link"
-        >
-          GitHub
-        </a>
+        <div class="footer-links">
+          <a href="https://github.com/nklisch/skilltap" target="_blank" rel="noopener" class="footer-link">GitHub</a>
+          <span class="footer-sep">·</span>
+          <a href="https://nathanklisch.dev" target="_blank" rel="noopener" class="footer-link">Nathan Klisch</a>
+        </div>
+      </div>
+      <div class="footer-inner footer-projects">
+        <a href="https://krometrail.dev" target="_blank" rel="noopener" class="footer-link">Krometrail</a>
+        <span class="footer-sep">·</span>
+        <a href="https://godot-theatre.dev" target="_blank" rel="noopener" class="footer-link">Theatre</a>
+        <span class="footer-sep">·</span>
+        <a href="https://ffmpegkit.dev" target="_blank" rel="noopener" class="footer-link">ffmpeg-kit</a>
       </div>
     </footer>
   </div>
@@ -809,11 +813,32 @@ const teamFeatures = [
   color: #78716c;
 }
 
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .footer-link {
   font-family: var(--vp-font-family-mono);
   font-size: 13px;
   color: #a8a29e;
   text-decoration: none;
+}
+
+.footer-link:hover {
+  color: #f5f5f4;
+}
+
+.footer-sep {
+  color: #44403c;
+  font-size: 13px;
+}
+
+.footer-projects {
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .footer-link:hover {

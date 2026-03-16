@@ -178,6 +178,8 @@ gtag('config', 'G-B0D0L2YB0N');`],
 
     footer: {
       message: "Released under the MIT License.",
+      copyright:
+        'By <a href="https://nathanklisch.dev">Nathan Klisch</a> · Also: <a href="https://krometrail.dev">Krometrail</a> · <a href="https://godot-theatre.dev">Theatre</a> · <a href="https://ffmpegkit.dev">ffmpeg-kit</a>',
     },
 
     editLink: {
