@@ -5,6 +5,14 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.1
+- Fixed symlink creation to gracefully handle existing paths: replaces stale symlinks
+  pointing to the wrong target, real directories, and leftover files — instead of
+  failing with EEXIST.
+- Symlink creation is now idempotent when the path already points to the correct target.
+
+---
+
 ## v0.8.0
 **Security config redesign and `skills` command group.**
 

@@ -1,7 +1,7 @@
 # skilltap — Complete Documentation
 
 > Source: https://skilltap.dev/llms-full.txt
-> Generated: 2026-03-15
+> Generated: 2026-03-16
 >
 > This file contains the complete skilltap documentation as a single Markdown document
 > for AI coding assistant ingestion. For a navigable index see https://skilltap.dev/llms.txt.

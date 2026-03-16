@@ -230,7 +230,7 @@ core → test-utils (dev)
 
 **taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps. Supports both git-cloned taps and HTTP registry taps (fetched live).
 
-**symlink.ts** — Creates and removes symlinks for agent-specific directories. Knows the path conventions for each supported agent.
+**symlink.ts** — Creates and removes symlinks for agent-specific directories. Knows the path conventions for each supported agent. Idempotent — gracefully replaces stale symlinks and leftover real directories instead of failing on EEXIST.
 
 **npm-registry.ts** — npm registry API client. `parseNpmSource()`, `fetchPackageMetadata()`, `resolveVersion()`, `downloadAndExtract()`. Private registry support via `NPM_CONFIG_REGISTRY` env, `.npmrc`, or `~/.npmrc`.
 
