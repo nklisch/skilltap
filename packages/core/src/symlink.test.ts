@@ -101,24 +101,68 @@ describe("createAgentSymlinks", () => {
     }
   });
 
-  test("returns UserError when symlink already exists at path", async () => {
+  test("replaces existing symlink pointing to a different target", async () => {
     const targetDir = await makeTmpDir();
     const anotherTarget = await makeTmpDir();
     try {
       await createAgentSymlinks("my-skill", targetDir, ["claude-code"], "global");
-      // Second call with same agent — symlink already exists
+      // Second call with different target — should replace the symlink
       const result = await createAgentSymlinks(
         "my-skill",
         anotherTarget,
         ["claude-code"],
         "global",
       );
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error.message).toContain("Failed to create symlink");
+      expect(result.ok).toBe(true);
+      const linkPath = join(homeDir, ".claude", "skills", "my-skill");
+      const target = await readlink(linkPath);
+      expect(target).toBe(anotherTarget);
     } finally {
       await removeTmpDir(targetDir);
       await removeTmpDir(anotherTarget);
+    }
+  });
+
+  test("is idempotent when symlink already points to correct target", async () => {
+    const targetDir = await makeTmpDir();
+    try {
+      await createAgentSymlinks("my-skill", targetDir, ["claude-code"], "global");
+      // Same call again — should succeed without error
+      const result = await createAgentSymlinks(
+        "my-skill",
+        targetDir,
+        ["claude-code"],
+        "global",
+      );
+      expect(result.ok).toBe(true);
+      const linkPath = join(homeDir, ".claude", "skills", "my-skill");
+      const target = await readlink(linkPath);
+      expect(target).toBe(targetDir);
+    } finally {
+      await removeTmpDir(targetDir);
+    }
+  });
+
+  test("replaces existing real directory with symlink", async () => {
+    const targetDir = await makeTmpDir();
+    try {
+      // Pre-create a real directory at the symlink path
+      const linkPath = join(homeDir, ".claude", "skills", "my-skill");
+      const { mkdir: mkdirFs } = await import("node:fs/promises");
+      await mkdirFs(linkPath, { recursive: true });
+      await Bun.write(join(linkPath, "SKILL.md"), "old content");
+
+      const result = await createAgentSymlinks(
+        "my-skill",
+        targetDir,
+        ["claude-code"],
+        "global",
+      );
+      expect(result.ok).toBe(true);
+      const target = await readlink(linkPath);
+      expect(target).toBe(targetDir);
+    } finally {
+      await removeTmpDir(targetDir);
     }
   });
 

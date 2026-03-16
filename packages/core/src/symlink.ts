@@ -1,8 +1,38 @@
-import { mkdir, symlink, unlink } from "node:fs/promises";
+import { lstat, mkdir, readlink, rm, symlink, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { globalBase } from "./fs";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
+
+/**
+ * Remove an existing path so a symlink can be created there.
+ * - If it's a symlink pointing to the same target, returns false (no action needed).
+ * - If it's a symlink pointing elsewhere, unlinks it and returns true.
+ * - If it's a real directory/file, removes it and returns true.
+ * - If nothing exists, returns true (safe to create).
+ */
+async function clearForSymlink(
+  linkPath: string,
+  targetPath: string,
+): Promise<boolean> {
+  let stat: Awaited<ReturnType<typeof lstat>>;
+  try {
+    stat = await lstat(linkPath);
+  } catch {
+    return true; // Nothing exists — safe to create
+  }
+
+  if (stat.isSymbolicLink()) {
+    const existing = await readlink(linkPath);
+    if (existing === targetPath) return false; // Already correct
+    await unlink(linkPath);
+    return true;
+  }
+
+  // Real file or directory — remove it to make way for the symlink
+  await rm(linkPath, { recursive: true, force: true });
+  return true;
+}
 
 export const AGENT_PATHS: Record<string, string> = {
   "claude-code": ".claude/skills",
@@ -54,7 +84,10 @@ export async function createAgentSymlinks(
     }
     try {
       await mkdir(join(linkPath, ".."), { recursive: true });
-      await symlink(targetPath, linkPath, "dir");
+      const needed = await clearForSymlink(linkPath, targetPath);
+      if (needed) {
+        await symlink(targetPath, linkPath, "dir");
+      }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
       return err(

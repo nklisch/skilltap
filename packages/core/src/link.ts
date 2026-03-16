@@ -1,4 +1,4 @@
-import { mkdir, symlink } from "node:fs/promises";
+import { lstat, mkdir, readlink, rm, symlink, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { loadInstalled, saveInstalled } from "./config";
 import { skillInstallDir } from "./paths";
@@ -63,7 +63,26 @@ export async function linkSkill(
   await mkdir(dirname(installPath), { recursive: true });
 
   try {
-    await symlink(localPath, installPath, "dir");
+    // Clear existing path if it's a stale symlink or leftover directory
+    let needsCreate = true;
+    try {
+      const stat = await lstat(installPath);
+      if (stat.isSymbolicLink()) {
+        const existing = await readlink(installPath);
+        if (existing === localPath) {
+          needsCreate = false;
+        } else {
+          await unlink(installPath);
+        }
+      } else {
+        await rm(installPath, { recursive: true, force: true });
+      }
+    } catch {
+      // Path doesn't exist — fine
+    }
+    if (needsCreate) {
+      await symlink(localPath, installPath, "dir");
+    }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return err(new UserError(`Failed to create symlink: ${msg}`));

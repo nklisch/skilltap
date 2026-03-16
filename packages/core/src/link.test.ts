@@ -100,8 +100,8 @@ describe("linkSkill — conflict", () => {
   });
 });
 
-describe("linkSkill — symlink error", () => {
-  test("returns error when symlink destination already exists as a file", async () => {
+describe("linkSkill — existing path handling", () => {
+  test("replaces existing file at symlink destination", async () => {
     const dir = await makeSkillDir();
 
     // Pre-create a file at the install destination
@@ -110,9 +110,23 @@ describe("linkSkill — symlink error", () => {
     await Bun.write(installPath, "blocking file");
 
     const result = await linkSkill(dir, { scope: "global" });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toContain("Failed to create symlink");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.name).toBe("test-skill");
+  });
+
+  test("replaces existing directory at symlink destination", async () => {
+    const dir = await makeSkillDir();
+
+    // Pre-create a directory at the install destination
+    const installPath = join(homeDir, ".agents", "skills", "test-skill");
+    await mkdir(installPath, { recursive: true });
+    await Bun.write(join(installPath, "SKILL.md"), "old content");
+
+    const result = await linkSkill(dir, { scope: "global" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.name).toBe("test-skill");
   });
 });
 
