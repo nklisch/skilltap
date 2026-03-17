@@ -32,7 +32,7 @@ curl -fsSL https://skilltap.dev/install.sh | sh
 Installs to `~/.local/bin/skilltap`. Override the install directory:
 
 ```bash
-SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
+curl -fsSL https://skilltap.dev/install.sh | SKILLTAP_INSTALL=/usr/local/bin sh
 ```
 
 **Homebrew:**

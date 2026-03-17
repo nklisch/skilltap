@@ -427,7 +427,7 @@ This downloads the latest binary for your platform and installs it to `~/.local/
 To install to a different location, set `SKILLTAP_INSTALL`:
 
 ```bash
-SKILLTAP_INSTALL=/usr/local/bin curl -fsSL https://skilltap.dev/install.sh | sh
+curl -fsSL https://skilltap.dev/install.sh | SKILLTAP_INSTALL=/usr/local/bin sh
 ```
 
 ## Via Homebrew
