@@ -5,6 +5,13 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.10
+- Fixed skill install failing on macOS with "no such file or directory" during copy.
+  The scanner's symlink resolution (`/tmp` → `/private/tmp`) caused a path mismatch
+  with the install cache, so copied paths pointed at the deleted temp dir.
+
+---
+
 ## v0.9.9
 - Fixed scanner incorrectly matching lowercase `skill.md` as `SKILL.md` on macOS
   (case-insensitive filesystem). All SKILL.md existence checks now use `readdir` +
