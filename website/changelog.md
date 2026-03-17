@@ -5,6 +5,15 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.7
+- Fixed `skilltap tap install` failing with "Skill not found in repo" on macOS when
+  installing skills from repos that use `.agents/skills/` layout. Bun.Glob silently
+  skips dot-prefixed directories in cross-compiled macOS binaries; replaced with
+  `readdir`-based scanning that works reliably across platforms.
+- Added debug logging to the skill scanner (enable with `SKILLTAP_DEBUG=1`).
+
+---
+
 ## v0.9.6
 - Fixed `skilltap update` crashing on skills installed from local git paths whose source directory was later deleted. Records with a local filesystem path as `repo` now gracefully skip with `"local"` status instead of hard-failing on git fetch.
 
