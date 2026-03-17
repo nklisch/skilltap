@@ -5,6 +5,15 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.9
+- Fixed scanner incorrectly matching lowercase `skill.md` as `SKILL.md` on macOS
+  (case-insensitive filesystem). All SKILL.md existence checks now use `readdir` +
+  exact string matching instead of `Bun.file().exists()`.
+- Root `SKILL.md` no longer short-circuits scanning — repos with both a root skill
+  and nested skills under `.agents/skills/` now discover all skills correctly.
+
+---
+
 ## v0.9.7
 - Fixed `skilltap tap install` failing with "Skill not found in repo" on macOS when
   installing skills from repos that use `.agents/skills/` layout. Bun.Glob silently
