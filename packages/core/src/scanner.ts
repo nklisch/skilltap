@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, realpath } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { debug } from "./debug";
 import { parseSkillFrontmatter } from "./frontmatter";
@@ -119,12 +119,24 @@ export type ScanOptions = {
 };
 
 export async function scan(dir: string, options?: ScanOptions): Promise<ScannedSkill[]> {
+	// Resolve symlinks (macOS /tmp → /private/tmp) to avoid path confusion
+	const resolvedDir = await realpath(dir).catch(() => dir);
+	if (resolvedDir !== dir) {
+		debug("scan: resolved symlink", { from: dir, to: resolvedDir });
+		dir = resolvedDir;
+	}
 	debug("scan start", { dir });
+
+	// Log root directory contents for diagnostics
+	const rootEntries = await readdir(dir).catch(() => [] as string[]);
+	debug("scan: root entries", { entries: rootEntries });
 
 	// Step 1: Root SKILL.md — standalone repo
 	const rootSkillMd = join(dir, "SKILL.md");
 	if (await Bun.file(rootSkillMd).exists()) {
-		debug("scan: root SKILL.md found");
+		const rootSize = Bun.file(rootSkillMd).size;
+		const rootPreview = (await Bun.file(rootSkillMd).text()).slice(0, 200);
+		debug("scan: root SKILL.md found", { path: rootSkillMd, size: rootSize, preview: rootPreview });
 		const skill = await processSkillFile(rootSkillMd);
 		return [skill];
 	}
