@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, realpath } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
@@ -467,6 +467,10 @@ export async function installSkill(
       if (!shaResult.ok) return shaResult;
       sha = shaResult.value;
     }
+
+    // Resolve symlinks so scanner paths and contentDir match
+    // (macOS: /tmp → /private/tmp; scanner resolves internally)
+    contentDir = await realpath(contentDir).catch(() => contentDir);
 
     debug("content fetched", { contentDir, sha, adapter: resolved.adapter });
 
