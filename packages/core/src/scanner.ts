@@ -97,7 +97,7 @@ function deduplicate(skills: ScannedSkill[]): ScannedSkill[] {
 	);
 }
 
-/** List subdirectories of `parent` that contain a SKILL.md file. */
+/** List subdirectories of `parent` that contain a SKILL.md file (case-sensitive). */
 async function listSkillDirs(parent: string): Promise<string[]> {
 	let entries: string[];
 	try {
@@ -107,8 +107,11 @@ async function listSkillDirs(parent: string): Promise<string[]> {
 	}
 	const paths: string[] = [];
 	for (const entry of entries) {
-		const p = join(parent, entry, "SKILL.md");
-		if (await Bun.file(p).exists()) paths.push(p);
+		const subDir = join(parent, entry);
+		const subEntries = await readdir(subDir).catch(() => [] as string[]);
+		if (subEntries.includes("SKILL.md")) {
+			paths.push(join(subDir, "SKILL.md"));
+		}
 	}
 	return paths;
 }
@@ -127,18 +130,16 @@ export async function scan(dir: string, options?: ScanOptions): Promise<ScannedS
 	}
 	debug("scan start", { dir });
 
-	// Log root directory contents for diagnostics
+	// Use readdir for case-sensitive filename checks throughout
+	// (macOS filesystem is case-insensitive, so Bun.file("SKILL.md").exists() matches "skill.md")
 	const rootEntries = await readdir(dir).catch(() => [] as string[]);
-	debug("scan: root entries", { entries: rootEntries });
 
-	// Step 1: Root SKILL.md — standalone repo
-	const rootSkillMd = join(dir, "SKILL.md");
-	if (await Bun.file(rootSkillMd).exists()) {
-		const rootSize = Bun.file(rootSkillMd).size;
-		const rootPreview = (await Bun.file(rootSkillMd).text()).slice(0, 200);
-		debug("scan: root SKILL.md found", { path: rootSkillMd, size: rootSize, preview: rootPreview });
-		const skill = await processSkillFile(rootSkillMd);
-		return [skill];
+	// Step 1: Root SKILL.md — standalone or multi-skill repo with root skill
+	const rootPaths: string[] = [];
+	if (rootEntries.includes("SKILL.md")) {
+		const rootSkillMd = join(dir, "SKILL.md");
+		debug("scan: root SKILL.md found", { path: rootSkillMd });
+		rootPaths.push(rootSkillMd);
 	}
 
 	// Step 2: .agents/skills/*/SKILL.md — readdir-based (avoids Bun.Glob dot-dir issues)
@@ -159,7 +160,7 @@ export async function scan(dir: string, options?: ScanOptions): Promise<ScannedS
 	).flat();
 	debug("scan step 3: agent-specific", { count: agentSpecificPaths.length });
 
-	const combined = [...agentsPaths, ...skillsPaths, ...agentSpecificPaths];
+	const combined = [...rootPaths, ...agentsPaths, ...skillsPaths, ...agentSpecificPaths];
 
 	// Step 4: Deep scan fallback if nothing found
 	let discoveredPaths: string[];
