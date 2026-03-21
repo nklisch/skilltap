@@ -156,6 +156,15 @@ export async function scan(dir: string, options?: ScanOptions): Promise<ScannedS
 	skillsPaths.push(...(await listSkillDirs(skillsDir)));
 	debug("scan step 2.5: skills/", { count: skillsPaths.length });
 
+	// Step 2.6: plugins/*/skills/*/SKILL.md (Claude Code plugin convention)
+	const pluginsDir = join(dir, "plugins");
+	const pluginEntries = await readdir(pluginsDir).catch(() => [] as string[]);
+	const pluginPaths: string[] = [];
+	for (const pluginName of pluginEntries) {
+		pluginPaths.push(...(await listSkillDirs(join(pluginsDir, pluginName, "skills"))));
+	}
+	debug("scan step 2.6: plugins/*/skills/", { count: pluginPaths.length });
+
 	// Step 3: Agent-specific paths — readdir-based (avoids Bun.Glob dot-dir issues)
 	const agentSpecificPaths = (
 		await Promise.all(
@@ -166,7 +175,7 @@ export async function scan(dir: string, options?: ScanOptions): Promise<ScannedS
 	).flat();
 	debug("scan step 3: agent-specific", { count: agentSpecificPaths.length });
 
-	const combined = [...rootPaths, ...agentsPaths, ...skillsPaths, ...agentSpecificPaths];
+	const combined = [...rootPaths, ...agentsPaths, ...skillsPaths, ...pluginPaths, ...agentSpecificPaths];
 
 	// Step 4: Deep scan fallback if nothing found
 	let discoveredPaths: string[];

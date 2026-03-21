@@ -298,4 +298,38 @@ describe("scan — edge cases", () => {
     expect(skills).toHaveLength(1);
     expect(skills[0]?.name).toBe("my-tool");
   });
+
+  test("discovers skills in plugins/*/skills/*/SKILL.md (Claude Code plugin convention)", async () => {
+    tmpDir = await makeTmpDir();
+    const skillDir = join(tmpDir, "plugins", "my-plugin", "skills", "my-skill");
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: my-skill",
+        "description: From plugin skills directory.",
+        "---",
+      ].join("\n"),
+    );
+
+    const skills = await scan(tmpDir);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.name).toBe("my-skill");
+  });
+
+  test("discovers skills across multiple plugins in plugins/*/skills/", async () => {
+    tmpDir = await makeTmpDir();
+    await Bun.write(
+      join(tmpDir, "plugins", "plugin-a", "skills", "skill-a", "SKILL.md"),
+      ["---", "name: skill-a", "description: Skill A.", "---"].join("\n"),
+    );
+    await Bun.write(
+      join(tmpDir, "plugins", "plugin-b", "skills", "skill-b", "SKILL.md"),
+      ["---", "name: skill-b", "description: Skill B.", "---"].join("\n"),
+    );
+
+    const skills = await scan(tmpDir);
+    expect(skills).toHaveLength(2);
+    expect(skills.map((s) => s.name).sort()).toEqual(["skill-a", "skill-b"]);
+  });
 });
