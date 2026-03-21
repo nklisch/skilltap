@@ -5,10 +5,12 @@ import { resolveSource } from "./adapters";
 import { debug } from "./debug";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
-import { makeTmpDir, removeTmpDir } from "./fs";
+import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import { checkGitInstalled, clone, revParse } from "./git";
 import { downloadAndExtract, parseNpmSource } from "./npm-registry";
-import { skillCacheDir, skillInstallDir } from "./paths";
+import type { OnOrphansFound } from "./orphan";
+import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
+import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import type { ScannedSkill } from "./scanner";
 import { scan } from "./scanner";
 import type { ResolvedSource } from "./schemas/agent";
@@ -18,7 +20,7 @@ import { scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
 import { wrapShell } from "./shell";
-import { createAgentSymlinks } from "./symlink";
+import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { TapEntry } from "./taps";
 import { loadTaps } from "./taps";
 import type { TrustInfo } from "./trust";
@@ -79,6 +81,8 @@ export type InstallOptions = {
   onDeepScan?: (count: number) => Promise<boolean>;
   /** Source metadata for trust-tier override resolution via composePolicyForSource. */
   source?: { tapName?: string; sourceType: "tap" | "git" | "npm" | "local" };
+  /** Called when orphan records are detected before the install. Return names to purge. */
+  onOrphansFound?: OnOrphansFound;
 };
 
 export type InstallResult = {
@@ -383,6 +387,18 @@ export async function installSkill(
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
+  // 1.1. Detect and optionally purge orphan records before installing
+  if (options.onOrphansFound) {
+    const orphans = await findOrphanRecords(installed, options.projectRoot);
+    if (orphans.length > 0) {
+      const namesToPurge = await options.onOrphansFound(orphans);
+      if (namesToPurge.length > 0) {
+        const toPurge = orphans.filter((o) => namesToPurge.includes(o.record.name));
+        await purgeOrphanRecords(toPurge, installed, fileRoot);
+      }
+    }
+  }
+
   // 1.5. Tap pre-resolution
   const tapResult = await resolveTapName(
     source,
@@ -513,11 +529,27 @@ export async function installSkill(
     // 6.1. Check for already-installed conflicts — before running security scans
     const toUpdate: string[] = [];
     const toInstall: ScannedSkill[] = [];
+    const projectRoot = options.scope === "project" ? options.projectRoot : undefined;
     for (const skill of selected) {
       const conflict = installed.skills.find(
         (s) => s.name === skill.name && s.scope === options.scope,
       );
       if (conflict) {
+        // Verify the conflict is real — does the directory actually exist?
+        const conflictScope = conflict.scope as "global" | "project";
+        const conflictDir =
+          conflict.active === false
+            ? skillDisabledDir(conflict.name, conflictScope, projectRoot)
+            : skillInstallDir(conflict.name, conflictScope, projectRoot);
+
+        if (!(await resolvedDirExists(conflictDir))) {
+          // Phantom conflict: record exists but directory is gone. Clean up and install fresh.
+          installed.skills = installed.skills.filter((s) => s !== conflict);
+          await removeAgentSymlinks(conflict.name, conflict.also, conflict.scope, projectRoot);
+          toInstall.push(skill);
+          continue;
+        }
+
         if (!options.onAlreadyInstalled) {
           return err(
             new UserError(

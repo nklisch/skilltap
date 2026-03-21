@@ -3,6 +3,7 @@ import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
+import { resolvedDirExists } from "./fs";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
@@ -12,6 +13,8 @@ import { err, ok, UserError } from "./types";
 export type RemoveOptions = {
   scope?: "global" | "project" | "linked";
   projectRoot?: string;
+  /** Called when removing a skill whose directory was already missing. */
+  onOrphanRemoved?: (name: string) => void;
 };
 
 export async function removeSkill(
@@ -63,6 +66,10 @@ export async function removeSkill(
             record.scope === "linked" ? "global" : record.scope,
             options.projectRoot,
           );
+  if (!(await resolvedDirExists(installPath))) {
+    options.onOrphanRemoved?.(name);
+  }
+
   const rmResult = await wrapShell(
     () => $`rm -rf ${installPath}`.quiet().then(() => undefined),
     `Failed to remove skill directory '${name}'`,

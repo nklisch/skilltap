@@ -4,7 +4,7 @@ import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
-import { makeTmpDir, removeTmpDir } from "./fs";
+import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import type { DiffStat } from "./git";
 import { diff, diffStat, fetch, pull, resetHard, revParse } from "./git";
 import {
@@ -19,6 +19,8 @@ import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
+import type { OnOrphansFound, OrphanRecord } from "./orphan";
+import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import { wrapShell } from "./shell";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import { parseGitHubRepo, resolveTrust } from "./trust";
@@ -45,8 +47,12 @@ export type UpdateOptions = {
   projectRoot?: string;
   onProgress?: (
     skillName: string,
-    status: "checking" | "upToDate" | "updated" | "skipped" | "linked" | "local",
+    status: "checking" | "upToDate" | "updated" | "skipped" | "linked" | "local" | "removed-upstream",
   ) => void;
+  /** Called when orphan records are detected before the update pass. Return names to purge. */
+  onOrphansFound?: OnOrphansFound;
+  /** Called when a multi-skill's subdirectory is gone from the cache after pull. */
+  onSkillRemovedUpstream?: (skillName: string, repoUrl: string) => Promise<"remove" | "skip">;
   onDiff?: (
     skillName: string,
     stat: DiffStat,
@@ -311,6 +317,13 @@ async function updateGitSkill(
     ? skillDisabledDir(record.name, effectiveScope, options.projectRoot)
     : skillInstallDir(record.name, effectiveScope, options.projectRoot);
 
+  // Before fetch: verify the work directory exists (handles orphan installs)
+  if (!(await resolvedDirExists(workDir))) {
+    result.skipped.push(record.name);
+    options.onProgress?.(record.name, "removed-upstream");
+    return ok(undefined);
+  }
+
   const fetchResult = await fetch(workDir);
   if (!fetchResult.ok) {
     // Old local-path installs may have a deleted source. Gracefully skip.
@@ -479,6 +492,23 @@ async function updateGitSkillGroup(
     // biome-ignore lint/style/noNonNullAssertion: multi-skill records always have path
     const skillCacheSubdir = join(workDir, skill.path!);
 
+    // Check if skill still exists in pulled repo
+    if (!(await resolvedDirExists(skillCacheSubdir))) {
+      if (options.onSkillRemovedUpstream) {
+        const action = await options.onSkillRemovedUpstream(skill.name, repo);
+        if (action === "remove") {
+          const effectiveScope = skill.scope as "global" | "project";
+          const installDir = skillInstallDir(skill.name, effectiveScope, options.projectRoot);
+          await wrapShell(() => $`rm -rf ${installDir}`.quiet().then(() => undefined), "");
+          await removeAgentSymlinks(skill.name, skill.also, skill.scope, options.projectRoot);
+          installed.skills = installed.skills.filter((s) => s !== skill);
+        }
+      }
+      result.skipped.push(skill.name);
+      options.onProgress?.(skill.name, "removed-upstream");
+      continue;
+    }
+
     // Semantic scan on cache subdir BEFORE recopy so we can roll back cleanly on failure
     if (await runUpdateSemanticScan(skillCacheSubdir, skill.name, options)) {
       result.skipped.push(skill.name);
@@ -625,6 +655,28 @@ export async function updateSkill(
     const r = await loadInstalled(options.projectRoot);
     if (!r.ok) return r;
     projectInstalled = r.value;
+  }
+
+  // Detect and optionally purge orphan records before updating
+  if (options.onOrphansFound) {
+    const globalOrphans = await findOrphanRecords(globalInstalled);
+    if (globalOrphans.length > 0) {
+      const namesToPurge = await options.onOrphansFound(globalOrphans);
+      if (namesToPurge.length > 0) {
+        const toPurge = globalOrphans.filter((o) => namesToPurge.includes(o.record.name));
+        await purgeOrphanRecords(toPurge, globalInstalled);
+      }
+    }
+    if (projectInstalled) {
+      const projectOrphans = await findOrphanRecords(projectInstalled, options.projectRoot);
+      if (projectOrphans.length > 0) {
+        const namesToPurge = await options.onOrphansFound(projectOrphans);
+        if (namesToPurge.length > 0) {
+          const toPurge = projectOrphans.filter((o) => namesToPurge.includes(o.record.name));
+          await purgeOrphanRecords(toPurge, projectInstalled, options.projectRoot);
+        }
+      }
+    }
   }
 
   // Filter by name if specified — check both files

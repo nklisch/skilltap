@@ -131,6 +131,9 @@ export default defineCommand({
         const result = await removeSkill(skill.name, {
           scope: scopeOf(skill),
           projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
+          onOrphanRemoved(name) {
+            process.stdout.write(`note: "${name}" directory was already missing — cleaning up record only.\n`);
+          },
         });
         if (!result.ok) {
           sendEvent(config, "remove", {
@@ -169,6 +172,9 @@ export default defineCommand({
       const result = await removeSkill(skill.name, {
         scope: scopeOf(skill),
         projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
+        onOrphanRemoved(name) {
+          s.message(`Note: "${name}" directory was already missing — cleaning up record only.`);
+        },
       });
       if (!result.ok) {
         s.stop("Failed.");

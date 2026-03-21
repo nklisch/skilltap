@@ -4,6 +4,7 @@ import type {
   AgentAdapter,
   Config,
   EffectivePolicy,
+  OrphanRecord,
   ScannedSkill,
   SemanticWarning,
   StaticWarning,
@@ -12,6 +13,7 @@ import type {
 import {
   ensureBuiltinTap,
   findProjectRoot,
+  formatOrphanReason,
   installSkill,
   isBuiltinTapCloned,
   saveConfig,
@@ -175,6 +177,14 @@ async function runAgentMode(
         process.exit(1);
         return false;
       },
+      async onOrphansFound(orphans: OrphanRecord[]) {
+        for (const o of orphans) {
+          process.stdout.write(
+            `warning: Stale record "${o.record.name}" — ${formatOrphanReason(o.reason)}. Auto-removing.\n`,
+          );
+        }
+        return orphans.map((o) => o.record.name);
+      },
     });
 
     if (!result.ok) {
@@ -309,6 +319,26 @@ async function runInteractiveMode(
       semantic: runSemantic,
       threshold: config.security.threshold,
       ...callbacks,
+      async onOrphansFound(orphans: OrphanRecord[]) {
+        if (orphans.length === 0) return [];
+        if (policy.yes) {
+          for (const o of orphans) {
+            log.warn(`Stale record "${o.record.name}" (${formatOrphanReason(o.reason)}). Auto-removing.`);
+          }
+          return orphans.map((o) => o.record.name);
+        }
+        log.warn(`Found ${orphans.length} stale record(s):`);
+        for (const o of orphans) {
+          log.warn(`  ${o.record.name}: ${formatOrphanReason(o.reason)}`);
+        }
+        const { confirm: confirmPrompt, isCancel: isCancelPrompt } = await import("@clack/prompts");
+        const shouldClean = await confirmPrompt({
+          message: "Remove stale records? (directories are already gone)",
+          initialValue: true,
+        });
+        if (isCancelPrompt(shouldClean) || !shouldClean) return [];
+        return orphans.map((o) => o.record.name);
+      },
     });
 
     if (!result.ok) {

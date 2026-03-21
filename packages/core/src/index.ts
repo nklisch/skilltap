@@ -37,6 +37,7 @@ export {
 } from "./registry/types";
 export type { RegistryAuth, FetchSkillListResult } from "./registry/client";
 export { detectTapType, fetchSkillList, fetchSkillDetail } from "./registry/client";
+export * from "./orphan";
 export * from "./taps";
 export * from "./templates";
 export * from "./trust";

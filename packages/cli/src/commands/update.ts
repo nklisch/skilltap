@@ -5,6 +5,9 @@ import {
   type Config,
   type EffectivePolicy,
   fetchSkillUpdateStatus,
+  formatOrphanReason,
+  type OnOrphansFound,
+  type OrphanRecord,
   type SemanticWarning,
   type StaticWarning,
   updateSkill,
@@ -189,6 +192,25 @@ async function runAgentModeUpdate(
       if (status === "upToDate") agentUpToDate(skillName);
       else if (status === "linked") agentSkip(skillName, "is linked.");
       else if (status === "local") agentSkip(skillName, "is local (no remote).");
+      else if (status === "removed-upstream") {
+        process.stdout.write(`${skillName}: removed from upstream repo\n`);
+      }
+    },
+
+    async onOrphansFound(orphans: OrphanRecord[]) {
+      for (const o of orphans) {
+        process.stdout.write(
+          `warning: Stale record "${o.record.name}" — ${formatOrphanReason(o.reason)}. Auto-removing.\n`,
+        );
+      }
+      return orphans.map((o) => o.record.name);
+    },
+
+    async onSkillRemovedUpstream(skillName: string) {
+      process.stdout.write(
+        `warning: "${skillName}" removed from upstream repo. Auto-removing record.\n`,
+      );
+      return "remove" as const;
     },
 
     onDiff(skillName, stat, fromSha, toSha) {
@@ -286,7 +308,32 @@ async function runInteractiveUpdate(
         log.info("Skipped (linked).");
       } else if (status === "local") {
         log.info("Skipped (local, no remote).");
+      } else if (status === "removed-upstream") {
+        log.warn("Removed from upstream.");
       }
+    },
+
+    async onOrphansFound(orphans: OrphanRecord[]) {
+      if (orphans.length === 0) return [];
+      log.warn(`Found ${orphans.length} stale record(s):`);
+      for (const o of orphans) {
+        log.warn(`  ${o.record.name}: ${formatOrphanReason(o.reason)}`);
+      }
+      const shouldClean = await confirm({
+        message: "Remove stale records? (directories are already gone)",
+        initialValue: true,
+      });
+      if (isCancel(shouldClean) || !shouldClean) return [];
+      return orphans.map((o) => o.record.name);
+    },
+
+    async onSkillRemovedUpstream(skillName: string) {
+      log.warn(`"${skillName}" was removed from the upstream repo.`);
+      const action = await confirm({
+        message: `Remove "${skillName}" from installed.json?`,
+        initialValue: true,
+      });
+      return isCancel(action) || !action ? ("skip" as const) : ("remove" as const);
     },
 
     onDiff(_skillName, stat, fromSha, toSha, rawDiff) {
