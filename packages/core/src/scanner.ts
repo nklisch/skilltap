@@ -146,8 +146,14 @@ export async function scan(dir: string, options?: ScanOptions): Promise<ScannedS
 	const agentsPaths = await listSkillDirs(join(dir, ".agents", "skills"));
 	debug("scan step 2: .agents/skills", { count: agentsPaths.length });
 
-	// Step 2.5: skills/*/SKILL.md (antfu/skillpm convention) — priority path for npm packages
-	const skillsPaths = await listSkillDirs(join(dir, "skills"));
+	// Step 2.5: skills/SKILL.md or skills/*/SKILL.md (antfu/skillpm convention)
+	const skillsDir = join(dir, "skills");
+	const skillsDirEntries = await readdir(skillsDir).catch(() => [] as string[]);
+	const skillsPaths: string[] = [];
+	if (skillsDirEntries.includes("SKILL.md")) {
+		skillsPaths.push(join(skillsDir, "SKILL.md"));
+	}
+	skillsPaths.push(...(await listSkillDirs(skillsDir)));
 	debug("scan step 2.5: skills/", { count: skillsPaths.length });
 
 	// Step 3: Agent-specific paths — readdir-based (avoids Bun.Glob dot-dir issues)

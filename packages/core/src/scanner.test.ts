@@ -249,6 +249,41 @@ describe("scan — edge cases", () => {
     expect(skills[0]?.description).toBe("From .agents/skills/.");
   });
 
+  test("discovers skills in top-level skills/*/SKILL.md (subdirectory convention)", async () => {
+    tmpDir = await makeTmpDir();
+    const skillDir = join(tmpDir, "skills", "my-skill");
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      [
+        "---",
+        "name: my-skill",
+        "description: From skills/ subdirectory.",
+        "---",
+      ].join("\n"),
+    );
+
+    const skills = await scan(tmpDir);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.name).toBe("my-skill");
+  });
+
+  test("discovers skill at top-level skills/SKILL.md (flat convention)", async () => {
+    tmpDir = await makeTmpDir();
+    await Bun.write(
+      join(tmpDir, "skills", "SKILL.md"),
+      [
+        "---",
+        "name: flat-skill",
+        "description: SKILL.md directly in skills/.",
+        "---",
+      ].join("\n"),
+    );
+
+    const skills = await scan(tmpDir);
+    expect(skills).toHaveLength(1);
+    expect(skills[0]?.name).toBe("flat-skill");
+  });
+
   test("deep scan fallback finds SKILL.md in arbitrary subdirectory", async () => {
     tmpDir = await makeTmpDir();
     const nested = join(tmpDir, "deeply", "nested", "my-tool");
