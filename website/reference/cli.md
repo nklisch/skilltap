@@ -828,7 +828,7 @@ skilltap config agent-mode
 
 ## skilltap tap add
 
-Add a tap. Supports git repos, HTTP registry endpoints, and GitHub shorthand.
+Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`), HTTP registry endpoints, and GitHub shorthand.
 
 ```
 skilltap tap add <name> <url>
@@ -848,7 +848,7 @@ When two positional args are given, the first is the tap name and the second is 
 
 When one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion (e.g. `user/my-tap` → name `my-tap`).
 
-Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates `tap.json`, and records the tap in `config.toml`.
+Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates the tap index (`tap.json` or `.claude-plugin/marketplace.json`), and records the tap in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
 
 If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
 
@@ -863,6 +863,9 @@ skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
 
 # HTTP registry tap (auto-detected)
 skilltap tap add enterprise https://skills.example.com/api/v1
+
+# Claude Code marketplace repo (marketplace.json auto-detected)
+skilltap tap add anthropics/skills
 ```
 
 ---

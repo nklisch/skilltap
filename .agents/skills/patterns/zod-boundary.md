@@ -70,7 +70,7 @@ export const ConfigSchema = z.object({
 ## When to Use
 
 - Every file/network/process boundary where data enters the system
-- Config load, installed.json load, tap.json load, SKILL.md frontmatter parse
+- Config load, installed.json load, tap.json load, marketplace.json load, SKILL.md frontmatter parse
 
 ## When NOT to Use
 

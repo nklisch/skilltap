@@ -55,12 +55,14 @@ skilltap/
 │   │   │   ├── move.ts         # Move skills between global/project scopes
 │   │   │   ├── link.ts         # Link/symlink local skill
 │   │   │   ├── taps.ts         # Tap management (add, remove, update, search)
+│   │   │   ├── marketplace.ts  # adaptMarketplaceToTap() — marketplace.json → Tap adapter
 │   │   │   ├── symlink.ts      # Agent-specific symlink creation
 │   │   │   ├── policy.ts       # composePolicy() — config + CLI flag composition
 │   │   │   ├── schemas/
 │   │   │   │   ├── config.ts   # config.toml Zod schema
 │   │   │   │   ├── installed.ts # installed.json Zod schema
 │   │   │   │   ├── tap.ts      # tap.json Zod schema
+│   │   │   │   ├── marketplace.ts # marketplace.json Zod schema (Claude Code format)
 │   │   │   │   ├── skill.ts    # SKILL.md frontmatter Zod schema
 │   │   │   │   ├── agent.ts    # Agent response + ResolvedSource schemas
 │   │   │   │   └── index.ts    # Barrel export
@@ -228,7 +230,9 @@ core → test-utils (dev)
 
 **skill-check.ts** — Background skill update check. `checkForSkillUpdates(intervalHours, projectRoot)` reads the cache and fires a background refresh if stale. `fetchSkillUpdateStatus(projectRoot)` does the actual network check: groups git skills by cache dir (one `git fetch` per unique repo), compares `HEAD` vs `FETCH_HEAD`; fetches npm metadata for npm skills and compares versions. `writeSkillUpdateCache(updates, projectRoot)` persists results to `~/.config/skilltap/skills-update-check.json`.
 
-**taps.ts** — Manages tap repos. Clone, pull, parse `tap.json`, search across taps. Supports both git-cloned taps and HTTP registry taps (fetched live).
+**taps.ts** — Manages tap repos. Clone, pull, parse tap index (`tap.json` or `.claude-plugin/marketplace.json`), search across taps. Supports git-cloned taps, HTTP registry taps (fetched live), and Claude Code marketplace repos (marketplace.json adapted to Tap via `marketplace.ts`).
+
+**marketplace.ts** — Adapts Claude Code `marketplace.json` to skilltap's internal `Tap` type. Maps plugin sources (github, npm, url, git-subdir, relative path) to `TapSkill.repo` strings. Plugin-only features (MCP, LSP, hooks) are silently ignored.
 
 **symlink.ts** — Creates and removes symlinks for agent-specific directories. Knows the path conventions for each supported agent. Idempotent — gracefully replaces stale symlinks and leftover real directories instead of failing on EEXIST.
 
@@ -301,10 +305,11 @@ export type Config = z.infer<typeof ConfigSchema>
 Additional schemas defined in SPEC.md:
 - [installed.json](./SPEC.md#installedjson) — `InstalledJsonSchema`, `InstalledSkillSchema`
 - [tap.json](./SPEC.md#tapjson) — `TapSchema`, `TapSkillSchema`
+- [marketplace.json](./SPEC.md#marketplacejson) — `MarketplaceSchema` (Claude Code format, adapted to `Tap`)
 - [SKILL.md frontmatter](./SPEC.md#skillmd-parsing) — `SkillFrontmatterSchema`
 - [Agent response](./SPEC.md#json-extraction) — `AgentResponseSchema`
 
-Zod validates at every data boundary: parsing TOML config, reading installed.json, parsing tap.json, extracting SKILL.md frontmatter, and parsing agent CLI output. Adapter return values are validated before entering core logic.
+Zod validates at every data boundary: parsing TOML config, reading installed.json, parsing tap.json, parsing marketplace.json (Claude Code format), extracting SKILL.md frontmatter, and parsing agent CLI output. Adapter return values are validated before entering core logic.
 
 ### Adapter Interfaces
 
@@ -376,7 +381,7 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 ### Install from Tap Name
 
 ```
-1. Load all taps, parse tap.json (taps.ts)
+1. Load all taps, parse tap index — tap.json or marketplace.json (taps.ts, marketplace.ts)
 2. Search for name across all taps
 3. Resolve to repo URL (single match → use, multiple → prompt)
 4. → Continue from step 2 of "Install from URL"
@@ -405,11 +410,15 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 ├── config.toml                  # User configuration
 ├── installed.json               # Installation state (machine-managed)
 ├── taps/
-│   ├── home/                    # Cloned tap repo
+│   ├── home/                    # Cloned tap repo (tap.json format)
 │   │   ├── tap.json
 │   │   └── .git/
-│   └── community/
-│       ├── tap.json
+│   ├── community/               # Another tap repo (tap.json format)
+│   │   ├── tap.json
+│   │   └── .git/
+│   └── anthropic-skills/        # Marketplace repo (marketplace.json format)
+│       ├── .claude-plugin/
+│       │   └── marketplace.json
 │       └── .git/
 └── cache/
     └── {repo-url-hash}/        # Cached full clones for multi-skill repos

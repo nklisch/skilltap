@@ -69,9 +69,9 @@ For each skill with `also` entries, checks that symlinks exist and point to the 
 
 ### 7. Taps
 
-For each configured tap, verifies the local clone is intact and `tap.json` is valid.
+For each configured tap, verifies the local clone is intact and the tap index (`tap.json` or `.claude-plugin/marketplace.json`) is valid.
 
-- **Warn**: tap directory missing, `tap.json` invalid, or `.git/` missing
+- **Warn**: tap directory missing, tap index invalid, or `.git/` missing
 - **Fix** (`--fix`): re-clones missing tap directories from the configured URL
 
 ### 8. Agent CLIs

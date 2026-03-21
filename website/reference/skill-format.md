@@ -91,7 +91,7 @@ When skilltap clones a repo, it scans for SKILL.md files using the following pri
 
 ### 1. Root SKILL.md (standalone skill)
 
-If `SKILL.md` exists at the repo root, the entire repo is treated as a single standalone skill. Steps 2-4 are skipped.
+If `SKILL.md` exists at the repo root, it is included as a skill.
 
 ### 2. Standard path
 
@@ -101,7 +101,24 @@ If `SKILL.md` exists at the repo root, the entire repo is treated as a single st
 
 Each match is a separate skill, named by its parent directory. This is the canonical location for multi-skill repos.
 
-### 3. Agent-specific paths
+### 3. Skills directory
+
+```
+skills/SKILL.md
+skills/*/SKILL.md
+```
+
+Flat layout (`skills/SKILL.md`) or subdirectory convention (`skills/*/SKILL.md`).
+
+### 4. Plugin directory
+
+```
+plugins/*/skills/*/SKILL.md
+```
+
+Claude Code plugin convention. Discovers skills inside plugin subdirectories.
+
+### 5. Agent-specific paths
 
 ```
 .claude/skills/*/SKILL.md
@@ -113,13 +130,13 @@ Each match is a separate skill, named by its parent directory. This is the canon
 
 Skills in agent-specific directories are also discovered. If a skill with the same name was already found in `.agents/skills/`, the `.agents/skills/` version takes precedence.
 
-### 4. Deep scan
+### 6. Deep scan
 
 ```
 **/SKILL.md
 ```
 
-If no skills were found in steps 1-3, skilltap performs a deep scan for any SKILL.md file in the repo tree. This requires user confirmation.
+If no skills were found in steps 1-5, skilltap performs a deep scan for any SKILL.md file in the repo tree. This requires user confirmation.
 
 ### Deduplication
 

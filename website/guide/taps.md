@@ -4,7 +4,7 @@ description: Taps are curated skill registries — git repos or HTTP endpoints l
 
 # Taps
 
-A **tap** is either a git repository with a `tap.json` file or an HTTP registry endpoint that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+A **tap** is either a git repository with a `tap.json` file, an HTTP registry endpoint, or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
 
 Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
 

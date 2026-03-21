@@ -6,6 +6,8 @@ description: The tap.json schema for skill registries. Lists skills with names, 
 
 A **tap** is a git repository that acts as a skill registry. It contains a `tap.json` file listing skills with their names, descriptions, source repositories, and tags. Taps are how users discover and share collections of skills -- like Homebrew taps, but for agent skills.
 
+skilltap also supports [Claude Code marketplace repos](#claude-code-marketplace-repos) as taps -- if a repo has `.claude-plugin/marketplace.json` instead of `tap.json`, skilltap automatically adapts it.
+
 ## What a Tap Does
 
 - Provides a searchable index of skills across repositories
@@ -287,3 +289,35 @@ A single repo can contain multiple skills (see [SKILL.md Format](/reference/skil
 ```
 
 When a user installs either skill by name, skilltap clones the repo and discovers both skills inside it.
+
+## Claude Code Marketplace Repos
+
+Claude Code plugin marketplaces use `.claude-plugin/marketplace.json` instead of `tap.json`. skilltap recognizes this format automatically — when you `skilltap tap add` a repo that has `marketplace.json` (and no `tap.json`), it adapts the marketplace data into skilltap's internal tap format.
+
+```bash
+# Add the official Anthropic skills marketplace as a tap
+skilltap tap add anthropics/skills
+```
+
+### How It Works
+
+- If `tap.json` exists, it is used (always takes precedence)
+- If only `.claude-plugin/marketplace.json` exists, skilltap parses it and converts each plugin entry to a skill entry
+- Plugin sources (GitHub, npm, git URL, relative path) are mapped to the `repo` field that skilltap's install flow understands
+- Plugin-only features (MCP servers, LSP servers, hooks, agents) are silently ignored — skilltap only installs SKILL.md content
+
+### Source Mapping
+
+| Marketplace source type | skilltap repo mapping |
+|---|---|
+| Relative path (`"./plugins/my-plugin"`) | The marketplace repo's own URL |
+| `github` (`{ "source": "github", "repo": "owner/repo" }`) | `owner/repo` |
+| `url` (`{ "source": "url", "url": "https://..." }`) | The URL directly |
+| `git-subdir` (`{ "source": "git-subdir", "url": "..." }`) | The URL (subdirectory path is not preserved) |
+| `npm` (`{ "source": "npm", "package": "@org/pkg" }`) | `npm:@org/pkg` |
+
+### Limitations
+
+- **SKILL.md only**: skilltap installs the SKILL.md content from plugins. Plugin features like MCP servers, LSP servers, hooks, and agents require Claude Code's native `/plugin install`.
+- **No namespacing**: Claude Code plugins install skills as `/plugin-name:skill-name`. skilltap installs skills as `/skill-name` (agent-agnostic, no namespace).
+- **git-subdir**: The subdirectory path within the source repo is not preserved — skilltap clones the full repo and scans for SKILL.md files.

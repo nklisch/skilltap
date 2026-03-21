@@ -428,7 +428,7 @@ If no taps are configured and no query given (non-TTY): `No taps configured. Run
 
 ### `skilltap tap add <name> <url>` / `skilltap tap add <owner/repo>`
 
-Add a tap (a git repo containing `tap.json`).
+Add a tap (a git repo containing `tap.json` or `.claude-plugin/marketplace.json`).
 
 **Arguments:**
 
@@ -442,8 +442,9 @@ GitHub shorthand: when only one positional arg is given and it matches `owner/re
 **Behavior:**
 
 - Clone tap repo to `~/.config/skilltap/taps/{name}/`
-- Validate `tap.json` exists at repo root
-- Parse and validate `tap.json` schema
+- Validate tap index exists: try `tap.json` first, then fall back to `.claude-plugin/marketplace.json`
+- Parse and validate the found file (`TapSchema` or `MarketplaceSchema`)
+- If marketplace.json: adapt to internal `Tap` type via `adaptMarketplaceToTap()` — plugin sources (github, npm, url, git-subdir, relative path) are mapped to `TapSkill.repo` strings; plugin-only features (MCP, LSP, hooks) are silently ignored
 - Append tap entry to `config.toml`
 
 If tap name already exists, exit 1 with: `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
@@ -454,7 +455,7 @@ If the tap's destination directory already exists (from a previous failed clone)
 
 ### `skilltap tap update [name]`
 
-Pull the latest `tap.json` for all (or one) git tap.
+Pull the latest tap index (`tap.json` or `marketplace.json`) for all (or one) git tap.
 
 **Arguments:**
 
@@ -927,7 +928,7 @@ Diagnose the skilltap environment and state. Runs 9 checks and reports issues wi
 | installed.json | Global `~/.config/skilltap/installed.json` and project `.agents/installed.json` (when in a project) are valid and parseable; detail shows `"N skills (G global, P project)"` |
 | skill integrity | Every skill in installed.json has a directory at the correct scope-aware path (`~/.agents/skills/` for global, `{projectRoot}/.agents/skills/` for project); orphan dirs in both locations are reported |
 | symlinks | Agent-specific symlinks for global skills point into `~/.agents/skills/`; project-scoped skill symlinks point into `{projectRoot}/.agents/skills/` |
-| taps | Configured taps (including built-in `skilltap-skills`) have valid directories and `tap.json`; per-tap pass/fail status shown as info lines |
+| taps | Configured taps (including built-in `skilltap-skills`) have valid directories and a valid tap index (`tap.json` or `.claude-plugin/marketplace.json`); per-tap pass/fail status shown as info lines |
 | agents | At least one agent CLI is detected on PATH |
 | npm | `npm` binary is available on PATH (for `npm:` sources) |
 
@@ -1076,10 +1077,12 @@ Scan locations in priority order:
 
 1. **Root**: `SKILL.md` at repo root → standalone skill, named by repo directory
 2. **Standard path**: `.agents/skills/*/SKILL.md` → each match is a skill, named by parent directory
-3. **Agent-specific paths**: `.claude/skills/*/SKILL.md`, `.cursor/skills/*/SKILL.md`, `.codex/skills/*/SKILL.md`, `.gemini/skills/*/SKILL.md`, `.windsurf/skills/*/SKILL.md`
-4. **Deep scan**: `**/SKILL.md` anywhere else in the tree — if skills are found, prompt: `Found N SKILL.md at non-standard path(s). Continue? (Y/n)` (default Y). In agent mode or `--yes`, auto-accept.
+3. **Skills directory**: `skills/SKILL.md` (flat) or `skills/*/SKILL.md` (subdirectory convention)
+4. **Plugin directory**: `plugins/*/skills/*/SKILL.md` (Claude Code plugin convention)
+5. **Agent-specific paths**: `.claude/skills/*/SKILL.md`, `.cursor/skills/*/SKILL.md`, `.codex/skills/*/SKILL.md`, `.gemini/skills/*/SKILL.md`, `.windsurf/skills/*/SKILL.md`
+6. **Deep scan**: `**/SKILL.md` anywhere else in the tree — if skills are found, prompt: `Found N SKILL.md at non-standard path(s). Continue? (Y/n)` (default Y). In agent mode or `--yes`, auto-accept.
 
-**Stop condition**: If step 1 finds a root SKILL.md, steps 2-4 are skipped (the repo is a standalone skill).
+**Stop condition**: Steps 1-5 are checked first. If any of them find skills, step 6 (deep scan) is skipped. All non-deep-scan results are combined and deduplicated.
 
 **Deduplication**: If the same SKILL.md is found via multiple paths (e.g., `.agents/skills/foo/SKILL.md` and `.claude/skills/foo/SKILL.md` are the same file or have the same `name` frontmatter), deduplicate by name. Prefer the `.agents/skills/` path.
 
@@ -1923,6 +1926,8 @@ Example:
 
 Validated at clone/update with `TapSchema` (Zod 4). Invalid taps fail with a clear parse error.
 
+If `tap.json` is absent, skilltap falls back to `.claude-plugin/marketplace.json` (Claude Code marketplace format). The marketplace data is adapted to the internal `Tap` type via `adaptMarketplaceToTap()`. See [marketplace.json](#marketplacejson) below.
+
 ```typescript
 const TapTrustSchema = z.object({
   verified: z.boolean(),
@@ -1961,6 +1966,47 @@ Example:
   ]
 }
 ```
+
+### marketplace.json
+
+Claude Code plugin marketplace repos use `.claude-plugin/marketplace.json` instead of `tap.json`. When `tap add` encounters a repo with this file (and no `tap.json`), it parses and adapts it to the internal `Tap` type.
+
+Validated with `MarketplaceSchema` (Zod 4). The schema accepts all 5 plugin source types:
+
+```typescript
+const MarketplacePluginSourceSchema = z.union([
+  z.string(),                                    // relative path ("./plugins/my-plugin")
+  z.object({ source: z.literal("github"), repo: z.string(), ref: z.string().optional() }),
+  z.object({ source: z.literal("url"), url: z.string(), ref: z.string().optional() }),
+  z.object({ source: z.literal("git-subdir"), url: z.string(), path: z.string(), ref: z.string().optional() }),
+  z.object({ source: z.literal("npm"), package: z.string(), version: z.string().optional() }),
+])
+
+const MarketplaceSchema = z.object({
+  name: z.string(),
+  owner: z.object({ name: z.string(), email: z.string().optional() }),
+  metadata: z.object({ description: z.string().optional(), pluginRoot: z.string().optional() }).optional(),
+  plugins: z.array(z.object({
+    name: z.string(),
+    source: MarketplacePluginSourceSchema,
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    category: z.string().optional(),
+  })),
+})
+```
+
+**Source mapping to `TapSkill.repo`:**
+
+| Source type | Maps to |
+|---|---|
+| Relative path string | The marketplace repo's own git URL |
+| `github` | `repo` field (GitHub shorthand) |
+| `url` | `url` field (full git URL) |
+| `git-subdir` | `url` field (path is not preserved — limitation) |
+| `npm` | `"npm:<package>"` |
+
+Plugin-only features (MCP servers, LSP servers, hooks, agents, settings) are silently ignored — skilltap only installs SKILL.md content. Extra fields are stripped by Zod.
 
 ---
 
@@ -2069,7 +2115,7 @@ All errors include:
 | No SKILL.md found | `error: No SKILL.md found in '{url}'. This repo doesn't contain any skills.` |
 | Skill already installed | Prompt: `"{name}" is already installed. Update it instead? (Y/n)`. If yes (or `--yes`, or agent mode), runs `update`. If no, skips that skill. |
 | Tap already exists | `error: Tap '{name}' already exists. Remove it first with 'skilltap tap remove {name}'.` |
-| Invalid tap.json | `error: Invalid tap.json in '{url}': {parse error}` |
+| Invalid tap index | `error: No tap.json or marketplace.json found in '{url}'` or `error: Invalid tap.json in '{url}': {parse error}` or `error: Invalid marketplace.json in '{url}': {parse error}` |
 | Invalid SKILL.md frontmatter | `warning: Invalid frontmatter in {path}: {details}. Using directory name as skill name.` |
 | No taps configured | `error: No taps configured. Add one with 'skilltap tap add <name> <url>'.` |
 | Skill not found in taps | `error: Skill '{name}' not found in any configured tap.` |
