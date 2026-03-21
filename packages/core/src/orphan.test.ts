@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir } from "node:fs/promises";
+import { lstat, mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { loadInstalled, saveInstalled } from "./config";
@@ -10,6 +10,7 @@ import {
   purgeOrphanRecords,
 } from "./orphan";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import { removeSkill } from "./remove";
 
 type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
 
@@ -313,5 +314,185 @@ describe("purgeOrphanRecords", () => {
     if (!reloaded.ok) return;
     expect(reloaded.value.skills).toHaveLength(1);
     expect(reloaded.value.skills[0]!.name).toBe("healthy");
+  });
+
+  // Gap #8: purgeOrphanRecords must remove agent symlinks for purged records
+  test("removes agent symlinks for purged records", async () => {
+    const skillName = "linked-agent-skill";
+    const skill = makeSkill({ name: skillName, also: ["claude-code"] });
+    const installed = makeInstalled([skill]);
+    await saveInstalled(installed);
+
+    // Create a real target dir and a symlink at the agent path, mimicking what installSkill does.
+    // For claude-code at global scope: ${SKILLTAP_HOME}/.claude/skills/<name>
+    const agentSkillsDir = join(homeDir, ".claude", "skills");
+    const symlinkPath = join(agentSkillsDir, skillName);
+    const targetDir = join(homeDir, ".agents", "skills", skillName);
+    await mkdir(agentSkillsDir, { recursive: true });
+    await mkdir(targetDir, { recursive: true });
+    await symlink(targetDir, symlinkPath, "dir");
+
+    // Verify the symlink exists before purge
+    const beforeStat = await lstat(symlinkPath).catch(() => null);
+    expect(beforeStat).not.toBeNull();
+    expect(beforeStat!.isSymbolicLink()).toBe(true);
+
+    const orphans = [{ record: skill, reason: "directory-missing" as const }];
+    const result = await purgeOrphanRecords(orphans, installed);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // The agent symlink should be removed
+    const afterStat = await lstat(symlinkPath).catch(() => null);
+    expect(afterStat).toBeNull();
+  });
+});
+
+// ─── Gap tests: findOrphanRecords edge cases ───────────────────────────────
+
+describe("findOrphanRecords — additional cases", () => {
+  // Gap #22: project-scoped skill orphan detection
+  test("detects directory-missing for project-scoped skill", async () => {
+    const projectRoot = await makeTmpDir();
+    try {
+      const skill = makeSkill({ name: "project-skill", scope: "project" });
+      // Do NOT create the project-scoped install dir
+      const installed = makeInstalled([skill]);
+
+      const orphans = await findOrphanRecords(installed, projectRoot);
+      expect(orphans).toHaveLength(1);
+      expect(orphans[0]!.record.name).toBe("project-skill");
+      expect(orphans[0]!.reason).toBe("directory-missing");
+    } finally {
+      await removeTmpDir(projectRoot);
+    }
+  });
+
+  test("no orphan when project-scoped skill directory exists", async () => {
+    const projectRoot = await makeTmpDir();
+    try {
+      const skill = makeSkill({ name: "project-skill", scope: "project" });
+      const installDir = join(projectRoot, ".agents", "skills", "project-skill");
+      await mkdir(installDir, { recursive: true });
+      const installed = makeInstalled([skill]);
+
+      const orphans = await findOrphanRecords(installed, projectRoot);
+      expect(orphans).toHaveLength(0);
+    } finally {
+      await removeTmpDir(projectRoot);
+    }
+  });
+
+  // Gap #24: local skill (repo === null) directory missing
+  test("detects directory-missing for local skill (repo null)", async () => {
+    const skill = makeSkill({ name: "local-skill", repo: null });
+    // Do NOT create the install directory
+    const installed = makeInstalled([skill]);
+
+    const orphans = await findOrphanRecords(installed);
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.record.name).toBe("local-skill");
+    expect(orphans[0]!.reason).toBe("directory-missing");
+  });
+
+  test("no orphan for local skill (repo null) when directory exists", async () => {
+    const skill = makeSkill({ name: "local-skill", repo: null });
+    const installDir = skillInstallDir("local-skill", "global");
+    await mkdir(installDir, { recursive: true });
+    const installed = makeInstalled([skill]);
+
+    const orphans = await findOrphanRecords(installed);
+    expect(orphans).toHaveLength(0);
+  });
+
+  // Gap #21: multi-skill with cache-subdir-missing takes priority over directory-missing
+  test("multi-skill reports cache-subdir-missing (not directory-missing) when cache exists but subdir is gone", async () => {
+    // The implementation checks cache first, then subdir, then install dir.
+    // When cache exists but subdir is missing, it reports cache-subdir-missing
+    // and continues (skips the install dir check). So only ONE orphan per record.
+    const repoUrl = "https://github.com/example/priority-test-repo";
+    const subdir = ".agents/skills/priority-skill";
+    const skill = makeSkill({
+      name: "priority-skill",
+      repo: repoUrl,
+      path: subdir,
+    });
+
+    // Cache exists with .git, but subdir is missing AND install dir is also missing
+    const cacheDir = skillCacheDir(repoUrl);
+    await mkdir(join(cacheDir, ".git"), { recursive: true });
+    // Do NOT create the subdir in cache
+    // Do NOT create the install dir
+
+    const installed = makeInstalled([skill]);
+    const orphans = await findOrphanRecords(installed);
+
+    // Should report exactly one orphan — the most specific: cache-subdir-missing
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.reason).toBe("cache-subdir-missing");
+  });
+
+  test("multi-skill reports directory-missing when cache and subdir exist but install dir is gone", async () => {
+    const repoUrl = "https://github.com/example/installdir-missing-repo";
+    const subdir = ".agents/skills/installdir-skill";
+    const skill = makeSkill({
+      name: "installdir-skill",
+      repo: repoUrl,
+      path: subdir,
+    });
+
+    // Cache and subdir exist, but install dir is missing
+    const cacheDir = skillCacheDir(repoUrl);
+    await mkdir(join(cacheDir, ".git"), { recursive: true });
+    await mkdir(join(cacheDir, subdir), { recursive: true });
+    // Do NOT create install dir
+
+    const installed = makeInstalled([skill]);
+    const orphans = await findOrphanRecords(installed);
+
+    expect(orphans).toHaveLength(1);
+    expect(orphans[0]!.reason).toBe("directory-missing");
+  });
+});
+
+// ─── Gap #20: removeSkill calls onOrphanRemoved callback ──────────────────
+
+describe("removeSkill — orphan callback", () => {
+  test("calls onOrphanRemoved when directory is already missing", async () => {
+    const skill = makeSkill({ name: "ghost-skill" });
+    const installed = makeInstalled([skill]);
+    await saveInstalled(installed);
+    // Do NOT create the install directory
+
+    const orphanRemovedNames: string[] = [];
+    const result = await removeSkill("ghost-skill", {
+      onOrphanRemoved(name) {
+        orphanRemovedNames.push(name);
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orphanRemovedNames).toContain("ghost-skill");
+  });
+
+  test("does not call onOrphanRemoved when directory exists", async () => {
+    const skill = makeSkill({ name: "real-skill" });
+    const installed = makeInstalled([skill]);
+    await saveInstalled(installed);
+
+    // Create the install directory
+    const installDir = skillInstallDir("real-skill", "global");
+    await mkdir(installDir, { recursive: true });
+
+    const orphanRemovedNames: string[] = [];
+    const result = await removeSkill("real-skill", {
+      onOrphanRemoved(name) {
+        orphanRemovedNames.push(name);
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(orphanRemovedNames).toHaveLength(0);
   });
 });
