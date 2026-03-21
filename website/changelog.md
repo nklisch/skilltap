@@ -5,6 +5,13 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.11
+- Fixed scanner not detecting skills placed directly at `skills/SKILL.md` (flat layout).
+  Previously only `skills/<name>/SKILL.md` (subdirectory layout) was recognized.
+- Fixed `SKILLTAP_INSTALL` env var not being passed through to the install script.
+
+---
+
 ## v0.9.10
 - Fixed skill install failing on macOS with "no such file or directory" during copy.
   The scanner's symlink resolution (`/tmp` → `/private/tmp`) caused a path mismatch
