@@ -4,6 +4,7 @@ import { err, ok, type Result, UserError } from "../types";
 export * from "./agent";
 export * from "./config";
 export * from "./installed";
+export * from "./marketplace";
 export * from "./skill";
 export * from "./tap";
 

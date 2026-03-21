@@ -804,3 +804,159 @@ describe("installSkill via tap name", () => {
     }
   });
 });
+
+// ─── Helper: create a local marketplace git repo ───────────────────────────
+
+async function createLocalMarketplace(
+  plugins: Array<{ name: string; source: string; description?: string; category?: string }>,
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const dir = await makeTmpDir();
+  await mkdir(join(dir, ".claude-plugin"), { recursive: true });
+  const marketplace = {
+    name: "test-marketplace",
+    owner: { name: "Test" },
+    plugins: plugins.map((p) => ({
+      name: p.name,
+      source: p.source,
+      ...(p.description ? { description: p.description } : {}),
+      ...(p.category ? { category: p.category } : {}),
+    })),
+  };
+  await Bun.write(
+    join(dir, ".claude-plugin", "marketplace.json"),
+    JSON.stringify(marketplace, null, 2),
+  );
+  await initRepo(dir);
+  await commitAll(dir);
+  return { path: dir, cleanup: () => removeTmpDir(dir) };
+}
+
+// ─── Integration tests: marketplace.json fallback ──────────────────────────
+
+describe("loadTapJson — marketplace.json fallback", () => {
+  test("addTap works with marketplace repo (no tap.json, has .claude-plugin/marketplace.json)", async () => {
+    const mp = await createLocalMarketplace([
+      {
+        name: "mp-skill",
+        source: "https://github.com/owner/mp-skill.git",
+        description: "A marketplace skill",
+      },
+    ]);
+    try {
+      const result = await addTap("mp-tap", mp.path);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.skillCount).toBe(1);
+      expect(result.value.type).toBe("git");
+    } finally {
+      await mp.cleanup();
+    }
+  });
+
+  test("tap.json takes precedence when both exist", async () => {
+    const dir = await makeTmpDir();
+    // Write tap.json with 2 skills
+    const tapJson = {
+      name: "precedence-tap",
+      skills: [
+        { name: "skill-a", description: "A", repo: "https://example.com/a", tags: [] },
+        { name: "skill-b", description: "B", repo: "https://example.com/b", tags: [] },
+      ],
+    };
+    await Bun.write(join(dir, "tap.json"), JSON.stringify(tapJson, null, 2));
+    // Also write marketplace.json with 1 plugin
+    await mkdir(join(dir, ".claude-plugin"), { recursive: true });
+    const marketplace = {
+      name: "test-marketplace",
+      owner: { name: "Test" },
+      plugins: [{ name: "mp-skill", source: "https://example.com/mp.git" }],
+    };
+    await Bun.write(
+      join(dir, ".claude-plugin", "marketplace.json"),
+      JSON.stringify(marketplace, null, 2),
+    );
+    await initRepo(dir);
+    await commitAll(dir);
+    try {
+      const result = await addTap("precedence-tap", dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // tap.json has 2 skills, marketplace.json has 1 — tap.json wins
+      expect(result.value.skillCount).toBe(2);
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
+  test("returns error mentioning both formats when neither exists", async () => {
+    const emptyDir = await makeTmpDir();
+    await Bun.write(join(emptyDir, ".gitkeep"), "");
+    await initRepo(emptyDir);
+    await commitAll(emptyDir);
+    try {
+      const result = await addTap("no-tap", emptyDir);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain("tap.json");
+      expect(result.error.message).toContain("marketplace.json");
+    } finally {
+      await removeTmpDir(emptyDir);
+    }
+  });
+});
+
+describe("loadTaps — marketplace taps", () => {
+  test("marketplace tap skills appear in loadTaps() results", async () => {
+    const mp = await createLocalMarketplace([
+      {
+        name: "mp-skill-a",
+        source: "https://github.com/owner/mp-skill-a.git",
+        description: "Marketplace skill A",
+      },
+      {
+        name: "mp-skill-b",
+        source: "https://github.com/owner/mp-skill-b.git",
+        description: "Marketplace skill B",
+      },
+    ]);
+    try {
+      await addTap("mp-tap", mp.path);
+      const result = await loadTaps();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const mpEntries = result.value.filter((e) => e.tapName === "mp-tap");
+      expect(mpEntries).toHaveLength(2);
+      expect(mpEntries[0]?.skill.name).toBe("mp-skill-a");
+      expect(mpEntries[1]?.skill.name).toBe("mp-skill-b");
+    } finally {
+      await mp.cleanup();
+    }
+  });
+
+  test("marketplace tap skills are searchable via searchTaps()", async () => {
+    const mp = await createLocalMarketplace([
+      {
+        name: "pdf-extractor",
+        source: "https://github.com/owner/pdf.git",
+        description: "Extracts text from PDF files",
+        category: "document",
+      },
+    ]);
+    try {
+      await addTap("mp-tap", mp.path);
+      const loadResult = await loadTaps();
+      expect(loadResult.ok).toBe(true);
+      if (!loadResult.ok) return;
+
+      const pdfResults = searchTaps(loadResult.value, "pdf");
+      expect(pdfResults).toHaveLength(1);
+      expect(pdfResults[0]?.skill.name).toBe("pdf-extractor");
+
+      const docResults = searchTaps(loadResult.value, "document");
+      expect(docResults).toHaveLength(1);
+      expect(docResults[0]?.skill.name).toBe("pdf-extractor");
+    } finally {
+      await mp.cleanup();
+    }
+  });
+});

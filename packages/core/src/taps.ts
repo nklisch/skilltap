@@ -6,8 +6,10 @@ import { extractStderr } from "./shell";
 import { checkGitInstalled, clone, log, pull, syncRemoteUrl } from "./git";
 import type { RegistrySource } from "./registry";
 import { detectTapType, fetchSkillList } from "./registry";
+import { adaptMarketplaceToTap } from "./marketplace";
 import type { Tap, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
+import { MarketplaceSchema } from "./schemas/marketplace";
 import { parseWithResult } from "./schemas/index";
 import { err, type GitError, ok, type Result, UserError } from "./types";
 
@@ -33,19 +35,37 @@ function tapDir(name: string): string {
 async function loadTapJson(
   dir: string,
   name?: string,
+  tapUrl?: string,
 ): Promise<Result<Tap, UserError>> {
   const label = name ? `tap '${name}'` : dir;
-  const file = Bun.file(join(dir, "tap.json"));
-  if (!(await file.exists())) {
-    return err(new UserError(`tap.json not found in ${label}`));
+
+  // 1. Try tap.json (canonical format)
+  const tapFile = Bun.file(join(dir, "tap.json"));
+  if (await tapFile.exists()) {
+    let raw: unknown;
+    try {
+      raw = await tapFile.json();
+    } catch (e) {
+      return err(new UserError(`Invalid JSON in tap.json in ${label}: ${e}`));
+    }
+    return parseWithResult(TapSchema, raw, `tap.json in ${label}`);
   }
-  let raw: unknown;
-  try {
-    raw = await file.json();
-  } catch (e) {
-    return err(new UserError(`Invalid JSON in tap.json in ${label}: ${e}`));
+
+  // 2. Fall back to .claude-plugin/marketplace.json
+  const marketplaceFile = Bun.file(join(dir, ".claude-plugin", "marketplace.json"));
+  if (await marketplaceFile.exists()) {
+    let raw: unknown;
+    try {
+      raw = await marketplaceFile.json();
+    } catch (e) {
+      return err(new UserError(`Invalid JSON in marketplace.json in ${label}: ${e}`));
+    }
+    const parsed = parseWithResult(MarketplaceSchema, raw, `marketplace.json in ${label}`);
+    if (!parsed.ok) return parsed;
+    return ok(adaptMarketplaceToTap(parsed.value, tapUrl ?? ""));
   }
-  return parseWithResult(TapSchema, raw, `tap.json in ${label}`);
+
+  return err(new UserError(`No tap.json or marketplace.json found in ${label}`));
 }
 
 /** Map a registry source to a TapSkill repo string usable by the source adapter chain. */
@@ -166,7 +186,7 @@ export async function addTap(
   if (!cloneResult.ok) return cloneResult;
   const effectiveUrl = cloneResult.value.effectiveUrl;
 
-  const tapResult = await loadTapJson(dest, name);
+  const tapResult = await loadTapJson(dest, name, url);
   if (!tapResult.ok) {
     await rm(dest, { recursive: true, force: true });
     return tapResult;
@@ -256,7 +276,7 @@ export async function updateTap(
       const pullResult = await pull(dir);
       if (!pullResult.ok) return pullResult;
     }
-    const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
+    const tapResult = await loadTapJson(dir, BUILTIN_TAP.name, BUILTIN_TAP.url);
     updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
     return ok({ updated, http });
   }
@@ -271,7 +291,7 @@ export async function updateTap(
       } else {
         await pull(dir);
       }
-      const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
+      const tapResult = await loadTapJson(dir, BUILTIN_TAP.name, BUILTIN_TAP.url);
       updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
     }
   }
@@ -314,7 +334,7 @@ export async function updateTap(
       if (!pullResult.ok) return pullResult;
     }
 
-    const tapResult = await loadTapJson(dir, tap.name);
+    const tapResult = await loadTapJson(dir, tap.name, tap.url);
     updated[tap.name] = tapResult.ok ? tapResult.value.skills.length : 0;
   }
 
@@ -331,7 +351,7 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
   // Load built-in tap first (if enabled and already cloned)
   if (config.builtin_tap !== false) {
     const dir = tapDir(BUILTIN_TAP.name);
-    const tapResult = await loadTapJson(dir, BUILTIN_TAP.name);
+    const tapResult = await loadTapJson(dir, BUILTIN_TAP.name, BUILTIN_TAP.url);
     if (tapResult.ok) {
       for (const skill of tapResult.value.skills) {
         entries.push({ tapName: BUILTIN_TAP.name, skill });
@@ -363,7 +383,7 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
     } else {
       // Git tap: read local tap.json
       const dir = tapDir(tap.name);
-      const tapResult = await loadTapJson(dir, tap.name);
+      const tapResult = await loadTapJson(dir, tap.name, tap.url);
       if (!tapResult.ok) {
         // Graceful degradation: skip invalid taps
         continue;
@@ -441,7 +461,7 @@ export async function getTapInfo(
       return err(new UserError(`Built-in tap '${BUILTIN_TAP.name}' is disabled.`));
     }
     const dir = tapDir(BUILTIN_TAP.name);
-    const tapResult = await loadTapJson(dir, name);
+    const tapResult = await loadTapJson(dir, name, BUILTIN_TAP.url);
     const skillCount = tapResult.ok ? tapResult.value.skills.length : 0;
     let lastFetched: string | undefined;
     const logResult = await log(dir, 1);
@@ -469,7 +489,7 @@ export async function getTapInfo(
   }
 
   const dir = tapDir(tap.name);
-  const tapResult = await loadTapJson(dir, tap.name);
+  const tapResult = await loadTapJson(dir, tap.name, tap.url);
   const skillCount = tapResult.ok ? tapResult.value.skills.length : 0;
   let lastFetched: string | undefined;
   const logResult = await log(dir, 1);
