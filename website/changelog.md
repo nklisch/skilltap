@@ -5,6 +5,22 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.12
+- Fixed `skilltap update` crashing with `cp: cannot stat '...': No such file or directory`
+  when a skill's subdirectory was removed from an upstream multi-skill repo. The update
+  now detects this and offers to remove the stale skill record instead of crashing.
+- Fixed `skilltap update` and `install` crashing or showing false "already installed"
+  conflicts when an installed.json record exists but the skill directory has been manually
+  deleted. Stale records are now detected and cleaned up before the operation proceeds.
+- Fixed `skilltap remove` silently succeeding when the skill directory was already gone;
+  now reports that only the record was cleaned up.
+- Added support for Claude Code marketplace repos (`.claude-plugin/marketplace.json`) as
+  taps. `skilltap tap add owner/repo` now works with any Claude Code plugin marketplace.
+- Scanner now discovers skills in `plugins/*/skills/*/SKILL.md` (Claude Code plugin layout)
+  without requiring a deep scan.
+
+---
+
 ## v0.9.11
 - Fixed scanner not detecting skills placed directly at `skills/SKILL.md` (flat layout).
   Previously only `skills/<name>/SKILL.md` (subdirectory layout) was recognized.
