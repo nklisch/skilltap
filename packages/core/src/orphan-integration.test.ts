@@ -6,7 +6,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { $ } from "bun";
 import {
+  addFileAndCommit,
   commitAll,
   createStandaloneSkillRepo,
   initRepo,
@@ -267,6 +269,148 @@ describe("installSkill — phantom conflict", () => {
       expect(reloaded.value.skills.every((s) => s.name !== "stale-skill")).toBe(true);
     } finally {
       await repo.cleanup();
+    }
+  });
+});
+
+// ─── Gap #13: multi-skill cache-subdir removed upstream ──────────────────────
+
+describe("updateSkill — multi-skill subdirectory removed upstream", () => {
+  test("calls onSkillRemovedUpstream with correct args and respects 'remove' action", async () => {
+    // 1. Create a multi-skill git repo with skill-a and skill-b
+    const repoDir = await makeTmpDir();
+    try {
+      await mkdir(join(repoDir, ".agents", "skills", "skill-a"), { recursive: true });
+      await mkdir(join(repoDir, ".agents", "skills", "skill-b"), { recursive: true });
+      await Bun.write(
+        join(repoDir, ".agents", "skills", "skill-a", "SKILL.md"),
+        "---\nname: skill-a\ndescription: Skill A\n---\n# A",
+      );
+      await Bun.write(
+        join(repoDir, ".agents", "skills", "skill-b", "SKILL.md"),
+        "---\nname: skill-b\ndescription: Skill B\n---\n# B",
+      );
+      await initRepo(repoDir);
+      await commitAll(repoDir);
+
+      // 2. Install both skills
+      const installResult = await installSkill(repoDir, {
+        scope: "global",
+        skipScan: true,
+      });
+      expect(installResult.ok).toBe(true);
+      if (!installResult.ok) return;
+      expect(installResult.value.records).toHaveLength(2);
+
+      const repoUrl = installResult.value.records[0]!.repo!;
+
+      // 3. Remove skill-b from the source repo and commit
+      await $`rm -rf ${join(repoDir, ".agents", "skills", "skill-b")}`.quiet();
+      await $`git -C ${repoDir} add -A`.quiet();
+      await $`git -C ${repoDir} commit -m "remove skill-b"`.quiet();
+
+      // 4. Run update with onSkillRemovedUpstream
+      const removedUpstreamCalls: Array<{ name: string; repo: string }> = [];
+      const progressStatuses: Array<{ name: string; status: string }> = [];
+
+      const updateResult = await updateSkill({
+        yes: true,
+        async onSkillRemovedUpstream(skillName, repo) {
+          removedUpstreamCalls.push({ name: skillName, repo });
+          return "remove";
+        },
+        onProgress(skillName, status) {
+          progressStatuses.push({ name: skillName, status });
+        },
+      });
+
+      // 5. Assertions
+      expect(updateResult.ok).toBe(true);
+      if (!updateResult.ok) return;
+
+      // onSkillRemovedUpstream was called with correct args
+      expect(removedUpstreamCalls).toHaveLength(1);
+      expect(removedUpstreamCalls[0]!.name).toBe("skill-b");
+      expect(removedUpstreamCalls[0]!.repo).toBe(repoUrl);
+
+      // skill-b reported as removed-upstream
+      const removedProgress = progressStatuses.find(
+        (p) => p.name === "skill-b" && p.status === "removed-upstream",
+      );
+      expect(removedProgress).toBeDefined();
+
+      // skill-a was updated or up-to-date (may also have "checking" as intermediate status)
+      const skillAStatuses = progressStatuses
+        .filter((p) => p.name === "skill-a")
+        .map((p) => p.status);
+      expect(skillAStatuses.length).toBeGreaterThan(0);
+      const finalStatus = skillAStatuses[skillAStatuses.length - 1]!;
+      expect(["upToDate", "updated"]).toContain(finalStatus);
+
+      // installed.json should only have skill-a (skill-b was removed)
+      const reloaded = await loadInstalled();
+      expect(reloaded.ok).toBe(true);
+      if (!reloaded.ok) return;
+      const names = reloaded.value.skills.map((s) => s.name);
+      expect(names).toContain("skill-a");
+      expect(names).not.toContain("skill-b");
+
+      // skill-b install directory should be gone
+      const skillBDir = skillInstallDir("skill-b", "global");
+      const { resolvedDirExists } = await import("./fs");
+      expect(await resolvedDirExists(skillBDir)).toBe(false);
+    } finally {
+      await removeTmpDir(repoDir);
+    }
+  });
+
+  test("respects 'skip' action — keeps record and directory", async () => {
+    const repoDir = await makeTmpDir();
+    try {
+      await mkdir(join(repoDir, ".agents", "skills", "skill-a"), { recursive: true });
+      await mkdir(join(repoDir, ".agents", "skills", "skill-b"), { recursive: true });
+      await Bun.write(
+        join(repoDir, ".agents", "skills", "skill-a", "SKILL.md"),
+        "---\nname: skill-a\ndescription: Skill A\n---\n# A",
+      );
+      await Bun.write(
+        join(repoDir, ".agents", "skills", "skill-b", "SKILL.md"),
+        "---\nname: skill-b\ndescription: Skill B\n---\n# B",
+      );
+      await initRepo(repoDir);
+      await commitAll(repoDir);
+
+      const installResult = await installSkill(repoDir, {
+        scope: "global",
+        skipScan: true,
+      });
+      expect(installResult.ok).toBe(true);
+      if (!installResult.ok) return;
+
+      // Remove skill-b from upstream
+      await $`rm -rf ${join(repoDir, ".agents", "skills", "skill-b")}`.quiet();
+      await $`git -C ${repoDir} add -A`.quiet();
+      await $`git -C ${repoDir} commit -m "remove skill-b"`.quiet();
+
+      // Return "skip" — user declines to remove
+      const updateResult = await updateSkill({
+        yes: true,
+        async onSkillRemovedUpstream() {
+          return "skip";
+        },
+      });
+
+      expect(updateResult.ok).toBe(true);
+      if (!updateResult.ok) return;
+
+      // Record should still exist (not removed)
+      const reloaded = await loadInstalled();
+      expect(reloaded.ok).toBe(true);
+      if (!reloaded.ok) return;
+      const names = reloaded.value.skills.map((s) => s.name);
+      expect(names).toContain("skill-b");
+    } finally {
+      await removeTmpDir(repoDir);
     }
   });
 });
