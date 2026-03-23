@@ -42,7 +42,7 @@ Silent aliases (backwards compatibility):
 
 ## Global Behavior
 
-- Exit codes: `0` success, `1` error, `2` user cancelled
+- Exit codes: `0` success, `1` error, `2` user declined prompt, `130` Ctrl+C (SIGINT)
 - Errors to stderr, output to stdout
 - `--json` where supported outputs machine-readable JSON
 - Config at `~/.config/skilltap/config.toml` — created with defaults on first run

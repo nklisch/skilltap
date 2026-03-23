@@ -2087,7 +2087,8 @@ If both protocols fail, the original error is returned (the user-configured URL'
 |------|---------|
 | 0 | Success |
 | 1 | Error (bad input, operation failed, skill not found) |
-| 2 | User cancelled (declined install, Ctrl+C) |
+| 2 | User declined a prompt (answered "no" to a confirmation) |
+| 130 | User interrupted with Ctrl+C (SIGINT: 128 + signal 2) |
 
 ### Error Messages
 
