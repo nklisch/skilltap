@@ -324,7 +324,7 @@ async function runInteractiveSearch(
     },
   });
 
-  if (isCancel(result)) process.exit(2);
+  if (isCancel(result)) process.exit(130);
   await installChosen(result as SearchEntry, config);
 }
 
@@ -346,12 +346,11 @@ async function installChosen(
 
   if (!config.defaults.also.length) {
     const selected = await selectAgents(also);
-    if (isCancel(selected)) process.exit(2);
-    also = selected as string[];
+    also = selected;
 
     if (also.length) {
       const save = await confirmSaveDefault("Save agent selection as default?");
-      if (!isCancel(save) && save) {
+      if (save) {
         config.defaults.also = also;
         await saveConfig(config);
       }

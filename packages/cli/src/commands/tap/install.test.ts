@@ -103,7 +103,7 @@ describe("tap install — agent selection prompt", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }

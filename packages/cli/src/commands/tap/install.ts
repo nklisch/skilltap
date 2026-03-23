@@ -205,7 +205,7 @@ export default defineCommand({
         },
       });
 
-      if (isCancel(result)) process.exit(2);
+      if (isCancel(result)) process.exit(130);
       selected = result as TapEntry[];
     }
 
@@ -243,12 +243,11 @@ export default defineCommand({
 
       if (!args.also && !policy.yes && !config.defaults.also.length) {
         const agentSelected = await selectAgents(also);
-        if (isCancel(agentSelected)) process.exit(2);
-        also = agentSelected as string[];
+        also = agentSelected;
 
         if (also.length) {
           const save = await confirmSaveDefault("Save agent selection as default?");
-          if (!isCancel(save) && save) {
+          if (save) {
             config.defaults.also = also;
             await saveConfig(config);
           }

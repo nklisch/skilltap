@@ -1,4 +1,4 @@
-import { isCancel, log } from "@clack/prompts";
+import { log } from "@clack/prompts";
 import {
   type AgentAdapter,
   type Config,
@@ -41,7 +41,6 @@ export async function resolveScope(
     if (scope === "project") projectRoot = await findProjectRoot();
   } else {
     const chosen = await selectScope();
-    if (isCancel(chosen)) process.exit(2);
     scope = chosen as "global" | "project";
     if (scope === "project") projectRoot = await findProjectRoot();
   }
@@ -97,10 +96,9 @@ export async function resolveAgentInteractive(
 ): Promise<AgentAdapter | undefined> {
   const agentResult = await resolveAgent(config, async (detected) => {
     const chosen = await selectAgent(detected);
-    if (isCancel(chosen)) return null;
-    config.security.agent_cli = (chosen as AgentAdapter).cliName;
+    config.security.agent_cli = chosen.cliName;
     await saveConfig(config);
-    return chosen as AgentAdapter;
+    return chosen;
   });
 
   if (agentResult.ok) {

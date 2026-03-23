@@ -133,7 +133,7 @@ describe("install — scope prompt", () => {
   );
 
   test(
-    "Ctrl+C at scope prompt exits with code 2",
+    "Ctrl+C at scope prompt exits with code 130",
     async () => {
       const repo = await createStandaloneSkillRepo();
       try {
@@ -146,7 +146,7 @@ describe("install — scope prompt", () => {
         session.sendKey("CTRL_C");
 
         const { exitCode, output } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
         expect(output.toLowerCase()).toMatch(/cancel/);
       } finally {
         await repo.cleanup();
@@ -254,7 +254,7 @@ describe("install — confirm prompt", () => {
   );
 
   test(
-    "Ctrl+C at confirm prompt exits with code 2",
+    "Ctrl+C at confirm prompt exits with code 130",
     async () => {
       const repo = await createStandaloneSkillRepo();
       try {
@@ -267,7 +267,7 @@ describe("install — confirm prompt", () => {
         session.sendKey("CTRL_C");
 
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await repo.cleanup();
       }
@@ -342,7 +342,7 @@ describe("install — skill selection (multi-skill repo)", () => {
   );
 
   test(
-    "Ctrl+C at skill selection exits with code 2",
+    "Ctrl+C at skill selection exits with code 130",
     async () => {
       const repo = await createMultiSkillRepo();
       try {
@@ -355,7 +355,7 @@ describe("install — skill selection (multi-skill repo)", () => {
         session.sendKey("CTRL_C");
 
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await repo.cleanup();
       }

@@ -1,4 +1,4 @@
-import { isCancel, spinner } from "@clack/prompts";
+import { spinner } from "@clack/prompts";
 import { footerConfirm as confirm } from "./footer";
 import type {
   AgentAdapter,
@@ -101,7 +101,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
             return true;
           }
           const proceed = await confirmInstall(skillName);
-          if (isCancel(proceed) || proceed === false) process.exit(2);
+          if (proceed === false) process.exit(2);
           return true;
         },
 
@@ -147,7 +147,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
             return true;
           }
           const proceed = await confirmInstall(skillName);
-          if (isCancel(proceed) || proceed === false) process.exit(2);
+          if (proceed === false) process.exit(2);
           return true;
         }
       : undefined,
@@ -161,26 +161,26 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       }
       return withSpinnerPaused(s, async () => {
         const selected = await selectSkills(skills);
-        if (isCancel(selected)) process.exit(2);
-        return selected as string[];
+        return selected;
       });
     },
 
     onSelectTap: async (matches: TapEntry[]): Promise<TapEntry | null> =>
       withSpinnerPaused(s, async () => {
         const chosen = await selectTap(matches);
-        if (isCancel(chosen)) process.exit(2);
-        return chosen as TapEntry;
+        return chosen;
       }),
 
     onAlreadyInstalled: async (name: string): Promise<"update" | "abort"> => {
       if (yes) return "update";
       return withSpinnerPaused(s, async () => {
+        const { isCancel } = await import("@clack/prompts");
         const proceed = await confirm({
           message: `${name} is already installed. Update it instead?`,
           initialValue: true,
         });
-        if (isCancel(proceed) || proceed === false) return "abort";
+        if (isCancel(proceed)) process.exit(130);
+        if (proceed === false) return "abort";
         return "update";
       });
     },
@@ -191,8 +191,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
             s,
             async () => {
               const answer = await offerSemanticScan();
-              if (isCancel(answer)) return false;
-              return answer as boolean;
+              return answer;
             },
             "Starting semantic scan...",
           );
@@ -204,17 +203,19 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       : async (skillNames: string[]): Promise<boolean> =>
           withSpinnerPaused(s, async () => {
             const proceed = await confirmReadyInstall(skillNames);
-            if (isCancel(proceed) || proceed === false) process.exit(2);
+            if (proceed === false) process.exit(2);
             return true;
           }),
 
     onDeepScan: async (count: number): Promise<boolean> =>
       withSpinnerPaused(s, async () => {
+        const { isCancel } = await import("@clack/prompts");
         const proceed = await confirm({
           message: `Found ${count} SKILL.md at non-standard path(s). Continue?`,
           initialValue: true,
         });
-        if (isCancel(proceed) || proceed === false) process.exit(2);
+        if (isCancel(proceed)) process.exit(130);
+        if (proceed === false) process.exit(2);
         return true;
       }),
   };

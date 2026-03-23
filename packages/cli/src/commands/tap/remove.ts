@@ -30,10 +30,10 @@ export default defineCommand({
       });
       if (isCancel(confirmed)) {
         cancel("Operation cancelled.");
-        process.exit(2);
+        process.exit(130);
       }
       if (!confirmed) {
-        process.exit(2);
+        process.exit(130);
       }
     }
 

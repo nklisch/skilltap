@@ -219,7 +219,7 @@ async function promptSecurityMode(
   });
   if (isCancel(presetResult)) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
 
   const chosenPreset = presetResult as string;
@@ -244,7 +244,7 @@ async function promptSecurityMode(
   });
   if (isCancel(scanResult)) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
 
   const onWarnResult = await select({
@@ -254,7 +254,7 @@ async function promptSecurityMode(
   });
   if (isCancel(onWarnResult)) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
 
   const requireScanResult = await confirm({
@@ -263,7 +263,7 @@ async function promptSecurityMode(
   });
   if (isCancel(requireScanResult)) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
 
   let newAgentCli = agentCli;
@@ -300,7 +300,7 @@ async function promptTrustOverrides(current: TrustOverride[]): Promise<TrustOver
   });
   if (isCancel(configureOverrides)) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
   if (!configureOverrides) return current;
 
@@ -382,7 +382,7 @@ async function runInteractive(): Promise<void> {
   });
   if (isCancel(modeResult)) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
   const target = modeResult as "human" | "agent" | "both";
 
@@ -429,7 +429,7 @@ async function runInteractive(): Promise<void> {
   });
   if (isCancel(saveConfirm) || !saveConfirm) {
     cancel("Cancelled.");
-    process.exit(2);
+    process.exit(130);
   }
 
   config.security = {

@@ -143,7 +143,7 @@ export default defineCommand({
     });
     if (isCancel(descResult)) {
       cancel("Cancelled.");
-      process.exit(2);
+      process.exit(130);
     }
     const description = descResult as string;
 
@@ -202,7 +202,7 @@ export default defineCommand({
     });
     if (isCancel(licenseResult)) {
       cancel("Cancelled.");
-      process.exit(2);
+      process.exit(130);
     }
     const license = licenseResult as string;
 

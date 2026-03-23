@@ -1,4 +1,4 @@
-import { isCancel, spinner } from "@clack/prompts";
+import { spinner } from "@clack/prompts";
 import {
   discoverSkills,
   type InstalledSkill,
@@ -68,8 +68,7 @@ export default defineCommand({
         process.exit(1);
       }
       const selected = await selectSkillsToRemove(allSkills);
-      if (isCancel(selected)) process.exit(2);
-      const selectedKeys = new Set(selected as string[]);
+      const selectedKeys = new Set(selected);
       skillsToRemove = allSkills.filter((s) => selectedKeys.has(`${s.name}:${s.scope}`));
     } else {
       const names = [...new Set([args.name, ...(args._ as string[])])];
@@ -95,7 +94,7 @@ export default defineCommand({
               } else {
                 if (!args.yes) {
                   const confirmed = await confirmRemove(name);
-                  if (isCancel(confirmed) || confirmed === false) process.exit(2);
+                  if (confirmed === false) process.exit(2);
                 }
                 const s = spinner();
                 s.start(`Removing ${name}...`);
@@ -158,7 +157,7 @@ export default defineCommand({
           ? skillsToRemove[0]!.name
           : `${skillsToRemove.length} skills`;
       const confirmed = await confirmRemove(label);
-      if (isCancel(confirmed) || confirmed === false) process.exit(2);
+      if (confirmed === false) process.exit(2);
     }
 
     const label =

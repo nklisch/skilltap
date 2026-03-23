@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { linkSkill } from "@skilltap/core";
+import { linkSkill, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { exitWithError } from "../../ui/agent-out";
 import { successLine } from "../../ui/format";
@@ -34,13 +34,15 @@ export default defineCommand({
   },
   async run({ args }) {
     const agentMode = await isAgentMode();
+    const configResult = await loadConfig();
+    const config = configResult.ok ? configResult.value : undefined;
 
     // Resolve the local path (expand ~ and relative paths)
     const rawPath = args.path.replace(/^~/, process.env.HOME ?? "~");
     const localPath = resolve(process.cwd(), rawPath);
 
     const { scope, projectRoot } = await resolveScope(args);
-    const also = parseAlsoFlag(args.also);
+    const also = parseAlsoFlag(args.also, config);
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
     if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);

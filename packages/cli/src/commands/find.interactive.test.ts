@@ -115,7 +115,7 @@ describe("find -i — search prompt", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -159,7 +159,7 @@ describe("find -i — search prompt", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -195,7 +195,7 @@ describe("find -i — search prompt", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -204,7 +204,7 @@ describe("find -i — search prompt", () => {
   );
 
   test(
-    "Ctrl+C cancels with exit code 2",
+    "Ctrl+C cancels with exit code 130",
     async () => {
       const tap = await createLocalTap([
         {
@@ -225,7 +225,7 @@ describe("find -i — search prompt", () => {
         session.sendKey("CTRL_C");
 
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -264,7 +264,7 @@ describe("find -i — search prompt", () => {
         // Cancel out of the install flow
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -301,7 +301,7 @@ describe("find -i — search prompt", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -377,7 +377,7 @@ describe("find -i — search prompt", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }

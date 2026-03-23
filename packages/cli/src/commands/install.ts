@@ -1,4 +1,4 @@
-import { intro, isCancel, log, outro, spinner } from "@clack/prompts";
+import { intro, log, outro, spinner } from "@clack/prompts";
 import { createStepLogger } from "../ui/install-steps";
 import type {
   AgentAdapter,
@@ -278,8 +278,7 @@ async function runInteractiveMode(
   // or the user already has a saved default in config
   if (!args.also && !policy.yes && !config.defaults.also.length) {
     const selected = await selectAgents(also);
-    if (isCancel(selected)) process.exit(2);
-    also = selected as string[];
+    also = selected;
 
     // Offer to save if selection differs from config default
     const configAlso = config.defaults.also;
@@ -290,7 +289,7 @@ async function runInteractiveMode(
       const save = await confirmSaveDefault(
         "Save agent selection as default?",
       );
-      if (!isCancel(save) && save) {
+      if (save) {
         config.defaults.also = also;
         await saveConfig(config);
       }
@@ -336,7 +335,8 @@ async function runInteractiveMode(
           message: "Remove stale records? (directories are already gone)",
           initialValue: true,
         });
-        if (isCancelPrompt(shouldClean) || !shouldClean) return [];
+        if (isCancelPrompt(shouldClean)) process.exit(130);
+        if (!shouldClean) return [];
         return orphans.map((o) => o.record.name);
       },
     });

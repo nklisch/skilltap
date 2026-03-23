@@ -48,7 +48,11 @@ export default defineCommand({
         message: "Overwrite existing config?",
         initialValue: false,
       });
-      if (isCancel(confirmed) || !confirmed) {
+      if (isCancel(confirmed)) {
+        cancel("Cancelled.");
+        process.exit(130);
+      }
+      if (!confirmed) {
         cancel("Cancelled.");
         process.exit(2);
       }

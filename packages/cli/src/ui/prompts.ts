@@ -8,9 +8,18 @@ import {
   footerText as text,
 } from "./footer";
 
+/**
+ * Exit on Ctrl+C. Every prompt cancel path calls this instead of returning
+ * the cancel symbol — Ctrl+C always means "exit the program".
+ */
+function exitOnCancel(): never {
+  cancel("Operation cancelled.");
+  process.exit(130);
+}
+
 export async function selectSkills(
   skills: ScannedSkill[],
-): Promise<string[] | symbol> {
+): Promise<string[]> {
   const result = await multiselect({
     message: "Which skills to install?",
     options: skills.map((s) => ({
@@ -20,14 +29,11 @@ export async function selectSkills(
     })),
     required: true,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as string[];
 }
 
-export async function selectScope(): Promise<string | symbol> {
+export async function selectScope(): Promise<string> {
   const result = await select({
     message: "Install to:",
     options: [
@@ -39,45 +45,36 @@ export async function selectScope(): Promise<string | symbol> {
       },
     ],
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as string;
 }
 
 export async function confirmReadyInstall(
   skillNames: string[],
-): Promise<boolean | symbol> {
+): Promise<boolean> {
   const label = skillNames.length === 1 ? skillNames[0]! : `${skillNames.length} skills`;
   const result = await confirm({
     message: `Install ${label}?`,
     initialValue: true,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as boolean;
 }
 
 export async function confirmInstall(
   skillName: string,
-): Promise<boolean | symbol> {
+): Promise<boolean> {
   const result = await confirm({
     message: `Install ${skillName} despite warnings?`,
     initialValue: false,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as boolean;
 }
 
 export async function selectTap(
   matches: TapEntry[],
-): Promise<TapEntry | symbol> {
+): Promise<TapEntry> {
   const result = await select({
     message: "Multiple taps contain this skill. Which one?",
     options: matches.map((entry, i) => ({
@@ -86,17 +83,14 @@ export async function selectTap(
       hint: entry.skill.description,
     })),
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result as symbol;
-  }
+  if (isCancel(result)) exitOnCancel();
   // biome-ignore lint/style/noNonNullAssertion: result is a valid index from the select options
   return matches[result as number]!;
 }
 
 export async function selectSkillsToRemove(
   skills: InstalledSkill[],
-): Promise<string[] | symbol> {
+): Promise<string[]> {
   const nameCounts = new Map<string, number>();
   for (const s of skills) {
     nameCounts.set(s.name, (nameCounts.get(s.name) ?? 0) + 1);
@@ -110,28 +104,22 @@ export async function selectSkillsToRemove(
     })),
     required: true,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as string[];
 }
 
-export async function confirmRemove(name: string): Promise<boolean | symbol> {
+export async function confirmRemove(name: string): Promise<boolean> {
   const result = await confirm({
     message: `Remove ${name}?`,
     initialValue: false,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as boolean;
 }
 
 export async function selectAgent(
   agents: AgentAdapter[],
-): Promise<AgentAdapter | symbol> {
+): Promise<AgentAdapter> {
   const result = await select({
     message: "Which agent CLI should be used for semantic scanning?",
     options: agents.map((agent, i) => ({
@@ -140,29 +128,23 @@ export async function selectAgent(
       hint: agent.cliName,
     })),
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result as symbol;
-  }
+  if (isCancel(result)) exitOnCancel();
   // biome-ignore lint/style/noNonNullAssertion: result is a valid index from the select options
   return agents[result as number]!;
 }
 
-export async function offerSemanticScan(): Promise<boolean | symbol> {
+export async function offerSemanticScan(): Promise<boolean> {
   const result = await confirm({
     message: "Run semantic scan?",
     initialValue: true,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as boolean;
 }
 
 export async function selectAgents(
   currentSelection: string[],
-): Promise<string[] | symbol> {
+): Promise<string[]> {
   const result = await multiselect({
     message: "Which agents should this skill be available to?",
     options: VALID_AGENT_IDS.map((id) => ({
@@ -172,10 +154,7 @@ export async function selectAgents(
     initialValues: currentSelection,
     required: false,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as string[];
 }
 
@@ -188,15 +167,12 @@ export const SCAN_MODE_OPTIONS = [
 
 export async function confirmSaveDefault(
   message: string,
-): Promise<boolean | symbol> {
+): Promise<boolean> {
   const result = await confirm({
     message,
     initialValue: false,
   });
-  if (isCancel(result)) {
-    cancel("Operation cancelled.");
-    return result;
-  }
+  if (isCancel(result)) exitOnCancel();
   return result as boolean;
 }
 
@@ -224,10 +200,7 @@ export async function selectAgentForConfig(
     options,
     initialValue: currentAgent || undefined,
   });
-  if (isCancel(chosen)) {
-    cancel("Setup cancelled.");
-    process.exit(2);
-  }
+  if (isCancel(chosen)) exitOnCancel();
 
   if (chosen === "__custom") {
     const path = await text({
@@ -236,10 +209,7 @@ export async function selectAgentForConfig(
         if (!v || !v.startsWith("/")) return "Must be an absolute path";
       },
     });
-    if (isCancel(path)) {
-      cancel("Setup cancelled.");
-      process.exit(2);
-    }
+    if (isCancel(path)) exitOnCancel();
     return path as string;
   }
 

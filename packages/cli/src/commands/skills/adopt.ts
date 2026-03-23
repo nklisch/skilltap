@@ -63,7 +63,7 @@ export default defineCommand({
         required: true,
       });
 
-      if (isCancel(selected)) process.exit(2);
+      if (isCancel(selected)) process.exit(130);
       namesToAdopt = selected as string[];
     }
 

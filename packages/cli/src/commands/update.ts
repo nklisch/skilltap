@@ -323,7 +323,8 @@ async function runInteractiveUpdate(
         message: "Remove stale records? (directories are already gone)",
         initialValue: true,
       });
-      if (isCancel(shouldClean) || !shouldClean) return [];
+      if (isCancel(shouldClean)) process.exit(130);
+      if (!shouldClean) return [];
       return orphans.map((o) => o.record.name);
     },
 
@@ -333,7 +334,8 @@ async function runInteractiveUpdate(
         message: `Remove "${skillName}" from installed.json?`,
         initialValue: true,
       });
-      return isCancel(action) || !action ? ("skip" as const) : ("remove" as const);
+      if (isCancel(action)) process.exit(130);
+      return !action ? ("skip" as const) : ("remove" as const);
     },
 
     onDiff(_skillName, stat, fromSha, toSha, rawDiff) {
@@ -364,7 +366,7 @@ async function runInteractiveUpdate(
         ? `Apply update to ${skillName} despite warnings?`
         : `Apply update to ${skillName}?`;
       const answer = await confirm({ message, initialValue: false });
-      if (isCancel(answer)) return false;
+      if (isCancel(answer)) process.exit(130);
       return answer as boolean;
     },
 

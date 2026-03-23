@@ -18,6 +18,14 @@ if (process.argv.includes("--get-completions")) {
 import { footer } from "./ui/footer";
 footer().open();
 
+// ─── Ctrl+C always exits ─────────────────────────────────────────────────────
+// Clack prompts put stdin in raw mode, catching Ctrl+C as a cancel symbol.
+// Outside prompts, SIGINT fires normally — ensure we always exit cleanly.
+process.on("SIGINT", () => {
+  footer().close();
+  process.exit(130);
+});
+
 // ─── Startup checks ───────────────────────────────────────────────────────────
 // Skip for --version, --help, self-update, and telemetry subcommand
 const SKIP_STARTUP_ARGS = new Set([
@@ -87,7 +95,8 @@ async function runTelemetryNotice(): Promise<void> {
         "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)",
       initialValue: false,
     });
-    const enabled = !isCancel(opted) && opted === true;
+    if (isCancel(opted)) process.exit(130);
+    const enabled = opted === true;
     const anonymousId = enabled
       ? config.telemetry.anonymous_id || crypto.randomUUID()
       : config.telemetry.anonymous_id;

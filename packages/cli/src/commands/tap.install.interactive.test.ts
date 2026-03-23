@@ -118,7 +118,7 @@ describe("tap install — interactive multiselect", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -150,7 +150,7 @@ describe("tap install — interactive multiselect", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -189,7 +189,7 @@ describe("tap install — interactive multiselect", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -230,7 +230,7 @@ describe("tap install — interactive multiselect", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -239,7 +239,7 @@ describe("tap install — interactive multiselect", () => {
   );
 
   test(
-    "Ctrl+C cancels with exit code 2",
+    "Ctrl+C cancels with exit code 130",
     async () => {
       const tap = await createLocalTap("home", [
         {
@@ -260,7 +260,7 @@ describe("tap install — interactive multiselect", () => {
         session.sendKey("CTRL_C");
 
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }
@@ -301,7 +301,7 @@ describe("tap install — interactive multiselect", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap1.cleanup();
         await tap2.cleanup();
@@ -341,7 +341,7 @@ describe("tap install — interactive multiselect", () => {
 
         session.sendKey("CTRL_C");
         const { exitCode } = await session.finish();
-        expect(exitCode).toBe(2);
+        expect(exitCode).toBe(130);
       } finally {
         await tap.cleanup();
       }

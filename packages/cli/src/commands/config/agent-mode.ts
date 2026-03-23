@@ -64,7 +64,7 @@ export default defineCommand({
     });
     if (isCancel(enableResult)) {
       cancel("Cancelled.");
-      process.exit(2);
+      process.exit(130);
     }
 
     const enabled = enableResult as boolean;
@@ -152,7 +152,7 @@ export default defineCommand({
       {
         onCancel() {
           cancel("Cancelled.");
-          process.exit(2);
+          process.exit(130);
         },
       },
     );
