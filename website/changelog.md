@@ -5,6 +5,13 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.9.14
+- Fixed `skilltap update` auto-removing disabled skills as "stale records". Disabled
+  skills are now skipped entirely during orphan detection — missing install directories
+  and symlinks are expected for disabled skills and should not trigger removal.
+
+---
+
 ## v0.9.12
 - Fixed `skilltap update` crashing with `cp: cannot stat '...': No such file or directory`
   when a skill's subdirectory was removed from an upstream multi-skill repo. The update

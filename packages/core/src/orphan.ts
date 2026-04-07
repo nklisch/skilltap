@@ -2,7 +2,7 @@ import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { loadInstalled, saveInstalled } from "./config";
 import { resolvedDirExists } from "./fs";
-import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
+import { skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
@@ -43,6 +43,9 @@ export async function findOrphanRecords(
   const orphans: OrphanRecord[] = [];
 
   for (const record of installed.skills) {
+    // Disabled skills are expected to have missing install dirs/symlinks — skip them
+    if (record.active === false) continue;
+
     // Linked skills: check record.path exists
     if (record.scope === "linked") {
       if (record.path && !(await resolvedDirExists(record.path))) {
@@ -89,10 +92,7 @@ export async function findOrphanRecords(
 
     // Standalone git, local, or anything else: check install dir
     const effectiveScope = record.scope as "global" | "project";
-    const installDir =
-      record.active === false
-        ? skillDisabledDir(record.name, effectiveScope, projectRoot)
-        : skillInstallDir(record.name, effectiveScope, projectRoot);
+    const installDir = skillInstallDir(record.name, effectiveScope, projectRoot);
 
     if (!(await resolvedDirExists(installDir))) {
       orphans.push({ record, reason: "directory-missing" });

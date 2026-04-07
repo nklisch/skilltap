@@ -110,21 +110,9 @@ describe("findOrphanRecords", () => {
     expect(orphans[0]!.reason).toBe("directory-missing");
   });
 
-  test("detects directory-missing for disabled skill", async () => {
+  test("skips disabled skills entirely", async () => {
     const skill = makeSkill({ name: "disabled-skill", active: false });
-    // Do NOT create the disabled dir
-    const installed = makeInstalled([skill]);
-    const orphans = await findOrphanRecords(installed);
-    expect(orphans).toHaveLength(1);
-    expect(orphans[0]!.reason).toBe("directory-missing");
-  });
-
-  test("no orphan when disabled skill dir exists", async () => {
-    const { skillDisabledDir } = await import("./paths");
-    const skill = makeSkill({ name: "disabled-ok", active: false });
-    const disabledDir = skillDisabledDir("disabled-ok", "global");
-    await mkdir(disabledDir, { recursive: true });
-
+    // Do NOT create any directory — disabled skills should never be flagged
     const installed = makeInstalled([skill]);
     const orphans = await findOrphanRecords(installed);
     expect(orphans).toHaveLength(0);
