@@ -40,6 +40,8 @@ export const createMultiSkillRepo = () => createFixtureRepo("multi-skill-repo");
 export const createSampleTap = () => createFixtureRepo("sample-tap");
 export const createMaliciousSkillRepo = () =>
   createFixtureRepo("malicious-skill");
+export const createClaudePluginRepo = () => createFixtureRepo("claude-plugin");
+export const createCodexPluginRepo = () => createFixtureRepo("codex-plugin");
 
 /**
  * Creates a bare skill directory (not a git repo) with a SKILL.md file.

@@ -22,6 +22,7 @@ export * from "./move";
 export * from "./update";
 export * from "./scanner";
 export * from "./schemas";
+export * from "./plugin";
 export * from "./security";
 export * from "./symlink";
 // Export registry module — exclude names that conflict with ./schemas and ./skills-registry
