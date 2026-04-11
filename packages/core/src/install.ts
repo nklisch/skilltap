@@ -34,6 +34,10 @@ import {
   type ScanError,
   UserError,
 } from "./types";
+import { detectPlugin } from "./plugin/detect";
+import { installPlugin } from "./plugin/install";
+import type { PluginManifest } from "./schemas/plugin";
+import type { PluginRecord } from "./schemas/plugins";
 
 export type InstallOptions = {
   scope: "global" | "project";
@@ -83,6 +87,13 @@ export type InstallOptions = {
   source?: { tapName?: string; sourceType: "tap" | "git" | "npm" | "local" };
   /** Called when orphan records are detected before the install. Return names to purge. */
   onOrphansFound?: OnOrphansFound;
+  /** Called when a plugin manifest is detected after cloning. Return "plugin" to install as plugin,
+   *  "skills-only" to ignore the plugin and install skills normally, or "cancel" to abort. */
+  onPluginDetected?: (manifest: PluginManifest) => Promise<"plugin" | "skills-only" | "cancel">;
+  /** Called when static security warnings found during plugin install. Return true to proceed. */
+  onPluginWarnings?: (warnings: StaticWarning[], pluginName: string) => Promise<boolean>;
+  /** Called before plugin placement for confirmation. Return false to cancel. */
+  onPluginConfirm?: (manifest: PluginManifest) => Promise<boolean>;
 };
 
 export type InstallResult = {
@@ -91,6 +102,8 @@ export type InstallResult = {
   semanticWarnings: SemanticWarning[];
   /** Names of skills that were already installed and the user chose to update instead. */
   updates: string[];
+  /** If a plugin was installed, the plugin record. */
+  pluginRecord?: PluginRecord;
 };
 
 function looksLikeTapName(source: string): boolean {
@@ -489,6 +502,38 @@ export async function installSkill(
     contentDir = await realpath(contentDir).catch(() => contentDir);
 
     debug("content fetched", { contentDir, sha, adapter: resolved.adapter });
+
+    // 4. Plugin detection — before skill scanning
+    const pluginResult = await detectPlugin(contentDir);
+    if (!pluginResult.ok) return pluginResult;
+
+    if (pluginResult.value && options.onPluginDetected) {
+      const decision = await options.onPluginDetected(pluginResult.value);
+      if (decision === "cancel") return err(new UserError("Install cancelled."));
+      if (decision === "plugin") {
+        const pluginInstallResult = await installPlugin(contentDir, pluginResult.value, {
+          scope: options.scope,
+          projectRoot: options.projectRoot,
+          also,
+          skipScan: options.skipScan,
+          onWarnings: options.onPluginWarnings,
+          onConfirm: options.onPluginConfirm,
+          repo: cloneUrl ?? resolved.url,
+          ref: finalRef ?? null,
+          sha,
+          tap: effectiveTap,
+        });
+        if (!pluginInstallResult.ok) return pluginInstallResult;
+        return ok({
+          records: [],
+          warnings: pluginInstallResult.value.warnings,
+          semanticWarnings: [],
+          updates: [],
+          pluginRecord: pluginInstallResult.value.record,
+        });
+      }
+      // decision === "skills-only" → fall through to normal skill scanning
+    }
 
     // 5. Scan for skills
     const scanned = await scan(contentDir, { onDeepScan: options.onDeepScan });

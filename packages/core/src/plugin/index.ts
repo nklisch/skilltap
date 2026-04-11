@@ -13,6 +13,7 @@ export {
   manifestToRecord,
   type PluginInstallMeta,
 } from "./state";
+export { installPlugin, type PluginInstallOptions, type PluginInstallResult } from "./install";
 export {
   MCP_AGENT_CONFIGS,
   namespaceMcpServer,
