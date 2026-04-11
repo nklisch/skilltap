@@ -71,7 +71,7 @@ async function loadTapJson(
     }
     const parsed = parseWithResult(MarketplaceSchema, raw, `marketplace.json in ${label}`);
     if (!parsed.ok) return parsed;
-    return ok(adaptMarketplaceToTap(parsed.value, tapUrl ?? ""));
+    return ok(await adaptMarketplaceToTap(parsed.value, tapUrl ?? "", dir));
   }
 
   return err(new UserError(`No tap.json or marketplace.json found in ${label}`));
