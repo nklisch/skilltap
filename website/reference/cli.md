@@ -43,6 +43,7 @@ skilltap install <source> [source...] [flags]
 | npm scoped + version | `npm:@scope/skill@1.2.0` |
 | Tap name | `commit-helper` |
 | Tap name + ref | `commit-helper@v1.2.0` |
+| Tap plugin | `tap-name/plugin-name` |
 | Local path | `./my-skill` |
 
 Source resolution order:
@@ -51,9 +52,37 @@ Source resolution order:
 2. `npm:` prefix — npm registry adapter
 3. `url:` prefix — HTTP tarball (used internally by HTTP registry taps)
 4. `./`, `/`, `~/` — local adapter
-5. `github:` prefix, or contains `/` with no protocol — GitHub adapter
-6. Contains `@` — split into name + ref, resolve from taps
-7. Otherwise — search taps for matching skill name
+5. `github:` prefix, or contains `/` with no protocol — GitHub adapter (unless matches `tap-name/plugin-name` pattern)
+6. `tap-name/plugin-name` — tap plugin install (resolves plugin entry from named tap)
+7. Contains `@` — split into name + ref, resolve from taps
+8. Otherwise — search taps for matching skill name
+
+### Plugin Auto-Detection
+
+When cloning a git source, skilltap checks for plugin metadata in the repo:
+
+- `.claude-plugin/plugin.json` — Claude Code plugin format
+- `.codex-plugin/plugin.json` — Codex plugin format
+
+If plugin metadata is found, skilltap prompts:
+
+```
+This repo contains a plugin (my-plugin). Install as a plugin (skills + MCP + agents)?
+  ● Yes — install full plugin
+  ○ No — install skills only
+```
+
+Choosing "Yes" installs all plugin components — SKILL.md files, MCP server entries, and agent definitions — and records everything as a plugin in `plugins.json`. Use `skilltap plugin` to manage installed plugins.
+
+### Tap Plugin Syntax
+
+To install a plugin defined in a tap's `plugins` array, use `tap-name/plugin-name`:
+
+```bash
+skilltap install my-tap/my-plugin
+```
+
+This installs the full plugin (skills + MCP + agents) as defined in the tap entry. The components are installed to the same locations as a direct plugin install.
 
 ### Flags
 
@@ -430,6 +459,7 @@ skilltap find [query...] [flags]
 - Install counts are shown for skills.sh results (e.g., `184.5K installs`).
 - For skills.sh multi-skill repos, the specific skill is auto-selected during install — no extra prompt.
 - Picker hints adapt to terminal width — descriptions are truncated to fit.
+- Tap plugins (entries in a tap's `plugins` array) appear in results with a `[plugin]` badge and can be installed with `skilltap install tap-name/plugin-name`.
 
 ### Examples
 
@@ -1257,6 +1287,7 @@ scan: static
 agent: (none)
 also: claude-code
 taps: 2
+plugins: 3
 ```
 
 **JSON:**
@@ -1268,7 +1299,8 @@ taps: 2
   "scan": "static",
   "agent": null,
   "also": ["claude-code"],
-  "taps": 2
+  "taps": 2,
+  "plugins": 3
 }
 ```
 
@@ -1280,8 +1312,196 @@ taps: 2
 | `agent` | Configured LLM for semantic scan, or `null` |
 | `also` | Agent directories to symlink into on each install |
 | `taps` | Number of configured taps |
+| `plugins` | Number of installed plugins |
 
 Does not trigger the update check or telemetry notice.
+
+---
+
+## skilltap plugin
+
+> Also available as `skilltap plugins` (silent alias).
+
+List installed plugins.
+
+```
+skilltap plugin [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--global` | boolean | `false` | Show only global plugins |
+| `--project` | boolean | `false` | Show only project plugins |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+```
+  Name            Components                     Source
+  my-plugin       2 skills, 1 MCP, 0 agents      my-tap/my-plugin
+  dev-tools       1 skill, 2 MCPs, 1 agent        github:user/dev-tools
+```
+
+Columns: Name, Components summary (skill/MCP/agent counts), Source.
+
+If no plugins installed: `No plugins installed. Run 'skilltap install <source>' or 'skilltap install tap-name/plugin-name' to install one.`
+
+### Examples
+
+```bash
+# List all plugins
+skilltap plugin
+
+# List only global plugins
+skilltap plugin --global
+
+# Machine-readable output
+skilltap plugin --json
+```
+
+---
+
+## skilltap plugin info
+
+Show details about an installed plugin.
+
+```
+skilltap plugin info <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+```
+name:       my-plugin
+source:     my-tap/my-plugin
+format:     claude-plugin
+ref:        v1.2.0
+scope:      global
+installed:  2026-04-01T10:00:00.000Z
+updated:    2026-04-01T10:00:00.000Z
+
+Components:
+  Skills
+    ✓  commit-helper
+    ✓  code-review
+
+  MCP Servers
+    ✓  my-plugin:filesystem
+
+  Agents
+    ✗  my-plugin-agent  (not installed)
+```
+
+Components are shown by type with a ✓ (active) or ✗ (inactive/not installed) status.
+
+### Examples
+
+```bash
+skilltap plugin info my-plugin
+skilltap plugin info dev-tools --json
+```
+
+---
+
+## skilltap plugin toggle
+
+Enable or disable individual plugin components.
+
+```
+skilltap plugin toggle <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--skills` | boolean | `false` | Toggle all skills in this plugin |
+| `--mcps` | boolean | `false` | Toggle all MCP server entries in this plugin |
+| `--agents` | boolean | `false` | Toggle all agent definitions in this plugin |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Behavior
+
+When no component flags are passed, shows an interactive multiselect listing each component with its current status. Space to toggle, Enter to apply.
+
+When `--skills`, `--mcps`, or `--agents` are passed, those component groups are toggled (enabled if any are currently disabled, disabled if all are currently enabled).
+
+### Examples
+
+```bash
+# Interactive toggle picker
+skilltap plugin toggle my-plugin
+
+# Disable only MCP entries
+skilltap plugin toggle my-plugin --mcps
+
+# Re-enable skills
+skilltap plugin toggle my-plugin --skills
+```
+
+---
+
+## skilltap plugin remove
+
+Remove an installed plugin.
+
+```
+skilltap plugin remove <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--yes` | boolean | `false` | Skip confirmation prompt |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Behavior
+
+Removes all components associated with the plugin:
+
+1. SKILL.md files for each skill in the plugin (and their agent symlinks)
+2. MCP server entries injected into agent config files
+3. Agent definition files placed by the plugin
+4. The plugin's record in `plugins.json`
+
+On success, prints a summary of what was removed. With `--yes`, skips the confirmation prompt.
+
+### Examples
+
+```bash
+# Remove with confirmation prompt
+skilltap plugin remove my-plugin
+
+# Skip confirmation
+skilltap plugin remove my-plugin --yes
+```
 
 ---
 

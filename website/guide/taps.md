@@ -177,6 +177,35 @@ Each entry in `skills` has:
 | `repo`        | Yes      | Source URL — git URL, `github:owner/repo`, or `npm:package-name` |
 | `tags`        | No       | Array of strings for filtering/search  |
 
+### Tap plugins
+
+Taps can also distribute full plugins — bundles that include skills, MCP server entries, and agent definition files — via a `plugins` array in `tap.json`:
+
+```json
+{
+  "name": "my-tap",
+  "skills": [...],
+  "plugins": [
+    {
+      "name": "dev-assistant",
+      "description": "Development assistant with filesystem MCP access",
+      "repo": "https://github.com/user/dev-assistant",
+      "tags": ["productivity", "filesystem"]
+    }
+  ]
+}
+```
+
+Plugins appear in `skilltap find` results with a `[plugin]` badge alongside regular skills. Install a tap plugin with:
+
+```bash
+skilltap install my-tap/dev-assistant
+```
+
+This installs all plugin components — skills, MCP servers, and agent files — in a single step. Use `skilltap plugin` to manage installed plugins.
+
+See the [tap.json format reference](/reference/tap-format#plugin-entry-fields) for the full plugin entry schema.
+
 ### Publish your tap
 
 Push the repository to any git host — GitHub, GitLab, Bitbucket, a self-hosted server. Then share the URL:

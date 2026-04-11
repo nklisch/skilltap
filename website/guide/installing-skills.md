@@ -100,6 +100,35 @@ The `npm:` prefix downloads the tarball from the npm registry and verifies its S
 
 **Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
 
+### Tap plugin
+
+If a tap defines a `plugins` array, install a full plugin by name using `tap-name/plugin-name`:
+
+```bash
+skilltap install my-tap/dev-assistant
+```
+
+This installs all plugin components in one step: SKILL.md files, MCP server entries, and agent definition files. The plugin is recorded in `plugins.json` and tracked as a single unit.
+
+Use `skilltap plugin` to see what's installed and manage individual components.
+
+### Plugin auto-detection
+
+When you install from a git URL, GitHub shorthand, or npm, skilltap checks the cloned repo for plugin metadata:
+
+- `.claude-plugin/plugin.json`
+- `.codex-plugin/plugin.json`
+
+If found, skilltap prompts:
+
+```
+This repo contains a plugin (dev-assistant). Install as a plugin (skills + MCP + agents)?
+  ● Yes — install full plugin
+  ○ No — install skills only
+```
+
+Choosing "Yes" installs all components and records the plugin. Choosing "No" installs SKILL.md files only, the same as any other repo.
+
 ### Multiple sources
 
 Install several skills in a single command by listing them as positional arguments:
@@ -367,3 +396,31 @@ skilltap unlink my-skill
 ```
 
 Linked skills are skipped during `skilltap update` since they're managed directly by you.
+
+## Managing plugins
+
+After installing a plugin, use `skilltap plugin` to see all installed plugins:
+
+```bash
+skilltap plugin
+```
+
+To see the components of a specific plugin:
+
+```bash
+skilltap plugin info dev-assistant
+```
+
+To toggle specific components on or off:
+
+```bash
+skilltap plugin toggle dev-assistant
+```
+
+To remove a plugin and all its components:
+
+```bash
+skilltap plugin remove dev-assistant
+```
+
+See the [CLI reference](/reference/cli#skilltap-plugin) for all plugin commands and flags.

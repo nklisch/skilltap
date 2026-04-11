@@ -4,7 +4,7 @@ description: CLI tool for installing agent skills from any git host. Works with 
 
 # What is skilltap?
 
-skilltap is a CLI tool for installing agent skills from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it.
+skilltap is a CLI tool for installing agent skills and plugins from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it. When a repo contains a full plugin (skills + MCP servers + agent definitions), skilltap installs and tracks all components together.
 
 ```bash
 skilltap install https://gitea.example.com/nathan/commit-helper
@@ -49,6 +49,8 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Multi-source taps.** Configure multiple skill indexes (taps) — your own, a friend's, a community collection. Search across all of them with `skilltap find`.
 
+**Plugin support.** When a repo contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. `skilltap plugin` lists, inspects, toggles, and removes installed plugins.
+
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
 **Standalone binary.** One file, no runtime dependencies. Download and run.
@@ -61,7 +63,7 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Not a runtime.** Skills are Markdown files that agents read. skilltap doesn't execute anything -- it clones, scans, and places files.
 
-**Not an agent plugin system.** Some agents have their own distribution systems (Claude Code has a full plugin marketplace with commands, hooks, and MCP servers). skilltap is simpler -- it distributes SKILL.md files, and it works across all agents.
+**Not a full agent plugin platform.** Some agents have their own distribution systems (Claude Code has a full plugin marketplace with commands, hooks, LSP servers, and more). skilltap handles SKILL.md files plus MCP servers and agent definitions that ship alongside a skill — the parts that are useful across agents. Agent-specific features (hooks, LSP, slash commands) are outside its scope.
 
 ## Quick example
 
