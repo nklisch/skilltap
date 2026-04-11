@@ -8,6 +8,7 @@ export * from "./marketplace";
 export * from "./plugin";
 export * from "./skill";
 export * from "./tap";
+export * from "./plugins";
 
 export function parseWithResult<T>(
   schema: z.ZodType<T>,
