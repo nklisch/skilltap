@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { debug } from "../debug";
-import { globalBase } from "../fs";
+import { scopeBase } from "../paths";
 import type { StoredMcpComponent } from "../schemas/plugins";
 import { err, ok, type Result, UserError } from "../types";
 
@@ -21,18 +21,20 @@ export const MCP_AGENT_CONFIGS: Record<string, string> = {
 
 // --- Namespacing ---
 
+const SKILLTAP_MCP_PREFIX = "skilltap:";
+
 export function namespaceMcpServer(pluginName: string, serverName: string): string {
-  return `skilltap:${pluginName}:${serverName}`;
+  return `${SKILLTAP_MCP_PREFIX}${pluginName}:${serverName}`;
 }
 
 export function isNamespacedKey(key: string): boolean {
-  return key.startsWith("skilltap:");
+  return key.startsWith(SKILLTAP_MCP_PREFIX);
 }
 
 export function parseNamespacedKey(
   key: string,
 ): { pluginName: string; serverName: string } | null {
-  if (!key.startsWith("skilltap:")) return null;
+  if (!key.startsWith(SKILLTAP_MCP_PREFIX)) return null;
   const parts = key.split(":");
   // parts[0] = "skilltap", parts[1] = pluginName, parts[2..] = serverName segments
   if (parts.length < 3) return null;
@@ -78,8 +80,7 @@ export function mcpConfigPath(
 ): string | null {
   const relPath = MCP_AGENT_CONFIGS[agent];
   if (!relPath) return null;
-  const base = scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
-  return join(base, relPath);
+  return join(scopeBase(scope, projectRoot), relPath);
 }
 
 async function readConfigJson(
@@ -252,7 +253,7 @@ export async function removeMcpServers(
     }
 
     const mcpServers = config.mcpServers as Record<string, unknown>;
-    const prefix = `skilltap:${pluginName}:`;
+    const prefix = `${SKILLTAP_MCP_PREFIX}${pluginName}:`;
 
     for (const key of Object.keys(mcpServers)) {
       if (key.startsWith(prefix)) {

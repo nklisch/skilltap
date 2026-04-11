@@ -42,6 +42,10 @@ export const AGENT_PATHS: Record<string, string> = {
   windsurf: ".windsurf/skills",
 };
 
+export const AGENT_DEF_PATHS: Record<string, string> = {
+  "claude-code": ".claude/agents",
+};
+
 export const AGENT_LABELS: Record<string, string> = {
   "claude-code": "Claude Code",
   cursor: "Cursor",

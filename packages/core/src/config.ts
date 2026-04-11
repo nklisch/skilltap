@@ -5,6 +5,7 @@ import { parse, stringify } from "smol-toml";
 import { type Config, ConfigSchema } from "./schemas/config";
 import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
 import { parseWithResult } from "./schemas/index";
+import { loadJsonState, saveJsonState } from "./json-state";
 import { err, ok, type Result, UserError } from "./types";
 
 /**
@@ -232,46 +233,17 @@ function getInstalledPath(projectRoot?: string): string {
 }
 
 export async function loadInstalled(projectRoot?: string): Promise<Result<InstalledJson>> {
-  const file = getInstalledPath(projectRoot);
-
-  const f = Bun.file(file);
-  const exists = await f.exists();
-
-  if (!exists) {
-    return ok({ version: 1 as const, skills: [] });
-  }
-
-  let raw: unknown;
-  try {
-    raw = await f.json();
-  } catch (e) {
-    return err(new UserError(`Invalid JSON in installed.json: ${e}`));
-  }
-
-  return parseWithResult(InstalledJsonSchema, raw, "installed.json");
+  return loadJsonState(
+    getInstalledPath(projectRoot),
+    InstalledJsonSchema,
+    "installed.json",
+    { version: 1 as const, skills: [] },
+  );
 }
 
 export async function saveInstalled(
   installed: InstalledJson,
   projectRoot?: string,
 ): Promise<Result<void>> {
-  const file = getInstalledPath(projectRoot);
-
-  if (projectRoot) {
-    try {
-      await mkdir(join(projectRoot, ".agents"), { recursive: true });
-    } catch (e) {
-      return err(new UserError(`Failed to create .agents directory: ${e}`));
-    }
-  } else {
-    const dirsResult = await ensureDirs();
-    if (!dirsResult.ok) return dirsResult;
-  }
-
-  try {
-    await Bun.write(file, JSON.stringify(installed, null, 2));
-    return ok(undefined);
-  } catch (e) {
-    return err(new UserError(`Failed to save installed.json: ${e}`));
-  }
+  return saveJsonState(getInstalledPath(projectRoot), installed, "installed.json", projectRoot, ensureDirs);
 }

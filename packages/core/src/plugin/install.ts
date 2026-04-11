@@ -2,8 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import { getConfigDir } from "../config";
-import { globalBase } from "../fs";
-import { skillInstallDir } from "../paths";
+import { agentDefPath, skillInstallDir } from "../paths";
 import type { PluginAgentComponent, PluginManifest, PluginMcpComponent } from "../schemas/plugin";
 import type { PluginRecord, StoredMcpComponent } from "../schemas/plugins";
 import { scanStatic } from "../security/static";
@@ -11,7 +10,7 @@ import { wrapShell } from "../shell";
 import { createAgentSymlinks } from "../symlink";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
 import { injectMcpServers } from "./mcp-inject";
-import { addPlugin, loadPlugins, manifestToRecord, savePlugins } from "./state";
+import { addPlugin, loadPlugins, manifestToRecord, mcpServerToStored, savePlugins } from "./state";
 import type { StaticWarning } from "../security/static";
 
 export type PluginInstallOptions = {
@@ -114,14 +113,7 @@ export async function installPlugin(
   for (const component of mcpComponents) {
     const server = component.server;
     if (server.type === "http") continue;
-    storedMcpComponents.push({
-      type: "mcp",
-      name: server.name,
-      active: true,
-      command: server.command,
-      args: server.args ?? [],
-      env: server.env ?? {},
-    });
+    storedMcpComponents.push(mcpServerToStored(server));
   }
 
   let mcpAgents: string[] = [];
@@ -146,11 +138,11 @@ export async function installPlugin(
   const agentComponents = manifest.components.filter(
     (c): c is PluginAgentComponent => c.type === "agent",
   );
-  const base = scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
   let agentDefsPlaced = 0;
   for (const component of agentComponents) {
     const src = join(contentDir, component.path);
-    const dest = join(base, ".claude", "agents", component.name + ".md");
+    const dest = agentDefPath(component.name, "claude-code", scope, projectRoot);
+    if (!dest) continue;
 
     try {
       await mkdir(dirname(dest), { recursive: true });

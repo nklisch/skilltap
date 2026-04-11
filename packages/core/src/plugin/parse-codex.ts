@@ -1,8 +1,8 @@
-import { join, relative, resolve } from "node:path";
-import { scan } from "../scanner";
+import { join, resolve } from "node:path";
 import { CodexPluginJsonSchema, type PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 import { parseMcpJson } from "./mcp";
+import { discoverSkills } from "./parse-common";
 
 /**
  * Parse a Codex plugin from a directory containing .codex-plugin/plugin.json.
@@ -32,34 +32,7 @@ export async function parseCodexPlugin(
   const manifest = parsed.data;
 
   // --- Skills ---
-  const skillComponents: PluginManifest["components"] = [];
-  if (manifest.skills !== undefined) {
-    const absDir = resolve(pluginDir, manifest.skills);
-    let skills: Awaited<ReturnType<typeof scan>> = [];
-    try {
-      skills = await scan(absDir);
-    } catch {
-      // Path override points to non-existent directory — treat as no skills
-    }
-    for (const skill of skills) {
-      skillComponents.push({
-        type: "skill",
-        name: skill.name,
-        path: relative(pluginDir, skill.path),
-        description: skill.description,
-      });
-    }
-  } else {
-    const skills = await scan(pluginDir);
-    for (const skill of skills) {
-      skillComponents.push({
-        type: "skill",
-        name: skill.name,
-        path: relative(pluginDir, skill.path),
-        description: skill.description,
-      });
-    }
-  }
+  const skillComponents = await discoverSkills(pluginDir, manifest.skills);
 
   // --- MCP ---
   const mcpComponents: PluginManifest["components"] = [];

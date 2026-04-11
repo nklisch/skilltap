@@ -1,15 +1,15 @@
-import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { debug } from "../debug";
 import { ensureDirs, getConfigDir } from "../config";
-import { parseWithResult } from "../schemas";
+import { loadJsonState, saveJsonState } from "../json-state";
 import {
   PluginsJsonSchema,
   type PluginsJson,
   type PluginRecord,
   type StoredComponent,
+  type StoredMcpComponent,
 } from "../schemas/plugins";
-import type { PluginManifest } from "../schemas/plugin";
+import type { McpStdioServer, PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 
 function getPluginsPath(projectRoot?: string): string {
@@ -19,47 +19,30 @@ function getPluginsPath(projectRoot?: string): string {
 }
 
 export async function loadPlugins(projectRoot?: string): Promise<Result<PluginsJson, UserError>> {
-  const file = getPluginsPath(projectRoot);
-  const f = Bun.file(file);
-  const exists = await f.exists();
-
-  if (!exists) {
-    return ok({ version: 1 as const, plugins: [] });
-  }
-
-  let raw: unknown;
-  try {
-    raw = await f.json();
-  } catch (e) {
-    return err(new UserError(`Invalid JSON in plugins.json: ${e}`));
-  }
-
-  return parseWithResult(PluginsJsonSchema, raw, "plugins.json");
+  return loadJsonState(
+    getPluginsPath(projectRoot),
+    PluginsJsonSchema,
+    "plugins.json",
+    { version: 1 as const, plugins: [] },
+  );
 }
 
 export async function savePlugins(
   plugins: PluginsJson,
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
-  const file = getPluginsPath(projectRoot);
+  return saveJsonState(getPluginsPath(projectRoot), plugins, "plugins.json", projectRoot, ensureDirs);
+}
 
-  if (projectRoot) {
-    try {
-      await mkdir(join(projectRoot, ".agents"), { recursive: true });
-    } catch (e) {
-      return err(new UserError(`Failed to create .agents directory: ${e}`));
-    }
-  } else {
-    const dirsResult = await ensureDirs();
-    if (!dirsResult.ok) return dirsResult;
-  }
-
-  try {
-    await Bun.write(file, JSON.stringify(plugins, null, 2));
-    return ok(undefined);
-  } catch (e) {
-    return err(new UserError(`Failed to save plugins.json: ${e}`));
-  }
+export function mcpServerToStored(server: McpStdioServer): StoredMcpComponent {
+  return {
+    type: "mcp",
+    name: server.name,
+    active: true,
+    command: server.command,
+    args: server.args ?? [],
+    env: server.env ?? {},
+  };
 }
 
 export function addPlugin(state: PluginsJson, record: PluginRecord): PluginsJson {
@@ -129,14 +112,7 @@ export function manifestToRecord(manifest: PluginManifest, meta: PluginInstallMe
         debug("plugin", { skipped: "HTTP MCP server", name: server.name });
         continue;
       }
-      components.push({
-        type: "mcp",
-        name: server.name,
-        active: true,
-        command: server.command,
-        args: server.args ?? [],
-        env: server.env ?? {},
-      });
+      components.push(mcpServerToStored(server));
     } else if (component.type === "agent") {
       components.push({ type: "agent", name: component.name, active: true, platform: "claude-code" });
     }

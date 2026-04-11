@@ -1,7 +1,6 @@
 import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { globalBase } from "../fs";
-import { skillDisabledDir, skillInstallDir } from "../paths";
+import { agentDefDisabledPath, agentDefPath, scopeBase, skillDisabledDir, skillInstallDir } from "../paths";
 import type { PluginsJson, StoredComponent, StoredMcpComponent } from "../schemas/plugins";
 import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
 import { err, ok, type Result, UserError } from "../types";
@@ -70,7 +69,6 @@ export async function removeInstalledPlugin(
   if (!found.ok) return found;
 
   const { state, scope, projectRoot, record } = found.value;
-  const base = scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
 
   for (const component of record.components) {
     if (component.type === "skill") {
@@ -88,10 +86,10 @@ export async function removeInstalledPlugin(
       });
       if (!removeResult.ok) return removeResult;
     } else if (component.type === "agent") {
-      const activePath = join(base, ".claude", "agents", `${component.name}.md`);
-      const disabledPath = join(base, ".claude", "agents", ".disabled", `${component.name}.md`);
-      await rm(activePath, { force: true });
-      await rm(disabledPath, { force: true });
+      const activePath = agentDefPath(component.name, "claude-code", scope, projectRoot);
+      const disabledPath = agentDefDisabledPath(component.name, "claude-code", scope, projectRoot);
+      if (activePath) await rm(activePath, { force: true });
+      if (disabledPath) await rm(disabledPath, { force: true });
     }
   }
 
@@ -119,7 +117,6 @@ export async function toggleInstalledComponent(
   if (!found.ok) return found;
 
   const { state, scope, record } = found.value;
-  const base = scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
 
   const component = record.components.find(
     (c) => c.type === componentType && c.name === componentName,
@@ -142,7 +139,7 @@ export async function toggleInstalledComponent(
 
     if (wasActive) {
       // Deactivate: move to .disabled/, remove symlinks
-      await mkdir(join(base, ".agents", "skills", ".disabled"), { recursive: true });
+      await mkdir(join(scopeBase(scope, projectRoot), ".agents", "skills", ".disabled"), { recursive: true });
       await rename(activeDir, disabledDir);
       await removeAgentSymlinks(component.name, record.also, scope, projectRoot);
     } else {
@@ -198,18 +195,18 @@ export async function toggleInstalledComponent(
       mcpAgents = injectResult.value;
     }
   } else if (component.type === "agent") {
-    const agentDir = join(base, ".claude", "agents");
-    const disabledDir = join(agentDir, ".disabled");
-    const activePath = join(agentDir, `${component.name}.md`);
-    const disabledPath = join(disabledDir, `${component.name}.md`);
+    const activePath = agentDefPath(component.name, "claude-code", scope, projectRoot);
+    const disabledPath = agentDefDisabledPath(component.name, "claude-code", scope, projectRoot);
 
-    if (wasActive) {
-      // Deactivate: move to .disabled/
-      await mkdir(disabledDir, { recursive: true });
-      await rename(activePath, disabledPath);
-    } else {
-      // Activate: move from .disabled/ back
-      await rename(disabledPath, activePath);
+    if (activePath && disabledPath) {
+      if (wasActive) {
+        // Deactivate: move to .disabled/
+        await mkdir(join(disabledPath, ".."), { recursive: true });
+        await rename(activePath, disabledPath);
+      } else {
+        // Activate: move from .disabled/ back
+        await rename(disabledPath, activePath);
+      }
     }
   }
 

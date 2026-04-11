@@ -6,6 +6,7 @@ export * from "./doctor";
 export * from "./adapters";
 export * from "./agents";
 export * from "./config";
+export * from "./json-state";
 export * from "./config-keys";
 export * from "./fs";
 export * from "./git";

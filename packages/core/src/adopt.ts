@@ -3,9 +3,8 @@ import { dirname } from "node:path";
 import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import type { DiscoveredSkill } from "./discover";
-import { globalBase } from "./fs";
 import { revParse } from "./git";
-import { skillInstallDir } from "./paths";
+import { scopeBase, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security/static";
 import { scanStatic } from "./security/static";
@@ -152,9 +151,7 @@ export async function adoptSkill(
     for (const agent of also) {
       const relDir = AGENT_PATHS[agent];
       if (relDir) {
-        const base =
-          scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
-        const agentLinkPath = `${base}/${relDir}/${skill.name}`;
+        const agentLinkPath = `${scopeBase(scope, projectRoot)}/${relDir}/${skill.name}`;
         symlinksCreated.push(agentLinkPath);
       }
     }

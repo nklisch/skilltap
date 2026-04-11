@@ -11,6 +11,7 @@ export {
   toggleComponent,
   findPlugin,
   manifestToRecord,
+  mcpServerToStored,
   type PluginInstallMeta,
 } from "./state";
 export { installPlugin, type PluginInstallOptions, type PluginInstallResult } from "./install";
