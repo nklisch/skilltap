@@ -151,8 +151,7 @@ skilltap/
 │   │   │   │   │   ├── index.ts      # skilltap plugin — list installed plugins
 │   │   │   │   │   ├── info.ts       # skilltap plugin info — plugin details + components
 │   │   │   │   │   ├── toggle.ts     # skilltap plugin toggle — enable/disable components
-│   │   │   │   │   ├── remove.ts     # skilltap plugin remove — remove plugin + all components
-│   │   │   │   │   └── update.ts     # skilltap plugin update — update plugin source
+│   │   │   │   │   └── remove.ts     # skilltap plugin remove — remove plugin + all components
 │   │   │   │   └── tap/
 │   │   │   │       ├── add.ts
 │   │   │   │       ├── remove.ts

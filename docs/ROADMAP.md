@@ -450,9 +450,9 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
   - **Agent**: move agent .md to/from a `.disabled/` subdirectory
 - [x] **24.4** `skilltap plugin toggle <name> --skills` / `--mcps` / `--agents` — category-level bulk toggle (disable/enable all components of a type)
 - [x] **24.5** `skilltap plugin remove <name>` — remove all components (skills, MCP entries, agent definitions), clean up `plugins.json`
-- [x] **24.6** `skilltap plugin update [name]` — update plugin source (git pull / npm check), re-extract components, apply changes (new skills installed, removed skills deleted, MCP configs updated)
+- [ ] **24.6** `skilltap plugin update [name]` — update plugin source (git pull / npm check), re-extract components, apply changes (new skills installed, removed skills deleted, MCP configs updated) (deferred)
 - [x] **24.7** `--json` output for all plugin subcommands
-- [x] **24.8** Shell completions: add `plugin` subcommand, plugin name completions for info/toggle/remove/update
+- [x] **24.8** Shell completions: add `plugin` subcommand, plugin name completions for info/toggle/remove
 - [x] **24.9** Doctor integration: add plugin checks (plugins.json valid, plugin components exist on disk, MCP entries present in agent configs)
 - [x] **24.10** Unit tests: toggle logic, remove cleanup, update diff
 - [x] **24.11** Integration tests: full lifecycle (install → list → toggle → info → update → remove)

@@ -1221,34 +1221,6 @@ Remove a plugin and all its components.
 
 ---
 
-### `skilltap plugin update [name]`
-
-Update one or all installed plugins.
-
-**Arguments:**
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Plugin name. If omitted, update all. |
-
-**Options:**
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--yes` | boolean | false | Auto-accept updates |
-| `--strict` | boolean | (from config) | Abort on security warnings |
-
-**Behavior:**
-
-1. Fetch latest source (git fetch / npm check)
-2. If different: re-parse plugin manifest, diff components
-3. New components: install with security scan
-4. Removed components: clean up (remove skills, MCP entries, agent files)
-5. Changed components: update in place, re-scan
-6. Update `plugins.json` with new SHA/version and component list
-
----
-
 ## Plugin Detection
 
 When `skilltap install` clones a repo, plugin detection runs **before** skill scanning.
@@ -1273,8 +1245,9 @@ skilltap normalizes both Claude Code and Codex formats into a unified internal r
 const PluginManifestSchema = z.object({
   name: z.string(),
   version: z.string().optional(),
-  description: z.string().optional(),
+  description: z.string().default(""),
   format: z.enum(["claude-code", "codex", "skilltap"]),
+  pluginRoot: z.string(),
   components: z.array(z.discriminatedUnion("type", [
     z.object({
       type: z.literal("skill"),
@@ -1284,10 +1257,20 @@ const PluginManifestSchema = z.object({
     }),
     z.object({
       type: z.literal("mcp"),
-      name: z.string(),
-      command: z.string(),
-      args: z.array(z.string()).default([]),
-      env: z.record(z.string(), z.string()).default({}),
+      server: z.union([
+        z.object({
+          type: z.literal("stdio").default("stdio"),
+          name: z.string(),
+          command: z.string(),
+          args: z.array(z.string()).default([]),
+          env: z.record(z.string(), z.string()).default({}),
+        }),
+        z.object({
+          type: z.literal("http"),
+          name: z.string(),
+          url: z.string(),
+        }),
+      ]),
     }),
     z.object({
       type: z.literal("agent"),
@@ -1362,7 +1345,7 @@ const PluginComponentSchema = z.discriminatedUnion("type", [
 
 const PluginRecordSchema = z.object({
   name: z.string(),
-  description: z.string().optional(),
+  description: z.string().default(""),
   format: z.enum(["claude-code", "codex", "skilltap"]),
   repo: z.string().nullable(),
   ref: z.string().nullable(),

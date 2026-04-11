@@ -46,11 +46,11 @@ Each entry in the `plugins` array describes a full plugin — a bundle of skills
 | Field | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
 | `name` | string | Yes | -- | Plugin name, used as the install identifier |
-| `description` | string | Yes | -- | What the plugin does |
-| `repo` | string | Yes | -- | Source of the plugin. Git URL, `github:owner/repo`, or `npm:package-name`. |
+| `description` | string | No | `""` | What the plugin does |
+| `version` | string | No | -- | Optional version string |
 | `tags` | array of strings | No | `[]` | Searchable tags |
 | `skills` | array | No | `[]` | Skill entries bundled with this plugin |
-| `mcps` | array | No | `[]` | MCP server definitions to inject |
+| `mcpServers` | string or object | No | -- | Path to `.mcp.json` within the tap repo, or inline object in `.mcp.json` `mcpServers` format |
 | `agents` | array | No | `[]` | Agent definition files to install |
 
 Install a tap plugin with:
@@ -69,7 +69,7 @@ Each entry in a plugin's `skills` array:
 |-------|------|----------|-------------|
 | `name` | string | Yes | Skill name (matches SKILL.md frontmatter `name`) |
 | `description` | string | No | Short description |
-| `path` | string | No | Relative path within the plugin repo (for multi-skill repos) |
+| `path` | string | Yes | Relative path within the tap repo to the skill directory |
 
 ### Plugin Agent Entry
 
@@ -78,8 +78,7 @@ Each entry in a plugin's `agents` array:
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `name` | string | Yes | Agent identifier (e.g. `claude-code`) |
-| `file` | string | Yes | Relative path to the agent definition file within the plugin repo |
-| `dest` | string | No | Target path within the agent's config directory |
+| `path` | string | Yes | Relative path to the agent `.md` file within the tap repo |
 
 ## Full Example
 
@@ -116,11 +115,11 @@ Each entry in a plugin's `agents` array:
       "skills": [
         { "name": "dev-assistant", "description": "Development task assistant" }
       ],
-      "mcps": [
-        { "name": "dev-assistant:filesystem", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/dev"] }
-      ],
+      "mcpServers": {
+        "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/dev"] }
+      },
       "agents": [
-        { "name": "claude-code", "file": "agent/claude-settings.json", "dest": "settings.json" }
+        { "name": "claude-code", "path": "agent/claude-code.md" }
       ]
     }
   ]
