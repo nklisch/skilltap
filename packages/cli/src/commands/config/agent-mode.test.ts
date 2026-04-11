@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 setDefaultTimeout(60_000);
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
 
@@ -26,16 +26,16 @@ async function runAgentMode(
   return { exitCode, stdout, stderr };
 }
 
+let env: TestEnv;
 let configDir: string;
 
 beforeEach(async () => {
-  configDir = await makeTmpDir();
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 describe("skilltap config agent-mode", () => {

@@ -8,13 +8,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import {
-  addFileAndCommit,
-  createStandaloneSkillRepo,
-  makeTmpDir,
-  removeTmpDir,
-  runSkilltap,
-} from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv, addFileAndCommit, createStandaloneSkillRepo, runSkilltap } from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -30,21 +24,18 @@ async function writeAgentModeConfig(
   );
 }
 
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.SKILLTAP_HOME;
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 describe("update agent mode — up to date", () => {

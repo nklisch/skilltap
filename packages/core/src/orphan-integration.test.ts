@@ -11,9 +11,11 @@ import {
   addFileAndCommit,
   commitAll,
   createStandaloneSkillRepo,
+  createTestEnv,
   initRepo,
   makeTmpDir,
   removeTmpDir,
+  type TestEnv,
 } from "@skilltap/test-utils";
 import { loadInstalled, saveInstalled } from "./config";
 import { installSkill } from "./install";
@@ -22,31 +24,18 @@ import { skillInstallDir } from "./paths";
 import { updateSkill } from "./update";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 
-type Env = { SKILLTAP_HOME?: string; XDG_CONFIG_HOME?: string };
-
-let savedEnv: Env;
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  savedEnv = {
-    SKILLTAP_HOME: process.env.SKILLTAP_HOME,
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-  };
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
-  else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
-  if (savedEnv.XDG_CONFIG_HOME === undefined)
-    delete process.env.XDG_CONFIG_HOME;
-  else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 const NOW = "2024-01-01T00:00:00.000Z";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from
 setDefaultTimeout(60_000);
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_ENTRY = `${import.meta.dir}/../../src/index.ts`;
 
@@ -57,21 +57,18 @@ async function runGetCompletions(
   return { exitCode, stdout, stderr };
 }
 
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.SKILLTAP_HOME;
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 // ─── Script generation ────────────────────────────────────────────────────────

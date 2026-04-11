@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
 import {
   ensureDirs,
   loadConfig,
@@ -13,32 +12,17 @@ import {
 import { ConfigSchema } from "./schemas/config";
 import type { InstalledJson } from "./schemas/installed";
 
+let env: TestEnv;
 let tmpDir: string;
-let savedXdg: string | undefined;
 
 beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "skilltap-test-"));
-  savedXdg = process.env.XDG_CONFIG_HOME;
-  process.env.XDG_CONFIG_HOME = tmpDir;
+  env = await createTestEnv();
+  tmpDir = env.configDir;
 });
 
 afterEach(async () => {
-  if (savedXdg !== undefined) {
-    process.env.XDG_CONFIG_HOME = savedXdg;
-  } else {
-    delete process.env.XDG_CONFIG_HOME;
-  }
-  await rm(tmpDir, { recursive: true, force: true });
+  await env.cleanup();
 });
-
-async function dirExists(path: string): Promise<boolean> {
-  try {
-    const s = await stat(path);
-    return s.isDirectory();
-  } catch {
-    return false;
-  }
-}
 
 async function fileExists(path: string): Promise<boolean> {
   return Bun.file(path).exists();
@@ -48,17 +32,17 @@ describe("ensureDirs", () => {
   test("creates skilltap config directory", async () => {
     const result = await ensureDirs();
     expect(result.ok).toBe(true);
-    expect(await dirExists(join(tmpDir, "skilltap"))).toBe(true);
+    expect(await pathExists(join(tmpDir, "skilltap"))).toBe(true);
   });
 
   test("creates taps subdirectory", async () => {
     await ensureDirs();
-    expect(await dirExists(join(tmpDir, "skilltap", "taps"))).toBe(true);
+    expect(await pathExists(join(tmpDir, "skilltap", "taps"))).toBe(true);
   });
 
   test("creates cache subdirectory", async () => {
     await ensureDirs();
-    expect(await dirExists(join(tmpDir, "skilltap", "cache"))).toBe(true);
+    expect(await pathExists(join(tmpDir, "skilltap", "cache"))).toBe(true);
   });
 
   test("is idempotent (can be called multiple times)", async () => {

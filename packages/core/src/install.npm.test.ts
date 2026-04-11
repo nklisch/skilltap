@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { loadInstalled } from "./config";
 import { installSkill } from "./install";
@@ -119,37 +119,22 @@ function startMockRegistry(packages: MockPackageEntry[]): {
 
 // --- Env setup ---
 
-type Env = {
-  SKILLTAP_HOME?: string;
-  XDG_CONFIG_HOME?: string;
-  NPM_CONFIG_REGISTRY?: string;
-};
-
-let savedEnv: Env;
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
+let savedNpmRegistry: string | undefined;
 
 beforeEach(async () => {
-  savedEnv = {
-    SKILLTAP_HOME: process.env.SKILLTAP_HOME,
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-    NPM_CONFIG_REGISTRY: process.env.NPM_CONFIG_REGISTRY,
-  };
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
+  savedNpmRegistry = process.env.NPM_CONFIG_REGISTRY;
 });
 
 afterEach(async () => {
-  if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
-  else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
-  if (savedEnv.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME;
-  else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
-  if (savedEnv.NPM_CONFIG_REGISTRY === undefined) delete process.env.NPM_CONFIG_REGISTRY;
-  else process.env.NPM_CONFIG_REGISTRY = savedEnv.NPM_CONFIG_REGISTRY;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  if (savedNpmRegistry === undefined) delete process.env.NPM_CONFIG_REGISTRY;
+  else process.env.NPM_CONFIG_REGISTRY = savedNpmRegistry;
+  await env.cleanup();
 });
 
 // --- Tests ---

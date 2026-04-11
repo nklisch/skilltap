@@ -29,10 +29,12 @@ import {
   commitAll,
   createMultiSkillRepo,
   createStandaloneSkillRepo,
+  createTestEnv,
   initRepo,
   makeTmpDir,
   removeTmpDir,
   runInteractive,
+  type TestEnv,
 } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/..`;
@@ -41,21 +43,18 @@ const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
 // Absolute form — works regardless of cwd (needed for project-scope tests with custom cwd)
 const CMD_ABS = ["bun", "run", "--bun", `${CLI_DIR}/src/index.ts`] as const;
 
+let testEnv: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  testEnv = await createTestEnv();
+  homeDir = testEnv.homeDir;
+  configDir = testEnv.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.SKILLTAP_HOME;
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await testEnv.cleanup();
 });
 
 function env() {

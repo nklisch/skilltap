@@ -10,28 +10,23 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 setDefaultTimeout(60_000);
-import {
-  commitAll,
-  initRepo,
-  makeTmpDir,
-  removeTmpDir,
-  runInteractive,
-} from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv, commitAll, initRepo, runInteractive, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
 
+let testEnv: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
+  testEnv = await createTestEnv();
+  homeDir = testEnv.homeDir;
+  configDir = testEnv.configDir;
 });
 
 afterEach(async () => {
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await testEnv.cleanup();
 });
 
 function env() {

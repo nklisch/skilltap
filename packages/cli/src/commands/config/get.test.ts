@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 setDefaultTimeout(60_000);
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
 
@@ -27,14 +27,16 @@ async function runGet(
   return { exitCode, stdout, stderr };
 }
 
+let env: TestEnv;
 let configDir: string;
 
 beforeEach(async () => {
-  configDir = await makeTmpDir();
+  env = await createTestEnv();
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 describe("skilltap config get", () => {

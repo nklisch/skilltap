@@ -2,14 +2,7 @@ import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from
 setDefaultTimeout(60_000);
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  commitAll,
-  createStandaloneSkillRepo,
-  initRepo,
-  makeTmpDir,
-  removeTmpDir,
-  runSkilltap,
-} from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv, commitAll, createStandaloneSkillRepo, initRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
@@ -35,17 +28,18 @@ async function createLocalTap(
   return { path: tapDir, cleanup: () => removeTmpDir(tapDir) };
 }
 
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 describe("tap add", () => {

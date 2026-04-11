@@ -6,3 +6,4 @@ export * from "./fixtures";
 export * from "./git";
 export * from "./pty";
 export * from "./tmp";
+export * from "./env";

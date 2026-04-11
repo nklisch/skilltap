@@ -1,24 +1,19 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, readlink } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 
-type Env = { SKILLTAP_HOME?: string };
-
-let savedEnv: Env;
+let env: TestEnv;
 let homeDir: string;
 
 beforeEach(async () => {
-  savedEnv = { SKILLTAP_HOME: process.env.SKILLTAP_HOME };
-  homeDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
 });
 
 afterEach(async () => {
-  if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
-  else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
-  await removeTmpDir(homeDir);
+  await env.cleanup();
 });
 
 describe("createAgentSymlinks", () => {

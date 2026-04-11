@@ -7,31 +7,22 @@ import {
   test,
 } from "bun:test";
 import { installSkill } from "@skilltap/core";
-import {
-  createStandaloneSkillRepo,
-  makeTmpDir,
-  removeTmpDir,
-  runSkilltap,
-} from "@skilltap/test-utils";
+import { createStandaloneSkillRepo, createTestEnv, runSkilltap, type TestEnv } from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  // Set env so installSkill uses our temp dirs
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.SKILLTAP_HOME;
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 describe("skilltap skills — empty state", () => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import type { Result } from "./types";
 import type { GitError, NetworkError } from "./types";
 import {
@@ -11,33 +11,19 @@ import {
 } from "./skill-check";
 import { skillCacheDir } from "./paths";
 
-type Env = { XDG_CONFIG_HOME?: string; SKILLTAP_HOME?: string };
-
-let savedEnv: Env;
-let tmpRoot: string;
+let env: TestEnv;
 let configDir: string;
 let homeDir: string;
 
 beforeEach(async () => {
-  savedEnv = {
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-    SKILLTAP_HOME: process.env.SKILLTAP_HOME,
-  };
-  tmpRoot = await makeTmpDir();
-  configDir = join(tmpRoot, "config");
-  homeDir = join(tmpRoot, "home");
+  env = await createTestEnv();
+  configDir = env.configDir;
+  homeDir = env.homeDir;
   await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await mkdir(homeDir, { recursive: true });
-  process.env.XDG_CONFIG_HOME = configDir;
-  process.env.SKILLTAP_HOME = homeDir;
 });
 
 afterEach(async () => {
-  if (savedEnv.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME;
-  else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
-  if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
-  else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
-  await removeTmpDir(tmpRoot);
+  await env.cleanup();
 });
 
 async function writeRawCache(data: object): Promise<void> {

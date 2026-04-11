@@ -1,35 +1,23 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
 import { linkSkill } from "./link";
 
-type Env = { XDG_CONFIG_HOME?: string; SKILLTAP_HOME?: string };
-
-let savedEnv: Env;
+let env: TestEnv;
 let tmpDir: string;
 let configDir: string;
 let homeDir: string;
 
 beforeEach(async () => {
-  savedEnv = {
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-    SKILLTAP_HOME: process.env.SKILLTAP_HOME,
-  };
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
   tmpDir = await makeTmpDir();
-  configDir = join(tmpDir, "config");
-  homeDir = join(tmpDir, "home");
-  await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await mkdir(homeDir, { recursive: true });
-  process.env.XDG_CONFIG_HOME = configDir;
-  process.env.SKILLTAP_HOME = homeDir;
 });
 
 afterEach(async () => {
-  if (savedEnv.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME;
-  else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
-  if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
-  else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
+  await env.cleanup();
   await removeTmpDir(tmpDir);
 });
 

@@ -1,29 +1,24 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
 import { checkForUpdate, downloadAndInstall, fetchLatestVersion, isCompiledBinary } from "./self-update";
 import { err, GitError, ok, UserError } from "./types";
 
-type Env = { XDG_CONFIG_HOME?: string };
-
-let savedEnv: Env;
+let env: TestEnv;
 let configDir: string;
 let tmpDir: string;
 
 beforeEach(async () => {
-  savedEnv = { XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME };
-  configDir = await makeTmpDir();
+  env = await createTestEnv();
+  configDir = env.configDir;
   tmpDir = await makeTmpDir();
-  process.env.XDG_CONFIG_HOME = configDir;
   // Ensure the skilltap config subdir exists (writeCache needs it)
   await mkdir(join(configDir, "skilltap"), { recursive: true });
 });
 
 afterEach(async () => {
-  if (savedEnv.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME;
-  else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
-  await removeTmpDir(configDir);
+  await env.cleanup();
   await removeTmpDir(tmpDir);
 });
 

@@ -10,25 +10,22 @@ import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { loadInstalled, saveInstalled } from "@skilltap/core";
 import { $ } from "bun";
-import { makeTmpDir, removeTmpDir, runSkilltap } from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 setDefaultTimeout(45_000);
 
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.SKILLTAP_HOME;
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 const NOW = "2026-01-01T00:00:00.000Z";

@@ -2,23 +2,20 @@ import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from
 setDefaultTimeout(60_000);
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir, runSkilltap } from "@skilltap/test-utils";
+import { createTestEnv, runSkilltap, type TestEnv } from "@skilltap/test-utils";
 
+let env: TestEnv;
 let homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
+  env = await createTestEnv();
+  homeDir = env.homeDir;
+  configDir = env.configDir;
 });
 
 afterEach(async () => {
-  delete process.env.SKILLTAP_HOME;
-  delete process.env.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
+  await env.cleanup();
 });
 
 // ─── Healthy environment ──────────────────────────────────────────────────────
