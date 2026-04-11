@@ -253,6 +253,9 @@ const main = defineCommand({
     link: () => import("./commands/skills/link").then((m) => m.default),
     unlink: () => import("./commands/skills/unlink").then((m) => m.default),
 
+    plugin: () => import("./commands/plugin/index").then((m) => m.default),
+    plugins: () => import("./commands/plugin/index").then((m) => m.default),
+
     create: () => import("./commands/create").then((m) => m.default),
     verify: () => import("./commands/verify").then((m) => m.default),
     doctor: () => import("./commands/doctor").then((m) => m.default),

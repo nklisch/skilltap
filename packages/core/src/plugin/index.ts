@@ -15,6 +15,13 @@ export {
 } from "./state";
 export { installPlugin, type PluginInstallOptions, type PluginInstallResult } from "./install";
 export {
+  removeInstalledPlugin,
+  toggleInstalledComponent,
+  type RemovePluginOptions,
+  type ToggleComponentOptions,
+  type ToggleResult,
+} from "./lifecycle";
+export {
   MCP_AGENT_CONFIGS,
   namespaceMcpServer,
   isNamespacedKey,
