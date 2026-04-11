@@ -2,7 +2,7 @@
 
 ## Project
 
-skilltap — CLI tool for installing agent skills (SKILL.md) from any git host. "Homebrew taps for agent skills." Installs to `.agents/skills/`, agent-agnostic, multi-source.
+skilltap — CLI tool for installing agent skills (SKILL.md) and plugins from any git host. "Homebrew taps for agent skills." Installs to `.agents/skills/`, agent-agnostic, multi-source. Plugins bundle skills, MCP servers, and agent definitions as a single installable unit.
 
 ## Key Docs
 
@@ -29,7 +29,9 @@ Read these before making architectural decisions:
 
 ```
 packages/core/    → @skilltap/core  (library, all business logic, zero CLI deps)
+  src/plugin/     → plugin detection, install, lifecycle, MCP injection, state
 packages/cli/     → skilltap        (CLI entry point, commands, UI)
+  src/commands/plugin/  → plugin subcommands (list, info, toggle, remove)
 packages/test-utils/ → @skilltap/test-utils (private, test fixtures/helpers)
 ```
 
@@ -42,6 +44,7 @@ bun run dev          # Run CLI from source
 bun test             # Run all tests (recursive across packages)
 bun run build        # Compile to standalone binary
 bun run bump <patch|minor|major|x.y.z>  # Bump version (see Versioning below)
+bun test packages/core/src/plugin/      # Run plugin tests only
 ```
 
 ## Versioning

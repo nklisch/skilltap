@@ -23,8 +23,7 @@ skilltap
 ├── plugin                   Manage installed plugins
 │   ├── info <name>          Show plugin details and components
 │   ├── toggle <name>        Enable/disable individual components
-│   ├── remove <name>        Remove a plugin and all components
-│   └── update [name]        Update plugin(s)
+│   └── remove <name>        Remove a plugin and all components
 ├── config                   Interactive setup wizard
 │   ├── agent-mode           Toggle agent mode (human-only)
 │   ├── security             Configure security settings (wizard + flags)
@@ -72,6 +71,7 @@ skilltap install github:user/repo                           # GitHub explicit
 skilltap install commit-helper                              # Tap name
 skilltap install commit-helper@v1.2.0                       # Tap name + version
 skilltap install user/dev-toolkit                            # Plugin (auto-detected)
+skilltap install tap-name/plugin-name                       # Tap-defined plugin
 skilltap install ./my-skill                                 # Local path
 skilltap install npm:@scope/skill-name                     # npm registry
 skilltap install npm:@scope/skill-name@1.2.3               # npm pinned version
@@ -925,7 +925,6 @@ skilltap plugin toggle <name> --mcps         Disable/enable all MCP servers
 skilltap plugin toggle <name> --skills       Disable/enable all skills
 skilltap plugin toggle <name> --agents       Disable/enable all agents
 skilltap plugin remove <name>                Remove plugin + all components
-skilltap plugin update [name]                Update plugin(s)
 ```
 
 ### Plugin Install (via `skilltap install`)
