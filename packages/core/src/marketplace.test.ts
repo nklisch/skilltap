@@ -102,6 +102,7 @@ describe("adaptMarketplaceToTap", () => {
     expect(tap.skills[0]?.name).toBe("gh-plugin");
     expect(tap.skills[0]?.repo).toBe("owner/repo");
     expect(tap.skills[0]?.description).toBe("A GitHub plugin");
+    expect(tap.skills[0]?.plugin).toBe(true);
   });
 
   test("defaults description when missing", () => {

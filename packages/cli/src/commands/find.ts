@@ -46,6 +46,7 @@ type SearchEntry = {
   preSelectedSkill?: string;
   installs?: number;
   trustLabel?: string;
+  plugin?: boolean;
 };
 
 export default defineCommand({
@@ -186,6 +187,7 @@ async function search(
       installRef: skill.name,
       preSelectedSkill: skill.name,
       trustLabel: formatTapTrust(skill.trust),
+      plugin: skill.plugin || undefined,
     }),
   );
 
@@ -223,6 +225,7 @@ function applyFilter(
         installRef: skill.name,
         preSelectedSkill: skill.name,
         trustLabel: formatTapTrust(skill.trust),
+        plugin: skill.plugin || undefined,
       }))
     : tapSearchEntries;
 
@@ -250,7 +253,7 @@ function printTable(entries: SearchEntry[]): void {
   const width = termWidth();
   const descWidth = Math.max(20, width - 66);
   const rows = entries.map((e) => [
-    ansi.bold(e.name),
+    (e.plugin ? ansi.dim("[plugin] ") : "") + ansi.bold(e.name),
     truncate(e.description, descWidth),
     e.installs !== undefined ? ansi.dim(formatInstallCount(e.installs)) : (e.trustLabel ?? ""),
     ansi.dim(`[${e.source}]`),
@@ -289,6 +292,7 @@ async function runInteractiveSearch(
           source: tapName,
           installRef: skill.name,
           trustLabel: formatTapTrust(skill.trust),
+          plugin: skill.plugin || undefined,
         }));
       }
       const { filtered } = await search(query, local, config);
@@ -305,9 +309,10 @@ async function runInteractiveSearch(
 
       // Layout: name  description  [source]  installs
       const rawName = truncate(entry.name, 30);
-      const name = positions
+      const pluginBadge = entry.plugin ? pc.dim("[plugin] ") : "";
+      const name = pluginBadge + (positions
         ? highlightMatches(rawName, positions)
-        : rawName;
+        : rawName);
 
       // Fill description into remaining space between name and meta
       const fixedCols = rawName.length + 2 + meta.length + 2; // name + gaps + meta
@@ -320,7 +325,7 @@ async function runInteractiveSearch(
       if (active) {
         return `${pc.green(S_RADIO_ACTIVE)} ${name}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(meta)}`;
       }
-      return `${pc.dim(S_RADIO_INACTIVE)} ${pc.dim(rawName)}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(meta)}`;
+      return `${pc.dim(S_RADIO_INACTIVE)} ${pc.dim(pluginBadge + rawName)}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(meta)}`;
     },
   });
 

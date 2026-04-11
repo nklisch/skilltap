@@ -1,4 +1,4 @@
-import { BUILTIN_TAP, describeSecurityMode, loadConfig } from "@skilltap/core";
+import { BUILTIN_TAP, describeSecurityMode, loadConfig, loadPlugins } from "@skilltap/core";
 import { defineCommand } from "citty";
 
 export default defineCommand({
@@ -27,6 +27,9 @@ export default defineCommand({
     const hasBuiltin = config.builtin_tap !== false;
     const tapCount = config.taps.length + (hasBuiltin ? 1 : 0);
 
+    const pluginsResult = await loadPlugins();
+    const pluginCount = pluginsResult.ok ? pluginsResult.value.plugins.length : 0;
+
     if (args.json) {
       process.stdout.write(
         `${JSON.stringify(
@@ -42,6 +45,7 @@ export default defineCommand({
             },
             also: defaults.also,
             taps: tapCount,
+            plugins: pluginCount,
           },
           null,
           2,
@@ -63,6 +67,7 @@ export default defineCommand({
         `agent_cli: ${security.agent_cli || "(none)"}`,
         `also: ${defaults.also.length > 0 ? defaults.also.join(" ") : "(none)"}`,
         `taps: ${tapCount}`,
+        `plugins: ${pluginCount}`,
       ].join("\n") + "\n",
     );
   },

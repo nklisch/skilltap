@@ -12,6 +12,7 @@ export const TapSkillSchema = z.object({
   repo: z.string(),
   tags: z.array(z.string()).default([]),
   trust: TapTrustSchema.optional(),
+  plugin: z.boolean().default(false),
 });
 
 export const TapSchema = z.object({

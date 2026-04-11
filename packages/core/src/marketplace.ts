@@ -53,6 +53,7 @@ export function adaptMarketplaceToTap(marketplace: Marketplace, tapUrl: string):
       description: plugin.description ?? `Plugin from ${marketplace.name} marketplace`,
       repo,
       tags: plugin.tags ?? (plugin.category ? [plugin.category] : []),
+      plugin: true,
     });
   }
 
