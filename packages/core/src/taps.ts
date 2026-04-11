@@ -7,8 +7,12 @@ import { checkGitInstalled, clone, log, pull, syncRemoteUrl } from "./git";
 import type { RegistrySource } from "./registry";
 import { detectTapType, fetchSkillList } from "./registry";
 import { adaptMarketplaceToTap } from "./marketplace";
-import type { Tap, TapSkill } from "./schemas/tap";
+import { join as pathJoin } from "node:path";
+import type { Tap, TapPlugin, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
+import type { PluginManifest } from "./schemas/plugin";
+import { parseSkillFrontmatter } from "./frontmatter";
+import { parseMcpJson, parseMcpObject } from "./plugin/mcp";
 import { MarketplaceSchema } from "./schemas/marketplace";
 import { parseWithResult } from "./schemas/index";
 import { err, type GitError, ok, type Result, UserError } from "./types";
@@ -19,7 +23,12 @@ export const BUILTIN_TAP = {
   url: "https://github.com/nklisch/skilltap-skills.git",
 } as const;
 
-export type TapEntry = { tapName: string; skill: TapSkill };
+export type TapEntry = {
+  tapName: string;
+  skill: TapSkill;
+  /** Populated when this entry represents a tap-defined plugin (not a plain skill). */
+  tapPlugin?: TapPlugin;
+};
 
 export type UpdateTapResult = {
   /** Git taps: skill counts after pull. */
@@ -28,7 +37,7 @@ export type UpdateTapResult = {
   http: string[];
 };
 
-function tapDir(name: string): string {
+export function tapDir(name: string): string {
   return join(getConfigDir(), "taps", name);
 }
 
@@ -341,6 +350,69 @@ export async function updateTap(
   return ok({ updated, http });
 }
 
+/**
+ * Convert a tap-defined plugin into a PluginManifest ready for installPlugin().
+ * @param plugin - The TapPlugin entry from tap.json
+ * @param tapDirPath - Absolute path to the tap's cloned directory
+ */
+export async function tapPluginToManifest(
+  plugin: TapPlugin,
+  tapDirPath: string,
+): Promise<Result<PluginManifest, UserError>> {
+  const components: PluginManifest["components"] = [];
+
+  for (const skill of plugin.skills) {
+    components.push({
+      type: "skill",
+      name: skill.name,
+      path: skill.path,
+      description: skill.description,
+    });
+  }
+
+  if (plugin.mcpServers !== undefined) {
+    if (typeof plugin.mcpServers === "string") {
+      const mcpResult = await parseMcpJson(pathJoin(tapDirPath, plugin.mcpServers));
+      if (!mcpResult.ok) return mcpResult;
+      for (const server of mcpResult.value) {
+        components.push({ type: "mcp", server });
+      }
+    } else {
+      const mcpResult = parseMcpObject(plugin.mcpServers as Record<string, unknown>);
+      if (!mcpResult.ok) return mcpResult;
+      for (const server of mcpResult.value) {
+        components.push({ type: "mcp", server });
+      }
+    }
+  }
+
+  for (const agent of plugin.agents) {
+    const filePath = pathJoin(tapDirPath, agent.path);
+    let frontmatter: Record<string, unknown> = {};
+    try {
+      const content = await Bun.file(filePath).text();
+      frontmatter = parseSkillFrontmatter(content) ?? {};
+    } catch {
+      // Agent file may not exist yet — still include in manifest
+    }
+    components.push({
+      type: "agent",
+      name: agent.name,
+      path: agent.path,
+      frontmatter,
+    });
+  }
+
+  return ok({
+    name: plugin.name,
+    version: plugin.version,
+    description: plugin.description,
+    format: "skilltap",
+    pluginRoot: tapDirPath,
+    components,
+  });
+}
+
 export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
@@ -355,6 +427,19 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
     if (tapResult.ok) {
       for (const skill of tapResult.value.skills) {
         entries.push({ tapName: BUILTIN_TAP.name, skill });
+      }
+      for (const plugin of tapResult.value.plugins ?? []) {
+        entries.push({
+          tapName: BUILTIN_TAP.name,
+          skill: {
+            name: plugin.name,
+            description: plugin.description,
+            repo: BUILTIN_TAP.url,
+            tags: plugin.tags,
+            plugin: true,
+          },
+          tapPlugin: plugin,
+        });
       }
     }
   }
@@ -390,6 +475,19 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
       }
       for (const skill of tapResult.value.skills) {
         entries.push({ tapName: tap.name, skill });
+      }
+      for (const plugin of tapResult.value.plugins ?? []) {
+        entries.push({
+          tapName: tap.name,
+          skill: {
+            name: plugin.name,
+            description: plugin.description,
+            repo: tap.url,
+            tags: plugin.tags,
+            plugin: true,
+          },
+          tapPlugin: plugin,
+        });
       }
     }
   }

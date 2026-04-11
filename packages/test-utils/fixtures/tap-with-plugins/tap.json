@@ -1,0 +1,24 @@
+{
+  "name": "test-tap-plugins",
+  "description": "Test tap with inline plugins",
+  "skills": [
+    { "name": "standalone-skill", "description": "A regular skill", "repo": "owner/standalone" }
+  ],
+  "plugins": [
+    {
+      "name": "dev-toolkit",
+      "description": "Dev tools plugin",
+      "version": "1.0.0",
+      "skills": [
+        { "name": "code-review", "path": "plugins/dev-toolkit/skills/code-review" }
+      ],
+      "mcpServers": {
+        "test-db": { "command": "npx", "args": ["-y", "test-mcp"] }
+      },
+      "agents": [
+        { "name": "reviewer", "path": "plugins/dev-toolkit/agents/reviewer.md" }
+      ],
+      "tags": ["dev", "tools"]
+    }
+  ]
+}

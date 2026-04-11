@@ -1,6 +1,6 @@
 import { z } from "zod/v4";
 
-export const PLUGIN_FORMATS = ["claude-code", "codex"] as const;
+export const PLUGIN_FORMATS = ["claude-code", "codex", "skilltap"] as const;
 export const PLUGIN_COMPONENT_TYPES = ["skill", "mcp", "agent"] as const;
 
 export const PluginSkillComponentSchema = z.object({

@@ -20,8 +20,10 @@ import {
   parseGitHubTapShorthand,
   removeTap,
   searchTaps,
+  tapPluginToManifest,
   updateTap,
 } from "./taps";
+import type { TapPlugin } from "./schemas/tap";
 
 type Env = {
   SKILLTAP_HOME?: string;
@@ -957,6 +959,246 @@ describe("loadTaps — marketplace taps", () => {
       expect(docResults[0]?.skill.name).toBe("pdf-extractor");
     } finally {
       await mp.cleanup();
+    }
+  });
+});
+
+// ─── Helper: create a local tap git repo with plugins ────────────────────────
+
+async function createLocalTapWithPlugin(plugin: TapPlugin): Promise<{ path: string; cleanup: () => Promise<void> }> {
+  const tapPath = await makeTmpDir();
+  const tapJson = {
+    name: "test-tap",
+    description: "Test tap with plugins",
+    skills: [],
+    plugins: [plugin],
+  };
+  await Bun.write(join(tapPath, "tap.json"), JSON.stringify(tapJson, null, 2));
+  await initRepo(tapPath);
+  await commitAll(tapPath);
+  return { path: tapPath, cleanup: () => removeTmpDir(tapPath) };
+}
+
+// ─── Unit tests: tapPluginToManifest ─────────────────────────────────────────
+
+describe("tapPluginToManifest", () => {
+  let tapPath: string;
+
+  beforeEach(async () => {
+    tapPath = await makeTmpDir();
+  });
+
+  afterEach(async () => {
+    await removeTmpDir(tapPath);
+  });
+
+  test("converts skills with correct paths", async () => {
+    const plugin: TapPlugin = {
+      name: "my-plugin",
+      description: "My plugin",
+      skills: [{ name: "my-skill", path: "skills/my-skill", description: "A skill" }],
+      agents: [],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const skillComp = result.value.components.find((c) => c.type === "skill");
+    expect(skillComp).toBeDefined();
+    expect(skillComp?.type === "skill" && skillComp.path).toBe("skills/my-skill");
+  });
+
+  test("sets format to skilltap and pluginRoot to tapDir", async () => {
+    const plugin: TapPlugin = { name: "p", description: "", skills: [], agents: [], tags: [] };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.format).toBe("skilltap");
+    expect(result.value.pluginRoot).toBe(tapPath);
+  });
+
+  test("returns empty components when no skills/mcp/agents", async () => {
+    const plugin: TapPlugin = { name: "empty", description: "", skills: [], agents: [], tags: [] };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.components).toHaveLength(0);
+  });
+
+  test("converts inline MCP servers", async () => {
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      mcpServers: { "my-db": { command: "npx", args: ["-y", "my-mcp"] } },
+      agents: [],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const mcpComps = result.value.components.filter((c) => c.type === "mcp");
+    expect(mcpComps).toHaveLength(1);
+    const mcp = mcpComps[0];
+    expect(mcp?.type === "mcp" && mcp.server.name).toBe("my-db");
+  });
+
+  test("converts file path MCP references", async () => {
+    const mcpContent = JSON.stringify({ "file-db": { command: "node", args: ["server.js"] } });
+    await Bun.write(join(tapPath, ".mcp.json"), mcpContent);
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      mcpServers: ".mcp.json",
+      agents: [],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const mcpComps = result.value.components.filter((c) => c.type === "mcp");
+    expect(mcpComps).toHaveLength(1);
+    const mcp = mcpComps[0];
+    expect(mcp?.type === "mcp" && mcp.server.name).toBe("file-db");
+  });
+
+  test("returns empty MCP list for missing MCP file (non-fatal)", async () => {
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      mcpServers: "nonexistent/.mcp.json",
+      agents: [],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.components.filter((c) => c.type === "mcp")).toHaveLength(0);
+  });
+
+  test("returns error for malformed MCP inline object", async () => {
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      mcpServers: { "bad-server": "not-an-object" } as Record<string, unknown>,
+      agents: [],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(false);
+  });
+
+  test("reads agent frontmatter from .md files", async () => {
+    const agentDir = join(tapPath, "agents");
+    await mkdir(agentDir, { recursive: true });
+    await Bun.write(
+      join(agentDir, "my-agent.md"),
+      "---\nname: my-agent\nmodel: sonnet\n---\nYou are helpful.\n",
+    );
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      agents: [{ name: "my-agent", path: "agents/my-agent.md" }],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const agentComp = result.value.components.find((c) => c.type === "agent");
+    expect(agentComp).toBeDefined();
+    if (agentComp?.type !== "agent") return;
+    expect(agentComp.frontmatter.model).toBe("sonnet");
+  });
+
+  test("includes agent with empty frontmatter when file missing", async () => {
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      agents: [{ name: "ghost", path: "agents/ghost.md" }],
+      tags: [],
+    };
+    const result = await tapPluginToManifest(plugin, tapPath);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const agentComp = result.value.components.find((c) => c.type === "agent");
+    expect(agentComp).toBeDefined();
+    if (agentComp?.type !== "agent") return;
+    expect(agentComp.frontmatter).toEqual({});
+  });
+});
+
+// ─── Integration tests: loadTaps includes plugin entries ─────────────────────
+
+describe("loadTaps — tap plugin entries", () => {
+  test("includes plugin entries from tap plugins array", async () => {
+    const plugin: TapPlugin = {
+      name: "dev-toolkit",
+      description: "Dev tools",
+      skills: [],
+      agents: [],
+      tags: ["dev", "tools"],
+    };
+    const tap = await createLocalTapWithPlugin(plugin);
+    try {
+      await addTap("my-tap", tap.path);
+      const result = await loadTaps();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const pluginEntries = result.value.filter((e) => e.tapPlugin !== undefined);
+      expect(pluginEntries).toHaveLength(1);
+      const entry = pluginEntries[0]!;
+      expect(entry.tapName).toBe("my-tap");
+      expect(entry.skill.name).toBe("dev-toolkit");
+      expect(entry.skill.plugin).toBe(true);
+      expect(entry.tapPlugin?.name).toBe("dev-toolkit");
+    } finally {
+      await tap.cleanup();
+    }
+  });
+
+  test("skills-only taps still work unchanged", async () => {
+    const tap = await createLocalTap([
+      { name: "my-skill", description: "A skill", repo: "owner/repo" },
+    ]);
+    try {
+      await addTap("skills-tap", tap.path);
+      const result = await loadTaps();
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const entries = result.value.filter((e) => e.tapName === "skills-tap");
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.tapPlugin).toBeUndefined();
+    } finally {
+      await tap.cleanup();
+    }
+  });
+
+  test("searchTaps finds plugins by name and tags", async () => {
+    const plugin: TapPlugin = {
+      name: "dev-toolkit",
+      description: "Developer tools collection",
+      skills: [],
+      agents: [],
+      tags: ["dev", "tools"],
+    };
+    const tap = await createLocalTapWithPlugin(plugin);
+    try {
+      await addTap("tool-tap", tap.path);
+      const loadResult = await loadTaps();
+      expect(loadResult.ok).toBe(true);
+      if (!loadResult.ok) return;
+      const byName = searchTaps(loadResult.value, "dev-toolkit");
+      expect(byName.length).toBeGreaterThanOrEqual(1);
+      expect(byName[0]?.skill.name).toBe("dev-toolkit");
+      const byTag = searchTaps(loadResult.value, "tools");
+      expect(byTag.length).toBeGreaterThanOrEqual(1);
+    } finally {
+      await tap.cleanup();
     }
   });
 });

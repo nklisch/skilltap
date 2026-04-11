@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { TapSchema, TapSkillSchema } from "./tap";
+import { TapPluginSchema, TapSchema, TapSkillSchema } from "./tap";
 
 const VALID_SKILL = {
   name: "commit-helper",
@@ -95,5 +95,105 @@ describe("TapSchema", () => {
         skills: [{ ...VALID_SKILL, repo: 123 }],
       }).success,
     ).toBe(false);
+  });
+
+  test("defaults plugins to [] when omitted", () => {
+    const result = TapSchema.safeParse({ name: "my-tap", skills: [] });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.plugins).toEqual([]);
+  });
+
+  test("accepts tap.json with plugins array", () => {
+    const result = TapSchema.safeParse({
+      name: "my-tap",
+      skills: [],
+      plugins: [
+        {
+          name: "dev-toolkit",
+          description: "Dev tools",
+          version: "1.0.0",
+          skills: [{ name: "code-review", path: "plugins/code-review" }],
+          mcpServers: { "test-db": { command: "npx", args: ["-y", "test-mcp"] } },
+          agents: [{ name: "reviewer", path: "plugins/agents/reviewer.md" }],
+          tags: ["dev"],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.plugins).toHaveLength(1);
+      expect(result.data.plugins[0]!.name).toBe("dev-toolkit");
+    }
+  });
+});
+
+describe("TapPluginSchema", () => {
+  test("requires name", () => {
+    expect(TapPluginSchema.safeParse({}).success).toBe(false);
+  });
+
+  test("defaults description to empty string", () => {
+    const result = TapPluginSchema.safeParse({ name: "my-plugin" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.description).toBe("");
+  });
+
+  test("defaults skills to []", () => {
+    const result = TapPluginSchema.safeParse({ name: "my-plugin" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.skills).toEqual([]);
+  });
+
+  test("defaults agents to []", () => {
+    const result = TapPluginSchema.safeParse({ name: "my-plugin" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.agents).toEqual([]);
+  });
+
+  test("defaults tags to []", () => {
+    const result = TapPluginSchema.safeParse({ name: "my-plugin" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.tags).toEqual([]);
+  });
+
+  test("accepts mcpServers as inline object", () => {
+    const result = TapPluginSchema.safeParse({
+      name: "my-plugin",
+      mcpServers: { "my-db": { command: "npx", args: [] } },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(typeof result.data.mcpServers).toBe("object");
+    }
+  });
+
+  test("accepts mcpServers as string path", () => {
+    const result = TapPluginSchema.safeParse({
+      name: "my-plugin",
+      mcpServers: "plugins/my-plugin/.mcp.json",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mcpServers).toBe("plugins/my-plugin/.mcp.json");
+    }
+  });
+
+  test("accepts plugin with all fields", () => {
+    const result = TapPluginSchema.safeParse({
+      name: "full-plugin",
+      description: "Full plugin",
+      version: "2.0.0",
+      skills: [{ name: "my-skill", path: "skills/my-skill", description: "A skill" }],
+      mcpServers: { db: { command: "npx", args: [] } },
+      agents: [{ name: "my-agent", path: "agents/my-agent.md" }],
+      tags: ["a", "b"],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.version).toBe("2.0.0");
+      expect(result.data.skills).toHaveLength(1);
+      expect(result.data.agents).toHaveLength(1);
+      expect(result.data.tags).toEqual(["a", "b"]);
+    }
   });
 });

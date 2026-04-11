@@ -1,0 +1,1 @@
+{ "test-db": { "command": "npx", "args": ["-y", "test-mcp"] } }

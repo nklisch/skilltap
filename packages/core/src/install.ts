@@ -22,7 +22,7 @@ import { scanSemantic } from "./security/semantic";
 import { wrapShell } from "./shell";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { TapEntry } from "./taps";
-import { loadTaps } from "./taps";
+import { loadTaps, tapDir, tapPluginToManifest } from "./taps";
 import type { TrustInfo } from "./trust";
 import { parseGitHubRepo, resolveTrust } from "./trust";
 import type { Result } from "./types";
@@ -119,6 +119,15 @@ function looksLikeTapName(source: string): boolean {
     : source;
   if (name.includes("/")) return false;
   return true;
+}
+
+function parseTapPluginRef(source: string): { tapName: string; pluginName: string } | null {
+  if (!source.includes("/")) return null;
+  const parts = source.split("/");
+  if (parts.length !== 2) return null;
+  if (/^(https?:\/\/|git@|ssh:\/\/|github:|npm:)/.test(source)) return null;
+  if (source.startsWith("./") || source.startsWith("/") || source.startsWith("~/")) return null;
+  return { tapName: parts[0]!, pluginName: parts[1]! };
 }
 
 type TapResolution = { source: string; tap: string; skillName: string; ref?: string };
@@ -423,6 +432,72 @@ export async function installSkill(
   const effectiveSource = tapResult.value?.source ?? source;
   const effectiveTap = tapResult.value?.tap ?? options.tap ?? null;
   const effectiveRef = tapResult.value?.ref ?? options.ref;
+
+  // 1.6. Tap plugin resolution (tap-name/plugin-name)
+  if (!tapResult.value) {
+    const tapPluginRef = parseTapPluginRef(source);
+    if (tapPluginRef) {
+      const tapsResult = await loadTaps();
+      if (tapsResult.ok) {
+        const match = tapsResult.value.find(
+          (e) => e.tapName === tapPluginRef.tapName && e.tapPlugin?.name === tapPluginRef.pluginName,
+        );
+        if (match?.tapPlugin) {
+          const tapDirPath = tapDir(tapPluginRef.tapName);
+          const manifestResult = await tapPluginToManifest(match.tapPlugin, tapDirPath);
+          if (!manifestResult.ok) return manifestResult;
+
+          if (options.onPluginDetected) {
+            const decision = await options.onPluginDetected(manifestResult.value);
+            if (decision === "cancel") return err(new UserError("Install cancelled."));
+            if (decision !== "skills-only") {
+              const result = await installPlugin(tapDirPath, manifestResult.value, {
+                scope: options.scope,
+                projectRoot: options.projectRoot,
+                also,
+                skipScan: options.skipScan,
+                onWarnings: options.onPluginWarnings,
+                onConfirm: options.onPluginConfirm,
+                repo: match.skill.repo ?? null,
+                ref: null,
+                sha: null,
+                tap: tapPluginRef.tapName,
+              });
+              if (!result.ok) return result;
+              return ok({
+                records: [],
+                warnings: result.value.warnings,
+                semanticWarnings: [],
+                updates: [],
+                pluginRecord: result.value.record,
+              });
+            }
+            // decision === "skills-only": fall through to normal resolution
+          } else {
+            // No callback — auto-install as plugin
+            const result = await installPlugin(tapDirPath, manifestResult.value, {
+              scope: options.scope,
+              projectRoot: options.projectRoot,
+              also,
+              skipScan: options.skipScan,
+              repo: match.skill.repo ?? null,
+              ref: null,
+              sha: null,
+              tap: tapPluginRef.tapName,
+            });
+            if (!result.ok) return result;
+            return ok({
+              records: [],
+              warnings: result.value.warnings,
+              semanticWarnings: [],
+              updates: [],
+              pluginRecord: result.value.record,
+            });
+          }
+        }
+      }
+    }
+  }
 
   // 2. Resolve source
   const resolvedResult = await resolveSource(effectiveSource, options.gitHost);
