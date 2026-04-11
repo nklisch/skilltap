@@ -13,3 +13,17 @@ export {
   manifestToRecord,
   type PluginInstallMeta,
 } from "./state";
+export {
+  MCP_AGENT_CONFIGS,
+  namespaceMcpServer,
+  isNamespacedKey,
+  parseNamespacedKey,
+  substituteMcpVars,
+  mcpConfigPath,
+  injectMcpServers,
+  removeMcpServers,
+  listMcpServers,
+  type InjectOptions,
+  type RemoveOptions,
+  type McpVarContext,
+} from "./mcp-inject";
