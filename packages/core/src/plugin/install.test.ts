@@ -2,31 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import { installPlugin, type PluginInstallOptions } from "./install";
 import type { PluginManifest } from "../schemas/plugin";
 
-let homeDir: string;
-let configDir: string;
-let savedHome: string | undefined;
-let savedXdg: string | undefined;
+let env: TestEnv;
 
-beforeEach(async () => {
-  homeDir = await mkdtemp(join(tmpdir(), "skilltap-test-"));
-  configDir = await mkdtemp(join(tmpdir(), "skilltap-cfg-"));
-  savedHome = process.env.SKILLTAP_HOME;
-  savedXdg = process.env.XDG_CONFIG_HOME;
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
-});
-
-afterEach(async () => {
-  if (savedHome !== undefined) process.env.SKILLTAP_HOME = savedHome;
-  else delete process.env.SKILLTAP_HOME;
-  if (savedXdg !== undefined) process.env.XDG_CONFIG_HOME = savedXdg;
-  else delete process.env.XDG_CONFIG_HOME;
-  await rm(homeDir, { recursive: true, force: true });
-  await rm(configDir, { recursive: true, force: true });
-});
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
 async function makeContentDir(structure: Record<string, string>): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "skilltap-content-"));
@@ -83,7 +66,7 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const skillDir = join(homeDir, ".agents", "skills", "helper");
+      const skillDir = join(env.homeDir,".agents", "skills", "helper");
       const skillFile = Bun.file(join(skillDir, "SKILL.md"));
       expect(await skillFile.exists()).toBe(true);
     } finally {
@@ -103,7 +86,7 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const symlinkPath = join(homeDir, ".claude", "skills", "helper");
+      const symlinkPath = join(env.homeDir,".claude", "skills", "helper");
       const stat = await Bun.file(symlinkPath + "/SKILL.md").exists();
       expect(stat).toBe(true);
     } finally {
@@ -125,7 +108,7 @@ describe("installPlugin", () => {
       if (!result.ok) return;
       expect(result.value.mcpAgents).toContain("claude-code");
 
-      const configPath = join(homeDir, ".claude", "settings.json");
+      const configPath = join(env.homeDir,".claude", "settings.json");
       const config = await Bun.file(configPath).json();
       expect(config.mcpServers).toBeDefined();
       expect(config.mcpServers["skilltap:test-plugin:test-db"]).toBeDefined();
@@ -153,7 +136,7 @@ describe("installPlugin", () => {
       if (!result.ok) return;
       expect(result.value.agentDefsPlaced).toBe(1);
 
-      const agentFile = Bun.file(join(homeDir, ".claude", "agents", "reviewer.md"));
+      const agentFile = Bun.file(join(env.homeDir,".claude", "agents", "reviewer.md"));
       expect(await agentFile.exists()).toBe(true);
       expect(await agentFile.text()).toBe("# Reviewer agent content");
     } finally {
@@ -179,7 +162,7 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const agentFile = Bun.file(join(homeDir, ".claude", "agents", "new-agent.md"));
+      const agentFile = Bun.file(join(env.homeDir,".claude", "agents", "new-agent.md"));
       expect(await agentFile.exists()).toBe(true);
     } finally {
       await rm(contentDir, { recursive: true, force: true });
@@ -216,7 +199,7 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const installedFile = Bun.file(join(homeDir, ".agents", "installed.json"));
+      const installedFile = Bun.file(join(env.homeDir,".agents", "installed.json"));
       expect(await installedFile.exists()).toBe(false);
     } finally {
       await rm(contentDir, { recursive: true, force: true });

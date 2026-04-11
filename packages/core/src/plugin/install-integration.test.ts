@@ -1,32 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { installSkill } from "../install";
-import { createClaudePluginRepo, createCodexPluginRepo, createStandaloneSkillRepo } from "@skilltap/test-utils";
+import { createClaudePluginRepo, createCodexPluginRepo, createStandaloneSkillRepo, createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
-let homeDir: string;
-let configDir: string;
-let savedHome: string | undefined;
-let savedXdg: string | undefined;
+let env: TestEnv;
 
-beforeEach(async () => {
-  homeDir = await mkdtemp(join(tmpdir(), "skilltap-test-"));
-  configDir = await mkdtemp(join(tmpdir(), "skilltap-cfg-"));
-  savedHome = process.env.SKILLTAP_HOME;
-  savedXdg = process.env.XDG_CONFIG_HOME;
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
-});
-
-afterEach(async () => {
-  if (savedHome !== undefined) process.env.SKILLTAP_HOME = savedHome;
-  else delete process.env.SKILLTAP_HOME;
-  if (savedXdg !== undefined) process.env.XDG_CONFIG_HOME = savedXdg;
-  else delete process.env.XDG_CONFIG_HOME;
-  await rm(homeDir, { recursive: true, force: true });
-  await rm(configDir, { recursive: true, force: true });
-});
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
 describe("installSkill with plugin detection", () => {
   test("detects Claude Code plugin and installs via callback", async () => {

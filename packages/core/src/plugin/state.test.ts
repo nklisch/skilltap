@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import {
   addPlugin,
   findPlugin,
@@ -15,23 +14,10 @@ import {
 import type { PluginRecord, PluginsJson } from "../schemas/plugins";
 import type { PluginManifest } from "../schemas/plugin";
 
-let tmpDir: string;
-let savedXdg: string | undefined;
+let env: TestEnv;
 
-beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "skilltap-test-"));
-  savedXdg = process.env.XDG_CONFIG_HOME;
-  process.env.XDG_CONFIG_HOME = tmpDir;
-});
-
-afterEach(async () => {
-  if (savedXdg !== undefined) {
-    process.env.XDG_CONFIG_HOME = savedXdg;
-  } else {
-    delete process.env.XDG_CONFIG_HOME;
-  }
-  await rm(tmpDir, { recursive: true, force: true });
-});
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
 const VALID_RECORD: PluginRecord = {
   name: "dev-toolkit",
@@ -76,7 +62,7 @@ describe("loadPlugins", () => {
   });
 
   test("returns error for invalid JSON", async () => {
-    const configDir = join(tmpDir, "skilltap");
+    const configDir = join(env.configDir,"skilltap");
     await Bun.$ `mkdir -p ${configDir}`;
     await Bun.write(join(configDir, "plugins.json"), "not-valid-json{{{");
     const result = await loadPlugins();
@@ -84,7 +70,7 @@ describe("loadPlugins", () => {
   });
 
   test("returns error for invalid schema (version 99)", async () => {
-    const configDir = join(tmpDir, "skilltap");
+    const configDir = join(env.configDir,"skilltap");
     await Bun.$ `mkdir -p ${configDir}`;
     await Bun.write(join(configDir, "plugins.json"), JSON.stringify({ version: 99, plugins: [] }));
     const result = await loadPlugins();
@@ -92,7 +78,7 @@ describe("loadPlugins", () => {
   });
 
   test("reads from project path when projectRoot given", async () => {
-    const projectDir = join(tmpDir, "myproject");
+    const projectDir = join(env.configDir,"myproject");
     const state: PluginsJson = { version: 1, plugins: [VALID_RECORD] };
     const saveResult = await savePlugins(state, projectDir);
     expect(saveResult.ok).toBe(true);
@@ -118,7 +104,7 @@ describe("savePlugins", () => {
   });
 
   test("creates .agents/ dir for project scope", async () => {
-    const projectDir = join(tmpDir, "myproject");
+    const projectDir = join(env.configDir,"myproject");
     const result = await savePlugins(EMPTY_STATE, projectDir);
     expect(result.ok).toBe(true);
     expect(await Bun.file(join(projectDir, ".agents", "plugins.json")).exists()).toBe(true);

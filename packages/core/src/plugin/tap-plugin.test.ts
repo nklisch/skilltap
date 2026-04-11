@@ -4,43 +4,19 @@ import { join } from "node:path";
 import {
   commitAll,
   createTapWithPlugins,
+  createTestEnv,
   initRepo,
-  makeTmpDir,
-  removeTmpDir,
+  type TestEnv,
 } from "@skilltap/test-utils";
 import { getConfigDir, loadConfig } from "../config";
 import { installSkill } from "../install";
 import { loadPlugins } from "./state";
 import { addTap, loadTaps, searchTaps, tapDir } from "../taps";
 
-type Env = {
-  SKILLTAP_HOME?: string;
-  XDG_CONFIG_HOME?: string;
-};
+let env: TestEnv;
 
-let savedEnv: Env;
-let homeDir: string;
-let configDir: string;
-
-beforeEach(async () => {
-  savedEnv = {
-    SKILLTAP_HOME: process.env.SKILLTAP_HOME,
-    XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
-  };
-  homeDir = await makeTmpDir();
-  configDir = await makeTmpDir();
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
-});
-
-afterEach(async () => {
-  if (savedEnv.SKILLTAP_HOME === undefined) delete process.env.SKILLTAP_HOME;
-  else process.env.SKILLTAP_HOME = savedEnv.SKILLTAP_HOME;
-  if (savedEnv.XDG_CONFIG_HOME === undefined) delete process.env.XDG_CONFIG_HOME;
-  else process.env.XDG_CONFIG_HOME = savedEnv.XDG_CONFIG_HOME;
-  await removeTmpDir(homeDir);
-  await removeTmpDir(configDir);
-});
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
 /** Clone a fixture tap repo into the config taps directory, mimicking what addTap does. */
 async function cloneTapToConfig(tapName: string, sourcePath: string): Promise<void> {

@@ -1,7 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import type { StoredMcpComponent } from "../schemas/plugins";
 import {
   injectMcpServers,
@@ -39,20 +38,10 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 // Env isolation for global scope tests
 // ---------------------------------------------------------------------------
 
-let tmpDir: string;
-let savedHome: string | undefined;
+let env: TestEnv;
 
-beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "skilltap-test-"));
-  savedHome = process.env.SKILLTAP_HOME;
-  process.env.SKILLTAP_HOME = tmpDir;
-});
-
-afterEach(async () => {
-  if (savedHome !== undefined) process.env.SKILLTAP_HOME = savedHome;
-  else delete process.env.SKILLTAP_HOME;
-  await rm(tmpDir, { recursive: true, force: true });
-});
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
 // ---------------------------------------------------------------------------
 // namespaceMcpServer
@@ -174,12 +163,12 @@ describe("substituteMcpVars", () => {
 describe("mcpConfigPath", () => {
   test("returns correct path for claude-code global", () => {
     const path = mcpConfigPath("claude-code", "global");
-    expect(path).toBe(join(tmpDir, ".claude/settings.json"));
+    expect(path).toBe(join(env.homeDir, ".claude/settings.json"));
   });
 
   test("returns correct path for cursor global", () => {
     const path = mcpConfigPath("cursor", "global");
-    expect(path).toBe(join(tmpDir, ".cursor/mcp.json"));
+    expect(path).toBe(join(env.homeDir, ".cursor/mcp.json"));
   });
 
   test("returns correct path for project scope", () => {
@@ -205,7 +194,7 @@ describe("mcpConfigPath", () => {
 
 describe("injectMcpServers", () => {
   test("creates new mcp.json with mcpServers key", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const server = makeMcpServer({ name: "db" });
 
     const result = await injectMcpServers({
@@ -227,7 +216,7 @@ describe("injectMcpServers", () => {
   });
 
   test("adds to existing settings.json preserving other keys", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const settingsPath = join(projectRoot, ".claude/settings.json");
     await Bun.write(
       settingsPath,
@@ -249,7 +238,7 @@ describe("injectMcpServers", () => {
   });
 
   test("namespaces server names correctly", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
 
     await injectMcpServers({
       pluginName: "dev-toolkit",
@@ -266,7 +255,7 @@ describe("injectMcpServers", () => {
   });
 
   test("creates backup before first modification", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(configPath, JSON.stringify({ mcpServers: { "user-key": {} } }, null, 2));
 
@@ -283,7 +272,7 @@ describe("injectMcpServers", () => {
   });
 
   test("does not overwrite existing backup", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     const backupPath = configPath + ".skilltap.bak";
     await Bun.write(configPath, JSON.stringify({ mcpServers: {} }, null, 2));
@@ -302,7 +291,7 @@ describe("injectMcpServers", () => {
   });
 
   test("is idempotent — re-injection produces same result", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const opts = {
       pluginName: "p",
       servers: [makeMcpServer({ name: "db" })],
@@ -321,7 +310,7 @@ describe("injectMcpServers", () => {
   });
 
   test("only includes env when non-empty", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const serverNoEnv = makeMcpServer({ env: {} });
     const serverWithEnv = makeMcpServer({ name: "with-env", env: { TOKEN: "abc" } });
 
@@ -345,7 +334,7 @@ describe("injectMcpServers", () => {
       servers: [makeMcpServer()],
       agents: ["nonexistent-agent"],
       scope: "project",
-      projectRoot: tmpDir,
+      projectRoot: env.homeDir,
     });
 
     expect(result.ok).toBe(true);
@@ -354,7 +343,7 @@ describe("injectMcpServers", () => {
   });
 
   test("applies variable substitution", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
 
     await injectMcpServers({
       pluginName: "p",
@@ -379,7 +368,7 @@ describe("injectMcpServers", () => {
   });
 
   test("handles multiple servers for multiple agents", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
 
     const result = await injectMcpServers({
       pluginName: "p",
@@ -402,7 +391,7 @@ describe("injectMcpServers", () => {
   });
 
   test("creates parent directories when needed", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
 
     const result = await injectMcpServers({
       pluginName: "p",
@@ -424,7 +413,7 @@ describe("injectMcpServers", () => {
 
 describe("removeMcpServers", () => {
   test("removes only entries matching plugin name", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(
       configPath,
@@ -454,7 +443,7 @@ describe("removeMcpServers", () => {
   });
 
   test("preserves user-configured servers", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(
       configPath,
@@ -484,7 +473,7 @@ describe("removeMcpServers", () => {
   });
 
   test("preserves other skilltap plugin entries", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(
       configPath,
@@ -517,7 +506,7 @@ describe("removeMcpServers", () => {
       pluginName: "p",
       agents: ["cursor"],
       scope: "project",
-      projectRoot: tmpDir,
+      projectRoot: env.homeDir,
     });
 
     expect(result.ok).toBe(true);
@@ -527,7 +516,7 @@ describe("removeMcpServers", () => {
   });
 
   test("handles config with no mcpServers key", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(configPath, JSON.stringify({ other: "data" }, null, 2));
 
@@ -548,7 +537,7 @@ describe("removeMcpServers", () => {
 
 describe("listMcpServers", () => {
   test("lists skilltap-namespaced keys", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(
       configPath,
@@ -572,14 +561,14 @@ describe("listMcpServers", () => {
   });
 
   test("returns empty array for missing config", async () => {
-    const result = await listMcpServers("cursor", "project", tmpDir);
+    const result = await listMcpServers("cursor", "project", env.homeDir);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toHaveLength(0);
   });
 
   test("excludes non-skilltap keys", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(
       configPath,
@@ -593,7 +582,7 @@ describe("listMcpServers", () => {
   });
 
   test("returns empty array for unknown agent", async () => {
-    const result = await listMcpServers("unknown-agent", "project", tmpDir);
+    const result = await listMcpServers("unknown-agent", "project", env.homeDir);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toHaveLength(0);
@@ -606,7 +595,7 @@ describe("listMcpServers", () => {
 
 describe("round-trip integration", () => {
   test("inject → list → remove → list (empty) for all 5 agents", async () => {
-    const projectRoot = tmpDir;
+    const projectRoot = env.homeDir;
     const agents = Object.keys(MCP_AGENT_CONFIGS);
 
     const injectResult = await injectMcpServers({

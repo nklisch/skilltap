@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
 import { detectPlugin } from "./detect";
 import { installPlugin } from "./install";
 import { removeInstalledPlugin, toggleInstalledComponent } from "./lifecycle";
@@ -9,37 +10,10 @@ import { loadPlugins } from "./state";
 
 setDefaultTimeout(30_000);
 
-let homeDir: string;
-let configDir: string;
-let savedHome: string | undefined;
-let savedXdg: string | undefined;
+let env: TestEnv;
 
-beforeEach(async () => {
-  homeDir = await mkdtemp(join(tmpdir(), "skilltap-lifecycle-"));
-  configDir = await mkdtemp(join(tmpdir(), "skilltap-lifecycle-cfg-"));
-  savedHome = process.env.SKILLTAP_HOME;
-  savedXdg = process.env.XDG_CONFIG_HOME;
-  process.env.SKILLTAP_HOME = homeDir;
-  process.env.XDG_CONFIG_HOME = configDir;
-});
-
-afterEach(async () => {
-  if (savedHome !== undefined) process.env.SKILLTAP_HOME = savedHome;
-  else delete process.env.SKILLTAP_HOME;
-  if (savedXdg !== undefined) process.env.XDG_CONFIG_HOME = savedXdg;
-  else delete process.env.XDG_CONFIG_HOME;
-  await rm(homeDir, { recursive: true, force: true });
-  await rm(configDir, { recursive: true, force: true });
-});
-
-async function pathExists(p: string): Promise<boolean> {
-  try {
-    await stat(p);
-    return true;
-  } catch {
-    return false;
-  }
-}
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
 async function createPluginDir(): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), "skilltap-plugin-src-"));
@@ -116,12 +90,12 @@ describe("plugin lifecycle e2e", () => {
       // -----------------------------------------------------------------------
       // Step 3: Verify filesystem state after install
       // -----------------------------------------------------------------------
-      const skillDir = join(homeDir, ".agents", "skills", "helper");
+      const skillDir = join(env.homeDir,".agents", "skills", "helper");
       expect(await pathExists(skillDir)).toBe(true);
       expect(await pathExists(join(skillDir, "SKILL.md"))).toBe(true);
 
       // Agent definition placed
-      const agentFile = join(homeDir, ".claude", "agents", "reviewer.md");
+      const agentFile = join(env.homeDir,".claude", "agents", "reviewer.md");
       expect(await pathExists(agentFile)).toBe(true);
 
       // plugins.json has record
@@ -133,7 +107,7 @@ describe("plugin lifecycle e2e", () => {
       expect(pluginsResult.value.plugins[0]?.active).toBe(true);
 
       // MCP injected into claude-code settings
-      const mcpConfig = join(homeDir, ".claude", "settings.json");
+      const mcpConfig = join(env.homeDir,".claude", "settings.json");
       if (mcpAgents.length > 0) {
         expect(await pathExists(mcpConfig)).toBe(true);
         const settings = await Bun.file(mcpConfig).json();
@@ -155,7 +129,7 @@ describe("plugin lifecycle e2e", () => {
       expect(toggleOffResult.value.nowActive).toBe(false);
 
       // Skill should now be in .disabled/
-      const disabledDir = join(homeDir, ".agents", "skills", ".disabled", "helper");
+      const disabledDir = join(env.homeDir,".agents", "skills", ".disabled", "helper");
       expect(await pathExists(disabledDir)).toBe(true);
       expect(await pathExists(skillDir)).toBe(false);
 
