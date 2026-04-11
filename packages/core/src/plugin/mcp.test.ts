@@ -105,6 +105,31 @@ describe("parseMcpJson", () => {
     }
   });
 
+  test("returns ok([]) for empty file content", async () => {
+    const dir = await makeTmpDir();
+    try {
+      const path = join(dir, ".mcp.json");
+      await Bun.write(path, "   \n  ");
+      const result = await parseMcpJson(path);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toEqual([]);
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
+  test("returns err for non-object JSON (array)", async () => {
+    const dir = await makeTmpDir();
+    try {
+      const path = await writeTmpJson(dir, ".mcp.json", [{ command: "npx" }]);
+      const result = await parseMcpJson(path);
+      expect(result.ok).toBe(false);
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
   test("returns ok([]) for empty object {}", async () => {
     const dir = await makeTmpDir();
     try {
@@ -144,5 +169,37 @@ describe("parseMcpObject", () => {
       broken: { type: "http" },
     });
     expect(result.ok).toBe(false);
+  });
+
+  test("returns err for server with env but no command", () => {
+    const result = parseMcpObject({
+      broken: { env: { TOKEN: "secret" } },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("broken");
+  });
+
+  test("collects all errors when multiple entries are invalid", () => {
+    const result = parseMcpObject({
+      good: { command: "npx", args: ["-y", "mcp"] },
+      "bad-http": { type: "http" },
+      "bad-stdio": { env: { X: "1" } },
+    });
+    // The spec says errors are collected and reported together.
+    // Even though "good" is valid, the presence of invalid entries returns err.
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("bad-http");
+    expect(result.error.message).toContain("bad-stdio");
+  });
+
+  test("returns err for non-object server config value", () => {
+    const result = parseMcpObject({
+      broken: "not an object" as unknown,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("broken");
   });
 });

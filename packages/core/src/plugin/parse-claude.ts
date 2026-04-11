@@ -38,7 +38,12 @@ export async function parseClaudePlugin(
     const skillPaths = Array.isArray(manifest.skills) ? manifest.skills : [manifest.skills];
     for (const skillPath of skillPaths) {
       const absDir = resolve(pluginDir, skillPath);
-      const skills = await scan(absDir);
+      let skills: Awaited<ReturnType<typeof scan>> = [];
+      try {
+        skills = await scan(absDir);
+      } catch {
+        // Path override points to non-existent directory — treat as no skills
+      }
       for (const skill of skills) {
         skillComponents.push({
           type: "skill",

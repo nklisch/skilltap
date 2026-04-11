@@ -116,6 +116,47 @@ describe("parseAgentDefinitions", () => {
     }
   });
 
+  test("sorts results by name alphabetically", async () => {
+    const dir = await makeTmpDir();
+    try {
+      const agentsDir = join(dir, "agents");
+      await mkdir(agentsDir, { recursive: true });
+      // Create in reverse alphabetical order to verify sorting
+      await Bun.write(join(agentsDir, "zebra.md"), "---\nname: zebra\n---\nContent");
+      await Bun.write(join(agentsDir, "alpha.md"), "---\nname: alpha\n---\nContent");
+      await Bun.write(join(agentsDir, "middle.md"), "---\nname: middle\n---\nContent");
+
+      const result = await parseAgentDefinitions(agentsDir, dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value).toHaveLength(3);
+      expect(result.value[0]?.name).toBe("alpha");
+      expect(result.value[1]?.name).toBe("middle");
+      expect(result.value[2]?.name).toBe("zebra");
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
+  test("falls back to filename when frontmatter has no name key", async () => {
+    const dir = await makeTmpDir();
+    try {
+      const agentsDir = join(dir, "agents");
+      await mkdir(agentsDir, { recursive: true });
+      // Frontmatter exists but has model, not name
+      await Bun.write(join(agentsDir, "code-review.md"), "---\nmodel: sonnet\ncolor: blue\n---\nReview code");
+
+      const result = await parseAgentDefinitions(agentsDir, dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value[0]?.name).toBe("code-review");
+      // Frontmatter should still be preserved
+      expect(result.value[0]?.frontmatter.model).toBe("sonnet");
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
   test("path is relative to plugin root", async () => {
     const dir = await makeTmpDir();
     try {

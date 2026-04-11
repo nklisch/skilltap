@@ -35,7 +35,12 @@ export async function parseCodexPlugin(
   const skillComponents: PluginManifest["components"] = [];
   if (manifest.skills !== undefined) {
     const absDir = resolve(pluginDir, manifest.skills);
-    const skills = await scan(absDir);
+    let skills: Awaited<ReturnType<typeof scan>> = [];
+    try {
+      skills = await scan(absDir);
+    } catch {
+      // Path override points to non-existent directory — treat as no skills
+    }
     for (const skill of skills) {
       skillComponents.push({
         type: "skill",

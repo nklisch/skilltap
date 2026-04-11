@@ -3,6 +3,7 @@ import {
   ClaudePluginJsonSchema,
   CodexPluginJsonSchema,
   McpServerEntrySchema,
+  McpStdioServerSchema,
   PluginComponentSchema,
   PluginManifestSchema,
 } from "./plugin";
@@ -179,11 +180,27 @@ describe("McpServerEntrySchema", () => {
   });
 
   test("defaults type to 'stdio' when omitted", () => {
-    const result = McpServerEntrySchema.safeParse({ type: "stdio", name: "db", command: "npx" });
+    // Verify the literal default actually works when type is NOT passed
+    const result = McpStdioServerSchema.safeParse({ name: "db", command: "npx" });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.type).toBe("stdio");
     }
+  });
+
+  test("rejects stdio server with no command", () => {
+    const result = McpServerEntrySchema.safeParse({
+      type: "stdio",
+      name: "broken",
+      env: { TOKEN: "x" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  test("accepts empty name string (no length constraint)", () => {
+    // Plugin schemas don't enforce name length — validation is lenient
+    const result = McpServerEntrySchema.safeParse({ type: "stdio", name: "", command: "npx" });
+    expect(result.success).toBe(true);
   });
 
   test("accepts http server with type and url", () => {

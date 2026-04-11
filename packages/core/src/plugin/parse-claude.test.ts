@@ -177,6 +177,63 @@ describe("parseClaudePlugin", () => {
     }
   });
 
+  test("uses mcpServers as array-of-strings (multiple config files)", async () => {
+    const dir = await makeTmpDir();
+    try {
+      await makePlugin(dir, { name: "test", mcpServers: ["config/a.json", "config/b.json"] });
+      await mkdir(join(dir, "config"), { recursive: true });
+      await Bun.write(join(dir, "config", "a.json"), JSON.stringify({
+        "server-a": { command: "npx", args: ["-y", "mcp-a"] },
+      }));
+      await Bun.write(join(dir, "config", "b.json"), JSON.stringify({
+        "server-b": { command: "node", args: ["b.js"] },
+      }));
+
+      const result = await parseClaudePlugin(dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const mcps = result.value.components.filter((c) => c.type === "mcp");
+      expect(mcps).toHaveLength(2);
+      const names = mcps.map((c) => c.type === "mcp" ? c.server.name : "").sort();
+      expect(names).toEqual(["server-a", "server-b"]);
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
+  test("skills path override to non-existent directory returns empty skills", async () => {
+    const dir = await makeTmpDir();
+    try {
+      await makePlugin(dir, { name: "test", skills: "nonexistent-dir/" });
+      const result = await parseClaudePlugin(dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      // scanner.scan on a non-existent directory returns empty array
+      const skills = result.value.components.filter((c) => c.type === "skill");
+      expect(skills).toHaveLength(0);
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
+  test("returns empty skills when skills/ dir exists but has no SKILL.md files", async () => {
+    const dir = await makeTmpDir();
+    try {
+      await makePlugin(dir, { name: "test" });
+      // Create a skills/ directory with no SKILL.md
+      await mkdir(join(dir, "skills", "empty-skill"), { recursive: true });
+      await Bun.write(join(dir, "skills", "empty-skill", "README.md"), "Not a skill");
+
+      const result = await parseClaudePlugin(dir);
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const skills = result.value.components.filter((c) => c.type === "skill");
+      expect(skills).toHaveLength(0);
+    } finally {
+      await removeTmpDir(dir);
+    }
+  });
+
   test("returns err for missing plugin.json", async () => {
     const dir = await makeTmpDir();
     try {
