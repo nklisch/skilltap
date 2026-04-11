@@ -5,6 +5,42 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.10.0
+
+### Plugin Support
+
+- **Plugin detection and parsing** — skilltap now reads Claude Code (`.claude-plugin/plugin.json`)
+  and Codex (`.codex-plugin/plugin.json`) plugin formats, extracting skills, MCP server configs,
+  and agent definitions into a normalized manifest.
+- **Plugin install** — `skilltap install <repo>` auto-detects plugins and installs the portable
+  subset (skills + MCP servers + agent definitions) across all target agent platforms. MCP servers
+  are injected into each agent's config file (Claude Code, Cursor, Codex, Gemini, Windsurf) with
+  namespacing (`skilltap:<plugin>:<server>`) and automatic backup.
+- **Plugin management** — new `skilltap plugin` command group: `list`, `info`, `toggle`
+  (enable/disable individual skills, MCPs, or agents within a plugin), and `remove`.
+- **Agent definitions** — plugin agent `.md` files are placed in `.claude/agents/` (Claude
+  Code-only for now, extensible to other platforms).
+- **plugins.json** — installed plugins tracked in `~/.config/skilltap/plugins.json` (global)
+  or `{project}/.agents/plugins.json` with per-component active/inactive state.
+
+### Tap-Defined Plugins
+
+- **Inline plugin definitions in tap.json** — taps can now define plugins in a `plugins` array
+  with inline skills, MCP servers, and agent definitions. Content files live in the tap repo itself.
+- **`skilltap install tap-name/plugin-name`** — new install syntax for tap-defined plugins. If
+  the first path segment matches a configured tap name, resolves the plugin from that tap directly.
+- **Marketplace plugin auto-detection** — when using a Claude Code marketplace repo as a tap,
+  plugins with relative-path sources and `.claude-plugin/plugin.json` are automatically treated
+  as full plugins (not just skill entries).
+
+### Improvements
+
+- `skilltap find` shows `[plugin]` badge for plugin entries in search results.
+- `skilltap status` / `--json` includes plugin count.
+- `tap.json` `plugin: true` flag on skill entries marks them as plugins for badge display.
+
+---
+
 ## v0.9.14
 - Fixed `skilltap update` auto-removing disabled skills as "stale records". Disabled
   skills are now skipped entirely during orphan detection — missing install directories
