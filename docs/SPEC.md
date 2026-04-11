@@ -1274,7 +1274,7 @@ const PluginManifestSchema = z.object({
   name: z.string(),
   version: z.string().optional(),
   description: z.string().optional(),
-  format: z.enum(["claude-code", "codex"]),
+  format: z.enum(["claude-code", "codex", "skilltap"]),
   components: z.array(z.discriminatedUnion("type", [
     z.object({
       type: z.literal("skill"),
@@ -1363,7 +1363,7 @@ const PluginComponentSchema = z.discriminatedUnion("type", [
 const PluginRecordSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
-  format: z.enum(["claude-code", "codex"]),
+  format: z.enum(["claude-code", "codex", "skilltap"]),
   repo: z.string().nullable(),
   ref: z.string().nullable(),
   sha: z.string().nullable(),
@@ -2360,12 +2360,38 @@ const TapSkillSchema = z.object({
   repo: z.string(),                    // git URL or "npm:@scope/name"
   tags: z.array(z.string()).default([]),
   trust: TapTrustSchema,               // curator verification (optional)
+  plugin: z.boolean().default(false),  // true if this repo is a plugin (has MCP/agents)
+})
+
+const TapPluginSkillSchema = z.object({
+  name: z.string(),
+  path: z.string(),           // relative path within the tap repo
+  description: z.string().default(""),
+})
+
+const TapPluginAgentSchema = z.object({
+  name: z.string(),
+  path: z.string(),           // relative path to agent .md file within the tap repo
+})
+
+const TapPluginSchema = z.object({
+  name: z.string(),
+  description: z.string().default(""),
+  version: z.string().optional(),
+  skills: z.array(TapPluginSkillSchema).default([]),
+  mcpServers: z.union([
+    z.string(),                         // path to .mcp.json within tap repo
+    z.record(z.string(), z.unknown()),  // inline object (same format as .mcp.json mcpServers)
+  ]).optional(),
+  agents: z.array(TapPluginAgentSchema).default([]),
+  tags: z.array(z.string()).default([]),
 })
 
 const TapSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   skills: z.array(TapSkillSchema),
+  plugins: z.array(TapPluginSchema).default([]),
 })
 ```
 
@@ -2382,9 +2408,27 @@ Example:
       "repo": "https://gitea.example.com/nathan/commit-helper",
       "tags": ["git", "productivity"]
     }
+  ],
+  "plugins": [
+    {
+      "name": "dev-toolkit",
+      "description": "Development productivity plugin with MCP servers",
+      "skills": [
+        { "name": "code-review", "path": "plugins/dev-toolkit/skills/code-review", "description": "AI code review" }
+      ],
+      "mcpServers": {
+        "database": { "command": "npx", "args": ["-y", "@corp/db-mcp"] }
+      },
+      "agents": [
+        { "name": "reviewer", "path": "plugins/dev-toolkit/agents/reviewer.md" }
+      ],
+      "tags": ["productivity", "database"]
+    }
   ]
 }
 ```
+
+Tap-defined plugins are installed with `skilltap install <tap-name>/<plugin-name>`. The `tap-name/plugin-name` pattern (two slash-separated segments, not a URL or local path) triggers tap plugin resolution: load the tap, find the matching `TapPlugin` entry, convert to `PluginManifest` via `tapPluginToManifest()`, and install via `installPlugin()`. No git clone is needed — components are read directly from the cloned tap directory.
 
 ### marketplace.json
 
@@ -2415,17 +2459,22 @@ const MarketplaceSchema = z.object({
 })
 ```
 
-**Source mapping to `TapSkill.repo`:**
+**Source mapping:**
+
+For relative-path sources (string), `adaptMarketplaceToTap()` checks for `.claude-plugin/plugin.json` inside the local tap directory. If found, the entry becomes a `TapPlugin` (with full skill/MCP/agent components extracted from the manifest). If not found, it falls back to a `TapSkill` entry with `plugin: true`.
+
+For all other source types, the entry is always a `TapSkill`:
 
 | Source type | Maps to |
 |---|---|
-| Relative path string | The marketplace repo's own git URL |
-| `github` | `repo` field (GitHub shorthand) |
-| `url` | `url` field (full git URL) |
-| `git-subdir` | `url` field (path is not preserved — limitation) |
-| `npm` | `"npm:<package>"` |
+| Relative path string (no plugin.json) | `TapSkill` — the marketplace repo's own git URL |
+| Relative path string (plugin.json found) | `TapPlugin` — components from plugin manifest |
+| `github` | `TapSkill` — `repo` field (GitHub shorthand) |
+| `url` | `TapSkill` — `url` field (full git URL) |
+| `git-subdir` | `TapSkill` — `url` field (path not preserved — limitation) |
+| `npm` | `TapSkill` — `"npm:<package>"` |
 
-Plugin-only features (MCP servers, LSP servers, hooks, agents, settings) are silently ignored — skilltap only installs SKILL.md content. Extra fields are stripped by Zod.
+Plugin-only features (LSP servers, hooks, commands, outputStyles) are silently ignored. Extra fields are stripped by Zod.
 
 ---
 
