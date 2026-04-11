@@ -366,7 +366,134 @@ Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 dep
 
 ---
 
-## What's Deferred to v0.4+
+## v1.0 — Plugin Support
+
+### Phase 20 — Plugin Detection and Parsing
+
+Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) plugin formats. Extract the portable subset: skills, MCP server configs, and agent definitions.
+
+- [ ] **20.1** Define `PluginManifestSchema` (Zod) in `core/src/schemas/plugin.ts` — unified internal representation covering both Claude Code and Codex formats; component types: `skill`, `mcp`, `agent`
+- [ ] **20.2** Implement Claude Code plugin.json parser in `core/src/plugin/parse-claude.ts` — read `.claude-plugin/plugin.json`, extract skill paths, `.mcp.json` entries, `agents/*.md` files; resolve relative component paths against plugin root
+- [ ] **20.3** Implement Codex plugin.json parser in `core/src/plugin/parse-codex.ts` — read `.codex-plugin/plugin.json`, extract skill paths, `.mcp.json` entries
+- [ ] **20.4** Implement plugin detector in `core/src/plugin/detect.ts` — given a cloned directory, detect plugin.json presence (Claude Code → Codex priority), return parsed manifest or `null`
+- [ ] **20.5** Implement MCP config reader in `core/src/plugin/mcp.ts` — parse `.mcp.json` files from both formats into a normalized `McpServerConfig[]` (name, command, args, env)
+- [ ] **20.6** Implement agent definition reader in `core/src/plugin/agents.ts` — parse `agents/*.md` files, extract frontmatter (model, effort, maxTurns, tools, isolation) + body content
+- [ ] **20.7** Unit tests: parse both plugin formats, detect plugin vs. skill-only repo, MCP normalization, agent parsing, malformed/missing fields
+
+**Exit criteria:** Given a cloned repo, skilltap can detect whether it's a plugin (vs. skill-only), parse the manifest from either format, and produce a normalized list of components (skills, MCP servers, agents) with their paths and configs.
+
+---
+
+### Phase 21 — Plugin Storage and Data Model
+
+Plugin as a first-class record in `plugins.json`, with per-component state tracking.
+
+- [ ] **21.1** Define `PluginsJsonSchema` in `core/src/schemas/plugins.ts` — `{ version: 1, plugins: PluginRecord[] }`; each record: name, source (repo URL), ref, sha, scope, installedAt, updatedAt, active, components array
+- [ ] **21.2** Define `PluginComponentSchema` — `{ type: "skill" | "mcp" | "agent", name: string, active: boolean, config?: object }` — MCP components include their server config, agent components include their frontmatter
+- [ ] **21.3** Implement `core/src/plugin/state.ts` — `loadPlugins()`, `savePlugins()`, `addPlugin()`, `removePlugin()`, `updatePluginComponent()` (toggle active state)
+- [ ] **21.4** Storage path: `~/.config/skilltap/plugins.json` (global), `{projectRoot}/.agents/plugins.json` (project)
+- [ ] **21.5** Unit tests: round-trip save/load, add/remove/toggle, schema validation
+
+**Exit criteria:** Plugin records can be created, stored, loaded, and modified. Each component within a plugin has independent active/inactive state.
+
+---
+
+### Phase 22 — MCP Config Injection
+
+Write MCP server entries directly into each target agent's config file.
+
+- [ ] **22.1** Define `McpConfigAdapter` interface in `core/src/plugin/mcp-adapters.ts` — `{ agent: string, configPath(scope): string, read(): McpConfig, write(config): Result, addServer(name, config): Result, removeServer(name): Result }`
+- [ ] **22.2** Implement Claude Code MCP adapter — reads/writes `mcpServers` in `.claude/settings.json` (project) or `~/.claude/settings.json` (global); backs up before first write
+- [ ] **22.3** Implement Cursor MCP adapter — reads/writes `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
+- [ ] **22.4** Implement Codex MCP adapter — reads/writes `.codex/mcp.json` (project) or `~/.codex/mcp.json` (global)
+- [ ] **22.5** Implement Gemini and Windsurf MCP adapters (basic — may need research on exact config locations)
+- [ ] **22.6** Add `skilltap:` namespace prefix to injected MCP server names to avoid collisions (e.g., `skilltap:plugin-name:server-name`)
+- [ ] **22.7** Backup mechanism: copy agent config to `.bak` before first modification; `skilltap doctor` can detect/restore from backups
+- [ ] **22.8** Variable substitution: resolve `${CLAUDE_PLUGIN_ROOT}` → plugin install path, `${CLAUDE_PLUGIN_DATA}` → persistent data dir
+- [ ] **22.9** Unit tests: read/write each format, add/remove servers, backup creation, namespace prefixing
+- [ ] **22.10** Integration tests: inject MCP into mock agent configs, verify idempotent re-injection, verify removal cleans up
+
+**Exit criteria:** skilltap can inject MCP server configs into Claude Code, Cursor, Codex, Gemini, and Windsurf config files. Injection is namespaced, backed up, and reversible.
+
+---
+
+### Phase 23 — Plugin Install Flow
+
+Wire plugin detection into the existing `skilltap install` command. Auto-detect plugins and install all components.
+
+- [ ] **23.1** Extend install flow: after cloning, run plugin detection before skill scanning; if plugin detected, offer "Install as plugin?" (or auto-accept with `--yes`)
+- [ ] **23.2** Plugin install orchestration in `core/src/plugin/install.ts` — extract skills (use existing install machinery), inject MCP configs (per agent), place agent definitions (Claude Code `.claude/agents/` for now)
+- [ ] **23.3** Security scan: scan all plugin content (skills + agent .md files) through existing static scanner; MCP configs scanned for suspicious commands/URLs
+- [ ] **23.4** Agent definition placement: copy `agents/*.md` to `.claude/agents/` (global: `~/.claude/agents/`, project: `.claude/agents/`); Claude Code-only for now, extensible later
+- [ ] **23.5** Record plugin in `plugins.json` with all components and their initial state (all active)
+- [ ] **23.6** Skills within a plugin are recorded in `plugins.json` only (not duplicated in `installed.json`) — the plugin owns them
+- [ ] **23.7** Handle `--also` flag: inject MCP configs into all specified agent platforms; create skill symlinks as usual
+- [ ] **23.8** Handle scope: `--project` / `--global` determines both skill placement and MCP config injection target
+- [ ] **23.9** Conflict detection: warn if MCP server names collide with existing entries in agent configs
+- [ ] **23.10** CLI output: show component summary after install ("Installed plugin X: 3 skills, 2 MCP servers, 1 agent")
+- [ ] **23.11** Agent mode support: plain text output, auto-accept, strict security
+- [ ] **23.12** Integration tests: install Claude Code plugin, install Codex plugin, verify all components placed correctly
+
+**Exit criteria:** `skilltap install <plugin-repo>` detects the plugin format, installs skills + MCP servers + agents across target platforms, and records everything in `plugins.json`.
+
+---
+
+### Phase 24 — Plugin Management Commands
+
+`skilltap plugin` subcommand group for listing, inspecting, toggling, and removing plugins.
+
+- [ ] **24.1** `skilltap plugin` (alias: `skilltap plugins`) — list installed plugins with component counts and status
+- [ ] **24.2** `skilltap plugin info <name>` — show plugin details: source, scope, all components with active/inactive status
+- [ ] **24.3** `skilltap plugin toggle <name>` — interactive component picker (checkboxes for each skill, MCP server, agent); toggling a component enables/disables it:
+  - **Skill**: move to/from `.disabled/` (existing disable mechanism)
+  - **MCP server**: add/remove entry from agent config files
+  - **Agent**: move agent .md to/from a `.disabled/` subdirectory
+- [ ] **24.4** `skilltap plugin toggle <name> --skills` / `--mcps` / `--agents` — category-level bulk toggle (disable/enable all components of a type)
+- [ ] **24.5** `skilltap plugin remove <name>` — remove all components (skills, MCP entries, agent definitions), clean up `plugins.json`
+- [ ] **24.6** `skilltap plugin update [name]` — update plugin source (git pull / npm check), re-extract components, apply changes (new skills installed, removed skills deleted, MCP configs updated)
+- [ ] **24.7** `--json` output for all plugin subcommands
+- [ ] **24.8** Shell completions: add `plugin` subcommand, plugin name completions for info/toggle/remove/update
+- [ ] **24.9** Doctor integration: add plugin checks (plugins.json valid, plugin components exist on disk, MCP entries present in agent configs)
+- [ ] **24.10** Unit tests: toggle logic, remove cleanup, update diff
+- [ ] **24.11** Integration tests: full lifecycle (install → list → toggle → info → update → remove)
+
+**Exit criteria:** Plugins can be listed, inspected, toggled at the component level, updated, and removed. All operations are reversible and reflected in both `plugins.json` and agent config files.
+
+---
+
+### Phase 25 — Plugin Polish
+
+- [ ] **25.1** Marketplace tap adapter update: `adaptMarketplaceToTap()` now includes a `plugin: true` flag on entries that have MCP/agent components (not just skills), so `skilltap find` can show "plugin" vs "skill" in results
+- [ ] **25.2** `skilltap find` shows plugin badge for tap entries that are plugins
+- [ ] **25.3** `skilltap status --json` includes plugin count
+- [ ] **25.4** Update SPEC.md, ARCH.md, UX.md with final plugin specifications
+- [ ] **25.5** End-to-end test: install plugin from tap → toggle components → update → remove
+- [ ] **25.6** README update with plugin features
+
+**Exit criteria:** Plugin support is fully documented, tested end-to-end, and integrated with the existing tap/find/status ecosystem.
+
+---
+
+## Dependency Graph (updated)
+
+```
+v0.1–v0.3 (complete)
+  │
+  ├→ Phase 20 (plugin detection + parsing)
+  │    └→ Phase 21 (plugin storage + data model)
+  │         └→ Phase 22 (MCP config injection)
+  │              └→ Phase 23 (plugin install flow — needs 20, 21, 22)
+  │                   └→ Phase 24 (plugin management commands — needs 23)
+  │                        └→ Phase 25 (polish — needs 24)
+  │
+  └→ Deferred (independent of plugin work)
+```
+
+Phases 20–22 can be developed somewhat in parallel (parsing, storage, and MCP injection are mostly independent), but the install flow (23) needs all three, and management (24) needs the install flow.
+
+---
+
+## What's Deferred to v1.1+
 
 - Windows support
 - Linux distro packages (.deb, .rpm, AUR, Nix)
@@ -376,3 +503,8 @@ Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 dep
 - Plugin for popular editors (VS Code extension)
 - Skill dependency system
 - SBOM generation for installed skills
+- Plugin hooks support (Claude Code hooks.json — platform-specific, lower priority)
+- Plugin LSP server support (Claude Code .lsp.json)
+- Plugin commands support (Claude Code commands/*.md)
+- Agent definitions for non-Claude-Code platforms (when other agents adopt the format)
+- Plugin user config / secrets management (Claude Code userConfig with keychain)

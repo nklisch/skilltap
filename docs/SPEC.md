@@ -85,6 +85,7 @@ Auto-selecting all (--yes)
 **Behavior:**
 
 1. Clone source to temp directory (with [protocol fallback](#git-url-protocol-fallback) on auth failure)
+1b. **Plugin detection:** Check for `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`. If found, parse the manifest and extract components. Prompt "Install as plugin?" (auto-accept with `--yes`). If accepted → branch to [Plugin Detection](#plugin-detection) install flow. If declined → continue to step 2 (skill-only install).
 2. Scan for SKILL.md files (see [Skill Discovery](#skill-discovery))
 3. **Skill selection:**
    - If single skill found → auto-select
@@ -1064,6 +1065,424 @@ Generate a shell completion script for tab-completion.
 Dynamic values are fetched via a hidden `--get-completions <type>` endpoint that reads the local `installed.json` and tap config.
 
 **Exit codes:** 0 success, 1 error (unknown shell)
+
+---
+
+### `skilltap plugin`
+
+> Also available as `skilltap plugins` (alias).
+
+List installed plugins with component summary.
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--global` | boolean | false | Show only global plugins |
+| `--project` | boolean | false | Show only project plugins |
+| `--json` | boolean | false | Output as JSON |
+
+**Output format:**
+
+```
+Global plugins — 2 plugins
+  Name              Components                   Source
+  dev-toolkit       3 skills, 2 MCPs, 1 agent   nklisch/dev-toolkit
+  db-tools          1 skill, 1 MCP              npm:@corp/db-tools
+
+Project plugins — 1 plugin
+  Name              Components                   Source
+  project-helpers   2 skills, 1 MCP              ./plugins/helpers
+```
+
+---
+
+### `skilltap plugin info <name>`
+
+Show plugin details including all components and their active/inactive status.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output as JSON |
+
+**Output:**
+
+```
+dev-toolkit (installed, global)
+  Source: https://github.com/nklisch/dev-toolkit
+  Ref:    main (abc123de)
+  Installed: 2026-04-10
+  Updated:   2026-04-10
+
+  Skills (3):
+    ✓ code-review          Code review checklist
+    ✓ commit-helper        Conventional commit messages
+    ✗ test-generator       Generate test scaffolds (disabled)
+
+  MCP Servers (2):
+    ✓ database             PostgreSQL query tool
+    ✓ file-search          Fast file search
+
+  Agents (1):
+    ✓ code-review          Thorough code review subagent
+```
+
+---
+
+### `skilltap plugin toggle <name>`
+
+Enable/disable individual components within an installed plugin. Opens an interactive component picker.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--skills` | boolean | false | Toggle all skills in the plugin |
+| `--mcps` | boolean | false | Toggle all MCP servers in the plugin |
+| `--agents` | boolean | false | Toggle all agent definitions in the plugin |
+| `--yes` | boolean | false | Auto-accept (for category-level toggles) |
+
+**Interactive mode (no category flags):**
+
+```
+$ skilltap plugin toggle dev-toolkit
+
+┌ Toggle components
+│
+◇ Select active components:
+│  ☑ [skill] code-review
+│  ☑ [skill] commit-helper
+│  ☐ [skill] test-generator
+│  ☑ [mcp]   database
+│  ☑ [mcp]   file-search
+│  ☑ [agent] code-review
+│
+└ ✓ Disabled: test-generator (skill)
+    Enabled: (no changes)
+```
+
+**Category mode:**
+
+```
+$ skilltap plugin toggle dev-toolkit --mcps
+  Toggling all MCP servers → disabled
+
+  ✗ database       removed from claude-code, cursor
+  ✗ file-search    removed from claude-code, cursor
+```
+
+**Component toggle behavior:**
+
+| Component type | Enable | Disable |
+|----------------|--------|---------|
+| Skill | Move from `.disabled/` back to `.agents/skills/`, recreate agent symlinks | Move to `.disabled/`, remove agent symlinks |
+| MCP server | Re-inject entry into all target agent config files | Remove entry from all agent config files |
+| Agent (.md) | Move from `.disabled/` back to `.claude/agents/` | Move to `.disabled/` subdirectory |
+
+---
+
+### `skilltap plugin remove <name>`
+
+Remove a plugin and all its components.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--yes` | boolean | false | Skip confirmation |
+
+**Behavior:**
+
+1. Remove all skills (directories + agent symlinks)
+2. Remove all MCP server entries from agent config files
+3. Remove all agent definition files
+4. Remove cache entry
+5. Remove record from `plugins.json`
+
+---
+
+### `skilltap plugin update [name]`
+
+Update one or all installed plugins.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | No | Plugin name. If omitted, update all. |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--yes` | boolean | false | Auto-accept updates |
+| `--strict` | boolean | (from config) | Abort on security warnings |
+
+**Behavior:**
+
+1. Fetch latest source (git fetch / npm check)
+2. If different: re-parse plugin manifest, diff components
+3. New components: install with security scan
+4. Removed components: clean up (remove skills, MCP entries, agent files)
+5. Changed components: update in place, re-scan
+6. Update `plugins.json` with new SHA/version and component list
+
+---
+
+## Plugin Detection
+
+When `skilltap install` clones a repo, plugin detection runs **before** skill scanning.
+
+### Algorithm
+
+1. Check for `.claude-plugin/plugin.json` → parse as Claude Code plugin
+2. If not found, check for `.codex-plugin/plugin.json` → parse as Codex plugin
+3. If neither found → fall back to standard skill scanning
+
+If a plugin manifest is found:
+- Parse the manifest and extract component list
+- If interactive: prompt "This is a plugin with N skills, M MCP servers, K agents. Install as plugin? (Y/n)"
+- If `--yes`: auto-accept
+- If user declines plugin install: fall back to skill-only scanning (extract just the SKILL.md files)
+
+### Plugin Manifest (Internal)
+
+skilltap normalizes both Claude Code and Codex formats into a unified internal representation:
+
+```typescript
+const PluginManifestSchema = z.object({
+  name: z.string(),
+  version: z.string().optional(),
+  description: z.string().optional(),
+  format: z.enum(["claude-code", "codex"]),
+  components: z.array(z.discriminatedUnion("type", [
+    z.object({
+      type: z.literal("skill"),
+      name: z.string(),
+      path: z.string(),          // relative path to skill directory
+      description: z.string().optional(),
+    }),
+    z.object({
+      type: z.literal("mcp"),
+      name: z.string(),
+      command: z.string(),
+      args: z.array(z.string()).default([]),
+      env: z.record(z.string(), z.string()).default({}),
+    }),
+    z.object({
+      type: z.literal("agent"),
+      name: z.string(),
+      path: z.string(),          // relative path to agent .md file
+      frontmatter: z.record(z.string(), z.unknown()).optional(),
+    }),
+  ])),
+})
+```
+
+### Claude Code Plugin Parsing
+
+Read `.claude-plugin/plugin.json`. Component extraction:
+
+| Field | Component type | Extraction |
+|-------|---------------|------------|
+| `skills` (string or array) | skill | Resolve paths, scan for SKILL.md in each |
+| Default `skills/` directory | skill | If `skills` field absent, scan `skills/*/SKILL.md` |
+| `mcpServers` (string, array, or inline object) | mcp | Parse `.mcp.json` or inline config |
+| Default `.mcp.json` | mcp | If `mcpServers` field absent, check for `.mcp.json` at plugin root |
+| `agents` (string or array) | agent | Resolve paths, read each `.md` file |
+| Default `agents/` directory | agent | If `agents` field absent, scan `agents/*.md` |
+
+Ignored fields (platform-specific, not portable): `hooks`, `lspServers`, `commands`, `outputStyles`, `channels`, `userConfig`.
+
+### Codex Plugin Parsing
+
+Read `.codex-plugin/plugin.json`. Component extraction:
+
+| Field | Component type | Extraction |
+|-------|---------------|------------|
+| `skills` (string) | skill | Resolve path, scan for SKILL.md |
+| Default `skills/` directory | skill | If `skills` field absent, scan `skills/*/SKILL.md` |
+| `mcpServers` (string) | mcp | Parse `.mcp.json` |
+| Default `.mcp.json` | mcp | If `mcpServers` field absent, check for `.mcp.json` |
+
+Codex plugins do not have agent definitions.
+
+---
+
+## plugins.json
+
+State file for installed plugins. Separate from `installed.json` (which tracks standalone skills).
+
+**Storage locations:**
+- Global: `~/.config/skilltap/plugins.json`
+- Project: `{projectRoot}/.agents/plugins.json`
+
+```typescript
+const PluginComponentSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("skill"),
+    name: z.string(),
+    active: z.boolean().default(true),
+  }),
+  z.object({
+    type: z.literal("mcp"),
+    name: z.string(),
+    active: z.boolean().default(true),
+    command: z.string(),
+    args: z.array(z.string()).default([]),
+    env: z.record(z.string(), z.string()).default({}),
+  }),
+  z.object({
+    type: z.literal("agent"),
+    name: z.string(),
+    active: z.boolean().default(true),
+    platform: z.string().default("claude-code"),
+  }),
+])
+
+const PluginRecordSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  format: z.enum(["claude-code", "codex"]),
+  repo: z.string().nullable(),
+  ref: z.string().nullable(),
+  sha: z.string().nullable(),
+  scope: z.enum(["global", "project"]),
+  also: z.array(z.string()).default([]),
+  tap: z.string().nullable().default(null),
+  components: z.array(PluginComponentSchema),
+  installedAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+  active: z.boolean().default(true),
+})
+
+const PluginsJsonSchema = z.object({
+  version: z.literal(1),
+  plugins: z.array(PluginRecordSchema).default([]),
+})
+```
+
+**Example:**
+
+```json
+{
+  "version": 1,
+  "plugins": [
+    {
+      "name": "dev-toolkit",
+      "description": "Development productivity tools",
+      "format": "claude-code",
+      "repo": "https://github.com/nklisch/dev-toolkit",
+      "ref": "main",
+      "sha": "abc123def456",
+      "scope": "global",
+      "also": ["claude-code", "cursor"],
+      "tap": null,
+      "components": [
+        { "type": "skill", "name": "code-review", "active": true },
+        { "type": "skill", "name": "commit-helper", "active": true },
+        { "type": "skill", "name": "test-generator", "active": false },
+        { "type": "mcp", "name": "database", "active": true, "command": "npx", "args": ["-y", "@corp/db-mcp"], "env": {} },
+        { "type": "mcp", "name": "file-search", "active": true, "command": "node", "args": ["./bin/search-server.js"], "env": {} },
+        { "type": "agent", "name": "code-review", "active": true, "platform": "claude-code" }
+      ],
+      "installedAt": "2026-04-10T12:00:00Z",
+      "updatedAt": "2026-04-10T12:00:00Z",
+      "active": true
+    }
+  ]
+}
+```
+
+---
+
+## MCP Config Injection
+
+When a plugin includes MCP servers, skilltap injects them directly into each target agent's config file.
+
+### MCP Config Locations
+
+| Agent | Config file (global) | Config file (project) | Key/structure |
+|-------|---------------------|-----------------------|---------------|
+| Claude Code | `~/.claude/settings.json` | `.claude/settings.json` | `mcpServers.<name>` |
+| Cursor | `~/.cursor/mcp.json` | `.cursor/mcp.json` | `mcpServers.<name>` |
+| Codex | `~/.codex/mcp.json` | `.codex/mcp.json` | `mcpServers.<name>` |
+| Gemini | `~/.gemini/settings.json` | `.gemini/settings.json` | `mcpServers.<name>` |
+| Windsurf | `~/.windsurf/mcp.json` | `.windsurf/mcp.json` | `mcpServers.<name>` |
+
+### Namespacing
+
+Injected MCP server names use the format `skilltap:<plugin-name>:<server-name>` to avoid collisions with user-configured servers. Example: a plugin named `dev-toolkit` with a server named `database` becomes `skilltap:dev-toolkit:database` in the agent config.
+
+### Safety
+
+- **Backup**: Before the first modification to any agent config file, copy to `<file>.skilltap.bak`
+- **Idempotent**: Re-injection (on enable, update) replaces existing entries with the same namespaced key
+- **Clean removal**: Toggling off or removing a plugin removes only the `skilltap:*` entries it owns
+- **Conflict detection**: Warn if a server name (without prefix) already exists in the agent config
+
+### Variable Substitution
+
+MCP configs from plugins may contain variables:
+- `${CLAUDE_PLUGIN_ROOT}` → replaced with the plugin's install directory path
+- `${CLAUDE_PLUGIN_DATA}` → replaced with the plugin's persistent data directory (`~/.config/skilltap/plugin-data/<name>/`)
+
+---
+
+## Agent Definitions
+
+Plugin agent definitions (`.md` files with frontmatter) are placed in agent-specific directories.
+
+### Placement
+
+| Platform | Global path | Project path |
+|----------|------------|--------------|
+| Claude Code | `~/.claude/agents/<name>.md` | `.claude/agents/<name>.md` |
+
+Agent definitions are Claude Code-only for now. The placement path will be extended as other agents adopt agent definition formats.
+
+### Frontmatter
+
+Agent `.md` files use YAML frontmatter:
+
+```yaml
+---
+model: claude-sonnet-4-20250514
+effort: high
+maxTurns: 10
+tools: [Read, Write, Bash, Grep]
+isolation: worktree
+---
+
+Agent instructions follow...
+```
+
+skilltap reads and preserves this frontmatter. It does not validate the specific fields (those are agent-platform-specific), only that the file is valid markdown with optional frontmatter.
+
+### Toggle behavior
+
+- **Disable**: Move to `~/.claude/agents/.disabled/<name>.md` (or project equivalent)
+- **Enable**: Move back to `~/.claude/agents/<name>.md`
 
 ---
 

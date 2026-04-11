@@ -20,6 +20,11 @@ skilltap
 ├── verify [path]            Validate a skill before sharing
 ├── doctor                   Check environment and state
 ├── completions <shell>      Generate shell completion script
+├── plugin                   Manage installed plugins
+│   ├── info <name>          Show plugin details and components
+│   ├── toggle <name>        Enable/disable individual components
+│   ├── remove <name>        Remove a plugin and all components
+│   └── update [name]        Update plugin(s)
 ├── config                   Interactive setup wizard
 │   ├── agent-mode           Toggle agent mode (human-only)
 │   ├── security             Configure security settings (wizard + flags)
@@ -38,6 +43,7 @@ Silent aliases (backwards compatibility):
   skilltap info     → skilltap skills info
   skilltap link     → skilltap skills link
   skilltap unlink   → skilltap skills unlink
+  skilltap plugins  → skilltap plugin
 ```
 
 ## Global Behavior
@@ -65,6 +71,7 @@ skilltap install user/repo                                  # GitHub shorthand
 skilltap install github:user/repo                           # GitHub explicit
 skilltap install commit-helper                              # Tap name
 skilltap install commit-helper@v1.2.0                       # Tap name + version
+skilltap install user/dev-toolkit                            # Plugin (auto-detected)
 skilltap install ./my-skill                                 # Local path
 skilltap install npm:@scope/skill-name                     # npm registry
 skilltap install npm:@scope/skill-name@1.2.3               # npm pinned version
@@ -904,6 +911,129 @@ $ skilltap tap init my-tap
 
 Edit tap.json to add skills, then push:
   cd my-tap && git remote add origin <url> && git push
+```
+
+---
+
+## plugin
+
+```
+skilltap plugin                              List installed plugins
+skilltap plugin info <name>                  Show plugin details + components
+skilltap plugin toggle <name>                Interactive component toggle
+skilltap plugin toggle <name> --mcps         Disable/enable all MCP servers
+skilltap plugin toggle <name> --skills       Disable/enable all skills
+skilltap plugin toggle <name> --agents       Disable/enable all agents
+skilltap plugin remove <name>                Remove plugin + all components
+skilltap plugin update [name]                Update plugin(s)
+```
+
+### Plugin Install (via `skilltap install`)
+
+Plugin install is auto-detected — no separate command needed:
+
+```
+$ skilltap install https://github.com/corp/dev-toolkit --global --also claude-code --also cursor
+
+Cloning corp/dev-toolkit...
+
+Detected plugin: dev-toolkit (Claude Code format)
+  3 skills, 2 MCP servers, 1 agent definition
+
+Install as plugin? (Y/n): y
+
+Install to:
+  ● Global
+
+Scanning plugin content for security issues...
+✓ No warnings
+
+Installing plugin components:
+  ✓ Skill: code-review → ~/.agents/skills/code-review/
+  ✓ Skill: commit-helper → ~/.agents/skills/commit-helper/
+  ✓ Skill: test-generator → ~/.agents/skills/test-generator/
+  ✓ MCP: skilltap:dev-toolkit:database → claude-code, cursor
+  ✓ MCP: skilltap:dev-toolkit:file-search → claude-code, cursor
+  ✓ Agent: code-review → ~/.claude/agents/code-review.md
+
+✓ Installed plugin dev-toolkit (3 skills, 2 MCPs, 1 agent)
+```
+
+### Plugin Component Toggle
+
+```
+$ skilltap plugin toggle dev-toolkit
+
+┌ Toggle components
+│
+◇ Select active components:
+│  ☑ [skill] code-review
+│  ☑ [skill] commit-helper
+│  ☐ [skill] test-generator          ← unchecked to disable
+│  ☑ [mcp]   database
+│  ☐ [mcp]   file-search             ← unchecked to disable
+│  ☑ [agent] code-review
+│
+└ Changes applied:
+    ✗ Disabled: test-generator (skill)
+    ✗ Disabled: file-search (MCP) — removed from claude-code, cursor
+```
+
+### Plugin List
+
+```
+$ skilltap plugin
+
+Global plugins — 2 plugins
+  Name              Components                   Source
+  dev-toolkit       3 skills, 2 MCPs, 1 agent   corp/dev-toolkit
+  db-tools          1 skill, 1 MCP              npm:@corp/db-tools
+```
+
+### Plugin Info
+
+```
+$ skilltap plugin info dev-toolkit
+
+dev-toolkit (installed, global)
+  Source: https://github.com/corp/dev-toolkit
+  Format: Claude Code
+  Ref:    main (abc123de)
+  Also:   claude-code, cursor
+  Installed: 2026-04-10
+
+  Skills (3):
+    ✓ code-review          Code review checklist
+    ✓ commit-helper        Conventional commit messages
+    ✗ test-generator       Generate test scaffolds (disabled)
+
+  MCP Servers (2):
+    ✓ database             skilltap:dev-toolkit:database
+    ✗ file-search          skilltap:dev-toolkit:file-search (disabled)
+
+  Agents (1):
+    ✓ code-review          Thorough code review subagent
+```
+
+### Plugin Remove
+
+```
+$ skilltap plugin remove dev-toolkit
+
+Remove plugin dev-toolkit?
+  3 skills, 2 MCP servers, 1 agent will be removed.
+  MCP entries will be removed from: claude-code, cursor
+
+Remove? (y/N): y
+
+  ✗ Removed skill: code-review
+  ✗ Removed skill: commit-helper
+  ✗ Removed skill: test-generator
+  ✗ Removed MCP: skilltap:dev-toolkit:database (claude-code, cursor)
+  ✗ Removed MCP: skilltap:dev-toolkit:file-search (claude-code, cursor)
+  ✗ Removed agent: code-review
+
+✓ Plugin dev-toolkit removed
 ```
 
 ---

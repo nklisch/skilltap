@@ -1,6 +1,6 @@
 # skilltap
 
-A simple CLI for installing agent skills from any git host. Git-native, agent-agnostic, multi-source.
+A CLI for installing agent skills and plugins from any git host. Git-native, agent-agnostic, multi-source. Installs skills individually or as plugin bundles (skills + MCP servers + agents) across multiple agent platforms.
 
 ## Problem
 
@@ -15,6 +15,8 @@ Individual agents are starting to build their own distribution — Claude Code h
 Think: **Homebrew taps for agent skills.**
 
 skilltap installs to the universal `.agents/skills/` directory defined by the [Agent Skills spec](https://agentskills.io/specification). This is the agent-agnostic path that works across all conforming agents. If you also want skills in an agent-specific directory (`.claude/skills/`, `.cursor/skills/`), you can opt in to symlinking.
+
+skilltap also understands **plugins** — bundles that package skills alongside MCP servers and agent definitions. When you install a plugin, skilltap extracts the portable components (skills, MCP configs, agents) and installs them into each target agent platform. You can then toggle individual components on/off within an installed plugin.
 
 ## Design Principles
 
@@ -72,6 +74,35 @@ termtube/
 
 No build step. No manifest file. If it has a SKILL.md, it's a skill.
 
+### A plugin = a bundle of skills + MCP servers + agents
+
+A plugin is a repo (or directory) containing a `plugin.json` manifest that groups skills with MCP server configs and agent definitions. skilltap reads both Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) formats.
+
+```
+# Claude Code plugin
+my-plugin/
+  .claude-plugin/
+    plugin.json         # manifest (name, components, user config)
+  skills/
+    helper/SKILL.md
+    reviewer/SKILL.md
+  .mcp.json             # MCP server definitions
+  agents/
+    code-review.md      # Agent definition (Claude Code format)
+
+# Codex plugin
+my-plugin/
+  .codex-plugin/
+    plugin.json
+  skills/
+    helper/SKILL.md
+  .mcp.json
+```
+
+skilltap extracts the portable subset: **skills** (installed via the existing skill system), **MCP servers** (injected into each target agent's config), and **agents** (placed in agent-specific directories, Claude Code for now). Platform-specific components (hooks, LSP, commands, output styles) are ignored.
+
+After installing, you can toggle individual components — disable a specific MCP server or skill within the plugin without removing the whole thing.
+
 ### Repo scanning
 
 When you point skilltap at a repo, it scans for all SKILL.md files and lets you choose which to install. Single-skill repos install directly; multi-skill repos prompt for selection.
@@ -86,7 +117,7 @@ See [SPEC.md — tap.json](./SPEC.md#tapjson) for the format specification.
 
 ## CLI
 
-skilltap provides commands for installing, removing, updating, linking, and searching for skills, plus tap management.
+skilltap provides commands for installing, removing, updating, linking, and searching for skills and plugins, plus tap management.
 
 See [UX.md](./UX.md) for the full command tree, flag combinations, and interactive prompt flows. See [SPEC.md](./SPEC.md#cli-commands) for the precise behavioral specification of each command.
 
@@ -110,6 +141,15 @@ skilltap find review
 
 # Link a local skill for development
 skilltap link . --also claude-code
+
+# Install a plugin (auto-detected from plugin.json)
+skilltap install user/dev-toolkit --also claude-code --also cursor
+
+# Toggle plugin components
+skilltap plugin toggle dev-toolkit
+
+# List installed plugins
+skilltap plugin
 ```
 
 ## Security Scanning
@@ -284,7 +324,7 @@ The CLI auto-detects the type: if the URL points to a git repo, it's a git tap. 
 - **Not a package manager.** No dependencies, no build step, no install scripts.
 - **Not a marketplace.** No centralized index. Taps are just git repos anyone can create.
 - **Not a runtime.** Skills are static files. No execution engine.
-- **Not an agent plugin system.** Claude Code has its own [plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) that handles plugins (skills + commands + hooks + MCP servers + agents). skilltap is simpler — it only distributes SKILL.md files, and it works across all agents, not just one.
+- **Not a full plugin runtime.** Claude Code and Codex have their own plugin systems with hooks, channels, LSP, and other platform-specific features. skilltap reads their plugin formats but only installs the portable components (skills, MCP servers, agents). For the full platform-specific experience, use each agent's native plugin system.
 
 ## Prior Art
 
@@ -317,3 +357,4 @@ See [SPEC.md — Version Scope](./SPEC.md#version-scope) for the detailed roadma
 - **v0.1** — Core install/remove/update/link + taps + security scanning (static + semantic) + standalone binary
 - **v0.2** — npm adapter, HTTP registry, shell completions
 - **v0.3** — Community trust signals, `skilltap publish`, skill templates
+- **v1.0** — Plugin support: read Claude Code and Codex plugin formats, install skills + MCP servers + agents as a group, component-level toggle

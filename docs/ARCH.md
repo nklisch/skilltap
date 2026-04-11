@@ -2,7 +2,7 @@
 
 ## Overview
 
-skilltap is a CLI tool that installs agent skills from any git host. It clones repos, scans for SKILL.md files, runs security checks, and places skills in the universal `.agents/skills/` directory.
+skilltap is a CLI tool that installs agent skills and plugins from any git host. It clones repos, scans for SKILL.md files and plugin manifests, runs security checks, and places skills in the universal `.agents/skills/` directory. For plugins, it also injects MCP server configs into agent platform config files and places agent definitions.
 
 This document describes how skilltap is built internally — module boundaries, data flow, key abstractions, and technology decisions.
 
@@ -99,6 +99,16 @@ skilltap/
 │   │   │   ├── registry/
 │   │   │   │   ├── types.ts    # RegistrySkillSchema, RegistryListResponseSchema
 │   │   │   │   └── client.ts   # HTTP registry client with bearer auth
+│   │   │   ├── plugin/                # Plugin detection, parsing, and MCP injection
+│   │   │   │   ├── detect.ts          # detectPlugin(dir) — find and parse plugin manifest
+│   │   │   │   ├── parse-claude.ts    # Claude Code .claude-plugin/plugin.json parser
+│   │   │   │   ├── parse-codex.ts     # Codex .codex-plugin/plugin.json parser
+│   │   │   │   ├── mcp.ts            # MCP config normalization from .mcp.json
+│   │   │   │   ├── mcp-adapters.ts   # Per-agent MCP config read/write adapters
+│   │   │   │   ├── agents.ts         # Agent definition (.md) reader
+│   │   │   │   ├── install.ts        # Plugin install orchestration
+│   │   │   │   ├── state.ts          # plugins.json load/save/modify
+│   │   │   │   └── index.ts
 │   │   │   ├── templates/
 │   │   │   │   ├── basic.ts    # basicTemplate() — standalone git repo
 │   │   │   │   ├── npm.ts      # npmTemplate() — npm package with provenance
@@ -132,6 +142,12 @@ skilltap/
 │   │   │   │   │   ├── info.ts       # skilltap skills info — show skill details
 │   │   │   │   │   ├── link.ts       # skilltap skills link — symlink local skill
 │   │   │   │   │   └── unlink.ts     # skilltap skills unlink — remove linked skill
+│   │   │   │   ├── plugin/
+│   │   │   │   │   ├── index.ts      # skilltap plugin — list installed plugins
+│   │   │   │   │   ├── info.ts       # skilltap plugin info — plugin details + components
+│   │   │   │   │   ├── toggle.ts     # skilltap plugin toggle — enable/disable components
+│   │   │   │   │   ├── remove.ts     # skilltap plugin remove — remove plugin + all components
+│   │   │   │   │   └── update.ts     # skilltap plugin update — update plugin source
 │   │   │   │   └── tap/
 │   │   │   │       ├── add.ts
 │   │   │   │       ├── remove.ts
@@ -250,6 +266,24 @@ core → test-utils (dev)
 
 **templates/** — TypeScript functions generating `Record<string, string>` (relPath → content). Embedded in the compiled binary (no runtime file reads). Three templates: `basicTemplate()`, `npmTemplate()`, `multiTemplate()`.
 
+### Plugin Modules
+
+**plugin/detect.ts** — `detectPlugin(dir)` → `PluginManifest | null`. Checks for `.claude-plugin/plugin.json` first, then `.codex-plugin/plugin.json`. Returns a normalized manifest with component list, or `null` if not a plugin.
+
+**plugin/parse-claude.ts** — Parses Claude Code `.claude-plugin/plugin.json`. Extracts skill paths (from `skills` field or default `skills/` directory), MCP server configs (from `mcpServers` field or `.mcp.json`), and agent definitions (from `agents` field or `agents/` directory). Handles both path override and auto-discovery modes.
+
+**plugin/parse-codex.ts** — Parses Codex `.codex-plugin/plugin.json`. Extracts skill paths and MCP server configs. Codex plugins don't have agent definitions.
+
+**plugin/mcp.ts** — `parseMcpConfig(path)` → `McpServerConfig[]`. Reads `.mcp.json` files and normalizes server entries into `{ name, command, args, env }`. Handles both Claude Code and Codex MCP formats (they're compatible).
+
+**plugin/mcp-adapters.ts** — Per-agent config adapters for injecting/removing MCP server entries. Each adapter knows where the agent stores its MCP config and how to read/write it safely. Adapters for: Claude Code (`settings.json` → `mcpServers`), Cursor (`.cursor/mcp.json`), Codex (`.codex/mcp.json`), Gemini, Windsurf. All writes create a `.bak` backup before first modification. Server names are namespaced (`skilltap:<plugin>:<server>`) to avoid collisions.
+
+**plugin/agents.ts** — `parseAgentDefinitions(dir)` → `AgentDefinition[]`. Reads `agents/*.md` files, parses frontmatter (model, effort, maxTurns, tools, isolation) and body content. Claude Code-only for now.
+
+**plugin/install.ts** — Plugin install orchestration. Coordinates skill extraction (delegates to existing `install.ts`), MCP injection (via mcp-adapters), and agent placement. Produces a `PluginInstallResult` with the full component inventory.
+
+**plugin/state.ts** — Plugin state management. `loadPlugins(scope)`, `savePlugins(scope, data)`, `addPlugin(record)`, `removePlugin(name)`, `toggleComponent(pluginName, componentName)`. Reads/writes `plugins.json`.
+
 ### Schemas (Zod 4)
 
 All data boundaries are validated with Zod 4 schemas. Types are inferred from schemas — no separate interface definitions. Schema files live in `packages/core/src/schemas/`.
@@ -306,6 +340,9 @@ Additional schemas defined in SPEC.md:
 - [installed.json](./SPEC.md#installedjson) — `InstalledJsonSchema`, `InstalledSkillSchema`
 - [tap.json](./SPEC.md#tapjson) — `TapSchema`, `TapSkillSchema`
 - [marketplace.json](./SPEC.md#marketplacejson) — `MarketplaceSchema` (Claude Code format, adapted to `Tap`)
+- [plugins.json](./SPEC.md#pluginsjson) — `PluginsJsonSchema`, `PluginRecordSchema`, `PluginComponentSchema`
+- [Plugin manifest](./SPEC.md#plugin-manifest) — `PluginManifestSchema` (unified internal representation)
+- [MCP config](./SPEC.md#mcp-config) — `McpServerConfigSchema` (normalized MCP server entry)
 - [SKILL.md frontmatter](./SPEC.md#skillmd-parsing) — `SkillFrontmatterSchema`
 - [Agent response](./SPEC.md#json-extraction) — `AgentResponseSchema`
 
@@ -387,6 +424,36 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 4. → Continue from step 2 of "Install from URL"
 ```
 
+### Install Plugin
+
+```
+1. Parse source → select SourceAdapter → resolve → clone to temp dir
+2. Run plugin detection: check for .claude-plugin/plugin.json, then .codex-plugin/plugin.json
+3. If plugin detected: parse manifest, extract component list (skills, MCP servers, agents)
+4. If not a plugin: fall back to standard skill install flow
+5. Prompt "Install as plugin? (Y/n)" (auto-accept with --yes)
+6. Scope resolution (same as skill install: --project/--global/prompt)
+7. Security scan all plugin content (skills + agent .md files + MCP commands)
+8. For each skill: install via existing skill machinery (place in .agents/skills/, symlink)
+9. For each MCP server: inject into target agent configs via McpConfigAdapter
+   - Namespace: skilltap:<plugin-name>:<server-name>
+   - Backup agent config before first write
+10. For each agent definition: place .md in .claude/agents/ (Claude Code only)
+11. Record plugin in plugins.json with all components (active: true)
+12. Clean up temp dir
+```
+
+### Plugin Toggle
+
+```
+1. Load plugins.json, find plugin by name
+2. Show interactive component picker (checkboxes, grouped by type)
+3. For toggled skills: move to/from .disabled/ (existing mechanism)
+4. For toggled MCP servers: add/remove entries from agent config files
+5. For toggled agents: move .md to/from .disabled/ subdirectory
+6. Update component active state in plugins.json
+```
+
 ### Update
 
 ```
@@ -408,7 +475,8 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 ```
 ~/.config/skilltap/
 ├── config.toml                  # User configuration
-├── installed.json               # Installation state (machine-managed)
+├── installed.json               # Installation state — skills (machine-managed)
+├── plugins.json                 # Installation state — plugins (machine-managed)
 ├── taps/
 │   ├── home/                    # Cloned tap repo (tap.json format)
 │   │   ├── tap.json
@@ -421,7 +489,7 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 │       │   └── marketplace.json
 │       └── .git/
 └── cache/
-    └── {repo-url-hash}/        # Cached full clones for multi-skill repos
+    └── {repo-url-hash}/        # Cached full clones for multi-skill repos / plugins
         ├── .git/
         ├── .agents/skills/
         │   ├── skill-a/
@@ -442,9 +510,17 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 ├── commit-helper -> ~/.agents/skills/commit-helper/
 └── termtube-dev -> ~/.agents/skills/termtube-dev/
 
+~/.claude/agents/                # Agent definitions (plugin-installed, Claude Code only)
+└── code-review.md               # From a plugin's agents/ directory
+
+~/.claude/settings.json          # Agent config (MCP entries injected by skilltap)
+  # "mcpServers": { "skilltap:my-plugin:db": { "command": "...", "args": [...] } }
+
 .agents/skills/                  # Project-scoped (same structure)
 └── project-skill/
     └── SKILL.md
+
+.agents/plugins.json             # Project-scoped plugin state
 ```
 
 See [SPEC.md — Installation Paths](./SPEC.md#installation-paths) for the full path table and symlink agent identifiers.
@@ -515,3 +591,9 @@ All tests run with `bun test`. CI runs on Linux and macOS.
 | Template format | TypeScript functions returning Record<string,string> | File system templates | Binary embeddable; no runtime file reads; type-safe; easily testable |
 | Doctor checks | 9 sequential checks with onCheck callback | Parallel checks | Streaming output UX; failures in one check don't block others |
 | Platform | Linux + macOS | Cross-platform | Ship fast, add Windows when demand exists |
+| Plugin state | Separate plugins.json | Extend installed.json with type field | Clean separation, no migration, independent schemas |
+| Plugin scope | Portable subset (skills + MCP + agents) | Full plugin support (hooks, LSP, etc.) | Portable components work across agents; platform-specific features are low value for cross-agent tool |
+| MCP injection | Direct config write with backup | Generate snippets for user to copy | Best UX; backup + doctor checks provide safety net |
+| MCP namespacing | `skilltap:<plugin>:<server>` prefix | No prefix | Prevents collisions with user-configured MCP servers |
+| Agent definitions | Claude Code only (for now) | All agents | Only Claude Code has a documented agent definition format; extensible later |
+| Plugin detection | Auto-detect in install flow | Separate `plugin install` command | One command for everything; plugin vs. skill is a property of the source, not the user's intent |
