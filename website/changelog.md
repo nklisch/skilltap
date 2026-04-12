@@ -5,6 +5,22 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.10.7
+
+### Fixes
+
+- **Shell completions — plugin command** — `plugin` / `plugins` was registered in the
+  CLI but missing from all shell completion scripts. Bash, zsh, and fish now complete
+  `plugin list`, `plugin info`, `plugin toggle` (with `--skills`, `--mcps`, `--agents`),
+  and `plugin remove`.
+- **Shell completions — missing flags** — several flags were absent from completions:
+  `verify --all`, `config --reset`, `skills info --json` (and the `info` alias),
+  `tap add --type`, `tap remove --yes`, `tap list --json`.
+- **Shell completions — status description** — corrected to "Show agent mode status and
+  configuration" across zsh and fish.
+
+---
+
 ## v0.10.4
 
 ### Fixes
