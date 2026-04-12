@@ -68,6 +68,50 @@ description: >
     expect(result?.description).toBe("Single line text.");
   });
 
+  test("parses nested metadata object", () => {
+    const content = `---
+name: my-skill
+description: A short description
+metadata:
+  author: John Doe
+  version: 1.0.0
+---
+`;
+    const result = parseSkillFrontmatter(content);
+    expect(result).toEqual({
+      name: "my-skill",
+      description: "A short description",
+      metadata: {
+        author: "John Doe",
+        version: "1.0.0",
+      },
+    });
+  });
+
+  test("nested object followed by another key", () => {
+    const content = `---
+name: my-skill
+metadata:
+  author: Jane
+license: MIT
+---
+`;
+    const result = parseSkillFrontmatter(content);
+    expect(result?.metadata).toEqual({ author: "Jane" });
+    expect(result?.license).toBe("MIT");
+  });
+
+  test("nested object with boolean and numeric values", () => {
+    const content = `---
+config:
+  enabled: true
+  count: 5
+---
+`;
+    const result = parseSkillFrontmatter(content);
+    expect(result?.config).toEqual({ enabled: true, count: 5 });
+  });
+
   test("block scalar followed by another key", () => {
     const content = `---
 name: my-skill

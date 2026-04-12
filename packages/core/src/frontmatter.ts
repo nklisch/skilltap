@@ -32,6 +32,30 @@ export function parseSkillFrontmatter(
         } else break;
       }
       data[key] = style === ">" ? parts.join(" ").trim() : parts.join("\n").trimEnd();
+    } else if (raw === "") {
+      // Empty value — check if next lines are indented (nested object)
+      const nested: Record<string, unknown> = {};
+      let hasNested = false;
+      i++;
+      while (i < lines.length) {
+        const next = lines[i]!;
+        if (next.length > 0 && (next[0] === " " || next[0] === "\t")) {
+          const nsep = next.indexOf(":");
+          if (nsep !== -1) {
+            const nkey = next.slice(0, nsep).trim();
+            const nraw = next.slice(nsep + 1).trim();
+            if (nkey) {
+              hasNested = true;
+              if (nraw === "true") nested[nkey] = true;
+              else if (nraw === "false") nested[nkey] = false;
+              else if (nraw !== "" && !Number.isNaN(Number(nraw))) nested[nkey] = Number(nraw);
+              else nested[nkey] = nraw;
+            }
+          }
+          i++;
+        } else break;
+      }
+      data[key] = hasNested ? nested : "";
     } else {
       if (raw === "true") data[key] = true;
       else if (raw === "false") data[key] = false;
