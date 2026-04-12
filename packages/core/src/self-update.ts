@@ -237,6 +237,7 @@ export async function downloadAndInstall(
     await Bun.$`chmod +x ${tmpPath}`.quiet();
     if (process.platform === "darwin") {
       await Bun.$`xattr -d com.apple.quarantine ${tmpPath} 2>/dev/null || true`.quiet();
+      await Bun.$`codesign -s - ${tmpPath} 2>/dev/null || true`.quiet();
     }
     await Bun.$`mv -f ${tmpPath} ${_execPath}`.quiet();
   } catch (e) {

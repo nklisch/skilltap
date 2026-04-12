@@ -12,6 +12,9 @@ description: Release notes for every notable version of skilltap.
 - **macOS self-update quarantine** — downloaded binary now has the `com.apple.quarantine`
   extended attribute stripped before replacing the running binary, preventing Gatekeeper
   from killing the updated binary on macOS.
+- **macOS code signature** — ad-hoc sign (`codesign -s -`) the binary after download in
+  both self-update and install script. Cross-compiled Mach-O binaries from CI lack any
+  code signature, which Apple Silicon rejects with "load code signature error 4".
 
 ---
 
