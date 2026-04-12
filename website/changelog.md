@@ -5,6 +5,18 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.10.4
+
+### Fixes
+
+- **Nested frontmatter metadata** — `skilltap verify` no longer fails with
+  "expected record, received string" when a skill's frontmatter contains a
+  nested `metadata:` block. The parser now correctly preserves nested
+  key-value pairs as an object instead of flattening them to the top level.
+  (Fixes [#14](https://github.com/nklisch/skilltap/issues/14))
+
+---
+
 ## v0.10.1
 
 ### Fixes
