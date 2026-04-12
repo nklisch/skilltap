@@ -73,8 +73,12 @@ jobs:
           bun build packages/cli/src/index.ts --compile --target=bun-darwin-x64 --outfile=skilltap-darwin-x64
           bun build packages/cli/src/index.ts --compile --outfile=skilltap-darwin-arm64
 
-      - name: Ad-hoc codesign (cross-compiled x64 only; native arm64 is signed by the linker)
-        run: codesign --force -s - skilltap-darwin-x64
+      - name: Strip Bun-embedded signatures and re-sign
+        run: |
+          codesign --remove-signature skilltap-darwin-x64
+          codesign --remove-signature skilltap-darwin-arm64
+          codesign -s - skilltap-darwin-x64
+          codesign -s - skilltap-darwin-arm64
 
       - name: Verify signatures
         run: |
