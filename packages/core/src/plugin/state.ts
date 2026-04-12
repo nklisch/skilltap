@@ -1,5 +1,4 @@
 import { join } from "node:path";
-import { debug } from "../debug";
 import { ensureDirs, getConfigDir } from "../config";
 import { loadJsonState, saveJsonState } from "../json-state";
 import {
@@ -9,7 +8,7 @@ import {
   type StoredComponent,
   type StoredMcpComponent,
 } from "../schemas/plugins";
-import type { McpStdioServer, PluginManifest } from "../schemas/plugin";
+import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 
 function getPluginsPath(projectRoot?: string): string {
@@ -34,14 +33,16 @@ export async function savePlugins(
   return saveJsonState(getPluginsPath(projectRoot), plugins, "plugins.json", projectRoot, ensureDirs);
 }
 
-export function mcpServerToStored(server: McpStdioServer): StoredMcpComponent {
+export function mcpServerToStored(server: McpServerEntry): StoredMcpComponent {
+  if (server.type === "http") {
+    return {
+      type: "mcp", serverType: "http", name: server.name, active: true,
+      url: server.url, headers: server.headers ?? {},
+    };
+  }
   return {
-    type: "mcp",
-    name: server.name,
-    active: true,
-    command: server.command,
-    args: server.args ?? [],
-    env: server.env ?? {},
+    type: "mcp", serverType: "stdio", name: server.name, active: true,
+    command: server.command, args: server.args ?? [], env: server.env ?? {},
   };
 }
 
@@ -107,12 +108,7 @@ export function manifestToRecord(manifest: PluginManifest, meta: PluginInstallMe
     if (component.type === "skill") {
       components.push({ type: "skill", name: component.name, active: true });
     } else if (component.type === "mcp") {
-      const server = component.server;
-      if (server.type === "http") {
-        debug("plugin", { skipped: "HTTP MCP server", name: server.name });
-        continue;
-      }
-      components.push(mcpServerToStored(server));
+      components.push(mcpServerToStored(component.server));
     } else if (component.type === "agent") {
       components.push({ type: "agent", name: component.name, active: true, platform: "claude-code" });
     }

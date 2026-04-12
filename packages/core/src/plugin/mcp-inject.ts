@@ -61,6 +61,15 @@ export function substituteMcpVars(
   component: StoredMcpComponent,
   ctx: McpVarContext,
 ): StoredMcpComponent {
+  if (component.serverType === "http") {
+    return {
+      ...component,
+      url: substituteVars(component.url, ctx),
+      headers: Object.fromEntries(
+        Object.entries(component.headers).map(([k, v]) => [k, substituteVars(v, ctx)]),
+      ),
+    };
+  }
   return {
     ...component,
     command: substituteVars(component.command, ctx),
@@ -194,13 +203,20 @@ export async function injectMcpServers(
 
     for (const server of servers) {
       const key = namespaceMcpServer(pluginName, server.name);
-      const entry: Record<string, unknown> = {
-        command: server.command,
-        args: server.args,
-      };
-      if (Object.keys(server.env).length > 0) {
-        entry.env = server.env;
+      let entry: Record<string, unknown>;
+
+      if (server.serverType === "http") {
+        entry = { url: server.url };
+        if (Object.keys(server.headers).length > 0) {
+          entry.headers = server.headers;
+        }
+      } else {
+        entry = { command: server.command, args: server.args };
+        if (Object.keys(server.env).length > 0) {
+          entry.env = server.env;
+        }
       }
+
       mcpServers[key] = entry;
     }
 

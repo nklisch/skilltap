@@ -367,7 +367,7 @@ describe("installPlugin", () => {
     }
   });
 
-  test("skips HTTP MCP servers", async () => {
+  test("injects HTTP MCP servers as url entries", async () => {
     const contentDir = await makeContentDir({
       "placeholder.txt": "http server plugin",
     });
@@ -379,7 +379,7 @@ describe("installPlugin", () => {
       components: [
         {
           type: "mcp",
-          server: { type: "http", name: "remote-svc", url: "https://example.com/mcp" },
+          server: { type: "http", name: "remote-svc", url: "https://example.com/mcp", headers: {} },
         },
       ],
     };
@@ -390,8 +390,16 @@ describe("installPlugin", () => {
       });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      // HTTP servers are skipped — no injection happens
-      expect(result.value.mcpAgents).toHaveLength(0);
+      expect(result.value.mcpAgents).toContain("claude-code");
+
+      const { getConfigDir } = await import("../config");
+      const { join } = await import("node:path");
+      const configPath = join(env.homeDir, ".claude", "settings.json");
+      const config = await Bun.file(configPath).json();
+      const entry = config.mcpServers["skilltap:http-plugin:remote-svc"];
+      expect(entry).toBeDefined();
+      expect(entry.url).toBe("https://example.com/mcp");
+      expect(entry.command).toBeUndefined();
     } finally {
       await rm(contentDir, { recursive: true, force: true });
     }

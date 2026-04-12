@@ -31,7 +31,7 @@ const VALID_RECORD: PluginRecord = {
   tap: null,
   components: [
     { type: "skill", name: "code-review", active: true },
-    { type: "mcp", name: "database", active: true, command: "npx", args: [], env: {} },
+    { type: "mcp", serverType: "stdio", name: "database", active: true, command: "npx", args: [], env: {} },
     { type: "agent", name: "reviewer", active: true, platform: "claude-code" },
   ],
   installedAt: "2026-04-10T12:00:00Z",
@@ -248,6 +248,7 @@ describe("manifestToRecord", () => {
           type: "http",
           name: "remote-api",
           url: "https://api.example.com/mcp",
+          headers: {},
         },
       },
       {
@@ -261,8 +262,8 @@ describe("manifestToRecord", () => {
 
   test("converts manifest with skills, mcp, and agents", () => {
     const record = manifestToRecord(MANIFEST, META);
-    // HTTP MCP server is skipped, so 3 components: skill, mcp(stdio), agent
-    expect(record.components).toHaveLength(3);
+    // 4 components: skill, mcp(stdio), mcp(http), agent
+    expect(record.components).toHaveLength(4);
   });
 
   test("sets correct format and name", () => {
@@ -271,19 +272,23 @@ describe("manifestToRecord", () => {
     expect(record.format).toBe("claude-code");
   });
 
-  test("skips HTTP MCP servers", () => {
+  test("includes HTTP MCP servers with serverType='http' and url field", () => {
     const record = manifestToRecord(MANIFEST, META);
     const httpComp = record.components.find(
       (c) => c.type === "mcp" && c.name === "remote-api",
     );
-    expect(httpComp).toBeUndefined();
+    expect(httpComp).toBeDefined();
+    if (!httpComp || httpComp.type !== "mcp") return;
+    if (httpComp.serverType !== "http") return;
+    expect(httpComp.url).toBe("https://api.example.com/mcp");
   });
 
   test("converts stdio MCP servers correctly", () => {
     const record = manifestToRecord(MANIFEST, META);
-    const mcp = record.components.find((c) => c.type === "mcp");
+    const mcp = record.components.find((c) => c.type === "mcp" && c.name === "database");
     expect(mcp).toBeDefined();
     if (!mcp || mcp.type !== "mcp") return;
+    if (mcp.serverType !== "stdio") return;
     expect(mcp.name).toBe("database");
     expect(mcp.command).toBe("npx");
     expect(mcp.args).toEqual(["-y", "@corp/db-mcp"]);

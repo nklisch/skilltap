@@ -21,13 +21,14 @@ import {
 function makeMcpServer(overrides?: Partial<StoredMcpComponent>): StoredMcpComponent {
   return {
     type: "mcp",
+    serverType: "stdio",
     name: "test-server",
     active: true,
     command: "npx",
     args: ["-y", "my-mcp"],
     env: {},
     ...overrides,
-  };
+  } as StoredMcpComponent;
 }
 
 async function readJson(path: string): Promise<Record<string, unknown>> {
@@ -114,18 +115,21 @@ describe("substituteMcpVars", () => {
   test("replaces ${CLAUDE_PLUGIN_ROOT} in command", () => {
     const server = makeMcpServer({ command: "${CLAUDE_PLUGIN_ROOT}/bin/server" });
     const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "stdio") return;
     expect(result.command).toBe("/opt/plugins/foo/bin/server");
   });
 
   test("replaces ${CLAUDE_PLUGIN_ROOT} in args", () => {
     const server = makeMcpServer({ args: ["--root", "${CLAUDE_PLUGIN_ROOT}"] });
     const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "stdio") return;
     expect(result.args).toEqual(["--root", "/opt/plugins/foo"]);
   });
 
   test("replaces ${CLAUDE_PLUGIN_DATA} in env values", () => {
     const server = makeMcpServer({ env: { DATA_DIR: "${CLAUDE_PLUGIN_DATA}/cache" } });
     const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "stdio") return;
     expect(result.env).toEqual({ DATA_DIR: "/var/data/foo/cache" });
   });
 
@@ -135,12 +139,14 @@ describe("substituteMcpVars", () => {
       args: ["${CLAUDE_PLUGIN_ROOT}:${CLAUDE_PLUGIN_DATA}"],
     });
     const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "stdio") return;
     expect(result.args[0]).toBe("/opt/plugins/foo:/var/data/foo");
   });
 
   test("returns unchanged component when no variables present", () => {
     const server = makeMcpServer({ command: "npx", args: ["-y", "my-mcp"], env: {} });
     const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "stdio") return;
     expect(result.command).toBe("npx");
     expect(result.args).toEqual(["-y", "my-mcp"]);
   });
@@ -151,8 +157,30 @@ describe("substituteMcpVars", () => {
       env: { DATA: "${CLAUDE_PLUGIN_DATA}" },
     });
     const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "stdio") return;
     expect(result.command).toBe("/opt/plugins/foo/server");
     expect(result.env.DATA).toBe("/var/data/foo");
+  });
+
+  test("substitutes ${CLAUDE_PLUGIN_ROOT} in HTTP url", () => {
+    const server: StoredMcpComponent = {
+      type: "mcp", serverType: "http", name: "remote", active: true,
+      url: "${CLAUDE_PLUGIN_ROOT}/mcp", headers: {},
+    };
+    const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "http") return;
+    expect(result.url).toBe("/opt/plugins/foo/mcp");
+  });
+
+  test("substitutes vars in HTTP header values", () => {
+    const server: StoredMcpComponent = {
+      type: "mcp", serverType: "http", name: "remote", active: true,
+      url: "https://example.com/mcp",
+      headers: { Authorization: "Bearer ${CLAUDE_PLUGIN_DATA}/token" },
+    };
+    const result = substituteMcpVars(server, ctx);
+    if (result.serverType !== "http") return;
+    expect(result.headers.Authorization).toBe("Bearer /var/data/foo/token");
   });
 });
 
@@ -404,6 +432,79 @@ describe("injectMcpServers", () => {
     expect(result.ok).toBe(true);
     const exists = await Bun.file(join(projectRoot, ".gemini/settings.json")).exists();
     expect(exists).toBe(true);
+  });
+
+  test("writes { url } for HTTP server (no headers)", async () => {
+    const projectRoot = env.homeDir;
+    const server: StoredMcpComponent = {
+      type: "mcp", serverType: "http", name: "api", active: true,
+      url: "https://api.example.com/mcp", headers: {},
+    };
+
+    const result = await injectMcpServers({
+      pluginName: "my-plugin",
+      servers: [server],
+      agents: ["cursor"],
+      scope: "project",
+      projectRoot,
+    });
+
+    expect(result.ok).toBe(true);
+    const config = await readJson(join(projectRoot, ".cursor/mcp.json"));
+    const entry = (config.mcpServers as Record<string, Record<string, unknown>>)["skilltap:my-plugin:api"];
+    expect(entry).toBeDefined();
+    expect(entry.url).toBe("https://api.example.com/mcp");
+    expect(entry.command).toBeUndefined();
+    expect(entry.headers).toBeUndefined();
+  });
+
+  test("writes { url, headers } for HTTP server when headers non-empty", async () => {
+    const projectRoot = env.homeDir;
+    const server: StoredMcpComponent = {
+      type: "mcp", serverType: "http", name: "api", active: true,
+      url: "https://api.example.com/mcp",
+      headers: { Authorization: "Bearer token123" },
+    };
+
+    const result = await injectMcpServers({
+      pluginName: "my-plugin",
+      servers: [server],
+      agents: ["cursor"],
+      scope: "project",
+      projectRoot,
+    });
+
+    expect(result.ok).toBe(true);
+    const config = await readJson(join(projectRoot, ".cursor/mcp.json"));
+    const entry = (config.mcpServers as Record<string, Record<string, unknown>>)["skilltap:my-plugin:api"];
+    expect(entry.url).toBe("https://api.example.com/mcp");
+    expect(entry.headers).toEqual({ Authorization: "Bearer token123" });
+  });
+
+  test("mixed stdio and HTTP servers in same call", async () => {
+    const projectRoot = env.homeDir;
+    const httpServer: StoredMcpComponent = {
+      type: "mcp", serverType: "http", name: "remote", active: true,
+      url: "https://remote.example.com/mcp", headers: {},
+    };
+
+    const result = await injectMcpServers({
+      pluginName: "mixed-plugin",
+      servers: [makeMcpServer({ name: "local-db" }), httpServer],
+      agents: ["cursor"],
+      scope: "project",
+      projectRoot,
+    });
+
+    expect(result.ok).toBe(true);
+    const config = await readJson(join(projectRoot, ".cursor/mcp.json"));
+    const mcp = config.mcpServers as Record<string, Record<string, unknown>>;
+    const stdioEntry = mcp["skilltap:mixed-plugin:local-db"];
+    const httpEntry = mcp["skilltap:mixed-plugin:remote"];
+    expect(stdioEntry.command).toBe("npx");
+    expect(stdioEntry.url).toBeUndefined();
+    expect(httpEntry.url).toBe("https://remote.example.com/mcp");
+    expect(httpEntry.command).toBeUndefined();
   });
 });
 

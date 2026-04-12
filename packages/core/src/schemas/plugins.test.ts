@@ -140,6 +140,7 @@ describe("StoredComponentSchema", () => {
     expect(result.success).toBe(true);
     if (!result.success) return;
     if (result.data.type !== "mcp") return;
+    if (result.data.serverType !== "stdio") return;
     expect(result.data.command).toBe("npx");
     expect(result.data.args).toEqual(["-y", "@corp/db-mcp"]);
     expect(result.data.env).toEqual({ DB_URL: "postgres://localhost" });
@@ -159,5 +160,49 @@ describe("StoredComponentSchema", () => {
 
   test("rejects mcp component without command", () => {
     expect(StoredComponentSchema.safeParse({ type: "mcp", name: "db" }).success).toBe(false);
+  });
+
+  test("backward compat: existing mcp entry without serverType parses as stdio", () => {
+    const result = StoredComponentSchema.safeParse({
+      type: "mcp",
+      name: "legacy-server",
+      command: "node",
+      args: ["server.js"],
+      env: {},
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    if (result.data.type !== "mcp") return;
+    expect(result.data.serverType).toBe("stdio");
+  });
+
+  test("accepts http mcp component with url and headers", () => {
+    const result = StoredComponentSchema.safeParse({
+      type: "mcp",
+      serverType: "http",
+      name: "remote-api",
+      url: "https://api.example.com/mcp",
+      headers: { Authorization: "Bearer token" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    if (result.data.type !== "mcp") return;
+    if (result.data.serverType !== "http") return;
+    expect(result.data.url).toBe("https://api.example.com/mcp");
+    expect(result.data.headers).toEqual({ Authorization: "Bearer token" });
+  });
+
+  test("http mcp component defaults headers to empty object", () => {
+    const result = StoredComponentSchema.safeParse({
+      type: "mcp",
+      serverType: "http",
+      name: "remote-api",
+      url: "https://api.example.com/mcp",
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    if (result.data.type !== "mcp") return;
+    if (result.data.serverType !== "http") return;
+    expect(result.data.headers).toEqual({});
   });
 });

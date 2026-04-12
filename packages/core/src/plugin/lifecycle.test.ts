@@ -148,6 +148,7 @@ describe("removeInstalledPlugin", () => {
           components: [
             {
               type: "mcp",
+              serverType: "stdio",
               name: "test-server",
               active: true,
               command: "node",
@@ -234,6 +235,7 @@ describe("toggleInstalledComponent", () => {
           components: [
             {
               type: "mcp",
+              serverType: "stdio",
               name: "test-server",
               active: true,
               command: "node",
@@ -277,6 +279,7 @@ describe("toggleInstalledComponent", () => {
           components: [
             {
               type: "mcp",
+              serverType: "stdio",
               name: "test-server",
               active: false,
               command: "node",
@@ -392,5 +395,86 @@ describe("toggleInstalledComponent", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("no-such-component");
+  });
+
+  test("toggle HTTP MCP component off removes from agent config", async () => {
+    const stateWithHttpMcp: PluginsJson = {
+      version: 1,
+      plugins: [
+        {
+          ...BASE_STATE.plugins[0]!,
+          also: ["claude-code"],
+          components: [
+            {
+              type: "mcp",
+              serverType: "http",
+              name: "remote-api",
+              active: true,
+              url: "https://api.example.com/mcp",
+              headers: {},
+            },
+          ],
+        },
+      ],
+    };
+    await setupPlugin(stateWithHttpMcp);
+
+    const configPath = join(env.homeDir, ".claude", "settings.json");
+    await mkdir(join(env.homeDir, ".claude"), { recursive: true });
+    await Bun.write(
+      configPath,
+      JSON.stringify({
+        mcpServers: {
+          "skilltap:my-plugin:remote-api": { url: "https://api.example.com/mcp" },
+        },
+      }),
+    );
+
+    const result = await toggleInstalledComponent("my-plugin", "mcp", "remote-api");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.nowActive).toBe(false);
+
+    const config = await Bun.file(configPath).json();
+    expect(config.mcpServers["skilltap:my-plugin:remote-api"]).toBeUndefined();
+  });
+
+  test("toggle HTTP MCP component on re-injects { url } entry", async () => {
+    const stateWithHttpMcp: PluginsJson = {
+      version: 1,
+      plugins: [
+        {
+          ...BASE_STATE.plugins[0]!,
+          also: ["claude-code"],
+          components: [
+            {
+              type: "mcp",
+              serverType: "http",
+              name: "remote-api",
+              active: false,
+              url: "https://api.example.com/mcp",
+              headers: {},
+            },
+          ],
+        },
+      ],
+    };
+    await setupPlugin(stateWithHttpMcp);
+
+    const configPath = join(env.homeDir, ".claude", "settings.json");
+    await mkdir(join(env.homeDir, ".claude"), { recursive: true });
+    await Bun.write(configPath, JSON.stringify({ mcpServers: {} }));
+
+    const result = await toggleInstalledComponent("my-plugin", "mcp", "remote-api");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.nowActive).toBe(true);
+    expect(result.value.mcpAgents).toContain("claude-code");
+
+    const config = await Bun.file(configPath).json();
+    const entry = config.mcpServers["skilltap:my-plugin:remote-api"];
+    expect(entry).toBeDefined();
+    expect(entry.url).toBe("https://api.example.com/mcp");
+    expect(entry.command).toBeUndefined();
   });
 });

@@ -22,6 +22,7 @@ export const McpHttpServerSchema = z.object({
   type: z.literal("http"),
   name: z.string(),
   url: z.string(),
+  headers: z.record(z.string(), z.string()).default({}),
 });
 
 export const McpServerEntrySchema = z.union([

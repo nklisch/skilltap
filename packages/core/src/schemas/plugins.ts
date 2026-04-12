@@ -7,14 +7,29 @@ export const StoredSkillComponentSchema = z.object({
   active: z.boolean().default(true),
 });
 
-export const StoredMcpComponentSchema = z.object({
+export const StoredMcpStdioComponentSchema = z.object({
   type: z.literal("mcp"),
+  serverType: z.literal("stdio").default("stdio"),
   name: z.string(),
   active: z.boolean().default(true),
   command: z.string(),
   args: z.array(z.string()).default([]),
   env: z.record(z.string(), z.string()).default({}),
 });
+
+export const StoredMcpHttpComponentSchema = z.object({
+  type: z.literal("mcp"),
+  serverType: z.literal("http"),
+  name: z.string(),
+  active: z.boolean().default(true),
+  url: z.string(),
+  headers: z.record(z.string(), z.string()).default({}),
+});
+
+export const StoredMcpComponentSchema = z.union([
+  StoredMcpStdioComponentSchema,
+  StoredMcpHttpComponentSchema,
+]);
 
 export const StoredAgentComponentSchema = z.object({
   type: z.literal("agent"),
@@ -23,9 +38,10 @@ export const StoredAgentComponentSchema = z.object({
   platform: z.string().default("claude-code"),
 });
 
-export const StoredComponentSchema = z.discriminatedUnion("type", [
+export const StoredComponentSchema = z.union([
   StoredSkillComponentSchema,
-  StoredMcpComponentSchema,
+  StoredMcpStdioComponentSchema,
+  StoredMcpHttpComponentSchema,
   StoredAgentComponentSchema,
 ]);
 
@@ -51,6 +67,8 @@ export const PluginsJsonSchema = z.object({
 });
 
 export type StoredSkillComponent = z.infer<typeof StoredSkillComponentSchema>;
+export type StoredMcpStdioComponent = z.infer<typeof StoredMcpStdioComponentSchema>;
+export type StoredMcpHttpComponent = z.infer<typeof StoredMcpHttpComponentSchema>;
 export type StoredMcpComponent = z.infer<typeof StoredMcpComponentSchema>;
 export type StoredAgentComponent = z.infer<typeof StoredAgentComponentSchema>;
 export type StoredComponent = z.infer<typeof StoredComponentSchema>;

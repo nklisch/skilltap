@@ -111,9 +111,7 @@ export async function installPlugin(
   );
   const storedMcpComponents: StoredMcpComponent[] = [];
   for (const component of mcpComponents) {
-    const server = component.server;
-    if (server.type === "http") continue;
-    storedMcpComponents.push(mcpServerToStored(server));
+    storedMcpComponents.push(mcpServerToStored(component.server));
   }
 
   let mcpAgents: string[] = [];
