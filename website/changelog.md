@@ -5,6 +5,16 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.10.1
+
+### Fixes
+
+- **macOS self-update quarantine** — downloaded binary now has the `com.apple.quarantine`
+  extended attribute stripped before replacing the running binary, preventing Gatekeeper
+  from killing the updated binary on macOS.
+
+---
+
 ## v0.10.0
 
 ### Plugin Support
