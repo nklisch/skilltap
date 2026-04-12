@@ -159,7 +159,7 @@ main() {
   # macOS: strip quarantine attribute and ad-hoc sign (cross-compiled binaries lack a signature)
   if [ "$OS" = "darwin" ]; then
     xattr -d com.apple.quarantine "${INSTALL_DIR}/skilltap" 2>/dev/null || true
-    codesign -s - "${INSTALL_DIR}/skilltap" 2>/dev/null || true
+    codesign --force -s - "${INSTALL_DIR}/skilltap" 2>/dev/null || true
   fi
 
   ok "Installed skilltap ${VERSION} to ${INSTALL_DIR}/skilltap"
