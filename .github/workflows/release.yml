@@ -70,13 +70,11 @@ jobs:
         env:
           GA4_API_SECRET: ${{ secrets.GA4_API_SECRET }}
         run: |
-          bun build packages/cli/src/index.ts --compile --target=bun-darwin-x64  --outfile=skilltap-darwin-x64
-          bun build packages/cli/src/index.ts --compile --target=bun-darwin-arm64 --outfile=skilltap-darwin-arm64
+          bun build packages/cli/src/index.ts --compile --target=bun-darwin-x64 --outfile=skilltap-darwin-x64
+          bun build packages/cli/src/index.ts --compile --outfile=skilltap-darwin-arm64
 
-      - name: Ad-hoc codesign
-        run: |
-          codesign --force -s - skilltap-darwin-x64
-          codesign --force -s - skilltap-darwin-arm64
+      - name: Ad-hoc codesign (cross-compiled x64 only; native arm64 is signed by the linker)
+        run: codesign --force -s - skilltap-darwin-x64
 
       - name: Verify signatures
         run: |
