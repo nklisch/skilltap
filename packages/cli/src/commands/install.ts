@@ -28,6 +28,7 @@ import {
 } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
 import { createInstallCallbacks } from "../ui/install-callbacks";
+import { componentSummary } from "../ui/plugin-format";
 import { loadPolicyOrExit } from "../ui/policy";
 import {
   confirmSaveDefault,
@@ -185,6 +186,12 @@ async function runAgentMode(
         }
         return orphans.map((o) => o.record.name);
       },
+      onPluginDetected: async () => "plugin" as const,
+      onPluginWarnings: async (warnings: StaticWarning[]): Promise<boolean> => {
+        agentSecurityBlock(warnings, []);
+        process.exit(1);
+        return false;
+      },
     });
 
     if (!result.ok) {
@@ -213,6 +220,12 @@ async function runAgentMode(
     for (const record of result.value.records) {
       const installDir = skillInstallDir(record.name, scope, projectRoot);
       agentSuccess(record.name, installDir, record.ref, record.trust);
+    }
+
+    if (result.value.pluginRecord) {
+      const pr = result.value.pluginRecord;
+      const summary = componentSummary(pr);
+      process.stdout.write(`OK: Installed plugin ${pr.name} (${summary})\n`);
     }
 
     for (const name of result.value.updates) {
@@ -371,6 +384,12 @@ async function runInteractiveMode(
     for (const record of result.value.records) {
       const installDir = skillInstallDir(record.name, scope, projectRoot);
       successLine(`Installed ${record.name} → ${installDir}`);
+    }
+
+    if (result.value.pluginRecord) {
+      const pr = result.value.pluginRecord;
+      const summary = componentSummary(pr);
+      successLine(`Installed plugin ${pr.name} (${summary})`);
     }
 
     // Run updates for skills that were already installed
