@@ -103,6 +103,7 @@ describe("completions — bash script", () => {
       "link",
       "unlink",
       "info",
+      "plugin",
       "create",
       "verify",
       "config",
@@ -161,6 +162,7 @@ describe("completions — zsh script", () => {
       "update",
       "find",
       "skills",
+      "plugin",
       "tap",
       "doctor",
       "completions",
@@ -214,6 +216,7 @@ describe("completions — fish script", () => {
       "update",
       "find",
       "skills",
+      "plugin",
       "tap",
       "doctor",
       "completions",
@@ -229,6 +232,10 @@ describe("completions — fish script", () => {
     expect(stdout).toContain("-a 'edit'");
     // skills subcommands
     for (const sub of ["info", "remove", "link", "unlink", "adopt", "move"]) {
+      expect(stdout).toContain(sub);
+    }
+    // plugin subcommands
+    for (const sub of ["info", "toggle", "remove"]) {
       expect(stdout).toContain(sub);
     }
   });

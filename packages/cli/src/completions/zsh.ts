@@ -8,7 +8,7 @@ export function generateZshCompletions(): string {
 _skilltap() {
   local -a commands
   commands=(
-    'status:Show agent mode configuration'
+    'status:Show agent mode status and configuration'
     'install:Install a skill'
     'remove:Remove an installed skill'
     'list:List installed skills'
@@ -18,6 +18,7 @@ _skilltap() {
     'unlink:Remove a linked skill'
     'info:Show skill details'
     'skills:Manage installed skills'
+    'plugin:Manage installed plugins'
     'create:Create a new skill'
     'verify:Validate a skill'
     'config:Interactive setup wizard'
@@ -100,7 +101,9 @@ _skilltap() {
         info)
           local -a skills
           skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
-          _arguments "1:skill:($skills)"
+          _arguments \\
+            '--json[JSON output]' \\
+            "1:skill:($skills)"
           ;;
         skills)
           local -a skills_commands
@@ -113,7 +116,9 @@ _skilltap() {
                 info)
                   local -a skills
                   skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
-                  _arguments "1:skill:($skills)"
+                  _arguments \\
+                    '--json[JSON output]' \\
+                    "1:skill:($skills)"
                   ;;
                 remove)
                   local -a skills
@@ -182,18 +187,58 @@ _skilltap() {
               ;;
           esac
           ;;
+        plugin)
+          local -a plugin_commands
+          plugin_commands=('list:List installed plugins' 'info:Show plugin details' 'toggle:Toggle plugin components' 'remove:Remove a plugin')
+          _arguments -C '1:subcommand:->plugin_cmd' '*::arg:->plugin_args'
+          case $state in
+            plugin_cmd) _describe 'subcommand' plugin_commands ;;
+            plugin_args)
+              case $words[1] in
+                info)
+                  _arguments '--json[JSON output]' '1:plugin:'
+                  ;;
+                toggle)
+                  _arguments \\
+                    '--skills[Toggle all skills]' \\
+                    '--mcps[Toggle all MCP servers]' \\
+                    '--agents[Toggle all agent definitions]' \\
+                    '--json[JSON output]' \\
+                    '1:plugin:'
+                  ;;
+                remove)
+                  _arguments \\
+                    '--yes[Skip confirmation]' \\
+                    '--json[JSON output]' \\
+                    '1:plugin:'
+                  ;;
+                *)
+                  _arguments \\
+                    '--global[Show only global plugins]' \\
+                    '--project[Show only project plugins]' \\
+                    '--json[JSON output]'
+                  ;;
+              esac
+              ;;
+          esac
+          ;;
         create)
           _arguments \\
             '--template[Template type]:template:(${templateSpec})' \\
             '--dir[Target directory]:dir:_files -/'
           ;;
         verify)
-          _arguments '--json[JSON output]'
+          _arguments \\
+            '--all[Verify all skills in current project]' \\
+            '--json[JSON output]'
           ;;
         config)
           local -a config_commands
           config_commands=('agent-mode:Configure agent mode' 'security:Configure security settings' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value' 'edit:Open config in editor')
-          _arguments -C '1:subcommand:->config_cmd' '*::arg:->config_args'
+          _arguments -C \\
+            '--reset[Overwrite existing config]' \\
+            '1:subcommand:->config_cmd' \\
+            '*::arg:->config_args'
           case $state in
             config_cmd) _describe 'subcommand' config_commands ;;
             config_args)
@@ -223,7 +268,21 @@ _skilltap() {
             tap_cmd) _describe 'subcommand' tap_commands ;;
             tap_args)
               case $words[1] in
-                remove|info)
+                add)
+                  _arguments \\
+                    '--type[Tap type]:type:(git http)'
+                  ;;
+                remove)
+                  local -a taps
+                  taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
+                  _arguments \\
+                    '--yes[Skip confirmation]' \\
+                    "1:tap:($taps)"
+                  ;;
+                list)
+                  _arguments '--json[JSON output]'
+                  ;;
+                info)
                   local -a taps
                   taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
                   _arguments \\

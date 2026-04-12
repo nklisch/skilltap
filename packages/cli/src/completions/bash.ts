@@ -12,7 +12,7 @@ _skilltap() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="status install remove list update find skills link unlink info create verify config tap doctor completions self-update"
+  local commands="status install remove list update find skills link unlink info plugin create verify config tap doctor completions self-update"
   local tap_commands="add remove list info init install"
   local skills_commands="info remove link unlink adopt move disable enable"
   local agents="${agents}"
@@ -47,7 +47,9 @@ _skilltap() {
     skills)
       case "\${COMP_WORDS[2]}" in
         info)
-          if [[ "$cur" != -* ]]; then
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--json" -- "$cur"))
+          else
             local skills
             skills=$(skilltap --get-completions installed-skills 2>/dev/null)
             COMPREPLY=($(compgen -W "$skills" -- "$cur"))
@@ -150,11 +152,38 @@ _skilltap() {
       fi
       ;;
     info)
-      if [[ "$cur" != -* ]]; then
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--json" -- "$cur"))
+      else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)
         COMPREPLY=($(compgen -W "$skills" -- "$cur"))
       fi
+      ;;
+    plugin)
+      local plugin_commands="list info toggle remove"
+      case "\${COMP_WORDS[2]}" in
+        info)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--json" -- "$cur"))
+          else
+            COMPREPLY=()
+          fi
+          ;;
+        toggle)
+          COMPREPLY=($(compgen -W "--skills --mcps --agents --json" -- "$cur"))
+          ;;
+        remove)
+          COMPREPLY=($(compgen -W "--yes --json" -- "$cur"))
+          ;;
+        list|"")
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--global --project --json" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$plugin_commands" -- "$cur"))
+          fi
+          ;;
+      esac
       ;;
     create)
       case "$prev" in
@@ -163,7 +192,7 @@ _skilltap() {
       COMPREPLY=($(compgen -W "--template --dir" -- "$cur"))
       ;;
     verify)
-      COMPREPLY=($(compgen -W "--json" -- "$cur"))
+      COMPREPLY=($(compgen -W "--all --json" -- "$cur"))
       ;;
     config)
       case "\${COMP_WORDS[2]}" in
@@ -176,16 +205,30 @@ _skilltap() {
         set|agent-mode|telemetry|edit)
           ;;
         *)
-          COMPREPLY=($(compgen -W "agent-mode security telemetry get set edit" -- "$cur"))
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--reset" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "agent-mode security telemetry get set edit" -- "$cur"))
+          fi
           ;;
       esac
       ;;
     tap)
       case "\${COMP_WORDS[2]}" in
-        remove|update)
-          local taps
-          taps=$(skilltap --get-completions tap-names 2>/dev/null)
-          COMPREPLY=($(compgen -W "$taps" -- "$cur"))
+        add)
+          COMPREPLY=($(compgen -W "--type" -- "$cur"))
+          ;;
+        remove)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--yes" -- "$cur"))
+          else
+            local taps
+            taps=$(skilltap --get-completions tap-names 2>/dev/null)
+            COMPREPLY=($(compgen -W "$taps" -- "$cur"))
+          fi
+          ;;
+        list)
+          COMPREPLY=($(compgen -W "--json" -- "$cur"))
           ;;
         info)
           if [[ "$cur" == -* ]]; then
@@ -201,7 +244,7 @@ _skilltap() {
             COMPREPLY=($(compgen -W "--tap --project --global --also --yes --strict --no-strict --semantic --skip-scan" -- "$cur"))
           fi
           ;;
-        add|list|info|init|"")
+        info|init|"")
           COMPREPLY=($(compgen -W "$tap_commands" -- "$cur"))
           ;;
       esac

@@ -10,7 +10,7 @@ export function generateFishCompletions(): string {
 complete -c skilltap -f
 
 # Top-level commands
-complete -c skilltap -n '__fish_use_subcommand' -a status -d 'Show agent mode configuration'
+complete -c skilltap -n '__fish_use_subcommand' -a status -d 'Show agent mode status and configuration'
 complete -c skilltap -n '__fish_use_subcommand' -a install -d 'Install a skill'
 complete -c skilltap -n '__fish_use_subcommand' -a remove -d 'Remove an installed skill'
 complete -c skilltap -n '__fish_use_subcommand' -a list -d 'List installed skills'
@@ -20,6 +20,7 @@ complete -c skilltap -n '__fish_use_subcommand' -a link -d 'Symlink a local skil
 complete -c skilltap -n '__fish_use_subcommand' -a unlink -d 'Remove a linked skill'
 complete -c skilltap -n '__fish_use_subcommand' -a info -d 'Show skill details'
 complete -c skilltap -n '__fish_use_subcommand' -a skills -d 'Manage installed skills'
+complete -c skilltap -n '__fish_use_subcommand' -a plugin -d 'Manage installed plugins'
 complete -c skilltap -n '__fish_use_subcommand' -a create -d 'Create a new skill'
 complete -c skilltap -n '__fish_use_subcommand' -a verify -d 'Validate a skill'
 complete -c skilltap -n '__fish_use_subcommand' -a config -d 'Interactive setup wizard'
@@ -75,7 +76,8 @@ complete -c skilltap -n '__fish_seen_subcommand_from link' -l also -xa '${agentL
 complete -c skilltap -n '__fish_seen_subcommand_from unlink' -l yes -d 'Skip confirmation'
 complete -c skilltap -n '__fish_seen_subcommand_from unlink' -xa '(skilltap --get-completions linked-skills 2>/dev/null)'
 
-# info — dynamic installed skill names
+# info flags and dynamic installed skill names
+complete -c skilltap -n '__fish_seen_subcommand_from info' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from info' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 
 # skills subcommands
@@ -93,6 +95,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from skills; and not __fish_seen
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from info remove link unlink adopt move disable enable' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from info remove link unlink adopt move disable enable' -l disabled -d 'Show only disabled skills'
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and not __fish_seen_subcommand_from info remove link unlink adopt move disable enable' -l active -d 'Show only active skills'
+complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from info' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from info' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from remove' -l project -d 'Remove from project scope'
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from remove' -l global -d 'Remove from global scope'
@@ -119,12 +122,32 @@ complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_sub
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from enable' -l project -d 'Enable project skill'
 complete -c skilltap -n '__fish_seen_subcommand_from skills; and __fish_seen_subcommand_from enable' -xa '(skilltap --get-completions disabled-skills 2>/dev/null)'
 
+# plugin subcommands
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -a 'list' -d 'List installed plugins'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -a 'info' -d 'Show plugin details'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -a 'toggle' -d 'Toggle plugin components'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -a 'remove' -d 'Remove a plugin'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -l global -d 'Show only global plugins'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -l project -d 'Show only project plugins'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and not __fish_seen_subcommand_from list info toggle remove' -l json -d 'JSON output'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from info' -l json -d 'JSON output'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from toggle' -l skills -d 'Toggle all skills'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from toggle' -l mcps -d 'Toggle all MCP servers'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from toggle' -l agents -d 'Toggle all agent definitions'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from toggle' -l json -d 'JSON output'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from remove' -l yes -d 'Skip confirmation'
+complete -c skilltap -n '__fish_seen_subcommand_from plugin; and __fish_seen_subcommand_from remove' -l json -d 'JSON output'
+
 # create flags
 complete -c skilltap -n '__fish_seen_subcommand_from create' -l template -xa '${templateList}' -d 'Template type'
 complete -c skilltap -n '__fish_seen_subcommand_from create' -l dir -d 'Target directory'
 
 # verify flags
+complete -c skilltap -n '__fish_seen_subcommand_from verify' -l all -d 'Verify all skills in current project'
 complete -c skilltap -n '__fish_seen_subcommand_from verify' -l json -d 'JSON output'
+
+# config flags
+complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -l reset -d 'Overwrite existing config'
 
 # config subcommands
 complete -c skilltap -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from agent-mode security telemetry get set edit' -a 'agent-mode' -d 'Configure agent mode'
@@ -149,7 +172,10 @@ complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_su
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list info init install' -a 'info' -d 'Show tap details'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list info init install' -a 'init' -d 'Scaffold a tap repo'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and not __fish_seen_subcommand_from add remove list info init install' -a 'install' -d 'Install skills from taps'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from add' -l type -xa 'git http' -d 'Tap type'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from remove' -l yes -d 'Skip confirmation'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from remove' -xa '(skilltap --get-completions tap-names 2>/dev/null)'
+complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from list' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from info' -xa '(skilltap --get-completions tap-names 2>/dev/null)'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from info' -l json -d 'JSON output'
 complete -c skilltap -n '__fish_seen_subcommand_from tap; and __fish_seen_subcommand_from install' -l tap -xa '(skilltap --get-completions tap-names 2>/dev/null)' -d 'Scope to one tap'
