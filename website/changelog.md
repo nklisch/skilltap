@@ -5,6 +5,22 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v0.10.8
+
+### Fixes
+
+- **Plugin detection for direct install** — `skilltap install nklisch/skills` (or any
+  direct git/GitHub source) now detects plugin manifests and prompts whether to install
+  as a plugin. Previously the plugin manifest was silently ignored and only skills were
+  installed. Tap-based resolution was unaffected.
+
+- **HTTP MCP servers** — plugins that declare HTTP MCP servers now have them fully
+  injected into target agent configs as `{ url, headers? }` entries. Previously HTTP
+  servers were parsed from the manifest but silently dropped at install time. Toggle and
+  remove also work correctly for HTTP servers.
+
+---
+
 ## v0.10.7
 
 ### Fixes
