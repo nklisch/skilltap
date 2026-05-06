@@ -1351,7 +1351,7 @@ skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
 skilltap tap list
 ```
 
-Shows all registered taps with their names, URLs, type (`git`/`http`), and skill count.
+Shows all registered taps with their names, URLs, and skill count. (Pre-v2.0, the type column also distinguished `git` from `http` taps; HTTP support was removed in v2.0.)
 
 ## Inspecting a tap
 
@@ -1523,44 +1523,13 @@ skilltap tap add my-tap https://github.com/you/my-tap
 
 Anyone with access to the repo can add it as a tap.
 
-## HTTP registry taps
+## HTTP registry taps (removed in v2.0)
 
-HTTP taps are live web services that serve skill indexes over an API. They're useful for enterprise registries, large or dynamic catalogs, or anything that doesn't fit cleanly into a git repo.
+::: warning Removed in v2.0
+HTTP registry taps were removed in v2.0 — taps are now git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning, and `skilltap migrate` lists them as needing manual conversion or removal. The original design is described in [VISION.md](https://github.com/nklisch/skilltap/blob/main/docs/VISION.md#http-registry-removed-in-v20--historical-reference-only) for historical reference.
 
-### Adding an HTTP tap
-
-`skilltap tap add` probes the URL to auto-detect the type:
-
-```bash
-skilltap tap add enterprise https://skills.example.com/api/v1
-```
-
-If the URL returns a valid skill list response, it's registered as an HTTP tap. Otherwise skilltap falls back to treating it as a git repo.
-
-### HTTP vs git taps
-
-|  | Git tap | HTTP tap |
-|---|---|---|
-| Storage | Cloned locally | No local clone |
-| Updates | Auto on `skilltap update` | Always live |
-| Discovery | Reads local `tap.json` | Queries the API |
-| Auth | Git credentials | Bearer token |
-
-### Authentication
-
-For private HTTP registries, add credentials in your config:
-
-```toml
-[[taps]]
-name = "enterprise"
-url = "https://skills.example.com/api/v1"
-type = "http"
-auth_env = "SKILLS_REGISTRY_TOKEN"
-```
-
-`auth_env` names an environment variable that holds the bearer token. Prefer it over `auth_token` (which embeds the token directly in config).
-
-See the [tap-format reference](/reference/tap-format#http-registry-api) for the full HTTP registry API spec.
+If you need a non-git distribution path, host your `tap.json` in a private git repo (Gitea, GitLab self-hosted, or any HTTP-accessible bare repo). `skilltap tap add` works against any git URL.
+:::
 
 ## Auth errors and URL fallback
 
