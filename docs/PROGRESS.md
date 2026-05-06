@@ -172,6 +172,21 @@ Split per design-skill rule (>15 units → split):
 
 Splitting respects context limits and lets each step ship + verify in isolation.
 
+### Phase 31c-b-2 complete — sync apply
+
+`skilltap sync --apply` now executes the SyncPlan via existing v1 install/remove machinery. Per-item dispatch:
+
+- **add** (skill or plugin) → `installSkill(source, options)` with auto-accept callbacks. Plugins flow through the same path because installSkill auto-detects via detectPlugin.
+- **remove** → look up the skill/plugin name from state by source (canonicalizeSourceKey for matching), then call `removeSkill` or `removeInstalledPlugin`.
+- **ref-mismatch** → installSkill with `onAlreadyInstalled: () => "update"`. Forces re-install at the new ref.
+- **lock-missing / lock-stale / lock-orphan** → skipped (informational only).
+
+Failure handling: non-strict reports + continues; `--strict` stops at first failure. Exit 1 if any failed.
+
+Tests use injected `installFn`/`removeSkillFn`/`installPluginFn`/`removeInstalledPluginFn` parameters (Injectable Dependencies pattern from `.claude/rules/patterns.md`) to avoid real network/git operations. 12 new tests in `sync/apply.test.ts`.
+
+CLI: `skilltap sync --apply` shows per-item progress, prints final summary, exits 1 on failure. `--strict` flag added. `--json` mode also supported.
+
 ### Phase 31c-a complete — manifest writes from install
 
 `install.ts` and `plugin/install.ts` now update `skilltap.toml` + `skilltap.lock` after a successful install, but ONLY when scope=project AND `skilltap.toml` exists at the project root. Linked skills and global installs are skipped (correctly — neither belongs to a project manifest). Manifest-write failures are non-fatal — the skill/plugin is already installed; we don't roll that back.
