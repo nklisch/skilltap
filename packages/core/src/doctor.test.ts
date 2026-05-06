@@ -367,15 +367,17 @@ describe("checkSkills", () => {
     ).toBe(false);
   });
 
-  test("--fix removes orphan records from installed.json", async () => {
+  test("--fix removes orphan records from canonical state (Phase 31c-c-2d-1: state.json)", async () => {
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });
-    const installedFile = join(skilltapDir, "installed.json");
+    // Phase 31c-c-2d-1: state.json is canonical. Orphan record is now
+    // tracked here; saveInstalled (via --fix) writes here too.
+    const stateFile = join(skilltapDir, "state.json");
     await writeFile(
-      installedFile,
+      stateFile,
       JSON.stringify(
         {
-          version: 1,
+          version: 2,
           skills: [
             {
               name: "missing-skill",
@@ -391,6 +393,8 @@ describe("checkSkills", () => {
               updatedAt: "2024-01-01T00:00:00.000Z",
             },
           ],
+          plugins: [],
+          mcpServers: [],
         },
         null,
         2,
@@ -399,8 +403,8 @@ describe("checkSkills", () => {
 
     await runDoctor({ fix: true });
 
-    // The orphan record should be removed
-    const repaired = await Bun.file(installedFile).json();
+    // The orphan record should be removed from state.json
+    const repaired = await Bun.file(stateFile).json();
     expect(repaired.skills).toHaveLength(0);
   });
 });
