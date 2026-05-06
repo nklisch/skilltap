@@ -58,7 +58,6 @@ function buildHint(ctx: FooterContext): string {
       return `${d("Type")} search  ${d("↑↓")} navigate  ${d("Enter")} confirm  ${d("Ctrl+C")} cancel`;
     case "search-multiselect":
       return `${d("Type")} search  ${d("Space")} toggle  ${d("↑↓")} navigate  ${d("Enter")} confirm  ${d("Ctrl+C")} cancel`;
-    case "idle":
     default:
       return "";
   }

@@ -18,7 +18,8 @@ function makeMockStream(isTTY = true, rows = 24) {
       return true;
     },
     on(event: string, handler: () => void) {
-      (handlers[event] ??= []).push(handler);
+      handlers[event] ??= [];
+      handlers[event].push(handler);
     },
     off(event: string, handler: () => void) {
       if (handlers[event])
