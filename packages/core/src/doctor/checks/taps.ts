@@ -28,11 +28,7 @@ export async function checkTaps(config: Config): Promise<DoctorCheck> {
   }
 
   for (const tap of allTaps) {
-    if (tap.type === "http") {
-      validCount++;
-      info.push(`${tap.name} (http): ok`);
-      continue;
-    }
+    if (tap.type === "http") continue;
 
     const dir = join(getConfigDir(), "taps", tap.name);
     const label = tap.type === "builtin" ? `${tap.name} (built-in)` : tap.name;

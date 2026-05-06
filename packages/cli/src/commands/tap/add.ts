@@ -17,22 +17,13 @@ export default defineCommand({
     },
     url: {
       type: "positional",
-      description: "URL of the tap (git repo or HTTP registry)",
+      description: "Git repository URL",
       required: false,
-    },
-    type: {
-      type: "string",
-      description: "Tap type: 'git' or 'http' (auto-detected if omitted)",
     },
   },
   async run({ args }) {
     const configResult = await loadConfig();
     const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
-
-    const typeOverride = args.type as "git" | "http" | undefined;
-    if (typeOverride && typeOverride !== "git" && typeOverride !== "http") {
-      exitWithError(agentMode, `Invalid tap type '${typeOverride}'. Must be 'git' or 'http'.`);
-    }
 
     let tapName: string;
     let tapUrl: string;
@@ -58,12 +49,12 @@ export default defineCommand({
     }
 
     if (agentMode) {
-      const result = await addTap(tapName, tapUrl, typeOverride);
+      const result = await addTap(tapName, tapUrl);
       if (!result.ok) {
         agentError(result.error.message);
         process.exit(1);
       }
-      const typeLabel = result.value.type === "http" ? "HTTP registry" : "git";
+      const typeLabel = "git";
       process.stdout.write(`OK: Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)\n`);
       return;
     }
@@ -73,7 +64,7 @@ export default defineCommand({
     const s = spinner();
     s.start("Adding tap...");
 
-    const result = await addTap(tapName, tapUrl, typeOverride);
+    const result = await addTap(tapName, tapUrl);
 
     if (!result.ok) {
       s.stop("Failed.");
@@ -82,7 +73,7 @@ export default defineCommand({
     }
 
     s.stop("Done.");
-    const typeLabel = result.value.type === "http" ? "HTTP registry" : "git";
+    const typeLabel = "git";
     successLine(
       `Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)`,
     );

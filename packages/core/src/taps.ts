@@ -4,14 +4,13 @@ import { $ } from "bun";
 import { getConfigDir, loadConfig, saveConfig } from "./config";
 import { extractStderr } from "./shell";
 import { checkGitInstalled, clone, log, pull, syncRemoteUrl } from "./git";
-import type { RegistrySource } from "./registry";
-import { detectTapType, fetchSkillList } from "./registry";
 import { adaptMarketplaceToTap } from "./marketplace";
 import { join as pathJoin } from "node:path";
 import type { Tap, TapPlugin, TapSkill } from "./schemas/tap";
 import { TapSchema } from "./schemas/tap";
 import type { PluginManifest } from "./schemas/plugin";
 import { parseSkillFrontmatter } from "./frontmatter";
+import type { Config } from "./schemas/config";
 import { parseMcpJson, parseMcpObject } from "./plugin/mcp";
 import { MarketplaceSchema } from "./schemas/marketplace";
 import { parseWithResult } from "./schemas/index";
@@ -33,9 +32,30 @@ export type TapEntry = {
 export type UpdateTapResult = {
   /** Git taps: skill counts after pull. */
   updated: Record<string, number>;
-  /** HTTP tap names (always live, no update needed). */
-  http: string[];
 };
+
+type ConfigTap = Config["taps"][number];
+
+let httpWarningEmittedFor = new Set<string>();
+
+function filterAndWarnHttpTaps(taps: readonly ConfigTap[]): ConfigTap[] {
+  const result: ConfigTap[] = [];
+  for (const tap of taps) {
+    if (tap.type === "http") {
+      if (!httpWarningEmittedFor.has(tap.name)) {
+        httpWarningEmittedFor.add(tap.name);
+        const DIM = "\x1b[2m";
+        const RESET = "\x1b[0m";
+        process.stderr.write(
+          `${DIM}↑  HTTP tap '${tap.name}' ignored — HTTP support removed in v2.0. Use a git tap or run 'skilltap migrate'.${RESET}\n`,
+        );
+      }
+      continue;
+    }
+    result.push(tap);
+  }
+  return result;
+}
 
 export function tapDir(name: string): string {
   return join(getConfigDir(), "taps", name);
@@ -75,20 +95,6 @@ async function loadTapJson(
   }
 
   return err(new UserError(`No tap.json or marketplace.json found in ${label}`));
-}
-
-/** Map a registry source to a TapSkill repo string usable by the source adapter chain. */
-function registrySourceToRepo(source: RegistrySource): string {
-  switch (source.type) {
-    case "git":
-      return source.url;
-    case "github":
-      return source.repo;
-    case "npm":
-      return `npm:${source.package}`;
-    case "url":
-      return `url:${source.url}`;
-  }
 }
 
 export type GitHubTapShorthand = { name: string; url: string };
@@ -148,8 +154,7 @@ export async function ensureBuiltinTap(): Promise<Result<void, UserError | GitEr
 export async function addTap(
   name: string,
   url: string,
-  typeOverride?: "git" | "http",
-): Promise<Result<{ skillCount: number; type: "git" | "http" }, UserError | GitError>> {
+): Promise<Result<{ skillCount: number; type: "git" }, UserError | GitError>> {
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
   const config = configResult.value;
@@ -172,21 +177,6 @@ export async function addTap(
     );
   }
 
-  // Auto-detect type if not specified
-  const tapType = typeOverride ?? (await detectTapType(url));
-
-  if (tapType === "http") {
-    const listResult = await fetchSkillList(url, name, {});
-    if (!listResult.ok) return listResult;
-
-    config.taps.push({ name, url, type: "http" });
-    const saveResult = await saveConfig(config);
-    if (!saveResult.ok) return saveResult;
-
-    return ok({ skillCount: listResult.value.skills.length, type: "http" });
-  }
-
-  // Git tap
   const gitCheck = await checkGitInstalled();
   if (!gitCheck.ok) return gitCheck;
 
@@ -247,10 +237,7 @@ export async function removeTap(
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) return saveResult;
 
-  // Only clean up local directory for git taps
-  if (tap.type !== "http") {
-    await rm(tapDir(name), { recursive: true, force: true });
-  }
+  await rm(tapDir(name), { recursive: true, force: true });
   return ok(undefined);
 }
 
@@ -262,7 +249,6 @@ export async function updateTap(
   const config = configResult.value;
 
   const updated: Record<string, number> = {};
-  const http: string[] = [];
 
   // Handle built-in tap: update if enabled and requested
   if (name === BUILTIN_TAP.name) {
@@ -287,7 +273,7 @@ export async function updateTap(
     }
     const tapResult = await loadTapJson(dir, BUILTIN_TAP.name, BUILTIN_TAP.url);
     updated[BUILTIN_TAP.name] = tapResult.ok ? tapResult.value.skills.length : 0;
-    return ok({ updated, http });
+    return ok({ updated });
   }
 
   // Update all: include built-in tap if enabled
@@ -305,11 +291,7 @@ export async function updateTap(
     }
   }
 
-  const targets = name
-    ? config.taps.filter((t) => t.name === name)
-    : config.taps;
-
-  if (name && targets.length === 0) {
+  if (name && !config.taps.some((t) => t.name === name)) {
     return err(
       new UserError(
         `Tap '${name}' is not configured.`,
@@ -318,12 +300,12 @@ export async function updateTap(
     );
   }
 
-  for (const tap of targets) {
-    if (tap.type === "http") {
-      http.push(tap.name);
-      continue;
-    }
+  const allTaps = name
+    ? config.taps.filter((t) => t.name === name)
+    : config.taps;
+  const targets = filterAndWarnHttpTaps(allTaps);
 
+  for (const tap of targets) {
     const dir = tapDir(tap.name);
     const gitCheck = await checkGitInstalled();
     if (!gitCheck.ok) return gitCheck;
@@ -347,7 +329,7 @@ export async function updateTap(
     updated[tap.name] = tapResult.ok ? tapResult.value.skills.length : 0;
   }
 
-  return ok({ updated, http });
+  return ok({ updated });
 }
 
 /**
@@ -444,51 +426,25 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
     }
   }
 
-  for (const tap of config.taps) {
-    if (tap.type === "http") {
-      // HTTP registry: fetch skills from API
-      const auth = { token: tap.auth_token, envVar: tap.auth_env };
-      const listResult = await fetchSkillList(tap.url, tap.name, auth);
-      if (!listResult.ok) {
-        // Graceful degradation: skip unreachable/invalid HTTP registries
-        continue;
-      }
-      for (const skill of listResult.value.skills) {
-        entries.push({
-          tapName: tap.name,
-          skill: {
-            name: skill.name,
-            description: skill.description,
-            repo: registrySourceToRepo(skill.source),
-            tags: skill.tags,
-            trust: skill.trust,
-          },
-        });
-      }
-    } else {
-      // Git tap: read local tap.json
-      const dir = tapDir(tap.name);
-      const tapResult = await loadTapJson(dir, tap.name, tap.url);
-      if (!tapResult.ok) {
-        // Graceful degradation: skip invalid taps
-        continue;
-      }
-      for (const skill of tapResult.value.skills) {
-        entries.push({ tapName: tap.name, skill });
-      }
-      for (const plugin of tapResult.value.plugins ?? []) {
-        entries.push({
-          tapName: tap.name,
-          skill: {
-            name: plugin.name,
-            description: plugin.description,
-            repo: tap.url,
-            tags: plugin.tags,
-            plugin: true,
-          },
-          tapPlugin: plugin,
-        });
-      }
+  for (const tap of filterAndWarnHttpTaps(config.taps)) {
+    const dir = tapDir(tap.name);
+    const tapResult = await loadTapJson(dir, tap.name, tap.url);
+    if (!tapResult.ok) continue;
+    for (const skill of tapResult.value.skills) {
+      entries.push({ tapName: tap.name, skill });
+    }
+    for (const plugin of tapResult.value.plugins ?? []) {
+      entries.push({
+        tapName: tap.name,
+        skill: {
+          name: plugin.name,
+          description: plugin.description,
+          repo: tap.url,
+          tags: plugin.tags,
+          plugin: true,
+        },
+        tapPlugin: plugin,
+      });
     }
   }
 
@@ -540,7 +496,7 @@ export function searchTaps(skills: TapEntry[], query: string): TapEntry[] {
 
 export type TapInfo = {
   name: string;
-  type: "git" | "http" | "builtin";
+  type: "git" | "builtin";
   url: string;
   localPath?: string;
   lastFetched?: string;
@@ -580,10 +536,12 @@ export async function getTapInfo(
   }
 
   if (tap.type === "http") {
-    const auth = { token: tap.auth_token, envVar: tap.auth_env };
-    const listResult = await fetchSkillList(tap.url, tap.name, auth);
-    const skillCount = listResult.ok ? listResult.value.skills.length : 0;
-    return ok({ name: tap.name, type: "http", url: tap.url, skillCount });
+    return err(
+      new UserError(
+        `Tap '${name}' is an HTTP tap — HTTP support was removed in v2.0.`,
+        "Convert to a git tap or remove with 'skilltap tap remove'.",
+      ),
+    );
   }
 
   const dir = tapDir(tap.name);

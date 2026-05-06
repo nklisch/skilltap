@@ -94,7 +94,7 @@ export default defineCommand({
     for (const tap of config.taps) {
       rows.push([
         ansi.bold(tap.name),
-        tap.type === "http" ? ansi.dim("http") : ansi.dim("git"),
+        ansi.dim("git"),
         tap.url,
         `${counts[tap.name] ?? 0} skills`,
       ]);

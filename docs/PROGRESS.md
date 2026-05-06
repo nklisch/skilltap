@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 6
+**Phases since last refactor:** 8
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -20,7 +20,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 29 | Sync Engine + Command                          | done     | 2026-05-06 |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | done     | 2026-05-06 |
 | 31a | v2 policy compose + trust-glob                 | done     | 2026-05-06 |
-| 31b | HTTP registry adapter removal                  | pending  | —         |
+| 31b | HTTP registry adapter removal                  | done     | 2026-05-06 |
 | 31c | Install/update/remove cutover + sync apply     | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
