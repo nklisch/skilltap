@@ -53,6 +53,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["**/plugin/mcp-inject.ts", "**/plugin/mcp-inject.test.ts", "**/schemas/plugin.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noTemplateCurlyInString": "off"
+          }
+        }
+      }
     }
   ]
 }

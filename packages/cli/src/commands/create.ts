@@ -59,6 +59,7 @@ function printNextSteps(
   );
   if (template === "npm") {
     process.stdout.write(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: ${name} is shown literally as user guidance
       `    ${ansi.dim('# Edit package.json — set "name" to your npm scope (e.g. @yourname/${name})')}\n`,
     );
     process.stdout.write(

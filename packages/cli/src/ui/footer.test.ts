@@ -26,7 +26,9 @@ function makeMockStream(isTTY = true, rows = 24) {
         handlers[event] = handlers[event].filter((h) => h !== handler);
     },
     emit(event: string) {
-      handlers[event]?.forEach((h) => h());
+      handlers[event]?.forEach((h) => {
+        h();
+      });
     },
   };
 
