@@ -60,7 +60,6 @@ if (shouldRunStartup) {
 
 // v2.0 soft hint: if v1.0 markers exist (installed.json/plugins.json/v1 config keys)
 // and no state.json exists yet, suggest the user run `skilltap migrate`.
-// This is a soft warning until Phase 31 cuts over v1.0 readers.
 async function runV1DetectionNotice(): Promise<void> {
   try {
     const { detectV1StateGlobal, hasAnyV1Markers, getStatePath } = await import(
@@ -73,7 +72,7 @@ async function runV1DetectionNotice(): Promise<void> {
     const DIM = "\x1b[2m";
     const RESET = "\x1b[0m";
     process.stderr.write(
-      `${DIM}↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0 (preview).${RESET}\n\n`,
+      `${DIM}↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.${RESET}\n\n`,
     );
   } catch {
     // Detection is best-effort. Never block startup.
