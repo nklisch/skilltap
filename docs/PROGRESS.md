@@ -3,7 +3,7 @@
 **Status:** v2.0 in-scope complete (v2.1 backlog: 31c-c-2)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 10
+**Phases since last refactor:** 11
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -37,6 +37,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 37  | Command surface promotion + aliases            | done     | 2026-05-06 |
 | 38a | v2.0 README + changelog                        | done     | 2026-05-06 |
 | 38b | Internal docs (CLAUDE.md/AGENTS.md/llms-full.txt) | done   | 2026-05-06 |
+| 38d | v2.0 end-to-end test (38.5)                    | done     | 2026-05-06 |
 | 38c | Version bump to 2.0.0(-rc.1) + tag + push      | ready for user | — |
 
 ---
@@ -199,6 +200,25 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 38d complete — v2.0 end-to-end test (roadmap 38.5)
+
+The last in-scope v2.0 work item from the roadmap. New `packages/cli/src/e2e-v2.test.ts` walks the canonical v2 journey as a real CLI subprocess:
+
+1. Seed empty `skilltap.toml` in a fresh git project.
+2. `install <local-skill> --project --skip-scan --yes` — assert manifest entry, lockfile entry with sha, and `installed.json` are written. (state.json cutover is deferred to v2.1; install still uses the v0.x dual-write path.)
+3. `status` — assert dashboard mentions the installed skill name.
+4. `doctor` — assert clean exit (warnings allowed, hard failures not).
+5. **Fresh-clone sync** — copy `skilltap.toml` + `skilltap.lock` (no `.agents/`) into a brand-new git dir, run `sync --apply`, assert `installed.json` materializes with the skill.
+6. **v1 → v2 migrate** — set up an old-shape `installed.json` + `.agents/skills/legacy-skill/SKILL.md` in a fresh dir, run `migrate`, assert `state.json` v2 appears with the legacy skill carried over.
+
+Bug found and fixed in the process: `core/src/status/gather.ts::tryProjectRoot` used `Bun.file(".git").exists()` to verify project-root candidates, but `Bun.file().exists()` returns false for directories — so the CLI's `status` command was always reporting "no project root" when run inside a real git repo. Replaced with `lstat(...).catch(() => null)` to match the existing pattern in `paths.ts`, `orphan.ts`, `skill-check.ts`, and `update.ts`. Existing 24 status tests still pass (they bypass the buggy path by passing `projectRootHint` directly, which is why this had never been caught).
+
+Files:
+- `packages/cli/src/e2e-v2.test.ts` — new, 6 tests, ~250 lines.
+- `packages/core/src/status/gather.ts` — `tryProjectRoot` fix (Bun.file → lstat).
+
+Tests: 47 CLI tests (e2e-v2 + e2e + install + doctor) + 155 core/status/migrate/manifest/sync/state tests all green.
 
 ### Phase 35b-2 complete — `skilltap remove mcp:<source>`
 

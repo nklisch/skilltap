@@ -1,3 +1,4 @@
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { loadConfig } from "../config";
 import { detectDrift } from "../sync/drift";
@@ -133,9 +134,10 @@ export async function gatherStatus(
 async function tryProjectRoot(): Promise<string | null> {
   const fromCwd = await findProjectRoot();
   // findProjectRoot returns cwd as fallback when no .git found; verify
-  // there's actually a .git there.
-  const gitDir = Bun.file(join(fromCwd, ".git"));
-  return (await gitDir.exists()) ? fromCwd : null;
+  // there's actually a .git there. Use lstat — Bun.file().exists() returns
+  // false for directories.
+  const stat = await lstat(join(fromCwd, ".git")).catch(() => null);
+  return stat ? fromCwd : null;
 }
 
 async function manifestAlso(
