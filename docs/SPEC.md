@@ -2620,3 +2620,406 @@ Features:
 - `skilltap completions` — bash, zsh, fish tab-completion with `--install`
 - GitHub Actions release workflow (4 platform binaries, npm provenance, Homebrew formula)
 - Install script (`scripts/install.sh`)
+
+### v1.0 — Plugins
+
+Commands added: `plugin info`, `plugin toggle`, `plugin remove`. Plugin install auto-detected on `install`.
+
+Features:
+- Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) plugin formats
+- MCP server injection into 5 agents (claude-code, cursor, codex, gemini, windsurf)
+- Agent definition placement (Claude Code only)
+- `plugins.json` state file with per-component active/inactive state
+- Plugin component toggle, remove, info
+- Tap-defined plugins (`tap.json` `plugins` array, inline manifests)
+- Marketplace.json auto-detection (Claude Code marketplace format)
+
+---
+
+## v2.0 — Tooling-Surface Redesign
+
+The v2.0 redesign collapses the surface of the v1.0 CLI around a project manifest, drops the HTTP registry adapter, retires "agent mode" as a concept, simplifies security config, and adds Cargo-style sync. See [VISION.md — v2.0 Direction](./VISION.md#v20-direction-simplification-unification-project-manifest) for the rationale; this section is the behavioral spec.
+
+### v2.0 Command Surface
+
+```
+skilltap                                  Status dashboard (text)
+skilltap install <source> [source...]     Install + add to manifest/lockfile
+skilltap remove <name> [name...]          Remove + drop from manifest/lockfile
+skilltap list                             Unified list (skills + plugins)
+skilltap info <name>                      Skill or plugin details
+skilltap toggle <name>[:component]        Toggle plugin or component
+skilltap enable <name>[:component]        Enable plugin or component
+skilltap disable <name>[:component]       Disable plugin or component
+skilltap sync [--strict|--prompt|--yes]   Reconcile manifest ↔ lockfile ↔ disk
+skilltap update [name]                    Refresh lockfile to latest matching range
+skilltap status [--json]                  Same as bare `skilltap`, explicit + pipeable
+skilltap try <source>                     Read-only preview (no install)
+skilltap find [query]                     Search across taps
+skilltap migrate                          v1.0 → v2.0 one-shot upgrade
+skilltap doctor [--fix] [--json]          Diagnostics + drift checks
+skilltap create [name]                    Scaffold a new skill or plugin
+skilltap verify [path]                    Validate before sharing
+skilltap completions <shell>              Generate completion script
+skilltap link <path>                      Symlink a local skill
+skilltap unlink <name>                    Remove a linked skill
+skilltap skills <subcommand>              Adopt, move, info, remove (less common)
+skilltap plugin <subcommand>              Info, toggle, remove (less common; dup of top-level)
+skilltap tap <subcommand>                 add, remove, list, update, info, init, install
+skilltap config <subcommand>              get, set, edit
+```
+
+Old paths from v1.0 that are kept as silent aliases: `skilltap skills`, `skilltap plugins`, `skilltap remove` → `skilltap skills remove`, etc.
+
+### Project Manifest (`skilltap.toml`)
+
+The project manifest lives at the project root. Presence of this file is what defines a "skilltap project" — `skilltap` commands run inside a project root respect the manifest; commands run outside default to global scope and don't touch a manifest.
+
+#### Schema (consumer side)
+
+```toml
+# skilltap.toml — project root
+
+[targets]
+also  = ["claude-code", "cursor"]   # default agent symlinks for installs in this project
+scope = "project"                   # "project" | "global"; affects bare commands
+
+[skills]
+"github:nathan/commit-helper" = "^1.0"
+"npm:@corp/code-review"       = "*"
+"local:./vendor/team-tools"   = "*"
+"home/git-workflow"           = "*"   # tap-name/skill-name shorthand
+
+[plugins]
+"github:corp/dev-toolkit"     = "*"
+"home/team-bundle"            = { ref = "v2.1", components = { "test-skipper" = false } }
+
+[taps]
+home = "https://gitea.example.com/nathan/my-tap"
+```
+
+Tables:
+
+- **`[targets]`** — defaults applied to installs originating from this manifest. `also` is the agent-symlink target list; `scope` is the default scope (project or global).
+- **`[skills]`** — declared skill dependencies. Key is the source ref (`github:`, `npm:`, `local:`, `git:`, or `tap-name/skill-name` shorthand). Value is a version/ref range string (`"*"`, `"^1.0"`, `"v1.2.3"`) or an inline table for advanced options.
+- **`[plugins]`** — same shape as `[skills]` but for plugin sources. Inline tables can disable specific components: `components = { "name" = false }`.
+- **`[taps]`** — taps the project depends on. Keyed by tap name; value is the git URL.
+
+Skills and plugins live in separate tables because they remain separate first-class concepts — same parsing, but distinct lifecycle.
+
+#### Lockfile (`skilltap.lock`)
+
+Auto-managed alongside the manifest. Records the exact resolved ref for every entry. Cargo-style:
+
+- **`sync`** installs from the lockfile (deterministic, reproducible across machines).
+- **`update`** refreshes the lockfile to the latest matching range and rewrites it.
+- **`install <pkg>`** writes both the manifest and the lockfile.
+- **`remove <pkg>`** drops from both.
+
+```toml
+# skilltap.lock — auto-managed
+version = 1
+
+[[skill]]
+source  = "github:nathan/commit-helper"
+ref     = "v1.2.0"
+sha     = "abc123def456..."
+range   = "^1.0"
+
+[[plugin]]
+source  = "github:corp/dev-toolkit"
+ref     = "main"
+sha     = "789abc..."
+range   = "*"
+```
+
+#### Schema (publish side)
+
+A repo opts into being a publishable plugin by adding one or more files under `.skilltap/<plugin-name>.toml`. The native v2.0 publish format is **TOML**. Existing `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` continue to be readable inputs (skilltap normalizes them internally).
+
+```toml
+# .skilltap/team-toolkit.toml
+
+name        = "team-toolkit"
+version     = "1.0.0"
+description = "Internal dev tools"
+publish     = true                  # required, default false; explicit opt-in to be installable from outside
+
+[[skills]]
+name = "code-review"
+path = "./skills/code-review"
+
+[[skills]]
+name = "lint-checker"
+path = "./skills/lint-checker"
+
+[[servers]]                          # MCP servers
+name    = "db"
+type    = "stdio"                    # "stdio" | "http"
+command = "node"
+args    = ["./mcp/db.js"]
+env     = { DATABASE_URL = "${DATABASE_URL}" }
+
+[[servers]]
+name    = "search"
+type    = "http"
+url     = "https://search.internal.corp/mcp"
+headers = { Authorization = "Bearer ${SEARCH_TOKEN}" }
+
+[[agents]]
+name = "reviewer"
+path = "./agents/reviewer.md"
+```
+
+Multiple plugins per repo: drop multiple files into `.skilltap/`. Each is independently publishable. `skilltap install user/repo` prompts the user to pick when multiple are publishable; `user/repo:plugin-name` selects directly. Bare `user/repo` in non-interactive mode (`--agent`) errors with "multiple plugins available; specify with `user/repo:name`".
+
+`publish = false` (or omitted) makes the manifest project-internal — the repo can still be installed for its consumer-side `[skills]`/`[plugins]` deps, but the publish-side plugin is not exposed to outside installers.
+
+### v2.0 Configuration
+
+The global config (`~/.config/skilltap/config.toml`) is collapsed and renamed:
+
+```toml
+# ~/.config/skilltap/config.toml — v2.0
+
+[defaults]
+also  = ["claude-code", "cursor"]
+scope = ""                          # "" = smart default; "global"; "project"
+
+[agent]
+default = false                     # if true, --agent is on by default; --no-agent to override
+block   = false                     # if true, refuse --agent (forces interactive)
+
+[security]
+scan    = "static"                  # "semantic" | "static" | "none"
+on_warn = "install"                 # "prompt" | "fail" | "install"
+trust   = []                        # glob patterns of tap names or source URLs to skip scan
+
+[[taps]]                            # explicit tap registrations (also configurable via `tap add`)
+name = "home"
+url  = "https://gitea.example.com/nathan/my-tap"
+
+[updates]
+auto_update                = "off"  # "off" | "patch" | "minor"
+interval_hours             = 24
+skill_check_interval_hours = 24
+show_diff                  = "full" # "full" | "stat" | "none"
+
+[telemetry]
+enabled      = false                # unchanged from v1.0
+notice_shown = false
+anonymous_id = ""
+
+builtin_tap      = true
+verbose          = true
+default_git_host = "https://github.com"
+```
+
+Removed from v1.0:
+- `[security.human]`, `[security.agent]` — collapsed to `[security]`.
+- `[security].agent_cli`, `.threshold`, `.max_size`, `.ollama_model`, `.overrides` — moved to `[security.advanced]` (optional, off the main surface) or removed.
+- `[agent-mode]` — replaced by `[agent]` (`default`, `block`).
+- `[registry]` — registries (skills.sh) are now configured under `[[registries]]` only if needed, with skills.sh as a sensible default that can be disabled.
+
+Migration of v1.0 keys: see `skilltap migrate` below.
+
+### v2.0 State File
+
+A single `state.json` per scope, replacing `installed.json` + `plugins.json`:
+
+```json
+{
+  "version": 2,
+  "skills": [
+    {
+      "name": "commit-helper",
+      "source": "github:nathan/commit-helper",
+      "ref": "v1.2.0",
+      "sha": "abc123...",
+      "scope": "global",
+      "installedAt": "2026-05-05T...",
+      "updatedAt": "2026-05-05T...",
+      "also": ["claude-code"],
+      "linked": false,
+      "trust": { "tier": "publisher", "..." }
+    }
+  ],
+  "plugins": [
+    {
+      "name": "dev-toolkit",
+      "source": "github:corp/dev-toolkit",
+      "ref": "main",
+      "sha": "def456...",
+      "scope": "global",
+      "format": "skilltap",
+      "components": [
+        { "type": "skill",  "name": "code-review",  "active": true },
+        { "type": "mcp",    "name": "database",     "active": true,  "config": { ... } },
+        { "type": "agent",  "name": "code-review",  "active": true }
+      ],
+      "installedAt": "...",
+      "updatedAt": "..."
+    }
+  ]
+}
+```
+
+Path:
+- Global: `~/.config/skilltap/state.json`
+- Project: `<projectRoot>/.agents/state.json`
+
+The schema reuses the existing `InstalledSkillSchema` and `PluginRecordSchema` shapes; only the file split changes.
+
+### v2.0 Security
+
+See [SECURITY.md — v2.0](./SECURITY.md#v20-simplification) for the full rewrite. In brief:
+
+- Single `[security]` block; same rules apply regardless of `--agent`.
+- `scan` ∈ {`semantic`, `static`, `none`} — default `static`.
+- `on_warn` ∈ {`prompt`, `fail`, `install`} — default `install`. ("install" = report warnings, proceed without prompting.)
+- `trust = []` — array of glob patterns. A source matching any pattern (against tap name or full source URL) skips the scan entirely.
+- `--agent` does NOT change security defaults. If `on_warn = "prompt"` is set and a warning fires under `--agent`, the run errors out (no prompts available); user must change `on_warn` or trust the source.
+- Old config keys (`[security.human]`, `[security.agent]`, `[[security.overrides]]`, presets) are read by `skilltap migrate` and translated; otherwise unsupported in v2.0.
+
+### v2.0 Agent Flag
+
+Replaces "agent mode" as a top-level concept.
+
+Activation (any one):
+- `--agent` CLI flag.
+- `SKILLTAP_AGENT=1` environment variable.
+- `[agent] default = true` in config (sticky).
+
+Effects:
+- All prompts skipped. Where v1.0 would prompt, v2.0 either auto-picks the only option, applies a configured default, or errors out (no silent fallback).
+- Output is plain text (no spinners, no colors, no clack UI).
+- `--no-agent` (or unsetting the env var) overrides the config default per call.
+- `[agent] block = true` rejects `--agent` invocations entirely with `error: --agent is blocked by config`. Useful for shared workstations.
+
+What `--agent` does NOT change:
+- Security policy. Same rules either way.
+- Scope resolution. Same rules either way.
+- Available commands. All commands work identically; just non-interactive.
+
+### v2.0 Sync Command
+
+```
+skilltap sync [--strict | --yes] [--prune]
+```
+
+Reconciles three sources of truth: manifest, lockfile, on-disk state.
+
+Default behavior (no flags): scan all three, show a summary of differences (additions, removals, ref changes), prompt to confirm. With `--yes`: auto-apply. With `--strict`: error out instead of prompting if any drift exists. With `--prune`: also remove on-disk skills/plugins not declared in the manifest.
+
+Drift categories:
+- **Declared but not installed** — install at locked ref (or resolve range if no lockfile entry yet).
+- **Installed but not declared** — leave alone unless `--prune`. (Rationale: don't accidentally delete manually-installed dev tools.)
+- **Declared with different ref than locked** — update lockfile (treat manifest as source of truth on conflict).
+- **Locked with different SHA than installed** — reinstall to match lockfile (treat lockfile as source of truth on disk).
+
+### v2.0 Multi-Plugin Repos
+
+When a repo has multiple `.skilltap/<plugin>.toml` files with `publish = true`:
+
+- `skilltap install user/repo` (interactive): prompt to pick one or more.
+- `skilltap install user/repo` (`--agent` or non-interactive): error with `multiple plugins available: <name1>, <name2>; specify with user/repo:<name>`.
+- `skilltap install user/repo:plugin-name`: install that one directly.
+- `skilltap install user/repo:*`: install all publishable plugins from the repo.
+
+### v2.0 Status Dashboard
+
+`skilltap` (no args) and `skilltap status` print:
+
+```
+skilltap status — project: ./termtube (git)
+
+Scope: project (in git repo)
+Targets: claude-code, cursor
+
+Skills (2 managed, 1 linked, 0 unmanaged)
+  termtube-dev      project   claude-code, cursor   nathan/termtube@main
+  termtube-review   project   claude-code, cursor   nathan/termtube@main
+  my-local-skill    project   claude-code           ~/dev/my-local-skill (linked)
+
+Plugins (1)
+  dev-toolkit       project   3 skills, 2 MCPs, 1 agent   corp/dev-toolkit@v2.1
+    ✓ code-review (skill)        ✓ database (mcp)         ✓ reviewer (agent)
+    ✗ test-generator (skill)     ✗ file-search (mcp)
+
+MCP servers injected
+  claude-code (.claude/settings.json)   skilltap:dev-toolkit:database
+  cursor      (.cursor/mcp.json)         skilltap:dev-toolkit:database
+
+Taps (2)
+  home              https://gitea.example.com/nathan/my-tap   4 plugins
+  skilltap-skills   https://github.com/nklisch/skilltap-skills (built-in)   47 plugins
+
+Updates: 1 skill update available. Run `skilltap update`.
+Drift:   manifest declares 1 plugin not installed. Run `skilltap sync`.
+```
+
+`--json` produces a machine-readable equivalent with the same fields.
+
+### v2.0 Try Command
+
+```
+skilltap try <source>
+```
+
+Read-only preview. Clones the source to a temp directory, parses any manifests, displays the structure, runs static security scan, prints the SKILL.md / plugin.toml contents. Never writes to install paths or state. Useful for inspecting an unfamiliar source before committing.
+
+### v2.0 Migrate Command
+
+```
+skilltap migrate
+```
+
+One-shot v1.0 → v2.0 upgrade. v2.0 does NOT auto-migrate. On startup, if v1.0 state is detected (`installed.json` or `plugins.json` present, or v1.0 config keys), the CLI prints:
+
+```
+error: v1.0 setup detected.
+hint: run `skilltap migrate` to upgrade, or stay on v1.x by reinstalling: skilltap-cli@1
+```
+
+`skilltap migrate`:
+1. Reads `installed.json` + `plugins.json`, writes consolidated `state.json`. Renames originals to `.v1.bak`.
+2. Reads v1.0 config keys (`[security.human]`, `[security.agent]`, `[[security.overrides]]`, `[agent-mode]`), translates to v2.0 keys (`[security]`, `[agent]`). Renames original to `config.v1.bak.toml`.
+3. If a v1.0 `tap.json` references HTTP taps, errors and lists them so the user can either remove them or run a separate migration helper.
+4. Verifies the migrated state with the v2.0 schema and reports any unmappable values.
+
+### v2.0 MCP-Only Install
+
+```
+skilltap install mcp:<source>
+```
+
+The `mcp:` prefix bypasses skill/plugin machinery entirely. Resolves the source as if it were a plugin, extracts ONLY the `[[servers]]` blocks, and injects them into the `also` agent configs. Tracks them in `state.json` under a separate `mcpServers` array (not `plugins`). Removes them on `skilltap remove mcp:<name>`.
+
+### v2.0 Doctor Upgrades
+
+`skilltap doctor` adds these v2.0 checks alongside the existing 9:
+
+- **Manifest drift** — declared in `skilltap.toml` but not in `state.json`, or vice versa.
+- **Lockfile drift** — locked SHA doesn't match installed SHA.
+- **Plugin manifest validity** — every `.skilltap/<plugin>.toml` parses and has required fields.
+- **MCP injection consistency** — every server in `state.json` is present in the corresponding agent's MCP config; every server in agent configs with the `skilltap:` prefix has a corresponding state entry.
+
+`--fix` extends to: prune state-orphan MCP entries from agent configs, regenerate lockfile entries from state if the lockfile is missing, recreate symlinks as before.
+
+### v2.0 Removed Features
+
+- HTTP registry tap type (`type = "http"` in tap config). Removed entirely. Migration: convert HTTP taps to git taps or remove.
+- `[security.human]` / `[security.agent]` split. Use `[security]`.
+- Security presets (none/relaxed/standard/strict). Use direct `scan`/`on_warn` values.
+- `[[security.overrides]]`. Use `[security] trust = [...]`.
+- `[agent-mode]` block. Use `[agent]` block.
+- `skilltap config agent-mode` interactive wizard. Use `skilltap config set agent.default true|false`.
+- `installed.json` and `plugins.json` as separate files. Use `state.json`.
+- The "human vs agent" mental model in security. There is one security policy.
+
+### v2.0 Backwards Compatibility
+
+- All v1.0 command paths remain as silent aliases (`skilltap skills`, `skilltap plugins`, `skilltap remove` → `skilltap skills remove`, etc.).
+- `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `tap.json`, `marketplace.json` formats continue to be read as plugin/tap inputs.
+- v1.0 state files are detected on startup and the user is directed to `skilltap migrate`.
+- `--also`, `--project`, `--global`, `--yes`, `--strict`, `--skip-scan`, `--semantic` flags retain v1.0 semantics where applicable.

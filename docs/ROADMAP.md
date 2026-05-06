@@ -505,6 +505,253 @@ Phases 20–22 can be developed somewhat in parallel (parsing, storage, and MCP 
 
 ---
 
+## v2.0 — Tooling-Surface Redesign
+
+This is the major refactor that introduces the project manifest, drops the HTTP registry, retires "agent mode" as a concept, simplifies security config, and adds Cargo-style sync. See [VISION.md — v2.0](./VISION.md#v20-direction-simplification-unification-project-manifest), [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign), and [ARCH.md — v2.0](./ARCH.md#v20-architecture-additions) for the design.
+
+The phases are ordered for dependency. 26–28 are the data-layer foundation; 29 is the headline behavior (sync); 30–35 are user-facing additions; 36–38 are polish and release. Several phases can run in parallel — see the dependency graph below.
+
+### Phase 26 — v2.0 Schema Foundation
+
+Establish all new Zod schemas before touching behavior. No user-facing change.
+
+- [ ] **26.1** Define `ProjectManifestSchema`, `ManifestEntrySchema`, `TargetsSchema`, `LockfileSchema`, `LockEntrySchema` in `core/src/manifest/schemas.ts`
+- [ ] **26.2** Define `PluginManifestV2Schema` in `core/src/plugin-v2/schema.ts` (native `.skilltap/<name>.toml` format)
+- [ ] **26.3** Define `ConfigV2Schema`, `SecurityConfigV2Schema`, `AgentConfigSchema` in `core/src/schemas/config-v2.ts`. Keep v1.0 schemas in `core/src/schemas/v1/` for migration.
+- [ ] **26.4** Define `StateSchema` (version 2) in `core/src/state/schema.ts` with `skills`, `plugins`, `mcpServers` arrays
+- [ ] **26.5** Add range parser/matcher in `core/src/manifest/range.ts` — handle `^`, `~`, `*`, exact tags, branch refs
+- [ ] **26.6** Unit tests: every schema with valid + invalid fixtures, range matching across patterns
+
+**Exit criteria:** All v2.0 schemas parse, validate, and have tests. v1.0 schemas remain untouched and continue to work.
+
+---
+
+### Phase 27 — State Consolidation + Migration
+
+Merge `installed.json` + `plugins.json` into `state.json`. Implement `skilltap migrate`.
+
+- [ ] **27.1** Implement `core/src/state/load.ts`, `save.ts` for the unified `state.json` file
+- [ ] **27.2** Implement v1.0 detection: presence of `installed.json` or `plugins.json` or any v1.0-only config key returns "v1.0 setup detected"
+- [ ] **27.3** Implement `core/src/state/migrate-v1.ts` — read v1.0 files, translate to v2.0 state, write atomically
+- [ ] **27.4** Implement config migration (v1.0 `[security.human]` / `[security.agent]` / `[[security.overrides]]` / `[agent-mode]` → v2.0 `[security]` / `[agent]`)
+- [ ] **27.5** HTTP-tap handling in migration: list affected taps, error with hint to convert to git or remove. Don't silently drop.
+- [ ] **27.6** `skilltap migrate` CLI command: detect, translate, write, run doctor verify, print diff summary
+- [ ] **27.7** v2.0 startup detection — `cli/src/index.ts` checks for v1.0 markers; if found, error with hint and exit
+- [ ] **27.8** Unit tests: migration of every v1.0 schema permutation, hint output, idempotent re-runs (already-migrated detection)
+- [ ] **27.9** Integration test: install via v1.0 binary, run v2.0 migrate, verify state matches expected
+
+**Exit criteria:** v1.0 users can run `skilltap migrate` and get a working v2.0 setup. v2.0 refuses to operate on un-migrated state with a clear hint.
+
+---
+
+### Phase 28 — Project Manifest + Lockfile
+
+Load, save, and resolve the project manifest. No behavior wired in yet.
+
+- [ ] **28.1** Implement `manifest/load.ts` and `save.ts` (with `findProjectRoot()` integration)
+- [ ] **28.2** Implement `manifest/resolve.ts` — resolve manifest entries to `ResolvedDeps[]` with source adapter dispatch
+- [ ] **28.3** Implement lockfile read/write/atomic-update. Lockfile entries keyed by source string.
+- [ ] **28.4** Implement `manifest/publish.ts` — `discoverPublishablePlugins(repoRoot)` returns all `.skilltap/<name>.toml` with `publish = true`
+- [ ] **28.5** Unit tests: round-trip manifest, round-trip lockfile, range resolution against fixture sources
+- [ ] **28.6** Integration test: write manifest, write lockfile, reload, verify
+
+**Exit criteria:** Manifest and lockfile can be loaded, edited programmatically, and saved. Publishable plugins are discoverable in a repo.
+
+---
+
+### Phase 29 — Sync Engine + Command
+
+The headline v2.0 capability.
+
+- [ ] **29.1** Implement `sync/drift.ts` — given manifest, lockfile, state, compute `DriftReport` (adds, removes, ref-changes, lockfile-only entries)
+- [ ] **29.2** Implement `sync/plan.ts` — `planSync()` produces a `SyncPlan` with action list and rationale per item
+- [ ] **29.3** Implement `sync/apply.ts` — execute plan via existing install/remove/update machinery; update lockfile after each step
+- [ ] **29.4** `skilltap sync` CLI command with `--strict`, `--yes`, `--prune` flags and interactive diff display via @clack/prompts
+- [ ] **29.5** Unit tests: plan generation across drift permutations, lockfile-only entry handling
+- [ ] **29.6** Integration tests: full sync flow with fixtures, `--strict` exits non-zero on drift, `--prune` removes undeclared, `--yes` auto-applies
+
+**Exit criteria:** `skilltap sync` reconciles manifest/lockfile/state. Teams can commit `skilltap.toml` + `skilltap.lock` and reach parity on a fresh clone.
+
+---
+
+### Phase 30 — Native Plugin Format + Multi-Plugin Repos
+
+Read `.skilltap/<plugin>.toml`. Support multiple plugins per repo.
+
+- [ ] **30.1** Implement `plugin-v2/parse-toml.ts` — TOML reader for native v2.0 plugin format
+- [ ] **30.2** Implement `plugin-v2/discover.ts` — find all `.skilltap/*.toml` in a repo, filter by `publish = true`
+- [ ] **30.3** Implement `plugin-v2/normalize.ts` — produce existing internal `PluginManifest` shape from `PluginManifestV2`
+- [ ] **30.4** Wire native format into `detect.ts` priority order: `.skilltap/` (preferred) → `.claude-plugin/` → `.codex-plugin/`
+- [ ] **30.5** Multi-plugin install: parse `user/repo:plugin-name` syntax in `install.ts`. Bare `user/repo` prompts; `--agent` errors with list.
+- [ ] **30.6** Validate `publish = true` enforcement — repos without it can't be installed as plugins from outside (still installable as consumer-only repos with `[skills]` / `[plugins]` deps)
+- [ ] **30.7** Unit tests: parse v2.0 plugin TOML, multi-plugin discovery, `:name` syntax parsing
+- [ ] **30.8** Integration test: install single plugin from multi-plugin repo, install all with `:*`, error in agent mode with multiple
+
+**Exit criteria:** Repos can publish multiple plugins via `.skilltap/<name>.toml`. Users select which to install. Backwards compat: existing `.claude-plugin/` / `.codex-plugin/` formats keep working.
+
+---
+
+### Phase 31 — Security Simplification
+
+Collapse the v1.0 security model. Remove HTTP registry adapter.
+
+- [ ] **31.1** Rewrite `policy/compose.ts` — single rule, no human/agent split, trust-list short-circuit
+- [ ] **31.2** Move semantic-scan opt-in: only `scan = "semantic"` in config OR `--deep` flag on the call enables it. Default config never enables it.
+- [ ] **31.3** Implement glob matcher for `trust = []` (matches against tap name OR full source URL)
+- [ ] **31.4** Remove HTTP registry tap adapter (`core/src/registry/`, registry-related types in tap config schema)
+- [ ] **31.5** Remove security presets (`PRESET_VALUES`, `SECURITY_PRESETS`)
+- [ ] **31.6** Remove `[[security.overrides]]` parsing (kept in v1.0 schemas for migration only)
+- [ ] **31.7** Update `installSkill` / `installPlugin` to use the new policy
+- [ ] **31.8** Update `policy.ts` UI helpers to render new policy explanation strings
+- [ ] **31.9** Unit tests: trust-list matching, on_warn = install proceeds without prompt, scan = none skips entirely
+- [ ] **31.10** Update existing security tests to v2.0 policy (delete or rewrite v1.0 mode-split assertions)
+
+**Exit criteria:** Security config is one block with three keys. Trust list short-circuits scanning. HTTP registry adapter gone. All v1.0 security tests either deleted, migrated, or kept for v1.0 schema compatibility tests.
+
+---
+
+### Phase 32 — Agent Flag
+
+Replace agent-mode code paths.
+
+- [ ] **32.1** Implement `agent-flag/resolve.ts` — combine `--agent` flag, `SKILLTAP_AGENT` env, `[agent] default` config into single boolean
+- [ ] **32.2** Implement `agent-flag/enforce.ts` — return error if `[agent] block = true` and `--agent` requested
+- [ ] **32.3** Replace `config["agent-mode"].enabled` checks across the codebase with `effective.agent`
+- [ ] **32.4** Remove `[agent-mode]` from v2.0 config schema (kept in v1.0 for migration)
+- [ ] **32.5** Remove `skilltap config agent-mode` interactive command. Add `skilltap config set agent.default true|false` and `agent.block`.
+- [ ] **32.6** Update `--agent` behavior: no prompts, plain text, auto-pick when single option, error when ambiguous
+- [ ] **32.7** Verify security policy is unchanged when `--agent` is set (no special agent-mode rules)
+- [ ] **32.8** Unit tests: flag resolution permutations (flag + env + config), block enforcement
+- [ ] **32.9** Integration tests: `--agent` + sync (auto-applies if --yes equivalent), `--agent` + multi-plugin (errors with hint)
+
+**Exit criteria:** `--agent` flag is the only mechanism. Agent-mode block + scope removed. Security treats `--agent` and human equally.
+
+---
+
+### Phase 33 — Smart Scope + Status Dashboard
+
+Two interlocking DX wins.
+
+- [ ] **33.1** Implement smart scope default in `policy/compose.ts` — `findProjectRoot()` → project; otherwise global. Always include resolved scope in install output.
+- [ ] **33.2** Implement `cli/src/commands/status.ts` — gather state (skills, plugins, MCP injection per agent, taps, updates, drift), render text dashboard
+- [ ] **33.3** Wire bare `skilltap` (no args) to status command (was citty default `--help`)
+- [ ] **33.4** `--json` output for status
+- [ ] **33.5** Drift line in status: "manifest declares N items not installed. Run `skilltap sync`." Updates line: "N updates available. Run `skilltap update`."
+- [ ] **33.6** Unit tests: status snapshot rendering, --json schema
+- [ ] **33.7** Integration tests: clean state, drift state, --json output
+
+**Exit criteria:** `skilltap` opens a status dashboard. Smart scope removes the default-scope prompt in git repos.
+
+---
+
+### Phase 34 — Component-Ref Syntax + Toggle Promotion
+
+Top-level toggle/enable/disable with `:component` syntax.
+
+- [ ] **34.1** Implement `name:component` parser in shared util
+- [ ] **34.2** Top-level `skilltap toggle <name>[:component]`, `skilltap enable <name>[:component]`, `skilltap disable <name>[:component]`
+- [ ] **34.3** Bare `name` opens picker (existing behavior); `name:component` direct toggle
+- [ ] **34.4** Update completions to suggest `name:component` after `:`
+- [ ] **34.5** Keep existing `skilltap plugin toggle` etc. as silent aliases
+- [ ] **34.6** Unit tests: parser edge cases (multiple colons, missing name, missing component)
+- [ ] **34.7** Integration tests: direct toggle, picker fallback
+
+**Exit criteria:** Users can address components directly without going through a picker.
+
+---
+
+### Phase 35 — Try + MCP-Only Install + Claude Desktop
+
+Three smaller v2.0 additions bundled.
+
+- [ ] **35.1** Implement `core/src/try.ts` — clone to temp, parse manifests, run scan, render summary, cleanup
+- [ ] **35.2** `skilltap try <source>` CLI command
+- [ ] **35.3** `mcp:` source prefix in `install.ts` — extract `[[servers]]` only, inject into agent configs, track in `state.json` `mcpServers` array
+- [ ] **35.4** `skilltap remove mcp:<name>` for symmetric removal
+- [ ] **35.5** Add `claude-desktop` to `MCP_AGENT_CONFIGS` registry with platform-specific paths (macOS, Windows, Linux)
+- [ ] **35.6** Unit tests: try cleanup behavior, mcp-only install/remove, claude-desktop config path resolution per platform
+- [ ] **35.7** Integration tests: `skilltap try` against fixture repo (no install side-effect), `skilltap install mcp:` round-trip, claude-desktop injection
+
+**Exit criteria:** `try` previews safely. `mcp:` installs servers without skill machinery. Claude Desktop is supported.
+
+---
+
+### Phase 36 — Doctor v2.0 Upgrades
+
+Drift and consistency checks.
+
+- [ ] **36.1** Add manifest-vs-state drift check
+- [ ] **36.2** Add lockfile-vs-state drift check
+- [ ] **36.3** Add `.skilltap/<name>.toml` validity check (parse + required fields)
+- [ ] **36.4** Add MCP injection consistency check (state ↔ agent config files, both directions)
+- [ ] **36.5** Extend `--fix`: prune state-orphan MCP entries from agent configs, regenerate missing lockfile entries from state
+- [ ] **36.6** Unit tests for each new check
+- [ ] **36.7** Integration tests: synthetic drift scenarios, --fix repairs
+
+**Exit criteria:** Doctor catches manifest/lockfile/state drift and MCP inconsistencies. `--fix` repairs the safely-fixable subset.
+
+---
+
+### Phase 37 — Command Surface Promotion + Aliases
+
+Top-level shortcuts and back-compat aliases.
+
+- [ ] **37.1** Top-level commands: `sync`, `status`, `try`, `migrate`, `enable`, `disable` (added in earlier phases — confirm wiring)
+- [ ] **37.2** Top-level `toggle` (already added in Phase 34) — confirm alias from `skilltap plugin toggle`
+- [ ] **37.3** Silent aliases for v1.0 paths: `skilltap remove` → `skilltap skills remove` (or top-level), `skilltap list` → `skilltap list` (already top-level), `skilltap plugins` → `skilltap plugin`
+- [ ] **37.4** Update bash/zsh/fish completion scripts for all new commands and `:component` dynamic completions
+- [ ] **37.5** Verify no breaking change in existing v1.0 command paths
+- [ ] **37.6** Integration tests: every v1.0 command path still works (silent alias verification)
+
+**Exit criteria:** v2.0 commands feel flat for daily use. v1.0 paths still work for users with muscle memory.
+
+---
+
+### Phase 38 — v2.0 Polish + Docs + Release
+
+- [ ] **38.1** Update README with v2.0 quickstart (manifest, sync, simplified config)
+- [ ] **38.2** Update website (`website/`) with new commands, status dashboard screenshots, manifest examples
+- [ ] **38.3** Update `llms-full.txt` for LLM ingestion
+- [ ] **38.4** Update CLAUDE.md / AGENTS.md with v2.0 conventions
+- [ ] **38.5** End-to-end test: clean v2.0 init → install → manifest write → sync on fresh clone → toggle → migrate from v1.0 → status dashboard
+- [ ] **38.6** CHANGELOG entry for v2.0 with migration guide
+- [ ] **38.7** Bump version to 2.0.0
+- [ ] **38.8** Release workflow verification (binaries, npm publish, Homebrew formula update)
+
+**Exit criteria:** v2.0 ships. Docs reflect v2.0. v1.0 users have a clear migration path.
+
+---
+
+### v2.0 Dependency Graph
+
+```
+Phase 26 (schemas) ────┬─→ Phase 27 (state + migrate) ─→ Phase 32 (agent flag)
+                        │                                     │
+                        ├─→ Phase 28 (manifest+lock) ─────────┤
+                        │         │                           │
+                        │         └─→ Phase 29 (sync) ───┐    │
+                        │                                │    │
+                        ├─→ Phase 30 (native plugin) ────┤    │
+                        │                                │    │
+                        └─→ Phase 31 (security simpl.) ──┤    │
+                                                         │    │
+                                                         ▼    ▼
+                                            Phase 33 (smart scope + status)
+                                            Phase 34 (component-ref toggle)
+                                            Phase 35 (try + mcp + desktop)
+                                            Phase 36 (doctor v2)
+                                                         │
+                                                         ▼
+                                            Phase 37 (surface promotion)
+                                                         │
+                                                         ▼
+                                            Phase 38 (polish + release)
+```
+
+Phases 28, 30, 31, 32 can run mostly in parallel after 27. Phases 33–36 can run in parallel after their dependencies are met. 37 needs 33–36; 38 is the final integration.
+
+---
+
 ## What's Deferred to v1.1+
 
 - Windows support

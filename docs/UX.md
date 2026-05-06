@@ -2045,3 +2045,357 @@ skilltap completions zsh --install
 # fish (one-time)
 skilltap completions fish --install
 ```
+
+---
+
+## v2.0 Command Surface
+
+The v2.0 redesign adds new commands and promotes daily commands to top-level. Old paths from v1.0 keep working as silent aliases. See [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign) for behavior; this section is the reference.
+
+### Command Tree (v2.0)
+
+```
+skilltap                             Status dashboard (text)
+skilltap install <source...>         Install + add to manifest/lockfile
+skilltap remove <name...>            Remove + drop from manifest/lockfile
+skilltap list [--json]               Unified list (skills + plugins)
+skilltap info <name>                 Skill or plugin details
+skilltap toggle <name>[:component]   Toggle plugin or component
+skilltap enable <name>[:component]   Enable plugin or component
+skilltap disable <name>[:component]  Disable plugin or component
+skilltap sync [--strict|--yes|--prune]  Reconcile manifest ↔ lockfile ↔ disk
+skilltap update [name]               Refresh lockfile to latest matching range
+skilltap status [--json]             Same as bare `skilltap`, explicit
+skilltap try <source>                Read-only preview (no install)
+skilltap find [query]                Search across taps
+skilltap migrate                     v1.0 → v2.0 one-shot upgrade
+skilltap doctor [--fix] [--json]     Diagnostics + drift checks
+skilltap link <path>                 Symlink a local skill
+skilltap unlink <name>               Remove a linked skill
+skilltap create [name]               Scaffold a new skill or plugin
+skilltap verify [path]               Validate before sharing
+skilltap completions <shell>         Generate completion script
+skilltap self-update                 Update the skilltap binary
+skilltap skills                      Less-common skill ops (group)
+├── adopt [name...]                  Adopt unmanaged skills
+├── move <name>                      Move between scopes
+├── info <name>                      (alias of top-level)
+├── remove <name...>                 (alias of top-level)
+├── link / unlink                    (aliases)
+skilltap plugin                      Less-common plugin ops (group)
+├── info <name>                      (alias)
+├── toggle <name>[:component]        (alias)
+├── remove <name>                    (alias)
+skilltap tap                         Tap management (group; HTTP removed)
+├── add <name> <url>                 Add a git tap
+├── remove <name>                    Remove a tap
+├── list                             List taps
+├── update [name]                    Pull tap(s)
+├── info <name>                      Tap details
+├── init <name>                      Initialize a new tap repo
+└── install                          Interactive tap-skill picker
+skilltap config                      Config (group)
+├── get [key] [--json]               Read config
+├── set <key> <value...>             Write config
+└── edit                             Open in $EDITOR
+```
+
+Aliases (silent — no deprecation warning):
+
+```
+skilltap remove   → skilltap skills remove
+skilltap list     → top-level (was skilltap skills)
+skilltap info     → top-level (was skilltap skills info)
+skilltap link     → top-level (was skilltap skills link)
+skilltap unlink   → top-level (was skilltap skills unlink)
+skilltap plugins  → skilltap plugin
+```
+
+### Flag changes from v1.0
+
+| Flag | v1.0 | v2.0 |
+|---|---|---|
+| `--agent` | (no flag — agent-mode was config-only) | NEW: enable non-interactive output, no prompts |
+| `--no-agent` | (n/a) | NEW: override `[agent] default = true` for one call |
+| `--deep` | (n/a) | NEW: enable Layer 2 semantic scan for this call (alias of `--semantic`) |
+| `--strict` | abort on any security warning | unchanged |
+| `--no-strict` | override `on_warn = fail` | unchanged |
+| `--semantic` | force Layer 2 scan | unchanged (alias of `--deep`) |
+| `--skip-scan` | skip scanning | kept as per-call escape hatch; recommended path is `[security] trust = [...]` |
+| `--strict` (sync) | abort on drift | NEW for sync |
+| `--yes` (sync) | auto-apply drift | NEW for sync |
+| `--prune` (sync) | also remove undeclared | NEW for sync |
+
+### `skilltap install` (v2.0)
+
+New source forms:
+
+```
+skilltap install user/repo:plugin-name      Specific plugin from a multi-plugin repo
+skilltap install user/repo:*                All publishable plugins from a repo
+skilltap install mcp:<source>               MCP-only install (just the server, no skills)
+```
+
+When a project has `skilltap.toml`, install ALSO writes the new dep to the manifest and lockfile. Outside a project: install proceeds as v1.0 (no manifest write).
+
+### `skilltap` (no args) and `skilltap status`
+
+```
+$ skilltap
+skilltap status — project: ./termtube (git)
+
+Scope: project (in git repo)
+Targets: claude-code, cursor
+
+Skills (2 managed, 1 linked, 0 unmanaged)
+  termtube-dev      project   claude-code, cursor   nathan/termtube@main
+  termtube-review   project   claude-code, cursor   nathan/termtube@main
+  my-local-skill    project   claude-code           ~/dev/my-local-skill (linked)
+
+Plugins (1)
+  dev-toolkit       project   3 skills, 2 MCPs, 1 agent   corp/dev-toolkit@v2.1
+    ✓ code-review (skill)        ✓ database (mcp)         ✓ reviewer (agent)
+    ✗ test-generator (skill)     ✗ file-search (mcp)
+
+MCP servers injected
+  claude-code     skilltap:dev-toolkit:database
+  cursor          skilltap:dev-toolkit:database
+  claude-desktop  (none)
+
+Taps (2)
+  home              https://gitea.example.com/nathan/my-tap   4 plugins
+  skilltap-skills   builtin                                    47 plugins
+
+Updates: 1 skill update available. Run `skilltap update`.
+Drift:   manifest declares 1 plugin not installed. Run `skilltap sync`.
+```
+
+`skilltap status --json` produces a machine-readable equivalent.
+
+### `skilltap sync` flow
+
+```
+$ skilltap sync
+
+Plan (project: ./termtube):
+  + install   plugin   corp/dev-toolkit          v2.1   (declared, not installed)
+  ~ update    skill    nathan/commit-helper      v1.2 → v1.3   (locked → declared range refreshes)
+  - remove    plugin   old-toolkit                       (--prune; not declared)
+
+Apply? (Y/n): y
+  + Installed corp/dev-toolkit@v2.1 (3 skills, 2 MCPs, 1 agent)
+  ~ Updated nathan/commit-helper v1.2 → v1.3
+  - Removed old-toolkit
+
+✓ Sync complete. State: 5 skills, 2 plugins.
+```
+
+With `--strict`:
+
+```
+$ skilltap sync --strict
+error: drift detected — 1 add, 1 update, 1 remove. Strict mode aborts.
+hint: run without --strict, or with --yes to auto-apply.
+```
+
+With `--yes`: same plan, auto-applies without the prompt.
+
+### `skilltap try <source>`
+
+```
+$ skilltap try corp/unknown-thing
+
+Cloning corp/unknown-thing to /tmp/skilltap-try-abc123...
+Detected: plugin (.skilltap/main.toml — TOML format)
+
+Plugin: main
+  description: Internal tooling for corp
+  publish: true
+  version: 0.1.0
+
+  Skills (2):
+    code-review     (./skills/code-review)
+    lint            (./skills/lint)
+
+  MCP servers (1):
+    db (stdio)      command=node args=["./mcp/db.js"]
+
+  Agents: (none)
+
+Security scan (static):
+  ✓ No warnings.
+
+This was a preview. Nothing was installed.
+To install: skilltap install corp/unknown-thing
+```
+
+### `skilltap migrate`
+
+```
+$ skilltap
+
+error: v1.0 setup detected (~/.config/skilltap/installed.json, ~/.config/skilltap/plugins.json).
+hint: run `skilltap migrate` to upgrade, or stay on v1.x by reinstalling: bunx skilltap@1
+
+
+$ skilltap migrate
+
+skilltap migrate — v1.0 → v2.0
+
+Detected:
+  ✓ ~/.config/skilltap/installed.json (3 skills)
+  ✓ ~/.config/skilltap/plugins.json (1 plugin)
+  ✓ ~/.config/skilltap/config.toml (v1.0 keys)
+
+Translating:
+  + state.json (3 skills, 1 plugin) ← installed.json + plugins.json
+  + config.toml [security] ← merged [security.human] + [security.agent] (took stricter where conflicting)
+  + config.toml [agent] ← [agent-mode]
+  ! [[security.overrides]] match="my-tap" preset="none" → security.trust = ["my-tap"]
+  ! [[security.overrides]] match="npm" preset="strict" → DROPPED (preset overrides not supported in v2.0)
+  ! HTTP tap "company-registry" → DROPPED. URL: https://...
+    To restore, convert to a git tap or remove from config.
+
+Renamed:
+  installed.json → installed.v1.bak.json
+  plugins.json   → plugins.v1.bak.json
+  config.toml    → config.v1.bak.toml
+
+✓ Migrated. Run `skilltap doctor` to verify.
+```
+
+### `skilltap config` (v2.0)
+
+```
+$ skilltap config set agent.default true
+(silent, exit 0)
+
+$ skilltap config set security.scan static
+(silent, exit 0)
+
+$ skilltap config set security.trust github.com/corp/*
+(silent, exit 0)  # appends to array
+
+$ skilltap config get
+defaults.also = ["claude-code", "cursor"]
+defaults.scope = ""
+agent.default = true
+agent.block = false
+security.scan = "static"
+security.on_warn = "install"
+security.trust = ["github.com/corp/*", "home"]
+...
+
+$ skilltap config get --json
+{ "defaults": {...}, "agent": {...}, "security": {...}, ... }
+
+$ skilltap config edit
+(opens config.toml in $EDITOR)
+```
+
+`skilltap config agent-mode` (the v1.0 wizard) is removed. To toggle agent mode default: `skilltap config set agent.default true|false`.
+
+### Project Manifest Workflow
+
+Day-to-day usage with a project manifest:
+
+```bash
+# In a fresh project
+$ cd ~/dev/my-project
+$ skilltap install nathan/commit-helper
+✓ Installed commit-helper @ v1.2.0 (project)
+✓ Updated skilltap.toml + skilltap.lock
+
+$ git add skilltap.toml skilltap.lock
+$ git commit -m "Add commit-helper skill"
+
+# Later, on a different machine
+$ git clone <repo> && cd my-project
+$ skilltap sync
+Plan: install commit-helper @ v1.2.0
+Apply? (Y/n): y
+✓ Synced.
+
+# Add another dep
+$ skilltap install corp/dev-toolkit
+✓ Installed dev-toolkit @ main (project)
+✓ Updated skilltap.toml + skilltap.lock
+
+# Update everything
+$ skilltap update
+Refreshing lockfile...
+  commit-helper: v1.2.0 → v1.3.0 (^1.0 matches)
+  dev-toolkit:   main (no change)
+✓ Lockfile updated. Run `skilltap sync` to apply.
+
+$ skilltap sync
+Plan: update commit-helper v1.2.0 → v1.3.0
+Apply? (Y/n): y
+✓ Synced.
+```
+
+### Publishing a plugin from a repo
+
+```bash
+$ cd my-tools
+$ mkdir -p .skilltap
+$ cat > .skilltap/team-tools.toml <<'EOF'
+name        = "team-tools"
+version     = "1.0.0"
+description = "Internal tooling"
+publish     = true
+
+[[skills]]
+name = "code-review"
+path = "./skills/code-review"
+
+[[servers]]
+name    = "db"
+type    = "stdio"
+command = "node"
+args    = ["./mcp/db.js"]
+EOF
+
+$ skilltap verify
+✓ team-tools is valid.
+
+$ git add -A && git commit -m "Add publishable plugin" && git push
+
+# Others can now install
+$ skilltap install your-org/my-tools          # prompts (1 plugin, auto-picks)
+$ skilltap install your-org/my-tools:team-tools  # explicit
+```
+
+### Multi-plugin repo
+
+```
+$ tree -a my-tools
+my-tools/
+├── skilltap.toml              # consumer side (project's own deps)
+├── skilltap.lock
+├── .skilltap/
+│   ├── frontend-tools.toml    # publish = true
+│   ├── backend-tools.toml     # publish = true
+│   └── private-stuff.toml     # publish = false (project-only)
+├── skills/...
+├── mcp/...
+└── agents/...
+
+$ skilltap install your-org/my-tools
+Multiple publishable plugins in your-org/my-tools:
+  ◆ frontend-tools   2 skills, 1 MCP
+  ◇ backend-tools    1 skill,  2 MCPs
+
+(Space to select, Enter to confirm)
+
+$ skilltap install your-org/my-tools:frontend-tools  # specific
+$ skilltap install your-org/my-tools:*               # all publishable
+```
+
+In `--agent` mode, bare `your-org/my-tools` errors:
+
+```
+$ skilltap install your-org/my-tools --agent
+error: multiple plugins available in your-org/my-tools: frontend-tools, backend-tools
+hint: specify with your-org/my-tools:<name> or your-org/my-tools:*
+```

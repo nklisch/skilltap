@@ -623,3 +623,252 @@ All tests run with `bun test`. CI runs on Linux and macOS.
 | MCP namespacing | `skilltap:<plugin>:<server>` prefix | No prefix | Prevents collisions with user-configured MCP servers |
 | Agent definitions | Claude Code only (for now) | All agents | Only Claude Code has a documented agent definition format; extensible later |
 | Plugin detection | Auto-detect in install flow | Separate `plugin install` command | One command for everything; plugin vs. skill is a property of the source, not the user's intent |
+
+---
+
+## v2.0 Architecture Additions
+
+This section documents the architecture changes introduced by the v2.0 redesign. The v0.1–v1.0 architecture above remains the foundation; the additions below describe new modules, modified data flow, and removed components. See [VISION.md — v2.0](./VISION.md#v20-direction-simplification-unification-project-manifest) and [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign) for behavior.
+
+### New Core Modules
+
+```
+packages/core/src/
+├── manifest/                     # NEW — project manifest + lockfile
+│   ├── schemas.ts                # ProjectManifestSchema, PluginManifestV2Schema, LockfileSchema
+│   ├── load.ts                   # loadManifest(projectRoot), loadLockfile(projectRoot)
+│   ├── save.ts                   # saveManifest, saveLockfile (atomic write + ensureDirs)
+│   ├── resolve.ts                # resolveDeps(manifest, lockfile) → ResolvedDeps[]
+│   ├── range.ts                  # Range parsing/matching (^, ~, *, exact ref)
+│   └── publish.ts                # discoverPublishablePlugins(repoRoot) → PluginManifestV2[]
+├── sync/                         # NEW — Cargo-style reconcile engine
+│   ├── plan.ts                   # planSync(manifest, lockfile, state) → SyncPlan with adds/removes/updates
+│   ├── apply.ts                  # applySync(plan, options, callbacks) — runs install/remove/update
+│   └── drift.ts                  # detectDrift(state, manifest, lockfile) → DriftReport
+├── state/                        # NEW — replaces installed.ts/plugins/state.ts file split
+│   ├── schema.ts                 # StateSchema { version: 2, skills: [], plugins: [], mcpServers: [] }
+│   ├── load.ts                   # loadState(scope, projectRoot?) → State
+│   ├── save.ts                   # saveState(state, scope, projectRoot?)
+│   └── migrate-v1.ts             # detect + read installed.json + plugins.json, write state.json
+├── agent-flag/                   # NEW — replaces agent-mode logic across the codebase
+│   ├── resolve.ts                # resolveAgentFlag({ flag, env, config }) → AgentEffective
+│   └── enforce.ts                # enforceBlock(config, requested) → Result<void, UserError>
+├── policy/                       # SIMPLIFIED — collapses old per-mode policy
+│   └── compose.ts                # composePolicy(config, flags, source) → EffectivePolicy
+│                                 # No more human/agent split. trust-list short-circuits scanning.
+├── plugin-v2/                    # NEW — native skilltap plugin format reader/writer
+│   ├── parse-toml.ts             # parse .skilltap/<name>.toml
+│   ├── discover.ts               # find all .skilltap/*.toml in a repo
+│   └── normalize.ts              # PluginManifestV2 → existing PluginManifest internal type
+└── try.ts                        # NEW — readonly preview (clone to temp, parse, scan, display, cleanup)
+```
+
+### Modified Modules
+
+- **`config.ts`** — schema collapsed (see SPEC.md `[v2.0 Configuration]`). Old keys read by `migrate.ts` only; v2.0 reader rejects them with a hint to run `migrate`.
+- **`security/policy.ts`** — single policy. No `[security.human]` / `[security.agent]` branching. `trust = []` checked first; matching sources skip scanning entirely.
+- **`install.ts`** — extended to update `skilltap.toml` and `skilltap.lock` when running inside a project root. Smart scope default: `findProjectRoot()` is checked first; if found and no scope flag, default to project. Otherwise global.
+- **`taps.ts`** — HTTP tap adapter removed. `loadTaps()` only loads git-cloned and built-in taps.
+- **`plugin/install.ts`** — multi-plugin repo support. After `discoverPublishablePlugins()`, prompt or pick by `:plugin-name` suffix.
+- **`mcp-inject.ts`** — adds `claude-desktop` to `MCP_AGENT_CONFIGS` registry, mapping to platform-specific paths (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, etc.).
+- **`doctor.ts`** — adds v2.0 checks: manifest drift, lockfile drift, plugin manifest validity, MCP injection consistency. Existing 9 checks preserved.
+
+### Removed Modules
+
+- **`registry/`** (HTTP registry client) — removed entirely.
+- **`security/overrides.ts`** if it exists — replaced with simple glob match in `policy/compose.ts`.
+
+### CLI Module Additions
+
+```
+packages/cli/src/commands/
+├── sync.ts                       # NEW
+├── status.ts                     # NEW (also wired as the bare-command default)
+├── try.ts                        # NEW
+├── migrate.ts                    # NEW
+├── enable.ts                     # NEW (top-level shortcut, also under plugin/)
+├── disable.ts                    # NEW
+├── toggle.ts                     # CHANGED — now top-level, accepts plugin:component syntax
+├── install.ts                    # CHANGED — supports `mcp:` prefix, manifest write
+├── update.ts                     # CHANGED — refreshes lockfile, semantically distinct from sync
+└── config/
+    ├── agent-mode.ts             # REMOVED — replaced by `config set agent.default <bool>`
+    └── set.ts                    # CHANGED — accepts agent.default, agent.block; rejects v1.0 keys
+```
+
+### Data Flow: `skilltap install` (v2.0)
+
+```
+1. Parse source, detect mcp:/<owner/repo:name>/etc syntax variants
+2. resolveAgentFlag() → effectivePolicy.agent
+3. resolveSource() → cloneable URL (no HTTP registry)
+4. Find project root (smart scope default)
+5. Clone to temp dir
+6. detectPlugin(tempDir) — try .skilltap/, .claude-plugin/, .codex-plugin/ in priority order
+7. If multiple publishable .skilltap/*.toml files: prompt or :name suffix selects
+8. Run security scan (single [security] policy, trust-list shortcuts)
+9. composePolicy → effective decision (install / prompt / fail)
+10. If running in project, update skilltap.toml + skilltap.lock atomically
+11. Place skill / inject MCP / place agent definitions per plugin manifest
+12. Update state.json (single file per scope)
+13. Print summary; non-interactive variant uses plain text
+```
+
+### Data Flow: `skilltap sync`
+
+```
+1. loadManifest(projectRoot) → manifest
+2. loadLockfile(projectRoot) → lockfile (or null)
+3. loadState(project) + loadState(global) → states
+4. planSync(manifest, lockfile, state) → SyncPlan
+   - adds: declared but not in state
+   - updates: declared at different ref than locked / installed
+   - removes: in state but not declared (only with --prune)
+   - lockfile-only: in lockfile but no state record (treat as add)
+5. If interactive and plan non-empty: show diff, prompt to confirm
+6. If --strict and plan non-empty: error out
+7. applySync(plan, callbacks) — runs install/remove/update for each entry
+8. Update lockfile if any range resolved to a new ref
+9. Update state.json
+10. Print summary
+```
+
+### Data Flow: `skilltap migrate`
+
+```
+1. Detect v1.0 markers: installed.json, plugins.json, [security.human], [agent-mode], [[security.overrides]]
+2. If no markers: exit 0 with "Already on v2.0".
+3. Read all v1.0 files. Parse with v1.0 schemas (kept as legacy schemas in core/src/schemas/v1/).
+4. Translate:
+   - installed.json + plugins.json → state.json (consolidate)
+   - [security.human] / [security.agent] → [security] (warn if mismatch; pick stricter or prompt)
+   - [[security.overrides]] → [security] trust = [...] (warn — trust list is less expressive than overrides)
+   - [agent-mode] → [agent] (default: enabled→default, scope: ignored, deprecated)
+   - [registry] → [[registries]] (renamed; functionality preserved)
+   - HTTP taps in [[taps]] → error, list affected taps for manual handling
+5. Write v2.0 files. Rename originals to *.v1.bak.
+6. Run `skilltap doctor` to verify.
+7. Print migration summary with diff.
+```
+
+### v2.0 Schemas (Zod 4)
+
+```typescript
+// manifest/schemas.ts
+
+export const TargetsSchema = z.object({
+  also: z.array(z.string()).default([]),
+  scope: z.enum(["", "global", "project"]).default(""),
+}).prefault({})
+
+export const ManifestEntrySchema = z.union([
+  z.string(),                            // "^1.0", "*", "v1.2.3"
+  z.object({
+    ref: z.string().optional(),
+    components: z.record(z.string(), z.boolean()).optional(),
+  }),
+])
+
+export const ProjectManifestSchema = z.object({
+  targets: TargetsSchema,
+  skills: z.record(z.string(), ManifestEntrySchema).default({}),
+  plugins: z.record(z.string(), ManifestEntrySchema).default({}),
+  taps: z.record(z.string(), z.string()).default({}),
+})
+
+export const LockEntrySchema = z.object({
+  source: z.string(),
+  ref: z.string(),
+  sha: z.string().optional(),
+  range: z.string(),
+})
+
+export const LockfileSchema = z.object({
+  version: z.literal(1),
+  skill: z.array(LockEntrySchema).default([]),
+  plugin: z.array(LockEntrySchema).default([]),
+})
+
+// Native skilltap plugin manifest (.skilltap/<name>.toml)
+export const PluginManifestV2Schema = z.object({
+  name: z.string(),
+  version: z.string(),
+  description: z.string().optional(),
+  publish: z.boolean().default(false),
+  skills: z.array(z.object({
+    name: z.string(),
+    path: z.string(),
+  })).default([]),
+  servers: z.array(z.object({
+    name: z.string(),
+    type: z.enum(["stdio", "http"]),
+    command: z.string().optional(),
+    args: z.array(z.string()).default([]),
+    env: z.record(z.string(), z.string()).default({}),
+    url: z.string().optional(),
+    headers: z.record(z.string(), z.string()).default({}),
+  })).default([]),
+  agents: z.array(z.object({
+    name: z.string(),
+    path: z.string(),
+  })).default([]),
+})
+
+// Simplified config (replaces v1.0 ConfigSchema)
+export const SecurityConfigV2Schema = z.object({
+  scan: z.enum(["semantic", "static", "none"]).default("static"),
+  on_warn: z.enum(["prompt", "fail", "install"]).default("install"),
+  trust: z.array(z.string()).default([]),
+}).prefault({})
+
+export const AgentConfigSchema = z.object({
+  default: z.boolean().default(false),
+  block: z.boolean().default(false),
+}).prefault({})
+
+export const ConfigV2Schema = z.object({
+  defaults: z.object({
+    also: z.array(z.string()).default([]),
+    scope: z.enum(["", "global", "project"]).default(""),
+  }).prefault({}),
+  agent: AgentConfigSchema,
+  security: SecurityConfigV2Schema,
+  taps: z.array(z.object({ name: z.string(), url: z.string() })).default([]),
+  updates: UpdatesConfigSchema.prefault({}),
+  telemetry: TelemetryConfigSchema.prefault({}),
+  builtin_tap: z.boolean().default(true),
+  verbose: z.boolean().default(true),
+  default_git_host: z.string().default("https://github.com"),
+})
+
+// Unified state file (replaces installed.json + plugins.json)
+export const StateSchema = z.object({
+  version: z.literal(2),
+  skills: z.array(InstalledSkillSchema).default([]),
+  plugins: z.array(PluginRecordSchema).default([]),
+  mcpServers: z.array(z.object({
+    name: z.string(),
+    source: z.string(),
+    config: z.any(),  // McpServerConfigSchema
+    targets: z.array(z.string()),
+    installedAt: z.string(),
+  })).default([]),
+})
+```
+
+### Decision Log Additions (v2.0)
+
+| Decision | Choice | Alternatives Considered | Rationale |
+|----------|--------|------------------------|-----------|
+| Manifest format | TOML at project root | JSON, package.json-style sub-key | Matches existing config.toml conventions; human-friendly; matches Cargo's design |
+| Native plugin format | TOML in `.skilltap/<name>.toml` | JSON to match Claude Code | Skilltap's own files use TOML for consistency; Claude/Codex JSON formats remain readable inputs |
+| Lockfile | Yes, Cargo-style | No lockfile, manifest only, single combined file | Reproducibility is the headline value of `sync`; users expect it from package-manager-shaped tools |
+| Sync drift | Prompt by default | Strict-by-default, additive-only | Prompt avoids destructive surprises while preserving the deterministic value when `--yes` |
+| Scope detection | Smart default (git → project) | Always prompt, always global | Most installs in a git repo are project-scoped; prompt fatigue is a known v1.0 issue |
+| State file | Single state.json per scope | Keep installed.json + plugins.json | One file per scope = easier backup, less file-proliferation, simpler doctor checks |
+| Security model | One [security] block, no per-mode | Keep human/agent split | One rule for everyone; agent flag becomes about UX (prompts, output), not policy |
+| Agent flag | --agent + env + config | Just config, just flag | Layered control: agents always set the flag; sticky config for CI; block flag for shared machines |
+| HTTP registry | Removed | Keep, mark deprecated | Real-world usage was minimal; removing the adapter cuts schemas, adapters, tests, and docs |
+| Multi-plugin repos | `.skilltap/<name>.toml` per plugin | Single skilltap.toml with [[publish.plugins]] | Mirrors `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` shape; one file per plugin |
+| Migration | Explicit `migrate` command | Auto-migrate on first run | Migration touches multiple files; users should be intentional, especially when HTTP taps exist |
+| Telemetry | Unchanged from v1.0 | Drop entirely | User signal valuable; behavior already privacy-preserving; no churn needed |

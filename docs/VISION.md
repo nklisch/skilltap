@@ -357,4 +357,101 @@ See [SPEC.md — Version Scope](./SPEC.md#version-scope) for the detailed roadma
 - **v0.1** — Core install/remove/update/link + taps + security scanning (static + semantic) + standalone binary
 - **v0.2** — npm adapter, HTTP registry, shell completions
 - **v0.3** — Community trust signals, `skilltap publish`, skill templates
+- **v1.0** — Plugin support (Claude Code + Codex formats, MCP injection, agent definitions)
+- **v2.0** — Tooling-surface redesign: unified package model, simplified security, drop agent-mode-as-concept, expanded MCP story (see below)
+
+---
+
+## v2.0 Direction: Simplification, Unification, Project Manifest
+
+By v1.0, skilltap had grown three parallel concepts (skill, plugin, tap), two security modes (human, agent), four security presets, two manifest formats we read (Claude Code, Codex) plus two we publish (tap.json, marketplace.json), and an "agent mode" with its own scope and security blocks. It worked, but the surface was wide enough that a new user couldn't predict what `skilltap install foo` would do without reading the spec.
+
+v2.0 keeps skill and plugin as the two parallel user-facing concepts (no forced unification — they really are different shapes), keeps **tap** as the canonical name for a curated git index, and reorganizes everything else around a project manifest.
+
+### 1. Project manifest (`skilltap.toml`) + Cargo-style sync
+
+The headline addition. Every project gets a `skilltap.toml` declaring the skills, plugins, and taps the project depends on, plus its default agent targets. A companion `skilltap.lock` records exact resolved refs.
+
+- `skilltap install <thing>` adds to the manifest and lockfile (like `cargo add`).
+- `skilltap sync` installs from the lockfile, prompts on any drift between declared / locked / installed.
+- `skilltap update` refreshes the lockfile to the latest matching range.
+- A teammate clones the repo, runs `skilltap sync`, and gets the exact same skill setup the project was built against.
+
+The manifest also opens a clean path for **publishing**: a repo can opt-in to being installable as a plugin by placing one or more `.skilltap/<plugin>.toml` files (TOML, native to skilltap). Multiple plugins per repo are supported; the bare `user/repo` reference prompts the user to pick when several are publishable, or `user/repo:plugin-name` selects directly. Plugins are NOT publishable by default — `publish = true` must be set explicitly.
+
+Existing `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` formats keep working as input — skilltap reads them, normalizes internally, and treats them like any other plugin source.
+
+### 2. Skill vs plugin: still two concepts, easier to manage them
+
+A skill is one SKILL.md plus assets. A plugin is a bundle (skills + MCP servers + agent definitions). Both stay first-class — no forced merge. What v2.0 changes is *managing* them:
+
+- **`skilltap` (no args) prints a status dashboard** — managed skills, plugins (with component status), MCP servers injected per agent, taps configured, updates available, scope. One screen, one read. Like `git status`.
+- **Component-ref syntax**: `skilltap toggle dev-toolkit:test-generator`, `skilltap enable foo:bar`, `skilltap disable foo:bar` for direct addressing without going through a picker.
+- **Smart scope default**: inside a git repo, default scope is `project`; outside, `global`. The inferred scope is always shown in output (no surprises).
+- **Single state file per scope**: `installed.json` + `plugins.json` collapse to one `state.json`. Easier to back up, easier to reason about. Config stays in TOML.
+- **Top-level commands for daily use**: `install`, `remove`, `list`, `info`, `sync`, `status`, `toggle`, `enable`, `disable`, `update`, `find`, `try`. The `tap/` and `config/` groups stay; `skills/` and `plugin/` retain their groups for less common operations (`adopt`, `move`, `info`, `toggle`, `remove`) but with top-level shortcuts. Old command paths remain as silent aliases.
+
+### 3. Drop "agent mode" as a concept
+
+Agent mode in v1.0 was a config-only switch with its own security block, its own scope, and its own behavioral contract. v2.0 replaces it with one mechanism that any caller — human, AI agent, CI, cron — can use:
+
+- A `--agent` flag.
+- A `SKILLTAP_AGENT=1` env var with the same effect.
+- Config keys: `agent.default = true|false` makes the flag sticky (always on); `agent.block = true|false` causes the CLI to refuse `--agent` (useful for shared workstations where a human wants interactivity locked in).
+- The flag turns off prompts, switches to plain text output, and forces non-interactive defaults (auto-pick when only one option, error when multiple).
+
+There's no separate `[security.agent]` block, no separate scope, no special bypass rules. **Security policy is the same regardless of whether `--agent` is set** — one rule for everyone. If a security warning would prompt a human, it would prompt an agent too (and the agent gets the non-interactive equivalent: error out unless `on_warn = "install"`).
+
+### 4. Simpler security
+
+v1.0 layered six things into security: per-mode config, presets, trust-tier overrides, semantic scan as a first-class config option, randomized wrapper tags, parallel chunked evaluation. Almost none of it was necessary for the 95% case.
+
+v2.0:
+
+- One `[security]` block. Three keys.
+  - `scan` ∈ {`semantic`, `static`, `none`} — default `static`.
+  - `on_warn` ∈ {`prompt`, `fail`, `install`} — default `install` (scan but proceed; warnings are reported, not blocking).
+  - `trust = []` — list of glob patterns matching tap names or source URLs that skip scanning entirely.
+- Drop the `[security.human]` / `[security.agent]` split.
+- Drop the four-preset table (none/relaxed/standard/strict).
+- Drop `[[security.overrides]]` (the kind/match/preset triple) — replaced by the simpler `trust` allowlist.
+- Drop `require_scan` — replaced by removing scan = none from your config if you actually want it required.
+
+Static scan stays on by default. Semantic stays available (just set `scan = "semantic"` or pass `--deep` per call) but is no longer the recommended default — it's the heavy option, not the default knob.
+
+### 5. MCP as a first-class story
+
+v1.0 supported MCP injection for five agent platforms but treated MCP as a side-effect of plugin install. v2.0 promotes it:
+
+- **Claude Desktop** added to the supported targets (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS).
+- `skilltap install mcp:<source>` — standalone MCP install for users who want only the server, no skill machinery.
+- MCP servers can be declared inline in a project's `.skilltap/<plugin>.toml` — your project's own dev tools become a first-class skilltap plugin without needing a separate repo.
+
+### 6. New helper commands
+
+- **`skilltap try <repo>`** — read-only preview. Clones to temp, displays manifest / SKILL.md / plugin contents, runs scan, never writes to install paths. Inspect before commit.
+- **`skilltap sync`** — described above. Reconciles manifest ↔ lockfile ↔ installed state.
+- **`skilltap status`** — same content as bare `skilltap`, but explicit and pipe-friendly. `--json` for machine output.
+- **`skilltap migrate`** — one-shot v1.0 → v2.0 upgrade. v2.0 does not auto-migrate; if v1.0 state is detected, the CLI errors with a hint to run migrate (or stay on v1.x).
+- **Doctor upgrades** — `skilltap doctor` adds checks for: declared-but-not-installed manifests, drifted lockfile (lockfile records SHAs that don't match what's installed), `.skilltap/` plugin dirs missing required fields, MCP injection inconsistencies (server in state but not in agent config or vice versa).
+
+### What stays the same
+
+- Git is still the transport. Clone and link.
+- `.agents/skills/` is still the canonical install path.
+- Source adapters (git, github, npm, local) are unchanged. **HTTP registry adapter is removed** — taps are git-only.
+- Agent symlinks (`.claude/skills/`, `.cursor/skills/`, etc.) are unchanged.
+- Existing `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `tap.json`, `marketplace.json` formats keep working as inputs.
+- Telemetry behavior is unchanged from v1.0.
+
+### What's deprecated or removed
+
+- HTTP registry tap type — removed.
+- The `[security.human]` / `[security.agent]` split — collapsed to `[security]`.
+- Security presets (none/relaxed/standard/strict) — removed.
+- `[[security.overrides]]` — replaced with `trust = []`.
+- `[agent-mode]` config block — replaced with `[agent]` block (`default`, `block`).
+- `installed.json` and `plugins.json` separate files — merged into `state.json`.
+- `skilltap config agent-mode` interactive wizard — replaced with `skilltap config set agent.default true|false`.
+- The "human mode vs agent mode" mental model — replaced with "interactive vs `--agent`".
 - **v1.0** — Plugin support: read Claude Code and Codex plugin formats, install skills + MCP servers + agents as a group, component-level toggle
