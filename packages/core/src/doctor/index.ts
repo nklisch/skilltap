@@ -13,6 +13,7 @@ import { checkSkills } from "./checks/skills";
 import { checkStateV2 } from "./checks/state-v2";
 import { checkSymlinks } from "./checks/symlinks";
 import { checkTaps } from "./checks/taps";
+import { checkV1Orphans } from "./checks/v1-orphans";
 import type { DoctorCheck, DoctorOptions, DoctorResult } from "./types";
 
 export type { DoctorCheck, DoctorIssue, DoctorOptions, DoctorResult } from "./types";
@@ -90,6 +91,9 @@ export async function runDoctor(options?: DoctorOptions): Promise<DoctorResult> 
 
   // 14. MCP injection consistency (state ↔ agent configs)
   await emit(await checkMcpConsistency(state, projectRoot));
+
+  // 15. v0.x file orphans (after canonical-store cutover in 31c-c-2d-1)
+  await emit(await checkV1Orphans(state, projectRoot));
 
   const hasFailure = checks.some((c) => c.status === "fail");
   return { ok: !hasFailure, checks };

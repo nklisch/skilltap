@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE; v2.1 cutover essentially done (31c-c-2a/b/c/d-1)
+**Status:** v2.0 in-scope COMPLETE; v2.1 cutover done + UX polish (31c-c-2a/b/c/d-1, 31c-c-2d-2-orphan-check)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 0
+**Phases since last refactor:** 1
 **Total refactor passes:** 2
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
@@ -35,7 +35,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-c-2b | state.json reads cutover (install/update/remove + plugin) | done | 2026-05-06 |
 | 31c-c-2c | --agent / SKILLTAP_AGENT precedence over config block | done | 2026-05-06 |
 | 31c-c-2d-1 | state.json canonical store; installed.json/plugins.json no longer written | done | 2026-05-06 |
-| 31c-c-2d-2 | v0.x schema + read-fallback deletion (final cleanup) | pending  | —         |
+| 31c-c-2d-2-orphan | doctor check + --fix for v0.x file orphans | done | 2026-05-06 |
+| 31c-c-2d-2-final | v0.x schema + read-fallback deletion (final cleanup) | deferred to v2.2 | — |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
@@ -230,6 +231,25 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 31c-c-2d-2 (orphan UX) complete — doctor detects and cleans up v0.x file orphans
+
+After Phase 31c-c-2d-1 made state.json the canonical store, v0.x users who upgrade and run any install/update/remove get their data transparently transferred into state.json (via the read-fallback). The legacy `installed.json` / `plugins.json` files remain orphaned on disk — harmless but confusing.
+
+Added `core/src/doctor/checks/v1-orphans.ts` as the 15th doctor check. Detects the orphan condition:
+- state.json populated (skills or plugins) — i.e. user has migrated
+- AND `installed.json` or `plugins.json` still on disk
+
+When detected, emits a `warn` with one fixable issue per orphan. `skilltap doctor --fix` renames each orphan to `<file>.v1.bak`. Pre-migration users (state.json empty, installed.json populated) are intentionally NOT flagged — they need the fallback to keep working until they migrate or install something new.
+
+Files:
+- `packages/core/src/doctor/checks/v1-orphans.ts` — new check, ~80 lines.
+- `packages/core/src/doctor/checks/v1-orphans.test.ts` — 6 tests covering: null state, empty state, populated state w/ no orphans, populated state w/ global orphan, populated state w/ multiple orphans, --fix renaming.
+- `packages/core/src/doctor/index.ts` — wired in as check #15.
+
+`skilltap doctor` now runs 15 checks (9 v1 + 6 v2). End-to-end smoke test in a clean env shows the new line: `v0.x file orphans: n/a (no populated v2 state)`.
+
+What's left for full v0.x retirement (deferred to v2.2): delete the read-fallback in `loadInstalled`/`loadPlugins`, drop `[agent-mode]` from ConfigSchema, move `schemas/installed.ts` and `schemas/plugins.ts` to `schemas/v1/`. Requires a release window so users have time to run the orphan cleanup.
 
 ### Phase 31c-c-2d-1 complete — state.json is the canonical store
 
