@@ -29,6 +29,7 @@ const ERASE_LINE = "\x1b[2K";
 /** Matches sequences that require a footer repaint:
  *  - Erase-down: \x1b[J, \x1b[0J, \x1b[2J (clack emits on every re-render)
  *  - Cursor hide: \x1b[?25l (clack emits on the first render only) */
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching ANSI escapes
 const REPAINT_RE = /\x1b\[\d*J|\x1b\[\?25l/;
 
 // ── Hint context definitions ─────────────────────────────────────────────────

@@ -30,7 +30,7 @@ export function truncate(s: string, max: number): string {
 
 /** Strip ANSI escape sequences to get the visible width of a string. */
 function visibleLength(s: string): number {
-  // eslint-disable-next-line no-control-regex
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escapes
   return s.replace(/\x1b\[[0-9;]*m/g, "").length;
 }
 

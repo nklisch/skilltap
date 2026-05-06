@@ -19,6 +19,7 @@ export const Keys = {
 export type Key = keyof typeof Keys;
 
 // Matches CSI sequences (\x1b[...X), OSC sequences (\x1b]...\x07), bare \x1b
+// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI escapes
 const ANSI_RE = /\x1b(?:\[[0-9;?]*[a-zA-Z]|\][^\x07]*\x07|[^[\]])/g;
 
 export function stripAnsi(str: string): string {
