@@ -366,6 +366,8 @@ See [SPEC.md — Version Scope](./SPEC.md#version-scope) for the detailed roadma
 
 ## v2.0 Direction: Simplification, Unification, Project Manifest
 
+> **Status note (post-cutover):** This section describes the **original v2.0 design intent**. Phase 31 shipped much of it — the project manifest (§1), the plugin/skill management upgrades (§2), the new helper commands (§6), the doctor v2 checks (§6), the `skilltap try` and `skilltap migrate` additions (§6), MCP-only install (§5), and the project manifest workflow are all live. **However, sections §3 (Drop "agent mode"), §4 (Simpler security), and parts of §7 (What's deprecated) were deferred.** Phase 31c-c-2 took simpler paths: the `--agent` flag and `SKILLTAP_AGENT=1` env var were added on top of the existing v0.x per-mode security and `[agent-mode]` config block, rather than replacing them. See [SPEC.md — v2.0 Security](./SPEC.md#v20-security), [v2.0 Configuration](./SPEC.md#v20-configuration), and [v2.0 Removed Features](./SPEC.md#v20-removed-features) for the actual shipped behavior. The original-intent text below is retained as the design rationale.
+
 By v1.0, skilltap had grown three parallel concepts (skill, plugin, tap), two security modes (human, agent), four security presets, two manifest formats we read (Claude Code, Codex) plus two we publish (tap.json, marketplace.json), and an "agent mode" with its own scope and security blocks. It worked, but the surface was wide enough that a new user couldn't predict what `skilltap install foo` would do without reading the spec.
 
 v2.0 keeps skill and plugin as the two parallel user-facing concepts (no forced unification — they really are different shapes), keeps **tap** as the canonical name for a curated git index, and reorganizes everything else around a project manifest.
@@ -446,14 +448,19 @@ v1.0 supported MCP injection for five agent platforms but treated MCP as a side-
 - Existing `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `tap.json`, `marketplace.json` formats keep working as inputs.
 - Telemetry behavior is unchanged from v1.0.
 
-### What's deprecated or removed
+### What's deprecated or removed (original design vs shipped)
 
-- HTTP registry tap type — removed.
-- The `[security.human]` / `[security.agent]` split — collapsed to `[security]`.
-- Security presets (none/relaxed/standard/strict) — removed.
-- `[[security.overrides]]` — replaced with `trust = []`.
-- `[agent-mode]` config block — replaced with `[agent]` block (`default`, `block`).
-- `installed.json` and `plugins.json` separate files — merged into `state.json`.
-- `skilltap config agent-mode` interactive wizard — replaced with `skilltap config set agent.default true|false`.
-- The "human mode vs agent mode" mental model — replaced with "interactive vs `--agent`".
+> **Status:** Bullets below were the v2.0 design intent. Two shipped, six were deferred. Verified against `core/src/schemas/config.ts` and CLAUDE.md.
+
+**Actually removed:**
+- HTTP registry tap type — removed in Phase 31b. ✓
+- `installed.json` and `plugins.json` separate canonical files — merged into `state.json` in Phase 31c-c-2d-1. v0.x files remain as one-time read-fallback for unmigrated users. ✓
+
+**Originally planned but kept in v2.1:**
+- The `[security.human]` / `[security.agent]` split was kept — composePolicy still routes per-mode. The single `[security]` block is deferred.
+- Security presets (none/relaxed/standard/strict) were kept — applied via `skilltap config security --preset` and trust overrides.
+- `[[security.overrides]]` was kept — the `trust = []` glob design (in `policy-v2/trust-glob.ts`) is reserved scaffolding, not wired.
+- `[agent-mode]` config block was kept (slated for v2.2 retirement). The proposed `[agent]` block with `default` / `block` was never built.
+- `skilltap config agent-mode` interactive wizard was kept — remains the persistent-default entry point. The `--agent` flag and `SKILLTAP_AGENT=1` env var were added (Phase 31c-c-2c) as **per-invocation alternatives**, not replacements.
+- The "human mode vs agent mode" mental model was kept — per-mode policy is the architecture. `--agent` activates the agent-mode block.
 - **v1.0** — Plugin support: read Claude Code and Codex plugin formats, install skills + MCP servers + agents as a group, component-level toggle
