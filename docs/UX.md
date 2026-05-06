@@ -2115,18 +2115,20 @@ skilltap plugins  → skilltap plugin
 
 ### Flag changes from v1.0
 
-| Flag | v1.0 | v2.0 |
+| Flag | v1.0 | v2.0 (shipped) |
 |---|---|---|
-| `--agent` | (no flag — agent-mode was config-only) | NEW: enable non-interactive output, no prompts |
-| `--no-agent` | (n/a) | NEW: override `[agent] default = true` for one call |
-| `--deep` | (n/a) | NEW: enable Layer 2 semantic scan for this call (alias of `--semantic`) |
+| `--agent` | (no flag — agent-mode was config-only) | **NEW**: enable non-interactive output, no prompts. Per-invocation alternative to `[agent-mode] enabled` config. |
+| ~~`--no-agent`~~ | (n/a) | **Not shipped.** mri's flag-parser intercepts `--no-*` as bare-flag negation, breaking the implementation pattern (see `.claude/rules/testing.md`). To unset agent mode per-call, omit `--agent` and unset `SKILLTAP_AGENT`. |
+| ~~`--deep`~~ | (n/a) | **Not shipped.** `--semantic` (kept from v1.0) is the only flag for forcing Layer 2 scan. |
 | `--strict` | abort on any security warning | unchanged |
 | `--no-strict` | override `on_warn = fail` | unchanged |
-| `--semantic` | force Layer 2 scan | unchanged (alias of `--deep`) |
-| `--skip-scan` | skip scanning | kept as per-call escape hatch; recommended path is `[security] trust = [...]` |
-| `--strict` (sync) | abort on drift | NEW for sync |
-| `--yes` (sync) | auto-apply drift | NEW for sync |
-| `--prune` (sync) | also remove undeclared | NEW for sync |
+| `--semantic` | force Layer 2 scan | unchanged |
+| `--skip-scan` | skip scanning | kept as per-call escape hatch. Trust path is `[[security.overrides]]` (see SECURITY.md), not the never-shipped `trust = []` array. |
+| `--apply` (sync) | (n/a) | **NEW for sync**: execute the drift plan via install/remove. Without it, sync is read-only. |
+| `--strict` (sync) | (n/a) | **NEW for sync**: stop on first failure during apply. |
+| `--json` (sync) | (n/a) | **NEW for sync**: emit drift plan as JSON. |
+| ~~`--yes` (sync)~~ | (n/a) | **Not shipped.** Use `--apply` to execute the plan. |
+| ~~`--prune` (sync)~~ | (n/a) | **Not shipped.** Sync's `remove`-kind drift fires for any item in state but not in the manifest; no separate prune toggle. |
 
 ### `skilltap install` (v2.0)
 
@@ -2281,21 +2283,23 @@ $ skilltap config set security.trust github.com/corp/*
 $ skilltap config get
 defaults.also = ["claude-code", "cursor"]
 defaults.scope = ""
-agent.default = true
-agent.block = false
-security.scan = "static"
-security.on_warn = "install"
-security.trust = ["github.com/corp/*", "home"]
+agent-mode.enabled = false
+agent-mode.scope = "project"
+security.human.scan = "static"
+security.human.on_warn = "prompt"
+security.agent.scan = "static"
+security.agent.on_warn = "fail"
+security.agent.require_scan = true
 ...
 
 $ skilltap config get --json
-{ "defaults": {...}, "agent": {...}, "security": {...}, ... }
+{ "defaults": {...}, "agent-mode": {...}, "security": {...}, ... }
 
 $ skilltap config edit
 (opens config.toml in $EDITOR)
 ```
 
-`skilltap config agent-mode` (the v1.0 wizard) is removed. To toggle agent mode default: `skilltap config set agent.default true|false`.
+`skilltap config agent-mode` (the persistent wizard) is **kept** in v2.1; it remains the canonical entry point for setting the persistent default. The `--agent` flag and `SKILLTAP_AGENT=1` env var are per-invocation alternatives, not replacements. To toggle the persistent default non-interactively, edit `config.toml` directly via `skilltap config edit` — `config set agent-mode.*` is intentionally blocked (the wizard captures invariants the flat setter cannot).
 
 ### Project Manifest Workflow
 
