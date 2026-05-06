@@ -1,4 +1,4 @@
-import { loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
+import { loadConfig, loadInstalled, loadPlugins, loadTaps } from "@skilltap/core";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 async function loadAllSkills() {
@@ -8,6 +8,16 @@ async function loadAllSkills() {
   return [
     ...(globalResult.ok ? globalResult.value.skills : []),
     ...(projectResult?.ok ? projectResult.value.skills : []),
+  ];
+}
+
+async function loadAllPlugins() {
+  const globalResult = await loadPlugins();
+  const projectRoot = await tryFindProjectRoot();
+  const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
+  return [
+    ...(globalResult.ok ? globalResult.value.plugins : []),
+    ...(projectResult?.ok ? projectResult.value.plugins : []),
   ];
 }
 
@@ -51,6 +61,11 @@ export async function printCompletions(type: string): Promise<void> {
       if (config.ok) {
         for (const tap of config.value.taps) console.log(tap.name);
       }
+      break;
+    }
+    case "installed-plugins": {
+      const plugins = await loadAllPlugins();
+      for (const p of plugins) console.log(p.name);
       break;
     }
   }

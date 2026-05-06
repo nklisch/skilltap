@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 1
+**Phases since last refactor:** 2
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -29,7 +29,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
 | 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
 | 36  | Doctor v2.0 upgrades                           | done     | 2026-05-06 |
-| 37  | Command surface promotion + aliases            | pending  | —         |
+| 37  | Command surface promotion + aliases            | done     | 2026-05-06 |
 | 38  | v2.0 polish + docs + release                   | pending  | —         |
 
 ---
@@ -156,6 +156,21 @@ Verification: 285 tests pass / 0 fail. 871-line net deletion (-984 / +113).
 - 8 phases since last refactor (26, 27, 28, 29, 30, 31a, 33a, 31b). The framework default is "every 3"; 8 is well past that.
 - Phases have been varied: schemas / I/O / commands / one destructive cleanup. No single duplication or pattern has emerged that would benefit from cross-phase refactoring.
 - Decision: defer one more phase. Re-evaluate after 31c lands the install cutover, which will likely surface refactor opportunities (the install code paths get rewritten and any duplication will be visible).
+
+### Phase 37 complete — surface promotion + aliases
+
+Most of the surface was wired in earlier phases (top-level `toggle/enable/disable` from Phase 34, `sync` from 29, `status` from 33a, `try` from 35a, `migrate` from 27). Phase 37 was mostly a polish pass on shell completions:
+
+- **bash.ts**: added 6 new commands to the `commands` list and per-command case branches for migrate/sync/try/toggle/enable/disable (incl. dynamic `installed-plugins` completion for the toggle/enable/disable family).
+- **zsh.ts**: added 6 new entries to the `commands` array and case branches under `case $words[1] in`.
+- **fish.ts**: added 6 `__fish_use_subcommand` entries plus per-command flag completions.
+- **dynamic.ts**: added `installed-plugins` case + `loadAllPlugins()` helper (reads global + project plugins.json).
+
+Verified end-to-end: `skilltap completions bash|zsh|fish` output includes the new commands; `skilltap --get-completions installed-plugins` returns the expected (empty in test env) list.
+
+Direct implementation, no Sonnet agents — pure additive completion script edits.
+
+Tests: 256 v2 baseline still passes (no new tests; completions are static-generated text covered by smoke).
 
 ### Phase 36 complete — doctor v2.0 upgrades
 

@@ -28,6 +28,12 @@ complete -c skilltap -n '__fish_use_subcommand' -a tap -d 'Manage taps'
 complete -c skilltap -n '__fish_use_subcommand' -a doctor -d 'Check environment and state'
 complete -c skilltap -n '__fish_use_subcommand' -a completions -d 'Generate shell completions'
 complete -c skilltap -n '__fish_use_subcommand' -a self-update -d 'Update the skilltap binary'
+complete -c skilltap -n '__fish_use_subcommand' -a migrate -d 'Migrate v1.0 setup to v2.0'
+complete -c skilltap -n '__fish_use_subcommand' -a sync -d 'Show drift between manifest, lockfile, and state'
+complete -c skilltap -n '__fish_use_subcommand' -a try -d 'Preview a skill or plugin without installing'
+complete -c skilltap -n '__fish_use_subcommand' -a toggle -d 'Toggle a plugin component (name:component) or open a picker'
+complete -c skilltap -n '__fish_use_subcommand' -a enable -d 'Enable a plugin component or all inactive components'
+complete -c skilltap -n '__fish_use_subcommand' -a disable -d 'Disable a plugin component or all active components'
 
 # install flags
 complete -c skilltap -n '__fish_seen_subcommand_from install' -l project -d 'Install to project scope'
@@ -202,5 +208,20 @@ complete -c skilltap -n '__fish_seen_subcommand_from status' -l json -d 'Output 
 complete -c skilltap -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from telemetry; and not __fish_seen_subcommand_from status enable disable' -xa 'status enable disable'
 
 # self-update flags
-complete -c skilltap -n '__fish_seen_subcommand_from self-update' -l force -d 'Bypass cache and re-install even if already on latest'`;
+complete -c skilltap -n '__fish_seen_subcommand_from self-update' -l force -d 'Bypass cache and re-install even if already on latest'
+
+# migrate flags
+complete -c skilltap -n '__fish_seen_subcommand_from migrate' -l json -d 'Output as JSON'
+
+# sync flags
+complete -c skilltap -n '__fish_seen_subcommand_from sync' -l json -d 'Output the plan as JSON'
+complete -c skilltap -n '__fish_seen_subcommand_from sync' -l apply -d 'Apply the plan (lands in Phase 31c)'
+
+# try flags
+complete -c skilltap -n '__fish_seen_subcommand_from try' -l json -d 'Output as JSON'
+complete -c skilltap -n '__fish_seen_subcommand_from try' -l skip-scan -d 'Skip the static security scan'
+
+# toggle/enable/disable flags + dynamic plugin names
+complete -c skilltap -n '__fish_seen_subcommand_from toggle enable disable' -l json -d 'Output as JSON'
+complete -c skilltap -n '__fish_seen_subcommand_from toggle enable disable' -xa '(skilltap --get-completions installed-plugins 2>/dev/null)'`;
 }

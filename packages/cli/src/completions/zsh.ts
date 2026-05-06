@@ -26,6 +26,12 @@ _skilltap() {
     'doctor:Check environment and state'
     'completions:Generate shell completions'
     'self-update:Update the skilltap binary'
+    'migrate:Migrate v1.0 setup to v2.0'
+    'sync:Show drift between manifest, lockfile, and state'
+    'try:Preview a skill or plugin without installing'
+    'toggle:Toggle a plugin component (name:component) or open a picker'
+    'enable:Enable a plugin component or all inactive components'
+    'disable:Disable a plugin component or all active components'
   )
 
   _arguments -C \\
@@ -320,6 +326,27 @@ _skilltap() {
           ;;
         self-update)
           _arguments '--force[Bypass cache and re-install even if already on latest]'
+          ;;
+        migrate)
+          _arguments '--json[Output as JSON]'
+          ;;
+        sync)
+          _arguments \\
+            '--json[Output the plan as JSON]' \\
+            '--apply[Apply the plan (lands in Phase 31c)]'
+          ;;
+        try)
+          _arguments \\
+            '--json[Output as JSON]' \\
+            '--skip-scan[Skip the static security scan]' \\
+            '1:source:'
+          ;;
+        toggle|enable|disable)
+          local -a plugins
+          plugins=(\${(f)"\$(skilltap --get-completions installed-plugins 2>/dev/null)"})
+          _arguments \\
+            '--json[Output as JSON]' \\
+            "1:plugin\\::($plugins)"
           ;;
       esac
       ;;

@@ -12,7 +12,7 @@ _skilltap() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="status install remove list update find skills link unlink info plugin create verify config tap doctor completions self-update"
+  local commands="status install remove list update find skills link unlink info plugin create verify config tap doctor completions self-update migrate sync try toggle enable disable"
   local tap_commands="add remove list info init install"
   local skills_commands="info remove link unlink adopt move disable enable"
   local agents="${agents}"
@@ -260,6 +260,26 @@ _skilltap() {
       ;;
     self-update)
       COMPREPLY=($(compgen -W "--force" -- "$cur"))
+      ;;
+    migrate)
+      COMPREPLY=($(compgen -W "--json" -- "$cur"))
+      ;;
+    sync)
+      COMPREPLY=($(compgen -W "--json --apply" -- "$cur"))
+      ;;
+    try)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--json --skip-scan" -- "$cur"))
+      fi
+      ;;
+    toggle|enable|disable)
+      if [[ "$cur" == -* ]]; then
+        COMPREPLY=($(compgen -W "--json" -- "$cur"))
+      else
+        local plugins
+        plugins=$(skilltap --get-completions installed-plugins 2>/dev/null)
+        COMPREPLY=($(compgen -W "$plugins" -- "$cur"))
+      fi
       ;;
     "")
       COMPREPLY=($(compgen -W "$commands" -- "$cur"))
