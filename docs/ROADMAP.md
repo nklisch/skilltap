@@ -368,7 +368,7 @@ Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 dep
 
 ## v1.0 — Plugin Support
 
-### Phase 20 — Plugin Detection and Parsing
+### Phase 20 — Plugin Detection and Parsing ✓
 
 Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) plugin formats. Extract the portable subset: skills, MCP server configs, and agent definitions.
 
@@ -384,7 +384,7 @@ Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin
 
 ---
 
-### Phase 21 — Plugin Storage and Data Model
+### Phase 21 — Plugin Storage and Data Model ✓
 
 Plugin as a first-class record in `plugins.json`, with per-component state tracking.
 
@@ -398,7 +398,7 @@ Plugin as a first-class record in `plugins.json`, with per-component state track
 
 ---
 
-### Phase 22 — MCP Config Injection
+### Phase 22 — MCP Config Injection ✓
 
 Write MCP server entries directly into each target agent's config file.
 
@@ -417,7 +417,7 @@ Write MCP server entries directly into each target agent's config file.
 
 ---
 
-### Phase 23 — Plugin Install Flow
+### Phase 23 — Plugin Install Flow ✓
 
 Wire plugin detection into the existing `skilltap install` command. Auto-detect plugins and install all components.
 
@@ -438,7 +438,7 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
 
 ---
 
-### Phase 24 — Plugin Management Commands
+### Phase 24 — Plugin Management Commands ✓
 
 `skilltap plugin` subcommand group for listing, inspecting, toggling, and removing plugins.
 
@@ -461,7 +461,7 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
 
 ---
 
-### Phase 25 — Plugin Polish
+### Phase 25 — Plugin Polish ✓
 
 - [x] **25.1** Marketplace tap adapter update: `adaptMarketplaceToTap()` now includes a `plugin: true` flag on entries that have MCP/agent components (not just skills), so `skilltap find` can show "plugin" vs "skill" in results
 - [x] **25.2** `skilltap find` shows plugin badge for tap entries that are plugins
