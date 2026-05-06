@@ -24,6 +24,7 @@ function parseVersion(v: string): [number, number, number] | null {
   const clean = v.startsWith("v") ? v.slice(1) : v;
   const parts = clean.split(".").map(Number);
   if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  // biome-ignore lint/style/noNonNullAssertion: parts.length === 3 guard above
   return [parts[0]!, parts[1]!, parts[2]!];
 }
 

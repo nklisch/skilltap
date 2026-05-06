@@ -39,8 +39,11 @@ export async function checkGit(): Promise<DoctorCheck> {
   }
 
   const match = versionStr.match(/(\d+)\.(\d+)\.(\d+)/);
+  // biome-ignore lint/style/noNonNullAssertion: regex has 3 groups; defined when match truthy
   const major = match ? parseInt(match[1]!, 10) : 0;
+  // biome-ignore lint/style/noNonNullAssertion: regex has 3 groups; defined when match truthy
   const minor = match ? parseInt(match[2]!, 10) : 0;
+  // biome-ignore lint/style/noNonNullAssertion: regex has 3 groups; defined when match truthy
   const patch = match ? parseInt(match[3]!, 10) : 0;
   const versionTag = match ? `${major}.${minor}.${patch}` : versionStr;
   const detail = `${gitPath} (${versionTag})`;

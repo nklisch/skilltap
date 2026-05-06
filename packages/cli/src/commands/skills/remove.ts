@@ -230,7 +230,8 @@ export default defineCommand({
     if (!args.yes && args.name) {
       const label =
         skillsToRemove.length === 1
-          ? skillsToRemove[0]!.name
+          ? // biome-ignore lint/style/noNonNullAssertion: length === 1 guard
+            skillsToRemove[0]!.name
           : `${skillsToRemove.length} skills`;
       const confirmed = await confirmRemove(label);
       if (confirmed === false) process.exit(2);
@@ -238,7 +239,8 @@ export default defineCommand({
 
     const label =
       skillsToRemove.length === 1
-        ? skillsToRemove[0]!.name
+        ? // biome-ignore lint/style/noNonNullAssertion: length === 1 guard
+          skillsToRemove[0]!.name
         : `${skillsToRemove.length} skills`;
     const s = spinner();
     s.start(`Removing ${label}...`);
@@ -269,6 +271,7 @@ export default defineCommand({
     sendEvent(config, "remove", { ...telemetryBase(false), success: true });
     s.stop("Removed.");
     if (skillsToRemove.length === 1) {
+      // biome-ignore lint/style/noNonNullAssertion: length === 1 guard
       successLine(`Removed ${skillsToRemove[0]!.name}`);
     } else {
       successLine(`Removed ${skillsToRemove.length} skills`);
