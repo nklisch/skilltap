@@ -132,7 +132,13 @@ All agents are invoked without tool access -- they can only produce text output,
 
 ## `[agent-mode]`
 
-Agent mode settings. When enabled, all skilltap commands become non-interactive. Toggle with `skilltap config agent-mode` (interactive, human-only).
+Agent mode settings. When enabled, all skilltap commands become non-interactive. Three ways to enter agent mode (highest precedence first):
+
+1. **Per-invocation flag**: `skilltap install foo --agent`
+2. **Environment variable**: `SKILLTAP_AGENT=1 skilltap install foo`
+3. **Persistent config**: `skilltap config agent-mode` (interactive wizard, sets `enabled = true` below)
+
+The flag and env var are recommended for CI / scripts because they don't leak persistent config state. The config block remains for users who always want agent mode in a given environment.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -157,7 +163,7 @@ When `agent-mode.enabled = true`:
 | Security | from `[security.agent]` | Uses per-mode agent security settings (fully configurable) |
 | Output format | Plain text | No ANSI colors, spinners, or Unicode decorations |
 
-Agent mode has **no CLI flag** to toggle it. It can only be enabled or disabled through `skilltap config agent-mode`, which requires an interactive terminal. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
+Agent mode can be toggled via the `--agent` flag, the `SKILLTAP_AGENT=1` env var, or persistently via `skilltap config agent-mode` (interactive wizard). Precedence order is flag > env > config block. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
 
 ### Agent Mode Output
 
@@ -436,7 +442,7 @@ When `agent-mode.enabled = true`:
 - Security uses `[security.agent]` settings (fully configurable)
 - Output is plain text (no ANSI, spinners, or Unicode)
 
-Agent mode can only be toggled interactively via `skilltap config agent-mode`. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
+Agent mode can be toggled per-invocation with `--agent`, per-shell with `SKILLTAP_AGENT=1`, or persistently with `skilltap config agent-mode`. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
 
 ### Trust Tier Override Resolution
 
