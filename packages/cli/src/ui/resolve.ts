@@ -5,6 +5,7 @@ import {
   type EffectivePolicy,
   type InstalledSkill,
   findProjectRoot,
+  isInGitRepo,
   loadInstalled,
   resolveAgent,
   saveConfig,
@@ -16,20 +17,30 @@ export async function tryFindProjectRoot(): Promise<string | undefined> {
 }
 import { agentError } from "./agent-out";
 import { errorLine } from "./format";
-import { selectAgent, selectScope } from "./prompts";
+import { selectAgent } from "./prompts";
 
 export type ScopeArgs = {
   project?: boolean;
   global?: boolean;
 };
 
-/** Resolve scope from CLI flags, config default, or interactive prompt. */
+/**
+ * Resolve scope from CLI flags, config default, or smart inference.
+ *
+ * Smart default (Phase 31c-c-1): when no flag and no config default is set,
+ * infer the scope from the cwd's git context. Inside a git repo → project;
+ * outside → global. No interactive prompt — the inferred scope is reported
+ * via the returned object (caller decides whether to surface it). If you
+ * genuinely want the old prompt behavior, run with `--prompt-scope` (not
+ * implemented; pass --project or --global to override the inference).
+ */
 export async function resolveScope(
   args: ScopeArgs,
   config?: Config,
-): Promise<{ scope: "global" | "project"; projectRoot?: string }> {
+): Promise<{ scope: "global" | "project"; projectRoot?: string; inferred?: boolean }> {
   let scope: "global" | "project";
   let projectRoot: string | undefined;
+  let inferred = false;
 
   if (args.project) {
     scope = "project";
@@ -40,12 +51,17 @@ export async function resolveScope(
     scope = config.defaults.scope as "global" | "project";
     if (scope === "project") projectRoot = await findProjectRoot();
   } else {
-    const chosen = await selectScope();
-    scope = chosen as "global" | "project";
-    if (scope === "project") projectRoot = await findProjectRoot();
+    const gitRoot = await isInGitRepo();
+    if (gitRoot) {
+      scope = "project";
+      projectRoot = gitRoot;
+    } else {
+      scope = "global";
+    }
+    inferred = true;
   }
 
-  return { scope, projectRoot };
+  return { scope, projectRoot, inferred };
 }
 
 /** Parse --also flag with agent validation, falling back to config defaults. */

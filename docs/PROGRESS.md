@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 5
+**Phases since last refactor:** 6
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -24,10 +24,11 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-a | Manifest+lockfile writes from install        | done     | 2026-05-06 |
 | 31c-b-1 | Manifest writes from remove                | done     | 2026-05-06 |
 | 31c-b-2 | Sync apply implementation                  | done     | 2026-05-06 |
-| 31c-c | state.json reads cutover + smart scope + agent | pending  | —         |
+| 31c-c-1 | Smart scope default (was 33b)            | done     | 2026-05-06 |
+| 31c-c-2 | state.json reads + agent flag + mcp + v1 retire | pending | —     |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
-| 33b | Smart scope default in policy compose          | pending  | —         |
+| 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
 | 34  | Component-ref syntax + toggle/enable/disable   | done     | 2026-05-06 |
 | 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
 | 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
@@ -171,6 +172,16 @@ Split per design-skill rule (>15 units → split):
 - **31c-c (pending)**: state.json reads cutover + smart scope default + agent flag cutover + `mcp:` prefix + v1 schema retirement. The destructive batch.
 
 Splitting respects context limits and lets each step ship + verify in isolation.
+
+### Phase 31c-c-1 complete — smart scope default
+
+`resolveScope` (in `cli/src/ui/resolve.ts`) no longer prompts when there's no scope flag and no config default. Instead it infers from cwd's git context: inside a git repo → `project`; outside → `global`. Returns `inferred: true` so callers can surface what was chosen.
+
+New helper `isInGitRepo(startDir?)` in `core/src/paths.ts` mirrors `findProjectRoot` but returns `null` instead of falling back to cwd — needed to distinguish "no .git ancestor" from the cwd-fallback semantics.
+
+This was originally Phase 33b. Pulled into Phase 31c-c as 31c-c-1 because the behavior change is small and additive (pure UX improvement: no prompt for the common case). Existing tests don't mock the prompt so removing it was safe.
+
+Tests: 4 new in `core/src/paths.test.ts`. Install tests pass unchanged. Full v2 baseline 293/293.
 
 ### Phase 31c-b-2 complete — sync apply
 

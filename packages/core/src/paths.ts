@@ -19,6 +19,20 @@ export async function findProjectRoot(startDir?: string): Promise<string> {
   }
 }
 
+// Like findProjectRoot, but returns null when no .git ancestor exists.
+// Used by smart-scope-default logic to distinguish "in a git repo" from
+// "outside any repo" (where findProjectRoot's cwd-fallback would mislead).
+export async function isInGitRepo(startDir?: string): Promise<string | null> {
+  let dir = startDir ?? process.cwd();
+  while (true) {
+    const stat = await lstat(join(dir, ".git")).catch(() => null);
+    if (stat) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 export function skillInstallDir(
   name: string,
   scope: "global" | "project",
