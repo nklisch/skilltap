@@ -6,7 +6,9 @@
 **Phases since last refactor:** 4
 **Total refactor passes:** 2
 
-**Quality milestone (2026-05-06):** Project lint state went from 104 errors / 279 warnings (session start) to **0 / 0** through a sustained per-rule cleanup. macOS test-isolation bug fixed (1621 / 1621 tests now ALL pass). Every remaining `!` non-null assertion in the codebase has a comment explaining the runtime guard that makes it safe.
+**Quality milestone (2026-05-06):** Project lint state went from 104 errors / 279 warnings (session start) to **0 / 0** through a sustained per-rule cleanup. macOS test-isolation bug fixed (1608+ tests now ALL pass). Every remaining `!` non-null assertion in the codebase has a comment explaining the runtime guard that makes it safe.
+
+**Documentation milestone (2026-05-06):** All user-facing docs audited for v2.1 consistency. Stale references corrected across 14 files: HTTP registry sections marked deprecated (README, VISION, taps, config-options, tap-format), `installed.json`/`plugins.json` references updated to `state.json` (getting-started, doctor, shell-completions, installing-skills, configuration, cli, config-options — 16+ occurrences), `--agent` flag entry points documented across configuration + cli + config-options. New v2.0 feature surfacing: project manifest workflow added to teams guide, `skilltap status` + v2.0 next-steps added to getting-started, key-features bullets for project manifest + agent mode added to "What is skilltap?", 6 v2 doctor checks documented in doctor.md.
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
 
