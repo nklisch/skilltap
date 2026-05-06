@@ -81,7 +81,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-c-2d-1-fix | doctor 'installed' check reads state.json post-cutover | done | 2026-05-06 |
 | 31c-c-2d-1-msg | doctor messages + code comments updated 'installed.json' → 'state.json' | done | 2026-05-06 |
 | 31c-c-2d-2-final | v0.x schema + read-fallback deletion (final cleanup) | deferred to v2.2 | — |
-| 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
+| 32  | Agent flag (superseded by 31c-c-2c)            | superseded | 2026-05-06 |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
 | 34  | Component-ref syntax + toggle/enable/disable   | done     | 2026-05-06 |
@@ -754,7 +754,7 @@ opening steps.
 
 - **31c-c-2**: state.json reads cutover + `[agent-mode]` retirement + `mcp:` prefix + v1 schema retirement. The destructive cutover. v0.x readers (`installed.json` + `plugins.json`) stay active in v2.0 so existing users aren't broken on upgrade.
 - **35b**: `skilltap install mcp:<source>` standalone MCP install. Designed but not implemented; rolls into 31c-c-2.
-- **32**: dedicated agent-flag wire-up. Largely subsumed by 31a's `composeV2` (which already implements `--agent` flag, `SKILLTAP_AGENT` env var, `[agent].default`, `[agent].block`); the cutover that retires `[agent-mode]` is part of 31c-c-2.
+- **32**: dedicated agent-flag wire-up. Originally planned to swap v1 `composePolicy` for `composeV2`. Phase 31c-c-2c took the simpler path: extended v1 `composePolicy` directly with the same precedence (`flags.agent > SKILLTAP_AGENT > config`). The post-cutover doc-audit pass (this session) marks 32 as **superseded by 31c-c-2c** and documents `policy-v2/index.ts` as reserved-but-unwired infrastructure. The `composeV2` module retains a few v2-only concepts (`--no-agent`, source-level `trust` glob matching, `EnvV2` separation) that a future v2.x phase could pick up.
 
 ### Phase deferred to user
 
