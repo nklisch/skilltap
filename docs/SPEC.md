@@ -761,6 +761,75 @@ ERROR: 'agent-mode.enabled' cannot be set via 'config set'
 
 ---
 
+### `skilltap config security`
+
+Configure the `[security]` block — scan mode, warning behavior, trust overrides. Has both interactive (wizard) and non-interactive flag-driven modes; mode is auto-selected based on whether any non-interactive flags were passed.
+
+**Options (non-interactive mode — passing any of these triggers flag-driven mode):**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--preset <name>` | string | — | Apply a named preset: `none`, `relaxed`, `standard`, `strict`. |
+| `--mode <which>` | string | `both` | Which mode to configure when applying the preset/scan/on-warn flags: `human`, `agent`, `both`. |
+| `--scan <level>` | string | — | Set `[security.<mode>].scan` to `static`, `semantic`, or `off`. |
+| `--on-warn <behavior>` | string | — | Set `[security.<mode>].on_warn` to `prompt`, `fail`, or `allow`. |
+| `--require-scan` | boolean | — | Set `[security.<mode>].require_scan = true` (blocks `--skip-scan` for that mode). Pass without value; cannot be cleared via this flag (use the wizard or edit config.toml). |
+| `--trust <override>` | string | — | Add a trust override. Format: `tap:<name>=<preset>` or `source:<type>=<preset>` (e.g. `tap:my-corp=none`, `source:npm=strict`). |
+| `--remove-trust <match>` | string | — | Remove a trust override by its match value. |
+
+**Behavior:**
+
+- If any non-interactive flag is set, runs once, updates config, and exits silently. Safe in scripts and agents.
+- Otherwise, runs an interactive wizard prompting for human-mode and agent-mode security separately. The wizard requires a TTY; non-TTY contexts with no flags exit 1.
+- Presets map to the documented `SECURITY_PRESETS` (`none`, `relaxed`, `standard`, `strict`); see [Security Config Schema](#security-policy-composition).
+
+**Examples:**
+
+```
+skilltap config security --preset standard
+skilltap config security --mode agent --preset strict
+skilltap config security --trust tap:my-corp=none
+skilltap config security --remove-trust my-corp
+```
+
+**Exit codes:** 0 success, 1 invalid flag value, 2 cancelled wizard, 1 non-TTY without flags.
+
+---
+
+### `skilltap config telemetry <subcommand>`
+
+Manage anonymous usage telemetry. Three subcommands:
+
+| Subcommand | Description |
+|------------|-------------|
+| `enable` | Opt in. Generates an anonymous ID if one doesn't exist and sets `telemetry.enabled = true`. |
+| `disable` | Opt out. Sets `telemetry.enabled = false`. The anonymous ID is retained so re-enabling doesn't generate a new one (idempotent). |
+| `status` | Print whether telemetry is currently active, the anonymous ID (if enabled), what's collected, and how to opt out via env vars (`DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1`). |
+
+**Behavior:**
+
+- The `enable`/`disable` subcommands are non-interactive — safe for agents and scripts.
+- `status` is read-only.
+- If `DO_NOT_TRACK=1` or `SKILLTAP_TELEMETRY_DISABLED=1` is set in the environment, `status` reports the override and ignores the config setting.
+
+**Exit codes:** 0 success, 1 config load/save failure.
+
+---
+
+### `skilltap config edit`
+
+Open the user's `config.toml` in `$EDITOR` (falls back to `vi`). Useful for editing keys not covered by the wizards or `config set`.
+
+**Behavior:**
+
+- Resolves the config path: `${XDG_CONFIG_HOME:-~/.config}/skilltap/config.toml`.
+- Spawns the configured editor with that path as its sole argument.
+- Skilltap does not validate the file post-edit; running `skilltap doctor` afterward catches any introduced TOML errors.
+
+**Exit codes:** Inherits the editor's exit code.
+
+---
+
 ### `skilltap config agent-mode`
 
 Interactive wizard for **persistently** enabling or disabling agent mode in the user's config. **Always interactive — agents cannot run this command.**
