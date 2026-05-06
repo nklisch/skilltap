@@ -38,13 +38,34 @@ See the [Security guide](/guide/security#configuring-security-behavior) for full
 
 ## Agent mode setup
 
-Agent mode configures skilltap for use by AI agents (non-interactive, machine-readable output). Set it up with:
+Agent mode runs skilltap non-interactively: auto-yes, hard-fail on security warnings, and plain-text output (no spinners or prompts). It's how AI agents, CI scripts, and cron jobs invoke skilltap. There are three ways to enable it, ordered by precedence:
+
+### Per-invocation flag (preferred)
+
+```bash
+skilltap install foo --agent
+skilltap update --agent
+```
+
+The `--agent` flag forces agent mode for that one command, regardless of any persistent config. This is the recommended way for one-off automation runs because nothing leaks into your shell environment or config file.
+
+### Environment variable
+
+```bash
+SKILLTAP_AGENT=1 skilltap install foo
+```
+
+Set `SKILLTAP_AGENT=1` to make every skilltap invocation in that shell run in agent mode. Useful when wrapping skilltap in a script or harness.
+
+### Persistent config
 
 ```bash
 skilltap config agent-mode
 ```
 
-This command requires a TTY -- it must be run by a human, not by an agent. It prompts for agent-mode-specific settings like default scope and security preset.
+Interactive wizard that sets `[agent-mode] enabled = true` in your config. After running it, every skilltap invocation defaults to agent mode (you can still override with `--agent=false` per command). Requires a TTY — must be run by a human, not by an agent.
+
+Precedence (highest to lowest): `--agent` flag > `SKILLTAP_AGENT` env var > `[agent-mode] enabled` in config.
 
 ## Programmatic access
 
