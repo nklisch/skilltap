@@ -226,9 +226,7 @@ describe("removeSkill — cache cleanup", () => {
       });
       const loaded = await loadInstalled();
       if (!loaded.ok) return;
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded
       const record = loaded.value.skills[0]!;
-      // biome-ignore lint/style/noNonNullAssertion: multi-skill always sets repo
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
       expect(await lstat(cacheRoot).then((s) => s.isDirectory())).toBe(true);
@@ -246,9 +244,7 @@ describe("removeSkill — cache cleanup", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       const loaded = await loadInstalled();
       if (!loaded.ok) return;
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded
       const record = loaded.value.skills[0]!;
-      // biome-ignore lint/style/noNonNullAssertion: multi-skill always sets repo
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
 

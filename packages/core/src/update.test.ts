@@ -178,7 +178,6 @@ describe("updateSkill — updated", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const beforeLoaded = await loadInstalled();
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded
       const oldSha = beforeLoaded.ok ? beforeLoaded.value.skills[0]!.sha : null;
 
       const newSha = await addFileAndCommit(repo.path, "extra.md", "# Extra");
@@ -191,7 +190,6 @@ describe("updateSkill — updated", () => {
       });
 
       expect(diffs).toHaveLength(1);
-      // biome-ignore lint/style/noNonNullAssertion: asserted length above
       const d = diffs[0]!;
       expect(d.name).toBe("standalone-skill");
       if (oldSha) expect(d.fromSha).toBe(oldSha);
@@ -207,7 +205,6 @@ describe("updateSkill — updated", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const before = await loadInstalled();
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded
       const oldUpdatedAt = before.ok ? before.value.skills[0]!.updatedAt : null;
 
       const newSha = await addFileAndCommit(repo.path, "patch.md", "# Patch");
@@ -216,7 +213,6 @@ describe("updateSkill — updated", () => {
       const after = await loadInstalled();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      // biome-ignore lint/style/noNonNullAssertion: skills array has one entry
       const record = after.value.skills[0]!;
       expect(record.sha).toBe(newSha);
       if (oldUpdatedAt) {

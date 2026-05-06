@@ -39,7 +39,6 @@ describe("installSkill — standalone", () => {
       if (!result.ok) return;
 
       expect(result.value.records).toHaveLength(1);
-      // biome-ignore lint/style/noNonNullAssertion: asserted length above
       const record = result.value.records[0]!;
       expect(record.name).toBe("standalone-skill");
       expect(record.scope).toBe("global");
@@ -174,7 +173,6 @@ describe("installSkill — multi-skill", () => {
       const installedResult = await loadInstalled();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded, at least one skill present
       const record = installedResult.value.skills[0]!;
       expect(record.repo).toBe(repo.path);
     } finally {
@@ -406,10 +404,8 @@ describe("removeSkill", () => {
       });
       const installedResult = await loadInstalled();
       if (!installedResult.ok) return;
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded, at least one skill present
       const record = installedResult.value.skills[0]!;
 
-      // biome-ignore lint/style/noNonNullAssertion: multi-skill install always sets repo
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
       expect(await lstat(cacheRoot).then((s) => s.isDirectory())).toBe(true);
@@ -427,10 +423,8 @@ describe("removeSkill", () => {
       await installSkill(repo.path, { scope: "global" });
       const installedResult = await loadInstalled();
       if (!installedResult.ok) return;
-      // biome-ignore lint/style/noNonNullAssertion: install succeeded, at least one skill present
       const record = installedResult.value.skills[0]!;
 
-      // biome-ignore lint/style/noNonNullAssertion: multi-skill install always sets repo
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
 

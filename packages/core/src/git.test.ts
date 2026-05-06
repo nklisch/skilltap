@@ -129,7 +129,6 @@ describe("log", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.length).toBeGreaterThan(0);
-    // biome-ignore lint/style/noNonNullAssertion: asserted non-empty above
     const entry = result.value[0]!;
     expect(entry.sha).toMatch(/^[0-9a-f]{40}$/);
     expect(typeof entry.message).toBe("string");

@@ -172,7 +172,6 @@ describe("installSkill — npm standalone", () => {
         if (!result.ok) return;
 
         expect(result.value.records).toHaveLength(1);
-        // biome-ignore lint/style/noNonNullAssertion: checked length above
         const record = result.value.records[0]!;
         expect(record.name).toBe("npm-skill");
         expect(record.repo).toBe("npm:npm-skill");
@@ -219,7 +218,6 @@ describe("installSkill — npm standalone", () => {
 
         const { skills } = installedResult.value;
         expect(skills).toHaveLength(1);
-        // biome-ignore lint/style/noNonNullAssertion: checked length above
         const record = skills[0]!;
         expect(record.repo).toBe("npm:npm-skill");
         expect(record.ref).toBe("2.3.1");
@@ -262,7 +260,6 @@ describe("installSkill — npm standalone", () => {
         expect(result.ok).toBe(true);
         if (!result.ok) return;
 
-        // biome-ignore lint/style/noNonNullAssertion: install succeeded
         expect(result.value.records[0]!.ref).toBe("1.0.0");
       } finally {
         registry.stop();
@@ -366,7 +363,6 @@ describe("installSkill — npm multi-skill (skills/* convention)", () => {
         if (!result.ok) return;
 
         expect(result.value.records).toHaveLength(1);
-        // biome-ignore lint/style/noNonNullAssertion: checked length above
         expect(result.value.records[0]!.name).toBe("skill-alpha");
 
         const alphaDir = join(homeDir, ".agents", "skills", "skill-alpha");
@@ -450,7 +446,6 @@ describe("updateSkill — npm", () => {
         });
 
         // Simulate v2 being published by mutating the packages array
-        // biome-ignore lint/style/noNonNullAssertion: packages[0] initialized above
         packages[0]!.versions.push({
           version: "2.0.0",
           tgzPath: v2.tgzPath,
@@ -475,7 +470,6 @@ describe("updateSkill — npm", () => {
         const installedResult = await loadInstalled();
         expect(installedResult.ok).toBe(true);
         if (!installedResult.ok) return;
-        // biome-ignore lint/style/noNonNullAssertion: skill was installed
         expect(installedResult.value.skills[0]!.ref).toBe("2.0.0");
       } finally {
         registry.stop();

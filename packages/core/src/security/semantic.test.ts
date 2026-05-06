@@ -332,7 +332,6 @@ describe("scanSemantic", () => {
     });
 
     expect(progressCalls.length).toBeGreaterThan(0);
-    // biome-ignore lint/style/noNonNullAssertion: length > 0 guaranteed by assertion above
     const last = progressCalls[progressCalls.length - 1]!;
     expect(last[0]).toBe(last[1]); // completed === total
   });

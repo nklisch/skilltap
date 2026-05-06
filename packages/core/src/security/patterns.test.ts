@@ -60,7 +60,6 @@ describe("detectHiddenHtmlCss", () => {
     const content = "text\n<!--\nhidden content\n-->\nmore";
     const matches = detectHiddenHtmlCss(content);
     expect(matches.length).toBeGreaterThan(0);
-    // biome-ignore lint/style/noNonNullAssertion: asserted non-empty above
     const m = matches[0]!;
     expect(m.category).toBe("HTML comment");
     expect(Array.isArray(m.line)).toBe(true);
@@ -123,7 +122,6 @@ describe("detectObfuscation", () => {
     const content = `Encoded data: ${b64}`;
     const matches = detectObfuscation(content);
     expect(matches.some((m) => m.category === "Base64 block")).toBe(true);
-    // biome-ignore lint/style/noNonNullAssertion: find result asserted present via some() above
     const base64Match = matches.find((m) => m.category === "Base64 block")!;
     expect(base64Match.decoded).toBeDefined();
   });
@@ -177,7 +175,6 @@ describe("detectObfuscation", () => {
     const content = "Run: \\x63\\x75\\x72\\x6c\\x20\\x68\\x74\\x74\\x70\\x73";
     const matches = detectObfuscation(content);
     expect(matches.some((m) => m.category === "Hex encoding")).toBe(true);
-    // biome-ignore lint/style/noNonNullAssertion: find result asserted present via some() above
     const hexMatch = matches.find((m) => m.category === "Hex encoding")!;
     expect(hexMatch.decoded).toBe("curl https");
   });

@@ -801,7 +801,6 @@ describe("installSkill via tap name", () => {
         skipScan: true,
         onSelectTap: async (matches) => {
           capturedMatches = matches;
-          // biome-ignore lint/style/noNonNullAssertion: matches guaranteed non-empty here
           return matches[0]!;
         },
       });
