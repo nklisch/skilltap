@@ -320,10 +320,12 @@ Tap definitions. Managed by `skilltap tap add` and `skilltap tap remove`. Each e
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | string | — | Local name for the tap |
-| `url` | string | — | URL of the tap (git repo or HTTP registry endpoint) |
-| `type` | `"git"` \| `"http"` | auto-detected | Tap type. `"git"` clones the repo locally; `"http"` queries a live API. Auto-detected on `tap add`. |
-| `auth_token` | string | — | Static bearer token for HTTP tap authentication. Prefer `auth_env` over this. |
-| `auth_env` | string | — | Name of an environment variable containing the bearer token for HTTP tap authentication. |
+| `url` | string | — | Git URL of the tap repo |
+| `type` | `"git"` | `"git"` | Tap type. v2.0 supports git only — pre-v2.0 also accepted `"http"` for live API registries; those entries are now silently filtered with a warning, and `skilltap migrate` flags them for manual conversion. |
+
+::: warning v2.0 — HTTP tap removal
+`type = "http"`, `auth_token`, and `auth_env` were removed in v2.0. Self-host a private git repo (Gitea, GitLab, bare HTTP repo) for non-public distribution; git authentication via SSH keys or credential helpers covers the auth use case.
+:::
 
 ### Example
 
@@ -335,15 +337,9 @@ url = "https://gitea.example.com/nathan/my-skills-tap"
 [[taps]]
 name = "community"
 url = "https://github.com/someone/awesome-skills-tap"
-
-[[taps]]
-name = "enterprise"
-url = "https://skills.example.com/api/v1"
-type = "http"
-auth_env = "SKILLS_REGISTRY_TOKEN"
 ```
 
-Git taps are cloned to `~/.config/skilltap/taps/{name}/`. HTTP taps have no local clone — they are queried live.
+Git taps are cloned to `~/.config/skilltap/taps/{name}/`.
 
 ---
 

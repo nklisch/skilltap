@@ -242,7 +242,13 @@ Taps can reference skills published to the npm registry using an `npm:` prefix i
 
 When a user installs a skill whose `repo` starts with `npm:`, the tarball is downloaded from the npm registry rather than cloned from git.
 
-## HTTP Registry API
+## HTTP Registry API (removed in v2.0 — historical reference)
+
+::: warning Removed in v2.0
+HTTP registry tap support was removed in v2.0 — taps are now git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning, and `skilltap migrate` lists them as needing manual conversion. The endpoint specifications below are retained as historical reference; nothing here is currently implemented.
+
+For non-git distribution, host your `tap.json` in a private git repo (Gitea, GitLab self-hosted, or any HTTP-accessible bare repo). `skilltap tap add` works against any git URL.
+:::
 
 Instead of a static `tap.json` file in a git repo, you can serve a skill index over HTTP. Any web server that returns the correct JSON responses qualifies as an HTTP registry.
 
