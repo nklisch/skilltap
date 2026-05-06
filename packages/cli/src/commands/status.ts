@@ -119,7 +119,9 @@ function renderStatus(report: StatusReport): void {
       ? `${tap.name} ${ansi.dim("(built-in)")}`
       : tap.name;
     const typeLabel =
-      tap.type === "http" ? ansi.yellow(" (http — deprecated)") : "";
+      tap.type === "http"
+        ? ansi.yellow(" (http — removed in v2.0; run 'skilltap migrate')")
+        : "";
     process.stdout.write(`  ${label}${typeLabel} ${ansi.dim(tap.url)}\n`);
   }
   process.stdout.write("\n");
