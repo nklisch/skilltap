@@ -752,7 +752,7 @@ skilltap config set updates.auto_update patch
 # Blocked keys show hints:
 skilltap config set agent-mode.enabled true
 # error: 'agent-mode.enabled' cannot be set via 'config set'
-# hint: Use 'skilltap config agent-mode'
+# hint: Use 'skilltap config agent-mode' (persistent), or pass --agent / SKILLTAP_AGENT=1 per invocation
 
 skilltap config set security.human.scan off
 # error: 'security.human.scan' cannot be set via 'config set'

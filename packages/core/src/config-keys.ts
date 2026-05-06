@@ -36,8 +36,10 @@ export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
 };
 
 const BLOCKED_SET_KEYS: Record<string, string> = {
-  "agent-mode.enabled": "Use 'skilltap config agent-mode'",
-  "agent-mode.scope": "Use 'skilltap config agent-mode'",
+  "agent-mode.enabled":
+    "Use 'skilltap config agent-mode' (persistent), or pass --agent / SKILLTAP_AGENT=1 per invocation",
+  "agent-mode.scope":
+    "Use 'skilltap config agent-mode' (persistent), or pass --project / --global per invocation",
   "telemetry.enabled": "Use 'skilltap config telemetry enable/disable'",
   "telemetry.notice_shown": "Internal field",
   "telemetry.anonymous_id": "Internal field",
