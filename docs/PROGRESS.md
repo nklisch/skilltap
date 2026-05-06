@@ -3,7 +3,7 @@
 **Status:** v2.0 in-scope complete (v2.1 backlog: 31c-c-2 + 35b)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 8
+**Phases since last refactor:** 9
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -31,7 +31,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
 | 34  | Component-ref syntax + toggle/enable/disable   | done     | 2026-05-06 |
 | 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
-| 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
+| 35b-1 | mcp: install prefix (install side)           | done     | 2026-05-06 |
+| 35b-2 | mcp: remove handling                         | pending  | —         |
 | 36  | Doctor v2.0 upgrades                           | done     | 2026-05-06 |
 | 37  | Command surface promotion + aliases            | done     | 2026-05-06 |
 | 38a | v2.0 README + changelog                        | done     | 2026-05-06 |
@@ -174,6 +175,30 @@ Split per design-skill rule (>15 units → split):
 - **31c-c (pending)**: state.json reads cutover + smart scope default + agent flag cutover + `mcp:` prefix + v1 schema retirement. The destructive batch.
 
 Splitting respects context limits and lets each step ship + verify in isolation.
+
+### Phase 35b-1 complete — `skilltap install mcp:<source>`
+
+Started v2.1 work. Phase 35b (mcp: install prefix) split into 35b-1 (install side, this) and 35b-2 (remove side, pending).
+
+`skilltap install mcp:<source>` now installs MCP servers from a source without touching skill machinery. The `mcp:` prefix is detected at the top of the install command's run handler; if all sources have the prefix, dispatch to `runMcpInstall`. Mixing mcp: and regular sources in one invocation errors out with a clear hint.
+
+For each `mcp:<inner>`:
+- Resolve `<inner>` via existing source adapters (works for github, local, npm, etc.).
+- Clone (or use local path) into a temp dir.
+- Find servers: try `detectPlugin()` first (covers `.claude-plugin/`, `.codex-plugin/`, `.skilltap/` formats and extracts their `[[servers]]`). Fall back to a bare `.mcp.json` at the source root.
+- Inject all found servers into the agent configs from `--also` (or `[claude-code]` by default), namespaced under `skilltap:<slug>:<server-name>` where slug is the last `/`-separated segment of `<inner>`.
+- Write each server to state.json's `mcpServers[]` array (StoredMcpStandalone schema, populated for the first time since Phase 26).
+
+Phase 35b-1 doesn't touch v0.x readers — installations land in `state.json` only (purely additive). Re-running with the same source replaces the existing entries (idempotent).
+
+Smoke verified end-to-end: `skilltap install mcp:/tmp/mcp-test/source --project` writes `skilltap:source:db` into both `state.json` and `.claude/settings.json`. 11 new core tests + the existing 30 install tests still pass. Full v2 baseline 304/304.
+
+Files:
+- `core/src/mcp-install.ts`: `parseMcpRef(source)` + `installMcpOnly(source, options)` orchestrator. Reuses existing helpers (`resolveSource`, `clone`, `detectPlugin`, `parseMcpJson`, `injectMcpServers`, `loadState`/`saveState`).
+- `core/src/mcp-install.test.ts`: 11 tests — parser cases (npm scoped, ssh form, missing prefix, etc.), local-source install path, idempotent re-install, no-servers-found error.
+- `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
+
+35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
 
 ### Phase 38b complete — internal docs (AGENTS.md / CLAUDE.md symlink)
 

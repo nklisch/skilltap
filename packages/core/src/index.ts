@@ -61,3 +61,10 @@ export * from "./sync";
 export * from "./policy-v2";
 export * from "./status";
 export { tryPreview, type TryReport, type TryOptions } from "./try";
+export {
+  installMcpOnly,
+  parseMcpRef,
+  type McpInstallOptions,
+  type McpInstallResult,
+  type ParsedMcpRef,
+} from "./mcp-install";

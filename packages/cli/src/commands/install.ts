@@ -14,8 +14,10 @@ import {
   ensureBuiltinTap,
   findProjectRoot,
   formatOrphanReason,
+  installMcpOnly,
   installSkill,
   isBuiltinTapCloned,
+  parseMcpRef,
   saveConfig,
   skillInstallDir,
   updateSkill,
@@ -122,12 +124,73 @@ export default defineCommand({
     const verbose = args.quiet ? false : config.verbose;
     const sources = args._ as string[];
 
+    // Phase 35b: dispatch mcp:<source> to MCP-only install path. Mixing
+    // mcp: and regular sources in one invocation is rejected.
+    const hasMcp = sources.some((s) => s.startsWith("mcp:"));
+    if (hasMcp) {
+      if (!sources.every((s) => s.startsWith("mcp:"))) {
+        errorLine(
+          "Cannot mix mcp: and regular sources in one install. Run them separately.",
+        );
+        process.exit(1);
+      }
+      return runMcpInstall(sources, args, config, policy);
+    }
+
     if (policy.agentMode) {
       return runAgentMode(sources, args, config, policy);
     }
     return runInteractiveMode(sources, args, config, policy, verbose);
   },
 });
+
+// ─── MCP-only install (Phase 35b) ─────────────────────────────────────────────
+
+async function runMcpInstall(
+  sources: string[],
+  args: { also?: string },
+  config: Config,
+  policy: EffectivePolicy,
+): Promise<void> {
+  const scope = (policy.scope || "project") as "global" | "project";
+  const projectRoot = scope === "project" ? await findProjectRoot() : undefined;
+  const agents = parseAlsoFlag(args.also as string | undefined, config);
+  const effectiveAgents = agents.length > 0 ? agents : ["claude-code"];
+
+  for (const source of sources) {
+    const ref = parseMcpRef(source);
+    if (!ref) {
+      errorLine(`Invalid mcp: source: ${source}`);
+      process.exit(1);
+    }
+
+    const result = await installMcpOnly(source, {
+      scope,
+      projectRoot,
+      agents: effectiveAgents,
+      gitHost: config.default_git_host,
+    });
+
+    if (!result.ok) {
+      errorLine(result.error.message, result.error.hint);
+      process.exit(1);
+    }
+
+    const r = result.value;
+    if (policy.agentMode) {
+      agentSuccess(
+        `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} into ${r.agents.join(", ")}`,
+      );
+    } else {
+      successLine(
+        `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} → ${r.agents.join(", ")}`,
+      );
+      for (const record of r.records) {
+        successLine(`  • ${record.name}`);
+      }
+    }
+  }
+}
 
 // ─── Agent Mode ───────────────────────────────────────────────────────────────
 
