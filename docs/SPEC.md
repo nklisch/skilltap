@@ -375,6 +375,12 @@ Show details about an installed or available skill.
 |----------|----------|-------------|
 | `name` | Yes | Skill name |
 
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output as JSON. |
+
 **Output:**
 
 ```
@@ -2260,7 +2266,7 @@ skilltap self-update [--force]
 
 ### Startup Update Check
 
-Runs on every invocation except for the args in `SKIP_STARTUP_ARGS` (`--version`, `--help`, `-h`, `self-update`, `telemetry`, `status`) and when agent mode is enabled.
+Runs on every invocation except for the args in `SKIP_STARTUP_ARGS` (`--version`, `--help`, `-h`, `self-update`, `telemetry`, `status`, `migrate`) and when agent mode is enabled. Also skipped when `SKILLTAP_NO_STARTUP=1` is set in the environment (used by tests and CI).
 
 **Algorithm:**
 
@@ -3081,23 +3087,29 @@ See [SECURITY.md — v2.0](./SECURITY.md#v20-simplification) for the full rewrit
 
 ### v2.0 Agent Flag
 
-Replaces "agent mode" as a top-level concept.
+Phase 31c-c-2c (v2.0) made `--agent` and `SKILLTAP_AGENT=1` per-invocation entry points alongside the existing config-based agent mode.
 
-Activation (any one):
-- `--agent` CLI flag.
-- `SKILLTAP_AGENT=1` environment variable.
-- `[agent] default = true` in config (sticky).
+**Activation precedence (high → low):**
+1. `--agent` CLI flag (per-invocation, every command via `composePolicy`).
+2. `SKILLTAP_AGENT=1` environment variable (per-invocation).
+3. `[agent-mode] enabled = true` config block (persistent — set by `skilltap config agent-mode`).
 
-Effects:
+**Effects:**
 - All prompts skipped. Where v1.0 would prompt, v2.0 either auto-picks the only option, applies a configured default, or errors out (no silent fallback).
 - Output is plain text (no spinners, no colors, no clack UI).
-- `--no-agent` (or unsetting the env var) overrides the config default per call.
-- `[agent] block = true` rejects `--agent` invocations entirely with `error: --agent is blocked by config`. Useful for shared workstations.
+- Security mode follows `[security.agent]` (default `on_warn = "fail"`, `require_scan = true`).
 
-What `--agent` does NOT change:
-- Security policy. Same rules either way.
-- Scope resolution. Same rules either way.
+**What `--agent` does NOT change:**
+- Security policy. Same composition either way.
+- Scope resolution. Same smart-default rules either way.
 - Available commands. All commands work identically; just non-interactive.
+
+**Original v2.0 design vs. shipped behavior:**
+The original v2.0 design (in earlier SPEC drafts and the `policy-v2/` module) called for a fresh `[agent]` config block with `default` and `block` fields, plus a `--no-agent` flag for opt-out. That redesign never shipped — Phase 31c-c-2c took the simpler path of extending the existing `composePolicy` with the precedence chain above. Consequently:
+
+- The `[agent]` config block does not exist; v2.1 still uses the legacy `[agent-mode]` block (slated for retirement in v2.2).
+- The `--no-agent` flag does not exist (mri's flag-parser intercepts `--no-*` as negation of the bare flag, breaking the implementation pattern; see `.claude/rules/testing.md`).
+- The `[agent] block = true` lockout does not exist. The `policy-v2/index.ts` module retains scaffolding for these features but is not wired to the CLI; see its header comment for status.
 
 ### v2.0 Sync Command
 
