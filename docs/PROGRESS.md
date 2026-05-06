@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE; v2.1 cutover done + UX polish (31c-c-2a/b/c/d-1, 31c-c-2d-2-orphan-check)
+**Status:** v2.0 in-scope COMPLETE; v2.1 cutover done + post-cutover polish landed
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 1
+**Phases since last refactor:** 4
 **Total refactor passes:** 2
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
@@ -36,6 +36,9 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-c-2c | --agent / SKILLTAP_AGENT precedence over config block | done | 2026-05-06 |
 | 31c-c-2d-1 | state.json canonical store; installed.json/plugins.json no longer written | done | 2026-05-06 |
 | 31c-c-2d-2-orphan | doctor check + --fix for v0.x file orphans | done | 2026-05-06 |
+| 31c-c-2c-flag | --agent flag wired into per-command args (install/update/remove/tap install/skills enable+disable) | done | 2026-05-06 |
+| 31c-c-2d-1-fix | doctor 'installed' check reads state.json post-cutover | done | 2026-05-06 |
+| 31c-c-2d-1-msg | doctor messages + code comments updated 'installed.json' → 'state.json' | done | 2026-05-06 |
 | 31c-c-2d-2-final | v0.x schema + read-fallback deletion (final cleanup) | deferred to v2.2 | — |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
@@ -231,6 +234,20 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Post-cutover polish (commits d416ede, 59c308b, 5b7c01b)
+
+After Phase 31c-c-2d-1 made state.json canonical, three small follow-ups landed across separate autopilot turns:
+
+**31c-c-2c-flag** — wired `--agent` boolean flag into `args:` blocks of install, update, skills remove, tap install, and skills enable/disable. `composePolicy` already accepted `flags.agent`, but citty wasn't parsing it as a boolean — it was silently treated as a positional. Now the flag works on the command line, matching the v2.0 changelog promise. New e2e-v2 test 7 asserts `skilltap install ... --agent` from a non-TTY subprocess produces the agent-mode plain-text "OK: Installed" line.
+
+**31c-c-2d-1-fix** — doctor's `installed` check (one of the original 9 v1 checks) only read `installed.json`. After the canonical-store cutover, fresh users had skills tracked in `state.json` but no `installed.json` — so doctor reported `0 skills (no installed.json)` falsely. Updated to read state.json first, fall back to installed.json (same pattern as `loadInstalled`). Also updated the related `--fix removes orphan records` test to seed and assert against state.json.
+
+**31c-c-2d-1-msg** — 5 user-facing `skilltap doctor` messages in `checks/skills.ts` and 6 internal comments across install/orphan/move/adopt/link still referred to `installed.json`. Updated to `state.json` to match the cutover. Behavior unchanged; pure honesty pass.
+
+Plus a doc fix on `website/reference/cli.md`: `--agent <name>` was incorrectly documented as a string flag for `skilltap update` (semantic-scan agent CLI selector). That flag never existed in the source — semantic-scan agent selection is config-only. Replaced with the actual boolean `--agent` (force agent mode) and added it to install + skills remove flag tables. Regenerated llms-full.txt.
+
+Tests: 568 / 568 across the v2 surface remain green throughout.
 
 ### Phase 31c-c-2d-2 (orphan UX) complete — doctor detects and cleans up v0.x file orphans
 
