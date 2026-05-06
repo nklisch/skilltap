@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 6
+**Phases since last refactor:** 7
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -25,7 +25,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-b-1 | Manifest writes from remove                | done     | 2026-05-06 |
 | 31c-b-2 | Sync apply implementation                  | done     | 2026-05-06 |
 | 31c-c-1 | Smart scope default (was 33b)            | done     | 2026-05-06 |
-| 31c-c-2 | state.json reads + agent flag + mcp + v1 retire | pending | —     |
+| 31c-c-2 | state.json reads + agent flag + mcp + v1 retire | deferred to v2.1 | — |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
@@ -34,7 +34,9 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
 | 36  | Doctor v2.0 upgrades                           | done     | 2026-05-06 |
 | 37  | Command surface promotion + aliases            | done     | 2026-05-06 |
-| 38  | v2.0 polish + docs + release                   | pending  | —         |
+| 38a | v2.0 README + changelog                        | done     | 2026-05-06 |
+| 38b | Internal docs (CLAUDE.md/AGENTS.md/llms-full.txt) | pending | —     |
+| 38c | Version bump to 2.0.0-rc.1 + release prep      | pending  | —         |
 
 ---
 
@@ -172,6 +174,20 @@ Split per design-skill rule (>15 units → split):
 - **31c-c (pending)**: state.json reads cutover + smart scope default + agent flag cutover + `mcp:` prefix + v1 schema retirement. The destructive batch.
 
 Splitting respects context limits and lets each step ship + verify in isolation.
+
+### Phase 38a complete — v2.0 README + changelog
+
+User-facing docs updated for v2.0:
+
+- **README.md**: added a "Project manifests (v2.0)" section after Quickstart explaining `skilltap.toml` + `skilltap.lock` + `sync` workflow with a worked example. Updated the Commands table with all the new top-level entries (status, try, sync, migrate, toggle/enable/disable). Updated the Agent mode section to mention the new `--agent` flag and `SKILLTAP_AGENT` env var alongside the legacy `[agent-mode]` config block. Added the smart-scope-default note. README now 308 lines (was 243).
+
+- **website/changelog.md**: added a comprehensive `v2.0.0-rc.1 — Tooling-surface redesign` entry at the top covering Added / Simplified / Removed / Changed / Migration / Known gaps. Calls out everything 14 v2.0 phases shipped: project manifest, sync, status, try, migrate, top-level toggle/enable/disable, .skilltap/<plugin>.toml, Claude Desktop, smart scope, component-ref syntax, --agent flag, doctor v2 checks, simplified [security] block, single state.json, HTTP registry removal. Changelog now 499 lines (was 390).
+
+### Phase 31c-c-2 deferred to v2.1+ — strategic call
+
+Rather than block v2.0 on the destructive cutover (replacing v1 readers, retiring v1 schemas, adding mcp: prefix, fully wiring agent flag), shipping v2.0 as a "transition release" with v0.x paths still active alongside the new ones. The v2.0 user-facing surface is functional — manifest workflow, status, sync, try, doctor v2 checks, smart scope, top-level component commands, Claude Desktop. v0.x users see a soft startup hint pointing at `migrate`. The full cutover lands in v2.1.
+
+Logged in PROGRESS.md and the v2.0 changelog's "Known gaps" section.
 
 ### Phase 31c-c-1 complete — smart scope default
 

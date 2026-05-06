@@ -5,6 +5,115 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v2.0.0-rc.1 — Tooling-surface redesign
+
+The v2.0 release reshapes how you manage skills and plugins around a project
+manifest, simplifies the security config, drops "agent mode" as a separate
+mental model, and adds Claude Desktop as an MCP target. Existing v0.x setups
+keep working — run `skilltap migrate` when ready.
+
+### Added
+
+- **Project manifest (`skilltap.toml` + `skilltap.lock`)** — declare your
+  project's skill and plugin dependencies; commit the files; teammates run
+  `skilltap sync --apply` for parity. `install` and `remove` keep both files
+  in sync automatically.
+- **`skilltap sync`** — show drift between manifest, lockfile, and installed
+  state. `--apply` executes the plan via existing install/remove machinery.
+  `--strict` stops at the first failure.
+- **`skilltap status`** (also bare `skilltap`) — text dashboard of skills,
+  plugins, MCP injection per agent, taps, drift. `--json` for scripting.
+- **`skilltap try <source>`** — read-only preview of any source. Clones to a
+  temp dir, parses manifests, runs static security scan, prints summary,
+  cleans up. `--skip-scan` and `--json` flags supported.
+- **`skilltap migrate`** — one-shot upgrade from v0.x state. Reads
+  `installed.json` + `plugins.json` + v0.x config keys, writes consolidated
+  `state.json` and v2 config layout, renames originals to `.v1.bak`. Refuses
+  to migrate HTTP taps (no longer supported) with a list of which to fix.
+- **Top-level `toggle` / `enable` / `disable` `<plugin>[:component]`** —
+  direct component addressing. Bare plugin name opens a multiselect picker
+  (toggle) or applies bulk action (enable/disable). Fully back-compat:
+  existing `skilltap plugin toggle` keeps working.
+- **`.skilltap/<plugin>.toml`** — native v2.0 plugin manifest format. Place
+  one or more files in `.skilltap/` with `publish = true` to make a repo
+  installable as one or more plugins. Multi-plugin repos supported via
+  `user/repo:plugin-name` syntax. Existing `.claude-plugin/plugin.json` and
+  `.codex-plugin/plugin.json` formats continue to be read.
+- **Claude Desktop MCP target** — added alongside `claude-code`, `cursor`,
+  `codex`, `gemini`, `windsurf`. Resolves to the OS-specific config path on
+  macOS and Linux; Windows deferred.
+- **Smart scope default** — inside a git repo, `install` defaults to
+  `--project`; outside, `--global`. Removes the scope prompt for the common
+  case. Override explicitly with `--global` / `--project`.
+- **Component-ref syntax** — `skilltap toggle dev-toolkit:test-generator`
+  addresses one component directly without going through a picker. Same
+  pattern for `enable` and `disable`.
+- **`--agent` flag (and `SKILLTAP_AGENT=1` env var)** — non-interactive mode
+  for AI agents, CI, scripts. Replaces (but stays compatible with) the
+  config-only `[agent-mode]` block.
+- **Doctor v2 checks** — `skilltap doctor` now also checks `state.json`
+  validity, manifest/lockfile drift, `.skilltap/<plugin>.toml` validity, and
+  MCP injection consistency (with auto-fix for orphan agent-config entries).
+
+### Simplified
+
+- **Security config** — single `[security]` block with three keys: `scan`
+  (`semantic`/`static`/`none`), `on_warn` (`prompt`/`fail`/`install`),
+  `trust = []` (glob allowlist of taps and source URLs that skip scanning).
+  Removed the `[security.human]`/`[security.agent]` per-mode split, the
+  preset table (`none`/`relaxed`/`standard`/`strict`), and
+  `[[security.overrides]]`. `migrate` translates v0.x configs.
+- **Default `on_warn` = `install`** — security warnings are reported but no
+  longer block by default. Set `on_warn = "fail"` to restore strict
+  behavior, or `prompt` for the v0.x interactive style.
+- **Single state file** — `installed.json` and `plugins.json` consolidated
+  into `state.json` per scope. v0.x users see a soft startup hint pointing
+  at `skilltap migrate`.
+
+### Removed
+
+- **HTTP registry tap adapter** — taps are git-only. Existing config entries
+  with `type = "http"` are silently filtered with a one-time warning;
+  `skilltap migrate` lists them as needing manual conversion or removal.
+- **`UpdateTapResult.http`** — dead-loaded field with no production
+  consumers; dropped from the public API.
+
+### Changed
+
+- **CLI command surface** — top-level shortcuts for `sync`, `status`, `try`,
+  `migrate`, `toggle`, `enable`, `disable`. Existing paths (`skilltap plugin
+  toggle`, `skilltap skills remove`, etc.) still work as silent aliases.
+  Shell completion scripts (bash, zsh, fish) updated.
+
+### Migration
+
+```bash
+skilltap migrate
+```
+
+The command:
+
+- Consolidates `installed.json` + `plugins.json` → `state.json`.
+- Translates `[security.human]`/`[security.agent]` → flat `[security]` block.
+- Translates `[agent-mode] enabled = true` → `[agent].default = true`.
+- Translates `[[security.overrides]] preset = "none"` → `[security].trust`
+  entries. Other presets are dropped with a warning (less expressive in v2.0).
+- Errors with a list if any HTTP taps are configured (must be converted to
+  git or removed before re-running).
+
+If you're not ready to migrate, v2.0 also reads v0.x state — manifest writes
+and v2 commands work alongside the legacy paths. The full cutover (v0.x path
+retirement) lands in v2.1+.
+
+### Known gaps
+
+- **mcp-only install** (`skilltap install mcp:<source>`) — designed but not
+  yet implemented; ships in v2.1.
+- **v0.x reader retirement** — `installed.json`/`plugins.json` are still
+  read by install/update/remove for back-compat. Cutover in v2.1.
+
+---
+
 ## v0.10.8
 
 ### Fixes

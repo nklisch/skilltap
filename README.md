@@ -53,21 +53,70 @@ Or download a binary directly from [GitHub Releases](https://github.com/nklisch/
 ## Quickstart
 
 ```bash
+# See what's installed (skills, plugins, taps, drift)
+skilltap
+
 # Browse skills from the built-in community tap
 skilltap find
 
-# Install a skill globally and symlink to Claude Code
-skilltap install commit-helper --global --also claude-code
+# Install a skill into the current project (auto-defaults to project scope inside a git repo)
+skilltap install commit-helper --also claude-code
 
 # Install from any git URL
 skilltap install https://github.com/you/my-skill --global
 
+# Preview a source without installing
+skilltap try someone/their-skill
+
 # View all skills (managed + unmanaged)
-skilltap skills
+skilltap list
 
 # Update all skills
 skilltap update
 ```
+
+## Project manifests (v2.0)
+
+Declare your project's skill + plugin dependencies in `skilltap.toml`, commit it,
+and have teammates run `skilltap sync` to bring their machines to parity. Like
+`Cargo.toml` for AI agent skills.
+
+```toml
+# skilltap.toml — at your project root
+[targets]
+also  = ["claude-code", "cursor"]
+scope = "project"
+
+[skills]
+"github:nathan/commit-helper" = "*"
+"npm:@corp/code-review"       = "*"
+
+[plugins]
+"github:corp/dev-toolkit"     = "*"
+
+[taps]
+home = "https://gitea.example.com/nathan/my-tap"
+```
+
+When `skilltap.toml` is present, `skilltap install` and `skilltap remove` keep
+the manifest and `skilltap.lock` in sync automatically. Run `skilltap sync`
+to see drift and `skilltap sync --apply` to bring installed state in line.
+
+```bash
+skilltap install nathan/commit-helper   # adds to skilltap.toml + skilltap.lock
+skilltap remove commit-helper            # drops from manifest + lockfile
+skilltap sync                            # show drift between manifest, lockfile, state
+skilltap sync --apply                    # execute the plan
+skilltap status                          # rich snapshot: skills, plugins, MCPs, drift
+```
+
+To publish a repo as a plugin (skills + MCP servers + agent definitions),
+add `.skilltap/<plugin-name>.toml` with `publish = true`. See
+[the v2.0 spec](docs/SPEC.md#v20--tooling-surface-redesign) for the full
+manifest format.
+
+If you've been on v0.x, run `skilltap migrate` to upgrade your global state
+(`installed.json` + `plugins.json` → `state.json`) without losing anything.
 
 ## Taps
 
@@ -116,27 +165,39 @@ When you update a skill in the tap, every subscriber sees the diff and confirms 
 
 | Command | Description |
 |---|---|
+| `(no args)` | Status dashboard — installed skills, plugins, MCPs, drift |
+| `status` | Same as bare invocation, with `--json` for scripting |
 | `install <source>` | Install a skill from a URL, GitHub shorthand, npm package, or tap name |
 | `remove <name>` | Remove an installed skill |
 | `update [name]` | Update one or all installed skills |
 | `list` | List installed skills |
 | `info <name>` | Show details about a skill (installed or available in taps) |
 | `find [query]` | Search skills across configured taps |
+| `try <source>` | Preview a source (clone, parse, scan) without installing |
+| `sync` | Show drift between `skilltap.toml`, `skilltap.lock`, and installed state |
+| `sync --apply` | Execute the sync plan via install/remove |
+| `migrate` | One-shot upgrade from v0.x state to v2.0 |
 | `link <path>` | Link a local skill directory |
 | `unlink <name>` | Remove a linked skill |
+| `toggle <plugin>[:component]` | Toggle a plugin component (or open picker) |
+| `enable <plugin>[:component]` | Activate a plugin component (or all inactive) |
+| `disable <plugin>[:component]` | Deactivate a plugin component (or all active) |
 | `create [name]` | Scaffold a new skill from a template |
 | `verify [path]` | Validate a skill before sharing (CI-friendly) |
-| `doctor` | Check environment, config, and installed state |
+| `doctor` | Check environment, config, manifest/lockfile drift, MCP consistency |
 | `completions <shell>` | Generate shell tab-completion script |
-| `tap add <name> <url>` | Add a tap (git repo or HTTP registry) |
+| `tap add <name> <url>` | Add a git tap |
 | `tap remove <name>` | Remove a tap |
 | `tap update [name]` | Update one or all taps |
 | `tap list` | List configured taps |
 | `tap init <name>` | Initialize a new tap directory |
 | `config` | Interactive configuration wizard |
-| `config agent-mode` | Enable/disable agent mode |
+| `config agent-mode` | Enable/disable agent mode (legacy; see Agent flag below) |
 
-Most commands accept `--global` / `--project` for scope and `--yes` to skip prompts.
+Most commands accept `--global` / `--project` for scope, `--yes` to skip prompts,
+and `--agent` for non-interactive use. **Smart scope default**: inside a git repo,
+`install` defaults to `--project`; outside, `--global`. Override explicitly with
+`--global` / `--project` whenever you need to.
 
 ## How it works
 
@@ -160,13 +221,17 @@ See [docs/SECURITY.md](docs/SECURITY.md) for the full threat model, detector ref
 
 ## Agent mode
 
-Enable agent mode so skilltap works headlessly from within AI agents:
+For non-interactive use (AI agents, CI, scripts), three options that compose:
 
 ```bash
-skilltap config agent-mode
+skilltap install foo --agent             # one-off flag (v2.0)
+SKILLTAP_AGENT=1 skilltap install foo    # env var (v2.0)
+skilltap config agent-mode               # interactive wizard, sticky (v0.x; still works)
 ```
 
-In agent mode, all prompts are suppressed, `--yes` is implied, security issues block installation with a machine-readable message, and output is plain text (no ANSI codes).
+`--agent` (or `SKILLTAP_AGENT=1`) suppresses all prompts, implies `--yes`,
+turns security warnings into hard failures, and emits plain text output. Agents
+should set the flag or env var on every invocation.
 
 ## Configuration
 
