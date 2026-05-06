@@ -108,7 +108,7 @@ If a tap defines a `plugins` array, install a full plugin by name using `tap-nam
 skilltap install my-tap/dev-assistant
 ```
 
-This installs all plugin components in one step: SKILL.md files, MCP server entries, and agent definition files. The plugin is recorded in `plugins.json` and tracked as a single unit.
+This installs all plugin components in one step: SKILL.md files, MCP server entries, and agent definition files. The plugin is recorded in `state.json::plugins[]` and tracked as a single unit.
 
 Use `skilltap plugin` to see what's installed and manage individual components.
 

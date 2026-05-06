@@ -72,7 +72,7 @@ This repo contains a plugin (my-plugin). Install as a plugin (skills + MCP + age
   ○ No — install skills only
 ```
 
-Choosing "Yes" installs all plugin components — SKILL.md files, MCP server entries, and agent definitions — and records everything as a plugin in `plugins.json`. Use `skilltap plugin` to manage installed plugins.
+Choosing "Yes" installs all plugin components — SKILL.md files, MCP server entries, and agent definitions — and records everything as a plugin in `state.json::plugins[]`. Use `skilltap plugin` to manage installed plugins.
 
 ### Tap Plugin Syntax
 
@@ -1491,7 +1491,7 @@ Removes all components associated with the plugin:
 1. SKILL.md files for each skill in the plugin (and their agent symlinks)
 2. MCP server entries injected into agent config files
 3. Agent definition files placed by the plugin
-4. The plugin's record in `plugins.json`
+4. The plugin's record in `state.json::plugins[]`
 
 On success, prints a summary of what was removed. With `--yes`, skips the confirmation prompt.
 
