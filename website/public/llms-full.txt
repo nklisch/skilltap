@@ -2647,7 +2647,7 @@ Project (.agents/skills/) — 5 skills
   bun            managed  claude-code  nklisch/skills
 ```
 
-Scans `.agents/skills/` and every agent-specific directory (`.claude/skills/`, `.cursor/skills/`, etc.) at both global and project scope. Skills are classified as **managed** (tracked by skilltap), **linked** (symlinked via `skilltap link`), or **unmanaged** (manually placed, not in `installed.json`).
+Scans `.agents/skills/` and every agent-specific directory (`.claude/skills/`, `.cursor/skills/`, etc.) at both global and project scope. Skills are classified as **managed** (tracked in `state.json`), **linked** (symlinked via `skilltap link`), or **unmanaged** (manually placed, not in state).
 
 Agent-specific sections only appear if they contain unmanaged skills — managed skills in agent dirs are just symlinks, shown via the "Agents" column.
 
@@ -2742,7 +2742,7 @@ skilltap skills move <name> [flags]
 
 ### Behavior
 
-Requires exactly one of `--global` or `--project`. Looks up skill in `installed.json`, moves the directory, removes old agent symlinks and creates new ones at the target scope. Updates `installed.json` records across files when crossing scope boundaries.
+Requires exactly one of `--global` or `--project`. Looks up skill in `state.json`, moves the directory, removes old agent symlinks and creates new ones at the target scope. Updates `state.json` records across files when crossing scope boundaries.
 
 ### Examples
 
@@ -2794,7 +2794,7 @@ For each skill:
 5. If `--strict` and warnings found: skip this skill, continue to next
 6. If warnings found (not strict): prompt to apply
 7. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
-8. Update `installed.json` with new SHA and `updatedAt`
+8. Update `state.json` with new SHA and `updatedAt`
 9. Re-create agent symlinks if target dirs are missing
 
 Linked skills (from `skilltap link`) are always skipped.
@@ -2909,7 +2909,7 @@ skilltap link <path> [flags]
 
 ### Behavior
 
-Resolves the path to absolute, validates SKILL.md exists, parses frontmatter for the skill name, and creates a symlink at the install path. Records in `installed.json` with `scope: "linked"`.
+Resolves the path to absolute, validates SKILL.md exists, parses frontmatter for the skill name, and creates a symlink at the install path. Records in `state.json` with `scope: "linked"`.
 
 Does **not** clone or copy -- the symlink points to the original directory.
 
@@ -2946,7 +2946,7 @@ skilltap skills unlink <name>
 
 ### Behavior
 
-Verifies the skill was linked (not installed via clone), removes the symlink from the install path, removes any agent-specific symlinks, and updates `installed.json`.
+Verifies the skill was linked (not installed via clone), removes the symlink from the install path, removes any agent-specific symlinks, and updates `state.json`.
 
 Does **not** delete the original skill directory.
 
@@ -3925,7 +3925,7 @@ Doctor runs 9 independent checks and streams each result as it completes:
 | 1 | git | git is on PATH, version ≥ 2.25 |
 | 2 | config | `config.toml` exists, valid TOML, passes schema |
 | 3 | dirs | All required directories exist |
-| 4 | installed | Global `installed.json` and project `.agents/installed.json` (when in a project) parse and pass schema; detail: `"N skills (G global, P project)"` |
+| 4 | installed | Global `state.json` and project `.agents/state.json` (when in a project) parse and pass schema; detail: `"N skills (G global, P project)"`. Falls back to `installed.json` for unmigrated v0.x users. |
 | 5 | skills | Every entry has a directory in the correct scope location (`~/.agents/skills/` or `{project}/.agents/skills/`); orphan dirs in both locations reported |
 | 6 | symlinks | Agent symlinks for `also` entries point to the right scope-aware target |
 | 7 | taps | Each configured tap has a valid local clone |
