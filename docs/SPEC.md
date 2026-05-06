@@ -1008,7 +1008,7 @@ With issues (no `--fix`):
 
 ### `skilltap status`
 
-Report agent mode status and current configuration. Designed for use by agents to verify they are operating in agent mode before proceeding.
+Show installed skills, plugins, taps, and project manifest drift. Replaced the v0.x agent-mode reporter in Phase 33a (v2.0). Bare `skilltap` (no command) also routes here.
 
 **Options:**
 
@@ -1016,33 +1016,51 @@ Report agent mode status and current configuration. Designed for use by agents t
 |------|------|---------|-------------|
 | `--json` | boolean | false | Output as JSON |
 
-**Plain text output** (one `key: value` line per field):
+**Plain-text output** is a multi-section dashboard:
+- Header: `skilltap status — project: <path> (manifest|no manifest)` or `global (no project root)`
+- Scope + `also` agent targets
+- `Skills:` table — name, scope, source, ref, agents, active state
+- `Plugins:` table — name, scope, source, component count by type
+- `Taps:` list — name, URL, builtin flag, type
+- `Drift:` lines (if `skilltap.toml` is present) — items declared in manifest but not installed, locked SHAs that don't match installed SHAs, etc.
 
-```
-agent-mode: enabled|disabled
-scope: project|global|(not configured)
-scan: static|semantic|off
-agent: <name>|(none)
-also: <agent1> <agent2>|(none)
-taps: <count>
-```
+(See `packages/cli/src/commands/status.ts` `renderStatus()` for the exact rendering.)
 
 **JSON output:**
 
 ```json
 {
-  "agentMode": true,
+  "projectRoot": "/path/to/project",
+  "hasManifest": false,
   "scope": "project",
-  "scan": "static",
-  "agent": null,
   "also": ["claude-code"],
-  "taps": 1
+  "fromV2State": false,
+  "skills": [
+    {
+      "name": "bun",
+      "scope": "project",
+      "source": "https://github.com/nklisch/skills.git",
+      "ref": null,
+      "also": ["claude-code"],
+      "active": true
+    }
+  ],
+  "plugins": [],
+  "taps": [
+    {
+      "name": "skilltap-skills",
+      "url": "https://github.com/nklisch/skilltap-skills.git",
+      "builtin": true,
+      "type": "builtin"
+    }
+  ],
+  "drift": null
 }
 ```
 
-Fields: `agentMode` (boolean), `scope` (string or null), `scan` (string), `agent` (string or null), `also` (array), `taps` (number).
+Top-level fields: `projectRoot` (string|null), `hasManifest` (boolean — true when `skilltap.toml` is present), `scope` (`project`|`global`), `also` (array), `fromV2State` (boolean — true when state was read from `state.json`, false when read from v0.x fallback), `skills` (array), `plugins` (array), `taps` (array), `drift` (null when no manifest, otherwise `{ items: DriftItem[], inSync: boolean }` — each `DriftItem` has `kind` of `add`, `remove`, `ref-mismatch`, `lock-stale`, `lock-missing`, or `lock-orphan`; see `core/src/sync/types.ts` for the full schema).
 
-**Exit codes:** 0 success, 1 config load failure.
+**Exit codes:** 0 success, 1 state-load failure.
 
 **Startup skipped:** does not trigger the update check or telemetry notice.
 
