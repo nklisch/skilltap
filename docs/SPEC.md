@@ -136,9 +136,12 @@ Remove one or more skills (managed or unmanaged).
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--project` | boolean | false | Remove from project scope instead of global |
-| `--global` | boolean | false | Remove from global scope (explicit for scripts) |
-| `--yes` | boolean | false | Skip confirmation prompt |
+| `--project` | boolean | false | Remove from project scope (overrides smart-scope inference) |
+| `--global` | boolean | false | Remove from global scope (overrides smart-scope inference) |
+| `--yes` (`-y`) | boolean | false | Skip confirmation prompt |
+| `--agent` | boolean | false | Run in non-interactive agent mode (also: `SKILLTAP_AGENT=1`). Required for `mcp:<source>` removes in non-interactive contexts. |
+
+The positional accepts both regular skill names and `mcp:<source>` entries — when `mcp:` prefixes are passed, the command branches into the MCP-only remove path (Phase 35b-2), which removes namespaced agent-config entries rather than skill records. Mixing `mcp:` with regular skill names in one invocation is rejected with `Cannot mix mcp: and regular sources in one remove. Run them separately.`
 
 **Behavior:**
 
@@ -168,6 +171,8 @@ Uses `discoverSkills()` to scan disk and correlate with tracked records (loaded 
 | `--global` | boolean | false | Show only global skills |
 | `--project` | boolean | false | Show only project skills |
 | `--unmanaged` | boolean | false | Show only unmanaged skills |
+| `--disabled` | boolean | false | Show only disabled skills (filters by `active = false` in `state.json`) |
+| `--active` | boolean | false | Show only active skills (filters by `active = true` in `state.json`) |
 | `--json` | boolean | false | Output as JSON |
 
 **Output format (default):**
@@ -863,6 +868,7 @@ Validate a skill before sharing. Useful as a pre-push hook or CI step.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--all` | boolean | false | Verify every skill discovered under the current project (overrides `path`). Each skill is checked independently and the command exits 1 if any fail. |
 | `--json` | boolean | false | Output as JSON |
 
 **Checks run:**
