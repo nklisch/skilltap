@@ -273,7 +273,13 @@ updated:       2026-02-28T12:00:00.000Z
 
 ## Agent mode
 
-When [agent mode](./configuration.md) is enabled, skilltap uses the `[security.agent]` settings. The defaults are strict (scan=static, on_warn=fail, require_scan=true), but agent mode is fully configurable — you can set any security level including `none`.
+Agent mode can be activated three ways (precedence high → low):
+
+1. `--agent` CLI flag (per-invocation, every command).
+2. `SKILLTAP_AGENT=1` environment variable (per-invocation).
+3. `[agent-mode] enabled = true` config block (persistent — set by `skilltap config agent-mode`; see [Configuration](./configuration.md)).
+
+When any of those is true, skilltap uses the `[security.agent]` settings. The defaults are strict (scan=static, on_warn=fail, require_scan=true), but agent mode is fully configurable — you can set any security level including `none`.
 
 Configure agent security independently:
 

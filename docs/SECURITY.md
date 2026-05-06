@@ -195,7 +195,13 @@ Agent is auto-detected if not configured. First semantic scan prompts for select
 
 ## Agent mode
 
-When agent mode is enabled (`skilltap config agent-mode`), skilltap uses the `[security.agent]` settings. Agent mode is fully configurable — there are no enforced minimums. The defaults are strict (`on_warn = "fail"`, `require_scan = true`), but can be changed to any level including `none`.
+Agent mode can be activated three ways (precedence high → low):
+
+1. `--agent` CLI flag (per-invocation, every command via `composePolicy`).
+2. `SKILLTAP_AGENT=1` environment variable (per-invocation).
+3. `[agent-mode] enabled = true` config block (persistent — set by `skilltap config agent-mode`).
+
+When any of those is true, skilltap uses the `[security.agent]` settings. Agent mode is fully configurable — there are no enforced minimums. The defaults are strict (`on_warn = "fail"`, `require_scan = true`), but can be changed to any level including `none`.
 
 Agent mode also sets `yes = true` (auto-accept prompts) and `agentMode = true` (plain text output).
 
