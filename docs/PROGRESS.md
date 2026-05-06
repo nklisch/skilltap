@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 9
+**Phases since last refactor:** 10
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -25,7 +25,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | pending  | —         |
-| 34  | Component-ref syntax + toggle promotion        | pending  | —         |
+| 34  | Component-ref syntax + toggle/enable/disable   | done     | 2026-05-06 |
 | 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
 | 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
 | 36  | Doctor v2.0 upgrades                           | pending  | —         |
@@ -150,6 +150,20 @@ Verification: 285 tests pass / 0 fail. 871-line net deletion (-984 / +113).
 - 8 phases since last refactor (26, 27, 28, 29, 30, 31a, 33a, 31b). The framework default is "every 3"; 8 is well past that.
 - Phases have been varied: schemas / I/O / commands / one destructive cleanup. No single duplication or pattern has emerged that would benefit from cross-phase refactoring.
 - Decision: defer one more phase. Re-evaluate after 31c lands the install cutover, which will likely surface refactor opportunities (the install code paths get rewritten and any duplication will be visible).
+
+### Phase 34 complete — component-ref toggle/enable/disable
+
+Three new top-level commands accepting `<plugin>[:<component>]`:
+
+- `skilltap toggle foo:bar` — flip bar's state directly. Bare `foo` opens a multiselect picker (interactive only; errors in agent mode).
+- `skilltap enable foo:bar` — activate bar (no-op if already active). Bare `foo` enables all currently-inactive components.
+- `skilltap disable foo:bar` — deactivate bar (no-op if already inactive). Bare `foo` disables all currently-active components.
+
+Existing `skilltap plugin toggle` (with `--skills` / `--mcps` / `--agents`) keeps working unchanged.
+
+Decisions D1–D4 logged in `docs/design/phase-34.md`. Used inline design + direct implementation.
+
+Tests: 10 component-ref parser tests + lookup. CLI smoke-tested via `--help` and error-path renders. Full v2 baseline 224/224 pass in <250ms.
 
 ### Phase 35a complete — try + Claude Desktop
 

@@ -1,4 +1,9 @@
 export { detectPlugin, listPluginOptions, type DetectOptions } from "./detect";
+export {
+  parseComponentRef,
+  findComponentInPlugin,
+  type ParsedComponentRef,
+} from "./component-ref";
 export { parseClaudePlugin } from "./parse-claude";
 export { parseCodexPlugin } from "./parse-codex";
 export { parseMcpJson, parseMcpObject } from "./mcp";
