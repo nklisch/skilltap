@@ -83,3 +83,4 @@ export {
 } from "./schemas/config-v2";
 export * from "./state";
 export * from "./migrate";
+export * from "./sync";

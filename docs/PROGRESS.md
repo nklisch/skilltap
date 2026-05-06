@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 3
+**Phases since last refactor:** 4
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -17,8 +17,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 26 | v2.0 Schema Foundation                         | done     | 2026-05-06 |
 | 27 | State Consolidation + Migration                | done     | 2026-05-06 |
 | 28 | Project Manifest + Lockfile                    | done     | 2026-05-06 |
-| 29 | Sync Engine + Command                          | active   | —         |
-| 30 | Native Plugin Format + Multi-Plugin Repos      | pending  | —         |
+| 29 | Sync Engine + Command                          | done     | 2026-05-06 |
+| 30 | Native Plugin Format + Multi-Plugin Repos      | active   | —         |
 | 31 | Security Simplification                        | pending  | —         |
 | 32 | Agent Flag                                     | pending  | —         |
 | 33 | Smart Scope + Status Dashboard                 | pending  | —         |
@@ -78,6 +78,18 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 - Per the framework: refactor every 3 phases by default, every 4 if phases were small/independent.
 - Phases 26/27/28 were all data-layer (schemas / I/O wrappers / barrels) with minimal coupling between subsystems.
 - Decision: skip refactor pass after Phase 28; reassess after Phase 29 lands the sync engine (which actually exercises the new schemas + state + manifest together).
+
+### Phase 29: defer apply to Phase 31 (deviation from ROADMAP 29.3 / 29.4)
+
+- **Expected:** `sync/apply.ts` + CLI `--strict` / `--yes` / `--prune` flags that mutate state.
+- **Actual:** Phase 29 ships drift + plan + preview-only sync command. `--apply` errors with a hint pointing at Phase 31.
+- **Impact:** Status (Phase 33) and doctor drift checks (Phase 36) consume `planSync()` directly; both work without apply. Apply naturally lands in Phase 31 once v1.0 readers are removed (no need for a v1↔v2 bridge).
+
+### Refactor gate (after Phase 29): defer again
+
+- 4 small additive phases now, all data-layer with no observed duplication or abstractions worth extracting yet.
+- Per framework: "Skip entirely if you'd be refactoring for the sake of it."
+- Decision: skip refactor pass; revisit after Phase 30 (which touches existing plugin detect/install code — first phase that modifies the legacy surface).
 
 ---
 
