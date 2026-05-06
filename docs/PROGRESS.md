@@ -23,7 +23,36 @@ Until the user decides on a version and runs the bump, no further autopilot phas
 - Standard release: `bun run bump 2.0.0` (commits, tags, pushes — no env var needed).
 - Stage-and-review: `SKILLTAP_BUMP_NO_PUSH=1 bun run bump 2.0.0` (commits + tags locally, prints `git push --follow-tags` for the user to run).
 
-**Latest commit at block:** `3d82071` "Changelog: document the v2.1 lint cleanup + doc audit + CLI hint fix"
+**Latest commit at block:** `9e3337e` "Security docs: surface --agent flag + env-var as agent-mode entry points"
+
+## Post-cutover documentation audit (2026-05-06, second autopilot pass)
+
+A second autopilot pass after the initial v2.1 cutover ran a `~25 commits` deep audit of foundation docs, SPEC, and website docs against the actual shipped binary. Pattern: `< grep code for declared flags / schema → diff against doc claims → fix discrepancies >`.
+
+The big find: **the v2.0 redesign block in SPEC + SECURITY + VISION + website/changelog all carried original-design intent as if it were shipped reality**. Phase 31c-c-2c took simpler paths (extended v1 `composePolicy` + kept v0.x per-mode security + kept `[agent-mode]` block instead of replacing it with `[agent]` block), but four sections in SPEC and one each in SECURITY/VISION/changelog still described the never-built features as if live.
+
+**Categories of fixes (count of commits):**
+- v2.0-design-vs-shipped reconciliation: 5 commits (SPEC 4 sections, SECURITY 1, VISION 1, changelog 1)
+- Per-command flag-table omissions: 7 commits (`install --agent`, `update --semantic/--json/--agent`, `tap install --agent`, `skills info --json`, `skills remove --agent + mcp:`, `skills (list) --disabled/--active`, `verify --all`, `tap remove --yes`, `tap list --json`, `skills link --global`, `plugin toggle --json`, `plugin remove --json`)
+- Phantom commands removed: 1 commit (SPEC's `### skilltap tap update` documented a non-existent subcommand)
+- Wrong default-output examples: 2 commits (doctor 9-check table → 15-check; status v0.x agent-reporter → v2.0 dashboard)
+- Wrong invocation behavior: 3 commits (sync flag set, migrate startup-detection wording, install smart-scope)
+- Missing SPEC sections for shipped commands: 1 commit (toggle/enable/disable/self-update added)
+- Missing config subcommand sections: 1 commit (config security/telemetry/edit added)
+- HTTP-tap historical-flagging in foundation docs: 1 commit (ARCH module descriptions, SPEC HTTP-Registry section)
+- `installed.json`/`plugins.json` → `state.json` operational claims: 1 commit (~12 spots in SPEC behavior blocks)
+
+**Verification at end of audit:** 41/41 focused tests pass (CLI policy unit + install + skills/remove + doctor subprocess). No code changes, only docs + the bump-script env-var enhancement from earlier in the run.
+
+**What's now consistent across all docs:**
+- v2.1 has per-mode `[security.human]`/`[security.agent]` blocks (not collapsed)
+- `on_warn` enum is `prompt|fail|allow` (not `install`)
+- Trust mechanism is `[[security.overrides]]` (not glob `trust = []`)
+- `[agent-mode]` block is current (not replaced by `[agent]`)
+- Agent-mode entry points: `--agent` flag > `SKILLTAP_AGENT=1` env > `[agent-mode] enabled` (precedence chain)
+- `state.json` is canonical (with v0.x fallback)
+- `skilltap tap update` is NOT a subcommand — auto-refresh via `skilltap update`
+- 15 doctor checks, not 9
 
 ## Session completion summary (2026-05-06)
 
