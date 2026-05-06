@@ -97,7 +97,9 @@ const linesNeeded = Math.ceil(
 );
 const LARGE_DIFF = DIFF_HEADER + DIFF_LINE.repeat(linesNeeded);
 
-// 4. installed.json with 100 skills for loadInstalled
+// 4. installed.json with 100 skills for the loadInstalled v0.x-fallback path
+//    (post-Phase-31c-c-2d-1, loadInstalled reads state.json first; this
+//    fixture has no state.json so the fallback fires and is what's measured).
 const CONFIG_DIR = join(TMP, "config");
 await mkdir(join(CONFIG_DIR, "skilltap"), { recursive: true });
 
