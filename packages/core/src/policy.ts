@@ -10,6 +10,8 @@ export type CliFlags = {
   semantic?: boolean;
   project?: boolean;
   global?: boolean;
+  /** Phase 31c-c-2c: --agent flag override. */
+  agent?: boolean;
 };
 
 export type EffectivePolicy = {
@@ -102,7 +104,15 @@ export function composePolicy(
   config: Config,
   flags: CliFlags,
 ): Result<EffectivePolicy, UserError> {
-  const agentMode = config["agent-mode"].enabled;
+  // Phase 31c-c-2c: agentMode resolution precedence
+  //   1. flags.agent === true     (explicit --agent)
+  //   2. SKILLTAP_AGENT=1 env var (per-invocation override)
+  //   3. config["agent-mode"].enabled (legacy v0.x — still honored
+  //      until the v0.x config schema is deleted in 31c-c-2d)
+  const agentMode =
+    flags.agent === true ||
+    process.env.SKILLTAP_AGENT === "1" ||
+    config["agent-mode"].enabled;
 
   if (agentMode) {
     if (flags.skipScan && config.security.agent.require_scan) {
@@ -203,7 +213,11 @@ export function composePolicyForSource(
 
   // Apply preset values as mode overrides, then recompose
   const presetValues = PRESET_VALUES[preset];
-  const agentMode = config["agent-mode"].enabled;
+  // Same agent-mode resolution as composePolicy.
+  const agentMode =
+    flags.agent === true ||
+    process.env.SKILLTAP_AGENT === "1" ||
+    config["agent-mode"].enabled;
   const modeKey = agentMode ? "agent" : "human";
 
   const patchedConfig: Config = {

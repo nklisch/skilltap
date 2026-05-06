@@ -275,6 +275,53 @@ describe("composePolicy — agent mode", () => {
   });
 });
 
+describe("composePolicy — agent precedence (Phase 31c-c-2c)", () => {
+  test("--agent flag enables agent mode without config block", () => {
+    const result = composePolicy(baseConfig(), { agent: true, project: true });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.agentMode).toBe(true);
+    expect(result.value.yes).toBe(true); // agent mode auto-yes
+  });
+
+  test("SKILLTAP_AGENT=1 env var enables agent mode without config block", () => {
+    const prev = process.env.SKILLTAP_AGENT;
+    process.env.SKILLTAP_AGENT = "1";
+    try {
+      const result = composePolicy(baseConfig(), { project: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.agentMode).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
+      else process.env.SKILLTAP_AGENT = prev;
+    }
+  });
+
+  test("SKILLTAP_AGENT set to anything other than '1' does NOT enable agent mode", () => {
+    const prev = process.env.SKILLTAP_AGENT;
+    process.env.SKILLTAP_AGENT = "true"; // not "1"
+    try {
+      const result = composePolicy(baseConfig(), {});
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.agentMode).toBe(false);
+    } finally {
+      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
+      else process.env.SKILLTAP_AGENT = prev;
+    }
+  });
+
+  test("legacy [agent-mode].enabled config block still honored (back-compat)", () => {
+    const config = baseConfig();
+    config["agent-mode"] = { enabled: true, scope: "global" };
+    const result = composePolicy(config, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.agentMode).toBe(true);
+  });
+});
+
 describe("resolveOverride", () => {
   test("returns null when no overrides", () => {
     const result = resolveOverride([], { sourceType: "git" });

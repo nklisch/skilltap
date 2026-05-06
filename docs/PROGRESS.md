@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE; v2.1 cutover in progress (31c-c-2a + 31c-c-2b done)
+**Status:** v2.0 in-scope COMPLETE; v2.1 cutover in progress (31c-c-2a/b/c done)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 13
+**Phases since last refactor:** 14
 **Total refactor passes:** 1
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
@@ -33,7 +33,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-c-1 | Smart scope default (was 33b)            | done     | 2026-05-06 |
 | 31c-c-2a | state.json dual-write from saveInstalled/savePlugins | done | 2026-05-06 |
 | 31c-c-2b | state.json reads cutover (install/update/remove + plugin) | done | 2026-05-06 |
-| 31c-c-2c | `[agent-mode]` config block retirement             | pending  | —         |
+| 31c-c-2c | --agent / SKILLTAP_AGENT precedence over config block | done | 2026-05-06 |
 | 31c-c-2d | v0.x schema + installed.json/plugins.json deletion | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
@@ -209,6 +209,29 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 31c-c-2c complete — `--agent` flag + `SKILLTAP_AGENT` env var honored
+
+The v2.0 changelog advertised the `--agent` flag and `SKILLTAP_AGENT=1` env var as the modern way to enter agent mode, but `composePolicy` only read the legacy `[agent-mode].enabled` config block — the env var did nothing and the flag was ignored. This phase makes both work.
+
+`composePolicy` and `composePolicyForSource` now resolve `agentMode` with this precedence:
+1. `flags.agent === true` (explicit `--agent`)
+2. `process.env.SKILLTAP_AGENT === "1"` (env var override)
+3. `config["agent-mode"].enabled` (legacy v0.x — still honored until 31c-c-2d's schema deletion)
+
+CLI startup checks (`runTelemetryNotice`, `runUpdateCheck`, the skill-update reminder) and `isAgentMode()` in `cli/src/ui/policy.ts` also short-circuit on the env var so background output is suppressed for agent invocations regardless of config.
+
+`CliFlags.agent` is now defined; per-command `--agent` flag wiring in `args:` blocks is deferred to a follow-up (the env var covers the most common use case — `SKILLTAP_AGENT=1 skilltap install ...`).
+
+Files:
+- `packages/core/src/policy.ts` — added agent precedence resolution; `flags.agent` field on `CliFlags`.
+- `packages/core/src/policy.test.ts` — 4 new tests covering flag, env var (set/unset/non-"1" values), and back-compat with the config block.
+- `packages/cli/src/index.ts` — env var short-circuits in 3 startup hooks.
+- `packages/cli/src/ui/policy.ts` — `isAgentMode()` checks env var first.
+
+Tests: 375 pass across 31 files (policy, policy-v2, state, install, lifecycle, manifest, sync, migrate, doctor, status, try, mcp, e2e-v2). Existing `[agent-mode]` config tests remain green — back-compat preserved.
+
+What's now possible: `SKILLTAP_AGENT=1 skilltap install foo --project --skip-scan` works end-to-end without touching `~/.config/skilltap/config.toml`. CI scripts and AI agent harnesses no longer need to pre-mutate the config to get agent-mode behavior.
 
 ### Phase 31c-c-2b complete — state.json reads cutover + dual-write moved to source
 
