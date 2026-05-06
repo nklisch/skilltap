@@ -64,7 +64,10 @@ export { tryPreview, type TryReport, type TryOptions } from "./try";
 export {
   installMcpOnly,
   parseMcpRef,
+  removeMcpInstall,
   type McpInstallOptions,
   type McpInstallResult,
+  type McpRemoveOptions,
+  type McpRemoveResult,
   type ParsedMcpRef,
 } from "./mcp-install";

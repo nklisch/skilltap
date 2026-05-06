@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope complete (v2.1 backlog: 31c-c-2 + 35b)
+**Status:** v2.0 in-scope complete (v2.1 backlog: 31c-c-2)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 9
+**Phases since last refactor:** 10
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -32,7 +32,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 34  | Component-ref syntax + toggle/enable/disable   | done     | 2026-05-06 |
 | 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
 | 35b-1 | mcp: install prefix (install side)           | done     | 2026-05-06 |
-| 35b-2 | mcp: remove handling                         | pending  | —         |
+| 35b-2 | mcp: remove handling                         | done     | 2026-05-06 |
 | 36  | Doctor v2.0 upgrades                           | done     | 2026-05-06 |
 | 37  | Command surface promotion + aliases            | done     | 2026-05-06 |
 | 38a | v2.0 README + changelog                        | done     | 2026-05-06 |
@@ -199,6 +199,17 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 35b-2 complete — `skilltap remove mcp:<source>`
+
+Mirror of 35b-1 on the remove side. `skilltap remove mcp:<source>` drops every state.mcpServers entry whose `source` matches and prunes the namespaced `skilltap:<plugin>:<server>` keys from each target agent's MCP config.
+
+Implementation:
+- `core/src/mcp-install.ts`: new `removeMcpInstall(source, options)` — loads state, filters `mcpServers` by `source`, groups remaining matches by their parsed `pluginName` (via `parseNamespacedKey`), calls `removeMcpServers` once per pluginName/agents combination so each agent config gets pruned, then saves state without the matched entries. Returns a count + agent list + name list for CLI output. Errors with a "No MCP servers installed from source" UserError when the source has no matches.
+- `cli/src/commands/skills/remove.ts`: dispatch on `mcp:` prefix at the top of `run`. Refuses mixed mcp: + regular sources in one invocation. Honors agent-mode for plain stdout output, otherwise emits one `successLine` per removed server.
+- `core/src/mcp-install.test.ts`: 3 new tests — full round-trip install + remove (state pruned, agent config pruned), error on unknown source, multi-source install where only one is removed (selectivity check).
+
+Tests: 14 mcp-install tests + 64 MCP-surface tests + 245 doctor/try/plugin-v2/schema tests all green. The macOS `/tmp` → `/private/tmp` symlink failures in `parse-claude.test.ts` (2 cases) are pre-existing and unrelated to MCP.
 
 ### Phase 38b complete — internal docs (AGENTS.md / CLAUDE.md symlink)
 

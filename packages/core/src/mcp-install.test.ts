@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
-import { installMcpOnly, parseMcpRef } from "./mcp-install";
+import { installMcpOnly, parseMcpRef, removeMcpInstall } from "./mcp-install";
 import { loadState } from "./state/load";
 
 let env: TestEnv;
@@ -171,6 +171,99 @@ describe("installMcpOnly — local source", () => {
     expect(stateResult.value.mcpServers).toHaveLength(1); // not duplicated
     if (stateResult.value.mcpServers[0].config.type === "stdio") {
       expect(stateResult.value.mcpServers[0].config.args).toEqual(["v2.js"]);
+    }
+  });
+});
+
+describe("removeMcpInstall", () => {
+  test("removes entries from state and prunes agent config", async () => {
+    await writeFile(
+      join(mcpSourceDir, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: {
+          db: { command: "node", args: ["server.js"] },
+          search: { type: "http", url: "https://search.example.com/mcp" },
+        },
+      }),
+    );
+    const source = `mcp:${mcpSourceDir}`;
+    const installResult = await installMcpOnly(source, {
+      scope: "project",
+      projectRoot,
+      agents: ["claude-code"],
+    });
+    expect(installResult.ok).toBe(true);
+
+    // Sanity: settings has the entries
+    const settingsPath = join(projectRoot, ".claude", "settings.json");
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    expect(Object.keys(before.mcpServers ?? {})).toHaveLength(2);
+
+    const result = await removeMcpInstall(source, {
+      scope: "project",
+      projectRoot,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.removed).toBe(2);
+    expect(result.value.agents).toContain("claude-code");
+    expect(result.value.names).toHaveLength(2);
+
+    // State pruned
+    const stateResult = await loadState(projectRoot);
+    expect(stateResult.ok).toBe(true);
+    if (!stateResult.ok) return;
+    expect(stateResult.value.mcpServers).toHaveLength(0);
+
+    // Agent config pruned
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    const remaining = Object.keys(after.mcpServers ?? {}).filter((k) =>
+      k.startsWith("skilltap:"),
+    );
+    expect(remaining).toHaveLength(0);
+  });
+
+  test("fails when source has no installed entries", async () => {
+    const result = await removeMcpInstall("mcp:nope/missing", {
+      scope: "project",
+      projectRoot,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("No MCP servers installed");
+  });
+
+  test("only removes entries matching the given source", async () => {
+    const otherDir = await mkdtemp(join(tmpdir(), "skilltap-mcp-other-"));
+    try {
+      await writeFile(
+        join(mcpSourceDir, ".mcp.json"),
+        JSON.stringify({ mcpServers: { db: { command: "node", args: ["a.js"] } } }),
+      );
+      await writeFile(
+        join(otherDir, ".mcp.json"),
+        JSON.stringify({ mcpServers: { kept: { command: "node", args: ["b.js"] } } }),
+      );
+      const sourceA = `mcp:${mcpSourceDir}`;
+      const sourceB = `mcp:${otherDir}`;
+      expect((await installMcpOnly(sourceA, { scope: "project", projectRoot })).ok).toBe(true);
+      expect((await installMcpOnly(sourceB, { scope: "project", projectRoot })).ok).toBe(true);
+
+      const result = await removeMcpInstall(sourceA, {
+        scope: "project",
+        projectRoot,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.removed).toBe(1);
+
+      const stateResult = await loadState(projectRoot);
+      expect(stateResult.ok).toBe(true);
+      if (!stateResult.ok) return;
+      expect(stateResult.value.mcpServers).toHaveLength(1);
+      expect(stateResult.value.mcpServers[0].source).toBe(sourceB);
+    } finally {
+      await rm(otherDir, { recursive: true, force: true });
     }
   });
 });

@@ -5,7 +5,12 @@ import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import { clone, type GitError } from "./git";
 import { detectPlugin } from "./plugin/detect";
-import { injectMcpServers, namespaceMcpServer } from "./plugin/mcp-inject";
+import {
+  injectMcpServers,
+  namespaceMcpServer,
+  parseNamespacedKey,
+  removeMcpServers,
+} from "./plugin/mcp-inject";
 import { parseMcpJson } from "./plugin/mcp";
 import type { McpServerEntry, PluginManifest } from "./schemas/plugin";
 import { loadState } from "./state/load";
@@ -176,6 +181,84 @@ export async function installMcpOnly(
     if (cleanup) await cleanup();
     return err(new UserError(`mcp install failed: ${e}`));
   }
+}
+
+export interface McpRemoveOptions {
+  scope: "global" | "project";
+  projectRoot?: string;
+}
+
+export interface McpRemoveResult {
+  /** Number of state.mcpServers records removed. */
+  removed: number;
+  /** Agents that had MCP entries pruned. */
+  agents: string[];
+  /** Names of removed records (for output). */
+  names: string[];
+}
+
+// Remove MCP-only installs from a previously-installed source.
+// `source` is the same string the user passed to install (e.g., "mcp:user/repo").
+// Drops matching entries from state.mcpServers AND removes namespaced keys
+// from each target agent's MCP config.
+export async function removeMcpInstall(
+  source: string,
+  options: McpRemoveOptions,
+): Promise<Result<McpRemoveResult, UserError>> {
+  const stateResult = await loadState(
+    options.scope === "project" ? options.projectRoot : undefined,
+  );
+  if (!stateResult.ok) return stateResult;
+  const state = stateResult.value;
+
+  const matching = state.mcpServers.filter((s) => s.source === source);
+  if (matching.length === 0) {
+    return err(
+      new UserError(
+        `No MCP servers installed from source '${source}'`,
+        "Run 'skilltap status' to see installed MCP servers.",
+      ),
+    );
+  }
+
+  // Group entries by their parsed pluginName so removeMcpServers can prune
+  // them per-plugin, per-agent (it removes all keys matching `skilltap:<plugin>:`).
+  const byPlugin = new Map<string, Set<string>>();
+  for (const entry of matching) {
+    const parsed = parseNamespacedKey(entry.name);
+    if (!parsed) continue;
+    const existing = byPlugin.get(parsed.pluginName) ?? new Set<string>();
+    for (const agent of entry.targets) existing.add(agent);
+    byPlugin.set(parsed.pluginName, existing);
+  }
+
+  const removedAgents = new Set<string>();
+  for (const [pluginName, agents] of byPlugin) {
+    const result = await removeMcpServers({
+      pluginName,
+      agents: [...agents],
+      scope: options.scope,
+      projectRoot: options.projectRoot,
+    });
+    if (!result.ok) return result;
+    for (const a of result.value) removedAgents.add(a);
+  }
+
+  const newState: State = {
+    ...state,
+    mcpServers: state.mcpServers.filter((s) => s.source !== source),
+  };
+  const saveResult = await saveState(
+    newState,
+    options.scope === "project" ? options.projectRoot : undefined,
+  );
+  if (!saveResult.ok) return saveResult;
+
+  return ok({
+    removed: matching.length,
+    agents: [...removedAgents],
+    names: matching.map((s) => s.name),
+  });
 }
 
 async function collectServers(

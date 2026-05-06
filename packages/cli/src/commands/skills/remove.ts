@@ -4,6 +4,7 @@ import {
   type InstalledSkill,
   loadInstalled,
   removeAnySkill,
+  removeMcpInstall,
   removeSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
@@ -44,6 +45,47 @@ export default defineCommand({
   },
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project, global: args.global });
+
+    // Phase 35b-2: dispatch mcp:<source> to MCP-only remove path.
+    const allInputs = [args.name, ...(args._ as string[] | undefined ?? [])].filter(
+      (n): n is string => typeof n === "string" && n.length > 0,
+    );
+    const mcpInputs = allInputs.filter((n) => n.startsWith("mcp:"));
+    if (mcpInputs.length > 0) {
+      if (mcpInputs.length !== allInputs.length) {
+        errorLine(
+          "Cannot mix mcp: and regular sources in one remove. Run them separately.",
+        );
+        process.exit(1);
+      }
+      const scope = (policy.scope || "project") as "global" | "project";
+      const projectRoot =
+        scope === "project" ? await tryFindProjectRoot() : undefined;
+      let anyFail = false;
+      for (const source of mcpInputs) {
+        const result = await removeMcpInstall(source, { scope, projectRoot });
+        if (!result.ok) {
+          errorLine(result.error.message, result.error.hint);
+          anyFail = true;
+          continue;
+        }
+        const r = result.value;
+        if (policy.agentMode) {
+          process.stdout.write(
+            `OK: Removed ${r.removed} MCP server${r.removed === 1 ? "" : "s"} from ${source}\n`,
+          );
+        } else {
+          successLine(
+            `Removed ${r.removed} MCP server${r.removed === 1 ? "" : "s"} from ${source} (agents: ${r.agents.join(", ")})`,
+          );
+          for (const name of r.names) {
+            successLine(`  • ${name}`);
+          }
+        }
+      }
+      if (anyFail) process.exit(1);
+      return;
+    }
 
     const projectRoot = await tryFindProjectRoot();
     const globalResult = await loadInstalled();
