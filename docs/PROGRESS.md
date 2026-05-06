@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 4
+**Phases since last refactor:** 5
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -18,8 +18,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 27 | State Consolidation + Migration                | done     | 2026-05-06 |
 | 28 | Project Manifest + Lockfile                    | done     | 2026-05-06 |
 | 29 | Sync Engine + Command                          | done     | 2026-05-06 |
-| 30 | Native Plugin Format + Multi-Plugin Repos      | active   | —         |
-| 31 | Security Simplification                        | pending  | —         |
+| 30 | Native Plugin Format + Multi-Plugin Repos      | done     | 2026-05-06 |
+| 31 | Security Simplification                        | active   | —         |
 | 32 | Agent Flag                                     | pending  | —         |
 | 33 | Smart Scope + Status Dashboard                 | pending  | —         |
 | 34 | Component-Ref Syntax + Toggle Promotion        | pending  | —         |
@@ -90,6 +90,17 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 - 4 small additive phases now, all data-layer with no observed duplication or abstractions worth extracting yet.
 - Per framework: "Skip entirely if you'd be refactoring for the sake of it."
 - Decision: skip refactor pass; revisit after Phase 30 (which touches existing plugin detect/install code — first phase that modifies the legacy surface).
+
+### Phase 30: defer source-string `:plugin-name` parsing to a later phase (deviation from ROADMAP 30.5)
+
+- **Expected:** `skilltap install user/repo:plugin-name` parses the suffix and passes it to detectPlugin for auto-selection.
+- **Actual:** `detectPlugin(dir, { selectName })` takes a name and selects correctly when called with one. Install.ts still calls `detectPlugin(contentDir)` with no name. Multi-plugin repos error with a clear hint to specify by name; single-plugin repos auto-select; `.skilltap/` takes priority over `.claude-plugin/` and `.codex-plugin/`.
+- **Impact:** Single-plugin .skilltap/ repos work end-to-end. Multi-plugin .skilltap/ repos error helpfully but don't accept a selector yet. Wiring the source string parser into install.ts naturally fits with Phase 33's smart-scope work, which already touches install.ts.
+
+### Refactor gate (after Phase 30): defer again
+
+- Phase 30 added 3 new files (normalize/discover/index in plugin-v2/) and modified 2 existing (plugin/detect.ts, plugin/index.ts) — small surgical change, no duplication discovered.
+- Decision: skip refactor pass; revisit after Phase 32 (agent flag) which will touch many files across cli/ and core/.
 
 ---
 

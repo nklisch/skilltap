@@ -52,20 +52,7 @@ export * from "./types";
 
 // v2.0 additions (Phase 26+) — additive, no v1.0 paths use these yet.
 export * from "./manifest";
-export {
-  type PluginManifestV2,
-  PluginManifestV2Schema,
-  type PluginV2Skill,
-  PluginV2SkillSchema,
-  type PluginV2Server,
-  PluginV2ServerSchema,
-  type PluginV2StdioServer,
-  PluginV2StdioServerSchema,
-  type PluginV2HttpServer,
-  PluginV2HttpServerSchema,
-  type PluginV2Agent,
-  PluginV2AgentSchema,
-} from "./plugin-v2/schema";
+export * from "./plugin-v2";
 export {
   type ConfigV2,
   ConfigV2Schema,

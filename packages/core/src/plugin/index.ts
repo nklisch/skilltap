@@ -1,4 +1,4 @@
-export { detectPlugin } from "./detect";
+export { detectPlugin, listPluginOptions, type DetectOptions } from "./detect";
 export { parseClaudePlugin } from "./parse-claude";
 export { parseCodexPlugin } from "./parse-codex";
 export { parseMcpJson, parseMcpObject } from "./mcp";
