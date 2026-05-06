@@ -1,14 +1,16 @@
 import {
+  applySync,
   detectDrift,
   type DriftItem,
   loadLockfile,
   loadManifest,
   loadState,
   planSync,
+  type SyncApplyResult,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { outputJson } from "../ui/agent-out";
-import { ansi, errorLine } from "../ui/format";
+import { ansi, errorLine, successLine } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
@@ -24,23 +26,19 @@ export default defineCommand({
     },
     apply: {
       type: "boolean",
-      description: "Apply the plan (not yet implemented; lands in Phase 31)",
+      description: "Apply the plan via install/remove",
+      default: false,
+    },
+    strict: {
+      type: "boolean",
+      description: "Stop on first failure during apply",
       default: false,
     },
   },
   async run({ args }) {
     const useJson = args.json as boolean;
     const apply = args.apply as boolean;
-
-    if (apply) {
-      errorLine(
-        "sync --apply is not yet implemented. The v2.0 apply path lands in Phase 31 once v1.0 readers are removed.",
-      );
-      process.stderr.write(
-        `${ansi.dim("hint:")} for now, run install/update/remove individually based on \`skilltap sync\` output.\n`,
-      );
-      process.exit(1);
-    }
+    const strict = args.strict as boolean;
 
     const projectRoot = await tryFindProjectRoot();
     if (!projectRoot) {
@@ -69,6 +67,52 @@ export default defineCommand({
 
     const report = detectDrift(manifestResult.value, lockfileResult.value, stateResult.value);
     const plan = planSync(report);
+
+    if (apply) {
+      if (plan.inSync) {
+        if (useJson) {
+          outputJson({ inSync: true, applied: 0, skipped: 0, failed: 0, results: [] });
+        } else {
+          process.stdout.write(`${ansi.green("✓")} In sync. Nothing to apply.\n`);
+        }
+        return;
+      }
+
+      const applyResult = await applySync(plan, {
+        projectRoot,
+        state: stateResult.value,
+        strict,
+        onProgress: useJson
+          ? undefined
+          : (item, status, error) => {
+              const label = `${item.kind} ${item.target} ${item.source}`;
+              if (status === "ok") successLine(label);
+              else if (status === "skipped") process.stdout.write(`${ansi.dim("·")} ${ansi.dim(`${label} (skipped)`)}\n`);
+              else errorLine(`${label} — ${error ?? "unknown error"}`);
+            },
+      });
+
+      if (!applyResult.ok) {
+        errorLine(applyResult.error.message);
+        process.exit(1);
+      }
+      const summary: SyncApplyResult = applyResult.value;
+      if (useJson) {
+        outputJson({
+          inSync: false,
+          applied: summary.applied,
+          skipped: summary.skipped,
+          failed: summary.failed,
+          results: summary.results,
+        });
+      } else {
+        process.stdout.write(
+          `\n${ansi.bold("Sync apply complete:")} ${ansi.green(`${summary.applied} applied`)}, ${ansi.dim(`${summary.skipped} skipped`)}, ${summary.failed > 0 ? ansi.red(`${summary.failed} failed`) : `${summary.failed} failed`}\n`,
+        );
+      }
+      if (summary.failed > 0) process.exit(1);
+      return;
+    }
 
     if (useJson) {
       outputJson({
@@ -113,7 +157,7 @@ export default defineCommand({
     }
 
     process.stdout.write(
-      `${ansi.dim("note:")} apply lands in Phase 31. For now, use install / remove / update individually.\n`,
+      `${ansi.dim("note:")} run ${ansi.bold("skilltap sync --apply")} to execute this plan.\n`,
     );
   },
 });
