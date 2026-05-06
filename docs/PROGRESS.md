@@ -116,6 +116,82 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 
 ---
 
+## Session Handoff Notes (2026-05-06)
+
+**Next session resumes at: Phase 31 — Security Simplification.**
+
+Phases 26–30 are `done`, all tests pass. The v2.0 data layer is in place:
+schemas, state.json, migrate command, project manifest + lockfile I/O,
+sync drift/plan, native .skilltap/ plugin format. Nothing v1.0 has been
+removed yet — Phase 31 is the first destructive cutover.
+
+### Phase 31 scope (the bulk of pending work)
+
+This is a meaty phase that touches policy/security across many files.
+A clean fresh session is recommended.
+
+1. **Rewrite `core/src/policy/compose.ts`** — single rule (no human/agent
+   split). Pull values from v2.0 `[security]` block. Apply `trust = []`
+   short-circuit before any scan logic.
+2. **Add glob matcher** — match `trust` patterns against tap name OR full
+   source URL. Use `Bun.Glob` or a small inline matcher.
+3. **Remove HTTP registry adapter** — delete `core/src/registry/` and any
+   tap config keys/types that referenced HTTP. Migration already errors
+   on HTTP taps so users have been warned.
+4. **Remove security presets** — drop `PRESET_VALUES`, `SECURITY_PRESETS`
+   from the v1.0 schema. Drop `[[security.overrides]]` parsing.
+5. **Move semantic to opt-in only** — `scan = "semantic"` in config OR
+   `--deep` flag enables Layer 2. Default config never enables it.
+   Remove the v1.0 "auto-offer Layer 2 after Layer 1" prompt.
+6. **Cut over readers to v2.0 paths** — install/update/remove read state
+   via `loadState()` and write via `saveState()`. v1.0 `installed.json`
+   and `plugins.json` files are no longer read or written. Hard-error
+   the v1.0 detection in cli/src/index.ts (replace soft hint).
+7. **Update install/installPlugin/update/remove** to use the new policy
+   shape and v2 state. Also wire **manifest writes** here — `install`
+   adds entries to `skilltap.toml` + `skilltap.lock` when in a project.
+8. **Sync apply** — Phase 29 deferred apply; this is where it lands.
+   `sync` calls install/remove/update via the new v2 paths and writes
+   the lockfile + state.
+9. **Update `composePolicy` callers** in cli/ — drop the human/agent
+   branching, surface the trust-list short-circuit.
+10. **Test rewrites** — every existing security/policy test needs
+    rewriting for the new shape. Some tests will be deleted entirely
+    (preset tests, override tests). Migration tests stay.
+
+Estimate: ~25 implementation units. Splittable into 31a (policy + trust
++ remove HTTP) and 31b (cut over readers + install rewrite + apply).
+
+### What's stable enough to build on
+
+- `core/src/sync/{drift,plan}.ts` — already callable; Phase 33 (status)
+  and Phase 36 (doctor drift checks) can consume `planSync()` directly.
+- `core/src/state/{load,save}.ts` — works against v2 state.json.
+- `core/src/manifest/{load,save,lockfile,publish}.ts` — works.
+- `core/src/migrate/run.ts` — works end-to-end for v1→v2 upgrade.
+- `core/src/plugin-v2/*` — works; .skilltap/ priority detection landed.
+
+### Verification commands when resuming
+
+```bash
+bun test packages/core/src/manifest/
+bun test packages/core/src/state/
+bun test packages/core/src/migrate/
+bun test packages/core/src/sync/
+bun test packages/core/src/plugin-v2/
+bun test packages/core/src/plugin/detect.test.ts
+bun test packages/core/src/schemas/config-v2.test.ts
+```
+
+All should be green (242+ tests). Run before starting Phase 31 to
+confirm clean baseline.
+
+### Watchdog loop
+
+A 30-min cron loop is scheduled in this session (`6972f010`). It dies
+when this session exits. Re-arm in the new session per autopilot's
+opening steps.
+
 ## Completion Summary
 
 (written on completion)
