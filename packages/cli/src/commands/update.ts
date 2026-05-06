@@ -83,6 +83,11 @@ export default defineCommand({
       description: "Force update even if skill appears up to date (re-applies and re-scans).",
       default: false,
     },
+    agent: {
+      type: "boolean",
+      description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
+      default: false,
+    },
   },
   async run({ args }) {
     const name = args.name as string | undefined;
@@ -96,6 +101,7 @@ export default defineCommand({
       strict: args.strict,
       yes: args.yes,
       semantic: args.semantic,
+      agent: args.agent,
     });
 
     await refreshTapIndexes(policy.agentMode);

@@ -242,4 +242,34 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       await removeTmpDir(v1Dir);
     }
   });
+
+  // ── 7. --agent flag — Phase 31c-c-2c follow-up ───────────────────────────────
+
+  test("7. --agent flag forces non-interactive output even outside TTY", async () => {
+    // Use a fresh project for this — independent of the prior sequence.
+    // Note: --agent requires security scanning by default, so we can't
+    // also pass --skip-scan. The standalone-skill fixture is small and
+    // passes the static scan cleanly.
+    const agentDir = await makeTmpDir();
+    try {
+      await initRepo(agentDir);
+      await writeFile(join(agentDir, "skilltap.toml"), "");
+      const { exitCode, stdout, stderr } = await run(
+        ["install", skillRepo.path, "--project", "--agent"],
+        { cwd: agentDir },
+      );
+      if (exitCode !== 0) {
+        // eslint-disable-next-line no-console
+        console.error("agent-install stdout:", stdout);
+        // eslint-disable-next-line no-console
+        console.error("agent-install stderr:", stderr);
+      }
+      expect(exitCode).toBe(0);
+      // Agent mode emits "OK: Installed <name>" plain-text lines (vs the
+      // clack spinner output of interactive mode).
+      expect(stdout).toContain("OK: Installed standalone-skill");
+    } finally {
+      await removeTmpDir(agentDir);
+    }
+  });
 });

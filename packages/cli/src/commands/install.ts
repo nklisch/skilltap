@@ -101,6 +101,11 @@ export default defineCommand({
       description: "Force semantic scan",
       default: false,
     },
+    agent: {
+      type: "boolean",
+      description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
+      default: false,
+    },
   },
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({
@@ -111,6 +116,7 @@ export default defineCommand({
       semantic: args.semantic,
       project: args.project,
       global: args.global,
+      agent: args.agent,
     });
 
     // Ensure built-in tap is cloned before resolving tap names

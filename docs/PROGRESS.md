@@ -277,6 +277,23 @@ What remains for 31c-c-2d-2 (the final cleanup, deferred):
 
 Tests: 496 pass across 40 files.
 
+### Phase 31c-c-2c-flag complete — `--agent` flag wired into CLI commands
+
+The follow-up I deferred from 31c-c-2c. `composePolicy` already accepted `flags.agent` and `loadPolicyOrExit` already passed it through; what was missing was the per-command `args:` definition that lets users actually type `--agent` on the command line.
+
+Wired `agent: { type: "boolean", default: false }` into `args` for:
+- `install` (already passed `agent: args.agent` through to `loadPolicyOrExit`).
+- `update`
+- `skills remove`
+- `tap install`
+- `skills enable` / `skills disable` (shared via `makeToggleCommand` factory)
+
+Each of those commands now accepts `--agent` and threads it through to `loadPolicyOrExit({ ..., agent: args.agent })`.
+
+End-to-end test: `packages/cli/src/e2e-v2.test.ts::test 7` runs `skilltap install <local-skill> --project --agent` from a non-TTY subprocess and asserts the output contains `OK: Installed standalone-skill` (the agent-mode plain-text format, not the clack spinner output).
+
+Tests: 7 / 7 in e2e-v2 pass. Full v2 surface still 523+ green.
+
 ### Phase 31c-c-2c complete — `--agent` flag + `SKILLTAP_AGENT` env var honored
 
 The v2.0 changelog advertised the `--agent` flag and `SKILLTAP_AGENT=1` env var as the modern way to enter agent mode, but `composePolicy` only read the legacy `[agent-mode].enabled` config block — the env var did nothing and the flag was ignored. This phase makes both work.

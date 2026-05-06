@@ -42,9 +42,14 @@ export default defineCommand({
       description: "Skip confirmation prompt",
       default: false,
     },
+    agent: {
+      type: "boolean",
+      description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
+      default: false,
+    },
   },
   async run({ args }) {
-    const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project, global: args.global });
+    const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project, global: args.global, agent: args.agent });
 
     // Phase 35b-2: dispatch mcp:<source> to MCP-only remove path.
     const allInputs = [args.name, ...(args._ as string[] | undefined ?? [])].filter(

@@ -18,9 +18,14 @@ function makeToggleCommand(action: "enable" | "disable") {
       name: { type: "positional", description: `Skill name to ${action}`, required: true },
       global: { type: "boolean", description: `${label} global skill`, default: false },
       project: { type: "boolean", description: `${label} project skill`, default: false },
+      agent: {
+        type: "boolean",
+        description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
+        default: false,
+      },
     },
     async run({ args }) {
-      const { policy } = await loadPolicyOrExit({ project: args.project, global: args.global });
+      const { policy } = await loadPolicyOrExit({ project: args.project, global: args.global, agent: args.agent });
       const scope = args.project ? "project" : args.global ? "global" : undefined;
       const projectRoot = scope === "project" ? await tryFindProjectRoot() : undefined;
       const result = await coreFn(args.name, { scope, projectRoot });

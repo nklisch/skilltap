@@ -28,6 +28,8 @@ the command remains available.
   resolves agent mode with proper precedence: `flags.agent` >
   `SKILLTAP_AGENT=1` > config block. CLI startup checks (telemetry notice,
   update hint, skill-update reminder) also short-circuit on the env var.
+  The flag is wired into `install`, `update`, `tap install`,
+  `skills remove`, and `skills enable`/`disable`.
 
 ### Added
 
