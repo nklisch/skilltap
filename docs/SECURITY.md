@@ -216,17 +216,21 @@ Security blocks emit a machine-readable stop message directing the agent not to 
 
 ---
 
-## v2.0 Simplification
+## v2.0 Simplification (original design — substantially deferred to v2.x+)
 
-The v2.0 redesign collapses the v1.0 security model. The threat model and Layer 1 / Layer 2 mechanisms above are unchanged — the simplification is about config surface and policy composition.
+> **Status:** This section describes the original Phase 31 design intent for v2.0 security. **It was not shipped.** Phase 31c-c-2 took a simpler path: kept the v0.x per-mode security model with backward compatibility, added the `--agent` flag as a per-invocation override into the existing per-mode policy, and left the more invasive simplifications (single `[security]` block, glob-based trust, `on_warn = "install"` default) for a future v2.x phase. See [SPEC.md — v2.0 Security](./SPEC.md#v20-security) for the actual shipped schema.
+>
+> The original-design content below is retained as historical reference and as a forward-pointer for any future redesign that picks this up. Do not configure your v2.1 install according to this section — it documents a config schema the binary doesn't accept.
 
-### What changes
+### Original design intent (NOT shipped)
+
+The plan was to collapse the v0.x security model:
 
 - One `[security]` block. No `[security.human]` / `[security.agent]` split.
 - Three keys: `scan`, `on_warn`, `trust`. That's it.
 - Same security policy regardless of `--agent` flag.
 
-### v2.0 schema
+### Original v2.0 schema (NOT shipped)
 
 ```toml
 [security]
@@ -235,7 +239,7 @@ on_warn = "install"     # "prompt" | "fail" | "install"
 trust   = []            # glob patterns of tap names or source URLs to skip scan
 ```
 
-### v2.0 keys
+### Original v2.0 keys (NOT shipped)
 
 **`scan`** — what scanning runs:
 - `semantic` — Layer 1 + Layer 2 (full machinery, including chunking and agent invocation)
@@ -245,67 +249,31 @@ trust   = []            # glob patterns of tap names or source URLs to skip scan
 **`on_warn`** — what happens when warnings fire:
 - `prompt` — interactive: ask "install anyway?" If non-interactive (`--agent` / no TTY): error out.
 - `fail` — block. Exit 1.
-- `install` — proceed. Warnings are reported; no prompt, no block. (**default**)
+- `install` — proceed. Warnings are reported; no prompt, no block. (**default — not actually shipped; real default is per-mode `prompt`/`fail`**)
 
-**`trust`** — array of glob patterns. A source matching any pattern (against tap name OR full source URL) skips the scan entirely. Examples:
+**`trust`** — array of glob patterns. (Not shipped; the `policy-v2/trust-glob.ts` module retains scaffolding for this design, but the trust path remains `[[security.overrides]]`.)
 
-```toml
-trust = [
-  "home",                            # tap named "home"
-  "github.com/corp/*",                # any github.com/corp repo
-  "npm:@corp/*",                      # any @corp npm package
-  "https://gitea.example.com/team/*", # full URL pattern
-]
-```
+### What actually shipped in v2.0/v2.1
 
-`trust` replaces the v1.0 `[[security.overrides]]` system. It's less expressive (no per-source preset; trusted sources are simply unscanned) but covers the common case (internal taps, internal repos) without the kind/match/preset triple.
+Per `core/src/schemas/config.ts SecurityConfigSchema`:
 
-### Defaults
+- **Per-mode blocks** (`[security.human]`, `[security.agent]`) — kept from v0.x. Each carries `scan`, `on_warn`, `require_scan`.
+- **`on_warn` enum** — `prompt` | `fail` | `allow` (NOT `install`).
+- **Defaults** — human: `scan=static`, `on_warn=prompt`, `require_scan=false`. Agent: `scan=static`, `on_warn=fail`, `require_scan=true`.
+- **Trust mechanism** — `[[security.overrides]]` records (`{match, kind, preset}`) — same as v0.x.
+- **Presets** (`none` / `relaxed` / `standard` / `strict`) — kept; applied via `skilltap config security --preset` or in trust overrides.
+- **`--agent` activates the agent-mode block.** Same composition mechanism either way; only the per-mode rules differ.
+- **`skilltap config security`** wizard — kept as the canonical configuration entry point.
+- **`--skip-scan` flag** — kept; gated by per-mode `require_scan = true`.
+- **`--strict` / `--no-strict` flags** — kept; per-invocation override of `on_warn`.
+- **`--semantic` flag** — kept (no `--deep` alias was wired).
 
-- Default `scan = "static"` — fast, deterministic, on by default.
-- Default `on_warn = "install"` — warnings reported, install proceeds. The user is informed; nothing blocks.
-- Default `trust = []` — no allowlist.
+### Migration (actual)
 
-The default behavior change from v1.0 is that warnings no longer prompt. Rationale: prompting on every warning was annoying noise for the 95% case. Users who want the v1.0 prompt behavior set `on_warn = "prompt"`. Users who want strict blocking set `on_warn = "fail"`.
+`skilltap migrate` translates v0.x configs into v2.1's per-mode structure:
 
-### Removed from v1.0
+- v0.x's old top-level `[security]` keys (`scan`, `on_warn`, `require_scan`) → `[security.human]` and `[security.agent]` blocks (default agent-mode hardening applied: `on_warn = "fail"`, `require_scan = true`).
+- v0.x presets (`security.preset = "..."`) → expanded to per-mode keys per `PRESET_VALUES`.
+- `[[security.overrides]]` is preserved (no schema change).
 
-- `[security.human]` / `[security.agent]` split.
-- The four-preset table (`none` / `relaxed` / `standard` / `strict`).
-- `[[security.overrides]]` (kind/match/preset triples).
-- `require_scan` boolean — implicit: if you want scanning, set `scan` to a value other than `none`.
-- `--skip-scan` flag — replaced by adding the source to `trust`. (Still supported as a per-call escape hatch in v2.0, but the configured `trust` list is the recommended path.)
-- `--strict` / `--no-strict` flag — kept; equivalent to overriding `on_warn` to `fail` / configured value for the call.
-- `--semantic` flag — kept as `--deep` alias; both equivalent to overriding `scan` to `semantic`.
-- `skilltap config security` interactive wizard — replaced by `skilltap config set security.scan static` / `set security.on_warn install` / `set security.trust [...]`.
-
-### Agent flag interaction (no special rules)
-
-`--agent` does NOT change security defaults. There is one security policy.
-
-If `[security] on_warn = "prompt"` is set and a warning fires under `--agent` (no TTY available to prompt), the run errors out with:
-
-```
-error: security warning encountered, on_warn = "prompt", but no interactive TTY (--agent set or non-TTY).
-hint: change on_warn to "install" or "fail", or add the source to security.trust.
-```
-
-This is intentional: a non-interactive run shouldn't silently auto-decide on a security warning. The user must commit to a policy ahead of time.
-
-### Layer 2 (semantic scan) under v2.0
-
-The Layer 2 chunking, agent invocation, prompt injection prevention, and parallel evaluation described above are unchanged. What's changed is opt-in:
-
-- `scan = "semantic"` enables Layer 2 always.
-- `--deep` (or v1.0 `--semantic`) enables Layer 2 for one call.
-- v1.0's "auto-offer Layer 2 after Layer 1 warnings" prompt is removed — too magical, low signal-to-noise. Users who want Layer 2 set the config flag or pass `--deep`.
-
-### Migration
-
-`skilltap migrate` translates v1.0 security keys:
-
-- `[security.human]` and `[security.agent]` are merged. If they conflict, the stricter wins (warns user).
-- Presets are translated to direct `scan` / `on_warn` values.
-- `[[security.overrides]]` entries with `preset = "none"` are translated to `trust` entries (matching the `match` field). Other preset overrides are warned about and dropped (less expressive in v2.0).
-
-See [SPEC.md — v2.0 Migrate Command](./SPEC.md#v20-migrate-command) for the full translation table.
+See [SPEC.md — v2.0 Migrate Command](./SPEC.md#v20-migrate-command) for the full migration spec.
