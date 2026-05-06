@@ -60,7 +60,11 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Plugin support.** When a repo contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. `skilltap plugin` lists, inspects, toggles, and removes installed plugins.
 
+**Project manifest + lockfile (v2.0).** Pin a project's skill dependencies in `skilltap.toml` and `skilltap.lock`. Teammates check out the repo and run `skilltap sync --apply` to install the exact pinned versions. Cargo-style determinism for AI-agent skill setup.
+
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
+
+**Non-interactive agent mode.** Pass `--agent` (or set `SKILLTAP_AGENT=1`) to put skilltap in machine-readable mode: auto-yes, hard-fail on security warnings, plain-text output. Designed for AI agents, CI pipelines, and cron jobs.
 
 **Standalone binary.** One file, no runtime dependencies. Download and run.
 
