@@ -139,6 +139,32 @@ For CI/CD or automated environments:
 skilltap update --all --yes
 ```
 
+## Project manifest (v2.0 — pinned dependencies)
+
+For teams that want the project to *declare* its skill dependencies (not just rely on the tap catalog), v2.0 added a Cargo-style manifest + lockfile workflow:
+
+- **`skilltap.toml`** at the project root lists which skills + plugins the project uses
+- **`skilltap.lock`** captures exact ref + sha for each entry (auto-managed)
+- Teammates check out the project and run `skilltap sync --apply` to install the exact pinned versions
+
+```toml
+# skilltap.toml — committed to the repo
+[skills]
+"github:acme/commit-helper" = "^1.0"
+"github:acme/code-review" = "*"
+
+[plugins]
+"github:acme/dev-toolkit" = "^2.1"
+```
+
+```bash
+# Teammate clones the repo, then:
+skilltap sync --apply       # install exactly what skilltap.lock pins
+skilltap status             # show drift between manifest, lockfile, and installed state
+```
+
+`install` and `remove` automatically update both `skilltap.toml` (the user-managed declared range) and `skilltap.lock` (the auto-managed exact resolution). Commit both files. Use the tap pattern above for catalog-style sharing; use the manifest pattern when the project needs deterministic, lockfile-pinned dependencies.
+
 ## Controlling what gets installed
 
 For teams and organizations, skilltap lets you control the sources, not just the skills.
