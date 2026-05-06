@@ -289,7 +289,6 @@ describe("ConfigSchema", () => {
       security: { threshold: 7 },
       taps: [{ name: "home", url: "https://example.com/tap.git" }],
     });
-    // biome-ignore lint/suspicious/noExplicitAny: smol-toml stringify types don't accept Config directly
     const toml = stringify(config as any);
     const parsed = parse(toml);
     const result = ConfigSchema.parse(parsed);

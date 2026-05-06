@@ -56,7 +56,10 @@ const SPINNER_FRAMES = ["◒", "◐", "◓", "◑"];
 // ---------------------------------------------------------------------------
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
-  return value != null && typeof (value as any).then === "function";
+  return (
+    value != null &&
+    typeof (value as { then?: unknown }).then === "function"
+  );
 }
 
 function wrapAsResults<T>(items: T[]): FzfResultItem<T>[] {
@@ -122,6 +125,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
     this._opts = opts;
 
     // Grab the bound render method from the base class (private in TS, exists at runtime)
+    // biome-ignore lint/suspicious/noExplicitAny: clack's Prompt.render is private; runtime access required
     this.rerender = (this as any).render.bind(this);
 
     // Event handlers

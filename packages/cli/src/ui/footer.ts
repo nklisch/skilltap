@@ -13,7 +13,14 @@
  *      footer at the physical bottom row.
  *   3. On resize, repaint.
  *   4. On close, reverse all patches cleanly.
+ *
+ * `any` usage in this file is intentional: we intercept Node's
+ * `WriteStream.write()` which has overloaded signatures, and we read
+ * private TTY internals via `(stream as any).rows`. Properly typing
+ * either would require replicating Node's @types/node overloads
+ * inline — far more code than the inline cast.
  */
+// biome-ignore-all lint/suspicious/noExplicitAny: TTY/WriteStream interop — see file docstring.
 
 import pc from "picocolors";
 
