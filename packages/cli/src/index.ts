@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
-import { VERSION } from "@skilltap/core";
+import { isAgentEnv, VERSION } from "@skilltap/core";
 import { tryFindProjectRoot } from "./ui/resolve";
 
 // Handle --get-completions before citty takes over — fast path for tab completion
@@ -99,7 +99,7 @@ async function runTelemetryNotice(): Promise<void> {
   if (!configResult.ok) return;
   const config = configResult.value;
 
-  if (process.env.SKILLTAP_AGENT === "1") return;
+  if (isAgentEnv()) return;
   if (config["agent-mode"].enabled) return;
   if (process.env.CI) return;
   if (config.telemetry.notice_shown) return;
@@ -166,7 +166,7 @@ async function runStartupUpdateCheck(): Promise<void> {
   const config = configResult.ok ? configResult.value : null;
 
   // Suppress update output when running in agent mode
-  if (process.env.SKILLTAP_AGENT === "1") return;
+  if (isAgentEnv()) return;
   if (config?.["agent-mode"]?.enabled) return;
 
   const intervalHours = config?.updates?.interval_hours ?? 24;
@@ -204,7 +204,7 @@ async function runStartupSkillUpdateCheck(): Promise<void> {
   const configResult = await loadConfig();
   const config = configResult.ok ? configResult.value : null;
 
-  if (process.env.SKILLTAP_AGENT === "1") return;
+  if (isAgentEnv()) return;
   if (config?.["agent-mode"]?.enabled) return;
 
   const intervalHours = config?.updates?.skill_check_interval_hours ?? 24;

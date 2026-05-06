@@ -3,8 +3,8 @@
 **Status:** v2.0 in-scope COMPLETE; v2.1 cutover essentially done (31c-c-2a/b/c/d-1)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 15
-**Total refactor passes:** 1
+**Phases since last refactor:** 0
+**Total refactor passes:** 2
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
 
@@ -53,6 +53,26 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 ---
 
 ## Refactor Log
+
+### Refactor 2 (after Phase 31c-c-2d-1)
+
+Triggered by 15 phases since Refactor 1, plus concrete duplication left over from the v2.1 cutover.
+
+**Consolidation 1: `SKILLTAP_AGENT === "1"` check.** Phase 31c-c-2c added the env-var check in 6 places across 4 files (cli/src/index.ts × 3, cli/src/ui/policy.ts, core/src/policy.ts × 2). Extracted to `core/src/agent-env.ts::isAgentEnv()`. Single source of truth; all 6 sites now call `isAgentEnv()`. The literal `"1"` lives in only one place.
+
+**Consolidation 2: `getConfigDir` + `ensureDirs` extracted to leaf module.** These were defined in `config.ts` but needed by `state/save.ts`, `state/paths.ts`, and `plugin/state.ts` — creating a circular import that Phase 31c-c-2d-1 worked around with dynamic `await import("./state/load")` calls inside `saveInstalled`/`loadInstalled`. Moved both helpers to a new leaf module `core/src/dirs.ts` with no internal dependencies. `config.ts`, `state/*`, and `plugin/state.ts` now import statically. Re-exported from `config.ts` so external consumers keep working.
+
+Result: `saveInstalled`, `loadInstalled`, `savePlugins`, `loadPlugins` use static imports — cleaner stacks, no module-load-time surprises. `core/src/index.ts` now exports `agent-env` and `dirs` modules so external consumers (CLI, future plugins) can use them.
+
+Files added:
+- `packages/core/src/agent-env.ts` — `isAgentEnv()` helper.
+- `packages/core/src/dirs.ts` — `getConfigDir`, `ensureDirs` (relocated from config.ts).
+
+Files touched: 7 (config.ts, policy.ts, state/save.ts, state/paths.ts, plugin/state.ts, cli/src/index.ts, cli/src/ui/policy.ts) plus 1 test (config.test.ts: assertion now checks state.json instead of installed.json after the canonical-store cutover).
+
+Reduction: 26 lines of duplication consolidated; net minimal line count change but **6 inline literal "1" checks → 1**, **2 dynamic imports → 0**, **1 import cycle → 0**.
+
+Tests: 523 pass across 41 files. CLI builds cleanly (603 modules, 2.97 MB).
 
 ### Refactor 1 (after Phase 34)
 

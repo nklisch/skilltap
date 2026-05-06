@@ -1,12 +1,16 @@
-import { mkdir } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
+import { ensureDirs, getConfigDir } from "./dirs";
+import { loadJsonState } from "./json-state";
 import { type Config, ConfigSchema } from "./schemas/config";
 import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
 import { parseWithResult } from "./schemas/index";
-import { loadJsonState, saveJsonState } from "./json-state";
+import { loadState } from "./state/load";
+import { saveState } from "./state/save";
 import { err, ok, type Result, UserError } from "./types";
+
+// Re-export from leaf module so existing importers keep working.
+export { ensureDirs, getConfigDir };
 
 /**
  * Migrate v1 flat security config to v2 per-mode structure.
@@ -65,22 +69,6 @@ export function migrateSecurityConfig(raw: Record<string, unknown>): Record<stri
   if (v2Security.ollama_model === undefined) delete v2Security.ollama_model;
 
   return { ...raw, security: v2Security };
-}
-
-export function getConfigDir(): string {
-  const xdg = process.env.XDG_CONFIG_HOME;
-  return xdg ? join(xdg, "skilltap") : join(homedir(), ".config", "skilltap");
-}
-
-export async function ensureDirs(): Promise<Result<void>> {
-  const dir = getConfigDir();
-  try {
-    await mkdir(join(dir, "taps"), { recursive: true });
-    await mkdir(join(dir, "cache"), { recursive: true });
-    return ok(undefined);
-  } catch (e) {
-    return err(new UserError(`Failed to create config directories: ${e}`));
-  }
 }
 
 // Static template preserves comments for user reference.
@@ -232,20 +220,15 @@ function getInstalledPath(projectRoot?: string): string {
     : join(getConfigDir(), "installed.json");
 }
 
-// Phase 31c-c-2d-1: state.json is now the canonical store. Reads still
-// fall back to installed.json for unmigrated v0.x users (one-time read;
-// the next saveInstalled writes state.json and the fallback stops firing).
-// Writes go ONLY to state.json — no more installed.json updates.
+// state.json is the canonical store. Reads still fall back to installed.json
+// for unmigrated v0.x users (one-time; the next saveInstalled writes state.json
+// and the fallback stops firing). Writes go ONLY to state.json.
 export async function loadInstalled(projectRoot?: string): Promise<Result<InstalledJson>> {
-  const { loadState } = await import("./state/load");
   const stateResult = await loadState(projectRoot);
   if (stateResult.ok && stateResult.value.skills.length > 0) {
     return ok({ version: 1 as const, skills: stateResult.value.skills });
   }
   if (!stateResult.ok) return stateResult;
-  // Empty state.json — fall back to legacy installed.json so unmigrated
-  // v0.x users keep working. Their next save populates state.json and
-  // future reads short-circuit on the populated state.
   return loadJsonState(
     getInstalledPath(projectRoot),
     InstalledJsonSchema,
@@ -258,10 +241,6 @@ export async function saveInstalled(
   installed: InstalledJson,
   projectRoot?: string,
 ): Promise<Result<void>> {
-  const { loadState } = await import("./state/load");
-  const { saveState } = await import("./state/save");
-  // Read existing state to preserve plugins + mcpServers slices we don't
-  // own here.
   const stateResult = await loadState(projectRoot);
   if (!stateResult.ok) return stateResult;
   const newState = {

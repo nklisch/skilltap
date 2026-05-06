@@ -345,11 +345,11 @@ describe("loadConfig — migration integration", () => {
 });
 
 describe("saveInstalled", () => {
-  test("writes installed.json to disk", async () => {
+  test("writes state.json to disk (Phase 31c-c-2d-1: state.json is canonical)", async () => {
     const installed: InstalledJson = { version: 1, skills: [] };
     const result = await saveInstalled(installed);
     expect(result.ok).toBe(true);
-    expect(await fileExists(join(tmpDir, "skilltap", "installed.json"))).toBe(
+    expect(await fileExists(join(tmpDir, "skilltap", "state.json"))).toBe(
       true,
     );
   });

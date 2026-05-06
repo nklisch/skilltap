@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { ensureDirs, getConfigDir } from "../config";
+import { ensureDirs, getConfigDir } from "../dirs";
 import { loadJsonState, saveJsonState } from "../json-state";
 import {
   PluginsJsonSchema,
@@ -9,6 +9,8 @@ import {
   type StoredMcpComponent,
 } from "../schemas/plugins";
 import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
+import { loadState } from "../state/load";
+import { saveState } from "../state/save";
 import { err, ok, type Result, UserError } from "../types";
 
 function getPluginsPath(projectRoot?: string): string {
@@ -17,10 +19,9 @@ function getPluginsPath(projectRoot?: string): string {
     : join(getConfigDir(), "plugins.json");
 }
 
-// Phase 31c-c-2d-1: state.json is the canonical store. Same read-fallback +
-// state-only-write pattern as loadInstalled/saveInstalled in config.ts.
+// state.json is the canonical store. Same read-fallback + state-only-write
+// pattern as loadInstalled/saveInstalled in config.ts.
 export async function loadPlugins(projectRoot?: string): Promise<Result<PluginsJson, UserError>> {
-  const { loadState } = await import("../state/load");
   const stateResult = await loadState(projectRoot);
   if (stateResult.ok && stateResult.value.plugins.length > 0) {
     return ok({ version: 1 as const, plugins: stateResult.value.plugins });
@@ -38,8 +39,6 @@ export async function savePlugins(
   plugins: PluginsJson,
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
-  const { loadState } = await import("../state/load");
-  const { saveState } = await import("../state/save");
   const stateResult = await loadState(projectRoot);
   if (!stateResult.ok) return stateResult;
   const newState = {

@@ -1,4 +1,4 @@
-import { ensureDirs } from "../config";
+import { ensureDirs } from "../dirs";
 import { saveJsonState } from "../json-state";
 import type { Result, UserError } from "../types";
 import { getStatePath } from "./paths";

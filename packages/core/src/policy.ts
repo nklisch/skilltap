@@ -1,3 +1,4 @@
+import { isAgentEnv } from "./agent-env";
 import type { Config, TrustOverride } from "./schemas/config";
 import { PRESET_VALUES, SECURITY_PRESETS } from "./schemas/config";
 import { type Result, UserError, err, ok } from "./types";
@@ -111,7 +112,7 @@ export function composePolicy(
   //      until the v0.x config schema is deleted in 31c-c-2d)
   const agentMode =
     flags.agent === true ||
-    process.env.SKILLTAP_AGENT === "1" ||
+    isAgentEnv() ||
     config["agent-mode"].enabled;
 
   if (agentMode) {
@@ -216,7 +217,7 @@ export function composePolicyForSource(
   // Same agent-mode resolution as composePolicy.
   const agentMode =
     flags.agent === true ||
-    process.env.SKILLTAP_AGENT === "1" ||
+    isAgentEnv() ||
     config["agent-mode"].enabled;
   const modeKey = agentMode ? "agent" : "human";
 

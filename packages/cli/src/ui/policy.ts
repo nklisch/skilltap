@@ -3,14 +3,15 @@ import {
   type Config,
   type EffectivePolicy,
   composePolicy,
+  isAgentEnv,
   loadConfig,
 } from "@skilltap/core";
 import { agentError } from "./agent-out";
 import { errorLine } from "./format";
 
 export async function isAgentMode(): Promise<boolean> {
-  // Phase 31c-c-2c: env var takes precedence over the legacy config block.
-  if (process.env.SKILLTAP_AGENT === "1") return true;
+  // env var takes precedence over the legacy config block.
+  if (isAgentEnv()) return true;
   const configResult = await loadConfig();
   return configResult.ok && configResult.value["agent-mode"].enabled;
 }

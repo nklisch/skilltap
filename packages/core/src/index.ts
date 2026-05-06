@@ -1,6 +1,8 @@
 import { version } from "../package.json";
 export const VERSION: string = version;
+export * from "./agent-env";
 export * from "./debug";
+export * from "./dirs";
 export * from "./doctor";
 
 export * from "./adapters";
