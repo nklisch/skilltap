@@ -1,7 +1,6 @@
 import { unlink } from "node:fs/promises";
 import { $ } from "bun";
-import { saveInstalled } from "./config";
-import { loadActiveInstalled } from "./state/read-bridge";
+import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
 import { removeSkillFromManifest } from "./manifest/update";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
@@ -25,11 +24,8 @@ export async function removeSkill(
 ): Promise<Result<void, UserError>> {
   debug("removeSkill", { name, scope: options.scope });
   const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
-  // Phase 31c-c-2b: state.json first, fall back to installed.json.
-  const installedResult = await loadActiveInstalled(
-    options.scope ?? "global",
-    fileRoot,
-  );
+  // state.json canonical with installed.json fallback for unmigrated users.
+  const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 

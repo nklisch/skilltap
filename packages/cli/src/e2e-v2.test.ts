@@ -108,19 +108,9 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     expect(typeof skillEntries[0]?.sha).toBe("string");
     expect((skillEntries[0]?.sha ?? "").length).toBeGreaterThan(0);
 
-    // Phase 31c-c-2a dual-write: install writes BOTH installed.json (v0.x
-    // source of truth) AND state.json (v2 shadow). v2 readers (status,
-    // doctor, sync) now see new installs without an explicit migrate.
-    const installedText = await readFile(
-      join(projectRoot, ".agents", "installed.json"),
-      "utf8",
-    );
-    const installed = JSON.parse(installedText) as {
-      skills: Array<{ name: string }>;
-    };
-    expect(installed.skills).toHaveLength(1);
-    expect(installed.skills[0]?.name).toBe("standalone-skill");
-
+    // Phase 31c-c-2d-1: install writes ONLY to state.json. installed.json
+    // is no longer maintained (it's read-fallback only for unmigrated
+    // v0.x users).
     const stateText = await readFile(
       join(projectRoot, ".agents", "state.json"),
       "utf8",
@@ -177,17 +167,7 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       }
       expect(exitCode).toBe(0);
 
-      // After apply, both installed.json AND state.json exist with the
-      // skill (sync delegates to install which now dual-writes).
-      const installedExists = await Bun.file(
-        join(cloneDir, ".agents", "installed.json"),
-      ).exists();
-      expect(installedExists).toBe(true);
-      const installed = JSON.parse(
-        await readFile(join(cloneDir, ".agents", "installed.json"), "utf8"),
-      ) as { skills: Array<{ name: string }> };
-      expect(installed.skills.some((s) => s.name === "standalone-skill")).toBe(true);
-
+      // After apply, state.json exists with the skill.
       const state = JSON.parse(
         await readFile(join(cloneDir, ".agents", "state.json"), "utf8"),
       ) as { version: number; skills: Array<{ name: string }> };

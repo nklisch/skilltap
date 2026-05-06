@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE; v2.1 cutover in progress (31c-c-2a/b/c done)
+**Status:** v2.0 in-scope COMPLETE; v2.1 cutover essentially done (31c-c-2a/b/c/d-1)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 14
+**Phases since last refactor:** 15
 **Total refactor passes:** 1
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
@@ -34,7 +34,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-c-2a | state.json dual-write from saveInstalled/savePlugins | done | 2026-05-06 |
 | 31c-c-2b | state.json reads cutover (install/update/remove + plugin) | done | 2026-05-06 |
 | 31c-c-2c | --agent / SKILLTAP_AGENT precedence over config block | done | 2026-05-06 |
-| 31c-c-2d | v0.x schema + installed.json/plugins.json deletion | pending  | —         |
+| 31c-c-2d-1 | state.json canonical store; installed.json/plugins.json no longer written | done | 2026-05-06 |
+| 31c-c-2d-2 | v0.x schema + read-fallback deletion (final cleanup) | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
@@ -209,6 +210,32 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 31c-c-2d-1 complete — state.json is the canonical store
+
+`saveInstalled()` and `savePlugins()` no longer write `installed.json`/`plugins.json`. They write directly to `state.json`. Reads still fall back to the legacy v0.x files when state.json is empty (handles unmigrated v0.x users for one read; the next save populates state.json and the fallback never fires again).
+
+This subsumes the work that 31c-c-2a (the `syncV1ToV2State` shadow helper) and 31c-c-2b (the `loadActiveInstalled` / `loadActivePlugins` bridge helpers) did. With reads + writes both going through state.json natively, the bridge files are dead code:
+
+Deleted:
+- `packages/core/src/state/sync-from-v1.ts` + `sync-from-v1.test.ts`
+- `packages/core/src/state/read-bridge.ts` + `read-bridge.test.ts`
+
+install/update/remove/plugin paths reverted to plain `loadInstalled` / `loadPlugins` calls (which now do the right thing internally).
+
+Tests touched:
+- `packages/core/src/link.test.ts` — assertion changed from `installed.json` to `state.json`.
+- `packages/core/src/plugin/install.test.ts` — same; assertion against `state.json`.
+- `packages/cli/src/e2e-v2.test.ts` — dropped now-impossible `installed.json` checks; only state.json is asserted.
+
+What's now possible: a fresh skilltap user has only `state.json` on disk — no `installed.json` or `plugins.json` ever appear. v0.x users who upgrade get one transparent read fallback, then their state.json is populated and the legacy files become orphaned (deletable on the user's schedule, or by a future `skilltap prune` command).
+
+What remains for 31c-c-2d-2 (the final cleanup, deferred):
+- Delete `packages/core/src/schemas/installed.ts` and `schemas/plugins.ts` v0.x schemas (still referenced by `migrate/run.ts` for one-shot upgrades; can move to `schemas/v1/`).
+- Delete the read-fallback paths in `loadInstalled` / `loadPlugins` (after a release window).
+- Drop `[agent-mode]` config block from ConfigSchema (after deprecation window).
+
+Tests: 496 pass across 40 files.
 
 ### Phase 31c-c-2c complete — `--agent` flag + `SKILLTAP_AGENT` env var honored
 

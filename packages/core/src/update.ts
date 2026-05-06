@@ -2,8 +2,7 @@ import { lstat, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
-import { saveInstalled } from "./config";
-import { loadActiveInstalled } from "./state/read-bridge";
+import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import type { DiffStat } from "./git";
@@ -645,15 +644,15 @@ export async function updateSkill(
 ): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
   debug("updateSkill", { name: options.name ?? "all" });
 
-  // Load global installed (Phase 31c-c-2b: state.json first, fallback to installed.json)
-  const globalInstalledResult = await loadActiveInstalled("global");
+  // Load global installed (state.json canonical with installed.json fallback)
+  const globalInstalledResult = await loadInstalled();
   if (!globalInstalledResult.ok) return globalInstalledResult;
   const globalInstalled = globalInstalledResult.value;
 
   // Optionally load project installed
   let projectInstalled: InstalledJson | null = null;
   if (options.projectRoot) {
-    const r = await loadActiveInstalled("project", options.projectRoot);
+    const r = await loadInstalled(options.projectRoot);
     if (!r.ok) return r;
     projectInstalled = r.value;
   }

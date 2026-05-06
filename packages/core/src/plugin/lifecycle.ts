@@ -4,10 +4,9 @@ import { removePluginFromManifest } from "../manifest/update";
 import { agentDefDisabledPath, agentDefPath, scopeBase, skillDisabledDir, skillInstallDir } from "../paths";
 import type { PluginsJson, StoredComponent, StoredMcpComponent } from "../schemas/plugins";
 import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
-import { loadActivePlugins } from "../state/read-bridge";
 import { err, ok, type Result, UserError } from "../types";
 import { injectMcpServers, removeMcpServers } from "./mcp-inject";
-import { findPlugin, removePlugin, savePlugins, toggleComponent } from "./state";
+import { findPlugin, loadPlugins, removePlugin, savePlugins, toggleComponent } from "./state";
 import type { PluginRecord } from "../schemas/plugins";
 
 export type RemovePluginOptions = {
@@ -37,9 +36,9 @@ async function findPluginInScopes(
 ): Promise<Result<ScopedState & { record: PluginRecord }, UserError>> {
   const { scope, projectRoot } = options;
 
-  // Phase 31c-c-2b: state.json first.
+  // state.json canonical with plugins.json fallback for unmigrated users.
   if (scope === "global" || !scope) {
-    const globalResult = await loadActivePlugins("global");
+    const globalResult = await loadPlugins();
     if (!globalResult.ok) return globalResult;
     const record = findPlugin(globalResult.value, pluginName);
     if (record) {
@@ -48,7 +47,7 @@ async function findPluginInScopes(
   }
 
   if (scope === "project" || (!scope && projectRoot)) {
-    const projResult = await loadActivePlugins("project", projectRoot);
+    const projResult = await loadPlugins(projectRoot);
     if (!projResult.ok) return projResult;
     const record = findPlugin(projResult.value, pluginName);
     if (record) {

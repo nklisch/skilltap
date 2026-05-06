@@ -232,7 +232,20 @@ function getInstalledPath(projectRoot?: string): string {
     : join(getConfigDir(), "installed.json");
 }
 
+// Phase 31c-c-2d-1: state.json is now the canonical store. Reads still
+// fall back to installed.json for unmigrated v0.x users (one-time read;
+// the next saveInstalled writes state.json and the fallback stops firing).
+// Writes go ONLY to state.json — no more installed.json updates.
 export async function loadInstalled(projectRoot?: string): Promise<Result<InstalledJson>> {
+  const { loadState } = await import("./state/load");
+  const stateResult = await loadState(projectRoot);
+  if (stateResult.ok && stateResult.value.skills.length > 0) {
+    return ok({ version: 1 as const, skills: stateResult.value.skills });
+  }
+  if (!stateResult.ok) return stateResult;
+  // Empty state.json — fall back to legacy installed.json so unmigrated
+  // v0.x users keep working. Their next save populates state.json and
+  // future reads short-circuit on the populated state.
   return loadJsonState(
     getInstalledPath(projectRoot),
     InstalledJsonSchema,
@@ -245,36 +258,17 @@ export async function saveInstalled(
   installed: InstalledJson,
   projectRoot?: string,
 ): Promise<Result<void>> {
-  const result = await saveJsonState(
-    getInstalledPath(projectRoot),
-    installed,
-    "installed.json",
-    projectRoot,
-    ensureDirs,
-  );
-  if (!result.ok) return result;
-  // Phase 31c-c-2a: shadow into state.json. Non-fatal — installed.json is
-  // the legacy source of truth until v2.1's full cutover, and the v0.x
-  // write already succeeded. Use a dynamic import to avoid loading state/
-  // unconditionally at module init; this also sidesteps any circular-import
-  // risk if the state module ever needs to read config.
-  await shadowSkillsIntoState(installed, projectRoot).catch(() => undefined);
-  return result;
-}
-
-async function shadowSkillsIntoState(
-  installed: InstalledJson,
-  projectRoot?: string,
-): Promise<void> {
   const { loadState } = await import("./state/load");
   const { saveState } = await import("./state/save");
+  // Read existing state to preserve plugins + mcpServers slices we don't
+  // own here.
   const stateResult = await loadState(projectRoot);
-  if (!stateResult.ok) return;
+  if (!stateResult.ok) return stateResult;
   const newState = {
     version: 2 as const,
     skills: installed.skills,
     plugins: stateResult.value.plugins,
     mcpServers: stateResult.value.mcpServers,
   };
-  await saveState(newState, projectRoot);
+  return saveState(newState, projectRoot);
 }

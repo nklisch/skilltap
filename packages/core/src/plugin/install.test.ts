@@ -169,7 +169,7 @@ describe("installPlugin", () => {
     }
   });
 
-  test("records plugin in plugins.json", async () => {
+  test("records plugin in state.json", async () => {
     const contentDir = await makeContentDir({
       "skills/helper/SKILL.md": "---\nname: helper\n---\n# Helper",
     });
@@ -178,13 +178,14 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      // Global plugins.json lives in configDir (XDG_CONFIG_HOME/skilltap/plugins.json)
+      // Phase 31c-c-2d-1: state.json is the canonical store.
       const { getConfigDir } = await import("../config");
-      const pluginsFile = Bun.file(join(getConfigDir(), "plugins.json"));
-      expect(await pluginsFile.exists()).toBe(true);
-      const plugins = await pluginsFile.json();
-      expect(plugins.plugins).toHaveLength(1);
-      expect(plugins.plugins[0].name).toBe("test-plugin");
+      const stateFile = Bun.file(join(getConfigDir(), "state.json"));
+      expect(await stateFile.exists()).toBe(true);
+      const state = await stateFile.json();
+      expect(state.version).toBe(2);
+      expect(state.plugins).toHaveLength(1);
+      expect(state.plugins[0].name).toBe("test-plugin");
     } finally {
       await rm(contentDir, { recursive: true, force: true });
     }

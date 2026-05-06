@@ -8,11 +8,10 @@ import type { PluginRecord, StoredMcpComponent } from "../schemas/plugins";
 import { scanStatic } from "../security/static";
 import { wrapShell } from "../shell";
 import { createAgentSymlinks } from "../symlink";
-import { loadActivePlugins } from "../state/read-bridge";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
 import { addPluginToManifest } from "../manifest/update";
 import { injectMcpServers } from "./mcp-inject";
-import { addPlugin, manifestToRecord, mcpServerToStored, savePlugins } from "./state";
+import { addPlugin, loadPlugins, manifestToRecord, mcpServerToStored, savePlugins } from "./state";
 import type { StaticWarning } from "../security/static";
 
 export type PluginInstallOptions = {
@@ -163,8 +162,8 @@ export async function installPlugin(
     tap: options.tap,
   });
 
-  // Phase 31c-c-2b: state.json first.
-  const loadResult = await loadActivePlugins(scope, projectRoot);
+  // state.json canonical with plugins.json fallback for unmigrated users.
+  const loadResult = await loadPlugins(projectRoot);
   if (!loadResult.ok) return loadResult;
   const newState = addPlugin(loadResult.value, record);
   const saveResult = await savePlugins(newState, projectRoot);

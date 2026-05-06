@@ -17,7 +17,15 @@ function getPluginsPath(projectRoot?: string): string {
     : join(getConfigDir(), "plugins.json");
 }
 
+// Phase 31c-c-2d-1: state.json is the canonical store. Same read-fallback +
+// state-only-write pattern as loadInstalled/saveInstalled in config.ts.
 export async function loadPlugins(projectRoot?: string): Promise<Result<PluginsJson, UserError>> {
+  const { loadState } = await import("../state/load");
+  const stateResult = await loadState(projectRoot);
+  if (stateResult.ok && stateResult.value.plugins.length > 0) {
+    return ok({ version: 1 as const, plugins: stateResult.value.plugins });
+  }
+  if (!stateResult.ok) return stateResult;
   return loadJsonState(
     getPluginsPath(projectRoot),
     PluginsJsonSchema,
@@ -30,34 +38,17 @@ export async function savePlugins(
   plugins: PluginsJson,
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
-  const result = await saveJsonState(
-    getPluginsPath(projectRoot),
-    plugins,
-    "plugins.json",
-    projectRoot,
-    ensureDirs,
-  );
-  if (!result.ok) return result;
-  // Phase 31c-c-2a: shadow into state.json. Non-fatal.
-  await shadowPluginsIntoState(plugins, projectRoot).catch(() => undefined);
-  return result;
-}
-
-async function shadowPluginsIntoState(
-  plugins: PluginsJson,
-  projectRoot?: string,
-): Promise<void> {
   const { loadState } = await import("../state/load");
   const { saveState } = await import("../state/save");
   const stateResult = await loadState(projectRoot);
-  if (!stateResult.ok) return;
+  if (!stateResult.ok) return stateResult;
   const newState = {
     version: 2 as const,
     skills: stateResult.value.skills,
     plugins: plugins.plugins,
     mcpServers: stateResult.value.mcpServers,
   };
-  await saveState(newState, projectRoot);
+  return saveState(newState, projectRoot);
 }
 
 export function mcpServerToStored(server: McpServerEntry): StoredMcpComponent {

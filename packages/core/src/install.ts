@@ -4,8 +4,7 @@ import { $ } from "bun";
 import { resolveSource } from "./adapters";
 import { debug } from "./debug";
 import type { AgentAdapter } from "./agents/types";
-import { saveInstalled } from "./config";
-import { loadActiveInstalled } from "./state/read-bridge";
+import { loadInstalled, saveInstalled } from "./config";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import { checkGitInstalled, clone, revParse } from "./git";
 import { downloadAndExtract, parseNpmSource } from "./npm-registry";
@@ -405,9 +404,9 @@ export async function installSkill(
   const allWarnings: StaticWarning[] = [];
   const allSemanticWarnings: SemanticWarning[] = [];
 
-  // 1. Check already-installed (Phase 31c-c-2b: state.json first, fall back to installed.json)
+  // 1. Check already-installed (state.json canonical, with installed.json fallback for unmigrated v0.x users)
   const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadActiveInstalled(options.scope, fileRoot);
+  const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 

@@ -134,13 +134,16 @@ describe("linkSkill — happy path", () => {
     expect(result.value.sha).toBeNull();
   });
 
-  test("saves record to installed.json", async () => {
+  test("saves record to state.json", async () => {
     const dir = await makeSkillDir();
     await linkSkill(dir, { scope: "global" });
 
-    const f = Bun.file(join(configDir, "skilltap", "installed.json"));
+    // Phase 31c-c-2d-1: state.json is the canonical store; installed.json
+    // is no longer written.
+    const f = Bun.file(join(configDir, "skilltap", "state.json"));
     expect(await f.exists()).toBe(true);
     const data = await f.json();
+    expect(data.version).toBe(2);
     expect(data.skills).toHaveLength(1);
     expect(data.skills[0].name).toBe("test-skill");
     expect(data.skills[0].scope).toBe("linked");
