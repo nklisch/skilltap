@@ -713,7 +713,7 @@ Set config values. Non-interactive — safe for agents and scripts. Only prefere
 
 **Blocked keys** (with suggested alternative):
 
-- `agent-mode.*` → Use `skilltap config agent-mode`
+- `agent-mode.*` → Use `skilltap config agent-mode` (persistent), or pass `--agent` / `SKILLTAP_AGENT=1` per invocation
 - `telemetry.*` → Use `skilltap config telemetry enable/disable`
 - `security.human.*`, `security.agent.*` → Use `skilltap config security`
 - `security.overrides` → Use `skilltap config security --trust`
@@ -739,15 +739,22 @@ $ skilltap config set defaults.also
 $ skilltap config set defaults.yes true
 
 $ skilltap config set agent-mode.enabled true
-error: 'agent-mode.enabled' cannot be set via 'config set'
-hint: Use 'skilltap config agent-mode'
+ERROR: 'agent-mode.enabled' cannot be set via 'config set'
+  hint: Use 'skilltap config agent-mode' (persistent), or pass --agent / SKILLTAP_AGENT=1 per invocation
 ```
 
 ---
 
 ### `skilltap config agent-mode`
 
-Interactive wizard for enabling or disabling agent mode. **Always interactive — agents cannot run this command.** This is the only way to toggle agent mode. There are no CLI flags or environment variables that activate it.
+Interactive wizard for **persistently** enabling or disabling agent mode in the user's config. **Always interactive — agents cannot run this command.**
+
+> **v2.1 entry points (precedence high → low):**
+> 1. `--agent` flag (per-invocation, works on every command via `composePolicy`).
+> 2. `SKILLTAP_AGENT=1` environment variable (per-invocation, works on every command).
+> 3. `[agent-mode] enabled = true` in `config.toml` (persistent — set by this wizard).
+>
+> The wizard persists the choice in `config.toml`. The flag and env var override the config per-invocation without touching it. v2.0 introduced the flag and env-var entry points; the wizard remains for users who want a permanent default. Keeping a deprecated-but-readable `[agent-mode]` block in v2.1 is intentional — full retirement is deferred to v2.2.
 
 **Flow (enabling):**
 
