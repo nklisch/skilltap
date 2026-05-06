@@ -325,7 +325,8 @@ Symlink a local skill directory into the install path. For development workflows
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--project` | boolean | false | Link to project scope instead of global |
+| `--project` | boolean | false | Link to project scope (overrides smart-scope inference) |
+| `--global` | boolean | false | Link to global scope (`~/.agents/skills/`; overrides smart-scope inference) |
 | `--also <agent>` | string | (from config) | Also symlink to agent-specific directory |
 
 **Behavior:**
@@ -333,7 +334,7 @@ Symlink a local skill directory into the install path. For development workflows
 - Resolve path to absolute
 - Validate SKILL.md exists at path
 - Parse SKILL.md frontmatter for name
-- Create symlink: `~/.agents/skills/{name}` → `{absolute-path}`
+- Create symlink: `~/.agents/skills/{name}` → `{absolute-path}` (or project-scope equivalent)
 - Record in `state.json` with `repo: null`, `ref: null`, scope `"linked"`
 - Create agent symlinks if `--also`
 
@@ -724,6 +725,7 @@ Set config values. Non-interactive — safe for agents and scripts. Only prefere
 | `updates.auto_update` | enum | `"off"`, `"patch"`, `"minor"` |
 | `updates.interval_hours` | number | Positive integer |
 | `updates.show_diff` | enum | `"full"`, `"stat"`, `"none"` |
+| `default_git_host` | string | Hostname (e.g. `gitlab.example.com`) used to expand `owner/repo` shorthand into a full git URL when the resolver doesn't match GitHub. |
 
 **Blocked keys** (with suggested alternative):
 
