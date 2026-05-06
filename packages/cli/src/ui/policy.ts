@@ -10,10 +10,23 @@ import { agentError } from "./agent-out";
 import { errorLine } from "./format";
 
 export async function isAgentMode(): Promise<boolean> {
-  // env var takes precedence over the legacy config block.
+  // Precedence matches composePolicy: --agent flag > env var > legacy config.
+  // Commands that don't go through composePolicy (disable, enable, toggle,
+  // plugin/skills/tap info-only paths) call this helper, so the flag must
+  // be detected directly from argv to honor the documented precedence.
+  if (hasAgentFlag()) return true;
   if (isAgentEnv()) return true;
   const configResult = await loadConfig();
   return configResult.ok && configResult.value["agent-mode"].enabled;
+}
+
+function hasAgentFlag(): boolean {
+  for (const arg of process.argv) {
+    if (arg === "--agent" || arg === "--agent=true" || arg === "--agent=1") {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function loadPolicyOrExit(

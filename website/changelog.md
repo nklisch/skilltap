@@ -29,7 +29,11 @@ the command remains available.
   `SKILLTAP_AGENT=1` > config block. CLI startup checks (telemetry notice,
   update hint, skill-update reminder) also short-circuit on the env var.
   The flag is wired into `install`, `update`, `tap install`,
-  `skills remove`, and `skills enable`/`disable`.
+  `skills remove`, and `skills enable`/`disable`. The `isAgentMode()`
+  helper used by read-only commands (`disable`, `enable`, `toggle`,
+  `plugin info`, `skills info`, etc.) now also honors the `--agent` flag
+  via direct argv inspection, so the documented precedence applies
+  uniformly across every command.
 
 ### Added
 
