@@ -3,7 +3,8 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 10
+**Phases since last refactor:** 0
+**Total refactor passes:** 1
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -36,7 +37,13 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 
 ## Refactor Log
 
-(none yet)
+### Refactor 1 (after Phase 34)
+
+Triggered by concrete duplication introduced in Phase 34 + 35a — the new toggle/enable/disable/try CLI commands replicated `loadPluginByName` (3 dups) and `componentLabel` (5 dups across toggle/enable/disable/plugin-toggle/plugin-info). Extracted both helpers to `cli/src/ui/plugin-format.ts` (alongside the existing `componentSummary`).
+
+Notable: plugin/info.ts has a function also named `componentLabel` but with different semantics (returns just the type — `"skill"` / `"mcp"` / `"agent"`). Left untouched to avoid introducing a different bug; should rename in a future pass.
+
+Reduction: 38 lines deleted across 5 files; 8 added in plugin-format.ts. All 224 v2 tests still pass.
 
 ---
 

@@ -1,7 +1,6 @@
 import { multiselect } from "@clack/prompts";
 import {
   findComponentInPlugin,
-  loadPlugins,
   parseComponentRef,
   type PluginRecord,
   type StoredComponent,
@@ -10,28 +9,9 @@ import {
 import { defineCommand } from "citty";
 import { agentError, exitWithError, outputJson } from "../ui/agent-out";
 import { ansi, errorLine, successLine } from "../ui/format";
+import { componentLabel, loadPluginByName } from "../ui/plugin-format";
 import { isAgentMode } from "../ui/policy";
 import { tryFindProjectRoot } from "../ui/resolve";
-
-function componentLabel(c: StoredComponent): string {
-  if (c.type === "skill") return `skill: ${c.name}`;
-  if (c.type === "mcp") return `mcp: ${c.name}`;
-  return `agent: ${c.name}`;
-}
-
-async function loadPluginByName(
-  name: string,
-  projectRoot: string | undefined,
-): Promise<PluginRecord | null> {
-  const globalResult = await loadPlugins();
-  if (!globalResult.ok) return null;
-  const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
-  const all = [
-    ...globalResult.value.plugins,
-    ...(projectResult?.ok ? projectResult.value.plugins : []),
-  ];
-  return all.find((p) => p.name === name) ?? null;
-}
 
 export default defineCommand({
   meta: {

@@ -4,14 +4,9 @@ import { loadPlugins, toggleInstalledComponent } from "@skilltap/core";
 import type { StoredComponent } from "@skilltap/core";
 import { agentError, exitWithError } from "../../ui/agent-out";
 import { ansi, errorLine, successLine } from "../../ui/format";
+import { componentLabel } from "../../ui/plugin-format";
 import { isAgentMode } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
-
-function componentLabel(c: StoredComponent): string {
-  if (c.type === "skill") return `skill: ${c.name}`;
-  if (c.type === "mcp") return `mcp: ${c.name}`;
-  return `agent: ${c.name}`;
-}
 
 export default defineCommand({
   meta: {
