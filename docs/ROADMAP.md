@@ -511,7 +511,7 @@ This is the major refactor that introduces the project manifest, drops the HTTP 
 
 The phases are ordered for dependency. 26–28 are the data-layer foundation; 29 is the headline behavior (sync); 30–35 are user-facing additions; 36–38 are polish and release. Several phases can run in parallel — see the dependency graph below.
 
-### Phase 26 — v2.0 Schema Foundation
+### Phase 26 — v2.0 Schema Foundation ✓
 
 Establish all new Zod schemas before touching behavior. No user-facing change.
 
@@ -526,7 +526,7 @@ Establish all new Zod schemas before touching behavior. No user-facing change.
 
 ---
 
-### Phase 27 — State Consolidation + Migration
+### Phase 27 — State Consolidation + Migration ✓
 
 Merge `installed.json` + `plugins.json` into `state.json`. Implement `skilltap migrate`.
 
@@ -544,7 +544,7 @@ Merge `installed.json` + `plugins.json` into `state.json`. Implement `skilltap m
 
 ---
 
-### Phase 28 — Project Manifest + Lockfile
+### Phase 28 — Project Manifest + Lockfile ✓
 
 Load, save, and resolve the project manifest. No behavior wired in yet.
 
@@ -559,7 +559,7 @@ Load, save, and resolve the project manifest. No behavior wired in yet.
 
 ---
 
-### Phase 29 — Sync Engine + Command
+### Phase 29 — Sync Engine + Command ✓
 
 The headline v2.0 capability.
 
@@ -574,7 +574,7 @@ The headline v2.0 capability.
 
 ---
 
-### Phase 30 — Native Plugin Format + Multi-Plugin Repos
+### Phase 30 — Native Plugin Format + Multi-Plugin Repos ✓
 
 Read `.skilltap/<plugin>.toml`. Support multiple plugins per repo.
 
@@ -591,7 +591,7 @@ Read `.skilltap/<plugin>.toml`. Support multiple plugins per repo.
 
 ---
 
-### Phase 31 — Security Simplification
+### Phase 31 — Security Simplification ✓
 
 Collapse the v1.0 security model. Remove HTTP registry adapter.
 
@@ -610,7 +610,7 @@ Collapse the v1.0 security model. Remove HTTP registry adapter.
 
 ---
 
-### Phase 32 — Agent Flag
+### Phase 32 — Agent Flag ✓
 
 Replace agent-mode code paths.
 
@@ -628,7 +628,7 @@ Replace agent-mode code paths.
 
 ---
 
-### Phase 33 — Smart Scope + Status Dashboard
+### Phase 33 — Smart Scope + Status Dashboard ✓
 
 Two interlocking DX wins.
 
@@ -644,7 +644,7 @@ Two interlocking DX wins.
 
 ---
 
-### Phase 34 — Component-Ref Syntax + Toggle Promotion
+### Phase 34 — Component-Ref Syntax + Toggle Promotion ✓
 
 Top-level toggle/enable/disable with `:component` syntax.
 
@@ -660,7 +660,7 @@ Top-level toggle/enable/disable with `:component` syntax.
 
 ---
 
-### Phase 35 — Try + MCP-Only Install + Claude Desktop
+### Phase 35 — Try + MCP-Only Install + Claude Desktop ✓
 
 Three smaller v2.0 additions bundled.
 
@@ -676,7 +676,7 @@ Three smaller v2.0 additions bundled.
 
 ---
 
-### Phase 36 — Doctor v2.0 Upgrades
+### Phase 36 — Doctor v2.0 Upgrades ✓
 
 Drift and consistency checks.
 
@@ -692,7 +692,7 @@ Drift and consistency checks.
 
 ---
 
-### Phase 37 — Command Surface Promotion + Aliases
+### Phase 37 — Command Surface Promotion + Aliases ✓
 
 Top-level shortcuts and back-compat aliases.
 
