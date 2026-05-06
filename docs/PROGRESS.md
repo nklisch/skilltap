@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 2
+**Phases since last refactor:** 3
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -16,8 +16,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 |----|------------------------------------------------|----------|-----------|
 | 26 | v2.0 Schema Foundation                         | done     | 2026-05-06 |
 | 27 | State Consolidation + Migration                | done     | 2026-05-06 |
-| 28 | Project Manifest + Lockfile                    | active   | —         |
-| 29 | Sync Engine + Command                          | pending  | —         |
+| 28 | Project Manifest + Lockfile                    | done     | 2026-05-06 |
+| 29 | Sync Engine + Command                          | active   | —         |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | pending  | —         |
 | 31 | Security Simplification                        | pending  | —         |
 | 32 | Agent Flag                                     | pending  | —         |
@@ -66,6 +66,18 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 - **Expected:** Hard error on v1.0 markers with hint to run `migrate`.
 - **Actual:** Implemented as a soft `↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0 (preview).` line written to stderr — never blocks startup.
 - **Impact:** None. Hard-error gating must wait for Phase 31 (v1.0 readers cut over). Until then a hard gate would break every existing user's everyday commands.
+
+### Phase 28: defer manifest entry resolver (deviation from ROADMAP 28.2)
+
+- **Expected:** `manifest/resolve.ts` (resolves manifest entries to ResolvedDeps[] via source adapters) lands in Phase 28.
+- **Actual:** Deferred to Phase 29 (sync engine). The only consumer of resolution is sync; without a consumer, resolve.ts is dead code.
+- **Impact:** None — Phase 29 already pulls in source adapter dispatch as part of building the sync plan.
+
+### Refactor gate (after Phase 28): defer to Phase 30
+
+- Per the framework: refactor every 3 phases by default, every 4 if phases were small/independent.
+- Phases 26/27/28 were all data-layer (schemas / I/O wrappers / barrels) with minimal coupling between subsystems.
+- Decision: skip refactor pass after Phase 28; reassess after Phase 29 lands the sync engine (which actually exercises the new schemas + state + manifest together).
 
 ---
 

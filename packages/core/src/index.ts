@@ -51,26 +51,7 @@ export * from "./shell";
 export * from "./types";
 
 // v2.0 additions (Phase 26+) — additive, no v1.0 paths use these yet.
-export {
-  type Lockfile,
-  LockfileSchema,
-  type LockEntry,
-  LockEntrySchema,
-  type ProjectManifest,
-  ProjectManifestSchema,
-  type ManifestEntry,
-  ManifestEntrySchema,
-  type ManifestEntryDetail,
-  ManifestEntryDetailSchema,
-  type Targets,
-  TargetsSchema,
-} from "./manifest/schemas";
-export {
-  type ParsedRange,
-  parseRange,
-  matchesRange,
-  findBestMatch,
-} from "./manifest/range";
+export * from "./manifest";
 export {
   type PluginManifestV2,
   PluginManifestV2Schema,
