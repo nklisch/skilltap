@@ -810,13 +810,17 @@ skilltap config security --remove-trust my-company
 
 ## skilltap config agent-mode
 
-Interactive wizard for enabling or disabling agent mode.
+Interactive wizard for setting agent mode persistently in config. One of three ways to enter agent mode (precedence order):
+
+1. **`--agent` flag** — per-invocation, e.g. `skilltap install foo --agent`
+2. **`SKILLTAP_AGENT=1` env var** — per-shell wrap
+3. **`skilltap config agent-mode`** — persistent (this wizard)
 
 ```
 skilltap config agent-mode
 ```
 
-**Always interactive.** Requires a TTY. This is the **only** way to toggle agent mode -- there are no CLI flags or environment variables. An agent cannot enable or disable its own safety constraints.
+**Always interactive.** Requires a TTY — the wizard cannot be run by an agent on its own behalf. For one-off non-interactive runs, use the flag or env var instead.
 
 ### Wizard Flow (enabling)
 
@@ -837,13 +841,13 @@ When enabled, all skilltap commands behave differently:
 - Output is plain text (no colors, spinners, or Unicode)
 - Security failures emit a directive message telling the agent to stop
 
-Agent mode toggling is **not overridable** via CLI flags. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
+Agent mode is overridable per-invocation via the `--agent` flag or `SKILLTAP_AGENT=1` env var (precedence: flag > env > config block). Security levels within agent mode are configurable via `skilltap config security --mode agent`.
 
 ### Non-TTY Error
 
 ```
 error: 'skilltap config agent-mode' must be run interactively.
-Agent mode can only be enabled or disabled by a human.
+Use --agent or SKILLTAP_AGENT=1 for per-invocation agent mode.
 ```
 
 ### Examples
