@@ -1,5 +1,6 @@
 import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { removePluginFromManifest } from "../manifest/update";
 import { agentDefDisabledPath, agentDefPath, scopeBase, skillDisabledDir, skillInstallDir } from "../paths";
 import type { PluginsJson, StoredComponent, StoredMcpComponent } from "../schemas/plugins";
 import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
@@ -96,6 +97,12 @@ export async function removeInstalledPlugin(
   const newState = removePlugin(state, pluginName);
   const saveResult = await savePlugins(newState, scope === "project" ? projectRoot : undefined);
   if (!saveResult.ok) return saveResult;
+
+  if (scope === "project" && projectRoot && record.repo) {
+    await removePluginFromManifest(projectRoot, record.repo).catch(() => {
+      // non-fatal
+    });
+  }
 
   return ok(record);
 }

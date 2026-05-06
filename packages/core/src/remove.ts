@@ -2,6 +2,7 @@ import { unlink } from "node:fs/promises";
 import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
+import { removeSkillFromManifest } from "./manifest/update";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
 import { resolvedDirExists } from "./fs";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
@@ -97,6 +98,16 @@ export async function removeSkill(
   installed.skills.splice(idx, 1);
   const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
+
+  if (
+    options.scope === "project" &&
+    options.projectRoot &&
+    record.repo
+  ) {
+    await removeSkillFromManifest(options.projectRoot, record.repo).catch(() => {
+      // non-fatal
+    });
+  }
 
   return ok(undefined);
 }

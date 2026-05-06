@@ -15,6 +15,8 @@ export { discoverPublishablePlugins, type PublishDiscovery } from "./publish";
 export {
   addSkillToManifest,
   addPluginToManifest,
+  removeSkillFromManifest,
+  removePluginFromManifest,
   canonicalizeSourceKey,
   type ManifestUpdateInput,
 } from "./update";

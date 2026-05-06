@@ -7,6 +7,8 @@ import {
   addPluginToManifest,
   addSkillToManifest,
   canonicalizeSourceKey,
+  removePluginFromManifest,
+  removeSkillFromManifest,
 } from "./update";
 
 let projectRoot: string;
@@ -143,6 +145,80 @@ describe("addSkillToManifest", () => {
     });
     const text = await readFile(join(projectRoot, "skilltap.toml"), "utf8");
     expect(text).toMatch(/github:n\/r"?\s*=\s*"\^1\.0"/);
+  });
+});
+
+describe("removeSkillFromManifest", () => {
+  test("no-op when skilltap.toml is absent", async () => {
+    const result = await removeSkillFromManifest(projectRoot, "https://github.com/n/r");
+    expect(result.ok).toBe(true);
+  });
+
+  test("drops entry from [skills] table and lockfile", async () => {
+    await writeFile(join(projectRoot, "skilltap.toml"), "");
+    await addSkillToManifest(projectRoot, {
+      source: "https://github.com/n/r",
+      ref: "v1",
+      sha: "abc",
+    });
+    const before = parse(
+      await readFile(join(projectRoot, "skilltap.toml"), "utf8"),
+    ) as { skills?: Record<string, string> };
+    expect(before.skills?.["github:n/r"]).toBe("*");
+
+    const result = await removeSkillFromManifest(projectRoot, "https://github.com/n/r");
+    expect(result.ok).toBe(true);
+
+    const after = parse(
+      await readFile(join(projectRoot, "skilltap.toml"), "utf8"),
+    ) as { skills?: Record<string, string> };
+    expect(after.skills?.["github:n/r"]).toBeUndefined();
+
+    const lockText = await readFile(join(projectRoot, "skilltap.lock"), "utf8");
+    const lock = parse(lockText) as { skill?: Array<{ source: string }> };
+    expect(lock.skill).toEqual([]);
+  });
+
+  test("removing a non-existent entry is a no-op (no error)", async () => {
+    await writeFile(join(projectRoot, "skilltap.toml"), "");
+    const result = await removeSkillFromManifest(projectRoot, "https://github.com/missing/x");
+    expect(result.ok).toBe(true);
+  });
+
+  test("uses canonical source key for lookup", async () => {
+    await writeFile(join(projectRoot, "skilltap.toml"), "");
+    await addSkillToManifest(projectRoot, {
+      source: "https://github.com/n/r",
+      ref: "v1",
+      sha: "abc",
+    });
+    const result = await removeSkillFromManifest(projectRoot, "git@github.com:n/r.git");
+    expect(result.ok).toBe(true);
+    const text = await readFile(join(projectRoot, "skilltap.toml"), "utf8");
+    expect(text).not.toContain("github:n/r");
+  });
+});
+
+describe("removePluginFromManifest", () => {
+  test("drops entry from [plugins] and lockfile.plugin[]", async () => {
+    await writeFile(join(projectRoot, "skilltap.toml"), "");
+    await addPluginToManifest(projectRoot, {
+      source: "https://github.com/c/dev-toolkit",
+      ref: "v2",
+      sha: "abc",
+    });
+    const result = await removePluginFromManifest(
+      projectRoot,
+      "https://github.com/c/dev-toolkit",
+    );
+    expect(result.ok).toBe(true);
+
+    const text = await readFile(join(projectRoot, "skilltap.toml"), "utf8");
+    expect(text).not.toContain("github:c/dev-toolkit");
+
+    const lockText = await readFile(join(projectRoot, "skilltap.lock"), "utf8");
+    const lock = parse(lockText) as { plugin?: Array<unknown> };
+    expect(lock.plugin).toEqual([]);
   });
 });
 

@@ -60,6 +60,65 @@ export async function addPluginToManifest(
   return updateManifestEntry(projectRoot, input, "plugins");
 }
 
+// Remove a skill or plugin entry from skilltap.toml + skilltap.lock.
+// No-op without skilltap.toml. Failures are silenced (non-fatal — the
+// removal already succeeded at the install-state level).
+export async function removeSkillFromManifest(
+  projectRoot: string,
+  source: string,
+): Promise<Result<void, UserError>> {
+  return removeManifestEntry(projectRoot, source, "skills");
+}
+
+export async function removePluginFromManifest(
+  projectRoot: string,
+  source: string,
+): Promise<Result<void, UserError>> {
+  return removeManifestEntry(projectRoot, source, "plugins");
+}
+
+async function removeManifestEntry(
+  projectRoot: string,
+  source: string,
+  kind: "skills" | "plugins",
+): Promise<Result<void, UserError>> {
+  if (!(await manifestExists(projectRoot))) return ok(undefined);
+
+  const sourceKey = canonicalizeSourceKey(source);
+
+  const manifestResult = await loadManifest(projectRoot);
+  if (!manifestResult.ok) return ok(undefined);
+  const manifest = manifestResult.value;
+  if (!(sourceKey in manifest[kind])) {
+    // Not in manifest — could be a global install or a different canonical key.
+    // Still drop from lockfile if present.
+  } else {
+    const { [sourceKey]: _, ...rest } = manifest[kind];
+    const updated: ProjectManifest = {
+      ...manifest,
+      [kind]: rest,
+    };
+    const saveManifestResult = await saveManifest(projectRoot, updated);
+    if (!saveManifestResult.ok) return ok(undefined);
+  }
+
+  const lockfileResult = await loadLockfile(projectRoot);
+  if (!lockfileResult.ok) return ok(undefined);
+  const lockfile = lockfileResult.value;
+
+  const targetArray: "skill" | "plugin" = kind === "skills" ? "skill" : "plugin";
+  const filtered = lockfile[targetArray].filter((e) => e.source !== sourceKey);
+  if (filtered.length === lockfile[targetArray].length) return ok(undefined);
+
+  const nextLockfile: Lockfile = LockfileSchema.parse({
+    version: 1,
+    skill: targetArray === "skill" ? filtered : lockfile.skill,
+    plugin: targetArray === "plugin" ? filtered : lockfile.plugin,
+  });
+  await saveLockfile(projectRoot, nextLockfile);
+  return ok(undefined);
+}
+
 async function updateManifestEntry(
   projectRoot: string,
   input: ManifestUpdateInput,
