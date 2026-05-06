@@ -19,18 +19,17 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 28 | Project Manifest + Lockfile                    | done     | 2026-05-06 |
 | 29 | Sync Engine + Command                          | done     | 2026-05-06 |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | done     | 2026-05-06 |
-| 31a | v2 policy compose + trust-glob                | done     | 2026-05-06 |
-| 31b | HTTP registry adapter removal                 | pending  | —         |
-| 31c | Install/update/remove cutover + sync apply    | pending  | —         |
-| 32  | Agent flag (mostly subsumed by 31a)           | pending  | —         |
-| 33  | Smart scope + Status dashboard                | active   | —         |
-| 32 | Agent Flag                                     | pending  | —         |
-| 33 | Smart Scope + Status Dashboard                 | pending  | —         |
-| 34 | Component-Ref Syntax + Toggle Promotion        | pending  | —         |
-| 35 | Try + MCP-Only Install + Claude Desktop        | pending  | —         |
-| 36 | Doctor v2.0 Upgrades                           | pending  | —         |
-| 37 | Command Surface Promotion + Aliases            | pending  | —         |
-| 38 | v2.0 Polish + Docs + Release                   | pending  | —         |
+| 31a | v2 policy compose + trust-glob                 | done     | 2026-05-06 |
+| 31b | HTTP registry adapter removal                  | pending  | —         |
+| 31c | Install/update/remove cutover + sync apply     | pending  | —         |
+| 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
+| 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
+| 33b | Smart scope default in policy compose          | pending  | —         |
+| 34  | Component-ref syntax + toggle promotion        | pending  | —         |
+| 35  | Try + MCP-only install + Claude Desktop        | pending  | —         |
+| 36  | Doctor v2.0 upgrades                           | pending  | —         |
+| 37  | Command surface promotion + aliases            | pending  | —         |
+| 38  | v2.0 polish + docs + release                   | pending  | —         |
 
 ---
 
