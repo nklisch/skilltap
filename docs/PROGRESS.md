@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** blocked
+**Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 0
+**Phases since last refactor:** 1
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -14,8 +14,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 
 | #  | Phase                                          | Status   | Completed |
 |----|------------------------------------------------|----------|-----------|
-| 26 | v2.0 Schema Foundation                         | blocked  | —         |
-| 27 | State Consolidation + Migration                | pending  | —         |
+| 26 | v2.0 Schema Foundation                         | done     | 2026-05-06 |
+| 27 | State Consolidation + Migration                | active   | —         |
 | 28 | Project Manifest + Lockfile                    | pending  | —         |
 | 29 | Sync Engine + Command                          | pending  | —         |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | pending  | —         |
