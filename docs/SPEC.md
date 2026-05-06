@@ -3013,17 +3013,18 @@ Read-only preview. Clones the source to a temp directory, parses any manifests, 
 skilltap migrate
 ```
 
-One-shot v1.0 → v2.0 upgrade. v2.0 does NOT auto-migrate. On startup, if v1.0 state is detected (`installed.json` or `plugins.json` present, or v1.0 config keys), the CLI prints:
+One-shot v1.0 → v2.0 upgrade. v2.0 does NOT auto-migrate. On startup, if v1.0 state is detected (`installed.json` or `plugins.json` present, or v1.0 config keys) AND no `state.json` exists yet, the CLI prints a soft notice (dim text, non-blocking):
 
 ```
-error: v1.0 setup detected.
-hint: run `skilltap migrate` to upgrade, or stay on v1.x by reinstalling: skilltap-cli@1
+↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.
 ```
+
+The original v0.x design called for an error-and-exit gate; the actual implementation softened this to a notice so unmigrated users aren't blocked from running `skilltap` at all. v0.x state continues to be read transparently as a fallback by `loadInstalled` / `loadPlugins` until the user runs `skilltap migrate`.
 
 `skilltap migrate`:
-1. Reads `installed.json` + `plugins.json`, writes consolidated `state.json`. Renames originals to `.v1.bak`.
-2. Reads v1.0 config keys (`[security.human]`, `[security.agent]`, `[[security.overrides]]`, `[agent-mode]`), translates to v2.0 keys (`[security]`, `[agent]`). Renames original to `config.v1.bak.toml`.
-3. If a v1.0 `tap.json` references HTTP taps, errors and lists them so the user can either remove them or run a separate migration helper.
+1. Reads `installed.json` + `plugins.json`, writes consolidated `state.json`. Renames originals to `<file>.v1.bak` (e.g. `installed.json` → `installed.json.v1.bak`).
+2. Reads v1.0 config keys (`[security.human]`, `[security.agent]`, `[[security.overrides]]`, `[agent-mode]`), translates to v2.0 keys (`[security]`, `[agent]`). Renames original to `config.toml.v1.bak`.
+3. If a v1.0 `tap.json` references HTTP taps, aborts before any writes with `Migration aborted: HTTP taps are not supported in v2.0. Convert these to git or remove them, then re-run:` followed by the offending tap list. The user removes/converts and re-runs.
 4. Verifies the migrated state with the v2.0 schema and reports any unmappable values.
 
 ### v2.0 MCP-Only Install
