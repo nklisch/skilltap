@@ -1,9 +1,9 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE; v2.1 cutover in progress (31c-c-2a done)
+**Status:** v2.0 in-scope COMPLETE; v2.1 cutover in progress (31c-c-2a + 31c-c-2b done)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 12
+**Phases since last refactor:** 13
 **Total refactor passes:** 1
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
@@ -31,8 +31,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-b-1 | Manifest writes from remove                | done     | 2026-05-06 |
 | 31c-b-2 | Sync apply implementation                  | done     | 2026-05-06 |
 | 31c-c-1 | Smart scope default (was 33b)            | done     | 2026-05-06 |
-| 31c-c-2a | state.json dual-write from install/update/remove | done | 2026-05-06 |
-| 31c-c-2b | state.json reads cutover (install/update/remove)   | pending  | —         |
+| 31c-c-2a | state.json dual-write from saveInstalled/savePlugins | done | 2026-05-06 |
+| 31c-c-2b | state.json reads cutover (install/update/remove + plugin) | done | 2026-05-06 |
 | 31c-c-2c | `[agent-mode]` config block retirement             | pending  | —         |
 | 31c-c-2d | v0.x schema + installed.json/plugins.json deletion | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
@@ -209,6 +209,30 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 31c-c-2b complete — state.json reads cutover + dual-write moved to source
+
+Two improvements landed together because the first one surfaced a bug the second one fixed.
+
+**Read-side cutover.** New helpers `loadActiveInstalled(scope, projectRoot)` and `loadActivePlugins(scope, projectRoot)` in `core/src/state/read-bridge.ts` read state.json first, fall back to v0.x `installed.json`/`plugins.json` only when state.json is empty (handles unmigrated v0.x users gracefully). install.ts, update.ts, remove.ts, plugin/install.ts, plugin/lifecycle.ts all now call these instead of `loadInstalled`/`loadPlugins` directly. The fallback is auto-healing — once any v0.x write fires, the next dual-write populates state.json and the fallback never fires again for that scope.
+
+**Centralized dual-write.** Phase 31c-c-2a originally peppered `syncV1ToV2State()` calls across 6 site (install, update, remove, plugin/install, plugin/lifecycle remove + toggle). The lifecycle test surfaced the gap: `disable.ts`, `enable` (also in disable.ts), `move.ts`, `adopt.ts`, `link.ts` ALSO write `installed.json` and weren't dual-writing. Reads from state.json then returned stale `active` flags and update-while-disabled looked in the wrong directory.
+
+Fix: moved the shadow-write into `saveInstalled()` (in `config.ts`) and `savePlugins()` (in `plugin/state.ts`) themselves. Every caller — install, update, remove, disable, enable, move, adopt, link, plugin install, plugin lifecycle — now gets the dual-write automatically. Removed the per-call-site `syncV1ToV2State` invocations from 31c-c-2a; the helper still exists for explicit migrations but isn't called on every install path anymore.
+
+Both writes use dynamic `import()` to avoid circular-import risk between `config.ts` and `state/` modules.
+
+Files:
+- `packages/core/src/config.ts` — `saveInstalled` now shadows into state.json after writing installed.json (private helper `shadowSkillsIntoState`).
+- `packages/core/src/plugin/state.ts` — `savePlugins` now shadows into state.json after writing plugins.json (private helper `shadowPluginsIntoState`).
+- `packages/core/src/state/read-bridge.ts` — new `loadActiveInstalled`, `loadActivePlugins` helpers.
+- `packages/core/src/state/read-bridge.test.ts` — 5 tests (state-first happy path, fallback path, empty path).
+- `packages/core/src/install.ts`, `update.ts`, `remove.ts`, `plugin/install.ts`, `plugin/lifecycle.ts` — switched reads to read-bridge, removed per-call-site sync calls.
+- `packages/cli/src/e2e-v2.test.ts` — assertions extended (state.json now appears post-install, post-sync).
+
+Tests: 569 across 46 files pass (state, install, update, lifecycle, manifest, sync, migrate, doctor, status, try, mcp, policy, plugin-v2, schemas, e2e). The two pre-existing macOS `/private/tmp` symlink failures in `plugin/parse-claude.test.ts` and `plugin/e2e-plugin.test.ts` remain — unrelated to v2.1 work.
+
+What's now possible: install/update/remove no longer depend on `installed.json`/`plugins.json` for reads. v0.x files become a write-only artifact maintained for backward compat. The destructive deletion (31c-c-2d) is now a clean cut — drop the writes, drop the schemas, done.
 
 ### Phase 31c-c-2a complete — state.json dual-write (v2.1 cutover begins)
 

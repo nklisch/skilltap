@@ -1,7 +1,7 @@
 import { unlink } from "node:fs/promises";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
-import { syncV1ToV2State } from "./state/sync-from-v1";
+import { saveInstalled } from "./config";
+import { loadActiveInstalled } from "./state/read-bridge";
 import { debug } from "./debug";
 import { removeSkillFromManifest } from "./manifest/update";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
@@ -25,7 +25,11 @@ export async function removeSkill(
 ): Promise<Result<void, UserError>> {
   debug("removeSkill", { name, scope: options.scope });
   const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  // Phase 31c-c-2b: state.json first, fall back to installed.json.
+  const installedResult = await loadActiveInstalled(
+    options.scope ?? "global",
+    fileRoot,
+  );
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -99,9 +103,6 @@ export async function removeSkill(
   installed.skills.splice(idx, 1);
   const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
-
-  // Phase 31c-c-2a: keep state.json in sync after removing from installed.json.
-  await syncV1ToV2State(options.scope, fileRoot).catch(() => undefined);
 
   if (
     options.scope === "project" &&

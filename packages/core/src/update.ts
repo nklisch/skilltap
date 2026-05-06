@@ -2,8 +2,8 @@ import { lstat, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
-import { loadInstalled, saveInstalled } from "./config";
-import { syncV1ToV2State } from "./state/sync-from-v1";
+import { saveInstalled } from "./config";
+import { loadActiveInstalled } from "./state/read-bridge";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import type { DiffStat } from "./git";
@@ -645,15 +645,15 @@ export async function updateSkill(
 ): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
   debug("updateSkill", { name: options.name ?? "all" });
 
-  // Load global installed
-  const globalInstalledResult = await loadInstalled();
+  // Load global installed (Phase 31c-c-2b: state.json first, fallback to installed.json)
+  const globalInstalledResult = await loadActiveInstalled("global");
   if (!globalInstalledResult.ok) return globalInstalledResult;
   const globalInstalled = globalInstalledResult.value;
 
   // Optionally load project installed
   let projectInstalled: InstalledJson | null = null;
   if (options.projectRoot) {
-    const r = await loadInstalled(options.projectRoot);
+    const r = await loadActiveInstalled("project", options.projectRoot);
     if (!r.ok) return r;
     projectInstalled = r.value;
   }
@@ -712,16 +712,13 @@ export async function updateSkill(
     if (!projectPass.ok) return projectPass;
   }
 
-  // Save both files
+  // Save both files (saveInstalled also shadows into state.json)
   const globalSave = await saveInstalled(globalInstalled);
   if (!globalSave.ok) return globalSave;
-  // Phase 31c-c-2a: shadow into state.json so v2 readers stay in sync.
-  await syncV1ToV2State("global").catch(() => undefined);
 
   if (projectInstalled && options.projectRoot) {
     const projectSave = await saveInstalled(projectInstalled, options.projectRoot);
     if (!projectSave.ok) return projectSave;
-    await syncV1ToV2State("project", options.projectRoot).catch(() => undefined);
   }
 
   return ok(result);

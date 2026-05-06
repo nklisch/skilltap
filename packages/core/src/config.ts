@@ -245,5 +245,36 @@ export async function saveInstalled(
   installed: InstalledJson,
   projectRoot?: string,
 ): Promise<Result<void>> {
-  return saveJsonState(getInstalledPath(projectRoot), installed, "installed.json", projectRoot, ensureDirs);
+  const result = await saveJsonState(
+    getInstalledPath(projectRoot),
+    installed,
+    "installed.json",
+    projectRoot,
+    ensureDirs,
+  );
+  if (!result.ok) return result;
+  // Phase 31c-c-2a: shadow into state.json. Non-fatal — installed.json is
+  // the legacy source of truth until v2.1's full cutover, and the v0.x
+  // write already succeeded. Use a dynamic import to avoid loading state/
+  // unconditionally at module init; this also sidesteps any circular-import
+  // risk if the state module ever needs to read config.
+  await shadowSkillsIntoState(installed, projectRoot).catch(() => undefined);
+  return result;
+}
+
+async function shadowSkillsIntoState(
+  installed: InstalledJson,
+  projectRoot?: string,
+): Promise<void> {
+  const { loadState } = await import("./state/load");
+  const { saveState } = await import("./state/save");
+  const stateResult = await loadState(projectRoot);
+  if (!stateResult.ok) return;
+  const newState = {
+    version: 2 as const,
+    skills: installed.skills,
+    plugins: stateResult.value.plugins,
+    mcpServers: stateResult.value.mcpServers,
+  };
+  await saveState(newState, projectRoot);
 }

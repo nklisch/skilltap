@@ -4,10 +4,10 @@ import { removePluginFromManifest } from "../manifest/update";
 import { agentDefDisabledPath, agentDefPath, scopeBase, skillDisabledDir, skillInstallDir } from "../paths";
 import type { PluginsJson, StoredComponent, StoredMcpComponent } from "../schemas/plugins";
 import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
-import { syncV1ToV2State } from "../state/sync-from-v1";
+import { loadActivePlugins } from "../state/read-bridge";
 import { err, ok, type Result, UserError } from "../types";
 import { injectMcpServers, removeMcpServers } from "./mcp-inject";
-import { findPlugin, loadPlugins, removePlugin, savePlugins, toggleComponent } from "./state";
+import { findPlugin, removePlugin, savePlugins, toggleComponent } from "./state";
 import type { PluginRecord } from "../schemas/plugins";
 
 export type RemovePluginOptions = {
@@ -37,8 +37,9 @@ async function findPluginInScopes(
 ): Promise<Result<ScopedState & { record: PluginRecord }, UserError>> {
   const { scope, projectRoot } = options;
 
+  // Phase 31c-c-2b: state.json first.
   if (scope === "global" || !scope) {
-    const globalResult = await loadPlugins();
+    const globalResult = await loadActivePlugins("global");
     if (!globalResult.ok) return globalResult;
     const record = findPlugin(globalResult.value, pluginName);
     if (record) {
@@ -47,7 +48,7 @@ async function findPluginInScopes(
   }
 
   if (scope === "project" || (!scope && projectRoot)) {
-    const projResult = await loadPlugins(projectRoot);
+    const projResult = await loadActivePlugins("project", projectRoot);
     if (!projResult.ok) return projResult;
     const record = findPlugin(projResult.value, pluginName);
     if (record) {
@@ -98,11 +99,6 @@ export async function removeInstalledPlugin(
   const newState = removePlugin(state, pluginName);
   const saveResult = await savePlugins(newState, scope === "project" ? projectRoot : undefined);
   if (!saveResult.ok) return saveResult;
-
-  // Phase 31c-c-2a: keep state.json in sync after plugin removal.
-  await syncV1ToV2State(scope, scope === "project" ? projectRoot : undefined).catch(
-    () => undefined,
-  );
 
   if (scope === "project" && projectRoot && record.repo) {
     await removePluginFromManifest(projectRoot, record.repo).catch(() => {
@@ -231,11 +227,6 @@ export async function toggleInstalledComponent(
     scope === "project" ? projectRoot : undefined,
   );
   if (!saveResult.ok) return saveResult;
-
-  // Phase 31c-c-2a: keep state.json in sync after toggle.
-  await syncV1ToV2State(scope, scope === "project" ? projectRoot : undefined).catch(
-    () => undefined,
-  );
 
   return ok({ component, nowActive, mcpAgents });
 }

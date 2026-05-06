@@ -30,7 +30,34 @@ export async function savePlugins(
   plugins: PluginsJson,
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
-  return saveJsonState(getPluginsPath(projectRoot), plugins, "plugins.json", projectRoot, ensureDirs);
+  const result = await saveJsonState(
+    getPluginsPath(projectRoot),
+    plugins,
+    "plugins.json",
+    projectRoot,
+    ensureDirs,
+  );
+  if (!result.ok) return result;
+  // Phase 31c-c-2a: shadow into state.json. Non-fatal.
+  await shadowPluginsIntoState(plugins, projectRoot).catch(() => undefined);
+  return result;
+}
+
+async function shadowPluginsIntoState(
+  plugins: PluginsJson,
+  projectRoot?: string,
+): Promise<void> {
+  const { loadState } = await import("../state/load");
+  const { saveState } = await import("../state/save");
+  const stateResult = await loadState(projectRoot);
+  if (!stateResult.ok) return;
+  const newState = {
+    version: 2 as const,
+    skills: stateResult.value.skills,
+    plugins: plugins.plugins,
+    mcpServers: stateResult.value.mcpServers,
+  };
+  await saveState(newState, projectRoot);
 }
 
 export function mcpServerToStored(server: McpServerEntry): StoredMcpComponent {
