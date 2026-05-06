@@ -113,7 +113,7 @@ bun test packages/core/src/doctor.test.ts   # or scoped to a file
 - Core never writes to stdout/stderr — CLI layer handles all output
 
 ### Patterns
-- All data boundaries validated with Zod (config, installed.json, tap.json, frontmatter, agent responses)
+- All data boundaries validated with Zod (config, `state.json` (canonical) + `installed.json`/`plugins.json` (fallback), tap.json, plugin manifests (`.skilltap/<plugin>.toml`), `skilltap.toml` + `skilltap.lock`, frontmatter, agent responses, registry responses)
 - Shell out to `git` CLI directly (no git library) — user's auth just works
 - Git operations go through `core/src/git.ts`
 - Agent symlinks map: claude-code→.claude/skills/, cursor→.cursor/skills/, etc.
