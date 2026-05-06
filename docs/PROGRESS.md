@@ -5,7 +5,6 @@
 **Last updated:** 2026-05-06
 **Phases since last refactor:** 0
 **Total refactor passes:** 1
-**Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
 
