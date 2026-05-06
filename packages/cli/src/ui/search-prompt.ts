@@ -6,15 +6,8 @@
  */
 
 import type { Key } from "node:readline";
-import { getColumns, getRows, Prompt } from "@clack/core";
-import {
-  limitOptions,
-  S_BAR,
-  S_BAR_END,
-  S_RADIO_ACTIVE,
-  S_RADIO_INACTIVE,
-  symbol,
-} from "@clack/prompts";
+import { Prompt } from "@clack/core";
+import { limitOptions, S_BAR, S_BAR_END, symbol } from "@clack/prompts";
 import type { FzfResultItem } from "fzf";
 import { byLengthAsc, Fzf } from "fzf";
 import pc from "picocolors";

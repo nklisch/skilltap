@@ -9,7 +9,7 @@ import {
 } from "@skilltap/test-utils";
 import { loadInstalled, saveInstalled } from "./config";
 import { disableSkill, enableSkill } from "./disable";
-import { skillDisabledDir, skillInstallDir } from "./paths";
+import { skillDisabledDir } from "./paths";
 import { createAgentSymlinks } from "./symlink";
 
 let env: TestEnv;

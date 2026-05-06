@@ -6,7 +6,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { lstat, mkdir, symlink } from "node:fs/promises";
+import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   createTestEnv,

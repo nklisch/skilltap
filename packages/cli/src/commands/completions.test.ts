@@ -9,7 +9,7 @@ import {
 
 setDefaultTimeout(60_000);
 
-import { mkdir, unlink, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 

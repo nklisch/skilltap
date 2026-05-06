@@ -13,7 +13,7 @@ import { defineCommand } from "citty";
 import { exitWithError, outputJson } from "../../ui/agent-out";
 import { ansi } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
-import { formatTrustLabel, formatTrustTier } from "../../ui/trust";
+import { formatTrustLabel } from "../../ui/trust";
 
 export default defineCommand({
   meta: {

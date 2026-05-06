@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import type { SemanticWarning, StaticWarning } from "@skilltap/core";
 
 // We test by running these functions in a subprocess and capturing output,
 // since they write directly to process.stdout/stderr.

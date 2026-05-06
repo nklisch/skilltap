@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { AgentAdapter } from "../agents/types";
 import type { Result } from "../types";
 import { err, ok, ScanError } from "../types";
-import { type Chunk, chunkSkillDir } from "./chunking";
+import { chunkSkillDir } from "./chunking";
 
 // ── Types ──
 

@@ -6,7 +6,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { lstat, mkdir, readlink } from "node:fs/promises";
+import { lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 setDefaultTimeout(60_000);

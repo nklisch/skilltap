@@ -19,7 +19,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { randomBytes } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { claudeAdapter } from "../agents/adapters";
 import { buildSecurityPrompt } from "./semantic";

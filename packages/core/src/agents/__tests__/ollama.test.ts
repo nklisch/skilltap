@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { ScanError } from "../../types";
 import { createOllamaAdapter } from "../ollama";
 
 let savedPath: string | undefined;

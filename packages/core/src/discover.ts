@@ -9,7 +9,7 @@ import type { InstalledSkill } from "./schemas/installed";
 import { SkillFrontmatterSchema } from "./schemas/skill";
 import { AGENT_PATHS } from "./symlink";
 import type { Result } from "./types";
-import { err, ok, type UserError } from "./types";
+import { ok, type UserError } from "./types";
 
 export type SkillLocation = {
   path: string;

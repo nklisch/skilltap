@@ -2,13 +2,10 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  commitAll,
   createTapWithPlugins,
   createTestEnv,
-  initRepo,
   type TestEnv,
 } from "@skilltap/test-utils";
-import { getConfigDir, loadConfig } from "../config";
 import { installSkill } from "../install";
 import { addTap, loadTaps, searchTaps, tapDir } from "../taps";
 import { loadPlugins } from "./state";

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import { loadLockfile } from "../../manifest";
 import type { State } from "../../state/schema";
 import { checkLockfileDrift } from "./lockfile-drift";

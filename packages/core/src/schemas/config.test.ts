@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import { loadConfig, saveConfig } from "@skilltap/core";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { parse, stringify } from "smol-toml";

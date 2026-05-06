@@ -9,7 +9,6 @@ import {
 import { loadInstalled } from "@skilltap/core";
 import {
   addFileAndCommit,
-  createMaliciousSkillRepo,
   createStandaloneSkillRepo,
   createTestEnv,
   runSkilltap,

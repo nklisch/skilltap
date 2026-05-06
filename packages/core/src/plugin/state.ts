@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { ensureDirs, getConfigDir } from "../dirs";
-import { loadJsonState, saveJsonState } from "../json-state";
+import { getConfigDir } from "../dirs";
+import { loadJsonState } from "../json-state";
 import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
 import {
   type PluginRecord,

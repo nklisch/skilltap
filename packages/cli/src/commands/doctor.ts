@@ -1,7 +1,7 @@
 import { type DoctorCheck, type DoctorIssue, runDoctor } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { outputJson } from "../ui/agent-out";
-import { ansi, errorLine } from "../ui/format";
+import { ansi } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({

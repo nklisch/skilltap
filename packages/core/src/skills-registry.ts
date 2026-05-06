@@ -1,6 +1,6 @@
 import type { Config } from "./schemas/config";
 import type { Result } from "./types";
-import { err, type NetworkError, ok } from "./types";
+import { type NetworkError, ok } from "./types";
 
 // ---------------------------------------------------------------------------
 // Registry protocol types

@@ -1,11 +1,4 @@
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  setDefaultTimeout,
-  test,
-} from "bun:test";
+import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -15,8 +8,6 @@ import {
   removeTmpDir,
 } from "@skilltap/test-utils";
 import { detectPlugin } from "./detect";
-import { parseClaudePlugin } from "./parse-claude";
-import { parseCodexPlugin } from "./parse-codex";
 
 setDefaultTimeout(30_000);
 
