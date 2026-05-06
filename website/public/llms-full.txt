@@ -2486,6 +2486,7 @@ This installs the full plugin (skills + MCP + agents) as defined in the tap entr
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
 | `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
 | `--quiet` | boolean | `false` | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
+| `--agent` | boolean | `false` | Force non-interactive agent mode for this invocation. Equivalent to `SKILLTAP_AGENT=1`. Auto-yes; security warnings hard-fail; plain-text output (no spinners). |
 
 ### Prompt Behavior
 
@@ -2573,10 +2574,11 @@ skilltap skills remove [name...] [flags]
 | `--project` | boolean | `false` | Remove from project scope instead of global |
 | `--global` | boolean | `false` | Remove from global scope (explicit for scripts) |
 | `--yes` | boolean | `false` | Skip confirmation prompt |
+| `--agent` | boolean | `false` | Force non-interactive agent mode. Equivalent to `SKILLTAP_AGENT=1`. |
 
 ### Behavior
 
-When no name is given, shows an interactive multiselect of all installed skills (no separate confirmation step). If a skill is installed at both global and project scopes, the picker shows disambiguated entries with `(global)` / `(project)` labels. When names are supplied, first checks `installed.json`; if not found, discovers on disk via `discoverSkills()` — unmanaged skills can be removed too. `--global`/`--project` overrides the stored scope when resolving where to remove from. For each skill, removes the skill directory, any agent-specific symlinks (from the `also` list), and the cache entry if this was the last skill from that repo. Updates `installed.json` after each removal.
+When no name is given, shows an interactive multiselect of all installed skills (no separate confirmation step). If a skill is installed at both global and project scopes, the picker shows disambiguated entries with `(global)` / `(project)` labels. When names are supplied, first checks `state.json`; if not found, discovers on disk via `discoverSkills()` — unmanaged skills can be removed too. `--global`/`--project` overrides the stored scope when resolving where to remove from. For each skill, removes the skill directory, any agent-specific symlinks (from the `also` list), and the cache entry if this was the last skill from that repo. Updates `state.json` after each removal.
 
 ### Examples
 
@@ -2769,7 +2771,7 @@ skilltap update [name] [flags]
 | `--yes` | boolean | `false` | Auto-accept clean updates. Security warnings still prompt. |
 | `--strict` | boolean | from config | Skip skills with security warnings in the diff (does not abort; continues to next skill). |
 | `--semantic` | boolean | from config | Force Layer 2 semantic scan on diff content |
-| `--agent <name>` | string | from config | Agent CLI for semantic scan (e.g. `"claude-code"`). See [config reference](/reference/config-options#security) for all supported values. |
+| `--agent` | boolean | `false` | Force non-interactive agent mode (auto-yes, hard-fail on warnings, plain-text output). Equivalent to `SKILLTAP_AGENT=1`. |
 | `--check` / `-c` | boolean | `false` | Check for updates without applying them. Fetches all remotes, shows which skills have updates, then exits. Refreshes the background update cache. |
 | `--force` / `-f` | boolean | `false` | Force update even if skill appears up to date. Re-applies, re-scans, and refreshes `updatedAt`. |
 
