@@ -661,10 +661,12 @@ Welcome to skilltap setup!
 
 | Subcommand | Description |
 |------------|-------------|
-| `agent-mode` | Enable or disable agent mode |
-| `telemetry` | Manage anonymous usage telemetry |
-| `get` | Get a config value (non-interactive) |
-| `set` | Set a config value (non-interactive) |
+| `agent-mode` | Persistent agent-mode wizard. (Per-invocation: `--agent` flag or `SKILLTAP_AGENT=1`.) |
+| `security` | Interactive wizard for `[security]` config (scan mode, on_warn, semantic agent CLI, trust overrides). |
+| `telemetry` | Manage anonymous usage telemetry. Subcommands: `enable`, `disable`, `status`. |
+| `get` | Get a config value (non-interactive). |
+| `set` | Set a config value (non-interactive). |
+| `edit` | Open `~/.config/skilltap/config.toml` in `$EDITOR`. |
 
 ---
 
@@ -1271,7 +1273,7 @@ Enable/disable individual components within an installed plugin. Opens an intera
 | `--skills` | boolean | false | Toggle all skills in the plugin |
 | `--mcps` | boolean | false | Toggle all MCP servers in the plugin |
 | `--agents` | boolean | false | Toggle all agent definitions in the plugin |
-| `--yes` | boolean | false | Auto-accept (for category-level toggles) |
+| `--json` | boolean | false | Output as JSON |
 
 **Interactive mode (no category flags):**
 
@@ -1326,7 +1328,8 @@ Remove a plugin and all its components.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--yes` | boolean | false | Skip confirmation |
+| `--yes` (`-y`) | boolean | false | Skip confirmation prompt |
+| `--json` | boolean | false | Output as JSON |
 
 **Behavior:**
 
