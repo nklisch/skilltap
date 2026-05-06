@@ -2050,7 +2050,9 @@ skilltap completions fish --install
 
 ## v2.0 Command Surface
 
-The v2.0 redesign adds new commands and promotes daily commands to top-level. Old paths from v1.0 keep working as silent aliases. See [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign) for behavior; this section is the reference.
+The v2.0 redesign adds new commands and promotes daily commands to top-level. Old paths from v1.0 keep working as silent aliases. See [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign) for shipped behavior; this section is the UX reference.
+
+> **Status note:** Some of the design intent below was deferred during Phase 31c-c-2. Specifically: the `--no-agent` and `--deep` flags were not wired (mri's `--no-*` parsing prevents the former; the latter never replaced `--semantic`). The `[agent].default` / `[agent].block` config keys do not exist — v2.1 still uses `[agent-mode] enabled`, with `--agent` and `SKILLTAP_AGENT=1` as per-invocation alternatives. The `security.trust = [...]` glob array does not exist — trust still goes through `[[security.overrides]]`. The `sync --yes` / `sync --prune` flags do not exist — actual flags are `--apply`, `--strict`, `--json`. See [SPEC.md → v2.0 Agent Flag](./SPEC.md#v20-agent-flag) and [v2.0 Sync Command](./SPEC.md#v20-sync-command) for the actual shipped behavior. The original-intent text below is retained as design rationale.
 
 ### Command Tree (v2.0)
 
