@@ -612,21 +612,21 @@ Collapse the v1.0 security model. Remove HTTP registry adapter.
 
 ---
 
-### Phase 32 — Agent Flag ✓
+### Phase 32 — Agent Flag (superseded by 31c-c-2c; cleanup deferred to v2.2)
 
-Replace agent-mode code paths.
+The user-facing goal — making `--agent` / `SKILLTAP_AGENT` / config the single resolved precedence chain for entering agent mode — was achieved via Phase 31c-c-2c, which extended v1 `composePolicy` directly instead of building the parallel `agent-flag/` module the original Phase 32 design called for. As a result, several formal sub-items here are intentionally **not** done; they would only be useful if the plan to retire v1 `composePolicy` resumed (it didn't — see `policy-v2/index.ts` header for the parallel deferral).
 
-- [x] **32.1** Implement `agent-flag/resolve.ts` — combine `--agent` flag, `SKILLTAP_AGENT` env, `[agent] default` config into single boolean
-- [x] **32.2** Implement `agent-flag/enforce.ts` — return error if `[agent] block = true` and `--agent` requested
-- [x] **32.3** Replace `config["agent-mode"].enabled` checks across the codebase with `effective.agent`
-- [x] **32.4** Remove `[agent-mode]` from v2.0 config schema (kept in v1.0 for migration)
-- [x] **32.5** Remove `skilltap config agent-mode` interactive command. Add `skilltap config set agent.default true|false` and `agent.block`.
-- [x] **32.6** Update `--agent` behavior: no prompts, plain text, auto-pick when single option, error when ambiguous
-- [x] **32.7** Verify security policy is unchanged when `--agent` is set (no special agent-mode rules)
-- [x] **32.8** Unit tests: flag resolution permutations (flag + env + config), block enforcement
-- [x] **32.9** Integration tests: `--agent` + sync (auto-applies if --yes equivalent), `--agent` + multi-plugin (errors with hint)
+- [x] **32.6** `--agent` behavior: no prompts, plain text, auto-pick when single option, error when ambiguous *(via composePolicy.agentMode branch in commands)*
+- [x] **32.7** Security policy unchanged when `--agent` is set (no special agent-mode rules)
+- [x] **32.8** Unit tests: flag resolution permutations *(packages/cli/src/ui/policy.test.ts + composePolicy tests)*
+- [x] **32.9** Integration tests: `--agent` exercised in install/update/remove agent-mode subprocess tests
+- [ ] **32.1** ~~Implement `agent-flag/resolve.ts`~~ — superseded; precedence lives in v1 `composePolicy` (`core/src/policy.ts`).
+- [ ] **32.2** ~~Implement `agent-flag/enforce.ts`~~ — `[agent] block` was never added to the v2 schema. No enforce step exists or is planned for v2.x.
+- [ ] **32.3** Replace `config["agent-mode"].enabled` checks → deferred to v2.2 (alongside 31c-c-2d-2-final).
+- [ ] **32.4** Remove `[agent-mode]` from v2.0 config schema → deferred to v2.2 (release-window concern).
+- [ ] **32.5** Remove `skilltap config agent-mode` interactive command → deferred to v2.2 (still functional for back-compat; new entry points documented).
 
-**Exit criteria:** `--agent` flag is the only mechanism. Agent-mode block + scope removed. Security treats `--agent` and human equally.
+**Effective exit:** `--agent` flag works as a single mechanism in v2.1; the `[agent-mode]` config block is documented as legacy-readable. Full schema retirement waits for the v2.2 release window.
 
 ---
 
