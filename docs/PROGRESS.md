@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 1
+**Phases since last refactor:** 2
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -15,8 +15,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | #  | Phase                                          | Status   | Completed |
 |----|------------------------------------------------|----------|-----------|
 | 26 | v2.0 Schema Foundation                         | done     | 2026-05-06 |
-| 27 | State Consolidation + Migration                | active   | —         |
-| 28 | Project Manifest + Lockfile                    | pending  | —         |
+| 27 | State Consolidation + Migration                | done     | 2026-05-06 |
+| 28 | Project Manifest + Lockfile                    | active   | —         |
 | 29 | Sync Engine + Command                          | pending  | —         |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | pending  | —         |
 | 31 | Security Simplification                        | pending  | —         |
@@ -55,28 +55,17 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 - **Actual:** v1.0 schemas left in place. v2.0 schemas added alongside in new homes (`manifest/`, `plugin-v2/`, `state/`, `schemas/config-v2.ts`).
 - **Impact:** None for now. Phase 27 (migration) will copy whichever v1.0 shapes the migration command actually needs into `schemas/v1/`. Avoiding the wholesale move keeps Phase 26 additive and prevents touching dozens of files.
 
-### Phase 26: bun missing on this machine — verification blocked
+### Phase 26: bun missing on this machine — verification blocked (RESOLVED)
 
 - **Expected:** Run `bun test packages/core/src/manifest/` etc. and verify all new schema tests pass.
-- **Actual:** `bun` is not on this machine's PATH despite CLAUDE.md asserting it is. Common locations checked (/opt/homebrew/bin, ~/.bun, /usr/local/bin) — no bun. Homebrew has no bun formula installed. The harness denied installing bun via the official curl|bash script.
-- **Impact:** Phase 26 implementation is complete but unverified. All ten files were written following established patterns (cross-checked against `schemas/installed.ts`, `schemas/skill.ts`, etc., and their corresponding `*.test.ts` files), but I cannot execute `bun test` to confirm.
+- **Actual:** `bun` not on PATH. User installed bun via curl|bash + restart. Resolved.
+- **Impact:** Resolved. Phase 26 verified — 82/82 tests pass.
 
-## Blockers
+### Phase 27: soft v1 startup hint (deviation from ROADMAP 27.7)
 
-### Bun runtime not installed
-
-- **What's needed:** Install bun (`curl -fsSL https://bun.sh/install | bash`, then `source ~/.zshrc`). Once bun is on PATH, the next `/workflow:autopilot` invocation will pick up where this stopped.
-- **Verification commands when unblocked:**
-  ```
-  bun test packages/core/src/manifest/
-  bun test packages/core/src/plugin-v2/
-  bun test packages/core/src/schemas/config-v2.test.ts
-  bun test packages/core/src/state/
-  ```
-- **If tests pass:** Mark Phase 26 as `done`, increment `phases_since_refactor` to 1, advance to Phase 27.
-- **If tests fail:** Diagnose, fix, re-run. The schemas follow project conventions but a typo or pattern-mismatch is possible without runtime verification.
-
-The watchdog loop has been cancelled to avoid re-firing into the same blocker. Re-invoke `/workflow:autopilot` manually after installing bun.
+- **Expected:** Hard error on v1.0 markers with hint to run `migrate`.
+- **Actual:** Implemented as a soft `↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0 (preview).` line written to stderr — never blocks startup.
+- **Impact:** None. Hard-error gating must wait for Phase 31 (v1.0 readers cut over). Until then a hard gate would break every existing user's everyday commands.
 
 ---
 

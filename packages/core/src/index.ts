@@ -49,3 +49,56 @@ export * from "./self-update";
 export * from "./skill-check";
 export * from "./shell";
 export * from "./types";
+
+// v2.0 additions (Phase 26+) — additive, no v1.0 paths use these yet.
+export {
+  type Lockfile,
+  LockfileSchema,
+  type LockEntry,
+  LockEntrySchema,
+  type ProjectManifest,
+  ProjectManifestSchema,
+  type ManifestEntry,
+  ManifestEntrySchema,
+  type ManifestEntryDetail,
+  ManifestEntryDetailSchema,
+  type Targets,
+  TargetsSchema,
+} from "./manifest/schemas";
+export {
+  type ParsedRange,
+  parseRange,
+  matchesRange,
+  findBestMatch,
+} from "./manifest/range";
+export {
+  type PluginManifestV2,
+  PluginManifestV2Schema,
+  type PluginV2Skill,
+  PluginV2SkillSchema,
+  type PluginV2Server,
+  PluginV2ServerSchema,
+  type PluginV2StdioServer,
+  PluginV2StdioServerSchema,
+  type PluginV2HttpServer,
+  PluginV2HttpServerSchema,
+  type PluginV2Agent,
+  PluginV2AgentSchema,
+} from "./plugin-v2/schema";
+export {
+  type ConfigV2,
+  ConfigV2Schema,
+  type ConfigV2Defaults,
+  ConfigV2DefaultsSchema,
+  type SecurityConfigV2,
+  SecurityConfigV2Schema,
+  type AgentConfig,
+  AgentConfigSchema,
+  type ConfigV2TapEntry,
+  ConfigV2TapEntrySchema,
+  SECURITY_SCAN_V2,
+  SECURITY_ON_WARN_V2,
+  SCOPE_V2,
+} from "./schemas/config-v2";
+export * from "./state";
+export * from "./migrate";

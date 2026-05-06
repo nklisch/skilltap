@@ -35,6 +35,7 @@ const SKIP_STARTUP_ARGS = new Set([
   "self-update",
   "telemetry",
   "status",
+  "migrate",
 ]);
 
 // These commands handle telemetry consent themselves — skip the startup prompt for them
@@ -44,6 +45,7 @@ const shouldRunStartup =
   !process.argv.slice(2).some((a) => SKIP_STARTUP_ARGS.has(a));
 
 if (shouldRunStartup) {
+  await runV1DetectionNotice();
   await runStartupUpdateCheck();
   await runStartupSkillUpdateCheck();
   const shouldRunTelemetryNotice = !process.argv.slice(2).some((a) =>
@@ -52,6 +54,28 @@ if (shouldRunStartup) {
   if (shouldRunTelemetryNotice) {
     await sendFirstRunPing();
     await runTelemetryNotice();
+  }
+}
+
+// v2.0 soft hint: if v1.0 markers exist (installed.json/plugins.json/v1 config keys)
+// and no state.json exists yet, suggest the user run `skilltap migrate`.
+// This is a soft warning until Phase 31 cuts over v1.0 readers.
+async function runV1DetectionNotice(): Promise<void> {
+  try {
+    const { detectV1StateGlobal, hasAnyV1Markers, getStatePath } = await import(
+      "@skilltap/core"
+    );
+    const markers = await detectV1StateGlobal();
+    if (!hasAnyV1Markers(markers)) return;
+    const stateFile = Bun.file(getStatePath());
+    if (await stateFile.exists()) return;
+    const DIM = "\x1b[2m";
+    const RESET = "\x1b[0m";
+    process.stderr.write(
+      `${DIM}↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0 (preview).${RESET}\n\n`,
+    );
+  } catch {
+    // Detection is best-effort. Never block startup.
   }
 }
 
@@ -259,6 +283,7 @@ const main = defineCommand({
     create: () => import("./commands/create").then((m) => m.default),
     verify: () => import("./commands/verify").then((m) => m.default),
     doctor: () => import("./commands/doctor").then((m) => m.default),
+    migrate: () => import("./commands/migrate").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
     "self-update": () =>
       import("./commands/self-update").then((m) => m.default),
