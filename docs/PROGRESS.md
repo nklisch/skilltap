@@ -8,14 +8,20 @@
 
 ## ⚠ Autopilot blocker (2026-05-06)
 
-The next pending roadmap step (Phase 38.7) is `bun run bump 2.0.0` (or `2.1.0`) + `git tag` + `git push`. **The autopilot mandate forbids this**: "Never force-push or push to remote — the user reviews and pushes." After 38.7, Phase 38.8 (release workflow verification) and Phase 31c-c-2d-2-final (v2.2 cleanup, needs release window first) become unblocked.
+The next pending roadmap step (Phase 38.7) is the version bump. The bump script now supports `SKILLTAP_BUMP_NO_PUSH=1` (post-cutover doc-audit improvement) — autopilot can technically stage the commit + tag locally without pushing, but **picking the release version is still user-owned**: the user decides whether to ship 2.0.0, 2.0.0-rc.1, or fold further work in first. The autopilot mandate also forbids the eventual `git push --follow-tags` regardless.
 
-Until the user runs the bump, no further autopilot phases can make progress. The codebase is fully ready: 0 lint errors, 1608/1608 tests pass, foundation + website docs aligned with v2.1, ROADMAP.md visually consistent, v2.1 changelog drafted at `website/changelog.md`.
+After 38.7, Phase 38.8 (release workflow verification) and Phase 31c-c-2d-2-final (v2.2 cleanup, needs release window first) become unblocked.
+
+Until the user decides on a version and runs the bump, no further autopilot phases can make progress. The codebase is fully ready: 0 lint errors, 1608/1608 tests pass, foundation + website docs aligned with v2.1, ROADMAP.md visually consistent, v2.1 changelog drafted at `website/changelog.md`.
 
 **Resume conditions for a fresh autopilot session:**
 1. After user runs the bump → Phase 38.8 release-workflow verification can be checked.
 2. After release window passes → Phase 31c-c-2d-2-final (delete v0.x read-fallback, retire `[agent-mode]` schema) becomes safe.
 3. New roadmap added → Tackle a deferred item from the "Deferred (no scheduled version)" list (Windows support, VS Code extension, etc.) which would warrant its own design doc.
+
+**How to run the bump:**
+- Standard release: `bun run bump 2.0.0` (commits, tags, pushes — no env var needed).
+- Stage-and-review: `SKILLTAP_BUMP_NO_PUSH=1 bun run bump 2.0.0` (commits + tags locally, prints `git push --follow-tags` for the user to run).
 
 **Latest commit at block:** `3d82071` "Changelog: document the v2.1 lint cleanup + doc audit + CLI hint fix"
 
@@ -779,7 +785,7 @@ opening steps.
 - ~~`mcp:` install prefix not yet implemented (35b).~~ **Done** in Phases 35b-1 (install) and 35b-2 (remove).
 - ~~Phase 31c-c-2's split into 31c-c-2-a/b/c/d~~ **Done** — full split shipped (a/b/c/d-1/d-2-orphan).
 - ~~The `componentLabel` function in `cli/src/commands/plugin/info.ts` has different semantics from the shared one~~ **Resolved (post-cutover doc-audit pass)**: local helper renamed `componentKind` so the collision is gone.
-- Bump script (`scripts/bump-version.ts`) doesn't accept pre-release versions (regex is `/^\d+\.\d+\.\d+$/`); auto-pushes on tag. Two small enhancements that would make it autopilot-compatible: (a) extend regex to accept `-rc.N` suffixes; (b) support `SKILLTAP_BUMP_NO_PUSH=1` env var to skip the push.
+- ~~Bump script (`scripts/bump-version.ts`) doesn't accept pre-release versions; auto-pushes on tag.~~ **Resolved (post-cutover doc-audit pass)**: regex extended to `/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/` so prerelease tags like `2.0.0-rc.1`, `1.5.0-beta`, `0.9.0-alpha.2` parse. The patch/minor/major shortcuts now strip an existing prerelease tag before incrementing (so `bump patch` on `2.0.0-rc.1` yields `2.0.1`). Added `SKILLTAP_BUMP_NO_PUSH=1` env var that stages the commit + tag locally and prints "git push --follow-tags" for the user — autopilot-runs can now invoke the script for the version-bump step without violating the "never push to remote" mandate.
 
 ### Watchdog loop
 
