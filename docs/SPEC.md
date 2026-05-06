@@ -12,40 +12,42 @@ Install one or more skills from URLs, tap names, or local paths. Multiple source
 
 | Argument | Required | Description |
 |----------|----------|-------------|
-| `source` | Yes | Git URL, `github:owner/repo`, tap skill name, or local path |
+| `source` | Yes | Git URL, `github:owner/repo`, tap skill name, `mcp:<server>` (Phase 35b — install MCP server only, no skill scaffolding), or local path |
 | `[source...]` | No | Additional sources to install in the same invocation |
 
 **Options:**
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--project` | boolean | false | Install to `.agents/skills/` in current project instead of global |
-| `--global` | boolean | false | Install to `~/.agents/skills/` (global, explicit for scripts) |
+| `--project` | boolean | false | Install to `.agents/skills/` in current project (overrides smart-scope inference) |
+| `--global` | boolean | false | Install to `~/.agents/skills/` (overrides smart-scope inference) |
 | `--also <agent>` | string | (from config) | Create symlink in agent-specific directory. Repeatable. |
 | `--ref <ref>` | string | default branch | Branch or tag to install |
 | `--skip-scan` | boolean | false | Skip security scanning (not recommended). Blocked if `require_scan = true` in the active security mode config. |
-| `--semantic` | boolean | (from config) | Force semantic scan regardless of config |
+| `--semantic` | boolean | false | Force semantic scan regardless of config |
 | `--strict` | boolean | (from config) | Abort install if any security warnings are found. No prompt, just fail. |
 | `--no-strict` | boolean | false | Override `on_warn = "fail"` for this invocation |
-| `--yes` | boolean | false | Auto-select all skills and auto-accept install. Security warnings still require confirmation. |
+| `--yes` (`-y`) | boolean | false | Auto-select all skills and auto-accept install. Security warnings still require confirmation. |
 | `--quiet` | boolean | false | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
+| `--agent` | boolean | false | Run in non-interactive agent mode (also: `SKILLTAP_AGENT=1`; same precedence applies to all commands — see `composePolicy` in `core/src/policy.ts`). |
+
+**Smart scope (Phase 31c-c-1):** when neither `--project` nor `--global` is passed and no `defaults.scope` config default is set, scope is inferred from the cwd: inside a git repo → `project`; outside → `global`. There is **no scope prompt** — the inferred scope is reported in the install output instead. Pass `--project`/`--global` to override.
 
 **Prompt behavior with flags:**
 
 | Flags | Skill selection | Scope | Security warnings | Clean install |
 |-------|----------------|-------|-------------------|---------------|
-| (none) | Prompt if multiple | **Prompt (global/project)** | Prompt | Prompt |
+| (none) | Prompt if multiple | **Smart-inferred (no prompt)** | Prompt | Prompt |
 | `--project` | Prompt if multiple | Project | Prompt | Prompt |
 | `--global` | Prompt if multiple | Global | Prompt | Prompt |
-| `--yes` | Auto-select all | **Prompt (global/project)** | **Still prompts** | Auto-accept |
+| `--yes` | Auto-select all | **Smart-inferred (no prompt)** | **Still prompts** | Auto-accept |
 | `--global --yes` | Auto-select all | Global | **Still prompts** | Auto-accept |
 | `--project --yes` | Auto-select all | Project | **Still prompts** | Auto-accept |
-| `--strict` | Prompt if multiple | **Prompt (global/project)** | **Abort (exit 1)** | Prompt |
+| `--strict` | Prompt if multiple | **Smart-inferred (no prompt)** | **Abort (exit 1)** | Prompt |
 | `--strict --yes --global` | Auto-select all | Global | **Abort (exit 1)** | Auto-accept |
 | `--strict --yes --project` | Auto-select all | Project | **Abort (exit 1)** | Auto-accept |
 | `--skip-scan --yes --global` | Auto-select all | Global | Skipped | Auto-accept |
-
-Scope always prompts unless `--project` or `--global` is explicitly passed. Even `--yes` does not skip the scope prompt — use `--yes --global` or `--yes --project` for fully non-interactive installs.
+| `--agent` | Auto-select all | Smart-inferred (no prompt) | Per `security.agent.on_warn` (default `fail`) | Auto-accept |
 
 Security scanning is a hard gate — `--yes` does **not** bypass it. `--strict` goes further: any warning is a hard failure with no prompt. The only way to skip scanning entirely is `--skip-scan`, which is deliberately separate and discouraged.
 
@@ -96,10 +98,11 @@ Auto-selecting all (--yes)
    - If already installed (no `--yes`) → prompt: `"{name}" is already installed. Update it instead? (Y/n)`
      - Yes → run `update` for that skill; it is excluded from the normal install flow
      - No → skip that skill
-5. **Scope resolution:**
+5. **Scope resolution** (Phase 31c-c-1 smart default):
    - `--project` → install to `.agents/skills/` in project
    - `--global` → install to `~/.agents/skills/`
-   - Neither flag → prompt: `Install to: (1) Global (~/.agents/skills/) (2) Project (.agents/skills/)`
+   - Neither flag, but `defaults.scope` set in config → use config default
+   - Neither flag and no config default → infer from cwd: inside a git repo → project; outside → global. No prompt; the inferred scope is reported in the install output (e.g. `Scope: project (inferred from git repo)`).
 6. **Security scan** (unless `--skip-scan`; if `require_scan = true` in the active mode config and `--skip-scan` is passed, error and abort):
    - Run Layer 1 static scan on all files in selected skill(s)
    - Display warnings (if any)
