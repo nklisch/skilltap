@@ -152,18 +152,25 @@ keep working — run `skilltap migrate` when ready.
 
 ### Simplified
 
-- **Security config** — single `[security]` block with three keys: `scan`
-  (`semantic`/`static`/`none`), `on_warn` (`prompt`/`fail`/`install`),
-  `trust = []` (glob allowlist of taps and source URLs that skip scanning).
-  Removed the `[security.human]`/`[security.agent]` per-mode split, the
-  preset table (`none`/`relaxed`/`standard`/`strict`), and
-  `[[security.overrides]]`. `migrate` translates v0.x configs.
-- **Default `on_warn` = `install`** — security warnings are reported but no
-  longer block by default. Set `on_warn = "fail"` to restore strict
-  behavior, or `prompt` for the v0.x interactive style.
 - **Single state file** — `installed.json` and `plugins.json` consolidated
   into `state.json` per scope. v0.x users see a soft startup hint pointing
-  at `skilltap migrate`.
+  at `skilltap migrate`; the legacy files remain readable as a one-time
+  fallback for unmigrated setups.
+- **Top-level command surface** — daily-use commands (`install`, `remove`,
+  `update`, `list`, `info`, `enable`, `disable`, `toggle`, `sync`,
+  `status`) sit at the root; `skills/`, `plugin/`, `tap/` subgroups are
+  retained for less-common operations.
+
+> **Note on security config:** The original v2.0 design called for a
+> collapsed single `[security]` block with three keys (`scan`/`on_warn`/`trust`)
+> and `on_warn = "install"` as the default — these features were
+> documented in earlier release-note drafts but were **deferred** during
+> Phase 31c-c-2. Shipped v2.0/v2.1 retains the v0.x per-mode structure
+> (`[security.human]` and `[security.agent]`) with `--agent` activating
+> the agent-mode block. The preset table, `[[security.overrides]]`,
+> and `require_scan` are all still active. See
+> [SPEC.md → v2.0 Security](https://github.com/nklisch/skilltap/blob/main/docs/SPEC.md#v20-security)
+> for the actual shipped schema.
 
 ### Removed
 
@@ -189,12 +196,19 @@ skilltap migrate
 The command:
 
 - Consolidates `installed.json` + `plugins.json` → `state.json`.
-- Translates `[security.human]`/`[security.agent]` → flat `[security]` block.
-- Translates `[agent-mode] enabled = true` → `[agent].default = true`.
-- Translates `[[security.overrides]] preset = "none"` → `[security].trust`
-  entries. Other presets are dropped with a warning (less expressive in v2.0).
-- Errors with a list if any HTTP taps are configured (must be converted to
-  git or removed before re-running).
+- Translates v0.x's old top-level `[security]` keys (`scan`, `on_warn`,
+  `require_scan`) **into** per-mode `[security.human]` + `[security.agent]`
+  blocks. (Per-mode structure was kept; the original "collapse to flat
+  [security]" design was deferred.) Existing per-mode configs pass through
+  unchanged.
+- Keeps `[agent-mode]` intact (the originally-planned `[agent]` block with
+  `default`/`block` was deferred). The new `--agent` flag and
+  `SKILLTAP_AGENT=1` env var are alternative per-invocation entry points.
+- Keeps `[[security.overrides]]` intact (the originally-planned
+  `trust = []` glob array was deferred).
+- Renames originals to `<file>.v1.bak` (e.g., `installed.json.v1.bak`).
+- Aborts before any writes with a list if any HTTP taps are configured
+  (must be converted to git or removed before re-running).
 
 If you're not ready to migrate, v2.0 also reads v0.x state — manifest writes
 and v2 commands work alongside the legacy paths. The full cutover (v0.x path
