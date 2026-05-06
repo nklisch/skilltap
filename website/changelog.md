@@ -54,6 +54,31 @@ the command remains available.
 - **Net –355 lines of code.** The dual-write scaffolding from the early
   v2.1 cutover (sync-from-v1.ts, read-bridge.ts) is dead code now that
   `state.json` is canonical. Deleted.
+- **Lint state: 104 errors / 279 warnings → 0 / 0.** Project-wide
+  `bun run check` safe-fix pass + targeted unsafe-fix passes for unused
+  imports/variables/templates + per-line documentation of every remaining
+  `!` non-null assertion with its runtime guard. macOS `/tmp` → `/private/tmp`
+  symlink bug in `makeTmpDir` fixed mid-cleanup, resolving 6 long-standing
+  test failures.
+
+### Documentation
+
+- **Comprehensive v2.1 doc audit.** Foundation docs (README, AGENTS,
+  ARCH, VISION) and all website pages (8 guides, 4 reference docs)
+  audited for v2.1 consistency. HTTP registry tap support marked
+  removed where claimed as current (5 docs). `installed.json` /
+  `plugins.json` references corrected to `state.json` across 14
+  files (~16 occurrences). `--agent` / `SKILLTAP_AGENT` entry points
+  documented across configuration + cli + config-options.
+- **New v2.0 feature surfacing.** "What is skilltap?" key features now
+  list project manifest + lockfile and non-interactive agent mode.
+  Teams guide gets a project-manifest section. Getting-started surfaces
+  `skilltap status` and points at v2.0 next-steps. Doctor guide
+  documents all 15 checks (9 v1 + 6 v2).
+- **CLI hint correctness.** Running `skilltap config set
+  agent-mode.enabled true` now emits a hint that mentions the
+  `--agent` flag and `SKILLTAP_AGENT=1` env var alongside the
+  persistent wizard, not just the wizard alone.
 
 ### Known gaps
 
