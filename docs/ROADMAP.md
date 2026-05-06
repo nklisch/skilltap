@@ -711,14 +711,14 @@ Top-level shortcuts and back-compat aliases.
 
 ### Phase 38 — v2.0 Polish + Docs + Release
 
-- [ ] **38.1** Update README with v2.0 quickstart (manifest, sync, simplified config)
-- [ ] **38.2** Update website (`website/`) with new commands, status dashboard screenshots, manifest examples
-- [ ] **38.3** Update `llms-full.txt` for LLM ingestion
-- [ ] **38.4** Update CLAUDE.md / AGENTS.md with v2.0 conventions
-- [ ] **38.5** End-to-end test: clean v2.0 init → install → manifest write → sync on fresh clone → toggle → migrate from v1.0 → status dashboard
-- [ ] **38.6** CHANGELOG entry for v2.0 with migration guide
-- [ ] **38.7** Bump version to 2.0.0
-- [ ] **38.8** Release workflow verification (binaries, npm publish, Homebrew formula update)
+- [x] **38.1** Update README with v2.0 quickstart (manifest, sync, simplified config)
+- [x] **38.2** Update website (`website/`) with new commands, status dashboard screenshots, manifest examples
+- [x] **38.3** Update `llms-full.txt` for LLM ingestion
+- [x] **38.4** Update CLAUDE.md / AGENTS.md with v2.0 conventions
+- [x] **38.5** End-to-end test: clean v2.0 init → install → manifest write → sync on fresh clone → toggle → migrate from v1.0 → status dashboard
+- [x] **38.6** CHANGELOG entry for v2.0 with migration guide
+- [ ] **38.7** Bump version to 2.0.0 *(gated on user — autopilot mandate forbids running `bun run bump`)*
+- [ ] **38.8** Release workflow verification (binaries, npm publish, Homebrew formula update) *(blocked on 38.7)*
 
 **Exit criteria:** v2.0 ships. Docs reflect v2.0. v1.0 users have a clear migration path.
 
