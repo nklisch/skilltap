@@ -1,10 +1,12 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE; v2.1 cutover done + post-cutover polish landed
+**Status:** v2.0 + v2.1 cutover COMPLETE; lint cleanup brought 0/0
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
 **Phases since last refactor:** 4
 **Total refactor passes:** 2
+
+**Quality milestone (2026-05-06):** Project lint state went from 104 errors / 279 warnings (session start) to **0 / 0** through a sustained per-rule cleanup. macOS test-isolation bug fixed (1621 / 1621 tests now ALL pass). Every remaining `!` non-null assertion in the codebase has a comment explaining the runtime guard that makes it safe.
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
 
@@ -234,6 +236,40 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Lint cleanup arc (commits b0880bd through 07cdd19)
+
+After the v2.1 cutover settled, surfaced that `bun run lint` reported 104 errors and 279 warnings — most predating this work but never triaged. Multi-turn cleanup brought it to 0/0 without changing semantic behavior:
+
+**Mechanical / safe-fix work** — `bun run check` ran biome's safe auto-fixes across 277 files (formatting, organize-imports, useImportType cascades). Lint dropped 104→98 errors / 279→264 warnings (`b0880bd`).
+
+**Targeted unsafe-fix passes** — single-rule `biome check --write --unsafe --only=<rule>` invocations:
+- `noUnusedImports`: 24 files cleaned (`e3899cc`)
+- `noUnusedVariables`: 3 auto + 5 manual (test destructure-removal / `_`-prefix) (`eea0738`)
+- `useTemplate` + `useLiteralKeys`: 12 files (`eea0738`)
+- `useNodejsImportProtocol` + `noUnusedFunctionParameters`: 3 files (`eea0738`)
+
+**File-level overrides in biome.json** for legitimate intentional patterns:
+- Tests: `noConsole`, `noControlCharactersInRegex`, `noNonNullAssertion`, `noExplicitAny` (`1e40472` + earlier `79e7541`).
+- `plugin/mcp-inject.ts` + tests: `noTemplateCurlyInString` (mcp `${VAR}` placeholders are runtime-substituted, not JS templates) (`ed42d6f`).
+- `cli/src/completions/dynamic.ts` + benchmarks: `noConsole` (intentional output mechanism) (`3a81589`).
+
+**Per-line documentation** of every remaining `!` non-null assertion in production. Each `biome-ignore` comment cites the specific runtime guard:
+- `frontmatter.ts` (3 sites): `lines[i]!` after `while (i < lines.length)` (`8877528`)
+- `taps.ts` (4 sites + 1 dead-code deletion): `parts[N]!` after length checks (`a3c3f6c`)
+- `security/static.ts` (4 sites): `fileLines[N]!` inside arithmetic-checked guards, regex-group `!` after `m ?` (`98c49cf`)
+- self-update / doctor/checks/git / skills/remove (9 sites batched): same pattern (`c373a58`)
+- final batch across 10 files (11 sites): footer, install-callbacks, prompts, resolve, scan, doctor/symlinks, install, move, skill-check, update (`07cdd19`)
+
+**Found and removed dead code** along the way:
+- `const _tap = config.taps[idx]!;` in taps.ts (declared but never used, leftover from refactor) (`a3c3f6c`).
+- 26 stale `// biome-ignore lint/style/noNonNullAssertion` comments in test files that became dead weight after the test-rule override (sed-removed in a single batch, `0d7e638`).
+
+**Consistency wins** along the way:
+- `cli.md` doc fix: `--agent <name>` (string) was documented but never existed; replaced with the actual boolean `--agent` flag (`d416ede`).
+- `doctor/checks/installed.ts`: post-cutover, the check needed to read `state.json` first and fall back to `installed.json` (matching `loadInstalled`), otherwise fresh users got "0 skills (no installed.json)" falsely (`59c308b`).
+- 5 doctor user-facing messages + 6 internal comments updated `installed.json` → `state.json` to match the canonical store (`5b7c01b`).
+- macOS `/tmp` → `/private/tmp` symlink fix in `test-utils/src/tmp.ts::makeTmpDir()` resolved 6 long-standing test failures (`9e63393`).
 
 ### Post-cutover polish (commits d416ede, 59c308b, 5b7c01b)
 
