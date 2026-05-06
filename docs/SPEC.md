@@ -113,7 +113,7 @@ Auto-selecting all (--yes)
    - Optionally run Layer 2 semantic scan (if config/flag says so)
    - If strict + semantic flags found → abort (exit 1)
 7. Install to target directory
-8. Update `installed.json`
+8. Update `state.json` (the v2.1 canonical state file; v0.x users see a one-time migration of their existing `installed.json` records into `state.json` on this write — see [state.json](#statejson-v21-canonical-state-file))
 9. Create agent symlinks if `--also` or config `defaults.also`
 
 **Exit codes:** 0 success, 1 error, 2 user cancelled
@@ -144,11 +144,11 @@ Remove one or more skills (managed or unmanaged).
 
 - If no names given: show interactive multiselect of all installed skills
 - If a skill is installed at both global and project scopes, the picker shows `name (global)` / `name (project)` as distinct entries
-- If names given: first check `installed.json`; if not found, discover on disk via `discoverSkills()` — if found as unmanaged, remove via `removeAnySkill()`; if not found anywhere, exit 1
+- If names given: first check tracked records (loaded from `state.json` with v0.x fallback); if not found, discover on disk via `discoverSkills()` — if found as unmanaged, remove via `removeAnySkill()`; if not found anywhere, exit 1
 - Duplicate names are deduplicated
 - `--global`/`--project` overrides the stored `scope` when resolving where to remove from
 - For each skill: remove agent-specific symlinks, remove skill directory, remove cache entry if last skill from that repo
-- Update `installed.json` after each removal
+- Update `state.json` after each removal
 - Confirmation prompt shown once for CLI-supplied names (skipped when multiselect was used or `--yes` is set)
 
 ---
@@ -159,7 +159,7 @@ Remove one or more skills (managed or unmanaged).
 
 Unified view of all skills across all locations — `.agents/skills/` and every agent-specific directory (`.claude/skills/`, `.cursor/skills/`, etc.) at both global and project scope. Shows managed, linked, and unmanaged skills.
 
-Uses `discoverSkills()` to scan disk and correlate with `installed.json`.
+Uses `discoverSkills()` to scan disk and correlate with tracked records (loaded from `state.json` with v0.x fallback).
 
 **Options:**
 
@@ -223,7 +223,7 @@ Adopt unmanaged skills into skilltap management. Default behavior: move to `.age
    - **Track-in-place mode** (`--track-in-place`): create "linked" record without moving
 4. Run static security scan (unless `--skip-scan`); `onWarnings` prompts user (or auto-accepts with `--yes`)
 5. Record git remote/ref/sha if the skill is a git repo
-6. Write record to `installed.json`
+6. Write record to `state.json`
 
 ---
 
@@ -248,12 +248,12 @@ Move a managed skill between scopes (global ↔ project).
 **Behavior:**
 
 1. Require exactly one of `--global` or `--project`
-2. Look up skill in `installed.json` (global + project)
+2. Look up skill in `state.json` (global + project)
 3. Error if skill not found or already in target scope
 4. Remove old agent symlinks
 5. Move skill directory to new scope's `.agents/skills/`
 6. Create new agent symlinks (preserving existing `also` + new)
-7. Update `installed.json` records (remove from source, add to target)
+7. Update `state.json` records (remove from source scope's slice, add to target scope's slice)
 
 ---
 
@@ -271,10 +271,13 @@ Update installed skills.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--yes` | boolean | false | Auto-accept updates (security warnings still shown) |
-| `--strict` | boolean | (from config) | Abort update if any security warnings are found in the diff. |
+| `--yes` (`-y`) | boolean | false | Auto-accept clean updates (security warnings still shown) |
+| `--strict` | boolean | (from config) | Skip skills with security warnings in the diff. |
+| `--semantic` | boolean | false | Run semantic scan on updated skills (in addition to the static scan that runs by default). |
 | `--check` / `-c` | boolean | false | Check for updates without applying them. Runs a fresh remote check, writes the result to the skill update cache, and prints which skills have updates. |
 | `--force` / `-f` | boolean | false | Force update even if the skill appears up to date (same SHA or version). Re-applies the update, re-runs security scanning, and refreshes `updatedAt`. |
+| `--json` | boolean | false | Output result as JSON. |
+| `--agent` | boolean | false | Run in non-interactive agent mode (also: `SKILLTAP_AGENT=1`). |
 
 **Behavior:**
 
@@ -294,7 +297,7 @@ Then, per skill:
    f. If warnings (not strict) → prompt: `Apply update? (y/N)`
    g. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
    h. If semantic scan blocks after pull → reset git HEAD to pre-pull state so the next run re-detects the pending update
-   i. Update `installed.json` with new SHA and `updatedAt`
+   i. Update `state.json` with new SHA and `updatedAt`
    j. Re-create agent symlinks
 
 **Linked skills** (`skilltap link`) are skipped — they're managed by the user.
@@ -326,7 +329,7 @@ Symlink a local skill directory into the install path. For development workflows
 - Validate SKILL.md exists at path
 - Parse SKILL.md frontmatter for name
 - Create symlink: `~/.agents/skills/{name}` → `{absolute-path}`
-- Record in `installed.json` with `repo: null`, `ref: null`, scope `"linked"`
+- Record in `state.json` with `repo: null`, `ref: null`, scope `"linked"`
 - Create agent symlinks if `--also`
 
 ---
@@ -348,7 +351,7 @@ Remove a linked skill.
 - Verify skill is linked (not installed via clone)
 - Remove symlink from install path
 - Remove agent-specific symlinks
-- Update `installed.json`
+- Update `state.json`
 
 Does **not** delete the original skill directory.
 
@@ -1099,7 +1102,7 @@ Generate a shell completion script for tab-completion.
 - Static: all commands, subcommands, flags, and flag values (`--also` agents, `--template` types)
 - Dynamic: skill names for `remove`, `update`, `unlink`, `info`; tap names for `tap remove`
 
-Dynamic values are fetched via a hidden `--get-completions <type>` endpoint that reads the local `installed.json` and tap config.
+Dynamic values are fetched via a hidden `--get-completions <type>` endpoint that reads the local `state.json` (with v0.x fallback) and tap config.
 
 **Exit codes:** 0 success, 1 error (unknown shell)
 
@@ -1254,7 +1257,7 @@ Remove a plugin and all its components.
 2. Remove all MCP server entries from agent config files
 3. Remove all agent definition files
 4. Remove cache entry
-5. Remove record from `plugins.json`
+5. Remove record from the `plugins[]` slice of `state.json`
 
 ---
 
@@ -1911,7 +1914,7 @@ npm-sourced skills update via version comparison (not SHA). `skilltap update` fe
 
 ## Trust Signals
 
-Trust signals provide provenance and publisher information for installed skills, computed at install time and stored in `installed.json`.
+Trust signals provide provenance and publisher information for installed skills, computed at install time and stored in the skill record inside `state.json`.
 
 ### Tiers
 
@@ -2562,7 +2565,7 @@ When a `git clone` fails due to authentication or access denial, skilltap automa
 Non-auth errors (e.g. "repository not found") do **not** trigger fallback.
 
 **URL persistence** — when fallback succeeds, the working URL is persisted:
-- `installed.json` records the effective URL in the `repo` field
+- `state.json` records the effective URL in the `repo` field
 - `config.toml` tap entries are updated to the working URL (via `tap add` and `tap update` self-heal)
 - Trust resolution and tap matching continue using the original canonical URL
 
