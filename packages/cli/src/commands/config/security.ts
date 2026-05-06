@@ -1,26 +1,26 @@
 import { cancel, intro, isCancel, note, outro } from "@clack/prompts";
 import {
+  type Config,
+  describeSecurityMode,
+  getConfigDir,
+  loadConfig,
+  ON_WARN_MODES,
+  PRESET_VALUES,
+  SCAN_MODES,
+  SECURITY_PRESETS,
+  type SecurityMode,
+  SOURCE_TYPES,
+  saveConfig,
+  type TrustOverride,
+} from "@skilltap/core";
+import { defineCommand } from "citty";
+import {
   footerConfirm as confirm,
   footerSelect as select,
   footerText as text,
 } from "../../ui/footer";
-import {
-  PRESET_VALUES,
-  SCAN_MODES,
-  ON_WARN_MODES,
-  SECURITY_PRESETS,
-  SOURCE_TYPES,
-  loadConfig,
-  saveConfig,
-  getConfigDir,
-  describeSecurityMode,
-  type Config,
-  type SecurityMode,
-  type TrustOverride,
-} from "@skilltap/core";
-import { defineCommand } from "citty";
 import { errorLine } from "../../ui/format";
-import { selectAgentForConfig, SCAN_MODE_OPTIONS } from "../../ui/prompts";
+import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../../ui/prompts";
 
 // ─── Non-interactive helpers ───────────────────────────────────────────────
 
@@ -43,7 +43,11 @@ function isNonInteractive(args: {
   );
 }
 
-function applyPresetToMode(config: Config, preset: (typeof SECURITY_PRESETS)[number], target: "human" | "agent" | "both"): void {
+function applyPresetToMode(
+  config: Config,
+  preset: (typeof SECURITY_PRESETS)[number],
+  target: "human" | "agent" | "both",
+): void {
   const values = PRESET_VALUES[preset];
   if (target === "human" || target === "both") {
     config.security.human = { ...config.security.human, ...values };
@@ -53,7 +57,9 @@ function applyPresetToMode(config: Config, preset: (typeof SECURITY_PRESETS)[num
   }
 }
 
-function parseTarget(modeArg: string | undefined): "human" | "agent" | "both" | null {
+function parseTarget(
+  modeArg: string | undefined,
+): "human" | "agent" | "both" | null {
   if (!modeArg || modeArg === "both") return "both";
   if (modeArg === "human" || modeArg === "agent") return modeArg;
   return null;
@@ -65,7 +71,11 @@ function parseTrustFlag(trust: string): TrustOverride | null {
   if (tapMatch) {
     const preset = tapMatch[2] as string;
     if (!(SECURITY_PRESETS as readonly string[]).includes(preset)) return null;
-    return { match: tapMatch[1] as string, kind: "tap", preset: preset as (typeof SECURITY_PRESETS)[number] };
+    return {
+      match: tapMatch[1] as string,
+      kind: "tap",
+      preset: preset as (typeof SECURITY_PRESETS)[number],
+    };
   }
   const sourceMatch = trust.match(/^source:([^=]+)=([^=]+)$/);
   if (sourceMatch) {
@@ -73,22 +83,24 @@ function parseTrustFlag(trust: string): TrustOverride | null {
     const preset = sourceMatch[2] as string;
     if (!(SOURCE_TYPES as readonly string[]).includes(sourceType)) return null;
     if (!(SECURITY_PRESETS as readonly string[]).includes(preset)) return null;
-    return { match: sourceType, kind: "source", preset: preset as (typeof SECURITY_PRESETS)[number] };
+    return {
+      match: sourceType,
+      kind: "source",
+      preset: preset as (typeof SECURITY_PRESETS)[number],
+    };
   }
   return null;
 }
 
-async function runNonInteractive(
-  args: {
-    preset?: string;
-    mode?: string;
-    scan?: string;
-    "on-warn"?: string;
-    "require-scan"?: boolean;
-    trust?: string;
-    "remove-trust"?: string;
-  },
-): Promise<void> {
+async function runNonInteractive(args: {
+  preset?: string;
+  mode?: string;
+  scan?: string;
+  "on-warn"?: string;
+  "require-scan"?: boolean;
+  trust?: string;
+  "remove-trust"?: string;
+}): Promise<void> {
   const configResult = await loadConfig();
   if (!configResult.ok) {
     errorLine(configResult.error.message, configResult.error.hint);
@@ -152,27 +164,37 @@ async function runNonInteractive(
 
   if (args.scan) {
     if (!(SCAN_MODES as readonly string[]).includes(args.scan)) {
-      errorLine(`Invalid scan level: '${args.scan}'. Valid: ${SCAN_MODES.join(", ")}`);
+      errorLine(
+        `Invalid scan level: '${args.scan}'. Valid: ${SCAN_MODES.join(", ")}`,
+      );
       process.exit(1);
     }
     const scan = args.scan as (typeof SCAN_MODES)[number];
-    if (target === "human" || target === "both") config.security.human.scan = scan;
-    if (target === "agent" || target === "both") config.security.agent.scan = scan;
+    if (target === "human" || target === "both")
+      config.security.human.scan = scan;
+    if (target === "agent" || target === "both")
+      config.security.agent.scan = scan;
   }
 
   if (args["on-warn"]) {
     if (!(ON_WARN_MODES as readonly string[]).includes(args["on-warn"])) {
-      errorLine(`Invalid on-warn value: '${args["on-warn"]}'. Valid: ${ON_WARN_MODES.join(", ")}`);
+      errorLine(
+        `Invalid on-warn value: '${args["on-warn"]}'. Valid: ${ON_WARN_MODES.join(", ")}`,
+      );
       process.exit(1);
     }
     const onWarn = args["on-warn"] as (typeof ON_WARN_MODES)[number];
-    if (target === "human" || target === "both") config.security.human.on_warn = onWarn;
-    if (target === "agent" || target === "both") config.security.agent.on_warn = onWarn;
+    if (target === "human" || target === "both")
+      config.security.human.on_warn = onWarn;
+    if (target === "agent" || target === "both")
+      config.security.agent.on_warn = onWarn;
   }
 
   if (args["require-scan"] !== undefined) {
-    if (target === "human" || target === "both") config.security.human.require_scan = args["require-scan"];
-    if (target === "agent" || target === "both") config.security.agent.require_scan = args["require-scan"];
+    if (target === "human" || target === "both")
+      config.security.human.require_scan = args["require-scan"];
+    if (target === "agent" || target === "both")
+      config.security.agent.require_scan = args["require-scan"];
   }
 
   const saveResult = await saveConfig(config);
@@ -182,10 +204,14 @@ async function runNonInteractive(
   }
 
   if (target === "human" || target === "both") {
-    process.stdout.write(`OK: security.human = ${describeSecurityMode(config.security.human)}\n`);
+    process.stdout.write(
+      `OK: security.human = ${describeSecurityMode(config.security.human)}\n`,
+    );
   }
   if (target === "agent" || target === "both") {
-    process.stdout.write(`OK: security.agent = ${describeSecurityMode(config.security.agent)}\n`);
+    process.stdout.write(
+      `OK: security.agent = ${describeSecurityMode(config.security.agent)}\n`,
+    );
   }
 }
 
@@ -194,8 +220,16 @@ async function runNonInteractive(
 const PRESET_OPTIONS = [
   { value: "none", label: "None", hint: "no scanning" },
   { value: "relaxed", label: "Relaxed", hint: "static scan, ignore warnings" },
-  { value: "standard", label: "Standard", hint: "static scan, ask on warnings (Recommended)" },
-  { value: "strict", label: "Strict", hint: "static + semantic scan, block on warnings" },
+  {
+    value: "standard",
+    label: "Standard",
+    hint: "static scan, ask on warnings (Recommended)",
+  },
+  {
+    value: "strict",
+    label: "Strict",
+    hint: "static + semantic scan, block on warnings",
+  },
   { value: "custom", label: "Custom", hint: "set individual options" },
 ];
 
@@ -293,7 +327,9 @@ const SOURCE_TYPE_OVERRIDE_OPTIONS = [
 
 const PRESET_ONLY_OPTIONS = PRESET_OPTIONS.filter((o) => o.value !== "custom");
 
-async function promptTrustOverrides(current: TrustOverride[]): Promise<TrustOverride[]> {
+async function promptTrustOverrides(
+  current: TrustOverride[],
+): Promise<TrustOverride[]> {
   const configureOverrides = await confirm({
     message: "Configure trust overrides?",
     initialValue: false,
@@ -391,16 +427,28 @@ async function runInteractive(): Promise<void> {
   let newAgentCli = config.security.agent_cli;
 
   if (target === "both") {
-    const { mode, agentCli } = await promptSecurityMode("both modes", config.security.human, newAgentCli);
+    const { mode, agentCli } = await promptSecurityMode(
+      "both modes",
+      config.security.human,
+      newAgentCli,
+    );
     newHuman = mode;
     newAgent = { ...mode };
     newAgentCli = agentCli;
   } else if (target === "human") {
-    const { mode, agentCli } = await promptSecurityMode("human mode", config.security.human, newAgentCli);
+    const { mode, agentCli } = await promptSecurityMode(
+      "human mode",
+      config.security.human,
+      newAgentCli,
+    );
     newHuman = mode;
     newAgentCli = agentCli;
   } else {
-    const { mode, agentCli } = await promptSecurityMode("agent mode", config.security.agent, newAgentCli);
+    const { mode, agentCli } = await promptSecurityMode(
+      "agent mode",
+      config.security.agent,
+      newAgentCli,
+    );
     newAgent = mode;
     newAgentCli = agentCli;
   }
@@ -457,13 +505,29 @@ export default defineCommand({
     description: "Configure security settings",
   },
   args: {
-    preset: { type: "string", description: "Apply a named preset: none, relaxed, standard, strict" },
-    mode: { type: "string", description: "Which mode to configure: human, agent, both (default: both)" },
+    preset: {
+      type: "string",
+      description: "Apply a named preset: none, relaxed, standard, strict",
+    },
+    mode: {
+      type: "string",
+      description:
+        "Which mode to configure: human, agent, both (default: both)",
+    },
     scan: { type: "string", description: "Scan level: static, semantic, off" },
-    "on-warn": { type: "string", description: "Warning behavior: prompt, fail, allow" },
+    "on-warn": {
+      type: "string",
+      description: "Warning behavior: prompt, fail, allow",
+    },
     "require-scan": { type: "boolean", description: "Block --skip-scan" },
-    trust: { type: "string", description: "Add trust override: tap:name=preset or source:type=preset" },
-    "remove-trust": { type: "string", description: "Remove a trust override by match name" },
+    trust: {
+      type: "string",
+      description: "Add trust override: tap:name=preset or source:type=preset",
+    },
+    "remove-trust": {
+      type: "string",
+      description: "Remove a trust override by match name",
+    },
   },
   async run({ args }) {
     if (isNonInteractive(args)) {
@@ -472,7 +536,9 @@ export default defineCommand({
     }
 
     if (!process.stdin.isTTY) {
-      errorLine("'skilltap config security' requires a TTY for interactive mode. Use flags for non-interactive use.");
+      errorLine(
+        "'skilltap config security' requires a TTY for interactive mode. Use flags for non-interactive use.",
+      );
       process.exit(1);
     }
 

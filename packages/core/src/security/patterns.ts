@@ -266,8 +266,7 @@ export function detectSuspiciousUrls(content: string): PatternMatch[] {
       );
       const isLocalhost =
         /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/.test(url);
-      const hasInterpolation =
-        !isLocalhost && /\$\{|\$\(|\{\{/.test(url);
+      const hasInterpolation = !isLocalhost && /\$\{|\$\(|\{\{/.test(url);
       const hasSuspiciousParams = /[?&](?:data|exfil|d|payload)=/.test(url);
 
       if (isSuspiciousDomain || hasInterpolation || hasSuspiciousParams) {

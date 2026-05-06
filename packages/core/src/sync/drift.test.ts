@@ -23,7 +23,14 @@ const EMPTY_STATE: State = {
   mcpServers: [],
 };
 
-const SKILL = (overrides: Partial<{ repo: string; ref: string; sha: string; name: string }> = {}) => ({
+const SKILL = (
+  overrides: Partial<{
+    repo: string;
+    ref: string;
+    sha: string;
+    name: string;
+  }> = {},
+) => ({
   name: overrides.name ?? "commit-helper",
   description: "",
   repo: overrides.repo ?? "github:n/commit-helper",
@@ -53,7 +60,12 @@ describe("detectDrift — base cases", () => {
     const lockfile: Lockfile = {
       ...EMPTY_LOCKFILE,
       skill: [
-        { source: "github:n/commit-helper", ref: "v1.2.0", sha: "abc123", range: "^1.0" },
+        {
+          source: "github:n/commit-helper",
+          ref: "v1.2.0",
+          sha: "abc123",
+          range: "^1.0",
+        },
       ],
     };
     const state: State = { ...EMPTY_STATE, skills: [SKILL()] };
@@ -79,7 +91,10 @@ describe("detectDrift — adds and removes", () => {
   });
 
   test("installed but not declared → remove", () => {
-    const state: State = { ...EMPTY_STATE, skills: [SKILL({ repo: "github:n/old" })] };
+    const state: State = {
+      ...EMPTY_STATE,
+      skills: [SKILL({ repo: "github:n/old" })],
+    };
     const r = detectDrift(EMPTY_MANIFEST, EMPTY_LOCKFILE, state);
     expect(r.items).toHaveLength(1);
     expect(r.items[0]).toMatchObject({
@@ -126,7 +141,10 @@ describe("detectDrift — lockfile categories", () => {
       ...EMPTY_MANIFEST,
       skills: { "github:n/foo": "^1.0" },
     };
-    const state: State = { ...EMPTY_STATE, skills: [SKILL({ repo: "github:n/foo" })] };
+    const state: State = {
+      ...EMPTY_STATE,
+      skills: [SKILL({ repo: "github:n/foo" })],
+    };
     const r = detectDrift(manifest, EMPTY_LOCKFILE, state);
     expect(r.items).toHaveLength(1);
     expect(r.items[0].kind).toBe("lock-missing");
@@ -143,7 +161,10 @@ describe("detectDrift — lockfile categories", () => {
         { source: "github:n/foo", ref: "v1.0.0", sha: "abc", range: "^1.0" },
       ],
     };
-    const state: State = { ...EMPTY_STATE, skills: [SKILL({ repo: "github:n/foo" })] };
+    const state: State = {
+      ...EMPTY_STATE,
+      skills: [SKILL({ repo: "github:n/foo" })],
+    };
     const r = detectDrift(manifest, lockfile, state);
     expect(r.items).toHaveLength(1);
     expect(r.items[0]).toMatchObject({
@@ -162,7 +183,12 @@ describe("detectDrift — lockfile categories", () => {
     const lockfile: Lockfile = {
       ...EMPTY_LOCKFILE,
       skill: [
-        { source: "github:n/foo", ref: "v1.2.0", sha: "DIFFERENT", range: "^1.0" },
+        {
+          source: "github:n/foo",
+          ref: "v1.2.0",
+          sha: "DIFFERENT",
+          range: "^1.0",
+        },
       ],
     };
     const state: State = {
@@ -177,9 +203,7 @@ describe("detectDrift — lockfile categories", () => {
   test("lockfile entry with no manifest or state → lock-orphan", () => {
     const lockfile: Lockfile = {
       ...EMPTY_LOCKFILE,
-      skill: [
-        { source: "github:n/orphan", ref: "v1", sha: "abc", range: "*" },
-      ],
+      skill: [{ source: "github:n/orphan", ref: "v1", sha: "abc", range: "*" }],
     };
     const r = detectDrift(EMPTY_MANIFEST, lockfile, EMPTY_STATE);
     expect(r.items).toHaveLength(1);
@@ -195,11 +219,12 @@ describe("detectDrift — multi-item scenarios", () => {
     };
     const lockfile: Lockfile = {
       ...EMPTY_LOCKFILE,
-      skill: [
-        { source: "github:n/orphan", ref: "v1", sha: "abc", range: "*" },
-      ],
+      skill: [{ source: "github:n/orphan", ref: "v1", sha: "abc", range: "*" }],
     };
-    const state: State = { ...EMPTY_STATE, skills: [SKILL({ repo: "github:n/old" })] };
+    const state: State = {
+      ...EMPTY_STATE,
+      skills: [SKILL({ repo: "github:n/old" })],
+    };
     const r = detectDrift(manifest, lockfile, state);
     expect(r.items).toHaveLength(3);
     const kinds = r.items.map((i) => i.kind).sort();
@@ -222,9 +247,7 @@ describe("detectDrift — multi-item scenarios", () => {
   test("linked skills (repo=null) are excluded from drift", () => {
     const state: State = {
       ...EMPTY_STATE,
-      skills: [
-        { ...SKILL(), repo: null, scope: "linked" as const },
-      ],
+      skills: [{ ...SKILL(), repo: null, scope: "linked" as const }],
     };
     const r = detectDrift(EMPTY_MANIFEST, EMPTY_LOCKFILE, state);
     expect(r.items).toEqual([]);

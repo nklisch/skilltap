@@ -1,7 +1,7 @@
 import { basename, join } from "node:path";
 import { parseSkillFrontmatter } from "./frontmatter";
-import { SkillFrontmatterSchema } from "./schemas";
 import type { SkillFrontmatter } from "./schemas";
+import { SkillFrontmatterSchema } from "./schemas";
 import { scanStatic } from "./security";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
@@ -49,13 +49,18 @@ export async function validateSkill(
     content = await Bun.file(skillMdPath).text();
   } catch (e) {
     return err(
-      new UserError(`Could not read SKILL.md: ${e instanceof Error ? e.message : String(e)}`),
+      new UserError(
+        `Could not read SKILL.md: ${e instanceof Error ? e.message : String(e)}`,
+      ),
     );
   }
 
   const rawFm = parseSkillFrontmatter(content);
   if (!rawFm) {
-    issues.push({ severity: "error", message: "No YAML frontmatter found in SKILL.md" });
+    issues.push({
+      severity: "error",
+      message: "No YAML frontmatter found in SKILL.md",
+    });
     return ok({ valid: false, issues });
   }
 
@@ -94,8 +99,17 @@ export async function validateSkill(
   let totalBytes = 0;
   try {
     const glob = new Bun.Glob("**/*");
-    for await (const relPath of glob.scan({ cwd: dir, onlyFiles: true, dot: true })) {
-      if (relPath.startsWith(".git/") || relPath.startsWith(".svn/") || relPath.startsWith(".hg/")) continue;
+    for await (const relPath of glob.scan({
+      cwd: dir,
+      onlyFiles: true,
+      dot: true,
+    })) {
+      if (
+        relPath.startsWith(".git/") ||
+        relPath.startsWith(".svn/") ||
+        relPath.startsWith(".hg/")
+      )
+        continue;
       fileCount++;
       totalBytes += Bun.file(join(dir, relPath)).size;
     }

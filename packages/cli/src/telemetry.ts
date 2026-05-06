@@ -56,15 +56,17 @@ export function sendFirstRun(version: string): void {
 
   const payload = JSON.stringify({
     client_id: "anonymous",
-    events: [{
-      name: "first_run",
-      params: {
-        os: process.platform,
-        arch: process.arch,
-        version,
-        engagement_time_msec: 1,
+    events: [
+      {
+        name: "first_run",
+        params: {
+          os: process.platform,
+          arch: process.arch,
+          version,
+          engagement_time_msec: 1,
+        },
       },
-    }],
+    ],
   });
 
   fetch(GA4_ENDPOINT, {
@@ -79,7 +81,13 @@ export function inferAdapter(source: string): string {
   if (source.startsWith("github:")) return "github";
   if (source.startsWith("gitlab:")) return "gitlab";
   if (source.startsWith("bitbucket:")) return "bitbucket";
-  if (source.startsWith("http://") || source.startsWith("https://")) return "git";
-  if (source.startsWith(".") || source.startsWith("/") || source.startsWith("~")) return "local";
+  if (source.startsWith("http://") || source.startsWith("https://"))
+    return "git";
+  if (
+    source.startsWith(".") ||
+    source.startsWith("/") ||
+    source.startsWith("~")
+  )
+    return "local";
   return "tap";
 }

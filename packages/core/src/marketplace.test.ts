@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { adaptMarketplaceToTap, marketplaceSourceToRepo } from "./marketplace";
-import type { Marketplace, MarketplacePluginSource } from "./schemas/marketplace";
+import type {
+  Marketplace,
+  MarketplacePluginSource,
+} from "./schemas/marketplace";
 
 const TAP_URL = "https://github.com/owner/marketplace.git";
 
@@ -81,7 +84,10 @@ describe("adaptMarketplaceToTap", () => {
   });
 
   test("tap description is undefined when metadata is absent", async () => {
-    const marketplace: Marketplace = { ...baseMarketplace, metadata: undefined };
+    const marketplace: Marketplace = {
+      ...baseMarketplace,
+      metadata: undefined,
+    };
     const tap = await adaptMarketplaceToTap(marketplace, TAP_URL);
     expect(tap.description).toBeUndefined();
   });
@@ -172,7 +178,9 @@ describe("adaptMarketplaceToTap", () => {
         {
           name: "unknown-plugin",
           // Cast to simulate an unknown/unexpected source object that passes at runtime
-          source: { source: "unknown-type" } as unknown as MarketplacePluginSource,
+          source: {
+            source: "unknown-type",
+          } as unknown as MarketplacePluginSource,
         },
         {
           name: "known-plugin",
@@ -243,7 +251,10 @@ describe("adaptMarketplaceToTap", () => {
       // Create a plugin directory with .claude-plugin/plugin.json
       const pluginDir = join(tapDir, "plugins", "my-plugin");
       await mkdir(join(pluginDir, ".claude-plugin"), { recursive: true });
-      await Bun.write(join(pluginDir, ".claude-plugin", "plugin.json"), JSON.stringify({ name: "my-plugin" }));
+      await Bun.write(
+        join(pluginDir, ".claude-plugin", "plugin.json"),
+        JSON.stringify({ name: "my-plugin" }),
+      );
 
       // Add a skill
       await mkdir(join(pluginDir, "skills", "helper"), { recursive: true });
@@ -253,11 +264,17 @@ describe("adaptMarketplaceToTap", () => {
       );
 
       // Add an MCP server
-      await Bun.write(join(pluginDir, ".mcp.json"), JSON.stringify({ db: { command: "npx", args: ["-y", "db-mcp"] } }));
+      await Bun.write(
+        join(pluginDir, ".mcp.json"),
+        JSON.stringify({ db: { command: "npx", args: ["-y", "db-mcp"] } }),
+      );
 
       // Add an agent
       await mkdir(join(pluginDir, "agents"), { recursive: true });
-      await Bun.write(join(pluginDir, "agents", "reviewer.md"), "---\nname: reviewer\nmodel: sonnet\n---\nReview code.");
+      await Bun.write(
+        join(pluginDir, "agents", "reviewer.md"),
+        "---\nname: reviewer\nmodel: sonnet\n---\nReview code.",
+      );
 
       const marketplace: Marketplace = {
         ...baseMarketplace,
@@ -314,7 +331,11 @@ describe("adaptMarketplaceToTap", () => {
       const marketplace: Marketplace = {
         ...baseMarketplace,
         plugins: [
-          { name: "simple", source: "./plugins/simple", description: "Just a skill" },
+          {
+            name: "simple",
+            source: "./plugins/simple",
+            description: "Just a skill",
+          },
         ],
       };
 
@@ -340,7 +361,10 @@ describe("adaptMarketplaceToTap", () => {
       const marketplace: Marketplace = {
         ...baseMarketplace,
         plugins: [
-          { name: "gh-plugin", source: { source: "github", repo: "owner/repo" } },
+          {
+            name: "gh-plugin",
+            source: { source: "github", repo: "owner/repo" },
+          },
         ],
       };
 

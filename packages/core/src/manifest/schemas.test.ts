@@ -98,7 +98,10 @@ describe("ProjectManifestSchema", () => {
         "npm:@corp/code-review": "*",
       },
       plugins: {
-        "github:corp/dev-toolkit": { ref: "v2.1", components: { "test-skipper": false } },
+        "github:corp/dev-toolkit": {
+          ref: "v2.1",
+          components: { "test-skipper": false },
+        },
       },
       taps: {
         home: "https://gitea.example.com/nathan/my-tap",

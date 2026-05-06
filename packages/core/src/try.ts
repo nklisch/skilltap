@@ -7,7 +7,7 @@ import { detectPlugin } from "./plugin/detect";
 import { type ScannedSkill, scan } from "./scanner";
 import type { ResolvedSource } from "./schemas/agent";
 import type { PluginManifest } from "./schemas/plugin";
-import { scanStatic, type StaticWarning } from "./security";
+import { type StaticWarning, scanStatic } from "./security";
 import { err, ok, type Result, type ScanError, UserError } from "./types";
 
 export interface TryReport {

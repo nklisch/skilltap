@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
-import { loadPlugins } from "@skilltap/core";
 import type { StoredComponent } from "@skilltap/core";
+import { loadPlugins } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { exitWithError, outputJson } from "../../ui/agent-out";
 import { ansi } from "../../ui/format";
 import { isAgentMode } from "../../ui/policy";
@@ -103,7 +103,9 @@ export default defineCommand({
       if (agents.length > 0) {
         process.stdout.write(`${ansi.bold("Agent Definitions:")}\n`);
         for (const c of agents) {
-          process.stdout.write(`  ${componentStatusIcon(c)} ${c.name} ${ansi.dim(`(${componentLabel(c)})`)}\n`);
+          process.stdout.write(
+            `  ${componentStatusIcon(c)} ${c.name} ${ansi.dim(`(${componentLabel(c)})`)}\n`,
+          );
         }
       }
     }

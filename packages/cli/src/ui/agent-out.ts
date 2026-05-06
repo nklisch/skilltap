@@ -20,8 +20,7 @@ export function agentUpdated(
   toRef?: string,
   trust?: TrustInfo,
 ): void {
-  const detail =
-    fromRef && toRef ? ` (${fromRef} → ${toRef})` : "";
+  const detail = fromRef && toRef ? ` (${fromRef} → ${toRef})` : "";
   const trustStr = trust ? ` [${agentTrustLabel(trust)}]` : "";
   process.stdout.write(`OK: Updated ${name}${detail}${trustStr}\n`);
 }
@@ -76,9 +75,7 @@ export function agentSecurityBlock(
   }
 
   lines.push("");
-  lines.push(
-    "User action required: review warnings and install manually with",
-  );
+  lines.push("User action required: review warnings and install manually with");
   lines.push("  skilltap install <url>");
 
   process.stderr.write(`${lines.join("\n")}\n`);

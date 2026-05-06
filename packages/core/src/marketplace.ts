@@ -1,7 +1,10 @@
 import { join } from "node:path";
 import { detectPlugin } from "./plugin/detect";
+import type {
+  Marketplace,
+  MarketplacePluginSource,
+} from "./schemas/marketplace";
 import type { Tap, TapPlugin, TapSkill } from "./schemas/tap";
-import type { Marketplace, MarketplacePluginSource } from "./schemas/marketplace";
 
 /**
  * Convert a marketplace plugin source to a TapSkill.repo string
@@ -38,12 +41,27 @@ export function marketplaceSourceToRepo(
  * Adjusts component paths to be relative to the tap repo root.
  */
 function manifestToTapPlugin(
-  manifest: NonNullable<Awaited<ReturnType<typeof detectPlugin>> extends { ok: true; value: infer V } ? V : never>,
-  marketplacePlugin: { name: string; description?: string; tags?: string[]; category?: string; version?: string },
+  manifest: NonNullable<
+    Awaited<ReturnType<typeof detectPlugin>> extends {
+      ok: true;
+      value: infer V;
+    }
+      ? V
+      : never
+  >,
+  marketplacePlugin: {
+    name: string;
+    description?: string;
+    tags?: string[];
+    category?: string;
+    version?: string;
+  },
   sourcePrefix: string,
 ): TapPlugin {
   const skills = manifest.components
-    .filter((c): c is Extract<typeof c, { type: "skill" }> => c.type === "skill")
+    .filter(
+      (c): c is Extract<typeof c, { type: "skill" }> => c.type === "skill",
+    )
     .map((c) => ({
       name: c.name,
       path: join(sourcePrefix, c.path),
@@ -51,7 +69,9 @@ function manifestToTapPlugin(
     }));
 
   const agents = manifest.components
-    .filter((c): c is Extract<typeof c, { type: "agent" }> => c.type === "agent")
+    .filter(
+      (c): c is Extract<typeof c, { type: "agent" }> => c.type === "agent",
+    )
     .map((c) => ({
       name: c.name,
       path: join(sourcePrefix, c.path),
@@ -85,7 +105,9 @@ function manifestToTapPlugin(
     skills,
     mcpServers,
     agents,
-    tags: marketplacePlugin.tags ?? (marketplacePlugin.category ? [marketplacePlugin.category] : []),
+    tags:
+      marketplacePlugin.tags ??
+      (marketplacePlugin.category ? [marketplacePlugin.category] : []),
   };
 }
 
@@ -131,7 +153,8 @@ export async function adaptMarketplaceToTap(
 
     skills.push({
       name: plugin.name,
-      description: plugin.description ?? `Plugin from ${marketplace.name} marketplace`,
+      description:
+        plugin.description ?? `Plugin from ${marketplace.name} marketplace`,
       repo,
       tags: plugin.tags ?? (plugin.category ? [plugin.category] : []),
       plugin: true,

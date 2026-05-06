@@ -11,9 +11,7 @@ const VALID_PLUGIN = {
   version: "1.0.0",
   description: "Internal dev tools",
   publish: true,
-  skills: [
-    { name: "code-review", path: "./skills/code-review" },
-  ],
+  skills: [{ name: "code-review", path: "./skills/code-review" }],
   servers: [
     {
       name: "db",
@@ -22,9 +20,7 @@ const VALID_PLUGIN = {
       args: ["./mcp/db.js"],
     },
   ],
-  agents: [
-    { name: "reviewer", path: "./agents/reviewer.md" },
-  ],
+  agents: [{ name: "reviewer", path: "./agents/reviewer.md" }],
 };
 
 describe("PluginV2StdioServerSchema", () => {
@@ -144,13 +140,16 @@ describe("PluginManifestV2Schema", () => {
 
   test("rejects invalid plugin name", () => {
     expect(
-      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "MyPlugin" }).success,
+      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "MyPlugin" })
+        .success,
     ).toBe(false);
     expect(
-      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "my_plugin" }).success,
+      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "my_plugin" })
+        .success,
     ).toBe(false);
     expect(
-      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "-leading" }).success,
+      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "-leading" })
+        .success,
     ).toBe(false);
   });
 

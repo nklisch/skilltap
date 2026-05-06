@@ -8,11 +8,17 @@ describe("parseComponentRef", () => {
   });
 
   test("name and component", () => {
-    expect(parseComponentRef("foo:bar")).toEqual({ name: "foo", component: "bar" });
+    expect(parseComponentRef("foo:bar")).toEqual({
+      name: "foo",
+      component: "bar",
+    });
   });
 
   test("multiple colons — first splits, rest is component", () => {
-    expect(parseComponentRef("foo:bar:baz")).toEqual({ name: "foo", component: "bar:baz" });
+    expect(parseComponentRef("foo:bar:baz")).toEqual({
+      name: "foo",
+      component: "bar:baz",
+    });
   });
 
   test("malformed leading colon falls back to name-only", () => {
@@ -24,7 +30,9 @@ describe("parseComponentRef", () => {
   });
 
   test("namespaced MCP-style component", () => {
-    expect(parseComponentRef("dev-toolkit:skilltap:dev-toolkit:database")).toEqual({
+    expect(
+      parseComponentRef("dev-toolkit:skilltap:dev-toolkit:database"),
+    ).toEqual({
       name: "dev-toolkit",
       component: "skilltap:dev-toolkit:database",
     });
@@ -57,7 +65,12 @@ describe("findComponentInPlugin", () => {
         args: [],
         env: {},
       },
-      { type: "agent", name: "reviewer", active: true, platform: "claude-code" },
+      {
+        type: "agent",
+        name: "reviewer",
+        active: true,
+        platform: "claude-code",
+      },
     ],
     installedAt: "2026-05-06T00:00:00.000Z",
     updatedAt: "2026-05-06T00:00:00.000Z",

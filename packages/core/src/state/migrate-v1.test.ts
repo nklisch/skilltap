@@ -35,7 +35,10 @@ const PLUGIN = {
 
 describe("migrateV1State", () => {
   test("merges empty installed + plugins to empty v2 state", () => {
-    const state = migrateV1State({ version: 1, skills: [] }, { version: 1, plugins: [] });
+    const state = migrateV1State(
+      { version: 1, skills: [] },
+      { version: 1, plugins: [] },
+    );
     expect(state.version).toBe(2);
     expect(state.skills).toEqual([]);
     expect(state.plugins).toEqual([]);

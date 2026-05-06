@@ -91,7 +91,9 @@ function printIssue(issue: DoctorIssue, fix: boolean): void {
 }
 
 async function runInteractive(fix: boolean): Promise<void> {
-  process.stdout.write(`\n${ansi.dim("┌")} skilltap doctor\n${ansi.dim("│")}\n`);
+  process.stdout.write(
+    `\n${ansi.dim("┌")} skilltap doctor\n${ansi.dim("│")}\n`,
+  );
 
   const projectRoot = await tryFindProjectRoot();
   const result = await runDoctor({

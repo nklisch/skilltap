@@ -6,7 +6,7 @@ import { skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
-import { ok, UserError } from "./types";
+import { ok, type UserError } from "./types";
 
 export type OrphanRecord = {
   record: InstalledSkill;
@@ -56,7 +56,11 @@ export async function findOrphanRecords(
 
     // npm skills
     if (record.repo?.startsWith("npm:")) {
-      const installDir = skillInstallDir(record.name, record.scope as "global" | "project", projectRoot);
+      const installDir = skillInstallDir(
+        record.name,
+        record.scope as "global" | "project",
+        projectRoot,
+      );
       if (!(await resolvedDirExists(installDir))) {
         orphans.push({ record, reason: "directory-missing" });
       }
@@ -83,7 +87,11 @@ export async function findOrphanRecords(
       }
 
       // Check install dir
-      const installDir = skillInstallDir(record.name, record.scope as "global" | "project", projectRoot);
+      const installDir = skillInstallDir(
+        record.name,
+        record.scope as "global" | "project",
+        projectRoot,
+      );
       if (!(await resolvedDirExists(installDir))) {
         orphans.push({ record, reason: "directory-missing" });
       }
@@ -92,7 +100,11 @@ export async function findOrphanRecords(
 
     // Standalone git, local, or anything else: check install dir
     const effectiveScope = record.scope as "global" | "project";
-    const installDir = skillInstallDir(record.name, effectiveScope, projectRoot);
+    const installDir = skillInstallDir(
+      record.name,
+      effectiveScope,
+      projectRoot,
+    );
 
     if (!(await resolvedDirExists(installDir))) {
       orphans.push({ record, reason: "directory-missing" });

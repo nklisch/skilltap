@@ -1,43 +1,47 @@
-export { detectPlugin, listPluginOptions, type DetectOptions } from "./detect";
-export {
-  parseComponentRef,
-  findComponentInPlugin,
-  type ParsedComponentRef,
-} from "./component-ref";
-export { parseClaudePlugin } from "./parse-claude";
-export { parseCodexPlugin } from "./parse-codex";
-export { parseMcpJson, parseMcpObject } from "./mcp";
 export { parseAgentDefinitions } from "./agents";
 export {
-  loadPlugins,
-  savePlugins,
+  findComponentInPlugin,
+  type ParsedComponentRef,
+  parseComponentRef,
+} from "./component-ref";
+export { type DetectOptions, detectPlugin, listPluginOptions } from "./detect";
+export {
+  installPlugin,
+  type PluginInstallOptions,
+  type PluginInstallResult,
+} from "./install";
+export {
+  type RemovePluginOptions,
+  removeInstalledPlugin,
+  type ToggleComponentOptions,
+  type ToggleResult,
+  toggleInstalledComponent,
+} from "./lifecycle";
+export { parseMcpJson, parseMcpObject } from "./mcp";
+export {
+  type InjectOptions,
+  injectMcpServers,
+  isNamespacedKey,
+  listMcpServers,
+  MCP_AGENT_CONFIGS,
+  type McpVarContext,
+  mcpConfigPath,
+  namespaceMcpServer,
+  parseNamespacedKey,
+  type RemoveOptions,
+  removeMcpServers,
+  substituteMcpVars,
+} from "./mcp-inject";
+export { parseClaudePlugin } from "./parse-claude";
+export { parseCodexPlugin } from "./parse-codex";
+export {
   addPlugin,
-  removePlugin,
-  toggleComponent,
   findPlugin,
+  loadPlugins,
   manifestToRecord,
   mcpServerToStored,
   type PluginInstallMeta,
+  removePlugin,
+  savePlugins,
+  toggleComponent,
 } from "./state";
-export { installPlugin, type PluginInstallOptions, type PluginInstallResult } from "./install";
-export {
-  removeInstalledPlugin,
-  toggleInstalledComponent,
-  type RemovePluginOptions,
-  type ToggleComponentOptions,
-  type ToggleResult,
-} from "./lifecycle";
-export {
-  MCP_AGENT_CONFIGS,
-  namespaceMcpServer,
-  isNamespacedKey,
-  parseNamespacedKey,
-  substituteMcpVars,
-  mcpConfigPath,
-  injectMcpServers,
-  removeMcpServers,
-  listMcpServers,
-  type InjectOptions,
-  type RemoveOptions,
-  type McpVarContext,
-} from "./mcp-inject";

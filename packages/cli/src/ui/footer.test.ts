@@ -12,14 +12,17 @@ function makeMockStream(isTTY = true, rows = 24) {
     rows,
     columns: 80,
     write(chunk: any, _enc?: any, _cb?: any): boolean {
-      written.push(typeof chunk === "string" ? chunk : (chunk?.toString?.() ?? ""));
+      written.push(
+        typeof chunk === "string" ? chunk : (chunk?.toString?.() ?? ""),
+      );
       return true;
     },
     on(event: string, handler: () => void) {
       (handlers[event] ??= []).push(handler);
     },
     off(event: string, handler: () => void) {
-      if (handlers[event]) handlers[event] = handlers[event].filter((h) => h !== handler);
+      if (handlers[event])
+        handlers[event] = handlers[event].filter((h) => h !== handler);
     },
     emit(event: string) {
       handlers[event]?.forEach((h) => h());

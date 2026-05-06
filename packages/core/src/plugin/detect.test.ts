@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir, createClaudePluginRepo, createCodexPluginRepo, createStandaloneSkillRepo } from "@skilltap/test-utils";
+import {
+  createClaudePluginRepo,
+  createCodexPluginRepo,
+  createStandaloneSkillRepo,
+  makeTmpDir,
+  removeTmpDir,
+} from "@skilltap/test-utils";
 import { detectPlugin } from "./detect";
 
 describe("detectPlugin", () => {
@@ -55,7 +61,11 @@ describe("detectPlugin", () => {
       await mkdir(join(dir, ".codex-plugin"), { recursive: true });
       await Bun.write(
         join(dir, ".codex-plugin", "plugin.json"),
-        JSON.stringify({ name: "codex-plugin", version: "1.0.0", description: "Codex" }),
+        JSON.stringify({
+          name: "codex-plugin",
+          version: "1.0.0",
+          description: "Codex",
+        }),
       );
 
       const result = await detectPlugin(dir);
@@ -72,7 +82,10 @@ describe("detectPlugin", () => {
     const dir = await makeTmpDir();
     try {
       await mkdir(join(dir, ".claude-plugin"), { recursive: true });
-      await Bun.write(join(dir, ".claude-plugin", "plugin.json"), "{ invalid json }");
+      await Bun.write(
+        join(dir, ".claude-plugin", "plugin.json"),
+        "{ invalid json }",
+      );
 
       const result = await detectPlugin(dir);
       expect(result.ok).toBe(false);

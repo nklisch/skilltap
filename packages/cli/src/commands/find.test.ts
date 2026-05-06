@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 
 setDefaultTimeout(60_000);
+
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -17,7 +18,6 @@ import {
   removeTmpDir,
   runSkilltap,
 } from "@skilltap/test-utils";
-
 
 async function writeConfig(configDir: string, toml: string): Promise<void> {
   const dir = join(configDir, "skilltap");
@@ -62,22 +62,32 @@ describe("find — no taps configured", () => {
   test("shows no taps message", async () => {
     // Disable built-in tap to test the truly-no-taps path
     await mkdir(join(configDir, "skilltap"), { recursive: true });
-    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
-    const { exitCode, stdout } = await runSkilltap(["find"], homeDir, configDir);
-    expect(exitCode).toBe(0);
-    expect(stdout).toContain("No taps configured");
-  });
-
-  test.skipIf(!process.env.SKILLTAP_IT)("shows skills.sh results for query even with no taps", async () => {
+    await Bun.write(
+      join(configDir, "skilltap", "config.toml"),
+      "builtin_tap = false\n",
+    );
     const { exitCode, stdout } = await runSkilltap(
-      ["find", "react"],
+      ["find"],
       homeDir,
       configDir,
     );
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("[skills.sh]");
-    expect(stdout).toContain("installs");
+    expect(stdout).toContain("No taps configured");
   });
+
+  test.skipIf(!process.env.SKILLTAP_IT)(
+    "shows skills.sh results for query even with no taps",
+    async () => {
+      const { exitCode, stdout } = await runSkilltap(
+        ["find", "react"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout).toContain("[skills.sh]");
+      expect(stdout).toContain("installs");
+    },
+  );
 });
 
 describe("find — with taps", () => {
@@ -98,7 +108,11 @@ describe("find — with taps", () => {
     ]);
     try {
       await runSkilltap(["tap", "add", "home", tap.path], homeDir, configDir);
-      const { exitCode, stdout } = await runSkilltap(["find"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["find"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("commit-helper");
       expect(stdout).toContain("code-review");
@@ -163,7 +177,10 @@ describe("find — with taps", () => {
   test("--json outputs valid JSON", async () => {
     // Disable built-in tap so only the custom tap's skills appear
     await mkdir(join(configDir, "skilltap"), { recursive: true });
-    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+    await Bun.write(
+      join(configDir, "skilltap", "config.toml"),
+      "builtin_tap = false\n",
+    );
     const tap = await createLocalTap([
       {
         name: "commit-helper",
@@ -215,12 +232,15 @@ describe("find — with taps", () => {
       const parsed = JSON.parse(stdout);
       expect(Array.isArray(parsed)).toBe(true);
       // Tap result for "commit" query should be present
-      const tapSkill = parsed.find((e: { source: string; name: string }) => e.source === "home");
+      const tapSkill = parsed.find(
+        (e: { source: string; name: string }) => e.source === "home",
+      );
       expect(tapSkill).toBeDefined();
       expect(tapSkill.name).toBe("commit-helper");
       // code-review should not appear from the tap (filtered out by query)
       const codeReview = parsed.find(
-        (e: { source: string; name: string }) => e.source === "home" && e.name === "code-review",
+        (e: { source: string; name: string }) =>
+          e.source === "home" && e.name === "code-review",
       );
       expect(codeReview).toBeUndefined();
     } finally {

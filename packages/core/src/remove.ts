@@ -2,9 +2,9 @@ import { unlink } from "node:fs/promises";
 import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { debug } from "./debug";
-import { removeSkillFromManifest } from "./manifest/update";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
 import { resolvedDirExists } from "./fs";
+import { removeSkillFromManifest } from "./manifest/update";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
@@ -23,7 +23,8 @@ export async function removeSkill(
   options: RemoveOptions = {},
 ): Promise<Result<void, UserError>> {
   debug("removeSkill", { name, scope: options.scope });
-  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const fileRoot =
+    options.scope === "project" ? options.projectRoot : undefined;
   // state.json canonical with installed.json fallback for unmigrated users.
   const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
@@ -91,7 +92,11 @@ export async function removeSkill(
         `Failed to remove cache directory for '${name}'`,
       );
       if (!cacheResult.ok) {
-        debug("cache cleanup failed", { name, cacheRoot, error: cacheResult.error.message });
+        debug("cache cleanup failed", {
+          name,
+          cacheRoot,
+          error: cacheResult.error.message,
+        });
       }
     }
   }
@@ -100,14 +105,12 @@ export async function removeSkill(
   const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
-  if (
-    options.scope === "project" &&
-    options.projectRoot &&
-    record.repo
-  ) {
-    await removeSkillFromManifest(options.projectRoot, record.repo).catch(() => {
-      // non-fatal
-    });
+  if (options.scope === "project" && options.projectRoot && record.repo) {
+    await removeSkillFromManifest(options.projectRoot, record.repo).catch(
+      () => {
+        // non-fatal
+      },
+    );
   }
 
   return ok(undefined);
@@ -146,7 +149,9 @@ export async function removeAnySkill(
         await unlink(loc.path);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        return err(new UserError(`Failed to remove symlink '${loc.path}': ${msg}`));
+        return err(
+          new UserError(`Failed to remove symlink '${loc.path}': ${msg}`),
+        );
       }
     } else {
       const rmResult = await wrapShell(

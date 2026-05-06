@@ -3,7 +3,12 @@ import { TrustInfoSchema, TrustTierSchema } from "./types";
 
 describe("TrustTierSchema", () => {
   test("accepts valid tiers", () => {
-    for (const tier of ["provenance", "publisher", "curated", "unverified"] as const) {
+    for (const tier of [
+      "provenance",
+      "publisher",
+      "curated",
+      "unverified",
+    ] as const) {
       expect(TrustTierSchema.safeParse(tier).success).toBe(true);
     }
   });
@@ -66,7 +71,9 @@ describe("TrustInfoSchema", () => {
     if (!result.success) return;
     expect(result.data.tier).toBe("provenance");
     expect(result.data.npm?.sourceRepo).toBe("https://github.com/acme/pkg");
-    expect(result.data.npm?.buildWorkflow).toBe(".github/workflows/publish.yml");
+    expect(result.data.npm?.buildWorkflow).toBe(
+      ".github/workflows/publish.yml",
+    );
     expect(result.data.tap).toBe("my-tap");
   });
 

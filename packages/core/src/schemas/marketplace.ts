@@ -55,6 +55,8 @@ export const MarketplaceSchema = z.object({
   plugins: z.array(MarketplacePluginSchema),
 });
 
-export type MarketplacePluginSource = z.infer<typeof MarketplacePluginSourceSchema>;
+export type MarketplacePluginSource = z.infer<
+  typeof MarketplacePluginSourceSchema
+>;
 export type MarketplacePlugin = z.infer<typeof MarketplacePluginSchema>;
 export type Marketplace = z.infer<typeof MarketplaceSchema>;

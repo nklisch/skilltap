@@ -1,5 +1,10 @@
 import { cancel, isCancel } from "@clack/prompts";
-import type { AgentAdapter, InstalledSkill, ScannedSkill, TapEntry } from "@skilltap/core";
+import type {
+  AgentAdapter,
+  InstalledSkill,
+  ScannedSkill,
+  TapEntry,
+} from "@skilltap/core";
 import { AGENT_LABELS, detectAgents, VALID_AGENT_IDS } from "@skilltap/core";
 import {
   footerConfirm as confirm,
@@ -17,9 +22,7 @@ function exitOnCancel(): never {
   process.exit(130);
 }
 
-export async function selectSkills(
-  skills: ScannedSkill[],
-): Promise<string[]> {
+export async function selectSkills(skills: ScannedSkill[]): Promise<string[]> {
   const result = await multiselect({
     message: "Which skills to install?",
     options: skills.map((s) => ({
@@ -52,7 +55,8 @@ export async function selectScope(): Promise<string> {
 export async function confirmReadyInstall(
   skillNames: string[],
 ): Promise<boolean> {
-  const label = skillNames.length === 1 ? skillNames[0]! : `${skillNames.length} skills`;
+  const label =
+    skillNames.length === 1 ? skillNames[0]! : `${skillNames.length} skills`;
   const result = await confirm({
     message: `Install ${label}?`,
     initialValue: true,
@@ -61,9 +65,7 @@ export async function confirmReadyInstall(
   return result as boolean;
 }
 
-export async function confirmInstall(
-  skillName: string,
-): Promise<boolean> {
+export async function confirmInstall(skillName: string): Promise<boolean> {
   const result = await confirm({
     message: `Install ${skillName} despite warnings?`,
     initialValue: false,
@@ -72,9 +74,7 @@ export async function confirmInstall(
   return result as boolean;
 }
 
-export async function selectTap(
-  matches: TapEntry[],
-): Promise<TapEntry> {
+export async function selectTap(matches: TapEntry[]): Promise<TapEntry> {
   const result = await select({
     message: "Multiple taps contain this skill. Which one?",
     options: matches.map((entry, i) => ({
@@ -99,7 +99,8 @@ export async function selectSkillsToRemove(
     message: "Which skills to remove?",
     options: skills.map((s) => ({
       value: `${s.name}:${s.scope}`,
-      label: (nameCounts.get(s.name) ?? 0) > 1 ? `${s.name} (${s.scope})` : s.name,
+      label:
+        (nameCounts.get(s.name) ?? 0) > 1 ? `${s.name} (${s.scope})` : s.name,
       hint: (nameCounts.get(s.name) ?? 0) > 1 ? undefined : s.scope,
     })),
     required: true,
@@ -160,14 +161,20 @@ export async function selectAgents(
 
 /** Shared scan mode select options — used in both config wizards. */
 export const SCAN_MODE_OPTIONS = [
-  { value: "static", label: "Static only", hint: "fast, catches common attacks" },
-  { value: "semantic", label: "Static + Semantic", hint: "thorough, uses your agent CLI" },
+  {
+    value: "static",
+    label: "Static only",
+    hint: "fast, catches common attacks",
+  },
+  {
+    value: "semantic",
+    label: "Static + Semantic",
+    hint: "thorough, uses your agent CLI",
+  },
   { value: "off", label: "Off", hint: "not recommended" },
 ];
 
-export async function confirmSaveDefault(
-  message: string,
-): Promise<boolean> {
+export async function confirmSaveDefault(message: string): Promise<boolean> {
   const result = await confirm({
     message,
     initialValue: false,

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { runDoctor } from "./doctor";
 
 const SKILL_RECORD = {
@@ -101,7 +106,8 @@ describe("checkDirs", () => {
     const result = await runDoctor({ fix: true });
     const dirsCheck = result.checks.find((c) => c.name === "dirs")!;
     // After fix, all fixable issues should be fixed
-    const unfixed = dirsCheck.issues?.filter((i) => i.fixable && !i.fixed) ?? [];
+    const unfixed =
+      dirsCheck.issues?.filter((i) => i.fixable && !i.fixed) ?? [];
     expect(unfixed).toHaveLength(0);
   });
 });
@@ -170,7 +176,13 @@ describe("checkSkills", () => {
     await mkdir(skilltapDir, { recursive: true });
 
     // Create the .disabled/<name> directory (where disabled skill files live)
-    const disabledDir = join(homeDir, ".agents", "skills", ".disabled", "my-skill");
+    const disabledDir = join(
+      homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "my-skill",
+    );
     await mkdir(disabledDir, { recursive: true });
 
     await writeFile(
@@ -204,7 +216,9 @@ describe("checkSkills", () => {
     const check = result.checks.find((c) => c.name === "skills")!;
     // Disabled skill with correct .disabled/ dir should not trigger any issues
     expect(check.status).toBe("pass");
-    expect(check.issues?.some((i) => i.message.includes("my-skill"))).toBeFalsy();
+    expect(
+      check.issues?.some((i) => i.message.includes("my-skill")),
+    ).toBeFalsy();
   });
 
   test("warns when disabled skill's .disabled/ directory is missing", async () => {
@@ -243,7 +257,9 @@ describe("checkSkills", () => {
     const check = result.checks.find((c) => c.name === "skills")!;
     // Disabled skill with missing .disabled/ dir should be flagged
     expect(check.status).toBe("warn");
-    expect(check.issues?.some((i) => i.message.includes("missing-disabled"))).toBe(true);
+    expect(
+      check.issues?.some((i) => i.message.includes("missing-disabled")),
+    ).toBe(true);
   });
 
   test("does not report .disabled directory itself as an orphan in global skills dir", async () => {
@@ -258,14 +274,15 @@ describe("checkSkills", () => {
     const disabledContainer = join(homeDir, ".agents", "skills", ".disabled");
     await mkdir(disabledContainer, { recursive: true });
     // Also put a skill inside .disabled/ to ensure the subdirectory isn't flagged
-    await mkdir(join(disabledContainer, "some-disabled-skill"), { recursive: true });
+    await mkdir(join(disabledContainer, "some-disabled-skill"), {
+      recursive: true,
+    });
 
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "skills")!;
     // .disabled is excluded from orphan scan — should not appear as an issue
-    const orphanIssues = check.issues?.filter((i) =>
-      i.message.includes(".disabled"),
-    ) ?? [];
+    const orphanIssues =
+      check.issues?.filter((i) => i.message.includes(".disabled")) ?? [];
     expect(orphanIssues).toHaveLength(0);
   });
 
@@ -340,7 +357,9 @@ describe("checkSkills", () => {
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "skills")!;
     expect(check.status).toBe("pass");
-    expect(check.issues?.some((i) => i.message.includes("local-my-skill"))).toBeFalsy();
+    expect(
+      check.issues?.some((i) => i.message.includes("local-my-skill")),
+    ).toBeFalsy();
   });
 
   test("warns on orphan directory (dir on disk but not in installed.json)", async () => {
@@ -358,9 +377,9 @@ describe("checkSkills", () => {
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "skills")!;
     expect(check.status).toBe("warn");
-    expect(
-      check.issues?.some((i) => i.message.includes("orphan-skill")),
-    ).toBe(true);
+    expect(check.issues?.some((i) => i.message.includes("orphan-skill"))).toBe(
+      true,
+    );
     // Orphan dirs are not fixable
     expect(
       check.issues?.find((i) => i.message.includes("orphan-skill"))?.fixable,
@@ -545,7 +564,9 @@ describe("checkSymlinks", () => {
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "symlinks")!;
     expect(check.status).toBe("pass");
-    expect(check.issues?.some((i) => i.message.includes("local-skill"))).toBeFalsy();
+    expect(
+      check.issues?.some((i) => i.message.includes("local-skill")),
+    ).toBeFalsy();
   });
 
   test("warns on wrong symlink target", async () => {
@@ -591,9 +612,9 @@ describe("checkSymlinks", () => {
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "symlinks")!;
     expect(check.status).toBe("warn");
-    expect(
-      check.issues?.some((i) => i.message.includes("wrong target")),
-    ).toBe(true);
+    expect(check.issues?.some((i) => i.message.includes("wrong target"))).toBe(
+      true,
+    );
   });
 });
 
@@ -602,7 +623,10 @@ describe("checkSymlinks", () => {
 describe("checkTaps", () => {
   test("passes with no taps configured (builtin disabled)", async () => {
     await mkdir(join(configDir, "skilltap"), { recursive: true });
-    await writeFile(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+    await writeFile(
+      join(configDir, "skilltap", "config.toml"),
+      "builtin_tap = false\n",
+    );
     const result = await runDoctor();
     const check = result.checks.find((c) => c.name === "taps")!;
     expect(check.status).toBe("pass");
@@ -723,17 +747,21 @@ describe("per-project: checkInstalled", () => {
     await mkdir(join(projectDir, ".agents"), { recursive: true });
     await writeFile(
       join(projectDir, ".agents", "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            ...SKILL_RECORD,
-            name: "proj-skill",
-            repo: "https://github.com/example/proj-skill",
-            scope: "project",
-          },
-        ],
-      }, null, 2),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "proj-skill",
+              repo: "https://github.com/example/proj-skill",
+              scope: "project",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
     );
 
     const result = await runDoctor({ projectRoot: projectDir });
@@ -745,7 +773,10 @@ describe("per-project: checkInstalled", () => {
 
   test("fails when project installed.json is corrupt", async () => {
     await mkdir(join(projectDir, ".agents"), { recursive: true });
-    await writeFile(join(projectDir, ".agents", "installed.json"), "bad json {{{");
+    await writeFile(
+      join(projectDir, ".agents", "installed.json"),
+      "bad json {{{",
+    );
 
     const result = await runDoctor({ projectRoot: projectDir });
     const check = result.checks.find((c) => c.name === "installed")!;
@@ -758,33 +789,41 @@ describe("per-project: checkInstalled", () => {
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(
       join(skilltapDir, "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            ...SKILL_RECORD,
-            name: "global-skill",
-            repo: "https://github.com/example/global-skill",
-            scope: "global",
-          },
-        ],
-      }, null, 2),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "global-skill",
+              repo: "https://github.com/example/global-skill",
+              scope: "global",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
     );
 
     await mkdir(join(projectDir, ".agents"), { recursive: true });
     await writeFile(
       join(projectDir, ".agents", "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            ...SKILL_RECORD,
-            name: "proj-skill",
-            repo: "https://github.com/example/proj-skill",
-            scope: "project",
-          },
-        ],
-      }, null, 2),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "proj-skill",
+              repo: "https://github.com/example/proj-skill",
+              scope: "project",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
     );
 
     const result = await runDoctor({ projectRoot: projectDir });
@@ -811,17 +850,21 @@ describe("per-project: checkSkills", () => {
     await mkdir(join(projectDir, ".agents"), { recursive: true });
     await writeFile(
       join(projectDir, ".agents", "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            ...SKILL_RECORD,
-            name: "missing-proj-skill",
-            repo: "https://github.com/example/skill",
-            scope: "project",
-          },
-        ],
-      }, null, 2),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "missing-proj-skill",
+              repo: "https://github.com/example/skill",
+              scope: "project",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
     );
 
     const result = await runDoctor({ projectRoot: projectDir });
@@ -831,25 +874,32 @@ describe("per-project: checkSkills", () => {
       check.issues?.some((i) => i.message.includes("missing-proj-skill")),
     ).toBe(true);
     expect(
-      check.issues?.find((i) => i.message.includes("missing-proj-skill"))?.message,
+      check.issues?.find((i) => i.message.includes("missing-proj-skill"))
+        ?.message,
     ).toContain(join(projectDir, ".agents", "skills", "missing-proj-skill"));
   });
 
   test("passes when project skill directory exists", async () => {
-    await mkdir(join(projectDir, ".agents", "skills", "my-proj-skill"), { recursive: true });
+    await mkdir(join(projectDir, ".agents", "skills", "my-proj-skill"), {
+      recursive: true,
+    });
     await writeFile(
       join(projectDir, ".agents", "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            ...SKILL_RECORD,
-            name: "my-proj-skill",
-            repo: "https://github.com/example/skill",
-            scope: "project",
-          },
-        ],
-      }, null, 2),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "my-proj-skill",
+              repo: "https://github.com/example/skill",
+              scope: "project",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
     );
 
     const result = await runDoctor({ projectRoot: projectDir });
@@ -858,20 +908,26 @@ describe("per-project: checkSkills", () => {
   });
 
   test("detects orphan directories in project skills dir", async () => {
-    await mkdir(join(projectDir, ".agents", "skills", "orphan"), { recursive: true });
+    await mkdir(join(projectDir, ".agents", "skills", "orphan"), {
+      recursive: true,
+    });
     await writeFile(
       join(projectDir, ".agents", "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            ...SKILL_RECORD,
-            name: "tracked-skill",
-            repo: "https://github.com/example/skill",
-            scope: "project",
-          },
-        ],
-      }, null, 2),
+      JSON.stringify(
+        {
+          version: 1,
+          skills: [
+            {
+              ...SKILL_RECORD,
+              name: "tracked-skill",
+              repo: "https://github.com/example/skill",
+              scope: "project",
+            },
+          ],
+        },
+        null,
+        2,
+      ),
     );
 
     const result = await runDoctor({ projectRoot: projectDir });
@@ -882,14 +938,17 @@ describe("per-project: checkSkills", () => {
 
   test("does not scan project orphans when no project skills tracked", async () => {
     // Project has a .agents/skills/ dir but no installed.json tracking project skills
-    await mkdir(join(projectDir, ".agents", "skills", "untracked"), { recursive: true });
+    await mkdir(join(projectDir, ".agents", "skills", "untracked"), {
+      recursive: true,
+    });
 
     const result = await runDoctor({ projectRoot: projectDir });
     const check = result.checks.find((c) => c.name === "skills")!;
     // No project skills tracked → no orphan scan → only global check runs
-    const orphanIssues = check.issues?.filter((i) =>
-      i.message.includes(join(projectDir, ".agents")),
-    ) ?? [];
+    const orphanIssues =
+      check.issues?.filter((i) =>
+        i.message.includes(join(projectDir, ".agents")),
+      ) ?? [];
     expect(orphanIssues).toHaveLength(0);
   });
 });

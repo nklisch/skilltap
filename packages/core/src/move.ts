@@ -103,12 +103,18 @@ export async function moveSkill(
       ? record.path
       : skillInstallDir(
           name,
-          effectiveSourceScope === "linked" ? "global" : (record.scope as "global" | "project"),
+          effectiveSourceScope === "linked"
+            ? "global"
+            : (record.scope as "global" | "project"),
           sourceProjectRoot,
         );
 
   // Compute destination path
-  const destPath = skillInstallDir(name, effectiveTargetScope, targetProjectRoot);
+  const destPath = skillInstallDir(
+    name,
+    effectiveTargetScope,
+    targetProjectRoot,
+  );
 
   // Ensure parent dir exists
   try {
@@ -154,7 +160,8 @@ export async function moveSkill(
   };
 
   // Remove from source state
-  const sourceFileRoot = record.scope === "project" ? sourceProjectRoot : undefined;
+  const sourceFileRoot =
+    record.scope === "project" ? sourceProjectRoot : undefined;
   const sourceInstalledResult = await loadInstalled(sourceFileRoot);
   if (!sourceInstalledResult.ok) return sourceInstalledResult;
   const sourceInstalled = sourceInstalledResult.value;
@@ -168,7 +175,8 @@ export async function moveSkill(
   if (!saveSourceResult.ok) return saveSourceResult;
 
   // Add to target state
-  const targetFileRoot = effectiveTargetScope === "project" ? targetProjectRoot : undefined;
+  const targetFileRoot =
+    effectiveTargetScope === "project" ? targetProjectRoot : undefined;
   const targetInstalledResult = await loadInstalled(targetFileRoot);
   if (!targetInstalledResult.ok) return targetInstalledResult;
   const targetInstalled = targetInstalledResult.value;

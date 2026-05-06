@@ -3,26 +3,58 @@ import { adoptSkill, discoverSkills, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { agentError, exitWithError } from "../../ui/agent-out";
 import { successLine } from "../../ui/format";
-import { parseAlsoFlag, resolveScope, tryFindProjectRoot } from "../../ui/resolve";
+import {
+  parseAlsoFlag,
+  resolveScope,
+  tryFindProjectRoot,
+} from "../../ui/resolve";
 
 export default defineCommand({
-  meta: { name: "adopt", description: "Adopt unmanaged skills into skilltap management" },
+  meta: {
+    name: "adopt",
+    description: "Adopt unmanaged skills into skilltap management",
+  },
   args: {
-    name: { type: "positional", description: "Skill name(s) to adopt", required: false },
-    global: { type: "boolean", description: "Adopt into global scope", default: false },
-    project: { type: "boolean", description: "Adopt into project scope", default: false },
+    name: {
+      type: "positional",
+      description: "Skill name(s) to adopt",
+      required: false,
+    },
+    global: {
+      type: "boolean",
+      description: "Adopt into global scope",
+      default: false,
+    },
+    project: {
+      type: "boolean",
+      description: "Adopt into project scope",
+      default: false,
+    },
     "track-in-place": {
       type: "boolean",
       description: "Track at current location instead of moving",
       default: false,
     },
-    also: { description: "Also symlink to agent-specific directory", valueHint: "agent" },
-    "skip-scan": { type: "boolean", description: "Skip security scan", default: false },
-    yes: { type: "boolean", alias: "y", description: "Auto-accept all prompts", default: false },
+    also: {
+      description: "Also symlink to agent-specific directory",
+      valueHint: "agent",
+    },
+    "skip-scan": {
+      type: "boolean",
+      description: "Skip security scan",
+      default: false,
+    },
+    yes: {
+      type: "boolean",
+      alias: "y",
+      description: "Auto-accept all prompts",
+      default: false,
+    },
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode =
+      configResult.ok && configResult.value["agent-mode"].enabled;
 
     const projectRoot = await tryFindProjectRoot();
 
@@ -35,7 +67,12 @@ export default defineCommand({
 
     const discoverResult = await discoverSkills(discoverOpts);
 
-    if (!discoverResult.ok) exitWithError(agentMode, discoverResult.error.message, discoverResult.error.hint);
+    if (!discoverResult.ok)
+      exitWithError(
+        agentMode,
+        discoverResult.error.message,
+        discoverResult.error.hint,
+      );
 
     const unmanaged = discoverResult.value.skills;
 
@@ -71,7 +108,11 @@ export default defineCommand({
     const skillsToAdopt = namesToAdopt.map((name) => {
       const skill = unmanaged.find((s) => s.name === name);
       if (!skill) {
-        exitWithError(agentMode, `Unmanaged skill '${name}' not found.`, "Run 'skilltap skills --unmanaged' to see unmanaged skills.");
+        exitWithError(
+          agentMode,
+          `Unmanaged skill '${name}' not found.`,
+          "Run 'skilltap skills --unmanaged' to see unmanaged skills.",
+        );
       }
       return skill;
     });
@@ -80,7 +121,10 @@ export default defineCommand({
       args,
       configResult.ok ? configResult.value : undefined,
     );
-    const also = parseAlsoFlag(args.also, configResult.ok ? configResult.value : undefined);
+    const also = parseAlsoFlag(
+      args.also,
+      configResult.ok ? configResult.value : undefined,
+    );
     const mode = args["track-in-place"] ? "track-in-place" : "move";
 
     for (const skill of skillsToAdopt) {
@@ -90,21 +134,23 @@ export default defineCommand({
         projectRoot: resolvedProjectRoot,
         also,
         skipScan: args["skip-scan"],
-        onWarnings: agentMode || args.yes
-          ? undefined
-          : async (warnings, skillName) => {
-              process.stderr.write(
-                `\nwarning: Security warnings for '${skillName}':\n`,
-              );
-              for (const w of warnings) {
-                process.stderr.write(`  ${w.file}: ${w.category}\n`);
-              }
-              // In interactive mode without --yes, auto-proceed (warnings were shown)
-              return true;
-            },
+        onWarnings:
+          agentMode || args.yes
+            ? undefined
+            : async (warnings, skillName) => {
+                process.stderr.write(
+                  `\nwarning: Security warnings for '${skillName}':\n`,
+                );
+                for (const w of warnings) {
+                  process.stderr.write(`  ${w.file}: ${w.category}\n`);
+                }
+                // In interactive mode without --yes, auto-proceed (warnings were shown)
+                return true;
+              },
       });
 
-      if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
+      if (!result.ok)
+        exitWithError(agentMode, result.error.message, result.error.hint);
 
       const { record, symlinksCreated } = result.value;
       const destPath = record.path ?? `~/.agents/skills/${skill.name}`;

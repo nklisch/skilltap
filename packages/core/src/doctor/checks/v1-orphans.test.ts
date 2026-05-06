@@ -32,7 +32,12 @@ const POPULATED_STATE: State = {
   mcpServers: [],
 };
 
-const EMPTY_STATE: State = { version: 2, skills: [], plugins: [], mcpServers: [] };
+const EMPTY_STATE: State = {
+  version: 2,
+  skills: [],
+  plugins: [],
+  mcpServers: [],
+};
 
 beforeEach(async () => {
   env = await createTestEnv();

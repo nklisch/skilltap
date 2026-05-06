@@ -11,7 +11,12 @@ export const AGENT_MODE_SCOPES = ["global", "project"] as const;
 export const SCOPE_VALUES = ["", "global", "project"] as const;
 export const AUTO_UPDATE_MODES = ["off", "patch", "minor"] as const;
 export const SHOW_DIFF_MODES = ["full", "stat", "none"] as const;
-export const SECURITY_PRESETS = ["none", "relaxed", "standard", "strict"] as const;
+export const SECURITY_PRESETS = [
+  "none",
+  "relaxed",
+  "standard",
+  "strict",
+] as const;
 export const SOURCE_TYPES = ["tap", "git", "npm", "local"] as const;
 
 // ---------------------------------------------------------------------------
@@ -21,12 +26,16 @@ export const SOURCE_TYPES = ["tap", "git", "npm", "local"] as const;
 
 export const PRESET_VALUES: Record<
   (typeof SECURITY_PRESETS)[number],
-  { scan: "static" | "semantic" | "off"; on_warn: "prompt" | "fail" | "allow"; require_scan: boolean }
+  {
+    scan: "static" | "semantic" | "off";
+    on_warn: "prompt" | "fail" | "allow";
+    require_scan: boolean;
+  }
 > = {
-  none:     { scan: "off",      on_warn: "allow",  require_scan: false },
-  relaxed:  { scan: "static",   on_warn: "allow",  require_scan: false },
-  standard: { scan: "static",   on_warn: "prompt", require_scan: false },
-  strict:   { scan: "semantic", on_warn: "fail",   require_scan: true  },
+  none: { scan: "off", on_warn: "allow", require_scan: false },
+  relaxed: { scan: "static", on_warn: "allow", require_scan: false },
+  standard: { scan: "static", on_warn: "prompt", require_scan: false },
+  strict: { scan: "semantic", on_warn: "fail", require_scan: true },
 };
 
 // ---------------------------------------------------------------------------
@@ -100,14 +109,16 @@ export const RegistrySourceSchema = z.object({
   url: z.string(),
 });
 
-export const RegistryConfigSchema = z.object({
-  /** Which registries to search (in order). Built-in: "skills.sh". */
-  enabled: z.array(z.string()).default(["skills.sh"]),
-  /** Custom registry sources implementing the skills.sh search API. */
-  sources: z.array(RegistrySourceSchema).default([]),
-  /** @deprecated Use enabled = [] to disable all registries instead. */
-  allow_npm: z.boolean().default(true),
-}).prefault({});
+export const RegistryConfigSchema = z
+  .object({
+    /** Which registries to search (in order). Built-in: "skills.sh". */
+    enabled: z.array(z.string()).default(["skills.sh"]),
+    /** Custom registry sources implementing the skills.sh search API. */
+    sources: z.array(RegistrySourceSchema).default([]),
+    /** @deprecated Use enabled = [] to disable all registries instead. */
+    allow_npm: z.boolean().default(true),
+  })
+  .prefault({});
 
 export const ConfigSchema = z.object({
   defaults: z

@@ -22,7 +22,9 @@ async function fileExists(path: string): Promise<boolean> {
 }
 
 async function configIsV1(path: string): Promise<boolean> {
-  const text = await Bun.file(path).text().catch(() => "");
+  const text = await Bun.file(path)
+    .text()
+    .catch(() => "");
   if (!text) return false;
   // Quick string check first (cheap)
   if (
@@ -69,7 +71,9 @@ export async function detectV1StateGlobal(): Promise<V1StateMarkers> {
   };
 }
 
-export async function detectV1StateProject(projectRoot: string): Promise<V1StateMarkers> {
+export async function detectV1StateProject(
+  projectRoot: string,
+): Promise<V1StateMarkers> {
   const installedPath = join(projectRoot, ".agents", "installed.json");
   const pluginsPath = join(projectRoot, ".agents", "plugins.json");
 

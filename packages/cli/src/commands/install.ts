@@ -1,5 +1,4 @@
 import { intro, log, outro, spinner } from "@clack/prompts";
-import { createStepLogger } from "../ui/install-steps";
 import type {
   AgentAdapter,
   Config,
@@ -23,26 +22,20 @@ import {
   updateSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import {
-  agentError,
-  agentSecurityBlock,
-  agentSuccess,
-} from "../ui/agent-out";
+import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
+import { agentError, agentSecurityBlock, agentSuccess } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
 import { createInstallCallbacks } from "../ui/install-callbacks";
+import { createStepLogger } from "../ui/install-steps";
 import { componentSummary } from "../ui/plugin-format";
 import { loadPolicyOrExit } from "../ui/policy";
-import {
-  confirmSaveDefault,
-  selectAgents,
-} from "../ui/prompts";
+import { confirmSaveDefault, selectAgents } from "../ui/prompts";
 import {
   parseAlsoFlag,
   resolveAgentForAgentMode,
   resolveScope,
   resolveSemanticInteractive,
 } from "../ui/resolve";
-import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -94,7 +87,8 @@ export default defineCommand({
     },
     quiet: {
       type: "boolean",
-      description: "Suppress install step details (overrides verbose = true in config)",
+      description:
+        "Suppress install step details (overrides verbose = true in config)",
     },
     semantic: {
       type: "boolean",
@@ -207,8 +201,7 @@ async function runAgentMode(
   policy: EffectivePolicy,
 ): Promise<void> {
   const scope = policy.scope as "global" | "project";
-  const projectRoot =
-    scope === "project" ? await findProjectRoot() : undefined;
+  const projectRoot = scope === "project" ? await findProjectRoot() : undefined;
 
   let agent: AgentAdapter | undefined;
   if (policy.scanMode === "semantic") {
@@ -225,9 +218,7 @@ async function runAgentMode(
       ref: args.ref,
       skipScan: false,
       gitHost: config.default_git_host,
-      onWarnings: async (
-        warnings: StaticWarning[],
-      ): Promise<boolean> => {
+      onWarnings: async (warnings: StaticWarning[]): Promise<boolean> => {
         agentSecurityBlock(warnings, []);
         process.exit(1);
         return false;
@@ -340,7 +331,11 @@ async function runInteractiveMode(
   const { onWarn, skipScan } = policy;
   let also = parseAlsoFlag(args.also, config);
 
-  const { runSemantic, agent } = await resolveSemanticInteractive(policy, args, config);
+  const { runSemantic, agent } = await resolveSemanticInteractive(
+    policy,
+    args,
+    config,
+  );
 
   intro("skilltap");
 
@@ -368,9 +363,7 @@ async function runInteractiveMode(
       also.length !== configAlso.length ||
       also.some((a) => !configAlso.includes(a));
     if (differs) {
-      const save = await confirmSaveDefault(
-        "Save agent selection as default?",
-      );
+      const save = await confirmSaveDefault("Save agent selection as default?");
       if (save) {
         config.defaults.also = also;
         await saveConfig(config);
@@ -386,7 +379,13 @@ async function runInteractiveMode(
 
     const steps = createStepLogger(verbose);
     const { callbacks, logScanResults } = createInstallCallbacks({
-      spinner: s, onWarn, skipScan, agent, yes: policy.yes, source, steps,
+      spinner: s,
+      onWarn,
+      skipScan,
+      agent,
+      yes: policy.yes,
+      source,
+      steps,
     });
 
     const result = await installSkill(source, {
@@ -404,7 +403,9 @@ async function runInteractiveMode(
         if (orphans.length === 0) return [];
         if (policy.yes) {
           for (const o of orphans) {
-            log.warn(`Stale record "${o.record.name}" (${formatOrphanReason(o.reason)}). Auto-removing.`);
+            log.warn(
+              `Stale record "${o.record.name}" (${formatOrphanReason(o.reason)}). Auto-removing.`,
+            );
           }
           return orphans.map((o) => o.record.name);
         }
@@ -412,7 +413,8 @@ async function runInteractiveMode(
         for (const o of orphans) {
           log.warn(`  ${o.record.name}: ${formatOrphanReason(o.reason)}`);
         }
-        const { confirm: confirmPrompt, isCancel: isCancelPrompt } = await import("@clack/prompts");
+        const { confirm: confirmPrompt, isCancel: isCancelPrompt } =
+          await import("@clack/prompts");
         const shouldClean = await confirmPrompt({
           message: "Remove stale records? (directories are already gone)",
           initialValue: true,
@@ -434,7 +436,11 @@ async function runInteractiveMode(
         scan_mode: policy.scanMode,
         scope,
       });
-      errors.push({ source, message: result.error.message, hint: result.error.hint });
+      errors.push({
+        source,
+        message: result.error.message,
+        hint: result.error.hint,
+      });
       continue;
     }
 
@@ -476,7 +482,8 @@ async function runInteractiveMode(
       } else {
         const { updated, upToDate } = updateResult.value;
         if (updated.includes(name)) successLine(`Updated ${name}`);
-        else if (upToDate.includes(name)) log.info(`${name} is already up to date.`);
+        else if (upToDate.includes(name))
+          log.info(`${name} is already up to date.`);
       }
     }
   }

@@ -51,7 +51,11 @@ function compareSemver(a: SemVer, b: SemVer): number {
   if (a.prerelease && !b.prerelease) return -1;
   if (!a.prerelease && b.prerelease) return 1;
   if (a.prerelease && b.prerelease) {
-    return a.prerelease < b.prerelease ? -1 : a.prerelease > b.prerelease ? 1 : 0;
+    return a.prerelease < b.prerelease
+      ? -1
+      : a.prerelease > b.prerelease
+        ? 1
+        : 0;
   }
   return 0;
 }
@@ -97,26 +101,33 @@ export function matchesRange(range: ParsedRange, candidate: string): boolean {
   if (version === null) return false;
   if (range.kind === "caret") {
     if (version.major !== range.major) return false;
-    return compareSemver(version, {
-      major: range.major,
-      minor: range.minor,
-      patch: range.patch,
-    }) >= 0;
+    return (
+      compareSemver(version, {
+        major: range.major,
+        minor: range.minor,
+        patch: range.patch,
+      }) >= 0
+    );
   }
   // tilde
   if (version.major !== range.major) return false;
   if (version.minor !== range.minor) return false;
-  return compareSemver(version, {
-    major: range.major,
-    minor: range.minor,
-    patch: range.patch,
-  }) >= 0;
+  return (
+    compareSemver(version, {
+      major: range.major,
+      minor: range.minor,
+      patch: range.patch,
+    }) >= 0
+  );
 }
 
 // Given a parsed range and a list of candidates, return the highest matching
 // candidate (semver-sorted). For non-semver candidates only the exact match
 // applies. Returns null if no candidate matches.
-export function findBestMatch(range: ParsedRange, candidates: string[]): string | null {
+export function findBestMatch(
+  range: ParsedRange,
+  candidates: string[],
+): string | null {
   if (range.kind === "exact") {
     return candidates.find((c) => c.trim() === range.value) ?? null;
   }

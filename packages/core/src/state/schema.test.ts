@@ -87,8 +87,10 @@ describe("StoredMcpStandaloneSchema", () => {
 
   test("rejects with invalid installedAt", () => {
     expect(
-      StoredMcpStandaloneSchema.safeParse({ ...VALID_MCP_STDIO, installedAt: "not-a-date" })
-        .success,
+      StoredMcpStandaloneSchema.safeParse({
+        ...VALID_MCP_STDIO,
+        installedAt: "not-a-date",
+      }).success,
     ).toBe(false);
   });
 });

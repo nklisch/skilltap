@@ -1,8 +1,5 @@
 import { z } from "zod/v4";
-import {
-  TelemetryConfigSchema,
-  UpdatesConfigSchema,
-} from "./config";
+import { TelemetryConfigSchema, UpdatesConfigSchema } from "./config";
 
 // v2.0 simplification of [security].
 // Three keys: scan, on_warn, trust.

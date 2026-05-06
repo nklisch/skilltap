@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { describeSecurityMode, matchPreset } from "./describe";
 import { PRESET_VALUES, SECURITY_PRESETS } from "../schemas/config";
+import { describeSecurityMode, matchPreset } from "./describe";
 
 describe("matchPreset", () => {
   test("returns preset name for none preset", () => {
@@ -20,11 +20,15 @@ describe("matchPreset", () => {
   });
 
   test("returns null for custom combo", () => {
-    expect(matchPreset({ scan: "static", on_warn: "fail", require_scan: false })).toBeNull();
+    expect(
+      matchPreset({ scan: "static", on_warn: "fail", require_scan: false }),
+    ).toBeNull();
   });
 
   test("returns null for another custom combo", () => {
-    expect(matchPreset({ scan: "off", on_warn: "fail", require_scan: true })).toBeNull();
+    expect(
+      matchPreset({ scan: "off", on_warn: "fail", require_scan: true }),
+    ).toBeNull();
   });
 });
 
@@ -50,12 +54,20 @@ describe("describeSecurityMode", () => {
   });
 
   test("describes custom combo with 'custom' prefix", () => {
-    const result = describeSecurityMode({ scan: "static", on_warn: "fail", require_scan: false });
+    const result = describeSecurityMode({
+      scan: "static",
+      on_warn: "fail",
+      require_scan: false,
+    });
     expect(result).toBe("custom (static + fail)");
   });
 
   test("describes custom combo with require_scan", () => {
-    const result = describeSecurityMode({ scan: "static", on_warn: "fail", require_scan: true });
+    const result = describeSecurityMode({
+      scan: "static",
+      on_warn: "fail",
+      require_scan: true,
+    });
     expect(result).toBe("custom (static + fail + require scan)");
   });
 
@@ -67,7 +79,11 @@ describe("describeSecurityMode", () => {
   });
 
   test("near-miss: strict but require_scan=false is custom", () => {
-    const result = describeSecurityMode({ scan: "semantic", on_warn: "fail", require_scan: false });
+    const result = describeSecurityMode({
+      scan: "semantic",
+      on_warn: "fail",
+      require_scan: false,
+    });
     expect(result).toStartWith("custom");
     expect(result).toContain("semantic");
     expect(result).toContain("fail");
@@ -75,12 +91,20 @@ describe("describeSecurityMode", () => {
   });
 
   test("near-miss: standard but on_warn=fail is custom", () => {
-    const result = describeSecurityMode({ scan: "static", on_warn: "fail", require_scan: false });
+    const result = describeSecurityMode({
+      scan: "static",
+      on_warn: "fail",
+      require_scan: false,
+    });
     expect(result).toStartWith("custom");
   });
 
   test("near-miss: relaxed but require_scan=true is custom", () => {
-    const result = describeSecurityMode({ scan: "static", on_warn: "allow", require_scan: true });
+    const result = describeSecurityMode({
+      scan: "static",
+      on_warn: "allow",
+      require_scan: true,
+    });
     expect(result).toStartWith("custom");
     expect(result).toContain("require scan");
   });

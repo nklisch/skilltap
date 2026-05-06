@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
@@ -171,7 +180,14 @@ describe("completions — zsh script", () => {
       expect(stdout).toContain(cmd);
     }
     // config subcommands
-    for (const sub of ["agent-mode", "security", "telemetry", "get", "set", "edit"]) {
+    for (const sub of [
+      "agent-mode",
+      "security",
+      "telemetry",
+      "get",
+      "set",
+      "edit",
+    ]) {
       expect(stdout).toContain(sub);
     }
     // skills subcommands
@@ -455,7 +471,9 @@ describe("completions --install", () => {
     expect(stdout).toContain("Wrote completions to");
     expect(stdout).toContain("bash-completion");
 
-    const content = await Bun.file(expectedPath).text().catch(() => null);
+    const content = await Bun.file(expectedPath)
+      .text()
+      .catch(() => null);
     expect(content).not.toBeNull();
     expect(content).toContain("_skilltap");
   });
@@ -471,7 +489,9 @@ describe("completions --install", () => {
     expect(stdout).toContain("Wrote completions to");
     expect(stdout).toContain(".zfunc");
 
-    const content = await Bun.file(expectedPath).text().catch(() => null);
+    const content = await Bun.file(expectedPath)
+      .text()
+      .catch(() => null);
     expect(content).not.toBeNull();
     expect(content).toContain("#compdef skilltap");
   });
@@ -480,7 +500,9 @@ describe("completions --install", () => {
     const zshrcPath = join(homeDir, ".zshrc");
     await runCompletions(["zsh", "--install"], homeDir, configDir);
 
-    const zshrcContent = await Bun.file(zshrcPath).text().catch(() => null);
+    const zshrcContent = await Bun.file(zshrcPath)
+      .text()
+      .catch(() => null);
     expect(zshrcContent).not.toBeNull();
     expect(zshrcContent).toContain("fpath=(~/.zfunc $fpath)");
     expect(zshrcContent).toContain("autoload -Uz compinit");
@@ -521,7 +543,9 @@ describe("completions --install", () => {
     expect(stdout).toContain("Wrote completions to");
     expect(stdout).toContain("fish");
 
-    const content = await Bun.file(expectedPath).text().catch(() => null);
+    const content = await Bun.file(expectedPath)
+      .text()
+      .catch(() => null);
     expect(content).not.toBeNull();
     expect(content).toContain("complete -c skilltap");
   });

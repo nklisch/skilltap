@@ -6,11 +6,17 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { loadInstalled, saveInstalled } from "@skilltap/core";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { $ } from "bun";
-import { createTestEnv, type TestEnv, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 setDefaultTimeout(45_000);
 
@@ -130,7 +136,9 @@ describe("skilltap skills disable/enable — full E2E roundtrip", () => {
     let loaded = await loadInstalled();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active).toBe(true);
+    expect(
+      loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active,
+    ).toBe(true);
 
     // Disable via CLI
     const disableResult = await runSkilltap(
@@ -145,7 +153,9 @@ describe("skilltap skills disable/enable — full E2E roundtrip", () => {
     loaded = await loadInstalled();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active).toBe(false);
+    expect(
+      loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active,
+    ).toBe(false);
 
     // Enable via CLI
     const enableResult = await runSkilltap(
@@ -160,7 +170,9 @@ describe("skilltap skills disable/enable — full E2E roundtrip", () => {
     loaded = await loadInstalled();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active).toBe(true);
+    expect(
+      loaded.value.skills.find((s) => s.name === "roundtrip-skill")?.active,
+    ).toBe(true);
   });
 
   test("list shows 'disabled' after disable and 'managed' after enable", async () => {
@@ -171,14 +183,22 @@ describe("skilltap skills disable/enable — full E2E roundtrip", () => {
     expect(listBefore.stdout).toContain("roundtrip-skill");
     expect(listBefore.stdout.toLowerCase()).not.toContain("disabled");
 
-    await runSkilltap(["skills", "disable", "roundtrip-skill"], homeDir, configDir);
+    await runSkilltap(
+      ["skills", "disable", "roundtrip-skill"],
+      homeDir,
+      configDir,
+    );
 
     const listDisabled = await runSkilltap(["skills"], homeDir, configDir);
     expect(listDisabled.exitCode).toBe(0);
     expect(listDisabled.stdout).toContain("roundtrip-skill");
     expect(listDisabled.stdout.toLowerCase()).toContain("disabled");
 
-    await runSkilltap(["skills", "enable", "roundtrip-skill"], homeDir, configDir);
+    await runSkilltap(
+      ["skills", "enable", "roundtrip-skill"],
+      homeDir,
+      configDir,
+    );
 
     const listEnabled = await runSkilltap(["skills"], homeDir, configDir);
     expect(listEnabled.exitCode).toBe(0);
@@ -195,7 +215,10 @@ describe("skilltap skills disable — project scope", () => {
 
       const skillDir = join(projectRoot, ".agents", "skills", "proj-skill");
       await mkdir(skillDir, { recursive: true });
-      await Bun.write(join(skillDir, "SKILL.md"), "---\nname: proj-skill\n---\n");
+      await Bun.write(
+        join(skillDir, "SKILL.md"),
+        "---\nname: proj-skill\n---\n",
+      );
 
       await saveInstalled(
         {
@@ -237,7 +260,13 @@ describe("skilltap skills disable — project scope", () => {
       expect(record?.active).toBe(false);
 
       // Verify files moved to .disabled/ within project
-      const disabledDir = join(projectRoot, ".agents", "skills", ".disabled", "proj-skill");
+      const disabledDir = join(
+        projectRoot,
+        ".agents",
+        "skills",
+        ".disabled",
+        "proj-skill",
+      );
       const { lstat } = await import("node:fs/promises");
       expect(await lstat(disabledDir).then((s) => s.isDirectory())).toBe(true);
       expect(await lstat(skillDir).catch(() => null)).toBeNull();

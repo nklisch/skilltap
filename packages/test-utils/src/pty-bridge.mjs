@@ -13,13 +13,19 @@
  *                     { "type": "exit",   "code": 0     }
  */
 import { createRequire } from "module";
-import { fileURLToPath } from "url";
 import path from "path";
+import { fileURLToPath } from "url";
 
 // Resolve node-pty from test-utils' own node_modules (where it was installed)
 const __dir = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
-const ptyPath = path.join(__dir, "..", "node_modules", "@homebridge", "node-pty-prebuilt-multiarch");
+const ptyPath = path.join(
+  __dir,
+  "..",
+  "node_modules",
+  "@homebridge",
+  "node-pty-prebuilt-multiarch",
+);
 const pty = require(ptyPath);
 
 // Bridge config arrives as a single JSON line on argv[2]
@@ -40,7 +46,9 @@ term.onData((text) => {
 });
 
 term.onExit(({ exitCode }) => {
-  process.stdout.write(JSON.stringify({ type: "exit", code: exitCode ?? 0 }) + "\n");
+  process.stdout.write(
+    JSON.stringify({ type: "exit", code: exitCode ?? 0 }) + "\n",
+  );
   process.exit(0);
 });
 

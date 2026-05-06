@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +14,11 @@ afterEach(async () => {
   await rm(workDir, { recursive: true, force: true });
 });
 
-async function writeSkill(dir: string, name: string, description: string): Promise<void> {
+async function writeSkill(
+  dir: string,
+  name: string,
+  description: string,
+): Promise<void> {
   await mkdir(dir, { recursive: true });
   await writeFile(
     join(dir, "SKILL.md"),
@@ -39,8 +43,16 @@ describe("tryPreview — local sources", () => {
   });
 
   test("previews a multi-skill local repo", async () => {
-    await writeSkill(join(workDir, ".agents", "skills", "alpha"), "alpha", "First skill");
-    await writeSkill(join(workDir, ".agents", "skills", "beta"), "beta", "Second skill");
+    await writeSkill(
+      join(workDir, ".agents", "skills", "alpha"),
+      "alpha",
+      "First skill",
+    );
+    await writeSkill(
+      join(workDir, ".agents", "skills", "beta"),
+      "beta",
+      "Second skill",
+    );
 
     const result = await tryPreview(workDir);
     expect(result.ok).toBe(true);

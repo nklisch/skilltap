@@ -1,5 +1,3 @@
-import { lstat, mkdir, readlink } from "node:fs/promises";
-import { join } from "node:path";
 import {
   afterEach,
   beforeEach,
@@ -8,8 +6,11 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import { lstat, mkdir, readlink } from "node:fs/promises";
+import { join } from "node:path";
 
 setDefaultTimeout(60_000);
+
 import { loadInstalled } from "@skilltap/core";
 import {
   createMaliciousSkillRepo,
@@ -132,10 +133,7 @@ describe("install — security scanning", () => {
 
 // ── Agent Selection Tests ──
 
-async function writeConfig(
-  configDir: string,
-  toml: string,
-): Promise<void> {
+async function writeConfig(configDir: string, toml: string): Promise<void> {
   const dir = join(configDir, "skilltap");
   await mkdir(dir, { recursive: true });
   await Bun.write(join(dir, "config.toml"), toml);
@@ -143,10 +141,7 @@ async function writeConfig(
 
 describe("install — agent selection", () => {
   test("--yes uses config defaults.also for symlinks", async () => {
-    await writeConfig(
-      configDir,
-      '[defaults]\nalso = ["claude-code"]\n',
-    );
+    await writeConfig(configDir, '[defaults]\nalso = ["claude-code"]\n');
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
@@ -174,7 +169,15 @@ describe("install — agent selection", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code"],
+        [
+          "install",
+          repo.path,
+          "--yes",
+          "--global",
+          "--skip-scan",
+          "--also",
+          "claude-code",
+        ],
         homeDir,
         configDir,
       );
@@ -220,7 +223,15 @@ describe("install — agent selection", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan", "--also", "claude-code,cursor"],
+        [
+          "install",
+          repo.path,
+          "--yes",
+          "--global",
+          "--skip-scan",
+          "--also",
+          "claude-code,cursor",
+        ],
         homeDir,
         configDir,
       );

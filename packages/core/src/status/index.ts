@@ -1,7 +1,7 @@
+export { type GatherStatusOptions, gatherStatus } from "./gather";
 export type {
+  StatusPlugin,
   StatusReport,
   StatusSkill,
-  StatusPlugin,
   StatusTap,
 } from "./types";
-export { gatherStatus, type GatherStatusOptions } from "./gather";

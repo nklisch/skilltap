@@ -1,1 +1,3 @@
-{ "mcpServers": { "lint-server": { "command": "node", "args": ["server.js"] } } }
+{
+  "mcpServers": { "lint-server": { "command": "node", "args": ["server.js"] } }
+}

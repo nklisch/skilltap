@@ -1,8 +1,8 @@
 import {
   type CliFlags,
   type Config,
-  type EffectivePolicy,
   composePolicy,
+  type EffectivePolicy,
   isAgentEnv,
   loadConfig,
 } from "@skilltap/core";

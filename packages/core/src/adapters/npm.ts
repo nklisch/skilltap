@@ -18,7 +18,9 @@ export const npmAdapter: SourceAdapter = {
 
     const metaResult = await fetchPackageMetadata(name);
     if (!metaResult.ok) {
-      return err(new UserError(metaResult.error.message, metaResult.error.hint));
+      return err(
+        new UserError(metaResult.error.message, metaResult.error.hint),
+      );
     }
 
     const versionResult = resolveVersion(metaResult.value, version);

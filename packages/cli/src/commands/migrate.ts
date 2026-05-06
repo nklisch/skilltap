@@ -24,10 +24,15 @@ export default defineCommand({
 
     if (!result.ok) {
       if (useJson) {
-        outputJson({ ok: false, error: result.error.message, hint: result.error.hint });
+        outputJson({
+          ok: false,
+          error: result.error.message,
+          hint: result.error.hint,
+        });
       } else {
         errorLine(result.error.message);
-        if (result.error.hint) process.stderr.write(`${ansi.dim("hint:")} ${result.error.hint}\n`);
+        if (result.error.hint)
+          process.stderr.write(`${ansi.dim("hint:")} ${result.error.hint}\n`);
       }
       process.exit(1);
     }
@@ -46,11 +51,15 @@ export default defineCommand({
     }
 
     if (report.alreadyMigrated) {
-      process.stdout.write(`${ansi.green("✓")} Already on v2.0. Nothing to do.\n`);
+      process.stdout.write(
+        `${ansi.green("✓")} Already on v2.0. Nothing to do.\n`,
+      );
       return;
     }
 
-    process.stdout.write(`\n${ansi.bold("skilltap migrate")} — v1.0 → v2.0\n\n`);
+    process.stdout.write(
+      `\n${ansi.bold("skilltap migrate")} — v1.0 → v2.0\n\n`,
+    );
 
     if (report.changes.written.length > 0) {
       process.stdout.write(`${ansi.green("Wrote:")}\n`);

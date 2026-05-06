@@ -41,7 +41,10 @@ if (_claudeDesktopPath !== null) {
 
 const SKILLTAP_MCP_PREFIX = "skilltap:";
 
-export function namespaceMcpServer(pluginName: string, serverName: string): string {
+export function namespaceMcpServer(
+  pluginName: string,
+  serverName: string,
+): string {
   return `${SKILLTAP_MCP_PREFIX}${pluginName}:${serverName}`;
 }
 
@@ -84,7 +87,10 @@ export function substituteMcpVars(
       ...component,
       url: substituteVars(component.url, ctx),
       headers: Object.fromEntries(
-        Object.entries(component.headers).map(([k, v]) => [k, substituteVars(v, ctx)]),
+        Object.entries(component.headers).map(([k, v]) => [
+          k,
+          substituteVars(v, ctx),
+        ]),
       ),
     };
   }
@@ -93,7 +99,10 @@ export function substituteMcpVars(
     command: substituteVars(component.command, ctx),
     args: component.args.map((a) => substituteVars(a, ctx)),
     env: Object.fromEntries(
-      Object.entries(component.env).map(([k, v]) => [k, substituteVars(v, ctx)]),
+      Object.entries(component.env).map(([k, v]) => [
+        k,
+        substituteVars(v, ctx),
+      ]),
     ),
   };
 }
@@ -330,6 +339,8 @@ export async function listMcpServers(
     return ok([]);
   }
 
-  const keys = Object.keys(config.mcpServers as Record<string, unknown>).filter(isNamespacedKey);
+  const keys = Object.keys(config.mcpServers as Record<string, unknown>).filter(
+    isNamespacedKey,
+  );
   return ok(keys);
 }

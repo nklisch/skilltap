@@ -1,15 +1,26 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir, createClaudePluginRepo } from "@skilltap/test-utils";
+import {
+  createClaudePluginRepo,
+  makeTmpDir,
+  removeTmpDir,
+} from "@skilltap/test-utils";
 import { parseClaudePlugin } from "./parse-claude";
 
 async function makePlugin(dir: string, pluginJson: unknown): Promise<void> {
   await mkdir(join(dir, ".claude-plugin"), { recursive: true });
-  await Bun.write(join(dir, ".claude-plugin", "plugin.json"), JSON.stringify(pluginJson));
+  await Bun.write(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify(pluginJson),
+  );
 }
 
-async function makeSkill(dir: string, name: string, description = "A test skill"): Promise<void> {
+async function makeSkill(
+  dir: string,
+  name: string,
+  description = "A test skill",
+): Promise<void> {
   await mkdir(join(dir, "skills", name), { recursive: true });
   await Bun.write(
     join(dir, "skills", name, "SKILL.md"),
@@ -58,9 +69,12 @@ describe("parseClaudePlugin", () => {
     const dir = await makeTmpDir();
     try {
       await makePlugin(dir, { name: "test" });
-      await Bun.write(join(dir, ".mcp.json"), JSON.stringify({
-        "my-server": { command: "npx", args: ["-y", "my-mcp"] },
-      }));
+      await Bun.write(
+        join(dir, ".mcp.json"),
+        JSON.stringify({
+          "my-server": { command: "npx", args: ["-y", "my-mcp"] },
+        }),
+      );
 
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(true);
@@ -80,7 +94,10 @@ describe("parseClaudePlugin", () => {
     try {
       await makePlugin(dir, { name: "test" });
       await mkdir(join(dir, "agents"), { recursive: true });
-      await Bun.write(join(dir, "agents", "reviewer.md"), "---\nname: reviewer\n---\nContent");
+      await Bun.write(
+        join(dir, "agents", "reviewer.md"),
+        "---\nname: reviewer\n---\nContent",
+      );
 
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(true);
@@ -119,9 +136,12 @@ describe("parseClaudePlugin", () => {
     try {
       await makePlugin(dir, { name: "test", mcpServers: "config/mcp.json" });
       await mkdir(join(dir, "config"), { recursive: true });
-      await Bun.write(join(dir, "config", "mcp.json"), JSON.stringify({
-        "config-server": { command: "node", args: ["server.js"] },
-      }));
+      await Bun.write(
+        join(dir, "config", "mcp.json"),
+        JSON.stringify({
+          "config-server": { command: "node", args: ["server.js"] },
+        }),
+      );
 
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(true);
@@ -141,7 +161,10 @@ describe("parseClaudePlugin", () => {
     try {
       await makePlugin(dir, { name: "test", agents: "custom-agents/" });
       await mkdir(join(dir, "custom-agents"), { recursive: true });
-      await Bun.write(join(dir, "custom-agents", "builder.md"), "---\nname: builder\n---\nContent");
+      await Bun.write(
+        join(dir, "custom-agents", "builder.md"),
+        "---\nname: builder\n---\nContent",
+      );
 
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(true);
@@ -180,21 +203,32 @@ describe("parseClaudePlugin", () => {
   test("uses mcpServers as array-of-strings (multiple config files)", async () => {
     const dir = await makeTmpDir();
     try {
-      await makePlugin(dir, { name: "test", mcpServers: ["config/a.json", "config/b.json"] });
+      await makePlugin(dir, {
+        name: "test",
+        mcpServers: ["config/a.json", "config/b.json"],
+      });
       await mkdir(join(dir, "config"), { recursive: true });
-      await Bun.write(join(dir, "config", "a.json"), JSON.stringify({
-        "server-a": { command: "npx", args: ["-y", "mcp-a"] },
-      }));
-      await Bun.write(join(dir, "config", "b.json"), JSON.stringify({
-        "server-b": { command: "node", args: ["b.js"] },
-      }));
+      await Bun.write(
+        join(dir, "config", "a.json"),
+        JSON.stringify({
+          "server-a": { command: "npx", args: ["-y", "mcp-a"] },
+        }),
+      );
+      await Bun.write(
+        join(dir, "config", "b.json"),
+        JSON.stringify({
+          "server-b": { command: "node", args: ["b.js"] },
+        }),
+      );
 
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const mcps = result.value.components.filter((c) => c.type === "mcp");
       expect(mcps).toHaveLength(2);
-      const names = mcps.map((c) => c.type === "mcp" ? c.server.name : "").sort();
+      const names = mcps
+        .map((c) => (c.type === "mcp" ? c.server.name : ""))
+        .sort();
       expect(names).toEqual(["server-a", "server-b"]);
     } finally {
       await removeTmpDir(dir);
@@ -222,7 +256,10 @@ describe("parseClaudePlugin", () => {
       await makePlugin(dir, { name: "test" });
       // Create a skills/ directory with no SKILL.md
       await mkdir(join(dir, "skills", "empty-skill"), { recursive: true });
-      await Bun.write(join(dir, "skills", "empty-skill", "README.md"), "Not a skill");
+      await Bun.write(
+        join(dir, "skills", "empty-skill", "README.md"),
+        "Not a skill",
+      );
 
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(true);
@@ -248,7 +285,10 @@ describe("parseClaudePlugin", () => {
     const dir = await makeTmpDir();
     try {
       await mkdir(join(dir, ".claude-plugin"), { recursive: true });
-      await Bun.write(join(dir, ".claude-plugin", "plugin.json"), "{ not valid }");
+      await Bun.write(
+        join(dir, ".claude-plugin", "plugin.json"),
+        "{ not valid }",
+      );
       const result = await parseClaudePlugin(dir);
       expect(result.ok).toBe(false);
     } finally {

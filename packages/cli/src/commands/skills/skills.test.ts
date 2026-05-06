@@ -9,8 +9,15 @@ import {
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { installSkill, loadInstalled, saveInstalled } from "@skilltap/core";
+import {
+  createStandaloneSkillRepo,
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { $ } from "bun";
-import { createTestEnv, type TestEnv, createStandaloneSkillRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -30,11 +37,7 @@ afterEach(async () => {
 
 const NOW = "2026-01-01T00:00:00.000Z";
 
-async function seedSkillWithState(
-  home: string,
-  name: string,
-  active: boolean,
-) {
+async function seedSkillWithState(home: string, name: string, active: boolean) {
   // Create skill in the appropriate directory based on active state
   const skillDir = active
     ? join(home, ".agents", "skills", name)
@@ -56,7 +59,11 @@ async function createUnmanagedSkill(home: string, name: string) {
 
 describe("skilltap skills", () => {
   test("shows empty state message when no skills", async () => {
-    const { exitCode, stdout } = await runSkilltap(["skills"], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(
+      ["skills"],
+      homeDir,
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No skills found");
   });
@@ -71,7 +78,12 @@ describe("skilltap skills", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       // Create an unmanaged project-scoped skill
-      const projectSkillDir = join(projectRoot, ".agents", "skills", "project-only");
+      const projectSkillDir = join(
+        projectRoot,
+        ".agents",
+        "skills",
+        "project-only",
+      );
       await mkdir(projectSkillDir, { recursive: true });
       await Bun.write(
         join(projectSkillDir, "SKILL.md"),
@@ -99,7 +111,11 @@ describe("skilltap skills", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       await createUnmanagedSkill(homeDir, "unmanaged-skill");
 
-      const { exitCode, stdout } = await runSkilltap(["skills"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["skills"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("standalone-skill");
       expect(stdout).toContain("unmanaged-skill");
@@ -139,7 +155,9 @@ describe("skilltap skills", () => {
       expect(exitCode).toBe(0);
       const parsed = JSON.parse(stdout);
       expect(Array.isArray(parsed)).toBe(true);
-      expect(parsed.some((s: { name: string }) => s.name === "standalone-skill")).toBe(true);
+      expect(
+        parsed.some((s: { name: string }) => s.name === "standalone-skill"),
+      ).toBe(true);
     } finally {
       await repo.cleanup();
     }
@@ -171,7 +189,11 @@ describe("skilltap skills", () => {
     await runSkilltap(["skills", "disable", "my-skill"], homeDir, configDir);
 
     // List should show skill with "disabled" status
-    const { exitCode, stdout } = await runSkilltap(["skills"], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(
+      ["skills"],
+      homeDir,
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("my-skill");
     expect(stdout.toLowerCase()).toContain("disabled");
@@ -180,11 +202,23 @@ describe("skilltap skills", () => {
   test("--disabled flag filters to only disabled skills", async () => {
     const activeSkillDir = join(homeDir, ".agents", "skills", "active-skill");
     await mkdir(activeSkillDir, { recursive: true });
-    await Bun.write(join(activeSkillDir, "SKILL.md"), "---\nname: active-skill\n---\n");
+    await Bun.write(
+      join(activeSkillDir, "SKILL.md"),
+      "---\nname: active-skill\n---\n",
+    );
 
-    const disabledSkillDir = join(homeDir, ".agents", "skills", ".disabled", "disabled-skill");
+    const disabledSkillDir = join(
+      homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "disabled-skill",
+    );
     await mkdir(disabledSkillDir, { recursive: true });
-    await Bun.write(join(disabledSkillDir, "SKILL.md"), "---\nname: disabled-skill\n---\n");
+    await Bun.write(
+      join(disabledSkillDir, "SKILL.md"),
+      "---\nname: disabled-skill\n---\n",
+    );
 
     await saveInstalled({
       version: 1,
@@ -234,11 +268,23 @@ describe("skilltap skills", () => {
     // Seed two skills: one active, one disabled
     const activeSkillDir = join(homeDir, ".agents", "skills", "active-skill");
     await mkdir(activeSkillDir, { recursive: true });
-    await Bun.write(join(activeSkillDir, "SKILL.md"), "---\nname: active-skill\n---\n");
+    await Bun.write(
+      join(activeSkillDir, "SKILL.md"),
+      "---\nname: active-skill\n---\n",
+    );
 
-    const disabledSkillDir = join(homeDir, ".agents", "skills", ".disabled", "disabled-skill");
+    const disabledSkillDir = join(
+      homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "disabled-skill",
+    );
     await mkdir(disabledSkillDir, { recursive: true });
-    await Bun.write(join(disabledSkillDir, "SKILL.md"), "---\nname: disabled-skill\n---\n");
+    await Bun.write(
+      join(disabledSkillDir, "SKILL.md"),
+      "---\nname: disabled-skill\n---\n",
+    );
 
     await saveInstalled({
       version: 1,
@@ -308,7 +354,14 @@ describe("skilltap skills adopt", () => {
     );
 
     const { exitCode, stdout } = await runSkilltap(
-      ["skills", "adopt", "track-me", "--global", "--track-in-place", "--skip-scan"],
+      [
+        "skills",
+        "adopt",
+        "track-me",
+        "--global",
+        "--track-in-place",
+        "--skip-scan",
+      ],
       homeDir,
       configDir,
     );

@@ -1,11 +1,16 @@
 import { copyFile, writeFile } from "node:fs/promises";
 import { z } from "zod/v4";
 import { fileExists } from "../../fs";
-import { type State, StateSchema } from "../../state/schema";
 import { getStatePath } from "../../state/paths";
+import { type State, StateSchema } from "../../state/schema";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
-const DEFAULT_STATE: State = { version: 2, skills: [], plugins: [], mcpServers: [] };
+const DEFAULT_STATE: State = {
+  version: 2,
+  skills: [],
+  plugins: [],
+  mcpServers: [],
+};
 
 async function readStateFile(
   file: string,
@@ -64,8 +69,14 @@ export async function checkStateV2(projectRoot?: string): Promise<{
     globalState || projectState
       ? {
           version: 2,
-          skills: [...(globalState?.skills ?? []), ...(projectState?.skills ?? [])],
-          plugins: [...(globalState?.plugins ?? []), ...(projectState?.plugins ?? [])],
+          skills: [
+            ...(globalState?.skills ?? []),
+            ...(projectState?.skills ?? []),
+          ],
+          plugins: [
+            ...(globalState?.plugins ?? []),
+            ...(projectState?.plugins ?? []),
+          ],
           mcpServers: [
             ...(globalState?.mcpServers ?? []),
             ...(projectState?.mcpServers ?? []),
@@ -74,7 +85,10 @@ export async function checkStateV2(projectRoot?: string): Promise<{
       : null;
 
   if (issues.length > 0) {
-    return { check: { name: "state.json", status: "fail", issues }, state: merged };
+    return {
+      check: { name: "state.json", status: "fail", issues },
+      state: merged,
+    };
   }
 
   if (!merged) {
@@ -92,5 +106,8 @@ export async function checkStateV2(projectRoot?: string): Promise<{
   const pluginCount = merged.plugins.length;
   const mcpCount = merged.mcpServers.length;
   const detail = `${skillCount} skill${skillCount === 1 ? "" : "s"}, ${pluginCount} plugin${pluginCount === 1 ? "" : "s"}, ${mcpCount} standalone MCP${mcpCount === 1 ? "" : "s"}`;
-  return { check: { name: "state.json", status: "pass", detail }, state: merged };
+  return {
+    check: { name: "state.json", status: "pass", detail },
+    state: merged,
+  };
 }

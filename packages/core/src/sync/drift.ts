@@ -1,4 +1,8 @@
-import type { Lockfile, ManifestEntry, ProjectManifest } from "../manifest/schemas";
+import type {
+  Lockfile,
+  ManifestEntry,
+  ProjectManifest,
+} from "../manifest/schemas";
 import type { InstalledSkill } from "../schemas/installed";
 import type { PluginRecord } from "../schemas/plugins";
 import type { State } from "../state/schema";
@@ -12,7 +16,10 @@ interface NormalizedEntry {
 
 // Translate a ManifestEntry (string range or inline-table) into a normalized
 // {source, ref?, range} triple keyed by the manifest key (the source string).
-function normalizeManifestEntry(source: string, value: ManifestEntry): NormalizedEntry {
+function normalizeManifestEntry(
+  source: string,
+  value: ManifestEntry,
+): NormalizedEntry {
   if (typeof value === "string") {
     return { source, range: value };
   }
@@ -29,11 +36,19 @@ function normalizeManifestTable(
   return map;
 }
 
-function normalizeStateSkill(skill: InstalledSkill): { source: string | null; ref: string | null; sha: string | null } {
+function normalizeStateSkill(skill: InstalledSkill): {
+  source: string | null;
+  ref: string | null;
+  sha: string | null;
+} {
   return { source: skill.repo, ref: skill.ref, sha: skill.sha };
 }
 
-function normalizeStatePlugin(plugin: PluginRecord): { source: string | null; ref: string | null; sha: string | null } {
+function normalizeStatePlugin(plugin: PluginRecord): {
+  source: string | null;
+  ref: string | null;
+  sha: string | null;
+} {
   return { source: plugin.repo, ref: plugin.ref, sha: plugin.sha };
 }
 
@@ -44,7 +59,9 @@ interface LockEntryNormalized {
   range: string;
 }
 
-function lockfileMap(entries: { source: string; ref: string; sha?: string; range: string }[]): Map<string, LockEntryNormalized> {
+function lockfileMap(
+  entries: { source: string; ref: string; sha?: string; range: string }[],
+): Map<string, LockEntryNormalized> {
   const map = new Map<string, LockEntryNormalized>();
   for (const entry of entries) {
     map.set(entry.source, entry);
@@ -62,7 +79,10 @@ export function detectDrift(
   // ── Skills ───────────────────────────────────────────────────────────────
   const manifestSkills = normalizeManifestTable(manifest.skills);
   const lockedSkills = lockfileMap(lockfile.skill);
-  const stateSkillsBySource = new Map<string, ReturnType<typeof normalizeStateSkill>>();
+  const stateSkillsBySource = new Map<
+    string,
+    ReturnType<typeof normalizeStateSkill>
+  >();
   for (const skill of state.skills) {
     const norm = normalizeStateSkill(skill);
     if (norm.source) stateSkillsBySource.set(norm.source, norm);
@@ -92,8 +112,12 @@ export function detectDrift(
         target: "skill",
         source,
         declared: { ref: declared.ref, range: declared.range },
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
-        reason: "no lockfile entry — run `skilltap update` to record the resolved ref",
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
+        reason:
+          "no lockfile entry — run `skilltap update` to record the resolved ref",
       });
       continue;
     }
@@ -105,7 +129,10 @@ export function detectDrift(
         target: "skill",
         source,
         declared: { ref: declared.ref, range: declared.range },
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
         locked: { ref: locked.ref, sha: locked.sha, range: locked.range },
         reason: "manifest range differs from lockfile range",
       });
@@ -119,7 +146,10 @@ export function detectDrift(
         target: "skill",
         source,
         declared: { ref: declared.ref, range: declared.range },
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
         locked: { ref: locked.ref, sha: locked.sha, range: locked.range },
         reason: "installed sha differs from locked sha",
       });
@@ -132,7 +162,10 @@ export function detectDrift(
         kind: "remove",
         target: "skill",
         source,
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
         reason: "installed but not declared in manifest",
       });
     }
@@ -153,7 +186,10 @@ export function detectDrift(
   // ── Plugins ──────────────────────────────────────────────────────────────
   const manifestPlugins = normalizeManifestTable(manifest.plugins);
   const lockedPlugins = lockfileMap(lockfile.plugin);
-  const statePluginsBySource = new Map<string, ReturnType<typeof normalizeStatePlugin>>();
+  const statePluginsBySource = new Map<
+    string,
+    ReturnType<typeof normalizeStatePlugin>
+  >();
   for (const plugin of state.plugins) {
     const norm = normalizeStatePlugin(plugin);
     if (norm.source) statePluginsBySource.set(norm.source, norm);
@@ -177,7 +213,10 @@ function applyDriftForTable(
   target: DriftTarget,
   manifestMap: Map<string, NormalizedEntry>,
   lockedMap: Map<string, LockEntryNormalized>,
-  stateMap: Map<string, { source: string | null; ref: string | null; sha: string | null }>,
+  stateMap: Map<
+    string,
+    { source: string | null; ref: string | null; sha: string | null }
+  >,
   items: DriftItem[],
 ): void {
   for (const [source, declared] of manifestMap) {
@@ -204,8 +243,12 @@ function applyDriftForTable(
         target,
         source,
         declared: { ref: declared.ref, range: declared.range },
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
-        reason: "no lockfile entry — run `skilltap update` to record the resolved ref",
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
+        reason:
+          "no lockfile entry — run `skilltap update` to record the resolved ref",
       });
       continue;
     }
@@ -216,7 +259,10 @@ function applyDriftForTable(
         target,
         source,
         declared: { ref: declared.ref, range: declared.range },
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
         locked: { ref: locked.ref, sha: locked.sha, range: locked.range },
         reason: "manifest range differs from lockfile range",
       });
@@ -229,7 +275,10 @@ function applyDriftForTable(
         target,
         source,
         declared: { ref: declared.ref, range: declared.range },
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
         locked: { ref: locked.ref, sha: locked.sha, range: locked.range },
         reason: "installed sha differs from locked sha",
       });
@@ -242,7 +291,10 @@ function applyDriftForTable(
         kind: "remove",
         target,
         source,
-        installed: { ref: installed.ref ?? undefined, sha: installed.sha ?? undefined },
+        installed: {
+          ref: installed.ref ?? undefined,
+          sha: installed.sha ?? undefined,
+        },
         reason: "installed but not declared in manifest",
       });
     }

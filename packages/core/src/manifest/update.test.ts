@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse } from "smol-toml";
@@ -25,7 +25,9 @@ describe("canonicalizeSourceKey", () => {
   });
 
   test("https github with .git → github: shorthand", () => {
-    expect(canonicalizeSourceKey("https://github.com/n/r.git")).toBe("github:n/r");
+    expect(canonicalizeSourceKey("https://github.com/n/r.git")).toBe(
+      "github:n/r",
+    );
   });
 
   test("ssh github with .git → github: shorthand", () => {
@@ -37,7 +39,9 @@ describe("canonicalizeSourceKey", () => {
   });
 
   test("npm: passthrough", () => {
-    expect(canonicalizeSourceKey("npm:@scope/code-review")).toBe("npm:@scope/code-review");
+    expect(canonicalizeSourceKey("npm:@scope/code-review")).toBe(
+      "npm:@scope/code-review",
+    );
   });
 
   test("npm versioned: passthrough", () => {
@@ -57,7 +61,9 @@ describe("canonicalizeSourceKey", () => {
   });
 
   test("ssh non-github: passthrough", () => {
-    expect(canonicalizeSourceKey("git@example.com:n/r.git")).toBe("git@example.com:n/r.git");
+    expect(canonicalizeSourceKey("git@example.com:n/r.git")).toBe(
+      "git@example.com:n/r.git",
+    );
   });
 });
 
@@ -75,7 +81,10 @@ describe("addSkillToManifest", () => {
   });
 
   test("appends to fresh manifest", async () => {
-    await writeFile(join(projectRoot, "skilltap.toml"), `[targets]\nalso = []\n`);
+    await writeFile(
+      join(projectRoot, "skilltap.toml"),
+      `[targets]\nalso = []\n`,
+    );
     const result = await addSkillToManifest(projectRoot, {
       source: "https://github.com/n/r",
       ref: "v1.2.0",
@@ -88,7 +97,12 @@ describe("addSkillToManifest", () => {
 
     const lockText = await readFile(join(projectRoot, "skilltap.lock"), "utf8");
     const lock = parse(lockText) as {
-      skill?: Array<{ source: string; ref: string; sha?: string; range: string }>;
+      skill?: Array<{
+        source: string;
+        ref: string;
+        sha?: string;
+        range: string;
+      }>;
     };
     expect(lock.skill).toHaveLength(1);
     expect(lock.skill?.[0]).toMatchObject({
@@ -150,7 +164,10 @@ describe("addSkillToManifest", () => {
 
 describe("removeSkillFromManifest", () => {
   test("no-op when skilltap.toml is absent", async () => {
-    const result = await removeSkillFromManifest(projectRoot, "https://github.com/n/r");
+    const result = await removeSkillFromManifest(
+      projectRoot,
+      "https://github.com/n/r",
+    );
     expect(result.ok).toBe(true);
   });
 
@@ -166,7 +183,10 @@ describe("removeSkillFromManifest", () => {
     ) as { skills?: Record<string, string> };
     expect(before.skills?.["github:n/r"]).toBe("*");
 
-    const result = await removeSkillFromManifest(projectRoot, "https://github.com/n/r");
+    const result = await removeSkillFromManifest(
+      projectRoot,
+      "https://github.com/n/r",
+    );
     expect(result.ok).toBe(true);
 
     const after = parse(
@@ -181,7 +201,10 @@ describe("removeSkillFromManifest", () => {
 
   test("removing a non-existent entry is a no-op (no error)", async () => {
     await writeFile(join(projectRoot, "skilltap.toml"), "");
-    const result = await removeSkillFromManifest(projectRoot, "https://github.com/missing/x");
+    const result = await removeSkillFromManifest(
+      projectRoot,
+      "https://github.com/missing/x",
+    );
     expect(result.ok).toBe(true);
   });
 
@@ -192,7 +215,10 @@ describe("removeSkillFromManifest", () => {
       ref: "v1",
       sha: "abc",
     });
-    const result = await removeSkillFromManifest(projectRoot, "git@github.com:n/r.git");
+    const result = await removeSkillFromManifest(
+      projectRoot,
+      "git@github.com:n/r.git",
+    );
     expect(result.ok).toBe(true);
     const text = await readFile(join(projectRoot, "skilltap.toml"), "utf8");
     expect(text).not.toContain("github:n/r");

@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { writeFile, mkdir } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
 import { loadState } from "../state/load";
@@ -127,7 +127,10 @@ type = "http"
 
   test("emits warnings for lossy fields", async () => {
     const cfgDir = join(env.configDir, "skilltap");
-    await writeFile(join(cfgDir, "installed.json"), JSON.stringify(V1_INSTALLED, null, 2));
+    await writeFile(
+      join(cfgDir, "installed.json"),
+      JSON.stringify(V1_INSTALLED, null, 2),
+    );
     await writeFile(
       join(cfgDir, "config.toml"),
       `

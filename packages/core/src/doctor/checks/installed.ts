@@ -27,7 +27,10 @@ async function readInstalledFile(
       fixDescription: `backed up to ${backupName}, created fresh`,
       fix: async () => {
         await copyFile(file, backupFile).catch(() => {});
-        await writeFile(file, JSON.stringify({ version: 1, skills: [] }, null, 2));
+        await writeFile(
+          file,
+          JSON.stringify({ version: 1, skills: [] }, null, 2),
+        );
       },
     });
     return null;
@@ -43,7 +46,10 @@ async function readInstalledFile(
       fixDescription: `backed up to ${backupName}, created fresh`,
       fix: async () => {
         await copyFile(file, backupFile).catch(() => {});
-        await writeFile(file, JSON.stringify({ version: 1, skills: [] }, null, 2));
+        await writeFile(
+          file,
+          JSON.stringify({ version: 1, skills: [] }, null, 2),
+        );
       },
     });
     return null;
@@ -68,26 +74,29 @@ export async function checkInstalled(projectRoot?: string): Promise<{
   const globalSkills =
     globalState.ok && globalState.value.skills.length > 0
       ? globalState.value.skills
-      : (await readInstalledFile(globalFile, "installed.json", issues))?.skills ?? null;
+      : ((await readInstalledFile(globalFile, "installed.json", issues))
+          ?.skills ?? null);
   const projectSkills =
     projectState?.ok && projectState.value.skills.length > 0
       ? projectState.value.skills
       : projectRoot
-        ? (await readInstalledFile(
-            join(projectRoot, ".agents", "installed.json"),
-            ".agents/installed.json",
-            issues,
-          ))?.skills ?? null
+        ? ((
+            await readInstalledFile(
+              join(projectRoot, ".agents", "installed.json"),
+              ".agents/installed.json",
+              issues,
+            )
+          )?.skills ?? null)
         : null;
 
-  const allSkills = [
-    ...(globalSkills ?? []),
-    ...(projectSkills ?? []),
-  ];
+  const allSkills = [...(globalSkills ?? []), ...(projectSkills ?? [])];
   const merged: InstalledJson = { version: 1 as const, skills: allSkills };
 
   if (issues.length > 0) {
-    return { check: { name: "installed", status: "fail", issues }, installed: merged };
+    return {
+      check: { name: "installed", status: "fail", issues },
+      installed: merged,
+    };
   }
 
   const globalCount = globalSkills?.length ?? 0;
@@ -103,5 +112,8 @@ export async function checkInstalled(projectRoot?: string): Promise<{
     detail = `${total} skill${total === 1 ? "" : "s"}`;
   }
 
-  return { check: { name: "installed", status: "pass", detail }, installed: merged };
+  return {
+    check: { name: "installed", status: "pass", detail },
+    installed: merged,
+  };
 }

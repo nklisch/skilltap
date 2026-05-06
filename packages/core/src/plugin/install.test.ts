@@ -3,19 +3,27 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
-import { installPlugin, type PluginInstallOptions } from "./install";
 import type { PluginManifest } from "../schemas/plugin";
+import { installPlugin, type PluginInstallOptions } from "./install";
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
-async function makeContentDir(structure: Record<string, string>): Promise<string> {
+async function makeContentDir(
+  structure: Record<string, string>,
+): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "skilltap-content-"));
   for (const [relPath, content] of Object.entries(structure)) {
     const fullPath = join(dir, relPath);
-    await mkdir(fullPath.slice(0, fullPath.lastIndexOf("/")), { recursive: true });
+    await mkdir(fullPath.slice(0, fullPath.lastIndexOf("/")), {
+      recursive: true,
+    });
     await Bun.write(fullPath, content);
   }
   return dir;
@@ -50,9 +58,20 @@ const FULL_MANIFEST: PluginManifest = {
     { type: "skill", name: "helper", path: "skills/helper", description: "" },
     {
       type: "mcp",
-      server: { type: "stdio", name: "test-db", command: "npx", args: ["-y", "test-mcp"], env: {} },
+      server: {
+        type: "stdio",
+        name: "test-db",
+        command: "npx",
+        args: ["-y", "test-mcp"],
+        env: {},
+      },
     },
-    { type: "agent", name: "reviewer", path: "agents/reviewer.md", frontmatter: {} },
+    {
+      type: "agent",
+      name: "reviewer",
+      path: "agents/reviewer.md",
+      frontmatter: {},
+    },
   ],
 };
 
@@ -62,11 +81,15 @@ describe("installPlugin", () => {
       "skills/helper/SKILL.md": "---\nname: helper\n---\n# Helper",
     });
     try {
-      const result = await installPlugin(contentDir, SKILL_MANIFEST, BASE_OPTIONS);
+      const result = await installPlugin(
+        contentDir,
+        SKILL_MANIFEST,
+        BASE_OPTIONS,
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const skillDir = join(env.homeDir,".agents", "skills", "helper");
+      const skillDir = join(env.homeDir, ".agents", "skills", "helper");
       const skillFile = Bun.file(join(skillDir, "SKILL.md"));
       expect(await skillFile.exists()).toBe(true);
     } finally {
@@ -86,7 +109,7 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const symlinkPath = join(env.homeDir,".claude", "skills", "helper");
+      const symlinkPath = join(env.homeDir, ".claude", "skills", "helper");
       const stat = await Bun.file(symlinkPath + "/SKILL.md").exists();
       expect(stat).toBe(true);
     } finally {
@@ -108,7 +131,7 @@ describe("installPlugin", () => {
       if (!result.ok) return;
       expect(result.value.mcpAgents).toContain("claude-code");
 
-      const configPath = join(env.homeDir,".claude", "settings.json");
+      const configPath = join(env.homeDir, ".claude", "settings.json");
       const config = await Bun.file(configPath).json();
       expect(config.mcpServers).toBeDefined();
       expect(config.mcpServers["skilltap:test-plugin:test-db"]).toBeDefined();
@@ -127,7 +150,12 @@ describe("installPlugin", () => {
       format: "claude-code",
       pluginRoot: ".claude-plugin",
       components: [
-        { type: "agent", name: "reviewer", path: "agents/reviewer.md", frontmatter: {} },
+        {
+          type: "agent",
+          name: "reviewer",
+          path: "agents/reviewer.md",
+          frontmatter: {},
+        },
       ],
     };
     try {
@@ -136,7 +164,9 @@ describe("installPlugin", () => {
       if (!result.ok) return;
       expect(result.value.agentDefsPlaced).toBe(1);
 
-      const agentFile = Bun.file(join(env.homeDir,".claude", "agents", "reviewer.md"));
+      const agentFile = Bun.file(
+        join(env.homeDir, ".claude", "agents", "reviewer.md"),
+      );
       expect(await agentFile.exists()).toBe(true);
       expect(await agentFile.text()).toBe("# Reviewer agent content");
     } finally {
@@ -154,7 +184,12 @@ describe("installPlugin", () => {
       format: "claude-code",
       pluginRoot: ".claude-plugin",
       components: [
-        { type: "agent", name: "new-agent", path: "agents/new-agent.md", frontmatter: {} },
+        {
+          type: "agent",
+          name: "new-agent",
+          path: "agents/new-agent.md",
+          frontmatter: {},
+        },
       ],
     };
     try {
@@ -162,7 +197,9 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const agentFile = Bun.file(join(env.homeDir,".claude", "agents", "new-agent.md"));
+      const agentFile = Bun.file(
+        join(env.homeDir, ".claude", "agents", "new-agent.md"),
+      );
       expect(await agentFile.exists()).toBe(true);
     } finally {
       await rm(contentDir, { recursive: true, force: true });
@@ -174,7 +211,11 @@ describe("installPlugin", () => {
       "skills/helper/SKILL.md": "---\nname: helper\n---\n# Helper",
     });
     try {
-      const result = await installPlugin(contentDir, SKILL_MANIFEST, BASE_OPTIONS);
+      const result = await installPlugin(
+        contentDir,
+        SKILL_MANIFEST,
+        BASE_OPTIONS,
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
@@ -196,11 +237,17 @@ describe("installPlugin", () => {
       "skills/helper/SKILL.md": "---\nname: helper\n---\n# Helper",
     });
     try {
-      const result = await installPlugin(contentDir, SKILL_MANIFEST, BASE_OPTIONS);
+      const result = await installPlugin(
+        contentDir,
+        SKILL_MANIFEST,
+        BASE_OPTIONS,
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      const installedFile = Bun.file(join(env.homeDir,".agents", "installed.json"));
+      const installedFile = Bun.file(
+        join(env.homeDir, ".agents", "installed.json"),
+      );
       expect(await installedFile.exists()).toBe(false);
     } finally {
       await rm(contentDir, { recursive: true, force: true });
@@ -250,7 +297,11 @@ describe("installPlugin", () => {
       "skills/helper/SKILL.md": "---\nname: helper\n---\n# Helper",
     });
     try {
-      const result = await installPlugin(contentDir, SKILL_MANIFEST, BASE_OPTIONS);
+      const result = await installPlugin(
+        contentDir,
+        SKILL_MANIFEST,
+        BASE_OPTIONS,
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.mcpAgents).toHaveLength(0);
@@ -272,7 +323,13 @@ describe("installPlugin", () => {
       components: [
         {
           type: "mcp",
-          server: { type: "stdio", name: "my-server", command: "node", args: ["server.js"], env: {} },
+          server: {
+            type: "stdio",
+            name: "my-server",
+            command: "node",
+            args: ["server.js"],
+            env: {},
+          },
         },
       ],
     };
@@ -325,7 +382,13 @@ describe("installPlugin", () => {
       components: [
         {
           type: "mcp",
-          server: { type: "stdio", name: "svc", command: "bun", args: ["run", "server.ts"], env: {} },
+          server: {
+            type: "stdio",
+            name: "svc",
+            command: "bun",
+            args: ["run", "server.ts"],
+            env: {},
+          },
         },
       ],
     };
@@ -354,8 +417,18 @@ describe("installPlugin", () => {
       format: "claude-code",
       pluginRoot: ".claude-plugin",
       components: [
-        { type: "agent", name: "agent1", path: "agents/agent1.md", frontmatter: {} },
-        { type: "agent", name: "agent2", path: "agents/agent2.md", frontmatter: {} },
+        {
+          type: "agent",
+          name: "agent1",
+          path: "agents/agent1.md",
+          frontmatter: {},
+        },
+        {
+          type: "agent",
+          name: "agent2",
+          path: "agents/agent2.md",
+          frontmatter: {},
+        },
       ],
     };
     try {
@@ -380,7 +453,12 @@ describe("installPlugin", () => {
       components: [
         {
           type: "mcp",
-          server: { type: "http", name: "remote-svc", url: "https://example.com/mcp", headers: {} },
+          server: {
+            type: "http",
+            name: "remote-svc",
+            url: "https://example.com/mcp",
+            headers: {},
+          },
         },
       ],
     };

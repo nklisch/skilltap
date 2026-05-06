@@ -1,14 +1,23 @@
+import {
+  McpHttpServerSchema,
+  type McpServerEntry,
+  McpStdioServerSchema,
+} from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
-import { McpHttpServerSchema, McpStdioServerSchema, type McpServerEntry } from "../schemas/plugin";
 
 function parseServerObject(
   serverName: string,
   serverConfig: unknown,
 ): { entry: McpServerEntry } | { error: string } {
   if (typeof serverConfig !== "object" || serverConfig === null) {
-    return { error: `"${serverName}": expected object, got ${typeof serverConfig}` };
+    return {
+      error: `"${serverName}": expected object, got ${typeof serverConfig}`,
+    };
   }
-  const raw = { name: serverName, ...(serverConfig as Record<string, unknown>) };
+  const raw = {
+    name: serverName,
+    ...(serverConfig as Record<string, unknown>),
+  };
 
   if ("type" in raw && raw.type === "http") {
     const result = McpHttpServerSchema.safeParse(raw);
@@ -24,7 +33,9 @@ function parseServerObject(
   }
   const result = McpStdioServerSchema.safeParse(raw);
   if (!result.success) {
-    return { error: `"${serverName}": invalid stdio server — missing required field "command"` };
+    return {
+      error: `"${serverName}": invalid stdio server — missing required field "command"`,
+    };
   }
   return { entry: result.data };
 }
@@ -45,7 +56,9 @@ function parseServersRecord(
   }
 
   if (errors.length > 0) {
-    return err(new UserError(`Invalid MCP server entries:\n${errors.join("\n")}`));
+    return err(
+      new UserError(`Invalid MCP server entries:\n${errors.join("\n")}`),
+    );
   }
   return ok(entries);
 }
@@ -81,13 +94,20 @@ export async function parseMcpJson(
   }
 
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-    return err(new UserError(`MCP config file must be a JSON object: ${filePath}`));
+    return err(
+      new UserError(`MCP config file must be a JSON object: ${filePath}`),
+    );
   }
 
   const obj = parsed as Record<string, unknown>;
 
   // Detect wrapped format: { "mcpServers": { ... } }
-  if ("mcpServers" in obj && typeof obj.mcpServers === "object" && obj.mcpServers !== null && !Array.isArray(obj.mcpServers)) {
+  if (
+    "mcpServers" in obj &&
+    typeof obj.mcpServers === "object" &&
+    obj.mcpServers !== null &&
+    !Array.isArray(obj.mcpServers)
+  ) {
     return parseServersRecord(obj.mcpServers as Record<string, unknown>);
   }
 

@@ -1,9 +1,14 @@
-import { cancel, intro, isCancel, outro } from "@clack/prompts";
-import { footerSelect as select, footerText as text } from "../ui/footer";
-import { basicTemplate, multiTemplate, npmTemplate, TEMPLATE_NAMES } from "@skilltap/core";
-import { defineCommand } from "citty";
-import { dirname, join, resolve } from "node:path";
 import { mkdir } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+import { cancel, intro, isCancel, outro } from "@clack/prompts";
+import {
+  basicTemplate,
+  multiTemplate,
+  npmTemplate,
+  TEMPLATE_NAMES,
+} from "@skilltap/core";
+import { defineCommand } from "citty";
+import { footerSelect as select, footerText as text } from "../ui/footer";
 import { ansi, errorLine, successLine } from "../ui/format";
 
 const NAME_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
@@ -49,18 +54,30 @@ function printNextSteps(
   process.stdout.write(`\n`);
   process.stdout.write(`  ${ansi.bold("Next steps:")}\n`);
   process.stdout.write(`    cd ${dir}\n`);
-  process.stdout.write(`    ${ansi.dim("# Edit SKILL.md with your skill instructions")}\n`);
+  process.stdout.write(
+    `    ${ansi.dim("# Edit SKILL.md with your skill instructions")}\n`,
+  );
   if (template === "npm") {
     process.stdout.write(
-      `    ${ansi.dim("# Edit package.json — set \"name\" to your npm scope (e.g. @yourname/${name})")}\n`,
+      `    ${ansi.dim('# Edit package.json — set "name" to your npm scope (e.g. @yourname/${name})')}\n`,
     );
-    process.stdout.write(`    ${ansi.dim("# Set repository.url in package.json")}\n`);
+    process.stdout.write(
+      `    ${ansi.dim("# Set repository.url in package.json")}\n`,
+    );
   }
-  process.stdout.write(`    skilltap link . --also claude-code   ${ansi.dim("# Test locally")}\n`);
-  process.stdout.write(`    skilltap verify                        ${ansi.dim("# Validate before sharing")}\n`);
-  process.stdout.write(`    git init && git add -A && git commit -m "Initial skill"\n`);
+  process.stdout.write(
+    `    skilltap link . --also claude-code   ${ansi.dim("# Test locally")}\n`,
+  );
+  process.stdout.write(
+    `    skilltap verify                        ${ansi.dim("# Validate before sharing")}\n`,
+  );
+  process.stdout.write(
+    `    git init && git add -A && git commit -m "Initial skill"\n`,
+  );
   if (template === "npm") {
-    process.stdout.write(`    ${ansi.dim("# Push, then create a GitHub release to trigger publish")}\n`);
+    process.stdout.write(
+      `    ${ansi.dim("# Push, then create a GitHub release to trigger publish")}\n`,
+    );
   } else {
     process.stdout.write(
       `    git remote add origin <your-git-url> && git push -u origin main\n`,
@@ -207,7 +224,15 @@ export default defineCommand({
     const license = licenseResult as string;
 
     const outDir = (args.dir as string) || name;
-    await createSkill({ name, description, license, author, template, skillNames, outDir });
+    await createSkill({
+      name,
+      description,
+      license,
+      author,
+      template,
+      skillNames,
+      outDir,
+    });
 
     outro("Done!");
   },
@@ -228,7 +253,10 @@ async function runNonInteractive(opts: {
   }
 
   if (!(TEMPLATE_NAMES as readonly string[]).includes(template)) {
-    errorLine(`Unknown template '${template}'`, `Use: ${TEMPLATE_NAMES.join(", ")}`);
+    errorLine(
+      `Unknown template '${template}'`,
+      `Use: ${TEMPLATE_NAMES.join(", ")}`,
+    );
     process.exit(1);
   }
 
@@ -237,7 +265,15 @@ async function runNonInteractive(opts: {
   const license = "MIT";
   const skillNames = template === "multi" ? [`${name}-a`, `${name}-b`] : [];
 
-  await createSkill({ name, description, license, author, template, skillNames, outDir });
+  await createSkill({
+    name,
+    description,
+    license,
+    author,
+    template,
+    skillNames,
+    outDir,
+  });
 }
 
 async function createSkill(opts: {
@@ -249,7 +285,8 @@ async function createSkill(opts: {
   skillNames: string[];
   outDir: string;
 }): Promise<void> {
-  const { name, description, license, author, template, skillNames, outDir } = opts;
+  const { name, description, license, author, template, skillNames, outDir } =
+    opts;
   const resolvedDir = resolve(outDir);
 
   // Check directory doesn't already exist
@@ -259,7 +296,10 @@ async function createSkill(opts: {
     const { lstat } = await import("node:fs/promises");
     try {
       await lstat(resolvedDir);
-      errorLine(`Directory '${outDir}/' already exists.`, "Use --dir to specify a different location.");
+      errorLine(
+        `Directory '${outDir}/' already exists.`,
+        "Use --dir to specify a different location.",
+      );
       process.exit(1);
     } catch {
       // doesn't exist — good

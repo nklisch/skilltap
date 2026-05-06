@@ -1,7 +1,16 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
-import { join } from "node:path";
+
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
@@ -204,11 +213,17 @@ describe("verify --all", () => {
   test("exits 1 when any skill fails", async () => {
     const goodDir = join(tmpDir, ".agents", "skills", "good-skill");
     await mkdir(goodDir, { recursive: true });
-    await Bun.write(join(goodDir, "SKILL.md"), `---\nname: good-skill\ndescription: Good\nlicense: MIT\n---\n\nDo stuff.\n`);
+    await Bun.write(
+      join(goodDir, "SKILL.md"),
+      `---\nname: good-skill\ndescription: Good\nlicense: MIT\n---\n\nDo stuff.\n`,
+    );
 
     const badDir = join(tmpDir, ".agents", "skills", "bad-skill");
     await mkdir(badDir, { recursive: true });
-    await Bun.write(join(badDir, "SKILL.md"), `---\nname: bad-skill\n---\n\nMissing description.\n`);
+    await Bun.write(
+      join(badDir, "SKILL.md"),
+      `---\nname: bad-skill\n---\n\nMissing description.\n`,
+    );
 
     const { exitCode, stdout } = await runVerify(["--all"], tmpDir);
     expect(exitCode).toBe(1);
@@ -242,8 +257,16 @@ describe("verify + create roundtrip", () => {
     // Use create to generate the skill
     const createProc = Bun.spawn(
       [
-        "bun", "run", "--bun", "src/index.ts", "create",
-        "round-trip-skill", "--template", "basic", "--dir", outDir,
+        "bun",
+        "run",
+        "--bun",
+        "src/index.ts",
+        "create",
+        "round-trip-skill",
+        "--template",
+        "basic",
+        "--dir",
+        outDir,
       ],
       {
         cwd: `${import.meta.dir}/../..`,

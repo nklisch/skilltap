@@ -18,8 +18,20 @@ const VALID_RECORD = {
   components: [
     { type: "skill", name: "code-review", active: true },
     { type: "skill", name: "commit-helper", active: true },
-    { type: "mcp", name: "database", active: true, command: "npx", args: ["-y", "@corp/db-mcp"], env: {} },
-    { type: "agent", name: "code-review", active: true, platform: "claude-code" },
+    {
+      type: "mcp",
+      name: "database",
+      active: true,
+      command: "npx",
+      args: ["-y", "@corp/db-mcp"],
+      env: {},
+    },
+    {
+      type: "agent",
+      name: "code-review",
+      active: true,
+      platform: "claude-code",
+    },
   ],
   installedAt: "2026-04-10T12:00:00Z",
   updatedAt: "2026-04-10T12:00:00Z",
@@ -110,19 +122,34 @@ describe("PluginRecordSchema", () => {
   });
 
   test("rejects invalid scope", () => {
-    expect(PluginRecordSchema.safeParse({ ...VALID_RECORD, scope: "local" }).success).toBe(false);
+    expect(
+      PluginRecordSchema.safeParse({ ...VALID_RECORD, scope: "local" }).success,
+    ).toBe(false);
   });
 });
 
 describe("StoredComponentSchema", () => {
   test("discriminates on type", () => {
-    expect(StoredComponentSchema.safeParse({ type: "skill", name: "foo" }).success).toBe(true);
-    expect(StoredComponentSchema.safeParse({ type: "mcp", name: "db", command: "npx" }).success).toBe(true);
-    expect(StoredComponentSchema.safeParse({ type: "agent", name: "bot" }).success).toBe(true);
+    expect(
+      StoredComponentSchema.safeParse({ type: "skill", name: "foo" }).success,
+    ).toBe(true);
+    expect(
+      StoredComponentSchema.safeParse({
+        type: "mcp",
+        name: "db",
+        command: "npx",
+      }).success,
+    ).toBe(true);
+    expect(
+      StoredComponentSchema.safeParse({ type: "agent", name: "bot" }).success,
+    ).toBe(true);
   });
 
   test("accepts skill component and defaults active to true", () => {
-    const result = StoredComponentSchema.safeParse({ type: "skill", name: "code-review" });
+    const result = StoredComponentSchema.safeParse({
+      type: "skill",
+      name: "code-review",
+    });
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.active).toBe(true);
@@ -147,7 +174,10 @@ describe("StoredComponentSchema", () => {
   });
 
   test("accepts agent component and defaults platform to claude-code", () => {
-    const result = StoredComponentSchema.safeParse({ type: "agent", name: "bot" });
+    const result = StoredComponentSchema.safeParse({
+      type: "agent",
+      name: "bot",
+    });
     expect(result.success).toBe(true);
     if (!result.success) return;
     if (result.data.type !== "agent") return;
@@ -155,11 +185,15 @@ describe("StoredComponentSchema", () => {
   });
 
   test("rejects unknown type", () => {
-    expect(StoredComponentSchema.safeParse({ type: "unknown", name: "foo" }).success).toBe(false);
+    expect(
+      StoredComponentSchema.safeParse({ type: "unknown", name: "foo" }).success,
+    ).toBe(false);
   });
 
   test("rejects mcp component without command", () => {
-    expect(StoredComponentSchema.safeParse({ type: "mcp", name: "db" }).success).toBe(false);
+    expect(
+      StoredComponentSchema.safeParse({ type: "mcp", name: "db" }).success,
+    ).toBe(false);
   });
 
   test("backward compat: existing mcp entry without serverType parses as stdio", () => {

@@ -1,7 +1,9 @@
 import { discoverPublishablePlugins } from "../../manifest/publish";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
-export async function checkPluginManifests(projectRoot?: string): Promise<DoctorCheck> {
+export async function checkPluginManifests(
+  projectRoot?: string,
+): Promise<DoctorCheck> {
   if (!projectRoot) {
     return {
       name: "plugin manifests",

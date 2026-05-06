@@ -1,8 +1,7 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
 import { checkStateV2 } from "./state-v2";
 
@@ -79,7 +78,10 @@ describe("checkStateV2", () => {
 
   test("fail with fixable issue when state.json has invalid schema", async () => {
     const statePath = join(env.configDir, "skilltap", "state.json");
-    await writeFile(statePath, JSON.stringify({ version: 99, skills: "wrong" }, null, 2));
+    await writeFile(
+      statePath,
+      JSON.stringify({ version: 99, skills: "wrong" }, null, 2),
+    );
 
     const result = await checkStateV2();
     expect(result.check.status).toBe("fail");

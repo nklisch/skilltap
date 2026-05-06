@@ -245,7 +245,9 @@ describe("migrateSecurityConfig", () => {
   });
 
   test("migrates v1 with scan=off — agent gets static, not off", () => {
-    const raw = { security: { scan: "off", on_warn: "prompt", require_scan: false } };
+    const raw = {
+      security: { scan: "off", on_warn: "prompt", require_scan: false },
+    };
     const result = migrateSecurityConfig(raw);
     const sec = result.security as Record<string, unknown>;
     const agent = sec.agent as Record<string, unknown>;
@@ -349,9 +351,7 @@ describe("saveInstalled", () => {
     const installed: InstalledJson = { version: 1, skills: [] };
     const result = await saveInstalled(installed);
     expect(result.ok).toBe(true);
-    expect(await fileExists(join(tmpDir, "skilltap", "state.json"))).toBe(
-      true,
-    );
+    expect(await fileExists(join(tmpDir, "skilltap", "state.json"))).toBe(true);
   });
 
   test("round-trip: save then load produces equivalent data", async () => {

@@ -67,8 +67,12 @@ export const PluginsJsonSchema = z.object({
 });
 
 export type StoredSkillComponent = z.infer<typeof StoredSkillComponentSchema>;
-export type StoredMcpStdioComponent = z.infer<typeof StoredMcpStdioComponentSchema>;
-export type StoredMcpHttpComponent = z.infer<typeof StoredMcpHttpComponentSchema>;
+export type StoredMcpStdioComponent = z.infer<
+  typeof StoredMcpStdioComponentSchema
+>;
+export type StoredMcpHttpComponent = z.infer<
+  typeof StoredMcpHttpComponentSchema
+>;
 export type StoredMcpComponent = z.infer<typeof StoredMcpComponentSchema>;
 export type StoredAgentComponent = z.infer<typeof StoredAgentComponentSchema>;
 export type StoredComponent = z.infer<typeof StoredComponentSchema>;

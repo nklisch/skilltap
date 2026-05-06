@@ -8,7 +8,9 @@ export async function discoverSkills(
 ): Promise<PluginManifest["components"]> {
   const components: PluginManifest["components"] = [];
   const paths = skillPaths
-    ? (Array.isArray(skillPaths) ? skillPaths : [skillPaths])
+    ? Array.isArray(skillPaths)
+      ? skillPaths
+      : [skillPaths]
     : [pluginDir];
 
   for (const p of paths) {

@@ -1,6 +1,6 @@
-import { defineCommand } from "citty";
-import { discoverSkills } from "@skilltap/core";
 import type { DiscoveredSkill } from "@skilltap/core";
+import { discoverSkills } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { outputJson } from "../../ui/agent-out";
 import { ansi, table, termWidth, truncate } from "../../ui/format";
 import { isAgentMode } from "../../ui/policy";
@@ -12,12 +12,32 @@ export default defineCommand({
     description: "Manage installed skills",
   },
   args: {
-    global: { type: "boolean", description: "Show only global skills", default: false },
-    project: { type: "boolean", description: "Show only project skills", default: false },
-    unmanaged: { type: "boolean", description: "Show only unmanaged skills", default: false },
+    global: {
+      type: "boolean",
+      description: "Show only global skills",
+      default: false,
+    },
+    project: {
+      type: "boolean",
+      description: "Show only project skills",
+      default: false,
+    },
+    unmanaged: {
+      type: "boolean",
+      description: "Show only unmanaged skills",
+      default: false,
+    },
     json: { type: "boolean", description: "Output as JSON", default: false },
-    disabled: { type: "boolean", description: "Show only disabled skills", default: false },
-    active: { type: "boolean", description: "Show only active skills", default: false },
+    disabled: {
+      type: "boolean",
+      description: "Show only disabled skills",
+      default: false,
+    },
+    active: {
+      type: "boolean",
+      description: "Show only active skills",
+      default: false,
+    },
   },
   subCommands: {
     info: () => import("./info").then((m) => m.default),
@@ -75,22 +95,26 @@ export default defineCommand({
         const primaryLoc = skill.locations[0];
         if (!primaryLoc) continue;
         const scope = primaryLoc.source.scope.toUpperCase();
-        const status = skill.record?.active === false
-          ? "disabled"
-          : skill.managed
-            ? skill.record?.scope === "linked" ? "linked" : "managed"
-            : "unmanaged";
+        const status =
+          skill.record?.active === false
+            ? "disabled"
+            : skill.managed
+              ? skill.record?.scope === "linked"
+                ? "linked"
+                : "managed"
+              : "unmanaged";
         const agent =
           primaryLoc.source.type === "agent-specific"
             ? primaryLoc.source.agent.toUpperCase().replace(/-/g, "_")
             : "AGENTS";
-        const extra = skill.managed && skill.record
-          ? skill.record.scope !== "linked"
-            ? `source=${skill.record.repo ?? "local"}`
-            : `path=${skill.record.path ?? ""}`
-          : skill.gitRemote
-            ? `remote=${skill.gitRemote}`
-            : "";
+        const extra =
+          skill.managed && skill.record
+            ? skill.record.scope !== "linked"
+              ? `source=${skill.record.repo ?? "local"}`
+              : `path=${skill.record.path ?? ""}`
+            : skill.gitRemote
+              ? `remote=${skill.gitRemote}`
+              : "";
         process.stdout.write(
           `${scope} ${status} ${skill.name}${extra ? ` ${extra}` : ""}\n`,
         );
@@ -125,9 +149,10 @@ export default defineCommand({
           : isLinked
             ? ansi.cyan("linked")
             : ansi.green("managed");
-        const agents = s.record?.also && s.record.also.length > 0
-          ? s.record.also.join(", ")
-          : "—";
+        const agents =
+          s.record?.also && s.record.also.length > 0
+            ? s.record.also.join(", ")
+            : "—";
         const source = s.record?.repo ?? "local";
         return [
           truncate(s.name, NAME_W),

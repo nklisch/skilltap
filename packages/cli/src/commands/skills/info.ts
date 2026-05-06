@@ -1,11 +1,19 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { AGENT_PATHS, ensureBuiltinTap, globalBase, isBuiltinTapCloned, loadConfig, loadInstalled, loadTaps } from "@skilltap/core";
+import {
+  AGENT_PATHS,
+  ensureBuiltinTap,
+  globalBase,
+  isBuiltinTapCloned,
+  loadConfig,
+  loadInstalled,
+  loadTaps,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
 import { exitWithError, outputJson } from "../../ui/agent-out";
 import { ansi } from "../../ui/format";
-import { formatTrustLabel, formatTrustTier } from "../../ui/trust";
 import { tryFindProjectRoot } from "../../ui/resolve";
+import { formatTrustLabel, formatTrustTier } from "../../ui/trust";
 
 export default defineCommand({
   meta: {
@@ -26,20 +34,29 @@ export default defineCommand({
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode =
+      configResult.ok && configResult.value["agent-mode"].enabled;
 
     // Try installed first (global + project)
     const globalInstalledResult = await loadInstalled();
     if (!globalInstalledResult.ok) {
-      exitWithError(agentMode, globalInstalledResult.error.message, globalInstalledResult.error.hint);
+      exitWithError(
+        agentMode,
+        globalInstalledResult.error.message,
+        globalInstalledResult.error.hint,
+      );
     }
 
     const projectRoot = await tryFindProjectRoot();
-    const projectInstalledResult = projectRoot ? await loadInstalled(projectRoot) : null;
+    const projectInstalledResult = projectRoot
+      ? await loadInstalled(projectRoot)
+      : null;
 
     const allSkills = [
       ...globalInstalledResult.value.skills,
-      ...(projectInstalledResult?.ok ? projectInstalledResult.value.skills : []),
+      ...(projectInstalledResult?.ok
+        ? projectInstalledResult.value.skills
+        : []),
     ];
 
     const skill = allSkills.find((s) => s.name === args.name);
@@ -50,7 +67,10 @@ export default defineCommand({
         return;
       }
 
-      const base = skill.scope === "project" ? (projectRoot ?? process.cwd()) : globalBase();
+      const base =
+        skill.scope === "project"
+          ? (projectRoot ?? process.cwd())
+          : globalBase();
       const skillPath = join(base, ".agents", "skills", skill.name);
 
       const agentStatus = await Promise.all(
@@ -74,7 +94,12 @@ export default defineCommand({
         ["source:", skill.repo ?? "local"],
         ["ref:", skill.ref ?? "—"],
         ["sha:", skill.sha ? skill.sha.slice(0, 7) : "—"],
-        ["trust:", skill.trust ? formatTrustLabel(skill.trust) : ansi.dim("○ unverified")],
+        [
+          "trust:",
+          skill.trust
+            ? formatTrustLabel(skill.trust)
+            : ansi.dim("○ unverified"),
+        ],
         ["path:", skillPath],
         ["agents:", activeAgents.length > 0 ? activeAgents.join(", ") : "none"],
         ["installed:", skill.installedAt],
@@ -118,7 +143,11 @@ export default defineCommand({
       const tapEntry = tapsResult.value.find((e) => e.skill.name === args.name);
       if (tapEntry) {
         if (args.json) {
-          outputJson({ ...tapEntry.skill, tap: tapEntry.tapName, status: "available" });
+          outputJson({
+            ...tapEntry.skill,
+            tap: tapEntry.tapName,
+            status: "available",
+          });
           return;
         }
 
@@ -131,7 +160,12 @@ export default defineCommand({
           ["status:", ansi.dim("(available)")],
           ["tap:", tapEntry.tapName],
           ["source:", tapEntry.skill.repo],
-          ["tags:", tapEntry.skill.tags.length > 0 ? tapEntry.skill.tags.join(", ") : "—"],
+          [
+            "tags:",
+            tapEntry.skill.tags.length > 0
+              ? tapEntry.skill.tags.join(", ")
+              : "—",
+          ],
           ...(tapTrust ? [["trust:", tapTrust] as [string, string]] : []),
         ];
 

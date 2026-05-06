@@ -1,14 +1,16 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
-import type { State } from "../../state/schema";
 import { loadLockfile } from "../../manifest";
+import type { State } from "../../state/schema";
 import { checkLockfileDrift } from "./lockfile-drift";
 
-const makeLockfileContent = (entries: { source: string; ref: string; sha?: string; range: string }[] = [], kind: "skill" | "plugin" = "skill") => {
+const makeLockfileContent = (
+  entries: { source: string; ref: string; sha?: string; range: string }[] = [],
+  kind: "skill" | "plugin" = "skill",
+) => {
   if (entries.length === 0) return `version = 1\n`;
   const rows = entries.map(
     (e) =>
@@ -79,7 +81,14 @@ describe("checkLockfileDrift", () => {
     const state = makeState({ skills: [SKILL_RECORD] });
     await writeFile(
       join(projectRoot, "skilltap.lock"),
-      makeLockfileContent([{ source: "github:n/commit-helper", ref: "v1.2.0", sha: "abc123", range: "v1.2.0" }]),
+      makeLockfileContent([
+        {
+          source: "github:n/commit-helper",
+          ref: "v1.2.0",
+          sha: "abc123",
+          range: "v1.2.0",
+        },
+      ]),
     );
 
     const result = await checkLockfileDrift(state, projectRoot);
@@ -89,7 +98,10 @@ describe("checkLockfileDrift", () => {
 
   test("warn with fixable issue when state has skill missing from lockfile", async () => {
     const state = makeState({ skills: [SKILL_RECORD] });
-    await writeFile(join(projectRoot, "skilltap.lock"), makeLockfileContent([]));
+    await writeFile(
+      join(projectRoot, "skilltap.lock"),
+      makeLockfileContent([]),
+    );
 
     const result = await checkLockfileDrift(state, projectRoot);
     expect(result.status).toBe("warn");
@@ -111,12 +123,21 @@ describe("checkLockfileDrift", () => {
     const state = makeState({ skills: [SKILL_RECORD] });
     await writeFile(
       join(projectRoot, "skilltap.lock"),
-      makeLockfileContent([{ source: "github:n/commit-helper", ref: "v1.2.0", sha: "deadbeef", range: "v1.2.0" }]),
+      makeLockfileContent([
+        {
+          source: "github:n/commit-helper",
+          ref: "v1.2.0",
+          sha: "deadbeef",
+          range: "v1.2.0",
+        },
+      ]),
     );
 
     const result = await checkLockfileDrift(state, projectRoot);
     expect(result.status).toBe("warn");
-    const staleIssues = result.issues!.filter((i) => i.message.includes("differs from installed sha"));
+    const staleIssues = result.issues!.filter((i) =>
+      i.message.includes("differs from installed sha"),
+    );
     expect(staleIssues).toHaveLength(1);
     expect(staleIssues[0].fixable).toBe(false);
   });
@@ -125,12 +146,21 @@ describe("checkLockfileDrift", () => {
     const state = makeState();
     await writeFile(
       join(projectRoot, "skilltap.lock"),
-      makeLockfileContent([{ source: "github:n/orphan-skill", ref: "v1.0.0", sha: "abc", range: "*" }]),
+      makeLockfileContent([
+        {
+          source: "github:n/orphan-skill",
+          ref: "v1.0.0",
+          sha: "abc",
+          range: "*",
+        },
+      ]),
     );
 
     const result = await checkLockfileDrift(state, projectRoot);
     expect(result.status).toBe("warn");
-    const orphanIssues = result.issues!.filter((i) => i.message.includes("lockfile entry has no installed state"));
+    const orphanIssues = result.issues!.filter((i) =>
+      i.message.includes("lockfile entry has no installed state"),
+    );
     expect(orphanIssues).toHaveLength(1);
     expect(orphanIssues[0].fixable).toBe(false);
   });

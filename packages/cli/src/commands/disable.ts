@@ -14,7 +14,8 @@ import { tryFindProjectRoot } from "../ui/resolve";
 export default defineCommand({
   meta: {
     name: "disable",
-    description: "Disable a plugin component (name:component) or all active components (bare name)",
+    description:
+      "Disable a plugin component (name:component) or all active components (bare name)",
   },
   args: {
     target: {
@@ -45,7 +46,8 @@ export default defineCommand({
     if (ref.component) {
       const component = findComponentInPlugin(plugin, ref.component);
       if (!component) {
-        const available = plugin.components.map((c) => c.name).join(", ") || "(none)";
+        const available =
+          plugin.components.map((c) => c.name).join(", ") || "(none)";
         exitWithError(
           agentMode,
           `Component '${ref.component}' not found in plugin '${ref.name}'`,
@@ -54,15 +56,25 @@ export default defineCommand({
       }
       if (!component.active) {
         if (args.json) {
-          outputJson({ plugin: plugin.name, component, action: "noop", nowActive: false });
+          outputJson({
+            plugin: plugin.name,
+            component,
+            action: "noop",
+            nowActive: false,
+          });
         } else {
           successLine(`${componentLabel(component)} is already disabled`);
         }
         return;
       }
-      const result = await toggleInstalledComponent(plugin.name, component.type, component.name, {
-        projectRoot,
-      });
+      const result = await toggleInstalledComponent(
+        plugin.name,
+        component.type,
+        component.name,
+        {
+          projectRoot,
+        },
+      );
       if (!result.ok) {
         errorLine(result.error.message);
         process.exit(1);
@@ -82,8 +94,12 @@ export default defineCommand({
 
     const active = plugin.components.filter((c) => c.active);
     if (active.length === 0) {
-      if (args.json) outputJson({ plugin: plugin.name, action: "noop", active: 0 });
-      else process.stdout.write(`No active components in plugin '${plugin.name}'.\n`);
+      if (args.json)
+        outputJson({ plugin: plugin.name, action: "noop", active: 0 });
+      else
+        process.stdout.write(
+          `No active components in plugin '${plugin.name}'.\n`,
+        );
       return;
     }
 
@@ -94,9 +110,16 @@ export default defineCommand({
       error?: string;
     }[] = [];
     for (const c of active) {
-      const r = await toggleInstalledComponent(plugin.name, c.type, c.name, { projectRoot });
+      const r = await toggleInstalledComponent(plugin.name, c.type, c.name, {
+        projectRoot,
+      });
       if (!r.ok) {
-        results.push({ component: c, nowActive: true, action: "failed", error: r.error.message });
+        results.push({
+          component: c,
+          nowActive: true,
+          action: "failed",
+          error: r.error.message,
+        });
       } else {
         results.push({
           component: r.value.component,
@@ -112,7 +135,9 @@ export default defineCommand({
     }
     for (const r of results) {
       if (r.action === "failed") {
-        errorLine(`Failed to disable ${componentLabel(r.component)}: ${r.error}`);
+        errorLine(
+          `Failed to disable ${componentLabel(r.component)}: ${r.error}`,
+        );
       } else {
         successLine(`Disabled ${componentLabel(r.component)}`);
       }

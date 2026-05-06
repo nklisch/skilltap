@@ -1,13 +1,29 @@
 import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { removePluginFromManifest } from "../manifest/update";
-import { agentDefDisabledPath, agentDefPath, scopeBase, skillDisabledDir, skillInstallDir } from "../paths";
-import type { PluginsJson, StoredComponent, StoredMcpComponent } from "../schemas/plugins";
+import {
+  agentDefDisabledPath,
+  agentDefPath,
+  scopeBase,
+  skillDisabledDir,
+  skillInstallDir,
+} from "../paths";
+import type {
+  PluginRecord,
+  PluginsJson,
+  StoredComponent,
+  StoredMcpComponent,
+} from "../schemas/plugins";
 import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
 import { err, ok, type Result, UserError } from "../types";
 import { injectMcpServers, removeMcpServers } from "./mcp-inject";
-import { findPlugin, loadPlugins, removePlugin, savePlugins, toggleComponent } from "./state";
-import type { PluginRecord } from "../schemas/plugins";
+import {
+  findPlugin,
+  loadPlugins,
+  removePlugin,
+  savePlugins,
+  toggleComponent,
+} from "./state";
 
 export type RemovePluginOptions = {
   scope?: "global" | "project";
@@ -42,7 +58,12 @@ async function findPluginInScopes(
     if (!globalResult.ok) return globalResult;
     const record = findPlugin(globalResult.value, pluginName);
     if (record) {
-      return ok({ state: globalResult.value, scope: "global", projectRoot: undefined, record });
+      return ok({
+        state: globalResult.value,
+        scope: "global",
+        projectRoot: undefined,
+        record,
+      });
     }
   }
 
@@ -51,7 +72,12 @@ async function findPluginInScopes(
     if (!projResult.ok) return projResult;
     const record = findPlugin(projResult.value, pluginName);
     if (record) {
-      return ok({ state: projResult.value, scope: "project", projectRoot, record });
+      return ok({
+        state: projResult.value,
+        scope: "project",
+        projectRoot,
+        record,
+      });
     }
   }
 
@@ -78,7 +104,12 @@ export async function removeInstalledPlugin(
       const disabledDir = skillDisabledDir(component.name, scope, projectRoot);
       await rm(activeDir, { recursive: true, force: true });
       await rm(disabledDir, { recursive: true, force: true });
-      await removeAgentSymlinks(component.name, record.also, scope, projectRoot);
+      await removeAgentSymlinks(
+        component.name,
+        record.also,
+        scope,
+        projectRoot,
+      );
     } else if (component.type === "mcp") {
       const removeResult = await removeMcpServers({
         pluginName,
@@ -88,15 +119,28 @@ export async function removeInstalledPlugin(
       });
       if (!removeResult.ok) return removeResult;
     } else if (component.type === "agent") {
-      const activePath = agentDefPath(component.name, "claude-code", scope, projectRoot);
-      const disabledPath = agentDefDisabledPath(component.name, "claude-code", scope, projectRoot);
+      const activePath = agentDefPath(
+        component.name,
+        "claude-code",
+        scope,
+        projectRoot,
+      );
+      const disabledPath = agentDefDisabledPath(
+        component.name,
+        "claude-code",
+        scope,
+        projectRoot,
+      );
       if (activePath) await rm(activePath, { force: true });
       if (disabledPath) await rm(disabledPath, { force: true });
     }
   }
 
   const newState = removePlugin(state, pluginName);
-  const saveResult = await savePlugins(newState, scope === "project" ? projectRoot : undefined);
+  const saveResult = await savePlugins(
+    newState,
+    scope === "project" ? projectRoot : undefined,
+  );
   if (!saveResult.ok) return saveResult;
 
   if (scope === "project" && projectRoot && record.repo) {
@@ -147,9 +191,17 @@ export async function toggleInstalledComponent(
 
     if (wasActive) {
       // Deactivate: move to .disabled/, remove symlinks
-      await mkdir(join(scopeBase(scope, projectRoot), ".agents", "skills", ".disabled"), { recursive: true });
+      await mkdir(
+        join(scopeBase(scope, projectRoot), ".agents", "skills", ".disabled"),
+        { recursive: true },
+      );
       await rename(activeDir, disabledDir);
-      await removeAgentSymlinks(component.name, record.also, scope, projectRoot);
+      await removeAgentSymlinks(
+        component.name,
+        record.also,
+        scope,
+        projectRoot,
+      );
     } else {
       // Activate: move from .disabled/ back, recreate symlinks
       await rename(disabledDir, activeDir);
@@ -203,8 +255,18 @@ export async function toggleInstalledComponent(
       mcpAgents = injectResult.value;
     }
   } else if (component.type === "agent") {
-    const activePath = agentDefPath(component.name, "claude-code", scope, projectRoot);
-    const disabledPath = agentDefDisabledPath(component.name, "claude-code", scope, projectRoot);
+    const activePath = agentDefPath(
+      component.name,
+      "claude-code",
+      scope,
+      projectRoot,
+    );
+    const disabledPath = agentDefDisabledPath(
+      component.name,
+      "claude-code",
+      scope,
+      projectRoot,
+    );
 
     if (activePath && disabledPath) {
       if (wasActive) {
@@ -218,7 +280,12 @@ export async function toggleInstalledComponent(
     }
   }
 
-  const toggleResult = toggleComponent(state, pluginName, componentType, componentName);
+  const toggleResult = toggleComponent(
+    state,
+    pluginName,
+    componentType,
+    componentName,
+  );
   if (!toggleResult.ok) return toggleResult;
 
   const saveResult = await savePlugins(

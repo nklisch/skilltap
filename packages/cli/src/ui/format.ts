@@ -73,8 +73,10 @@ export function successLine(msg: string): void {
 
 /** Format install count as "1.2K" or "1.2M" */
 export function formatInstallCount(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M installs`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}K installs`;
+  if (count >= 1_000_000)
+    return `${(count / 1_000_000).toFixed(1).replace(/\.0$/, "")}M installs`;
+  if (count >= 1_000)
+    return `${(count / 1_000).toFixed(1).replace(/\.0$/, "")}K installs`;
   return `${count} install${count === 1 ? "" : "s"}`;
 }
 
@@ -84,9 +86,13 @@ export function formatShaChange(from: string, to: string): string {
 }
 
 /** "(2 files changed, +5 -2)" */
-export function formatDiffStatSummary(stat: Pick<DiffStat, "filesChanged" | "insertions" | "deletions">): string {
+export function formatDiffStatSummary(
+  stat: Pick<DiffStat, "filesChanged" | "insertions" | "deletions">,
+): string {
   const files =
-    stat.filesChanged === 1 ? "1 file changed" : `${stat.filesChanged} files changed`;
+    stat.filesChanged === 1
+      ? "1 file changed"
+      : `${stat.filesChanged} files changed`;
   const parts = [files];
   if (stat.insertions > 0) parts.push(`+${stat.insertions}`);
   if (stat.deletions > 0) parts.push(`-${stat.deletions}`);
@@ -107,26 +113,23 @@ export function formatUnifiedDiff(rawDiff: string): string {
   return rawDiff
     .split("\n")
     .map((line) => {
-      if (line.startsWith("+++") || line.startsWith("---")) return ansi.dim(line);
+      if (line.startsWith("+++") || line.startsWith("---"))
+        return ansi.dim(line);
       if (line.startsWith("+")) return ansi.green(line);
       if (line.startsWith("-")) return ansi.red(line);
       if (line.startsWith("@@")) return ansi.cyan(line);
-      if (line.startsWith("diff ") || line.startsWith("index ")) return ansi.dim(line);
+      if (line.startsWith("diff ") || line.startsWith("index "))
+        return ansi.dim(line);
       return line;
     })
     .join("\n");
 }
 
 /** Bold+underline characters at fzf match positions. */
-export function highlightMatches(
-  text: string,
-  positions: Set<number>,
-): string {
+export function highlightMatches(text: string, positions: Set<number>): string {
   let result = "";
   for (let i = 0; i < text.length; i++) {
-    result += positions.has(i)
-      ? `${BOLD}\x1b[4m${text[i]}${RESET}`
-      : text[i];
+    result += positions.has(i) ? `${BOLD}\x1b[4m${text[i]}${RESET}` : text[i];
   }
   return result;
 }

@@ -6,11 +6,29 @@
  * Enter to select, Ctrl+C to cancel, pre-filled queries, no-match state,
  * and agent selection prompt during install.
  */
+
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+
 setDefaultTimeout(60_000);
-import { createTestEnv, type TestEnv, commitAll, initRepo, runInteractive, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+
+import {
+  commitAll,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runInteractive,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
@@ -87,296 +105,268 @@ async function addTap(tapPath: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 describe("find -i — search prompt", () => {
-  test(
-    "shows search prompt with placeholder",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "https://example.com/a",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+  test("shows search prompt with placeholder", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
 
-        await session.waitForText("Search for skills:");
-        await session.waitForText("git, testing, docker");
+      await session.waitForText("Search for skills:");
+      await session.waitForText("git, testing, docker");
 
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
 
-  test(
-    "typing a query shows matching results",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "https://example.com/a",
-        },
-        {
-          name: "code-review",
-          description: "Code review assistant",
-          repo: "https://example.com/b",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+  test("typing a query shows matching results", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "https://example.com/a",
+      },
+      {
+        name: "code-review",
+        description: "Code review assistant",
+        repo: "https://example.com/b",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
 
-        await session.waitForText("Search for skills:");
+      await session.waitForText("Search for skills:");
 
-        // Wait for initial results to load
-        await session.waitForText("commit-helper");
+      // Wait for initial results to load
+      await session.waitForText("commit-helper");
 
-        // Type to filter
-        session.send("commit");
+      // Type to filter
+      session.send("commit");
 
-        // Should show commit-helper in results
-        await session.waitForText("commit-helper");
+      // Should show commit-helper in results
+      await session.waitForText("commit-helper");
 
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
 
-  test(
-    "pre-filled query shows results immediately",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "https://example.com/a",
-        },
-        {
-          name: "code-review",
-          description: "Code review assistant",
-          repo: "https://example.com/b",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+  test("pre-filled query shows results immediately", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "https://example.com/a",
+      },
+      {
+        name: "code-review",
+        description: "Code review assistant",
+        repo: "https://example.com/b",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        const session = await runInteractive(
-          [...CMD, "find", "commit", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
-
-        // Results should appear without typing — query pre-filled
-        await session.waitForText("commit-helper");
-
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
-
-  test(
-    "Ctrl+C cancels with exit code 130",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Commits",
-          repo: "https://example.com/a",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
-
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
-
-        await session.waitForText("Search for skills:");
-        session.sendKey("CTRL_C");
-
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    20_000,
-  );
-
-  test(
-    "Enter on a result starts install flow",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "https://example.com/a",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
-
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
-
-        await session.waitForText("Search for skills:");
-        // Wait for results to load
-        await session.waitForText("commit-helper");
-
-        // Select the result
-        session.sendKey("ENTER");
-
-        // Should transition to install flow (scope prompt)
-        await session.waitForText("Install to:");
-
-        // Cancel out of the install flow
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
-
-  test(
-    "shows agent selection prompt during install when no defaults set",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "https://example.com/a",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
-
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
-
-        await session.waitForText("Search for skills:");
-        await session.waitForText("commit-helper");
-        session.sendKey("ENTER"); // select skill
-
-        await session.waitForText("Install to:");
-        session.sendKey("ENTER"); // accept Global scope
-
-        await session.waitForText("Which agents should this skill be available to?");
-
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
-
-  test(
-    "skips agent selection prompt when defaults.also is configured",
-    async () => {
-      await mkdir(join(configDir, "skilltap"), { recursive: true });
-      await Bun.write(
-        join(configDir, "skilltap", "config.toml"),
-        'builtin_tap = false\n[defaults]\nscope = "global"\nalso = ["claude-code"]\n',
+      const session = await runInteractive(
+        [...CMD, "find", "commit", "-i", "--local"],
+        { cwd: CLI_DIR, env: env() },
       );
 
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "/nonexistent/skilltap-test-path",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+      // Results should appear without typing — query pre-filled
+      await session.waitForText("commit-helper");
 
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
 
-        await session.waitForText("Search for skills:");
-        await session.waitForText("commit-helper");
-        session.sendKey("ENTER"); // select skill — scope and agent prompts both skipped by config
+  test("Ctrl+C cancels with exit code 130", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Commits",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        // Install will fail (nonexistent path) but agent prompt must never appear
-        await session.waitForText("Failed.");
-        expect(session.output()).not.toContain("Which agents should this skill be available to?");
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
 
-        session.kill();
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
+      await session.waitForText("Search for skills:");
+      session.sendKey("CTRL_C");
 
-  test(
-    "no matches shows warning message",
-    async () => {
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Commits",
-          repo: "https://example.com/a",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 20_000);
 
-        const session = await runInteractive(
-          [...CMD, "find", "-i", "--local"],
-          { cwd: CLI_DIR, env: env() },
-        );
+  test("Enter on a result starts install flow", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        await session.waitForText("Search for skills:");
-        // Wait for initial load
-        await session.waitForText("commit-helper");
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
 
-        // Type something that won't match
-        session.send("zzznomatch");
-        await session.waitForText("No matches found");
+      await session.waitForText("Search for skills:");
+      // Wait for results to load
+      await session.waitForText("commit-helper");
 
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
+      // Select the result
+      session.sendKey("ENTER");
+
+      // Should transition to install flow (scope prompt)
+      await session.waitForText("Install to:");
+
+      // Cancel out of the install flow
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
+
+  test("shows agent selection prompt during install when no defaults set", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
+
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
+
+      await session.waitForText("Search for skills:");
+      await session.waitForText("commit-helper");
+      session.sendKey("ENTER"); // select skill
+
+      await session.waitForText("Install to:");
+      session.sendKey("ENTER"); // accept Global scope
+
+      await session.waitForText(
+        "Which agents should this skill be available to?",
+      );
+
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
+
+  test("skips agent selection prompt when defaults.also is configured", async () => {
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await Bun.write(
+      join(configDir, "skilltap", "config.toml"),
+      'builtin_tap = false\n[defaults]\nscope = "global"\nalso = ["claude-code"]\n',
+    );
+
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "/nonexistent/skilltap-test-path",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
+
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
+
+      await session.waitForText("Search for skills:");
+      await session.waitForText("commit-helper");
+      session.sendKey("ENTER"); // select skill — scope and agent prompts both skipped by config
+
+      // Install will fail (nonexistent path) but agent prompt must never appear
+      await session.waitForText("Failed.");
+      expect(session.output()).not.toContain(
+        "Which agents should this skill be available to?",
+      );
+
+      session.kill();
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
+
+  test("no matches shows warning message", async () => {
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Commits",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
+
+      const session = await runInteractive([...CMD, "find", "-i", "--local"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
+
+      await session.waitForText("Search for skills:");
+      // Wait for initial load
+      await session.waitForText("commit-helper");
+
+      // Type something that won't match
+      session.send("zzznomatch");
+      await session.waitForText("No matches found");
+
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
 });

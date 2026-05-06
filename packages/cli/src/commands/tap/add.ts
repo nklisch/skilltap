@@ -23,7 +23,8 @@ export default defineCommand({
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode =
+      configResult.ok && configResult.value["agent-mode"].enabled;
 
     let tapName: string;
     let tapUrl: string;
@@ -55,7 +56,9 @@ export default defineCommand({
         process.exit(1);
       }
       const typeLabel = "git";
-      process.stdout.write(`OK: Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)\n`);
+      process.stdout.write(
+        `OK: Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)\n`,
+      );
       return;
     }
 

@@ -3,8 +3,8 @@
  * Tests run sequentially and share state via homeDir/configDir/workDir.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { join } from "node:path";
 import { lstat } from "node:fs/promises";
+import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/..`;
@@ -96,9 +96,7 @@ describe("E2E Phase 19 — create → verify → doctor → completions", () => 
   // ── verify ───────────────────────────────────────────────────────────────────
 
   test("5. verify basic skill — exit 0", async () => {
-    const { exitCode } = await run(
-      ["verify", join(workDir, "my-e2e-skill")],
-    );
+    const { exitCode } = await run(["verify", join(workDir, "my-e2e-skill")]);
     expect(exitCode).toBe(0);
   });
 
@@ -116,9 +114,7 @@ describe("E2E Phase 19 — create → verify → doctor → completions", () => 
   });
 
   test("7. verify npm skill — exit 0", async () => {
-    const { exitCode } = await run(
-      ["verify", join(workDir, "my-npm-skill")],
-    );
+    const { exitCode } = await run(["verify", join(workDir, "my-npm-skill")]);
     expect(exitCode).toBe(0);
   });
 

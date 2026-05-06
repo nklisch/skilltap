@@ -19,7 +19,12 @@ export type SemanticWarning = {
 export type SemanticScanOptions = {
   threshold?: number;
   onScanStart?: (total: number) => void;
-  onProgress?: (completed: number, total: number, score: number, reason: string) => void;
+  onProgress?: (
+    completed: number,
+    total: number,
+    score: number,
+    reason: string,
+  ) => void;
 };
 
 // ── Constants ──

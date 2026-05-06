@@ -2,7 +2,11 @@ import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { getConfigDir, loadInstalled } from "./config";
 import { fetch as gitFetch, revParse } from "./git";
-import { fetchPackageMetadata, parseNpmSource, resolveVersion } from "./npm-registry";
+import {
+  fetchPackageMetadata,
+  parseNpmSource,
+  resolveVersion,
+} from "./npm-registry";
 import { skillCacheDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 

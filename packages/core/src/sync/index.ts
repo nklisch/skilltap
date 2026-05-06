@@ -1,3 +1,12 @@
+export {
+  type ApplyItemResult,
+  type ApplyStatus,
+  applySync,
+  type SyncApplyOptions,
+  type SyncApplyResult,
+} from "./apply";
+export { detectDrift } from "./drift";
+export { planSync } from "./plan";
 export type {
   DriftItem,
   DriftKind,
@@ -5,12 +14,3 @@ export type {
   DriftTarget,
   SyncPlan,
 } from "./types";
-export { detectDrift } from "./drift";
-export { planSync } from "./plan";
-export {
-  applySync,
-  type ApplyStatus,
-  type ApplyItemResult,
-  type SyncApplyOptions,
-  type SyncApplyResult,
-} from "./apply";

@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +37,10 @@ describe("parseMcpRef", () => {
   });
 
   test("strips mcp: prefix", () => {
-    expect(parseMcpRef("mcp:user/repo")).toEqual({ inner: "user/repo", slug: "repo" });
+    expect(parseMcpRef("mcp:user/repo")).toEqual({
+      inner: "user/repo",
+      slug: "repo",
+    });
   });
 
   test("derives slug from last path segment", () => {
@@ -151,18 +154,28 @@ describe("installMcpOnly — local source", () => {
   test("re-running replaces existing entries (idempotent)", async () => {
     await writeFile(
       join(mcpSourceDir, ".mcp.json"),
-      JSON.stringify({ mcpServers: { db: { command: "node", args: ["v1.js"] } } }),
+      JSON.stringify({
+        mcpServers: { db: { command: "node", args: ["v1.js"] } },
+      }),
     );
 
-    const r1 = await installMcpOnly(`mcp:${mcpSourceDir}`, { scope: "project", projectRoot });
+    const r1 = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+      scope: "project",
+      projectRoot,
+    });
     expect(r1.ok).toBe(true);
 
     // Update the source's mcp.json and re-install
     await writeFile(
       join(mcpSourceDir, ".mcp.json"),
-      JSON.stringify({ mcpServers: { db: { command: "node", args: ["v2.js"] } } }),
+      JSON.stringify({
+        mcpServers: { db: { command: "node", args: ["v2.js"] } },
+      }),
     );
-    const r2 = await installMcpOnly(`mcp:${mcpSourceDir}`, { scope: "project", projectRoot });
+    const r2 = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+      scope: "project",
+      projectRoot,
+    });
     expect(r2.ok).toBe(true);
 
     const stateResult = await loadState(projectRoot);
@@ -238,16 +251,24 @@ describe("removeMcpInstall", () => {
     try {
       await writeFile(
         join(mcpSourceDir, ".mcp.json"),
-        JSON.stringify({ mcpServers: { db: { command: "node", args: ["a.js"] } } }),
+        JSON.stringify({
+          mcpServers: { db: { command: "node", args: ["a.js"] } },
+        }),
       );
       await writeFile(
         join(otherDir, ".mcp.json"),
-        JSON.stringify({ mcpServers: { kept: { command: "node", args: ["b.js"] } } }),
+        JSON.stringify({
+          mcpServers: { kept: { command: "node", args: ["b.js"] } },
+        }),
       );
       const sourceA = `mcp:${mcpSourceDir}`;
       const sourceB = `mcp:${otherDir}`;
-      expect((await installMcpOnly(sourceA, { scope: "project", projectRoot })).ok).toBe(true);
-      expect((await installMcpOnly(sourceB, { scope: "project", projectRoot })).ok).toBe(true);
+      expect(
+        (await installMcpOnly(sourceA, { scope: "project", projectRoot })).ok,
+      ).toBe(true);
+      expect(
+        (await installMcpOnly(sourceB, { scope: "project", projectRoot })).ok,
+      ).toBe(true);
 
       const result = await removeMcpInstall(sourceA, {
         scope: "project",

@@ -1,8 +1,20 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, type TestEnv, createStandaloneSkillRepo, runSkilltap } from "@skilltap/test-utils";
 import { loadInstalled } from "@skilltap/core";
+import {
+  createStandaloneSkillRepo,
+  createTestEnv,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -22,7 +34,10 @@ afterEach(async () => {
 
 async function disableBuiltinTap(configDir: string): Promise<void> {
   await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+  await Bun.write(
+    join(configDir, "skilltap", "config.toml"),
+    "builtin_tap = false\n",
+  );
 }
 
 // ─── Test 4: Remove succeeds when directory already missing ──────────────────

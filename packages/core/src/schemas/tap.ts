@@ -31,10 +31,9 @@ export const TapPluginSchema = z.object({
   description: z.string().default(""),
   version: z.string().optional(),
   skills: z.array(TapPluginSkillSchema).default([]),
-  mcpServers: z.union([
-    z.string(),
-    z.record(z.string(), z.unknown()),
-  ]).optional(),
+  mcpServers: z
+    .union([z.string(), z.record(z.string(), z.unknown())])
+    .optional(),
   agents: z.array(TapPluginAgentSchema).default([]),
   tags: z.array(z.string()).default([]),
 });

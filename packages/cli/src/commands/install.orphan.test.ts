@@ -1,8 +1,24 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, type TestEnv, commitAll, createStandaloneSkillRepo, initRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { loadInstalled } from "@skilltap/core";
+import {
+  commitAll,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -22,7 +38,10 @@ afterEach(async () => {
 
 async function disableBuiltinTap(configDir: string): Promise<void> {
   await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+  await Bun.write(
+    join(configDir, "skilltap", "config.toml"),
+    "builtin_tap = false\n",
+  );
 }
 
 // ─── Test 3: Agent mode installs through phantom conflict ─────────────────────
@@ -80,7 +99,13 @@ describe("install orphan — plugins layout (plugins/*/skills/*/SKILL.md)", () =
       await disableBuiltinTap(configDir);
 
       // Create plugins/my-plugin/skills/my-skill/SKILL.md layout
-      const skillDir = join(repoDir, "plugins", "my-plugin", "skills", "my-skill");
+      const skillDir = join(
+        repoDir,
+        "plugins",
+        "my-plugin",
+        "skills",
+        "my-skill",
+      );
       await mkdir(skillDir, { recursive: true });
       await Bun.write(
         join(skillDir, "SKILL.md"),
@@ -101,7 +126,9 @@ describe("install orphan — plugins layout (plugins/*/skills/*/SKILL.md)", () =
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills.some((s) => s.name === "my-skill")).toBe(true);
+      expect(installed.value.skills.some((s) => s.name === "my-skill")).toBe(
+        true,
+      );
     } finally {
       await removeTmpDir(repoDir);
     }

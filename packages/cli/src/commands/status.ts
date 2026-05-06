@@ -23,7 +23,9 @@ export default defineCommand({
     const report = result.value;
 
     if (args.json) {
-      process.stdout.write(`${JSON.stringify(reportToJson(report), null, 2)}\n`);
+      process.stdout.write(
+        `${JSON.stringify(reportToJson(report), null, 2)}\n`,
+      );
       return;
     }
 
@@ -50,7 +52,9 @@ function renderStatus(report: StatusReport): void {
   const projectLabel = report.projectRoot
     ? `${ansi.bold(`project: ${shorten(report.projectRoot)}`)}${ansi.dim(report.hasManifest ? " (manifest)" : " (no manifest)")}`
     : ansi.bold("global (no project root)");
-  process.stdout.write(`\n${ansi.bold("skilltap status")} ${ansi.dim("—")} ${projectLabel}\n\n`);
+  process.stdout.write(
+    `\n${ansi.bold("skilltap status")} ${ansi.dim("—")} ${projectLabel}\n\n`,
+  );
 
   // ── Scope + targets ──────────────────────────────────────────────────────
   process.stdout.write(`${ansi.dim("Scope:")} ${report.scope}\n`);
@@ -75,9 +79,14 @@ function renderStatus(report: StatusReport): void {
     );
     for (const skill of report.skills) {
       const flag = skill.active ? ansi.green("✓") : ansi.dim("✗");
-      const sourceText = skill.source ? `${ansi.dim(skill.source)}${skill.ref ? ansi.dim(`@${skill.ref}`) : ""}` : ansi.dim("(local)");
-      const alsoText = skill.also.length > 0 ? ansi.dim(` [${skill.also.join(", ")}]`) : "";
-      process.stdout.write(`  ${flag} ${skill.name} ${ansi.dim(skill.scope)}${alsoText} ${sourceText}\n`);
+      const sourceText = skill.source
+        ? `${ansi.dim(skill.source)}${skill.ref ? ansi.dim(`@${skill.ref}`) : ""}`
+        : ansi.dim("(local)");
+      const alsoText =
+        skill.also.length > 0 ? ansi.dim(` [${skill.also.join(", ")}]`) : "";
+      process.stdout.write(
+        `  ${flag} ${skill.name} ${ansi.dim(skill.scope)}${alsoText} ${sourceText}\n`,
+      );
     }
     process.stdout.write("\n");
   }
@@ -86,10 +95,14 @@ function renderStatus(report: StatusReport): void {
   if (report.plugins.length === 0) {
     process.stdout.write(`${ansi.dim("Plugins:")} ${ansi.dim("(none)")}\n\n`);
   } else {
-    process.stdout.write(`${ansi.bold(`Plugins`)} ${ansi.dim(`(${report.plugins.length})`)}\n`);
+    process.stdout.write(
+      `${ansi.bold(`Plugins`)} ${ansi.dim(`(${report.plugins.length})`)}\n`,
+    );
     for (const plugin of report.plugins) {
       const flag = plugin.active ? ansi.green("✓") : ansi.dim("✗");
-      const sourceText = plugin.source ? `${ansi.dim(plugin.source)}${plugin.ref ? ansi.dim(`@${plugin.ref}`) : ""}` : ansi.dim("(local)");
+      const sourceText = plugin.source
+        ? `${ansi.dim(plugin.source)}${plugin.ref ? ansi.dim(`@${plugin.ref}`) : ""}`
+        : ansi.dim("(local)");
       process.stdout.write(
         `  ${flag} ${plugin.name} ${ansi.dim(plugin.scope)} ${ansi.dim(`(${plugin.componentSummary})`)} ${sourceText}\n`,
       );
@@ -98,10 +111,15 @@ function renderStatus(report: StatusReport): void {
   }
 
   // ── Taps ─────────────────────────────────────────────────────────────────
-  process.stdout.write(`${ansi.bold("Taps")} ${ansi.dim(`(${report.taps.length})`)}\n`);
+  process.stdout.write(
+    `${ansi.bold("Taps")} ${ansi.dim(`(${report.taps.length})`)}\n`,
+  );
   for (const tap of report.taps) {
-    const label = tap.builtin ? `${tap.name} ${ansi.dim("(built-in)")}` : tap.name;
-    const typeLabel = tap.type === "http" ? ansi.yellow(" (http — deprecated)") : "";
+    const label = tap.builtin
+      ? `${tap.name} ${ansi.dim("(built-in)")}`
+      : tap.name;
+    const typeLabel =
+      tap.type === "http" ? ansi.yellow(" (http — deprecated)") : "";
     process.stdout.write(`  ${label}${typeLabel} ${ansi.dim(tap.url)}\n`);
   }
   process.stdout.write("\n");
@@ -109,7 +127,9 @@ function renderStatus(report: StatusReport): void {
   // ── Drift ────────────────────────────────────────────────────────────────
   if (report.drift) {
     if (report.drift.inSync) {
-      process.stdout.write(`${ansi.green("✓")} Manifest in sync with installed state.\n`);
+      process.stdout.write(
+        `${ansi.green("✓")} Manifest in sync with installed state.\n`,
+      );
     } else {
       const counts = countByKind(report.drift.items);
       process.stdout.write(

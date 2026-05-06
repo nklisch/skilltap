@@ -44,7 +44,7 @@ _skilltap() {
       case $words[1] in
         install)
           local -a skills
-          skills=(\${(f)"\$(skilltap --get-completions tap-skills 2>/dev/null)"})
+          skills=(\${(f)"$(skilltap --get-completions tap-skills 2>/dev/null)"})
           _arguments \\
             '--project[Install to project scope]' \\
             '--global[Install to global scope]' \\
@@ -60,7 +60,7 @@ _skilltap() {
           ;;
         remove)
           local -a skills
-          skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
             '--project[Remove from project scope]' \\
             '--global[Remove from global scope]' \\
@@ -75,7 +75,7 @@ _skilltap() {
           ;;
         update)
           local -a skills
-          skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
             '--yes[Auto-accept]' \\
             '--strict[Abort on warnings]' \\
@@ -99,14 +99,14 @@ _skilltap() {
           ;;
         unlink)
           local -a skills
-          skills=(\${(f)"\$(skilltap --get-completions linked-skills 2>/dev/null)"})
+          skills=(\${(f)"$(skilltap --get-completions linked-skills 2>/dev/null)"})
           _arguments \\
             '--yes[Skip confirmation]' \\
             "1:skill:($skills)"
           ;;
         info)
           local -a skills
-          skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
             '--json[JSON output]' \\
             "1:skill:($skills)"
@@ -121,14 +121,14 @@ _skilltap() {
               case $words[1] in
                 info)
                   local -a skills
-                  skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
                   _arguments \\
                     '--json[JSON output]' \\
                     "1:skill:($skills)"
                   ;;
                 remove)
                   local -a skills
-                  skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
                   _arguments \\
                     '--project[Remove from project scope]' \\
                     '--global[Remove from global scope]' \\
@@ -143,7 +143,7 @@ _skilltap() {
                   ;;
                 unlink)
                   local -a skills
-                  skills=(\${(f)"\$(skilltap --get-completions linked-skills 2>/dev/null)"})
+                  skills=(\${(f)"$(skilltap --get-completions linked-skills 2>/dev/null)"})
                   _arguments "1:skill:($skills)"
                   ;;
                 adopt)
@@ -157,7 +157,7 @@ _skilltap() {
                   ;;
                 move)
                   local -a skills
-                  skills=(\${(f)"\$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
                   _arguments \\
                     '--global[Move to global scope]' \\
                     '--project[Move to project scope]' \\
@@ -166,7 +166,7 @@ _skilltap() {
                   ;;
                 disable)
                   local -a skills
-                  skills=(\${(f)"\$(skilltap --get-completions active-skills 2>/dev/null)"})
+                  skills=(\${(f)"$(skilltap --get-completions active-skills 2>/dev/null)"})
                   _arguments \\
                     '--global[Disable global skill]' \\
                     '--project[Disable project skill]' \\
@@ -174,7 +174,7 @@ _skilltap() {
                   ;;
                 enable)
                   local -a skills
-                  skills=(\${(f)"\$(skilltap --get-completions disabled-skills 2>/dev/null)"})
+                  skills=(\${(f)"$(skilltap --get-completions disabled-skills 2>/dev/null)"})
                   _arguments \\
                     '--global[Enable global skill]' \\
                     '--project[Enable project skill]' \\
@@ -280,7 +280,7 @@ _skilltap() {
                   ;;
                 remove)
                   local -a taps
-                  taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
+                  taps=(\${(f)"$(skilltap --get-completions tap-names 2>/dev/null)"})
                   _arguments \\
                     '--yes[Skip confirmation]' \\
                     "1:tap:($taps)"
@@ -290,14 +290,14 @@ _skilltap() {
                   ;;
                 info)
                   local -a taps
-                  taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
+                  taps=(\${(f)"$(skilltap --get-completions tap-names 2>/dev/null)"})
                   _arguments \\
                     '--json[JSON output]' \\
                     "1:tap:($taps)"
                   ;;
                 install)
                   local -a taps
-                  taps=(\${(f)"\$(skilltap --get-completions tap-names 2>/dev/null)"})
+                  taps=(\${(f)"$(skilltap --get-completions tap-names 2>/dev/null)"})
                   _arguments \\
                     '--tap[Scope to one tap]:tap:($taps)' \\
                     '--project[Install to project scope]' \\
@@ -343,7 +343,7 @@ _skilltap() {
           ;;
         toggle|enable|disable)
           local -a plugins
-          plugins=(\${(f)"\$(skilltap --get-completions installed-plugins 2>/dev/null)"})
+          plugins=(\${(f)"$(skilltap --get-completions installed-plugins 2>/dev/null)"})
           _arguments \\
             '--json[Output as JSON]' \\
             "1:plugin\\::($plugins)"

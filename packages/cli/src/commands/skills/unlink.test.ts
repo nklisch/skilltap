@@ -9,7 +9,12 @@ import {
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { linkSkill, loadInstalled } from "@skilltap/core";
-import { createTestEnv, type TestEnv, createStandaloneSkillRepo, runSkilltap } from "@skilltap/test-utils";
+import {
+  createStandaloneSkillRepo,
+  createTestEnv,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -75,7 +80,11 @@ describe("skills unlink — linked skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await linkSkill(repo.path, { scope: "global" });
-      await runSkilltap(["skills", "unlink", "standalone-skill"], homeDir, configDir);
+      await runSkilltap(
+        ["skills", "unlink", "standalone-skill"],
+        homeDir,
+        configDir,
+      );
 
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);

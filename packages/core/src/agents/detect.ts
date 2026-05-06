@@ -29,7 +29,10 @@ const ADAPTER_MAP: Record<string, AgentAdapter> = {
 };
 
 /** All valid values for security.agent_cli in config. */
-export const KNOWN_AGENT_NAMES: readonly string[] = [...Object.keys(ADAPTER_MAP), "ollama"];
+export const KNOWN_AGENT_NAMES: readonly string[] = [
+  ...Object.keys(ADAPTER_MAP),
+  "ollama",
+];
 
 /** Verify an adapter is reachable on PATH. Returns ok(adapter) or err with install hint. */
 async function verifyAdapterAvailable(

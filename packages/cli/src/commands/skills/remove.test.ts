@@ -6,10 +6,16 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 import { installSkill, loadInstalled } from "@skilltap/core";
-import { createTestEnv, type TestEnv, createMultiSkillRepo, createStandaloneSkillRepo, runSkilltap } from "@skilltap/test-utils";
+import {
+  createMultiSkillRepo,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 

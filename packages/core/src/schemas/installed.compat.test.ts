@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { loadInstalled } from "@skilltap/core";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 

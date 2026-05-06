@@ -1,5 +1,4 @@
 import { isCancel, log, spinner } from "@clack/prompts";
-import { footerConfirm as confirm } from "../ui/footer";
 import {
   type AgentAdapter,
   type Config,
@@ -14,6 +13,7 @@ import {
   writeSkillUpdateCache,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { sendEvent, telemetryBase } from "../telemetry";
 import {
   agentError,
   agentSecurityBlock,
@@ -21,6 +21,7 @@ import {
   agentUpToDate,
   outputJson,
 } from "../ui/agent-out";
+import { footerConfirm as confirm } from "../ui/footer";
 import {
   ansi,
   errorLine,
@@ -37,7 +38,6 @@ import {
   tryFindProjectRoot,
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
-import { sendEvent, telemetryBase } from "../telemetry";
 
 export default defineCommand({
   meta: {
@@ -73,13 +73,15 @@ export default defineCommand({
     check: {
       type: "boolean",
       alias: "c",
-      description: "Check for updates without applying them. Refreshes the update cache.",
+      description:
+        "Check for updates without applying them. Refreshes the update cache.",
       default: false,
     },
     force: {
       type: "boolean",
       alias: "f",
-      description: "Force update even if skill appears up to date (re-applies and re-scans).",
+      description:
+        "Force update even if skill appears up to date (re-applies and re-scans).",
       default: false,
     },
     agent: {
@@ -106,9 +108,23 @@ export default defineCommand({
     await refreshTapIndexes(policy.agentMode);
 
     if (policy.agentMode) {
-      return runAgentModeUpdate(name, config, policy, projectRoot, args.json, args.force);
+      return runAgentModeUpdate(
+        name,
+        config,
+        policy,
+        projectRoot,
+        args.json,
+        args.force,
+      );
     }
-    return runInteractiveUpdate(name, args, config, policy, projectRoot, args.force);
+    return runInteractiveUpdate(
+      name,
+      args,
+      config,
+      policy,
+      projectRoot,
+      args.force,
+    );
   },
 });
 
@@ -119,7 +135,9 @@ async function refreshTapIndexes(agentMode: boolean): Promise<void> {
     process.stdout.write("Refreshing tap indexes...\n");
     const result = await updateTap();
     if (!result.ok) {
-      process.stdout.write(`Warning: Could not refresh tap indexes: ${result.error.message}\n`);
+      process.stdout.write(
+        `Warning: Could not refresh tap indexes: ${result.error.message}\n`,
+      );
     }
     return;
   }
@@ -196,7 +214,8 @@ async function runAgentModeUpdate(
     onProgress(skillName, status) {
       if (status === "upToDate") agentUpToDate(skillName);
       else if (status === "linked") agentSkip(skillName, "is linked.");
-      else if (status === "local") agentSkip(skillName, "is local (no remote).");
+      else if (status === "local")
+        agentSkip(skillName, "is local (no remote).");
       else if (status === "removed-upstream") {
         process.stdout.write(`${skillName}: removed from upstream repo\n`);
       }
@@ -286,7 +305,11 @@ async function runInteractiveUpdate(
   projectRoot: string | undefined,
   force = false,
 ): Promise<void> {
-  const { runSemantic, agent } = await resolveSemanticInteractive(policy, args, config);
+  const { runSemantic, agent } = await resolveSemanticInteractive(
+    policy,
+    args,
+    config,
+  );
 
   let semSpinner: ReturnType<typeof spinner> | null = null;
 
@@ -380,8 +403,16 @@ async function runInteractiveUpdate(
       semSpinner.start(`Semantic scan of ${ansi.bold(skillName)}...`);
     },
 
-    onSemanticProgress(completed: number, total: number, score: number, reason: string) {
-      const flag = score >= (config.security.threshold ?? 5) ? ` — ⚠ ${reason.length > 60 ? `${reason.slice(0, 59)}…` : reason}` : "";
+    onSemanticProgress(
+      completed: number,
+      total: number,
+      score: number,
+      reason: string,
+    ) {
+      const flag =
+        score >= (config.security.threshold ?? 5)
+          ? ` — ⚠ ${reason.length > 60 ? `${reason.slice(0, 59)}…` : reason}`
+          : "";
       semSpinner?.message(`Semantic scan: chunk ${completed}/${total}${flag}`);
     },
 

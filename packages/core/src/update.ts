@@ -13,24 +13,25 @@ import {
   parseNpmSource,
   resolveVersion,
 } from "./npm-registry";
+import type { OnOrphansFound } from "./orphan";
+import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
-import type { OnOrphansFound } from "./orphan";
-import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import { wrapShell } from "./shell";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import { parseGitHubRepo, resolveTrust } from "./trust";
 
 type ResolveTrustFn = typeof resolveTrust;
+
 import type { Result } from "./types";
 import {
   err,
   type GitError,
-  NetworkError,
+  type NetworkError,
   ok,
   type ScanError,
   UserError,
@@ -47,12 +48,22 @@ export type UpdateOptions = {
   projectRoot?: string;
   onProgress?: (
     skillName: string,
-    status: "checking" | "upToDate" | "updated" | "skipped" | "linked" | "local" | "removed-upstream",
+    status:
+      | "checking"
+      | "upToDate"
+      | "updated"
+      | "skipped"
+      | "linked"
+      | "local"
+      | "removed-upstream",
   ) => void;
   /** Called when orphan records are detected before the update pass. Return names to purge. */
   onOrphansFound?: OnOrphansFound;
   /** Called when a multi-skill's subdirectory is gone from the cache after pull. */
-  onSkillRemovedUpstream?: (skillName: string, repoUrl: string) => Promise<"remove" | "skip">;
+  onSkillRemovedUpstream?: (
+    skillName: string,
+    repoUrl: string,
+  ) => Promise<"remove" | "skip">;
   onDiff?: (
     skillName: string,
     stat: DiffStat,
@@ -75,7 +86,12 @@ export type UpdateOptions = {
   /** Called before starting semantic scan for a skill. */
   onSemanticScanStart?: (skillName: string) => void;
   /** Called with progress during semantic scan. */
-  onSemanticProgress?: (completed: number, total: number, score: number, reason: string) => void;
+  onSemanticProgress?: (
+    completed: number,
+    total: number,
+    score: number,
+    reason: string,
+  ) => void;
   /** Force re-apply the update even if the skill appears up to date (same SHA / version). */
   force?: boolean;
 };
@@ -252,9 +268,10 @@ async function updateNpmSkill(
 
     // Replace the installed skill directory
     const npmEffectiveScope = record.scope as "global" | "project";
-    const installDir = record.active === false
-      ? skillDisabledDir(record.name, npmEffectiveScope, options.projectRoot)
-      : skillInstallDir(record.name, npmEffectiveScope, options.projectRoot);
+    const installDir =
+      record.active === false
+        ? skillDisabledDir(record.name, npmEffectiveScope, options.projectRoot)
+        : skillInstallDir(record.name, npmEffectiveScope, options.projectRoot);
     const rmResult = await wrapShell(
       () => $`rm -rf ${installDir}`.quiet().then(() => undefined),
       `Failed to remove old skill directory '${record.name}'`,
@@ -313,9 +330,10 @@ async function updateGitSkill(
   _resolveTrust: ResolveTrustFn,
 ): Promise<Result<void, UserError | GitError | ScanError>> {
   const effectiveScope = record.scope as "global" | "project";
-  const workDir = record.active === false
-    ? skillDisabledDir(record.name, effectiveScope, options.projectRoot)
-    : skillInstallDir(record.name, effectiveScope, options.projectRoot);
+  const workDir =
+    record.active === false
+      ? skillDisabledDir(record.name, effectiveScope, options.projectRoot)
+      : skillInstallDir(record.name, effectiveScope, options.projectRoot);
 
   // Before fetch: verify the work directory exists (handles orphan installs)
   if (!(await resolvedDirExists(workDir))) {
@@ -498,9 +516,21 @@ async function updateGitSkillGroup(
         const action = await options.onSkillRemovedUpstream(skill.name, repo);
         if (action === "remove") {
           const effectiveScope = skill.scope as "global" | "project";
-          const installDir = skillInstallDir(skill.name, effectiveScope, options.projectRoot);
-          await wrapShell(() => $`rm -rf ${installDir}`.quiet().then(() => undefined), "");
-          await removeAgentSymlinks(skill.name, skill.also, skill.scope, options.projectRoot);
+          const installDir = skillInstallDir(
+            skill.name,
+            effectiveScope,
+            options.projectRoot,
+          );
+          await wrapShell(
+            () => $`rm -rf ${installDir}`.quiet().then(() => undefined),
+            "",
+          );
+          await removeAgentSymlinks(
+            skill.name,
+            skill.also,
+            skill.scope,
+            options.projectRoot,
+          );
           installed.skills = installed.skills.filter((s) => s !== skill);
         }
       }
@@ -517,7 +547,11 @@ async function updateGitSkillGroup(
       continue;
     }
 
-    const recopyResult = await recopyMultiSkill(workDir, skill, options.projectRoot);
+    const recopyResult = await recopyMultiSkill(
+      workDir,
+      skill,
+      options.projectRoot,
+    );
     if (!recopyResult.ok) return recopyResult;
 
     const installDir = skillInstallDir(
@@ -623,14 +657,33 @@ async function runUpdatePass(
 
     if (group.type === "npm") {
       options.onProgress?.(group.skill.name, "checking");
-      const r = await updateNpmSkill(group.skill, installed, options, result, _resolveTrust);
+      const r = await updateNpmSkill(
+        group.skill,
+        installed,
+        options,
+        result,
+        _resolveTrust,
+      );
       if (!r.ok) return r;
     } else if (group.type === "git-standalone") {
       options.onProgress?.(group.skill.name, "checking");
-      const r = await updateGitSkill(group.skill, installed, options, result, _resolveTrust);
+      const r = await updateGitSkill(
+        group.skill,
+        installed,
+        options,
+        result,
+        _resolveTrust,
+      );
       if (!r.ok) return r;
     } else {
-      const r = await updateGitSkillGroup(group.repo, group.skills, installed, options, result, _resolveTrust);
+      const r = await updateGitSkillGroup(
+        group.repo,
+        group.skills,
+        installed,
+        options,
+        result,
+        _resolveTrust,
+      );
       if (!r.ok) return r;
     }
   }
@@ -641,7 +694,9 @@ async function runUpdatePass(
 export async function updateSkill(
   options: UpdateOptions = {},
   _resolveTrust: ResolveTrustFn = resolveTrust,
-): Promise<Result<UpdateResult, UserError | GitError | ScanError | NetworkError>> {
+): Promise<
+  Result<UpdateResult, UserError | GitError | ScanError | NetworkError>
+> {
   debug("updateSkill", { name: options.name ?? "all" });
 
   // Load global installed (state.json canonical with installed.json fallback)
@@ -663,17 +718,28 @@ export async function updateSkill(
     if (globalOrphans.length > 0) {
       const namesToPurge = await options.onOrphansFound(globalOrphans);
       if (namesToPurge.length > 0) {
-        const toPurge = globalOrphans.filter((o) => namesToPurge.includes(o.record.name));
+        const toPurge = globalOrphans.filter((o) =>
+          namesToPurge.includes(o.record.name),
+        );
         await purgeOrphanRecords(toPurge, globalInstalled);
       }
     }
     if (projectInstalled) {
-      const projectOrphans = await findOrphanRecords(projectInstalled, options.projectRoot);
+      const projectOrphans = await findOrphanRecords(
+        projectInstalled,
+        options.projectRoot,
+      );
       if (projectOrphans.length > 0) {
         const namesToPurge = await options.onOrphansFound(projectOrphans);
         if (namesToPurge.length > 0) {
-          const toPurge = projectOrphans.filter((o) => namesToPurge.includes(o.record.name));
-          await purgeOrphanRecords(toPurge, projectInstalled, options.projectRoot);
+          const toPurge = projectOrphans.filter((o) =>
+            namesToPurge.includes(o.record.name),
+          );
+          await purgeOrphanRecords(
+            toPurge,
+            projectInstalled,
+            options.projectRoot,
+          );
         }
       }
     }
@@ -702,12 +768,24 @@ export async function updateSkill(
   const result: UpdateResult = { updated: [], skipped: [], upToDate: [] };
 
   // Process global skills
-  const globalPass = await runUpdatePass(globalSkills, globalInstalled, options, result, _resolveTrust);
+  const globalPass = await runUpdatePass(
+    globalSkills,
+    globalInstalled,
+    options,
+    result,
+    _resolveTrust,
+  );
   if (!globalPass.ok) return globalPass;
 
   // Process project skills
   if (projectInstalled) {
-    const projectPass = await runUpdatePass(projectSkills, projectInstalled, { ...options, projectRoot: options.projectRoot }, result, _resolveTrust);
+    const projectPass = await runUpdatePass(
+      projectSkills,
+      projectInstalled,
+      { ...options, projectRoot: options.projectRoot },
+      result,
+      _resolveTrust,
+    );
     if (!projectPass.ok) return projectPass;
   }
 
@@ -716,7 +794,10 @@ export async function updateSkill(
   if (!globalSave.ok) return globalSave;
 
   if (projectInstalled && options.projectRoot) {
-    const projectSave = await saveInstalled(projectInstalled, options.projectRoot);
+    const projectSave = await saveInstalled(
+      projectInstalled,
+      options.projectRoot,
+    );
     if (!projectSave.ok) return projectSave;
   }
 

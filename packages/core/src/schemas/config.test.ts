@@ -1,9 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { loadConfig, saveConfig } from "@skilltap/core";
-import { parse, stringify } from "smol-toml";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { parse, stringify } from "smol-toml";
 import {
   AgentModeSchema,
   ConfigSchema,
@@ -25,7 +25,9 @@ describe("SecurityModeSchema", () => {
 
   test("accepts all valid scan values", () => {
     expect(SecurityModeSchema.parse({ scan: "static" }).scan).toBe("static");
-    expect(SecurityModeSchema.parse({ scan: "semantic" }).scan).toBe("semantic");
+    expect(SecurityModeSchema.parse({ scan: "semantic" }).scan).toBe(
+      "semantic",
+    );
     expect(SecurityModeSchema.parse({ scan: "off" }).scan).toBe("off");
   });
 
@@ -35,13 +37,19 @@ describe("SecurityModeSchema", () => {
   });
 
   test("accepts all valid on_warn values", () => {
-    expect(SecurityModeSchema.parse({ on_warn: "prompt" }).on_warn).toBe("prompt");
+    expect(SecurityModeSchema.parse({ on_warn: "prompt" }).on_warn).toBe(
+      "prompt",
+    );
     expect(SecurityModeSchema.parse({ on_warn: "fail" }).on_warn).toBe("fail");
-    expect(SecurityModeSchema.parse({ on_warn: "allow" }).on_warn).toBe("allow");
+    expect(SecurityModeSchema.parse({ on_warn: "allow" }).on_warn).toBe(
+      "allow",
+    );
   });
 
   test("rejects invalid on_warn value", () => {
-    expect(SecurityModeSchema.safeParse({ on_warn: "ignore" }).success).toBe(false);
+    expect(SecurityModeSchema.safeParse({ on_warn: "ignore" }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -61,19 +69,35 @@ describe("PRESET_VALUES", () => {
   });
 
   test("none preset has correct values", () => {
-    expect(PRESET_VALUES.none).toEqual({ scan: "off", on_warn: "allow", require_scan: false });
+    expect(PRESET_VALUES.none).toEqual({
+      scan: "off",
+      on_warn: "allow",
+      require_scan: false,
+    });
   });
 
   test("relaxed preset has correct values", () => {
-    expect(PRESET_VALUES.relaxed).toEqual({ scan: "static", on_warn: "allow", require_scan: false });
+    expect(PRESET_VALUES.relaxed).toEqual({
+      scan: "static",
+      on_warn: "allow",
+      require_scan: false,
+    });
   });
 
   test("standard preset has correct values", () => {
-    expect(PRESET_VALUES.standard).toEqual({ scan: "static", on_warn: "prompt", require_scan: false });
+    expect(PRESET_VALUES.standard).toEqual({
+      scan: "static",
+      on_warn: "prompt",
+      require_scan: false,
+    });
   });
 
   test("strict preset has correct values", () => {
-    expect(PRESET_VALUES.strict).toEqual({ scan: "semantic", on_warn: "fail", require_scan: true });
+    expect(PRESET_VALUES.strict).toEqual({
+      scan: "semantic",
+      on_warn: "fail",
+      require_scan: true,
+    });
   });
 });
 
@@ -142,12 +166,18 @@ describe("SecurityConfigSchema", () => {
   test("threshold min and max bounds", () => {
     expect(SecurityConfigSchema.parse({ threshold: 0 }).threshold).toBe(0);
     expect(SecurityConfigSchema.parse({ threshold: 10 }).threshold).toBe(10);
-    expect(SecurityConfigSchema.safeParse({ threshold: -1 }).success).toBe(false);
-    expect(SecurityConfigSchema.safeParse({ threshold: 11 }).success).toBe(false);
+    expect(SecurityConfigSchema.safeParse({ threshold: -1 }).success).toBe(
+      false,
+    );
+    expect(SecurityConfigSchema.safeParse({ threshold: 11 }).success).toBe(
+      false,
+    );
   });
 
   test("threshold must be integer", () => {
-    expect(SecurityConfigSchema.safeParse({ threshold: 5.5 }).success).toBe(false);
+    expect(SecurityConfigSchema.safeParse({ threshold: 5.5 }).success).toBe(
+      false,
+    );
   });
 
   test("accepts per-mode settings", () => {
@@ -217,7 +247,9 @@ describe("ConfigSchema", () => {
   });
 
   test("default_git_host accepts custom URL", () => {
-    const result = ConfigSchema.safeParse({ default_git_host: "https://gitea.example.com" });
+    const result = ConfigSchema.safeParse({
+      default_git_host: "https://gitea.example.com",
+    });
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.default_git_host).toBe("https://gitea.example.com");
@@ -280,7 +312,9 @@ describe("ConfigSchema", () => {
     if (!result.success) return;
     expect(result.data.defaults.yes).toBe(true);
     expect(result.data.security.human.scan).toBe("static");
-    expect((result.data as Record<string, unknown>).unknownTopLevel).toBeUndefined();
+    expect(
+      (result.data as Record<string, unknown>).unknownTopLevel,
+    ).toBeUndefined();
   });
 
   test("partial config with only [security] block uses defaults elsewhere", () => {
@@ -316,11 +350,23 @@ describe("Config I/O round-trip", () => {
 
     const config = {
       ...firstLoad.value,
-      defaults: { also: ["claude-code", "cursor"], yes: true, scope: "global" as const },
+      defaults: {
+        also: ["claude-code", "cursor"],
+        yes: true,
+        scope: "global" as const,
+      },
       security: {
         ...firstLoad.value.security,
-        human: { scan: "semantic" as const, on_warn: "fail" as const, require_scan: false },
-        agent: { scan: "semantic" as const, on_warn: "fail" as const, require_scan: true },
+        human: {
+          scan: "semantic" as const,
+          on_warn: "fail" as const,
+          require_scan: false,
+        },
+        agent: {
+          scan: "semantic" as const,
+          on_warn: "fail" as const,
+          require_scan: true,
+        },
         threshold: 8,
         agent_cli: "claude",
       },

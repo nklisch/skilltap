@@ -60,7 +60,10 @@ describe("resolveRegistries", () => {
   });
 
   test("unknown name with no matching source is skipped", () => {
-    const config = { ...base, registry: { ...base.registry, enabled: ["nonexistent"] } };
+    const config = {
+      ...base,
+      registry: { ...base.registry, enabled: ["nonexistent"] },
+    };
     expect(resolveRegistries(config)).toHaveLength(0);
   });
 
@@ -115,8 +118,14 @@ describe("searchRegistries", () => {
   });
 
   test("two registries — results concatenated, each tagged", async () => {
-    const reg1 = { name: "r1", search: async () => [{ ...SKILL_FIXTURE, id: "a" }] };
-    const reg2 = { name: "r2", search: async () => [{ ...SKILL_FIXTURE, id: "b" }] };
+    const reg1 = {
+      name: "r1",
+      search: async () => [{ ...SKILL_FIXTURE, id: "a" }],
+    };
+    const reg2 = {
+      name: "r2",
+      search: async () => [{ ...SKILL_FIXTURE, id: "b" }],
+    };
     const results = await searchRegistries("test", [reg1, reg2]);
     expect(results).toHaveLength(2);
     expect(results.find((r) => r.registryName === "r1")?.id).toBe("a");
@@ -125,7 +134,10 @@ describe("searchRegistries", () => {
 
   test("registry returning [] contributes nothing", async () => {
     const reg1 = { name: "r1", search: async () => [{ ...SKILL_FIXTURE }] };
-    const reg2 = { name: "r2", search: async (): Promise<typeof SKILL_FIXTURE[]> => [] };
+    const reg2 = {
+      name: "r2",
+      search: async (): Promise<(typeof SKILL_FIXTURE)[]> => [],
+    };
     const results = await searchRegistries("test", [reg1, reg2]);
     expect(results).toHaveLength(1);
     expect(results[0]?.registryName).toBe("r1");
@@ -159,7 +171,10 @@ describe("createCustomRegistry", () => {
     let capturedUrl = "";
     globalThis.fetch = mock((url: string | URL | Request) => {
       capturedUrl = url.toString();
-      return Promise.resolve({ ok: true, json: () => Promise.resolve({ skills: [] }) } as Response);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ skills: [] }),
+      } as Response);
     });
     const reg = createCustomRegistry("r", "https://example.com/");
     await reg.search("test", 10);
@@ -185,7 +200,9 @@ describe("createCustomRegistry", () => {
   });
 
   test("search() fills installs default when missing", async () => {
-    const body = { skills: [{ id: "x", name: "x", description: "d", source: "s" }] };
+    const body = {
+      skills: [{ id: "x", name: "x", description: "d", source: "s" }],
+    };
     globalThis.fetch = makeFetch(200, body);
     const reg = createCustomRegistry("r", "https://example.com");
     const results = await reg.search("test", 10);

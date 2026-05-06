@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { parseSkillFrontmatter } from "./frontmatter";
 
 describe("parseSkillFrontmatter", () => {
@@ -42,7 +42,9 @@ license: MIT
 ---
 `;
     const result = parseSkillFrontmatter(content);
-    expect(result?.description).toBe("This is a long description that spans multiple lines.");
+    expect(result?.description).toBe(
+      "This is a long description that spans multiple lines.",
+    );
     expect(result?.license).toBe("MIT");
   });
 

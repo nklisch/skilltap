@@ -1,7 +1,25 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, type TestEnv, addFileAndCommit, commitAll, createMultiSkillRepo, createStandaloneSkillRepo, initRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import {
+  addFileAndCommit,
+  commitAll,
+  createMultiSkillRepo,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -21,7 +39,10 @@ afterEach(async () => {
 
 async function disableBuiltinTap(configDir: string): Promise<void> {
   await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+  await Bun.write(
+    join(configDir, "skilltap", "config.toml"),
+    "builtin_tap = false\n",
+  );
 }
 
 async function writeAgentModeConfig(configDir: string): Promise<void> {
@@ -53,7 +74,11 @@ describe("update orphan — agent mode auto-cleans orphan during update", () => 
       // Enable agent mode
       await writeAgentModeConfig(configDir);
 
-      const { exitCode, stdout } = await runSkilltap(["update"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Stale record");
       expect(stdout).toContain("Auto-removing");
@@ -84,7 +109,11 @@ describe("update orphan — agent mode cleans orphan, healthy skill still update
       // Enable agent mode for auto-cleanup
       await writeAgentModeConfig(configDir);
 
-      const { exitCode, stdout } = await runSkilltap(["update"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       // Should warn about stale record and auto-clean
       expect(stdout).toMatch(/[Ss]tale|Auto-removing/);
@@ -132,12 +161,21 @@ describe("update orphan — one orphan + one healthy skill", () => {
       await rm(orphanDir, { recursive: true, force: true });
 
       // Add a new commit to the healthy skill's repo
-      await addFileAndCommit(repoB, "extra.md", "# Extra\nNew content.", "update");
+      await addFileAndCommit(
+        repoB,
+        "extra.md",
+        "# Extra\nNew content.",
+        "update",
+      );
 
       // Enable agent mode so orphan cleanup is automatic
       await writeAgentModeConfig(configDir);
 
-      const { exitCode, stdout } = await runSkilltap(["update"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       // Orphan cleaned
       expect(stdout).toMatch(/[Ss]tale|Auto-removing/);
@@ -167,7 +205,10 @@ describe("update orphan — multi-skill cache subdir removed upstream (crash fix
       expect(install.exitCode).toBe(0);
 
       // In the SOURCE repo, remove skill-b's subdirectory and commit
-      await rm(join(repo.path, ".agents", "skills", "skill-b"), { recursive: true, force: true });
+      await rm(join(repo.path, ".agents", "skills", "skill-b"), {
+        recursive: true,
+        force: true,
+      });
       await commitAll(repo.path, "remove skill-b");
 
       // Run update — must NOT crash even though skill-b's cache subdir will be gone after pull
@@ -219,13 +260,23 @@ describe("update orphan — all installed skills are orphaned", () => {
       );
 
       // Delete BOTH skill directories
-      await rm(join(homeDir, ".agents", "skills", "standalone-skill"), { recursive: true, force: true });
-      await rm(join(homeDir, ".agents", "skills", "second-skill"), { recursive: true, force: true });
+      await rm(join(homeDir, ".agents", "skills", "standalone-skill"), {
+        recursive: true,
+        force: true,
+      });
+      await rm(join(homeDir, ".agents", "skills", "second-skill"), {
+        recursive: true,
+        force: true,
+      });
 
       // Enable agent mode for auto-cleanup
       await writeAgentModeConfig(configDir);
 
-      const { exitCode, stdout } = await runSkilltap(["update"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       // Both stale records should be reported/cleaned
       expect(stdout).toMatch(/[Ss]tale|Auto-removing/);
@@ -314,7 +365,11 @@ describe("update orphan — mixed orphan types cleaned together", () => {
       // Enable agent mode for auto-cleanup
       await writeAgentModeConfig(configDir);
 
-      const { exitCode, stdout } = await runSkilltap(["update"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       // Both orphan types should be cleaned
       expect(stdout).toMatch(/[Ss]tale|Auto-removing/);
@@ -348,7 +403,11 @@ describe("update orphan — agent mode, multi-skill cache completely deleted", (
       // Enable agent mode for auto-cleanup
       await writeAgentModeConfig(configDir);
 
-      const { exitCode, stdout } = await runSkilltap(["update"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toMatch(/[Ss]tale|Auto-removing/);
     } finally {

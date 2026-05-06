@@ -1,7 +1,23 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, type TestEnv, commitAll, createStandaloneSkillRepo, initRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import {
+  commitAll,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -21,11 +37,18 @@ afterEach(async () => {
 
 async function disableBuiltinTap(configDir: string): Promise<void> {
   await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+  await Bun.write(
+    join(configDir, "skilltap", "config.toml"),
+    "builtin_tap = false\n",
+  );
 }
 
 async function createMarketplaceRepo(
-  plugins: Array<{ name: string; source: string | object; description?: string }>,
+  plugins: Array<{
+    name: string;
+    source: string | object;
+    description?: string;
+  }>,
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const dir = await makeTmpDir();
   await mkdir(join(dir, ".claude-plugin"), { recursive: true });
@@ -52,8 +75,14 @@ async function createMarketplaceRepo(
 describe("tap marketplace — add tap with marketplace.json", () => {
   test("exits 0 and reports skill count, tap appears in tap list", async () => {
     const marketplaceRepo = await createMarketplaceRepo([
-      { name: "plugin-alpha", source: { source: "github", repo: "https://example.com/alpha" } },
-      { name: "plugin-beta", source: { source: "github", repo: "https://example.com/beta" } },
+      {
+        name: "plugin-alpha",
+        source: { source: "github", repo: "https://example.com/alpha" },
+      },
+      {
+        name: "plugin-beta",
+        source: { source: "github", repo: "https://example.com/beta" },
+      },
     ]);
     try {
       await disableBuiltinTap(configDir);

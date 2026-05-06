@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,7 +35,10 @@ describe("isInGitRepo", () => {
   });
 
   test("treats .git as a file (worktree case)", async () => {
-    await writeFile(join(workDir, ".git"), "gitdir: /elsewhere/.git/worktrees/foo");
+    await writeFile(
+      join(workDir, ".git"),
+      "gitdir: /elsewhere/.git/worktrees/foo",
+    );
     const result = await isInGitRepo(workDir);
     expect(result).toBe(workDir);
   });

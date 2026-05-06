@@ -1,5 +1,5 @@
 import { $ } from "bun";
-import { ScanError, err, ok } from "../types";
+import { err, ok, ScanError } from "../types";
 import { extractAgentResponse } from "./extract";
 import type { AgentAdapter } from "./types";
 

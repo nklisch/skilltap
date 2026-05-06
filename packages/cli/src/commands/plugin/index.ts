@@ -1,10 +1,10 @@
-import { defineCommand } from "citty";
-import { loadPlugins } from "@skilltap/core";
 import type { PluginRecord } from "@skilltap/core";
+import { loadPlugins } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { outputJson } from "../../ui/agent-out";
 import { ansi, table, termWidth, truncate } from "../../ui/format";
-import { isAgentMode } from "../../ui/policy";
 import { componentSummary } from "../../ui/plugin-format";
+import { isAgentMode } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -13,8 +13,16 @@ export default defineCommand({
     description: "Manage installed plugins",
   },
   args: {
-    global: { type: "boolean", description: "Show only global plugins", default: false },
-    project: { type: "boolean", description: "Show only project plugins", default: false },
+    global: {
+      type: "boolean",
+      description: "Show only global plugins",
+      default: false,
+    },
+    project: {
+      type: "boolean",
+      description: "Show only project plugins",
+      default: false,
+    },
     json: { type: "boolean", description: "Output as JSON", default: false },
   },
   subCommands: {
@@ -39,9 +47,15 @@ export default defineCommand({
     type ScopedPlugin = PluginRecord & { _scope: "global" | "project" };
 
     let allPlugins: ScopedPlugin[] = [
-      ...globalResult.value.plugins.map((p) => ({ ...p, _scope: "global" as const })),
+      ...globalResult.value.plugins.map((p) => ({
+        ...p,
+        _scope: "global" as const,
+      })),
       ...(projectResult?.ok
-        ? projectResult.value.plugins.map((p) => ({ ...p, _scope: "project" as const }))
+        ? projectResult.value.plugins.map((p) => ({
+            ...p,
+            _scope: "project" as const,
+          }))
         : []),
     ];
 
@@ -58,7 +72,9 @@ export default defineCommand({
 
     if (allPlugins.length === 0) {
       process.stdout.write("No plugins installed.\n");
-      process.stdout.write("Run 'skilltap install <source>' to install a plugin.\n");
+      process.stdout.write(
+        "Run 'skilltap install <source>' to install a plugin.\n",
+      );
       return;
     }
 

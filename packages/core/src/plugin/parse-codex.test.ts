@@ -1,15 +1,29 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir, createCodexPluginRepo } from "@skilltap/test-utils";
+import {
+  createCodexPluginRepo,
+  makeTmpDir,
+  removeTmpDir,
+} from "@skilltap/test-utils";
 import { parseCodexPlugin } from "./parse-codex";
 
-async function makeCodexPlugin(dir: string, pluginJson: unknown): Promise<void> {
+async function makeCodexPlugin(
+  dir: string,
+  pluginJson: unknown,
+): Promise<void> {
   await mkdir(join(dir, ".codex-plugin"), { recursive: true });
-  await Bun.write(join(dir, ".codex-plugin", "plugin.json"), JSON.stringify(pluginJson));
+  await Bun.write(
+    join(dir, ".codex-plugin", "plugin.json"),
+    JSON.stringify(pluginJson),
+  );
 }
 
-async function makeSkill(dir: string, name: string, description = "A test skill"): Promise<void> {
+async function makeSkill(
+  dir: string,
+  name: string,
+  description = "A test skill",
+): Promise<void> {
   await mkdir(join(dir, "skills", name), { recursive: true });
   await Bun.write(
     join(dir, "skills", name, "SKILL.md"),
@@ -45,9 +59,12 @@ describe("parseCodexPlugin", () => {
     try {
       await makeCodexPlugin(dir, VALID_CODEX_MANIFEST);
       await makeSkill(dir, "linter", "Lints code");
-      await Bun.write(join(dir, ".mcp.json"), JSON.stringify({
-        "lint-server": { command: "node", args: ["server.js"] },
-      }));
+      await Bun.write(
+        join(dir, ".mcp.json"),
+        JSON.stringify({
+          "lint-server": { command: "node", args: ["server.js"] },
+        }),
+      );
 
       const result = await parseCodexPlugin(dir);
       expect(result.ok).toBe(true);
@@ -68,7 +85,10 @@ describe("parseCodexPlugin", () => {
       await makeCodexPlugin(dir, VALID_CODEX_MANIFEST);
       // Add an agents/ directory — it should be ignored
       await mkdir(join(dir, "agents"), { recursive: true });
-      await Bun.write(join(dir, "agents", "builder.md"), "---\nname: builder\n---\nContent");
+      await Bun.write(
+        join(dir, "agents", "builder.md"),
+        "---\nname: builder\n---\nContent",
+      );
 
       const result = await parseCodexPlugin(dir);
       expect(result.ok).toBe(true);
@@ -83,7 +103,10 @@ describe("parseCodexPlugin", () => {
   test("returns err for missing required fields (version)", async () => {
     const dir = await makeTmpDir();
     try {
-      await makeCodexPlugin(dir, { name: "test", description: "missing version" });
+      await makeCodexPlugin(dir, {
+        name: "test",
+        description: "missing version",
+      });
       const result = await parseCodexPlugin(dir);
       expect(result.ok).toBe(false);
     } finally {

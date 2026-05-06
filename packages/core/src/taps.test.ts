@@ -11,10 +11,11 @@ import {
 } from "@skilltap/test-utils";
 import { getConfigDir, loadConfig } from "./config";
 import { installSkill } from "./install";
+import type { TapPlugin } from "./schemas/tap";
 import type { TapEntry } from "./taps";
 import {
-  BUILTIN_TAP,
   addTap,
+  BUILTIN_TAP,
   ensureBuiltinTap,
   initTap,
   isBuiltinTapCloned,
@@ -25,7 +26,6 @@ import {
   tapPluginToManifest,
   updateTap,
 } from "./taps";
-import type { TapPlugin } from "./schemas/tap";
 
 let env: TestEnv;
 let homeDir: string;
@@ -123,9 +123,7 @@ describe("parseGitHubTapShorthand", () => {
   });
 
   test("returns null for git@ URLs", () => {
-    expect(
-      parseGitHubTapShorthand("git@github.com:user/repo.git"),
-    ).toBeNull();
+    expect(parseGitHubTapShorthand("git@github.com:user/repo.git")).toBeNull();
   });
 
   test("uses custom git host when provided", () => {
@@ -440,8 +438,15 @@ async function createClonedBuiltinTap(
 ): Promise<{ sourceDir: string; cleanup: () => Promise<void> }> {
   // Create a source git repo that acts as the "remote" for the builtin tap
   const sourceDir = await makeTmpDir();
-  const tapJson = { name: BUILTIN_TAP.name, description: "Built-in tap", skills: skills.map((s) => ({ tags: [], ...s })) };
-  await Bun.write(join(sourceDir, "tap.json"), JSON.stringify(tapJson, null, 2));
+  const tapJson = {
+    name: BUILTIN_TAP.name,
+    description: "Built-in tap",
+    skills: skills.map((s) => ({ tags: [], ...s })),
+  };
+  await Bun.write(
+    join(sourceDir, "tap.json"),
+    JSON.stringify(tapJson, null, 2),
+  );
   await initRepo(sourceDir);
   await commitAll(sourceDir);
 
@@ -503,7 +508,10 @@ describe("loadTapJson — invalid tap.json", () => {
 
   test("addTap errors when cloned tap.json has invalid schema", async () => {
     const tapDir = await makeTmpDir();
-    await Bun.write(join(tapDir, "tap.json"), JSON.stringify({ unexpected: true }));
+    await Bun.write(
+      join(tapDir, "tap.json"),
+      JSON.stringify({ unexpected: true }),
+    );
     await initRepo(tapDir);
     await commitAll(tapDir);
     try {
@@ -521,7 +529,9 @@ describe("loadTapJson — invalid tap.json", () => {
 
 describe("addTap — builtin tap name", () => {
   test("errors when adding a tap with the builtin tap name", async () => {
-    const tap = await createLocalTap([{ name: "skill-a", description: "A", repo: "https://example.com/a" }]);
+    const tap = await createLocalTap([
+      { name: "skill-a", description: "A", repo: "https://example.com/a" },
+    ]);
     try {
       const result = await addTap(BUILTIN_TAP.name, tap.path);
       expect(result.ok).toBe(false);
@@ -540,7 +550,10 @@ describe("removeTap — builtin tap", () => {
   test("errors when builtin tap is already disabled", async () => {
     // Write config with builtin_tap = false
     await mkdir(join(configDir, "skilltap"), { recursive: true });
-    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+    await Bun.write(
+      join(configDir, "skilltap", "config.toml"),
+      "builtin_tap = false\n",
+    );
     const result = await removeTap(BUILTIN_TAP.name);
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -568,7 +581,10 @@ describe("removeTap — builtin tap", () => {
 describe("updateTap — builtin tap", () => {
   test("errors when updating disabled builtin tap by name", async () => {
     await mkdir(join(configDir, "skilltap"), { recursive: true });
-    await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+    await Bun.write(
+      join(configDir, "skilltap", "config.toml"),
+      "builtin_tap = false\n",
+    );
     const result = await updateTap(BUILTIN_TAP.name);
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -619,13 +635,19 @@ describe("updateTap — builtin tap", () => {
 describe("loadTaps — builtin tap", () => {
   test("includes builtin tap skills when cloned", async () => {
     const { cleanup } = await createClonedBuiltinTap([
-      { name: "builtin-skill", description: "A builtin skill", repo: "https://example.com/builtin" },
+      {
+        name: "builtin-skill",
+        description: "A builtin skill",
+        repo: "https://example.com/builtin",
+      },
     ]);
     try {
       const result = await loadTaps();
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      const builtinEntry = result.value.find((e) => e.tapName === BUILTIN_TAP.name);
+      const builtinEntry = result.value.find(
+        (e) => e.tapName === BUILTIN_TAP.name,
+      );
       expect(builtinEntry).toBeDefined();
       expect(builtinEntry?.skill.name).toBe("builtin-skill");
     } finally {
@@ -652,7 +674,9 @@ describe("initTap", () => {
       expect(tapJson.skills).toEqual([]);
 
       // Verify it's a git repo
-      expect(await Bun.file(join(workDir, "my-new-tap", ".git", "HEAD")).exists()).toBe(true);
+      expect(
+        await Bun.file(join(workDir, "my-new-tap", ".git", "HEAD")).exists(),
+      ).toBe(true);
     } finally {
       process.chdir(origCwd);
       await removeTmpDir(workDir);
@@ -796,7 +820,12 @@ describe("installSkill via tap name", () => {
 // ─── Helper: create a local marketplace git repo ───────────────────────────
 
 async function createLocalMarketplace(
-  plugins: Array<{ name: string; source: string; description?: string; category?: string }>,
+  plugins: Array<{
+    name: string;
+    source: string;
+    description?: string;
+    category?: string;
+  }>,
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const dir = await makeTmpDir();
   await mkdir(join(dir, ".claude-plugin"), { recursive: true });
@@ -847,8 +876,18 @@ describe("loadTapJson — marketplace.json fallback", () => {
     const tapJson = {
       name: "precedence-tap",
       skills: [
-        { name: "skill-a", description: "A", repo: "https://example.com/a", tags: [] },
-        { name: "skill-b", description: "B", repo: "https://example.com/b", tags: [] },
+        {
+          name: "skill-a",
+          description: "A",
+          repo: "https://example.com/a",
+          tags: [],
+        },
+        {
+          name: "skill-b",
+          description: "B",
+          repo: "https://example.com/b",
+          tags: [],
+        },
       ],
     };
     await Bun.write(join(dir, "tap.json"), JSON.stringify(tapJson, null, 2));
@@ -951,7 +990,9 @@ describe("loadTaps — marketplace taps", () => {
 
 // ─── Helper: create a local tap git repo with plugins ────────────────────────
 
-async function createLocalTapWithPlugin(plugin: TapPlugin): Promise<{ path: string; cleanup: () => Promise<void> }> {
+async function createLocalTapWithPlugin(
+  plugin: TapPlugin,
+): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const tapPath = await makeTmpDir();
   const tapJson = {
     name: "test-tap",
@@ -982,7 +1023,9 @@ describe("tapPluginToManifest", () => {
     const plugin: TapPlugin = {
       name: "my-plugin",
       description: "My plugin",
-      skills: [{ name: "my-skill", path: "skills/my-skill", description: "A skill" }],
+      skills: [
+        { name: "my-skill", path: "skills/my-skill", description: "A skill" },
+      ],
       agents: [],
       tags: [],
     };
@@ -991,11 +1034,19 @@ describe("tapPluginToManifest", () => {
     if (!result.ok) return;
     const skillComp = result.value.components.find((c) => c.type === "skill");
     expect(skillComp).toBeDefined();
-    expect(skillComp?.type === "skill" && skillComp.path).toBe("skills/my-skill");
+    expect(skillComp?.type === "skill" && skillComp.path).toBe(
+      "skills/my-skill",
+    );
   });
 
   test("sets format to skilltap and pluginRoot to tapDir", async () => {
-    const plugin: TapPlugin = { name: "p", description: "", skills: [], agents: [], tags: [] };
+    const plugin: TapPlugin = {
+      name: "p",
+      description: "",
+      skills: [],
+      agents: [],
+      tags: [],
+    };
     const result = await tapPluginToManifest(plugin, tapPath);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -1004,7 +1055,13 @@ describe("tapPluginToManifest", () => {
   });
 
   test("returns empty components when no skills/mcp/agents", async () => {
-    const plugin: TapPlugin = { name: "empty", description: "", skills: [], agents: [], tags: [] };
+    const plugin: TapPlugin = {
+      name: "empty",
+      description: "",
+      skills: [],
+      agents: [],
+      tags: [],
+    };
     const result = await tapPluginToManifest(plugin, tapPath);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -1030,7 +1087,9 @@ describe("tapPluginToManifest", () => {
   });
 
   test("converts file path MCP references", async () => {
-    const mcpContent = JSON.stringify({ "file-db": { command: "node", args: ["server.js"] } });
+    const mcpContent = JSON.stringify({
+      "file-db": { command: "node", args: ["server.js"] },
+    });
     await Bun.write(join(tapPath, ".mcp.json"), mcpContent);
     const plugin: TapPlugin = {
       name: "p",
@@ -1061,7 +1120,9 @@ describe("tapPluginToManifest", () => {
     const result = await tapPluginToManifest(plugin, tapPath);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.components.filter((c) => c.type === "mcp")).toHaveLength(0);
+    expect(
+      result.value.components.filter((c) => c.type === "mcp"),
+    ).toHaveLength(0);
   });
 
   test("returns error for malformed MCP inline object", async () => {
@@ -1135,7 +1196,9 @@ describe("loadTaps — tap plugin entries", () => {
       const result = await loadTaps();
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      const pluginEntries = result.value.filter((e) => e.tapPlugin !== undefined);
+      const pluginEntries = result.value.filter(
+        (e) => e.tapPlugin !== undefined,
+      );
       expect(pluginEntries).toHaveLength(1);
       const entry = pluginEntries[0]!;
       expect(entry.tapName).toBe("my-tap");

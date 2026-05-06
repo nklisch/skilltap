@@ -19,7 +19,12 @@ import { createInstallCallbacks } from "../../ui/install-callbacks";
 import { createStepLogger } from "../../ui/install-steps";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmSaveDefault, selectAgents } from "../../ui/prompts";
-import { parseAlsoFlag, resolveScope, resolveSemanticInteractive, tryFindProjectRoot } from "../../ui/resolve";
+import {
+  parseAlsoFlag,
+  resolveScope,
+  resolveSemanticInteractive,
+  tryFindProjectRoot,
+} from "../../ui/resolve";
 import { searchPrompt } from "../../ui/search-prompt";
 
 export default defineCommand({
@@ -198,14 +203,20 @@ export default defineCommand({
               : pc.dim(rawName);
           const source = `[${entry.tapName}]`;
           const installedTag = isInstalled ? pc.dim(" installed") : "";
-          const fixedCols = rawName.length + 2 + source.length + 2 + (isInstalled ? 10 : 0);
+          const fixedCols =
+            rawName.length + 2 + source.length + 2 + (isInstalled ? 10 : 0);
           const descSpace = Math.max(0, maxLabelWidth - fixedCols);
           const desc = entry.skill.description
             ? truncate(entry.skill.description, descSpace)
             : "";
           const pad = Math.max(
             1,
-            maxLabelWidth - rawName.length - desc.length - source.length - 2 - (isInstalled ? 10 : 0),
+            maxLabelWidth -
+              rawName.length -
+              desc.length -
+              source.length -
+              2 -
+              (isInstalled ? 10 : 0),
           );
           return `${checkbox} ${nameStr}${installedTag}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(source)}`;
         },
@@ -240,7 +251,11 @@ export default defineCommand({
     let agent: Awaited<ReturnType<typeof resolveSemanticInteractive>>["agent"];
 
     if (toInstall.length > 0) {
-      ({ agent } = await resolveSemanticInteractive(policy, { semantic: args.semantic }, config));
+      ({ agent } = await resolveSemanticInteractive(
+        policy,
+        { semantic: args.semantic },
+        config,
+      ));
       ({ scope, projectRoot } = await resolveScope(
         { project: args.project, global: args.global },
         config,
@@ -252,7 +267,9 @@ export default defineCommand({
         also = agentSelected;
 
         if (also.length) {
-          const save = await confirmSaveDefault("Save agent selection as default?");
+          const save = await confirmSaveDefault(
+            "Save agent selection as default?",
+          );
           if (save) {
             config.defaults.also = also;
             await saveConfig(config);
@@ -267,7 +284,8 @@ export default defineCommand({
       s.start(`Removing ${skill.name}…`);
       const result = await removeSkill(skill.name, {
         scope: skill.scope,
-        projectRoot: skill.scope === "project" ? detectedProjectRoot : undefined,
+        projectRoot:
+          skill.scope === "project" ? detectedProjectRoot : undefined,
       });
       s.stop();
       if (!result.ok) {

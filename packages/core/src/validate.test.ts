@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { join } from "node:path";
 import { mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { validateSkill } from "./validate";
 
 async function makeTmpDir(): Promise<string> {
@@ -13,7 +13,11 @@ async function cleanup(dir: string): Promise<void> {
   await rm(dir, { recursive: true, force: true });
 }
 
-async function writeFile(dir: string, rel: string, content: string): Promise<void> {
+async function writeFile(
+  dir: string,
+  rel: string,
+  content: string,
+): Promise<void> {
   const fullPath = join(dir, rel);
   await Bun.write(fullPath, content);
 }
@@ -56,7 +60,9 @@ describe("validateSkill", () => {
       const errors = result.value.issues.filter((i) => i.severity === "error");
       expect(errors).toHaveLength(0);
       expect(result.value.frontmatter?.name).toBe("my-skill");
-      expect(result.value.frontmatter?.description).toBe("A test skill for validation");
+      expect(result.value.frontmatter?.description).toBe(
+        "A test skill for validation",
+      );
     } finally {
       await cleanup(parentDir);
     }
@@ -67,7 +73,11 @@ describe("validateSkill", () => {
     const dir = join(parentDir, "my-skill");
     await mkdir(dir, { recursive: true });
     try {
-      await writeFile(dir, "SKILL.md", "# Just some content\n\nNo frontmatter here.\n");
+      await writeFile(
+        dir,
+        "SKILL.md",
+        "# Just some content\n\nNo frontmatter here.\n",
+      );
       const result = await validateSkill(dir);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
@@ -116,7 +126,9 @@ name: my-skill
       if (!result.ok) return;
       expect(result.value.valid).toBe(false);
       const errors = result.value.issues.filter((i) => i.severity === "error");
-      expect(errors.some((e) => e.message.includes("does not match directory name"))).toBe(true);
+      expect(
+        errors.some((e) => e.message.includes("does not match directory name")),
+      ).toBe(true);
     } finally {
       await cleanup(parentDir);
     }
@@ -143,7 +155,9 @@ Do stuff.
       const result = await validateSkill(dir);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      const warnings = result.value.issues.filter((i) => i.severity === "warning");
+      const warnings = result.value.issues.filter(
+        (i) => i.severity === "warning",
+      );
       expect(warnings.length).toBeGreaterThan(0);
       // Skill is still valid — scan warnings don't block
       expect(result.value.valid).toBe(true);

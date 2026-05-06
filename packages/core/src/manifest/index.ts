@@ -1,22 +1,22 @@
-export * from "./schemas";
-export * from "./range";
+export { loadManifest, manifestExists } from "./load";
+export { loadLockfile, lockfileExists, saveLockfile } from "./lockfile";
 export {
-  MANIFEST_FILENAME,
   LOCKFILE_FILENAME,
-  PUBLISH_DIR,
-  manifestPath,
   lockfilePath,
+  MANIFEST_FILENAME,
+  manifestPath,
+  PUBLISH_DIR,
   publishDir,
 } from "./paths";
-export { manifestExists, loadManifest } from "./load";
-export { saveManifest } from "./save";
-export { lockfileExists, loadLockfile, saveLockfile } from "./lockfile";
 export { discoverPublishablePlugins, type PublishDiscovery } from "./publish";
+export * from "./range";
+export { saveManifest } from "./save";
+export * from "./schemas";
 export {
-  addSkillToManifest,
   addPluginToManifest,
-  removeSkillFromManifest,
-  removePluginFromManifest,
+  addSkillToManifest,
   canonicalizeSourceKey,
   type ManifestUpdateInput,
+  removePluginFromManifest,
+  removeSkillFromManifest,
 } from "./update";

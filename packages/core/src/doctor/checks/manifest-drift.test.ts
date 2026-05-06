@@ -1,8 +1,7 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
-import { mkdtemp, rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import type { State } from "../../state/schema";
 import { checkManifestDrift } from "./manifest-drift";
@@ -93,7 +92,10 @@ describe("checkManifestDrift", () => {
   });
 
   test("warn when manifest declares an entry not in state", async () => {
-    await writeFile(join(projectRoot, "skilltap.toml"), EXTRA_DECLARED_MANIFEST);
+    await writeFile(
+      join(projectRoot, "skilltap.toml"),
+      EXTRA_DECLARED_MANIFEST,
+    );
     await writeFile(join(projectRoot, "skilltap.lock"), IN_SYNC_LOCKFILE);
 
     const result = await checkManifestDrift(VALID_STATE, projectRoot);
@@ -101,11 +103,16 @@ describe("checkManifestDrift", () => {
     expect(result.issues).toBeDefined();
     expect(result.issues!.length).toBeGreaterThan(0);
     expect(result.issues!.every((i) => !i.fixable)).toBe(true);
-    expect(result.issues!.some((i) => i.message.includes("github:n/missing-skill"))).toBe(true);
+    expect(
+      result.issues!.some((i) => i.message.includes("github:n/missing-skill")),
+    ).toBe(true);
   });
 
   test("warn issues are not fixable", async () => {
-    await writeFile(join(projectRoot, "skilltap.toml"), EXTRA_DECLARED_MANIFEST);
+    await writeFile(
+      join(projectRoot, "skilltap.toml"),
+      EXTRA_DECLARED_MANIFEST,
+    );
 
     const result = await checkManifestDrift(VALID_STATE, projectRoot);
     expect(result.status).toBe("warn");

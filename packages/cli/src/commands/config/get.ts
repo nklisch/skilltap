@@ -1,8 +1,4 @@
-import {
-  formatConfigValue,
-  getConfigValue,
-  loadConfig,
-} from "@skilltap/core";
+import { formatConfigValue, getConfigValue, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { exitWithError, outputJson } from "../../ui/agent-out";
 import { errorLine } from "../../ui/format";
@@ -43,7 +39,12 @@ export default defineCommand({
     }
 
     const result = getConfigValue(config, key);
-    if (!result.ok) exitWithError(config["agent-mode"].enabled, result.error.message, result.error.hint);
+    if (!result.ok)
+      exitWithError(
+        config["agent-mode"].enabled,
+        result.error.message,
+        result.error.hint,
+      );
 
     if (args.json) {
       outputJson(result.value);
@@ -57,16 +58,12 @@ export default defineCommand({
 function printFlat(config: Record<string, unknown>): void {
   for (const [section, value] of Object.entries(config)) {
     if (Array.isArray(value)) {
-      process.stdout.write(
-        `${section} = ${formatConfigValue(value)}\n`,
-      );
+      process.stdout.write(`${section} = ${formatConfigValue(value)}\n`);
     } else if (value != null && typeof value === "object") {
       for (const [field, v] of Object.entries(
         value as Record<string, unknown>,
       )) {
-        process.stdout.write(
-          `${section}.${field} = ${formatConfigValue(v)}\n`,
-        );
+        process.stdout.write(`${section}.${field} = ${formatConfigValue(v)}\n`);
       }
     }
   }

@@ -1,13 +1,9 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadManifest, manifestExists, saveManifest } from "./index";
-import {
-  loadLockfile,
-  lockfileExists,
-  saveLockfile,
-} from "./lockfile";
+import { loadLockfile, lockfileExists, saveLockfile } from "./lockfile";
 import type { Lockfile, ProjectManifest } from "./schemas";
 
 let projectRoot: string;
@@ -40,7 +36,10 @@ describe("manifest load/save", () => {
         "github:n/commit-helper": "^1.0",
       },
       plugins: {
-        "github:c/dev-toolkit": { ref: "v2.1", components: { "test-skipper": false } },
+        "github:c/dev-toolkit": {
+          ref: "v2.1",
+          components: { "test-skipper": false },
+        },
       },
       taps: {
         home: "https://gitea.example.com/n/t",
@@ -63,13 +62,19 @@ describe("manifest load/save", () => {
   });
 
   test("loadManifest fails on invalid TOML", async () => {
-    await writeFile(join(projectRoot, "skilltap.toml"), `not = valid = toml = oops`);
+    await writeFile(
+      join(projectRoot, "skilltap.toml"),
+      `not = valid = toml = oops`,
+    );
     const result = await loadManifest(projectRoot);
     expect(result.ok).toBe(false);
   });
 
   test("loadManifest fails on schema mismatch", async () => {
-    await writeFile(join(projectRoot, "skilltap.toml"), `[targets]\nscope = "linked"\n`);
+    await writeFile(
+      join(projectRoot, "skilltap.toml"),
+      `[targets]\nscope = "linked"\n`,
+    );
     const result = await loadManifest(projectRoot);
     expect(result.ok).toBe(false);
   });

@@ -1,4 +1,9 @@
-import { loadPlugins, type PluginManifest, type PluginRecord, type StoredComponent } from "@skilltap/core";
+import {
+  loadPlugins,
+  type PluginManifest,
+  type PluginRecord,
+  type StoredComponent,
+} from "@skilltap/core";
 
 /** One-line "type: name" label for a stored component. Used in CLI output. */
 export function componentLabel(c: StoredComponent): string {
@@ -29,9 +34,12 @@ export function componentSummary(record: PluginRecord): string {
   const counts = { skill: 0, mcp: 0, agent: 0 };
   for (const c of record.components) counts[c.type]++;
   const parts: string[] = [];
-  if (counts.skill > 0) parts.push(`${counts.skill} ${counts.skill === 1 ? "skill" : "skills"}`);
-  if (counts.mcp > 0) parts.push(`${counts.mcp} ${counts.mcp === 1 ? "MCP" : "MCPs"}`);
-  if (counts.agent > 0) parts.push(`${counts.agent} ${counts.agent === 1 ? "agent" : "agents"}`);
+  if (counts.skill > 0)
+    parts.push(`${counts.skill} ${counts.skill === 1 ? "skill" : "skills"}`);
+  if (counts.mcp > 0)
+    parts.push(`${counts.mcp} ${counts.mcp === 1 ? "MCP" : "MCPs"}`);
+  if (counts.agent > 0)
+    parts.push(`${counts.agent} ${counts.agent === 1 ? "agent" : "agents"}`);
   return parts.join(", ") || "no components";
 }
 
@@ -40,8 +48,11 @@ export function pluginComponentSummary(manifest: PluginManifest): string {
   const counts = { skill: 0, mcp: 0, agent: 0 };
   for (const c of manifest.components) counts[c.type]++;
   const parts: string[] = [];
-  if (counts.skill > 0) parts.push(`${counts.skill} ${counts.skill === 1 ? "skill" : "skills"}`);
-  if (counts.mcp > 0) parts.push(`${counts.mcp} ${counts.mcp === 1 ? "MCP" : "MCPs"}`);
-  if (counts.agent > 0) parts.push(`${counts.agent} ${counts.agent === 1 ? "agent" : "agents"}`);
+  if (counts.skill > 0)
+    parts.push(`${counts.skill} ${counts.skill === 1 ? "skill" : "skills"}`);
+  if (counts.mcp > 0)
+    parts.push(`${counts.mcp} ${counts.mcp === 1 ? "MCP" : "MCPs"}`);
+  if (counts.agent > 0)
+    parts.push(`${counts.agent} ${counts.agent === 1 ? "agent" : "agents"}`);
   return parts.join(", ") || "no components";
 }

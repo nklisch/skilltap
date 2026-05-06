@@ -1,4 +1,4 @@
-import { tryPreview, type TryReport } from "@skilltap/core";
+import { type TryReport, tryPreview } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, errorLine } from "../ui/format";
 
@@ -10,7 +10,8 @@ export default defineCommand({
   args: {
     source: {
       type: "positional",
-      description: "Source URL, owner/repo shorthand, npm: prefix, or local path",
+      description:
+        "Source URL, owner/repo shorthand, npm: prefix, or local path",
       required: true,
     },
     json: {
@@ -37,7 +38,9 @@ export default defineCommand({
     }
 
     if (args.json as boolean) {
-      process.stdout.write(`${JSON.stringify(reportToJson(result.value), null, 2)}\n`);
+      process.stdout.write(
+        `${JSON.stringify(reportToJson(result.value), null, 2)}\n`,
+      );
       return;
     }
 
@@ -71,7 +74,9 @@ function reportToJson(report: TryReport): unknown {
 }
 
 function renderTry(report: TryReport): void {
-  process.stdout.write(`\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n\n`);
+  process.stdout.write(
+    `\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n\n`,
+  );
   process.stdout.write(
     `${ansi.dim("Resolved:")} ${report.resolved.url}${report.resolved.ref ? ansi.dim(`@${report.resolved.ref}`) : ""}\n`,
   );
@@ -84,9 +89,15 @@ function renderTry(report: TryReport): void {
     process.stdout.write(
       `${ansi.bold("Plugin:")} ${report.plugin.name} ${ansi.dim(`(${report.plugin.format})`)}\n`,
     );
-    const skillCount = report.plugin.components.filter((c) => c.type === "skill").length;
-    const mcpCount = report.plugin.components.filter((c) => c.type === "mcp").length;
-    const agentCount = report.plugin.components.filter((c) => c.type === "agent").length;
+    const skillCount = report.plugin.components.filter(
+      (c) => c.type === "skill",
+    ).length;
+    const mcpCount = report.plugin.components.filter(
+      (c) => c.type === "mcp",
+    ).length;
+    const agentCount = report.plugin.components.filter(
+      (c) => c.type === "agent",
+    ).length;
     process.stdout.write(
       `  ${skillCount} skill${skillCount === 1 ? "" : "s"}, ${mcpCount} MCP server${mcpCount === 1 ? "" : "s"}, ${agentCount} agent${agentCount === 1 ? "" : "s"}\n\n`,
     );
@@ -102,7 +113,9 @@ function renderTry(report: TryReport): void {
     }
     process.stdout.write("\n");
   } else if (!report.plugin) {
-    process.stdout.write(`${ansi.dim("Skills:")} ${ansi.dim("(none found)")}\n\n`);
+    process.stdout.write(
+      `${ansi.dim("Skills:")} ${ansi.dim("(none found)")}\n\n`,
+    );
   }
 
   if (!report.scanned) {
@@ -114,13 +127,18 @@ function renderTry(report: TryReport): void {
       `${ansi.yellow("⚠")} ${report.warnings.length} security warning${report.warnings.length === 1 ? "" : "s"}:\n`,
     );
     for (const w of report.warnings) {
-      const lineLabel = typeof w.line === "number" && w.line > 0 ? `:${w.line}` : "";
-      process.stdout.write(`  ${ansi.yellow(w.category)} ${w.file}${lineLabel}\n`);
+      const lineLabel =
+        typeof w.line === "number" && w.line > 0 ? `:${w.line}` : "";
+      process.stdout.write(
+        `  ${ansi.yellow(w.category)} ${w.file}${lineLabel}\n`,
+      );
     }
     process.stdout.write("\n");
   }
 
-  process.stdout.write(`${ansi.dim("This was a preview. Nothing was installed.")}\n`);
+  process.stdout.write(
+    `${ansi.dim("This was a preview. Nothing was installed.")}\n`,
+  );
   process.stdout.write(
     `${ansi.dim("To install: skilltap install ")}${report.source}\n`,
   );

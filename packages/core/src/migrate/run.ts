@@ -2,11 +2,11 @@ import { rename } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "../config";
-import { type InstalledJson, InstalledJsonSchema } from "../schemas/installed";
 import { parseWithResult } from "../schemas/index";
+import { type InstalledJson, InstalledJsonSchema } from "../schemas/installed";
 import { type PluginsJson, PluginsJsonSchema } from "../schemas/plugins";
-import { saveState } from "../state/save";
 import { migrateV1State } from "../state/migrate-v1";
+import { saveState } from "../state/save";
 import { err, ok, type Result, UserError } from "../types";
 import { type ConfigMigrationResult, migrateV1Config } from "./config-v1";
 import {
@@ -68,7 +68,9 @@ export async function runMigrate(
     try {
       raw = parse(text);
     } catch (e) {
-      return err(new UserError(`Invalid TOML in ${globalMarkers.configToml}: ${e}`));
+      return err(
+        new UserError(`Invalid TOML in ${globalMarkers.configToml}: ${e}`),
+      );
     }
     const result = migrateV1Config(raw);
     if (!result.ok) return result;
@@ -100,7 +102,10 @@ export async function runMigrate(
   // ── Migrate project state (if a project root was provided) ───────────────
   if (anyProject && projectMarkers !== null) {
     scopes.push("project");
-    const stateResult = await migrateScopeState(projectMarkers, options.projectRoot);
+    const stateResult = await migrateScopeState(
+      projectMarkers,
+      options.projectRoot,
+    );
     if (!stateResult.ok) return stateResult;
     written.push(...stateResult.value.written);
     renamed.push(...stateResult.value.renamed);
@@ -141,9 +146,15 @@ async function migrateScopeState(
     try {
       raw = await Bun.file(markers.installedJson).json();
     } catch (e) {
-      return err(new UserError(`Invalid JSON in ${markers.installedJson}: ${e}`));
+      return err(
+        new UserError(`Invalid JSON in ${markers.installedJson}: ${e}`),
+      );
     }
-    const parsed = parseWithResult(InstalledJsonSchema, raw, markers.installedJson);
+    const parsed = parseWithResult(
+      InstalledJsonSchema,
+      raw,
+      markers.installedJson,
+    );
     if (!parsed.ok) return parsed;
     installed = parsed.value;
   }
@@ -164,7 +175,11 @@ async function migrateScopeState(
   const newState = migrateV1State(installed, plugins);
   const saveResult = await saveState(newState, projectRoot);
   if (!saveResult.ok) return saveResult;
-  written.push(projectRoot ? join(projectRoot, ".agents", "state.json") : join(getConfigDir(), "state.json"));
+  written.push(
+    projectRoot
+      ? join(projectRoot, ".agents", "state.json")
+      : join(getConfigDir(), "state.json"),
+  );
 
   // Rename v1 files to .v1.bak (after state.json is safely written)
   if (markers.installedJson) {

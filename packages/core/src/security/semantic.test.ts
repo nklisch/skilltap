@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import type { AgentAdapter } from "../agents/types";
-import { detectDangerousPatterns, detectSuspiciousUrls } from "./patterns";
 import { chunkSkillDir } from "./chunking";
+import { detectDangerousPatterns, detectSuspiciousUrls } from "./patterns";
 import {
   buildSecurityPrompt,
   escapeTagInjections,
@@ -167,9 +167,9 @@ describe("chunkSkillDir", () => {
     // Overlap chunk triggers both — full attack visible
     for (const overlap of overlaps) {
       expect(detectSuspiciousUrls(overlap.content).length).toBeGreaterThan(0);
-      expect(
-        detectDangerousPatterns(overlap.content).length,
-      ).toBeGreaterThan(0);
+      expect(detectDangerousPatterns(overlap.content).length).toBeGreaterThan(
+        0,
+      );
     }
   });
 });

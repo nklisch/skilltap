@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, readlink } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 
 let env: TestEnv;
@@ -100,7 +105,12 @@ describe("createAgentSymlinks", () => {
     const targetDir = await makeTmpDir();
     const anotherTarget = await makeTmpDir();
     try {
-      await createAgentSymlinks("my-skill", targetDir, ["claude-code"], "global");
+      await createAgentSymlinks(
+        "my-skill",
+        targetDir,
+        ["claude-code"],
+        "global",
+      );
       // Second call with different target — should replace the symlink
       const result = await createAgentSymlinks(
         "my-skill",
@@ -121,7 +131,12 @@ describe("createAgentSymlinks", () => {
   test("is idempotent when symlink already points to correct target", async () => {
     const targetDir = await makeTmpDir();
     try {
-      await createAgentSymlinks("my-skill", targetDir, ["claude-code"], "global");
+      await createAgentSymlinks(
+        "my-skill",
+        targetDir,
+        ["claude-code"],
+        "global",
+      );
       // Same call again — should succeed without error
       const result = await createAgentSymlinks(
         "my-skill",
@@ -193,7 +208,11 @@ describe("removeAgentSymlinks", () => {
     // lstat on the symlink itself (not the target) should succeed — dangling link still has an inode
     expect(await lstat(claudePath).catch(() => null)).not.toBeNull();
 
-    const result = await removeAgentSymlinks("my-skill", ["claude-code"], "global");
+    const result = await removeAgentSymlinks(
+      "my-skill",
+      ["claude-code"],
+      "global",
+    );
     expect(result.ok).toBe(true);
     // Link inode is gone
     expect(await lstat(claudePath).catch(() => null)).toBeNull();

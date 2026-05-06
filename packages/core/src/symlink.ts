@@ -108,7 +108,8 @@ export async function removeAgentSymlinks(
   scope: "global" | "project" | "linked",
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
-  const effectiveScope = scope === "linked" ? (projectRoot ? "project" : "global") : scope;
+  const effectiveScope =
+    scope === "linked" ? (projectRoot ? "project" : "global") : scope;
   for (const agent of agents) {
     const linkPath = symlinkPath(skillName, agent, effectiveScope, projectRoot);
     if (!linkPath) continue;

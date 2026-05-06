@@ -4,7 +4,9 @@ import type { DoctorCheck } from "../types";
 export async function checkGit(): Promise<DoctorCheck> {
   let gitPath: string;
   try {
-    gitPath = await $`which git`.quiet().then((r) => r.stdout.toString().trim());
+    gitPath = await $`which git`
+      .quiet()
+      .then((r) => r.stdout.toString().trim());
   } catch {
     return {
       name: "git",

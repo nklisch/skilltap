@@ -236,7 +236,11 @@ describe("installSkill — multi-skill", () => {
     const repo = await createMultiSkillRepo();
     try {
       // Pre-install only skill-a
-      await installSkill(repo.path, { scope: "global", skillNames: ["skill-a"], skipScan: true });
+      await installSkill(repo.path, {
+        scope: "global",
+        skillNames: ["skill-a"],
+        skipScan: true,
+      });
 
       // Install whole repo — skill-a is already installed, skill-b is new
       const result = await installSkill(repo.path, {
@@ -255,7 +259,9 @@ describe("installSkill — multi-skill", () => {
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      const aEntries = installed.value.skills.filter((s) => s.name === "skill-a");
+      const aEntries = installed.value.skills.filter(
+        (s) => s.name === "skill-a",
+      );
       expect(aEntries).toHaveLength(1);
     } finally {
       await repo.cleanup();
@@ -293,13 +299,19 @@ describe("installSkill — project scope", () => {
     const projectRoot = await makeTmpDir();
     try {
       await $`git -C ${projectRoot} init`.quiet();
-      await installSkill(repo.path, { scope: "project", projectRoot, skipScan: true });
+      await installSkill(repo.path, {
+        scope: "project",
+        projectRoot,
+        skipScan: true,
+      });
 
       // Project file should have the record
       const projectInstalled = await loadInstalled(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
-      expect(projectInstalled.value.skills.map((s) => s.name)).toContain("standalone-skill");
+      expect(projectInstalled.value.skills.map((s) => s.name)).toContain(
+        "standalone-skill",
+      );
 
       // Global file should be empty
       const globalInstalled = await loadInstalled();
@@ -320,8 +332,16 @@ describe("installSkill — project scope", () => {
       await $`git -C ${projectA} init`.quiet();
       await $`git -C ${projectB} init`.quiet();
 
-      await installSkill(repo.path, { scope: "project", projectRoot: projectA, skipScan: true });
-      await installSkill(repo.path, { scope: "project", projectRoot: projectB, skipScan: true });
+      await installSkill(repo.path, {
+        scope: "project",
+        projectRoot: projectA,
+        skipScan: true,
+      });
+      await installSkill(repo.path, {
+        scope: "project",
+        projectRoot: projectB,
+        skipScan: true,
+      });
 
       // Both project files have the record
       const aInstalled = await loadInstalled(projectA);
@@ -517,7 +537,10 @@ describe("idempotency", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       await removeSkill("standalone-skill");
-      const result = await installSkill(repo.path, { scope: "global", skipScan: true });
+      const result = await installSkill(repo.path, {
+        scope: "global",
+        skipScan: true,
+      });
       expect(result.ok).toBe(true);
 
       const installedResult = await loadInstalled();
@@ -591,18 +614,34 @@ describe("installSkill — tap name resolution", () => {
         name: tapName,
         description: "Test tap",
         skills: [
-          { name: "skill-a", description: "Skill A", repo: repo.path, tags: [] },
-          { name: "skill-b", description: "Skill B", repo: repo.path, tags: [] },
+          {
+            name: "skill-a",
+            description: "Skill A",
+            repo: repo.path,
+            tags: [],
+          },
+          {
+            name: "skill-b",
+            description: "Skill B",
+            repo: repo.path,
+            tags: [],
+          },
         ],
       });
       await Bun.write(join(tapsDir, "tap.json"), tapJson);
 
       // Write config with builtin_tap disabled and our test tap
       const configPath = join(configDir, "skilltap", "config.toml");
-      await Bun.write(configPath, `builtin_tap = false\n\n[[taps]]\nname = "${tapName}"\nurl = "${repo.path}"\n`);
+      await Bun.write(
+        configPath,
+        `builtin_tap = false\n\n[[taps]]\nname = "${tapName}"\nurl = "${repo.path}"\n`,
+      );
 
       // Install by tap name — should only install skill-a, not both
-      const result = await installSkill("skill-a", { scope: "global", skipScan: true });
+      const result = await installSkill("skill-a", {
+        scope: "global",
+        skipScan: true,
+      });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
@@ -635,8 +674,18 @@ describe("installSkill — tap name resolution", () => {
         JSON.stringify({
           name: tapName,
           skills: [
-            { name: "skill-a", description: "Skill A", repo: repo.path, tags: [] },
-            { name: "skill-b", description: "Skill B", repo: repo.path, tags: [] },
+            {
+              name: "skill-a",
+              description: "Skill A",
+              repo: repo.path,
+              tags: [],
+            },
+            {
+              name: "skill-b",
+              description: "Skill B",
+              repo: repo.path,
+              tags: [],
+            },
           ],
         }),
       );

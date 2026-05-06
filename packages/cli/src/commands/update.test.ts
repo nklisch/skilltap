@@ -7,7 +7,14 @@ import {
   test,
 } from "bun:test";
 import { loadInstalled } from "@skilltap/core";
-import { createTestEnv, type TestEnv, addFileAndCommit, createMaliciousSkillRepo, createStandaloneSkillRepo, runSkilltap } from "@skilltap/test-utils";
+import {
+  addFileAndCommit,
+  createMaliciousSkillRepo,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -118,11 +125,7 @@ describe("update — linked skill skipped", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       // Link instead of install
-      await runSkilltap(
-        ["link", repo.path, "--global"],
-        homeDir,
-        configDir,
-      );
+      await runSkilltap(["link", repo.path, "--global"], homeDir, configDir);
 
       const { exitCode, stdout } = await runSkilltap(
         ["update", "--yes"],
@@ -193,7 +196,11 @@ describe("update — strict mode with warnings in diff", () => {
 
 describe("update — no skills installed", () => {
   test("reports no skills when none installed", async () => {
-    const { exitCode, stdout } = await runSkilltap(["update", "--yes"], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(
+      ["update", "--yes"],
+      homeDir,
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No skills installed");
   });
@@ -214,10 +221,18 @@ describe("update — show_diff config", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await writeShowDiffConfig("full");
-      await runSkilltap(["install", repo.path, "--yes", "--global", "--skip-scan"], homeDir, configDir);
+      await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
       await addFileAndCommit(repo.path, "notes.md", "# Notes\nsome content");
 
-      const { exitCode, stdout } = await runSkilltap(["update", "--yes"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update", "--yes"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       // Unified diff markers should appear
       expect(stdout).toContain("@@");
@@ -231,10 +246,18 @@ describe("update — show_diff config", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await writeShowDiffConfig("stat");
-      await runSkilltap(["install", repo.path, "--yes", "--global", "--skip-scan"], homeDir, configDir);
+      await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
       await addFileAndCommit(repo.path, "notes.md", "# Notes\nsome content");
 
-      const { exitCode, stdout } = await runSkilltap(["update", "--yes"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update", "--yes"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("notes.md");
       expect(stdout).not.toContain("@@");
@@ -247,10 +270,18 @@ describe("update — show_diff config", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await writeShowDiffConfig("none");
-      await runSkilltap(["install", repo.path, "--yes", "--global", "--skip-scan"], homeDir, configDir);
+      await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
       await addFileAndCommit(repo.path, "notes.md", "# Notes\nsome content");
 
-      const { exitCode, stdout } = await runSkilltap(["update", "--yes"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["update", "--yes"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).not.toContain("notes.md");
       expect(stdout).not.toContain("@@");

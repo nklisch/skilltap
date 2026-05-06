@@ -57,48 +57,62 @@ export const PluginManifestSchema = z.object({
   components: z.array(PluginComponentSchema),
 });
 
-export const ClaudePluginJsonSchema = z.object({
-  name: z.string(),
-  description: z.string().optional(),
-  version: z.string().optional(),
-  author: z.object({
+export const ClaudePluginJsonSchema = z
+  .object({
     name: z.string(),
-    email: z.string().optional(),
-    url: z.string().optional(),
-  }).optional(),
-  homepage: z.string().optional(),
-  repository: z.string().optional(),
-  license: z.string().optional(),
-  keywords: z.array(z.string()).optional(),
-  skills: z.union([z.string(), z.array(z.string())]).optional(),
-  commands: z.union([z.string(), z.array(z.string())]).optional(),
-  agents: z.union([z.string(), z.array(z.string())]).optional(),
-  mcpServers: z.union([z.string(), z.array(z.string()), z.record(z.string(), z.unknown())]).optional(),
-  hooks: z.unknown().optional(),
-  lspServers: z.unknown().optional(),
-  outputStyles: z.unknown().optional(),
-  channels: z.unknown().optional(),
-  userConfig: z.unknown().optional(),
-}).passthrough();
+    description: z.string().optional(),
+    version: z.string().optional(),
+    author: z
+      .object({
+        name: z.string(),
+        email: z.string().optional(),
+        url: z.string().optional(),
+      })
+      .optional(),
+    homepage: z.string().optional(),
+    repository: z.string().optional(),
+    license: z.string().optional(),
+    keywords: z.array(z.string()).optional(),
+    skills: z.union([z.string(), z.array(z.string())]).optional(),
+    commands: z.union([z.string(), z.array(z.string())]).optional(),
+    agents: z.union([z.string(), z.array(z.string())]).optional(),
+    mcpServers: z
+      .union([
+        z.string(),
+        z.array(z.string()),
+        z.record(z.string(), z.unknown()),
+      ])
+      .optional(),
+    hooks: z.unknown().optional(),
+    lspServers: z.unknown().optional(),
+    outputStyles: z.unknown().optional(),
+    channels: z.unknown().optional(),
+    userConfig: z.unknown().optional(),
+  })
+  .passthrough();
 
-export const CodexPluginJsonSchema = z.object({
-  name: z.string(),
-  version: z.string(),
-  description: z.string(),
-  author: z.object({
+export const CodexPluginJsonSchema = z
+  .object({
     name: z.string(),
-    email: z.string().optional(),
-    url: z.string().optional(),
-  }).optional(),
-  homepage: z.string().optional(),
-  repository: z.string().optional(),
-  license: z.string().optional(),
-  keywords: z.array(z.string()).optional(),
-  skills: z.string().optional(),
-  mcpServers: z.string().optional(),
-  apps: z.unknown().optional(),
-  interface: z.unknown().optional(),
-}).passthrough();
+    version: z.string(),
+    description: z.string(),
+    author: z
+      .object({
+        name: z.string(),
+        email: z.string().optional(),
+        url: z.string().optional(),
+      })
+      .optional(),
+    homepage: z.string().optional(),
+    repository: z.string().optional(),
+    license: z.string().optional(),
+    keywords: z.array(z.string()).optional(),
+    skills: z.string().optional(),
+    mcpServers: z.string().optional(),
+    apps: z.unknown().optional(),
+    interface: z.unknown().optional(),
+  })
+  .passthrough();
 
 export type PluginSkillComponent = z.infer<typeof PluginSkillComponentSchema>;
 export type McpStdioServer = z.infer<typeof McpStdioServerSchema>;

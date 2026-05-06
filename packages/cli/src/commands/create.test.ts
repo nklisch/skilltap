@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
@@ -108,10 +117,14 @@ describe("create — multi template", () => {
     // multi template in non-interactive mode creates two default skills
     expect(exitCode).toBe(0);
     expect(
-      await Bun.file(join(outDir, ".agents/skills/multi-skills-a/SKILL.md")).exists(),
+      await Bun.file(
+        join(outDir, ".agents/skills/multi-skills-a/SKILL.md"),
+      ).exists(),
     ).toBe(true);
     expect(
-      await Bun.file(join(outDir, ".agents/skills/multi-skills-b/SKILL.md")).exists(),
+      await Bun.file(
+        join(outDir, ".agents/skills/multi-skills-b/SKILL.md"),
+      ).exists(),
     ).toBe(true);
   });
 });

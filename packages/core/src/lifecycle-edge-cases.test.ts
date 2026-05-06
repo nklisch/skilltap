@@ -137,7 +137,12 @@ describe("scope interaction", () => {
 
     // Both exist
     const globalDir = join(homeDir, ".agents", "skills", "standalone-skill");
-    const projectSkillDir = join(projectDir, ".agents", "skills", "standalone-skill");
+    const projectSkillDir = join(
+      projectDir,
+      ".agents",
+      "skills",
+      "standalone-skill",
+    );
     expect((await lstat(globalDir)).isDirectory()).toBe(true);
     expect((await lstat(projectSkillDir)).isDirectory()).toBe(true);
 
@@ -162,7 +167,9 @@ describe("scope interaction", () => {
 
     await installSkill(repo.path, { scope: "global", skipScan: true });
 
-    const result = await moveSkill("standalone-skill", { to: { scope: "global" } });
+    const result = await moveSkill("standalone-skill", {
+      to: { scope: "global" },
+    });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("already in global scope");
@@ -177,7 +184,10 @@ describe("error recovery", () => {
     // installed.json lives in the config dir, not homeDir/.agents/
     const configSkiltapDir = join(configDir, "skilltap");
     await mkdir(configSkiltapDir, { recursive: true });
-    await Bun.write(join(configSkiltapDir, "installed.json"), "NOT VALID JSON {{{{");
+    await Bun.write(
+      join(configSkiltapDir, "installed.json"),
+      "NOT VALID JSON {{{{",
+    );
 
     const loaded = await loadInstalled();
     expect(loaded.ok).toBe(false);
@@ -287,9 +297,7 @@ describe("error recovery", () => {
     if (!result.ok) return;
 
     const targetDir = join(skillsDir, "standalone-skill");
-    expect(
-      await Bun.file(join(targetDir, "SKILL.md")).exists(),
-    ).toBe(true);
+    expect(await Bun.file(join(targetDir, "SKILL.md")).exists()).toBe(true);
   });
 });
 
@@ -306,9 +314,12 @@ describe("DX error messages", () => {
   });
 
   test("install non-existent path mentions 'does not exist'", async () => {
-    const result = await installSkill("/tmp/skilltap-definitely-not-real-12345", {
-      scope: "global",
-    });
+    const result = await installSkill(
+      "/tmp/skilltap-definitely-not-real-12345",
+      {
+        scope: "global",
+      },
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     // Adapter won't match or the local adapter will report missing

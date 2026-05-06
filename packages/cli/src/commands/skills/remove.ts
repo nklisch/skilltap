@@ -8,12 +8,12 @@ import {
   removeSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { sendEvent, telemetryBase } from "../../telemetry";
 import { agentError, exitWithError } from "../../ui/agent-out";
 import { errorLine, successLine } from "../../ui/format";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
 import { tryFindProjectRoot } from "../../ui/resolve";
-import { sendEvent, telemetryBase } from "../../telemetry";
 
 export default defineCommand({
   meta: {
@@ -23,7 +23,8 @@ export default defineCommand({
   args: {
     name: {
       type: "positional",
-      description: "Name(s) of installed skills to remove (required in agent mode)",
+      description:
+        "Name(s) of installed skills to remove (required in agent mode)",
       required: false,
     },
     project: {
@@ -49,12 +50,18 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const { config, policy } = await loadPolicyOrExit({ yes: args.yes, project: args.project, global: args.global, agent: args.agent });
+    const { config, policy } = await loadPolicyOrExit({
+      yes: args.yes,
+      project: args.project,
+      global: args.global,
+      agent: args.agent,
+    });
 
     // Phase 35b-2: dispatch mcp:<source> to MCP-only remove path.
-    const allInputs = [args.name, ...(args._ as string[] | undefined ?? [])].filter(
-      (n): n is string => typeof n === "string" && n.length > 0,
-    );
+    const allInputs = [
+      args.name,
+      ...((args._ as string[] | undefined) ?? []),
+    ].filter((n): n is string => typeof n === "string" && n.length > 0);
     const mcpInputs = allInputs.filter((n) => n.startsWith("mcp:"));
     if (mcpInputs.length > 0) {
       if (mcpInputs.length !== allInputs.length) {
@@ -116,7 +123,9 @@ export default defineCommand({
       }
       const selected = await selectSkillsToRemove(allSkills);
       const selectedKeys = new Set(selected);
-      skillsToRemove = allSkills.filter((s) => selectedKeys.has(`${s.name}:${s.scope}`));
+      skillsToRemove = allSkills.filter((s) =>
+        selectedKeys.has(`${s.name}:${s.scope}`),
+      );
     } else {
       const names = [...new Set([args.name, ...(args._ as string[])])];
       skillsToRemove = [];
@@ -126,17 +135,25 @@ export default defineCommand({
           // Check if it's an unmanaged skill on disk
           const discoverResult = await discoverSkills({ unmanagedOnly: true });
           if (discoverResult.ok) {
-            const discovered = discoverResult.value.skills.find((s) => s.name === name);
+            const discovered = discoverResult.value.skills.find(
+              (s) => s.name === name,
+            );
             if (discovered) {
               // Confirm and remove unmanaged skill
               if (policy.agentMode) {
-                const rmResult = await removeAnySkill({ skill: discovered, removeAll: true });
+                const rmResult = await removeAnySkill({
+                  skill: discovered,
+                  removeAll: true,
+                });
                 if (!rmResult.ok) {
                   agentError(rmResult.error.message);
                   process.exit(1);
                 }
                 process.stdout.write(`OK: Removed ${name}\n`);
-                sendEvent(config, "remove", { ...telemetryBase(true), success: true });
+                sendEvent(config, "remove", {
+                  ...telemetryBase(true),
+                  success: true,
+                });
                 return;
               } else {
                 if (!args.yes) {
@@ -145,7 +162,10 @@ export default defineCommand({
                 }
                 const s = spinner();
                 s.start(`Removing ${name}...`);
-                const rmResult = await removeAnySkill({ skill: discovered, removeAll: true });
+                const rmResult = await removeAnySkill({
+                  skill: discovered,
+                  removeAll: true,
+                });
                 if (!rmResult.ok) {
                   s.stop("Failed.");
                   errorLine(rmResult.error.message, rmResult.error.hint);
@@ -153,7 +173,10 @@ export default defineCommand({
                 }
                 s.stop("Removed.");
                 successLine(`Removed ${name}`);
-                sendEvent(config, "remove", { ...telemetryBase(false), success: true });
+                sendEvent(config, "remove", {
+                  ...telemetryBase(false),
+                  success: true,
+                });
                 return;
               }
             }
@@ -170,7 +193,11 @@ export default defineCommand({
     }
 
     const scopeOf = (skill: InstalledSkill): "global" | "project" | "linked" =>
-      args.project ? "project" : args.global ? "global" : (skill.scope as "global" | "project" | "linked");
+      args.project
+        ? "project"
+        : args.global
+          ? "global"
+          : (skill.scope as "global" | "project" | "linked");
 
     if (policy.agentMode) {
       for (const skill of skillsToRemove) {
@@ -178,7 +205,9 @@ export default defineCommand({
           scope: scopeOf(skill),
           projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
           onOrphanRemoved(name) {
-            process.stdout.write(`note: "${name}" directory was already missing — cleaning up record only.\n`);
+            process.stdout.write(
+              `note: "${name}" directory was already missing — cleaning up record only.\n`,
+            );
           },
         });
         if (!result.ok) {
@@ -219,7 +248,9 @@ export default defineCommand({
         scope: scopeOf(skill),
         projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
         onOrphanRemoved(name) {
-          s.message(`Note: "${name}" directory was already missing — cleaning up record only.`);
+          s.message(
+            `Note: "${name}" directory was already missing — cleaning up record only.`,
+          );
         },
       });
       if (!result.ok) {

@@ -6,7 +6,10 @@ import { skillDisabledDir, skillInstallDir } from "../../paths";
 import type { InstalledJson } from "../../schemas/installed";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
-export async function checkSkills(installed: InstalledJson, projectRoot?: string): Promise<DoctorCheck> {
+export async function checkSkills(
+  installed: InstalledJson,
+  projectRoot?: string,
+): Promise<DoctorCheck> {
   const issues: DoctorIssue[] = [];
   const globalTracked = new Set<string>();
   const projectTracked = new Set<string>();
@@ -45,9 +48,14 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
     }
 
     const isProject = skill.scope === "project" && !!projectRoot;
-    const installDir = skill.active === false
-      ? (isProject ? skillDisabledDir(skill.name, "project", projectRoot) : skillDisabledDir(skill.name, "global"))
-      : (isProject ? skillInstallDir(skill.name, "project", projectRoot) : skillInstallDir(skill.name, "global"));
+    const installDir =
+      skill.active === false
+        ? isProject
+          ? skillDisabledDir(skill.name, "project", projectRoot)
+          : skillDisabledDir(skill.name, "global")
+        : isProject
+          ? skillInstallDir(skill.name, "project", projectRoot)
+          : skillInstallDir(skill.name, "global");
 
     if (!(await resolvedDirExists(installDir))) {
       const skillName = skill.name;
@@ -58,11 +66,15 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
         fixable: true,
         fixDescription: `removed from state.json`,
         fix: async () => {
-          const effectiveRoot = skillScope === "project" ? capturedRoot : undefined;
+          const effectiveRoot =
+            skillScope === "project" ? capturedRoot : undefined;
           const r = await loadInstalled(effectiveRoot);
           if (!r.ok) return;
           await saveInstalled(
-            { ...r.value, skills: r.value.skills.filter((s) => s.name !== skillName) },
+            {
+              ...r.value,
+              skills: r.value.skills.filter((s) => s.name !== skillName),
+            },
             effectiveRoot,
           );
         },
@@ -95,7 +107,9 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
     const projectSkillsDir = join(projectRoot, ".agents", "skills");
     if (await resolvedDirExists(projectSkillsDir)) {
       try {
-        const entries = await readdir(projectSkillsDir, { withFileTypes: true });
+        const entries = await readdir(projectSkillsDir, {
+          withFileTypes: true,
+        });
         for (const entry of entries) {
           if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
           if (entry.name === ".disabled") continue;

@@ -1,4 +1,9 @@
-import { loadConfig, loadInstalled, loadPlugins, loadTaps } from "@skilltap/core";
+import {
+  loadConfig,
+  loadInstalled,
+  loadPlugins,
+  loadTaps,
+} from "@skilltap/core";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 async function loadAllSkills() {

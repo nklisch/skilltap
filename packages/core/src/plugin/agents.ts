@@ -1,8 +1,8 @@
 import { readdir } from "node:fs/promises";
 import { basename, join, relative } from "node:path";
 import { parseSkillFrontmatter } from "../frontmatter";
-import { type PluginAgentComponent } from "../schemas/plugin";
-import { ok, type Result, UserError } from "../types";
+import type { PluginAgentComponent } from "../schemas/plugin";
+import { ok, type Result, type UserError } from "../types";
 
 /**
  * Discover and parse agent definition .md files from a directory.

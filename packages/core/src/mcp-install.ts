@@ -5,13 +5,13 @@ import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir } from "./fs";
 import { clone, type GitError } from "./git";
 import { detectPlugin } from "./plugin/detect";
+import { parseMcpJson } from "./plugin/mcp";
 import {
   injectMcpServers,
   namespaceMcpServer,
   parseNamespacedKey,
   removeMcpServers,
 } from "./plugin/mcp-inject";
-import { parseMcpJson } from "./plugin/mcp";
 import type { McpServerEntry, PluginManifest } from "./schemas/plugin";
 import { loadState } from "./state/load";
 import { saveState } from "./state/save";
@@ -92,13 +92,17 @@ export async function installMcpOnly(
   let cleanup: (() => Promise<void>) | null = null;
 
   if (resolved.value.adapter === "local") {
-    contentDir = await realpath(resolved.value.url).catch(() => resolved.value.url);
+    contentDir = await realpath(resolved.value.url).catch(
+      () => resolved.value.url,
+    );
   } else {
     const tmpResult = await makeTmpDir();
     if (!tmpResult.ok) return tmpResult;
     const tmp = tmpResult.value;
     cleanup = async () => {
-      await removeTmpDir(tmp).catch((e) => debug("mcp-install: cleanup failed", { tmp, error: String(e) }));
+      await removeTmpDir(tmp).catch((e) =>
+        debug("mcp-install: cleanup failed", { tmp, error: String(e) }),
+      );
     };
     const cloneResult = await clone(resolved.value.url, tmp, {
       branch: resolved.value.ref,
@@ -127,7 +131,10 @@ export async function installMcpOnly(
       );
     }
 
-    const agents = options.agents && options.agents.length > 0 ? options.agents : ["claude-code"];
+    const agents =
+      options.agents && options.agents.length > 0
+        ? options.agents
+        : ["claude-code"];
 
     const injectResult = await injectMcpServers({
       pluginName: ref.slug,
@@ -268,7 +275,9 @@ async function collectServers(
   const pluginResult = await detectPlugin(contentDir);
   if (pluginResult.ok && pluginResult.value !== null) {
     const servers = (pluginResult.value as PluginManifest).components
-      .filter((c): c is { type: "mcp"; server: McpServerEntry } => c.type === "mcp")
+      .filter(
+        (c): c is { type: "mcp"; server: McpServerEntry } => c.type === "mcp",
+      )
       .map((c) => c.server);
     if (servers.length > 0) return ok(servers);
   }
@@ -279,7 +288,9 @@ async function collectServers(
   return ok([]);
 }
 
-function serverToStoredConfig(server: McpServerEntry): StoredMcpStandalone["config"] {
+function serverToStoredConfig(
+  server: McpServerEntry,
+): StoredMcpStandalone["config"] {
   if (server.type === "http") {
     return {
       type: "http",

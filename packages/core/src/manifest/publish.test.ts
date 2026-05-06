@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { discoverPublishablePlugins } from "./publish";
@@ -94,8 +94,12 @@ publish = true
     const result = await discoverPublishablePlugins(repoRoot);
     expect(result.publishable).toEqual([]);
     expect(result.rejected).toHaveLength(2);
-    expect(result.rejected.some((r) => r.reason.includes("Invalid TOML"))).toBe(true);
-    expect(result.rejected.some((r) => r.reason.includes("Schema mismatch"))).toBe(true);
+    expect(result.rejected.some((r) => r.reason.includes("Invalid TOML"))).toBe(
+      true,
+    );
+    expect(
+      result.rejected.some((r) => r.reason.includes("Schema mismatch")),
+    ).toBe(true);
   });
 
   test("handles multiple plugins (mix of publishable + rejected)", async () => {
@@ -117,6 +121,9 @@ publish = true
     const result = await discoverPublishablePlugins(repoRoot);
     expect(result.publishable).toHaveLength(2);
     expect(result.rejected).toHaveLength(1);
-    expect(result.publishable.map((p) => p.name).sort()).toEqual(["publish-a", "publish-b"]);
+    expect(result.publishable.map((p) => p.name).sort()).toEqual([
+      "publish-a",
+      "publish-b",
+    ]);
   });
 });

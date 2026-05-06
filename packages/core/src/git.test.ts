@@ -1,9 +1,19 @@
-import { lstat } from "node:fs/promises";
 import { afterEach, describe, expect, test } from "bun:test";
+import { lstat } from "node:fs/promises";
 import { createStandaloneSkillRepo } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { makeTmpDir, removeTmpDir } from "./fs";
-import { checkGitInstalled, clone, diff, fetch, flipUrlProtocol, log, lsRemoteTags, pull, revParse } from "./git";
+import {
+  checkGitInstalled,
+  clone,
+  diff,
+  fetch,
+  flipUrlProtocol,
+  log,
+  lsRemoteTags,
+  pull,
+  revParse,
+} from "./git";
 
 describe("checkGitInstalled", () => {
   test("returns ok when git is on PATH", async () => {

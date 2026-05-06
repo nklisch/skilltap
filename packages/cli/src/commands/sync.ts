@@ -1,7 +1,7 @@
 import {
   applySync,
-  detectDrift,
   type DriftItem,
+  detectDrift,
   loadLockfile,
   loadManifest,
   loadState,
@@ -42,7 +42,9 @@ export default defineCommand({
 
     const projectRoot = await tryFindProjectRoot();
     if (!projectRoot) {
-      errorLine("skilltap sync requires a project root (looks for .git or skilltap.toml).");
+      errorLine(
+        "skilltap sync requires a project root (looks for .git or skilltap.toml).",
+      );
       process.exit(1);
     }
 
@@ -65,15 +67,27 @@ export default defineCommand({
       process.exit(1);
     }
 
-    const report = detectDrift(manifestResult.value, lockfileResult.value, stateResult.value);
+    const report = detectDrift(
+      manifestResult.value,
+      lockfileResult.value,
+      stateResult.value,
+    );
     const plan = planSync(report);
 
     if (apply) {
       if (plan.inSync) {
         if (useJson) {
-          outputJson({ inSync: true, applied: 0, skipped: 0, failed: 0, results: [] });
+          outputJson({
+            inSync: true,
+            applied: 0,
+            skipped: 0,
+            failed: 0,
+            results: [],
+          });
         } else {
-          process.stdout.write(`${ansi.green("✓")} In sync. Nothing to apply.\n`);
+          process.stdout.write(
+            `${ansi.green("✓")} In sync. Nothing to apply.\n`,
+          );
         }
         return;
       }
@@ -87,7 +101,10 @@ export default defineCommand({
           : (item, status, error) => {
               const label = `${item.kind} ${item.target} ${item.source}`;
               if (status === "ok") successLine(label);
-              else if (status === "skipped") process.stdout.write(`${ansi.dim("·")} ${ansi.dim(`${label} (skipped)`)}\n`);
+              else if (status === "skipped")
+                process.stdout.write(
+                  `${ansi.dim("·")} ${ansi.dim(`${label} (skipped)`)}\n`,
+                );
               else errorLine(`${label} — ${error ?? "unknown error"}`);
             },
       });
@@ -123,7 +140,9 @@ export default defineCommand({
     }
 
     if (plan.inSync) {
-      process.stdout.write(`${ansi.green("✓")} In sync. Manifest, lockfile, and state agree.\n`);
+      process.stdout.write(
+        `${ansi.green("✓")} In sync. Manifest, lockfile, and state agree.\n`,
+      );
       return;
     }
 

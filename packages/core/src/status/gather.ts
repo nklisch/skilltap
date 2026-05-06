@@ -1,13 +1,12 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { loadConfig } from "../config";
-import { detectDrift } from "../sync/drift";
+import { loadConfig, loadInstalled } from "../config";
 import { loadLockfile, loadManifest, manifestExists } from "../manifest";
-import { loadInstalled } from "../config";
 import { findProjectRoot } from "../paths";
 import { loadPlugins } from "../plugin/state";
 import { loadState } from "../state/load";
 import { getStatePath } from "../state/paths";
+import { detectDrift } from "../sync/drift";
 import { BUILTIN_TAP } from "../taps";
 import type { Result, UserError } from "../types";
 import { ok } from "../types";
@@ -36,7 +35,7 @@ export async function gatherStatus(
   const projectRoot =
     options.projectRootHint === null
       ? null
-      : options.projectRootHint ?? (await tryProjectRoot());
+      : (options.projectRootHint ?? (await tryProjectRoot()));
 
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
@@ -65,13 +64,17 @@ export async function gatherStatus(
     : config.defaults.also;
 
   // ── Skills + plugins (v2 state if available, v1 fallback otherwise) ─────
-  const v2Path = getStatePath(scope === "project" ? (projectRoot ?? undefined) : undefined);
+  const v2Path = getStatePath(
+    scope === "project" ? (projectRoot ?? undefined) : undefined,
+  );
   const v2Exists = await Bun.file(v2Path).exists();
 
   let skills: StatusSkill[];
   let plugins: StatusPlugin[];
   if (v2Exists) {
-    const stateResult = await loadState(scope === "project" ? (projectRoot ?? undefined) : undefined);
+    const stateResult = await loadState(
+      scope === "project" ? (projectRoot ?? undefined) : undefined,
+    );
     if (!stateResult.ok) return stateResult;
     skills = stateResult.value.skills.map(skillToStatus);
     plugins = stateResult.value.plugins.map(pluginToStatus);
@@ -114,7 +117,11 @@ export async function gatherStatus(
     const lockfileResult = await loadLockfile(projectRoot);
     const stateResult = await loadState(projectRoot);
     if (manifestResult.ok && lockfileResult.ok && stateResult.ok) {
-      drift = detectDrift(manifestResult.value, lockfileResult.value, stateResult.value);
+      drift = detectDrift(
+        manifestResult.value,
+        lockfileResult.value,
+        stateResult.value,
+      );
     }
   }
 
@@ -147,7 +154,9 @@ async function manifestAlso(
   if (!projectRoot) return fallback;
   const result = await loadManifest(projectRoot);
   if (!result.ok) return fallback;
-  return result.value.targets.also.length > 0 ? result.value.targets.also : fallback;
+  return result.value.targets.also.length > 0
+    ? result.value.targets.also
+    : fallback;
 }
 
 // Used by status renderers — these helpers shape installed records into
@@ -183,9 +192,11 @@ function pluginToStatus(plugin: {
   const mcpCount = plugin.components.filter((c) => c.type === "mcp").length;
   const agentCount = plugin.components.filter((c) => c.type === "agent").length;
   const parts: string[] = [];
-  if (skillCount > 0) parts.push(`${skillCount} skill${skillCount === 1 ? "" : "s"}`);
+  if (skillCount > 0)
+    parts.push(`${skillCount} skill${skillCount === 1 ? "" : "s"}`);
   if (mcpCount > 0) parts.push(`${mcpCount} MCP${mcpCount === 1 ? "" : "s"}`);
-  if (agentCount > 0) parts.push(`${agentCount} agent${agentCount === 1 ? "" : "s"}`);
+  if (agentCount > 0)
+    parts.push(`${agentCount} agent${agentCount === 1 ? "" : "s"}`);
   const summary = parts.length === 0 ? "(empty)" : parts.join(", ");
 
   return {
@@ -198,4 +209,3 @@ function pluginToStatus(plugin: {
     active: plugin.active,
   };
 }
-

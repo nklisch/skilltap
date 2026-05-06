@@ -8,5 +8,11 @@ export async function saveState(
   state: State,
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
-  return saveJsonState(getStatePath(projectRoot), state, "state.json", projectRoot, ensureDirs);
+  return saveJsonState(
+    getStatePath(projectRoot),
+    state,
+    "state.json",
+    projectRoot,
+    ensureDirs,
+  );
 }

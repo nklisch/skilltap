@@ -45,7 +45,8 @@ export default defineCommand({
     const also = parseAlsoFlag(args.also, config);
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
-    if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
+    if (!result.ok)
+      exitWithError(agentMode, result.error.message, result.error.hint);
 
     const skill = result.value;
     if (agentMode) {

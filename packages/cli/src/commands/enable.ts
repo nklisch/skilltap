@@ -14,7 +14,8 @@ import { tryFindProjectRoot } from "../ui/resolve";
 export default defineCommand({
   meta: {
     name: "enable",
-    description: "Enable a plugin component (name:component) or all inactive components (bare name)",
+    description:
+      "Enable a plugin component (name:component) or all inactive components (bare name)",
   },
   args: {
     target: {
@@ -45,7 +46,8 @@ export default defineCommand({
     if (ref.component) {
       const component = findComponentInPlugin(plugin, ref.component);
       if (!component) {
-        const available = plugin.components.map((c) => c.name).join(", ") || "(none)";
+        const available =
+          plugin.components.map((c) => c.name).join(", ") || "(none)";
         exitWithError(
           agentMode,
           `Component '${ref.component}' not found in plugin '${ref.name}'`,
@@ -54,15 +56,25 @@ export default defineCommand({
       }
       if (component.active) {
         if (args.json) {
-          outputJson({ plugin: plugin.name, component, action: "noop", nowActive: true });
+          outputJson({
+            plugin: plugin.name,
+            component,
+            action: "noop",
+            nowActive: true,
+          });
         } else {
           successLine(`${componentLabel(component)} is already enabled`);
         }
         return;
       }
-      const result = await toggleInstalledComponent(plugin.name, component.type, component.name, {
-        projectRoot,
-      });
+      const result = await toggleInstalledComponent(
+        plugin.name,
+        component.type,
+        component.name,
+        {
+          projectRoot,
+        },
+      );
       if (!result.ok) {
         errorLine(result.error.message);
         process.exit(1);
@@ -83,8 +95,12 @@ export default defineCommand({
     // Bare name — enable all currently inactive components
     const inactive = plugin.components.filter((c) => !c.active);
     if (inactive.length === 0) {
-      if (args.json) outputJson({ plugin: plugin.name, action: "noop", inactive: 0 });
-      else process.stdout.write(`No inactive components in plugin '${plugin.name}'.\n`);
+      if (args.json)
+        outputJson({ plugin: plugin.name, action: "noop", inactive: 0 });
+      else
+        process.stdout.write(
+          `No inactive components in plugin '${plugin.name}'.\n`,
+        );
       return;
     }
 
@@ -95,11 +111,22 @@ export default defineCommand({
       error?: string;
     }[] = [];
     for (const c of inactive) {
-      const r = await toggleInstalledComponent(plugin.name, c.type, c.name, { projectRoot });
+      const r = await toggleInstalledComponent(plugin.name, c.type, c.name, {
+        projectRoot,
+      });
       if (!r.ok) {
-        results.push({ component: c, nowActive: false, action: "failed", error: r.error.message });
+        results.push({
+          component: c,
+          nowActive: false,
+          action: "failed",
+          error: r.error.message,
+        });
       } else {
-        results.push({ component: r.value.component, nowActive: r.value.nowActive, action: "enabled" });
+        results.push({
+          component: r.value.component,
+          nowActive: r.value.nowActive,
+          action: "enabled",
+        });
       }
     }
 
@@ -109,7 +136,9 @@ export default defineCommand({
     }
     for (const r of results) {
       if (r.action === "failed") {
-        errorLine(`Failed to enable ${componentLabel(r.component)}: ${r.error}`);
+        errorLine(
+          `Failed to enable ${componentLabel(r.component)}: ${r.error}`,
+        );
       } else {
         successLine(`Enabled ${componentLabel(r.component)}`);
       }

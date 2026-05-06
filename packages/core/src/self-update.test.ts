@@ -1,8 +1,18 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
-import { checkForUpdate, downloadAndInstall, fetchLatestVersion, isCompiledBinary } from "./self-update";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
+import {
+  checkForUpdate,
+  downloadAndInstall,
+  fetchLatestVersion,
+  isCompiledBinary,
+} from "./self-update";
 import { err, GitError, ok, UserError } from "./types";
 
 let env: TestEnv;
@@ -143,7 +153,8 @@ describe("fetchLatestVersion", () => {
   });
 
   test("ignores malformed tags", async () => {
-    const mockLsRemote = async () => ok(["v1.0.0", "release-candidate", "v2.0.0"]);
+    const mockLsRemote = async () =>
+      ok(["v1.0.0", "release-candidate", "v2.0.0"]);
     const result = await fetchLatestVersion(mockLsRemote);
     expect(result).toBe("2.0.0");
   });
@@ -190,7 +201,11 @@ describe("downloadAndInstall", () => {
     const execPath = join(tmpDir, "skilltap");
     await Bun.write(execPath, "old");
 
-    const result = await downloadAndInstall("9.9.9", networkErrorFetch, execPath);
+    const result = await downloadAndInstall(
+      "9.9.9",
+      networkErrorFetch,
+      execPath,
+    );
 
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -276,12 +291,21 @@ describe("downloadAndInstall", () => {
       return new Response(fakeBinary, { status: 200 });
     };
 
-    const mockGh = async (_version: string, _asset: string, destPath: string) => {
+    const mockGh = async (
+      _version: string,
+      _asset: string,
+      destPath: string,
+    ) => {
       await Bun.write(destPath, fakeBinary);
       return ok(undefined);
     };
 
-    const result = await downloadAndInstall("9.9.9", mockFetch, execPath, mockGh);
+    const result = await downloadAndInstall(
+      "9.9.9",
+      mockFetch,
+      execPath,
+      mockGh,
+    );
     expect(result.ok).toBe(true);
     expect(fetchCalled).toBe(false);
   });

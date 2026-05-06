@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { basename, dirname } from "node:path";
 import { createMockAgentBinary } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { createCliAdapter } from "../factory";
 import { ScanError } from "../../types";
+import { createCliAdapter } from "../factory";
 
 let savedPath: string | undefined;
 
@@ -37,7 +37,7 @@ describe("createCliAdapter — invoke", () => {
 
   test("JSON in code block → extracted correctly", async () => {
     const { binaryPath, cleanup } = await createMockAgentBinary(
-      "```json\n{\"score\": 3, \"reason\": \"looks fine\"}\n```",
+      '```json\n{"score": 3, "reason": "looks fine"}\n```',
     );
     try {
       const adapter = createCliAdapter("Test", "test", (_prompt) =>
@@ -72,7 +72,10 @@ describe("createCliAdapter — invoke", () => {
   });
 
   test("non-zero exit code → err(ScanError)", async () => {
-    const { binaryPath, cleanup } = await createMockAgentBinary("error output", 1);
+    const { binaryPath, cleanup } = await createMockAgentBinary(
+      "error output",
+      1,
+    );
     try {
       const adapter = createCliAdapter("Test", "test", (_prompt) =>
         $`${binaryPath}`.quiet(),

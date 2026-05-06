@@ -1,6 +1,6 @@
-import { z } from "zod/v4";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import type { z } from "zod/v4";
 import { parseWithResult } from "./schemas";
 import { err, ok, type Result, UserError } from "./types";
 

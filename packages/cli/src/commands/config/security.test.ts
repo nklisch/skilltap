@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
@@ -27,10 +36,7 @@ async function runSecurity(
   return { exitCode, stdout, stderr };
 }
 
-async function runGet(
-  key: string,
-  configDir: string,
-): Promise<string> {
+async function runGet(key: string, configDir: string): Promise<string> {
   const proc = Bun.spawn(
     ["bun", "run", "--bun", "src/index.ts", "config", "get", key],
     {
@@ -79,7 +85,10 @@ describe("skilltap config security (non-interactive)", () => {
     // First set human to relaxed
     await runSecurity(["--preset", "relaxed", "--mode", "human"], configDir);
 
-    const result = await runSecurity(["--preset", "strict", "--mode", "agent"], configDir);
+    const result = await runSecurity(
+      ["--preset", "strict", "--mode", "agent"],
+      configDir,
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("security.agent = strict");
     expect(result.stdout).not.toContain("security.human");
@@ -100,9 +109,14 @@ describe("skilltap config security (non-interactive)", () => {
   });
 
   test("--trust source:npm=standard adds source override", async () => {
-    const result = await runSecurity(["--trust", "source:npm=standard"], configDir);
+    const result = await runSecurity(
+      ["--trust", "source:npm=standard"],
+      configDir,
+    );
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("added source trust override 'npm' → standard");
+    expect(result.stdout).toContain(
+      "added source trust override 'npm' → standard",
+    );
   });
 
   test("--remove-trust removes matching override", async () => {
@@ -122,7 +136,10 @@ describe("skilltap config security (non-interactive)", () => {
   });
 
   test("invalid mode exits 1", async () => {
-    const result = await runSecurity(["--preset", "strict", "--mode", "invalid"], configDir);
+    const result = await runSecurity(
+      ["--preset", "strict", "--mode", "invalid"],
+      configDir,
+    );
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Invalid mode");
   });
@@ -151,13 +168,19 @@ describe("skilltap config security (non-interactive)", () => {
   });
 
   test("--remove-trust nonexistent exits 1", async () => {
-    const result = await runSecurity(["--remove-trust", "nonexistent"], configDir);
+    const result = await runSecurity(
+      ["--remove-trust", "nonexistent"],
+      configDir,
+    );
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("No trust override found");
   });
 
   test("--preset none --mode human only changes human mode", async () => {
-    const result = await runSecurity(["--preset", "none", "--mode", "human"], configDir);
+    const result = await runSecurity(
+      ["--preset", "none", "--mode", "human"],
+      configDir,
+    );
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("security.human = none");
     expect(result.stdout).not.toContain("security.agent");
@@ -198,7 +221,10 @@ describe("skilltap config security (non-interactive)", () => {
   });
 
   test("--trust with invalid source type exits 1", async () => {
-    const result = await runSecurity(["--trust", "source:invalid=none"], configDir);
+    const result = await runSecurity(
+      ["--trust", "source:invalid=none"],
+      configDir,
+    );
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("Invalid --trust format");
   });
@@ -219,10 +245,23 @@ describe("skilltap config security (non-interactive)", () => {
     await runSecurity(["--trust", "tap:corp=none"], configDir);
     await runSecurity(["--trust", "source:npm=strict"], configDir);
 
-    const { stdout } = await runGet("security", "--json", configDir) as unknown as { stdout: string };
+    const { stdout } = (await runGet(
+      "security",
+      "--json",
+      configDir,
+    )) as unknown as { stdout: string };
     // Verify via config get --json that both exist
     const proc = Bun.spawn(
-      ["bun", "run", "--bun", "src/index.ts", "config", "get", "security", "--json"],
+      [
+        "bun",
+        "run",
+        "--bun",
+        "src/index.ts",
+        "config",
+        "get",
+        "security",
+        "--json",
+      ],
       {
         cwd: CLI_DIR,
         stdin: "pipe",

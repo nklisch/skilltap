@@ -3,7 +3,11 @@ import { join } from "node:path";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { parseMcpJson, parseMcpObject } from "./mcp";
 
-async function writeTmpJson(dir: string, name: string, content: unknown): Promise<string> {
+async function writeTmpJson(
+  dir: string,
+  name: string,
+  content: unknown,
+): Promise<string> {
   const path = join(dir, name);
   await Bun.write(path, JSON.stringify(content));
   return path;
@@ -69,7 +73,9 @@ describe("parseMcpJson", () => {
   });
 
   test("returns ok([]) for non-existent file", async () => {
-    const result = await parseMcpJson("/tmp/this-file-does-not-exist-skilltap.json");
+    const result = await parseMcpJson(
+      "/tmp/this-file-does-not-exist-skilltap.json",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toEqual([]);
@@ -91,14 +97,21 @@ describe("parseMcpJson", () => {
     const dir = await makeTmpDir();
     try {
       const path = await writeTmpJson(dir, ".mcp.json", {
-        db: { command: "npx", args: [], env: { TOKEN: "secret", DB_URL: "postgres://..." } },
+        db: {
+          command: "npx",
+          args: [],
+          env: { TOKEN: "secret", DB_URL: "postgres://..." },
+        },
       });
       const result = await parseMcpJson(path);
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const entry = result.value[0]!;
       if (entry.type === "stdio") {
-        expect(entry.env).toEqual({ TOKEN: "secret", DB_URL: "postgres://..." });
+        expect(entry.env).toEqual({
+          TOKEN: "secret",
+          DB_URL: "postgres://...",
+        });
       }
     } finally {
       await removeTmpDir(dir);

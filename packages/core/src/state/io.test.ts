@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -65,7 +65,12 @@ describe("state load/save", () => {
   test("save then load round-trips a populated state (project)", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "skilltap-proj-"));
     try {
-      const state: State = { version: 2, skills: [], plugins: [], mcpServers: [] };
+      const state: State = {
+        version: 2,
+        skills: [],
+        plugins: [],
+        mcpServers: [],
+      };
       const saveResult = await saveState(state, projectRoot);
       expect(saveResult.ok).toBe(true);
       const loadResult = await loadState(projectRoot);

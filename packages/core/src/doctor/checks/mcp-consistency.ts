@@ -75,7 +75,11 @@ export async function checkMcpConsistency(
   const issues: DoctorIssue[] = [];
 
   for (const e of expected) {
-    const present = await readMcpServersFromConfig(e.agent, e.scope, projectRoot);
+    const present = await readMcpServersFromConfig(
+      e.agent,
+      e.scope,
+      projectRoot,
+    );
     const expectedKey = `skilltap:${e.pluginName}:${e.serverName}`;
     if (!present.has(expectedKey)) {
       issues.push({
@@ -85,7 +89,9 @@ export async function checkMcpConsistency(
     }
   }
 
-  const expectedKeySet = new Set(expected.map((e) => `skilltap:${e.pluginName}:${e.serverName}`));
+  const expectedKeySet = new Set(
+    expected.map((e) => `skilltap:${e.pluginName}:${e.serverName}`),
+  );
 
   for (const agent of Object.keys(MCP_AGENT_CONFIGS)) {
     for (const scope of ["global", "project"] as const) {

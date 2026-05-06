@@ -1,8 +1,27 @@
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+
 setDefaultTimeout(60_000);
-import { createTestEnv, type TestEnv, commitAll, createStandaloneSkillRepo, initRepo, runInteractive, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+
+import {
+  commitAll,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runInteractive,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
 const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
@@ -36,7 +55,12 @@ async function writeConfig(toml: string): Promise<void> {
 }
 
 async function createLocalTap(
-  skills: Array<{ name: string; description: string; repo: string; tags?: string[] }>,
+  skills: Array<{
+    name: string;
+    description: string;
+    repo: string;
+    tags?: string[];
+  }>,
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const tapDir = await makeTmpDir();
   const tapJson = {
@@ -65,72 +89,69 @@ async function addTap(tapPath: string): Promise<void> {
 }
 
 describe("tap install — agent selection prompt", () => {
-  test(
-    "shows agent selection prompt after scope selection when no defaults set",
-    async () => {
-      await writeConfig("builtin_tap = false\n");
-      const tap = await createLocalTap([
-        {
-          name: "commit-helper",
-          description: "Generates commit messages",
-          repo: "https://example.com/a",
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+  test("shows agent selection prompt after scope selection when no defaults set", async () => {
+    await writeConfig("builtin_tap = false\n");
+    const tap = await createLocalTap([
+      {
+        name: "commit-helper",
+        description: "Generates commit messages",
+        repo: "https://example.com/a",
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        const session = await runInteractive(
-          [...CMD, "tap", "install"],
-          { cwd: CLI_DIR, env: env() },
-        );
+      const session = await runInteractive([...CMD, "tap", "install"], {
+        cwd: CLI_DIR,
+        env: env(),
+      });
 
-        await session.waitForText("Select tap skills to install:");
-        await session.waitForText("commit-helper");
-        session.sendKey("SPACE"); // toggle selection
-        session.sendKey("ENTER"); // confirm
+      await session.waitForText("Select tap skills to install:");
+      await session.waitForText("commit-helper");
+      session.sendKey("SPACE"); // toggle selection
+      session.sendKey("ENTER"); // confirm
 
-        await session.waitForText("Install to:");
-        session.sendKey("ENTER"); // accept Global
+      await session.waitForText("Install to:");
+      session.sendKey("ENTER"); // accept Global
 
-        await session.waitForText("Which agents should this skill be available to?");
+      await session.waitForText(
+        "Which agents should this skill be available to?",
+      );
 
-        session.sendKey("CTRL_C");
-        const { exitCode } = await session.finish();
-        expect(exitCode).toBe(130);
-      } finally {
-        await tap.cleanup();
-      }
-    },
-    30_000,
-  );
+      session.sendKey("CTRL_C");
+      const { exitCode } = await session.finish();
+      expect(exitCode).toBe(130);
+    } finally {
+      await tap.cleanup();
+    }
+  }, 30_000);
 
-  test(
-    "--yes skips agent selection prompt",
-    async () => {
-      await writeConfig("builtin_tap = false\n");
-      const repo = await createStandaloneSkillRepo();
-      const tap = await createLocalTap([
-        {
-          name: "standalone-skill",
-          description: "A standalone skill",
-          repo: repo.path,
-        },
-      ]);
-      try {
-        await addTap(tap.path);
+  test("--yes skips agent selection prompt", async () => {
+    await writeConfig("builtin_tap = false\n");
+    const repo = await createStandaloneSkillRepo();
+    const tap = await createLocalTap([
+      {
+        name: "standalone-skill",
+        description: "A standalone skill",
+        repo: repo.path,
+      },
+    ]);
+    try {
+      await addTap(tap.path);
 
-        const { exitCode, stdout, stderr } = await runSkilltap(
-          ["tap", "install", "--yes", "--global", "--skip-scan"],
-          homeDir,
-          configDir,
-        );
+      const { exitCode, stdout, stderr } = await runSkilltap(
+        ["tap", "install", "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
 
-        expect(exitCode).toBe(0);
-        expect(stdout + stderr).not.toContain("Which agents should this skill be available to?");
-      } finally {
-        await tap.cleanup();
-        await repo.cleanup();
-      }
-    },
-  );
+      expect(exitCode).toBe(0);
+      expect(stdout + stderr).not.toContain(
+        "Which agents should this skill be available to?",
+      );
+    } finally {
+      await tap.cleanup();
+      await repo.cleanup();
+    }
+  });
 });

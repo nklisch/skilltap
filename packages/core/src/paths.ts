@@ -4,7 +4,10 @@ import { getConfigDir } from "./config";
 import { globalBase } from "./fs";
 import { AGENT_DEF_PATHS } from "./symlink";
 
-export function scopeBase(scope: "global" | "project", projectRoot?: string): string {
+export function scopeBase(
+  scope: "global" | "project",
+  projectRoot?: string,
+): string {
   return scope === "global" ? globalBase() : (projectRoot ?? process.cwd());
 }
 
@@ -46,7 +49,13 @@ export function skillDisabledDir(
   scope: "global" | "project",
   projectRoot?: string,
 ): string {
-  return join(scopeBase(scope, projectRoot), ".agents", "skills", ".disabled", name);
+  return join(
+    scopeBase(scope, projectRoot),
+    ".agents",
+    "skills",
+    ".disabled",
+    name,
+  );
 }
 
 export function agentDefPath(

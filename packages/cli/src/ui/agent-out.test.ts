@@ -104,7 +104,9 @@ describe("agent-out — snapshot stability", () => {
   });
 
   test("agentSkip full output", async () => {
-    const { stdout } = await run('agentSkip("my-skill", "is already installed.")');
+    const { stdout } = await run(
+      'agentSkip("my-skill", "is already installed.")',
+    );
     expect(stdout).toMatchSnapshot();
   });
 

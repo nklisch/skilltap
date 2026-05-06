@@ -1,5 +1,5 @@
-import { PRESET_VALUES, SECURITY_PRESETS } from "../schemas/config";
 import type { SecurityMode } from "../schemas/config";
+import { PRESET_VALUES, SECURITY_PRESETS } from "../schemas/config";
 
 export type SecurityPreset = (typeof SECURITY_PRESETS)[number];
 
@@ -9,7 +9,11 @@ export type SecurityPreset = (typeof SECURITY_PRESETS)[number];
 export function matchPreset(mode: SecurityMode): SecurityPreset | null {
   for (const preset of SECURITY_PRESETS) {
     const p = PRESET_VALUES[preset];
-    if (p.scan === mode.scan && p.on_warn === mode.on_warn && p.require_scan === mode.require_scan) {
+    if (
+      p.scan === mode.scan &&
+      p.on_warn === mode.on_warn &&
+      p.require_scan === mode.require_scan
+    ) {
       return preset;
     }
   }

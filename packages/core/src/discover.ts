@@ -2,14 +2,14 @@ import { lstat, readdir, readlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { $ } from "bun";
 import { loadInstalled } from "./config";
-import { globalBase } from "./fs";
 import { parseSkillFrontmatter } from "./frontmatter";
+import { globalBase } from "./fs";
 import { findProjectRoot } from "./paths";
-import { SkillFrontmatterSchema } from "./schemas/skill";
 import type { InstalledSkill } from "./schemas/installed";
+import { SkillFrontmatterSchema } from "./schemas/skill";
 import { AGENT_PATHS } from "./symlink";
 import type { Result } from "./types";
-import { err, ok, UserError } from "./types";
+import { err, ok, type UserError } from "./types";
 
 export type SkillLocation = {
   path: string;

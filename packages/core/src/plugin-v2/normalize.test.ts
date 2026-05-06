@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -42,7 +42,9 @@ describe("pluginV2ToManifest", () => {
       version: "1.0.0",
       description: "",
       publish: true,
-      skills: [{ name: "code-review", path: "./skills/code-review", description: "" }],
+      skills: [
+        { name: "code-review", path: "./skills/code-review", description: "" },
+      ],
       servers: [],
       agents: [],
     };
@@ -76,7 +78,9 @@ Body here.
       version: "1.0.0",
       description: "",
       publish: true,
-      skills: [{ name: "ignored-name", path: "./skills/review", description: "" }],
+      skills: [
+        { name: "ignored-name", path: "./skills/review", description: "" },
+      ],
       servers: [],
       agents: [],
     };
@@ -84,7 +88,11 @@ Body here.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
-    const skill = result.value.components[0] as { type: string; name: string; description: string };
+    const skill = result.value.components[0] as {
+      type: string;
+      name: string;
+      description: string;
+    };
     expect(skill.type).toBe("skill");
     expect(skill.name).toBe("review");
     expect(skill.description).toBe("A real skill");
@@ -112,7 +120,10 @@ Body here.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
-    const mcp = result.value.components[0] as { type: string; server: { type: string; name: string } };
+    const mcp = result.value.components[0] as {
+      type: string;
+      server: { type: string; name: string };
+    };
     expect(mcp.type).toBe("mcp");
     expect(mcp.server.type).toBe("stdio");
     expect(mcp.server.name).toBe("db");
@@ -139,7 +150,10 @@ Body here.
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
-    const mcp = result.value.components[0] as { type: string; server: { type: string; url: string } };
+    const mcp = result.value.components[0] as {
+      type: string;
+      server: { type: string; url: string };
+    };
     expect(mcp.server.type).toBe("http");
     expect(mcp.server.url).toBe("https://search.example.com/mcp");
   });

@@ -10,16 +10,23 @@ import {
 } from "@skilltap/test-utils";
 import { getConfigDir, loadConfig } from "../config";
 import { installSkill } from "../install";
-import { loadPlugins } from "./state";
 import { addTap, loadTaps, searchTaps, tapDir } from "../taps";
+import { loadPlugins } from "./state";
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
 /** Clone a fixture tap repo into the config taps directory, mimicking what addTap does. */
-async function cloneTapToConfig(tapName: string, sourcePath: string): Promise<void> {
+async function cloneTapToConfig(
+  tapName: string,
+  sourcePath: string,
+): Promise<void> {
   const { $ } = await import("bun");
   const dest = tapDir(tapName);
   await mkdir(dest, { recursive: true });
@@ -37,7 +44,10 @@ describe("tap plugin install flow", () => {
 
       // The plugin's skill dir must exist in the cloned tap directory
       const clonedTapDir = tapDir("test-tap-plugins");
-      const skillSrc = join(clonedTapDir, "plugins/dev-toolkit/skills/code-review");
+      const skillSrc = join(
+        clonedTapDir,
+        "plugins/dev-toolkit/skills/code-review",
+      );
       await mkdir(skillSrc, { recursive: true });
       await Bun.write(
         join(skillSrc, "SKILL.md"),
@@ -89,7 +99,10 @@ describe("tap plugin install flow", () => {
       await addTap("test-tap-plugins", fixture.path);
 
       const clonedTapDir = tapDir("test-tap-plugins");
-      const skillSrc = join(clonedTapDir, "plugins/dev-toolkit/skills/code-review");
+      const skillSrc = join(
+        clonedTapDir,
+        "plugins/dev-toolkit/skills/code-review",
+      );
       await mkdir(skillSrc, { recursive: true });
       await Bun.write(
         join(skillSrc, "SKILL.md"),
@@ -112,7 +125,9 @@ describe("tap plugin install flow", () => {
       const pluginsResult = await loadPlugins(undefined);
       expect(pluginsResult.ok).toBe(true);
       if (!pluginsResult.ok) return;
-      const record = pluginsResult.value.plugins.find((p) => p.name === "dev-toolkit");
+      const record = pluginsResult.value.plugins.find(
+        (p) => p.name === "dev-toolkit",
+      );
       expect(record).toBeDefined();
       expect(record?.tap).toBe("test-tap-plugins");
       expect(record?.format).toBe("skilltap");
@@ -132,7 +147,9 @@ describe("loadTaps — plugin entry fields", () => {
       const result = await loadTaps();
       expect(result.ok).toBe(true);
       if (!result.ok) return;
-      const pluginEntries = result.value.filter((e) => e.tapPlugin !== undefined);
+      const pluginEntries = result.value.filter(
+        (e) => e.tapPlugin !== undefined,
+      );
       expect(pluginEntries.length).toBeGreaterThanOrEqual(1);
       for (const entry of pluginEntries) {
         expect(entry.skill.plugin).toBe(true);

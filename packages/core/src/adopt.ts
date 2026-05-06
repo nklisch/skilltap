@@ -20,7 +20,10 @@ export type AdoptOptions = {
   projectRoot?: string;
   also?: string[];
   skipScan?: boolean;
-  onWarnings?: (warnings: StaticWarning[], skillName: string) => Promise<boolean>;
+  onWarnings?: (
+    warnings: StaticWarning[],
+    skillName: string,
+  ) => Promise<boolean>;
 };
 
 export type AdoptResult = {
@@ -51,7 +54,9 @@ export async function adoptSkill(
     skill.locations.find((l) => !l.isSymlink) ?? skill.locations[0];
 
   if (!primaryLocation) {
-    return err(new UserError(`Skill '${skill.name}' has no locations to adopt.`));
+    return err(
+      new UserError(`Skill '${skill.name}' has no locations to adopt.`),
+    );
   }
 
   const srcPath = primaryLocation.path;
@@ -64,13 +69,17 @@ export async function adoptSkill(
     if (warnings.length > 0 && options?.onWarnings) {
       const proceed = await options.onWarnings(warnings, skill.name);
       if (!proceed) {
-        return err(new UserError(`Adopt of '${skill.name}' aborted due to security warnings.`));
+        return err(
+          new UserError(
+            `Adopt of '${skill.name}' aborted due to security warnings.`,
+          ),
+        );
       }
     }
   }
 
   // Get git info if available
-  let gitRemote = skill.gitRemote ?? null;
+  const gitRemote = skill.gitRemote ?? null;
   let branch: string | null = null;
   let sha: string | null = null;
 

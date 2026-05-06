@@ -45,7 +45,8 @@ interface SlsaPredicateV1 {
 }
 
 const SLSA_PREDICATE_V1 = "https://slsa.dev/provenance/v1";
-const NPM_ATTESTATIONS_BASE = "https://registry.npmjs.org/-/npm/v1/attestations";
+const NPM_ATTESTATIONS_BASE =
+  "https://registry.npmjs.org/-/npm/v1/attestations";
 
 /**
  * Verify npm provenance for a downloaded tarball.
@@ -97,8 +98,9 @@ export async function verifyNpmProvenance(
     }
 
     // Decode DSSE payload to get the in-toto statement
-    const dsseEnvelope = (bundle as Record<string, unknown>)
-      .dsseEnvelope as { payload?: string } | undefined;
+    const dsseEnvelope = (bundle as Record<string, unknown>).dsseEnvelope as
+      | { payload?: string }
+      | undefined;
     const statement = decodeInTotoStatement(dsseEnvelope?.payload);
     if (!statement) return null;
 
@@ -126,13 +128,20 @@ export async function verifyNpmProvenance(
     // Extract provenance metadata
     const predicate = statement.predicate;
     const workflow = predicate?.buildDefinition?.externalParameters?.workflow;
-    const sourceRepo = workflow?.repository ?? extractRepoFromSan(signer.identity?.subjectAlternativeName ?? "");
+    const sourceRepo =
+      workflow?.repository ??
+      extractRepoFromSan(signer.identity?.subjectAlternativeName ?? "");
     const buildWorkflow = workflow?.path;
-    const publisher = extractPublisherFromSan(signer.identity?.subjectAlternativeName ?? "");
+    const publisher = extractPublisherFromSan(
+      signer.identity?.subjectAlternativeName ?? "",
+    );
 
     // Rekor log entry URL
     const tlogEntries = (
-      (bundle as Record<string, unknown>).verificationMaterial as Record<string, unknown>
+      (bundle as Record<string, unknown>).verificationMaterial as Record<
+        string,
+        unknown
+      >
     )?.tlogEntries as Array<{ logIndex?: string }> | undefined;
     const logIndex = tlogEntries?.[0]?.logIndex;
     const transparency = logIndex
@@ -140,7 +149,10 @@ export async function verifyNpmProvenance(
       : undefined;
 
     return {
-      publisher: publisher || packageName.split("/").slice(0, -1).join("/") || packageName,
+      publisher:
+        publisher ||
+        packageName.split("/").slice(0, -1).join("/") ||
+        packageName,
       sourceRepo: sourceRepo || "",
       buildWorkflow,
       transparency,

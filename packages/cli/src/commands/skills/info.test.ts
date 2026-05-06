@@ -8,7 +8,16 @@ import {
 } from "bun:test";
 import { join } from "node:path";
 import { installSkill, linkSkill } from "@skilltap/core";
-import { createTestEnv, type TestEnv, commitAll, createStandaloneSkillRepo, initRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import {
+  commitAll,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -138,17 +147,34 @@ describe("skills info — tap-available skill", () => {
     try {
       // Register the tap
       const proc = Bun.spawn(
-        ["bun", "run", "--bun", "src/index.ts", "tap", "add", "test-tap", tap.path],
+        [
+          "bun",
+          "run",
+          "--bun",
+          "src/index.ts",
+          "tap",
+          "add",
+          "test-tap",
+          tap.path,
+        ],
         {
           cwd: CLI_DIR,
           stdout: "pipe",
           stderr: "pipe",
-          env: { ...process.env, SKILLTAP_HOME: homeDir, XDG_CONFIG_HOME: configDir },
+          env: {
+            ...process.env,
+            SKILLTAP_HOME: homeDir,
+            XDG_CONFIG_HOME: configDir,
+          },
         },
       );
       await proc.exited;
 
-      const { exitCode, stdout } = await runSkilltap(["skills", "info", "tap-only-skill"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["skills", "info", "tap-only-skill"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("(available)");
       expect(stdout).toContain("tap-only-skill");
@@ -161,12 +187,25 @@ describe("skills info — tap-available skill", () => {
     const tap = await createLocalTap();
     try {
       const proc = Bun.spawn(
-        ["bun", "run", "--bun", "src/index.ts", "tap", "add", "test-tap", tap.path],
+        [
+          "bun",
+          "run",
+          "--bun",
+          "src/index.ts",
+          "tap",
+          "add",
+          "test-tap",
+          tap.path,
+        ],
         {
           cwd: CLI_DIR,
           stdout: "pipe",
           stderr: "pipe",
-          env: { ...process.env, SKILLTAP_HOME: homeDir, XDG_CONFIG_HOME: configDir },
+          env: {
+            ...process.env,
+            SKILLTAP_HOME: homeDir,
+            XDG_CONFIG_HOME: configDir,
+          },
         },
       );
       await proc.exited;

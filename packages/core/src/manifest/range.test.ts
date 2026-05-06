@@ -15,14 +15,39 @@ describe("parseRange", () => {
   });
 
   test("parses caret semver", () => {
-    expect(parseRange("^1.2.3")).toEqual({ kind: "caret", major: 1, minor: 2, patch: 3 });
-    expect(parseRange("^1.0")).toEqual({ kind: "caret", major: 1, minor: 0, patch: 0 });
-    expect(parseRange("^2")).toEqual({ kind: "caret", major: 2, minor: 0, patch: 0 });
+    expect(parseRange("^1.2.3")).toEqual({
+      kind: "caret",
+      major: 1,
+      minor: 2,
+      patch: 3,
+    });
+    expect(parseRange("^1.0")).toEqual({
+      kind: "caret",
+      major: 1,
+      minor: 0,
+      patch: 0,
+    });
+    expect(parseRange("^2")).toEqual({
+      kind: "caret",
+      major: 2,
+      minor: 0,
+      patch: 0,
+    });
   });
 
   test("parses tilde semver", () => {
-    expect(parseRange("~1.2.3")).toEqual({ kind: "tilde", major: 1, minor: 2, patch: 3 });
-    expect(parseRange("~1.2")).toEqual({ kind: "tilde", major: 1, minor: 2, patch: 0 });
+    expect(parseRange("~1.2.3")).toEqual({
+      kind: "tilde",
+      major: 1,
+      minor: 2,
+      patch: 3,
+    });
+    expect(parseRange("~1.2")).toEqual({
+      kind: "tilde",
+      major: 1,
+      minor: 2,
+      patch: 0,
+    });
   });
 
   test("parses exact version", () => {
@@ -37,11 +62,19 @@ describe("parseRange", () => {
 
   test("falls back to exact when caret/tilde target is non-semver", () => {
     expect(parseRange("^main")).toEqual({ kind: "exact", value: "^main" });
-    expect(parseRange("~develop")).toEqual({ kind: "exact", value: "~develop" });
+    expect(parseRange("~develop")).toEqual({
+      kind: "exact",
+      value: "~develop",
+    });
   });
 
   test("trims whitespace", () => {
-    expect(parseRange("  ^1.0  ")).toEqual({ kind: "caret", major: 1, minor: 0, patch: 0 });
+    expect(parseRange("  ^1.0  ")).toEqual({
+      kind: "caret",
+      major: 1,
+      minor: 0,
+      patch: 0,
+    });
   });
 });
 

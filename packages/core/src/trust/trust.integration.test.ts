@@ -29,8 +29,8 @@ import {
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-import { addTap } from "../taps";
 import { installSkill } from "../install";
+import { addTap } from "../taps";
 import { verifyNpmProvenance } from "./verify-npm";
 
 const SKIP_NETWORK = !process.env.SKILLTAP_IT;
@@ -111,134 +111,134 @@ describe.skipIf(SKIP_NETWORK)("npm attestation — real network", () => {
   const PACKAGE = "sigstore";
   const VERSION = "4.1.0";
 
-  test(
-    "npm attestations endpoint returns SLSA bundle with correct structure",
-    async () => {
-      const tmpDir = await makeTmpDir();
+  test("npm attestations endpoint returns SLSA bundle with correct structure", async () => {
+    const tmpDir = await makeTmpDir();
+    try {
+      // 1. Probe the attestations endpoint
+      let probe: Response;
       try {
-        // 1. Probe the attestations endpoint
-        let probe: Response;
-        try {
-          probe = await fetch(
-            `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE}@${VERSION}`,
-            { signal: AbortSignal.timeout(15_000) },
-          );
-        } catch {
-          console.warn("[SKIP] npm registry unreachable");
-          return;
-        }
-        if (probe.status === 404) {
-          console.warn(
-            `[SKIP] ${PACKAGE}@${VERSION} has no attestations on npm`,
-          );
-          return;
-        }
-        expect(probe.ok).toBe(true);
-
-        const data = (await probe.json()) as {
-          attestations?: Array<{
-            predicateType: string;
-            bundle: {
-              dsseEnvelope?: {
-                payload?: string;
-                payloadType?: string;
-              };
-              verificationMaterial?: {
-                tlogEntries?: Array<{ logIndex?: string }>;
-              };
-            };
-          }>;
-        };
-        const attestations = data.attestations ?? [];
-        expect(attestations.length).toBeGreaterThan(0);
-
-        // 2. Find the SLSA v1 attestation
-        const slsa = attestations.find(
-          (a) => a.predicateType === "https://slsa.dev/provenance/v1",
-        );
-        expect(slsa).toBeDefined();
-        if (!slsa) return;
-
-        // 3. Decode and validate the DSSE payload structure
-        const dsse = slsa.bundle.dsseEnvelope;
-        expect(dsse?.payload).toBeString();
-        expect(dsse?.payloadType).toBe("application/vnd.in-toto+json");
-
-        const stmt = JSON.parse(
-          Buffer.from(dsse!.payload!, "base64").toString("utf-8"),
-        ) as {
-          _type?: string;
-          subject?: Array<{ name?: string; digest?: Record<string, string> }>;
-          predicateType?: string;
-          predicate?: unknown;
-        };
-
-        expect(stmt._type).toBe("https://in-toto.io/Statement/v1");
-        expect(stmt.subject).toHaveLength(1);
-        expect(stmt.subject?.[0]?.name).toContain(PACKAGE);
-        // npm SLSA attestations use sha512 digest (not sha256)
-        expect(stmt.subject?.[0]?.digest?.sha512).toBeString();
-
-        // 4. Transparency log entry should be present
-        const tlog = slsa.bundle.verificationMaterial?.tlogEntries;
-        expect(tlog?.length).toBeGreaterThan(0);
-        expect(tlog?.[0]?.logIndex).toBeString();
-
-        // 5. Download the tarball and verify the hash matches the attestation
-        const metaResp = await fetch(
-          `https://registry.npmjs.org/${PACKAGE}/${VERSION}`,
+        probe = await fetch(
+          `https://registry.npmjs.org/-/npm/v1/attestations/${PACKAGE}@${VERSION}`,
           { signal: AbortSignal.timeout(15_000) },
         );
-        expect(metaResp.ok).toBe(true);
-        const meta = (await metaResp.json()) as { dist?: { tarball?: string } };
-        const tarballUrl = meta.dist?.tarball;
-        expect(tarballUrl).toBeString();
-
-        const tarResp = await fetch(tarballUrl as string, {
-          signal: AbortSignal.timeout(30_000),
-        });
-        expect(tarResp.ok).toBe(true);
-        const tarball = Buffer.from(await tarResp.arrayBuffer());
-
-        const expectedHash = stmt.subject![0]!.digest!.sha512!;
-        const actualHash = createHash("sha512").update(tarball).digest("hex");
-        expect(actualHash).toBe(expectedHash);
-
-        // 6. Run full end-to-end provenance verification (Sigstore + TUF)
-        const tarballPath = join(tmpDir, "_pkg.tgz");
-        await Bun.write(tarballPath, tarball);
-        const provResult = await verifyNpmProvenance(PACKAGE, VERSION, tarballPath);
-
-        expect(provResult).not.toBeNull();
-        if (!provResult) return;
-        expect(provResult.publisher).toBe("sigstore");
-        expect(provResult.sourceRepo).toContain("github.com/sigstore/sigstore-js");
-        expect(provResult.buildWorkflow).toBeString();
-        expect(provResult.transparency).toContain("search.sigstore.dev");
-        expect(provResult.verifiedAt).toBeString();
-      } finally {
-        await removeTmpDir(tmpDir);
+      } catch {
+        console.warn("[SKIP] npm registry unreachable");
+        return;
       }
-    },
-    60_000,
-  );
-
-  test(
-    "returns null gracefully for package with no attestations",
-    async () => {
-      const tmpDir = await makeTmpDir();
-      try {
-        const tarballPath = join(tmpDir, "_pkg.tgz");
-        await Bun.write(tarballPath, Buffer.alloc(0));
-        // left-pad predates npm provenance — 404 on attestations endpoint
-        const result = await verifyNpmProvenance("left-pad", "1.3.0", tarballPath);
-        expect(result).toBeNull();
-      } finally {
-        await removeTmpDir(tmpDir);
+      if (probe.status === 404) {
+        console.warn(`[SKIP] ${PACKAGE}@${VERSION} has no attestations on npm`);
+        return;
       }
-    },
-    30_000,
-  );
+      expect(probe.ok).toBe(true);
+
+      const data = (await probe.json()) as {
+        attestations?: Array<{
+          predicateType: string;
+          bundle: {
+            dsseEnvelope?: {
+              payload?: string;
+              payloadType?: string;
+            };
+            verificationMaterial?: {
+              tlogEntries?: Array<{ logIndex?: string }>;
+            };
+          };
+        }>;
+      };
+      const attestations = data.attestations ?? [];
+      expect(attestations.length).toBeGreaterThan(0);
+
+      // 2. Find the SLSA v1 attestation
+      const slsa = attestations.find(
+        (a) => a.predicateType === "https://slsa.dev/provenance/v1",
+      );
+      expect(slsa).toBeDefined();
+      if (!slsa) return;
+
+      // 3. Decode and validate the DSSE payload structure
+      const dsse = slsa.bundle.dsseEnvelope;
+      expect(dsse?.payload).toBeString();
+      expect(dsse?.payloadType).toBe("application/vnd.in-toto+json");
+
+      const stmt = JSON.parse(
+        Buffer.from(dsse!.payload!, "base64").toString("utf-8"),
+      ) as {
+        _type?: string;
+        subject?: Array<{ name?: string; digest?: Record<string, string> }>;
+        predicateType?: string;
+        predicate?: unknown;
+      };
+
+      expect(stmt._type).toBe("https://in-toto.io/Statement/v1");
+      expect(stmt.subject).toHaveLength(1);
+      expect(stmt.subject?.[0]?.name).toContain(PACKAGE);
+      // npm SLSA attestations use sha512 digest (not sha256)
+      expect(stmt.subject?.[0]?.digest?.sha512).toBeString();
+
+      // 4. Transparency log entry should be present
+      const tlog = slsa.bundle.verificationMaterial?.tlogEntries;
+      expect(tlog?.length).toBeGreaterThan(0);
+      expect(tlog?.[0]?.logIndex).toBeString();
+
+      // 5. Download the tarball and verify the hash matches the attestation
+      const metaResp = await fetch(
+        `https://registry.npmjs.org/${PACKAGE}/${VERSION}`,
+        { signal: AbortSignal.timeout(15_000) },
+      );
+      expect(metaResp.ok).toBe(true);
+      const meta = (await metaResp.json()) as { dist?: { tarball?: string } };
+      const tarballUrl = meta.dist?.tarball;
+      expect(tarballUrl).toBeString();
+
+      const tarResp = await fetch(tarballUrl as string, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      expect(tarResp.ok).toBe(true);
+      const tarball = Buffer.from(await tarResp.arrayBuffer());
+
+      const expectedHash = stmt.subject![0]!.digest!.sha512!;
+      const actualHash = createHash("sha512").update(tarball).digest("hex");
+      expect(actualHash).toBe(expectedHash);
+
+      // 6. Run full end-to-end provenance verification (Sigstore + TUF)
+      const tarballPath = join(tmpDir, "_pkg.tgz");
+      await Bun.write(tarballPath, tarball);
+      const provResult = await verifyNpmProvenance(
+        PACKAGE,
+        VERSION,
+        tarballPath,
+      );
+
+      expect(provResult).not.toBeNull();
+      if (!provResult) return;
+      expect(provResult.publisher).toBe("sigstore");
+      expect(provResult.sourceRepo).toContain(
+        "github.com/sigstore/sigstore-js",
+      );
+      expect(provResult.buildWorkflow).toBeString();
+      expect(provResult.transparency).toContain("search.sigstore.dev");
+      expect(provResult.verifiedAt).toBeString();
+    } finally {
+      await removeTmpDir(tmpDir);
+    }
+  }, 60_000);
+
+  test("returns null gracefully for package with no attestations", async () => {
+    const tmpDir = await makeTmpDir();
+    try {
+      const tarballPath = join(tmpDir, "_pkg.tgz");
+      await Bun.write(tarballPath, Buffer.alloc(0));
+      // left-pad predates npm provenance — 404 on attestations endpoint
+      const result = await verifyNpmProvenance(
+        "left-pad",
+        "1.3.0",
+        tarballPath,
+      );
+      expect(result).toBeNull();
+    } finally {
+      await removeTmpDir(tmpDir);
+    }
+  }, 30_000);
 });
 
 // ─── B) Install from verified tap → curated tier ─────────────────────────────
@@ -317,12 +317,19 @@ describe("trust integration — install from verified tap", () => {
       {
         name: "persisted-skill",
         repo: skillRepo.path,
-        trust: { verified: true, verifiedBy: "alice", verifiedAt: "2026-01-01" },
+        trust: {
+          verified: true,
+          verifiedBy: "alice",
+          verifiedAt: "2026-01-01",
+        },
       },
     ]);
     try {
       await addTap("home", tap.path);
-      await installSkill("persisted-skill", { scope: "global", skipScan: true });
+      await installSkill("persisted-skill", {
+        scope: "global",
+        skipScan: true,
+      });
 
       // Read back from installed.json
       const { loadInstalled } = await import("../config");

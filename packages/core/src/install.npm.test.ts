@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { $ } from "bun";
 import { loadInstalled } from "./config";
 import { installSkill } from "./install";
@@ -75,7 +80,9 @@ function startMockRegistry(packages: MockPackageEntry[]): {
         if (lastSlash === -1) return new Response("Not found", { status: 404 });
         const pkgName = rest.slice(0, lastSlash);
         const filename = rest.slice(lastSlash + 1);
-        const version = filename.endsWith(".tgz") ? filename.slice(0, -4) : filename;
+        const version = filename.endsWith(".tgz")
+          ? filename.slice(0, -4)
+          : filename;
 
         const pkg = packages.find((p) => p.name === pkgName);
         const ver = pkg?.versions.find((v) => v.version === version);
@@ -148,7 +155,10 @@ describe("installSkill — npm standalone", () => {
           "---\nname: npm-skill\ndescription: A skill from npm\n---\n# npm-skill\nInstructions.",
       });
       const packages: MockPackageEntry[] = [
-        { name: "npm-skill", versions: [{ version: "1.0.0", tgzPath, integrity }] },
+        {
+          name: "npm-skill",
+          versions: [{ version: "1.0.0", tgzPath, integrity }],
+        },
       ];
       const registry = startMockRegistry(packages);
       process.env.NPM_CONFIG_REGISTRY = registry.baseUrl;
@@ -190,12 +200,18 @@ describe("installSkill — npm standalone", () => {
           "---\nname: npm-skill\ndescription: A skill from npm\n---\n# npm-skill\nInstructions.",
       });
       const registry = startMockRegistry([
-        { name: "npm-skill", versions: [{ version: "2.3.1", tgzPath, integrity }] },
+        {
+          name: "npm-skill",
+          versions: [{ version: "2.3.1", tgzPath, integrity }],
+        },
       ]);
       process.env.NPM_CONFIG_REGISTRY = registry.baseUrl;
 
       try {
-        await installSkill("npm:npm-skill", { scope: "global", skipScan: true });
+        await installSkill("npm:npm-skill", {
+          scope: "global",
+          skipScan: true,
+        });
 
         const installedResult = await loadInstalled();
         expect(installedResult.ok).toBe(true);
@@ -284,7 +300,10 @@ describe("installSkill — npm multi-skill (skills/* convention)", () => {
           "---\nname: skill-beta\ndescription: Beta skill\n---\n# skill-beta",
       });
       const registry = startMockRegistry([
-        { name: "multi-skill-pkg", versions: [{ version: "1.0.0", tgzPath, integrity }] },
+        {
+          name: "multi-skill-pkg",
+          versions: [{ version: "1.0.0", tgzPath, integrity }],
+        },
       ]);
       process.env.NPM_CONFIG_REGISTRY = registry.baseUrl;
 
@@ -308,9 +327,9 @@ describe("installSkill — npm multi-skill (skills/* convention)", () => {
 
           const skillDir = join(homeDir, ".agents", "skills", record.name);
           expect(await lstat(skillDir).then((s) => s.isDirectory())).toBe(true);
-          expect(
-            await Bun.file(join(skillDir, "SKILL.md")).exists(),
-          ).toBe(true);
+          expect(await Bun.file(join(skillDir, "SKILL.md")).exists()).toBe(
+            true,
+          );
         }
       } finally {
         registry.stop();
@@ -330,7 +349,10 @@ describe("installSkill — npm multi-skill (skills/* convention)", () => {
           "---\nname: skill-beta\ndescription: Beta skill\n---\n# skill-beta",
       });
       const registry = startMockRegistry([
-        { name: "multi-skill-pkg", versions: [{ version: "1.0.0", tgzPath, integrity }] },
+        {
+          name: "multi-skill-pkg",
+          versions: [{ version: "1.0.0", tgzPath, integrity }],
+        },
       ]);
       process.env.NPM_CONFIG_REGISTRY = registry.baseUrl;
 
@@ -369,12 +391,18 @@ describe("updateSkill — npm", () => {
           "---\nname: npm-skill\ndescription: A skill\n---\n# npm-skill\nInstructions.",
       });
       const registry = startMockRegistry([
-        { name: "npm-skill", versions: [{ version: "1.0.0", tgzPath, integrity }] },
+        {
+          name: "npm-skill",
+          versions: [{ version: "1.0.0", tgzPath, integrity }],
+        },
       ]);
       process.env.NPM_CONFIG_REGISTRY = registry.baseUrl;
 
       try {
-        await installSkill("npm:npm-skill", { scope: "global", skipScan: true });
+        await installSkill("npm:npm-skill", {
+          scope: "global",
+          skipScan: true,
+        });
 
         const result = await updateSkill({ yes: true });
         expect(result.ok).toBe(true);
@@ -407,14 +435,19 @@ describe("updateSkill — npm", () => {
       const packages: MockPackageEntry[] = [
         {
           name: "npm-skill",
-          versions: [{ version: "1.0.0", tgzPath: v1.tgzPath, integrity: v1.integrity }],
+          versions: [
+            { version: "1.0.0", tgzPath: v1.tgzPath, integrity: v1.integrity },
+          ],
         },
       ];
       const registry = startMockRegistry(packages);
       process.env.NPM_CONFIG_REGISTRY = registry.baseUrl;
 
       try {
-        await installSkill("npm:npm-skill", { scope: "global", skipScan: true });
+        await installSkill("npm:npm-skill", {
+          scope: "global",
+          skipScan: true,
+        });
 
         // Simulate v2 being published by mutating the packages array
         // biome-ignore lint/style/noNonNullAssertion: packages[0] initialized above
@@ -424,10 +457,9 @@ describe("updateSkill — npm", () => {
           integrity: v2.integrity,
         });
 
-        const result = await updateSkill(
-          { yes: true },
-          async () => ({ tier: "unverified" as const }),
-        );
+        const result = await updateSkill({ yes: true }, async () => ({
+          tier: "unverified" as const,
+        }));
         expect(result.ok).toBe(true);
         if (!result.ok) return;
 

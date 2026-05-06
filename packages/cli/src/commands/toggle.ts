@@ -1,8 +1,8 @@
 import { multiselect } from "@clack/prompts";
 import {
   findComponentInPlugin,
-  parseComponentRef,
   type PluginRecord,
+  parseComponentRef,
   type StoredComponent,
   toggleInstalledComponent,
 } from "@skilltap/core";
@@ -47,16 +47,22 @@ export default defineCommand({
     if (ref.component) {
       const component = findComponentInPlugin(plugin, ref.component);
       if (!component) {
-        const available = plugin.components.map((c) => c.name).join(", ") || "(none)";
+        const available =
+          plugin.components.map((c) => c.name).join(", ") || "(none)";
         exitWithError(
           agentMode,
           `Component '${ref.component}' not found in plugin '${ref.name}'`,
           `Available: ${available}`,
         );
       }
-      const result = await toggleInstalledComponent(plugin.name, component.type, component.name, {
-        projectRoot,
-      });
+      const result = await toggleInstalledComponent(
+        plugin.name,
+        component.type,
+        component.name,
+        {
+          projectRoot,
+        },
+      );
       if (!result.ok) {
         errorLine(result.error.message);
         process.exit(1);
@@ -76,7 +82,9 @@ export default defineCommand({
     }
 
     if (agentMode) {
-      agentError("toggle requires a component name in agent mode. Use plugin:component syntax.");
+      agentError(
+        "toggle requires a component name in agent mode. Use plugin:component syntax.",
+      );
       process.exit(1);
     }
 
@@ -120,13 +128,26 @@ async function runPicker(
     return;
   }
 
-  const results: { component: StoredComponent; nowActive: boolean; error?: string }[] = [];
+  const results: {
+    component: StoredComponent;
+    nowActive: boolean;
+    error?: string;
+  }[] = [];
   for (const c of toToggle) {
-    const r = await toggleInstalledComponent(plugin.name, c.type, c.name, { projectRoot });
+    const r = await toggleInstalledComponent(plugin.name, c.type, c.name, {
+      projectRoot,
+    });
     if (!r.ok) {
-      results.push({ component: c, nowActive: c.active, error: r.error.message });
+      results.push({
+        component: c,
+        nowActive: c.active,
+        error: r.error.message,
+      });
     } else {
-      results.push({ component: r.value.component, nowActive: r.value.nowActive });
+      results.push({
+        component: r.value.component,
+        nowActive: r.value.nowActive,
+      });
     }
   }
 

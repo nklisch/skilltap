@@ -1,7 +1,7 @@
+import { basename, join, resolve } from "node:path";
 import { intro, outro, spinner } from "@clack/prompts";
-import { validateSkill, scan } from "@skilltap/core";
+import { scan, validateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { resolve, basename, join } from "node:path";
 import { agentError, outputJson } from "../ui/agent-out";
 import { ansi, errorLine, successLine } from "../ui/format";
 import { isAgentMode } from "../ui/policy";
@@ -41,7 +41,8 @@ export default defineCommand({
     let skillPath = resolve(argPath);
 
     // Bare-name fallback: try .agents/skills/<name> if arg has no path separator
-    const isBare = !argPath.includes("/") && !argPath.includes("\\") && argPath !== ".";
+    const isBare =
+      !argPath.includes("/") && !argPath.includes("\\") && argPath !== ".";
     if (isBare) {
       const agentsPath = resolve(join(".", ".agents", "skills", argPath));
       if (await Bun.file(join(agentsPath, "SKILL.md")).exists()) {
@@ -92,11 +93,15 @@ export default defineCommand({
     if (frontmatter) {
       successLine("Frontmatter valid");
       process.stdout.write(`   ${ansi.dim("name:")} ${frontmatter.name}\n`);
-      process.stdout.write(`   ${ansi.dim("description:")} ${frontmatter.description}\n`);
+      process.stdout.write(
+        `   ${ansi.dim("description:")} ${frontmatter.description}\n`,
+      );
     }
 
     // Name match check
-    const nameIssue = issues.find((i) => i.message.includes("does not match directory name"));
+    const nameIssue = issues.find((i) =>
+      i.message.includes("does not match directory name"),
+    );
     if (!nameIssue) {
       successLine("Name matches directory");
     }
@@ -118,9 +123,13 @@ export default defineCommand({
       const kb = (totalBytes / 1024).toFixed(1);
       const sizeOk = totalBytes <= 51200;
       if (sizeOk) {
-        successLine(`Size: ${kb} KB (${fileCount} ${fileCount === 1 ? "file" : "files"})`);
+        successLine(
+          `Size: ${kb} KB (${fileCount} ${fileCount === 1 ? "file" : "files"})`,
+        );
       } else {
-        process.stdout.write(`  ${ansi.yellow("warning")}: Size ${kb} KB exceeds 50 KB limit\n`);
+        process.stdout.write(
+          `  ${ansi.yellow("warning")}: Size ${kb} KB exceeds 50 KB limit\n`,
+        );
       }
     }
 
@@ -133,7 +142,9 @@ export default defineCommand({
         process.stdout.write(`  ${ansi.red("✗")} ${e.message}\n`);
       }
       process.stdout.write("\n");
-      outro(`✗ Fix ${errors.length} ${errors.length === 1 ? "issue" : "issues"} before sharing.`);
+      outro(
+        `✗ Fix ${errors.length} ${errors.length === 1 ? "issue" : "issues"} before sharing.`,
+      );
 
       // Print tap.json snippet even on error so user knows what to aim for
       if (frontmatter) {
@@ -164,10 +175,22 @@ async function runAll(useJson: boolean): Promise<void> {
       skills.map(async (skill) => {
         const result = await validateSkill(skill.path);
         if (!result.ok) {
-          return { name: skill.name, valid: false, error: result.error.message };
+          return {
+            name: skill.name,
+            valid: false,
+            error: result.error.message,
+          };
         }
-        const { valid, issues, frontmatter, fileCount, totalBytes } = result.value;
-        return { name: skill.name, valid, issues, frontmatter: frontmatter ?? null, fileCount: fileCount ?? null, totalBytes: totalBytes ?? null };
+        const { valid, issues, frontmatter, fileCount, totalBytes } =
+          result.value;
+        return {
+          name: skill.name,
+          valid,
+          issues,
+          frontmatter: frontmatter ?? null,
+          fileCount: fileCount ?? null,
+          totalBytes: totalBytes ?? null,
+        };
       }),
     );
     outputJson(results);
@@ -175,7 +198,9 @@ async function runAll(useJson: boolean): Promise<void> {
     return;
   }
 
-  intro(`Verifying ${skills.length} ${skills.length === 1 ? "skill" : "skills"}`);
+  intro(
+    `Verifying ${skills.length} ${skills.length === 1 ? "skill" : "skills"}`,
+  );
 
   let passed = 0;
   let failed = 0;
@@ -198,7 +223,9 @@ async function runAll(useJson: boolean): Promise<void> {
       s.stop(`${skill.name} — ${ansi.green("✓ valid")}`);
       passed++;
     } else {
-      s.stop(`${skill.name} — ${ansi.red(`✗ ${errors.length} ${errors.length === 1 ? "issue" : "issues"}`)}`);
+      s.stop(
+        `${skill.name} — ${ansi.red(`✗ ${errors.length} ${errors.length === 1 ? "issue" : "issues"}`)}`,
+      );
       for (const e of errors) {
         process.stdout.write(`    ${ansi.dim(e.message)}\n`);
       }
@@ -246,7 +273,9 @@ function printTapSnippet(name: string, description: string): void {
   process.stdout.write(`  ${ansi.dim("{")} \n`);
   process.stdout.write(`    ${ansi.dim(`"name": "${name}",`)}\n`);
   process.stdout.write(`    ${ansi.dim(`"description": "${description}",`)}\n`);
-  process.stdout.write(`    ${ansi.dim(`"repo": "https://github.com/you/${name}",`)}\n`);
+  process.stdout.write(
+    `    ${ansi.dim(`"repo": "https://github.com/you/${name}",`)}\n`,
+  );
   process.stdout.write(`    ${ansi.dim(`"tags": []`)}\n`);
   process.stdout.write(`  ${ansi.dim("}")}\n`);
   process.stdout.write(`\n`);

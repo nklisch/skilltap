@@ -1,5 +1,5 @@
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import type { StoredMcpComponent } from "../schemas/plugins";
 import {
@@ -18,7 +18,9 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeMcpServer(overrides?: Partial<StoredMcpComponent>): StoredMcpComponent {
+function makeMcpServer(
+  overrides?: Partial<StoredMcpComponent>,
+): StoredMcpComponent {
   return {
     type: "mcp",
     serverType: "stdio",
@@ -41,8 +43,12 @@ async function readJson(path: string): Promise<Record<string, unknown>> {
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
 // ---------------------------------------------------------------------------
 // namespaceMcpServer
@@ -50,11 +56,15 @@ afterEach(async () => { await env.cleanup(); });
 
 describe("namespaceMcpServer", () => {
   test("formats skilltap:plugin:server", () => {
-    expect(namespaceMcpServer("dev-toolkit", "database")).toBe("skilltap:dev-toolkit:database");
+    expect(namespaceMcpServer("dev-toolkit", "database")).toBe(
+      "skilltap:dev-toolkit:database",
+    );
   });
 
   test("handles plugin names with hyphens", () => {
-    expect(namespaceMcpServer("my-plugin", "my-server")).toBe("skilltap:my-plugin:my-server");
+    expect(namespaceMcpServer("my-plugin", "my-server")).toBe(
+      "skilltap:my-plugin:my-server",
+    );
   });
 });
 
@@ -113,7 +123,9 @@ describe("substituteMcpVars", () => {
   const ctx = { pluginRoot: "/opt/plugins/foo", pluginData: "/var/data/foo" };
 
   test("replaces ${CLAUDE_PLUGIN_ROOT} in command", () => {
-    const server = makeMcpServer({ command: "${CLAUDE_PLUGIN_ROOT}/bin/server" });
+    const server = makeMcpServer({
+      command: "${CLAUDE_PLUGIN_ROOT}/bin/server",
+    });
     const result = substituteMcpVars(server, ctx);
     if (result.serverType !== "stdio") return;
     expect(result.command).toBe("/opt/plugins/foo/bin/server");
@@ -127,7 +139,9 @@ describe("substituteMcpVars", () => {
   });
 
   test("replaces ${CLAUDE_PLUGIN_DATA} in env values", () => {
-    const server = makeMcpServer({ env: { DATA_DIR: "${CLAUDE_PLUGIN_DATA}/cache" } });
+    const server = makeMcpServer({
+      env: { DATA_DIR: "${CLAUDE_PLUGIN_DATA}/cache" },
+    });
     const result = substituteMcpVars(server, ctx);
     if (result.serverType !== "stdio") return;
     expect(result.env).toEqual({ DATA_DIR: "/var/data/foo/cache" });
@@ -144,7 +158,11 @@ describe("substituteMcpVars", () => {
   });
 
   test("returns unchanged component when no variables present", () => {
-    const server = makeMcpServer({ command: "npx", args: ["-y", "my-mcp"], env: {} });
+    const server = makeMcpServer({
+      command: "npx",
+      args: ["-y", "my-mcp"],
+      env: {},
+    });
     const result = substituteMcpVars(server, ctx);
     if (result.serverType !== "stdio") return;
     expect(result.command).toBe("npx");
@@ -164,8 +182,12 @@ describe("substituteMcpVars", () => {
 
   test("substitutes ${CLAUDE_PLUGIN_ROOT} in HTTP url", () => {
     const server: StoredMcpComponent = {
-      type: "mcp", serverType: "http", name: "remote", active: true,
-      url: "${CLAUDE_PLUGIN_ROOT}/mcp", headers: {},
+      type: "mcp",
+      serverType: "http",
+      name: "remote",
+      active: true,
+      url: "${CLAUDE_PLUGIN_ROOT}/mcp",
+      headers: {},
     };
     const result = substituteMcpVars(server, ctx);
     if (result.serverType !== "http") return;
@@ -174,7 +196,10 @@ describe("substituteMcpVars", () => {
 
   test("substitutes vars in HTTP header values", () => {
     const server: StoredMcpComponent = {
-      type: "mcp", serverType: "http", name: "remote", active: true,
+      type: "mcp",
+      serverType: "http",
+      name: "remote",
+      active: true,
       url: "https://example.com/mcp",
       headers: { Authorization: "Bearer ${CLAUDE_PLUGIN_DATA}/token" },
     };
@@ -248,7 +273,11 @@ describe("injectMcpServers", () => {
     const settingsPath = join(projectRoot, ".claude/settings.json");
     await Bun.write(
       settingsPath,
-      JSON.stringify({ permissions: { allow: ["Bash"] }, mcpServers: {} }, null, 2),
+      JSON.stringify(
+        { permissions: { allow: ["Bash"] }, mcpServers: {} },
+        null,
+        2,
+      ),
     );
 
     const result = await injectMcpServers({
@@ -262,7 +291,9 @@ describe("injectMcpServers", () => {
     expect(result.ok).toBe(true);
     const config = await readJson(settingsPath);
     expect((config.permissions as { allow: string[] }).allow).toEqual(["Bash"]);
-    expect((config.mcpServers as Record<string, unknown>)["skilltap:my-plugin:db"]).toBeTruthy();
+    expect(
+      (config.mcpServers as Record<string, unknown>)["skilltap:my-plugin:db"],
+    ).toBeTruthy();
   });
 
   test("namespaces server names correctly", async () => {
@@ -285,7 +316,10 @@ describe("injectMcpServers", () => {
   test("creates backup before first modification", async () => {
     const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
-    await Bun.write(configPath, JSON.stringify({ mcpServers: { "user-key": {} } }, null, 2));
+    await Bun.write(
+      configPath,
+      JSON.stringify({ mcpServers: { "user-key": {} } }, null, 2),
+    );
 
     await injectMcpServers({
       pluginName: "p",
@@ -340,7 +374,10 @@ describe("injectMcpServers", () => {
   test("only includes env when non-empty", async () => {
     const projectRoot = env.homeDir;
     const serverNoEnv = makeMcpServer({ env: {} });
-    const serverWithEnv = makeMcpServer({ name: "with-env", env: { TOKEN: "abc" } });
+    const serverWithEnv = makeMcpServer({
+      name: "with-env",
+      env: { TOKEN: "abc" },
+    });
 
     await injectMcpServers({
       pluginName: "p",
@@ -388,9 +425,9 @@ describe("injectMcpServers", () => {
     });
 
     const config = await readJson(join(projectRoot, ".cursor/mcp.json"));
-    const entry = (config.mcpServers as Record<string, Record<string, unknown>>)[
-      "skilltap:p:test-server"
-    ];
+    const entry = (
+      config.mcpServers as Record<string, Record<string, unknown>>
+    )["skilltap:p:test-server"];
     expect(entry.command).toBe("/plugins/p/bin/server");
     expect((entry.env as Record<string, string>).DATA).toBe("/data/p");
   });
@@ -430,15 +467,21 @@ describe("injectMcpServers", () => {
     });
 
     expect(result.ok).toBe(true);
-    const exists = await Bun.file(join(projectRoot, ".gemini/settings.json")).exists();
+    const exists = await Bun.file(
+      join(projectRoot, ".gemini/settings.json"),
+    ).exists();
     expect(exists).toBe(true);
   });
 
   test("writes { url } for HTTP server (no headers)", async () => {
     const projectRoot = env.homeDir;
     const server: StoredMcpComponent = {
-      type: "mcp", serverType: "http", name: "api", active: true,
-      url: "https://api.example.com/mcp", headers: {},
+      type: "mcp",
+      serverType: "http",
+      name: "api",
+      active: true,
+      url: "https://api.example.com/mcp",
+      headers: {},
     };
 
     const result = await injectMcpServers({
@@ -451,7 +494,9 @@ describe("injectMcpServers", () => {
 
     expect(result.ok).toBe(true);
     const config = await readJson(join(projectRoot, ".cursor/mcp.json"));
-    const entry = (config.mcpServers as Record<string, Record<string, unknown>>)["skilltap:my-plugin:api"];
+    const entry = (
+      config.mcpServers as Record<string, Record<string, unknown>>
+    )["skilltap:my-plugin:api"];
     expect(entry).toBeDefined();
     expect(entry.url).toBe("https://api.example.com/mcp");
     expect(entry.command).toBeUndefined();
@@ -461,7 +506,10 @@ describe("injectMcpServers", () => {
   test("writes { url, headers } for HTTP server when headers non-empty", async () => {
     const projectRoot = env.homeDir;
     const server: StoredMcpComponent = {
-      type: "mcp", serverType: "http", name: "api", active: true,
+      type: "mcp",
+      serverType: "http",
+      name: "api",
+      active: true,
       url: "https://api.example.com/mcp",
       headers: { Authorization: "Bearer token123" },
     };
@@ -476,7 +524,9 @@ describe("injectMcpServers", () => {
 
     expect(result.ok).toBe(true);
     const config = await readJson(join(projectRoot, ".cursor/mcp.json"));
-    const entry = (config.mcpServers as Record<string, Record<string, unknown>>)["skilltap:my-plugin:api"];
+    const entry = (
+      config.mcpServers as Record<string, Record<string, unknown>>
+    )["skilltap:my-plugin:api"];
     expect(entry.url).toBe("https://api.example.com/mcp");
     expect(entry.headers).toEqual({ Authorization: "Bearer token123" });
   });
@@ -484,8 +534,12 @@ describe("injectMcpServers", () => {
   test("mixed stdio and HTTP servers in same call", async () => {
     const projectRoot = env.homeDir;
     const httpServer: StoredMcpComponent = {
-      type: "mcp", serverType: "http", name: "remote", active: true,
-      url: "https://remote.example.com/mcp", headers: {},
+      type: "mcp",
+      serverType: "http",
+      name: "remote",
+      active: true,
+      url: "https://remote.example.com/mcp",
+      headers: {},
     };
 
     const result = await injectMcpServers({
@@ -673,7 +727,11 @@ describe("listMcpServers", () => {
     const configPath = join(projectRoot, ".cursor/mcp.json");
     await Bun.write(
       configPath,
-      JSON.stringify({ mcpServers: { "user-server": { command: "x", args: [] } } }, null, 2),
+      JSON.stringify(
+        { mcpServers: { "user-server": { command: "x", args: [] } } },
+        null,
+        2,
+      ),
     );
 
     const result = await listMcpServers("cursor", "project", projectRoot);
@@ -683,7 +741,11 @@ describe("listMcpServers", () => {
   });
 
   test("returns empty array for unknown agent", async () => {
-    const result = await listMcpServers("unknown-agent", "project", env.homeDir);
+    const result = await listMcpServers(
+      "unknown-agent",
+      "project",
+      env.homeDir,
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toHaveLength(0);

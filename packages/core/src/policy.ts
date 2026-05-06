@@ -1,7 +1,7 @@
 import { isAgentEnv } from "./agent-env";
 import type { Config, TrustOverride } from "./schemas/config";
-import { PRESET_VALUES, SECURITY_PRESETS } from "./schemas/config";
-import { type Result, UserError, err, ok } from "./types";
+import { PRESET_VALUES, type SECURITY_PRESETS } from "./schemas/config";
+import { err, ok, type Result, UserError } from "./types";
 
 export type CliFlags = {
   strict?: boolean;
@@ -111,9 +111,7 @@ export function composePolicy(
   //   3. config["agent-mode"].enabled (legacy v0.x — still honored
   //      until the v0.x config schema is deleted in 31c-c-2d)
   const agentMode =
-    flags.agent === true ||
-    isAgentEnv() ||
-    config["agent-mode"].enabled;
+    flags.agent === true || isAgentEnv() || config["agent-mode"].enabled;
 
   if (agentMode) {
     if (flags.skipScan && config.security.agent.require_scan) {
@@ -181,9 +179,7 @@ export function composePolicy(
   );
 
   const scanMode =
-    flags.semantic && humanSec.scan !== "semantic"
-      ? "semantic"
-      : humanSec.scan;
+    flags.semantic && humanSec.scan !== "semantic" ? "semantic" : humanSec.scan;
 
   return ok({
     yes: flags.yes || config.defaults.yes,
@@ -216,9 +212,7 @@ export function composePolicyForSource(
   const presetValues = PRESET_VALUES[preset];
   // Same agent-mode resolution as composePolicy.
   const agentMode =
-    flags.agent === true ||
-    isAgentEnv() ||
-    config["agent-mode"].enabled;
+    flags.agent === true || isAgentEnv() || config["agent-mode"].enabled;
   const modeKey = agentMode ? "agent" : "human";
 
   const patchedConfig: Config = {

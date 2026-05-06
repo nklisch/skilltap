@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Fzf, byLengthAsc } from "fzf";
+import { byLengthAsc, Fzf } from "fzf";
 import { highlightMatches } from "./format";
 
 // ---------------------------------------------------------------------------

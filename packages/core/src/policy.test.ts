@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
+import {
+  composePolicy,
+  composePolicyForSource,
+  mapAdapterToSourceType,
+  resolveOverride,
+} from "./policy";
 import { ConfigSchema } from "./schemas/config";
-import { composePolicy, composePolicyForSource, mapAdapterToSourceType, resolveOverride } from "./policy";
 
 const baseConfig = () => ConfigSchema.parse({});
 
@@ -429,10 +434,14 @@ describe("composePolicyForSource", () => {
 
   test("tap override applies preset values", () => {
     const config = baseWithOverrides();
-    const result = composePolicyForSource(config, {}, {
-      tapName: "trusted-tap",
-      sourceType: "tap",
-    });
+    const result = composePolicyForSource(
+      config,
+      {},
+      {
+        tapName: "trusted-tap",
+        sourceType: "tap",
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // "none" preset: scan=off, on_warn=allow, require_scan=false
@@ -455,10 +464,14 @@ describe("composePolicyForSource", () => {
   test("CLI --strict overrides trust tier preset", () => {
     const config = baseWithOverrides();
     // trusted-tap has "none" preset, but --strict should still set fail
-    const result = composePolicyForSource(config, { strict: true }, {
-      tapName: "trusted-tap",
-      sourceType: "tap",
-    });
+    const result = composePolicyForSource(
+      config,
+      { strict: true },
+      {
+        tapName: "trusted-tap",
+        sourceType: "tap",
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("fail");
@@ -466,7 +479,11 @@ describe("composePolicyForSource", () => {
 
   test("--skip-scan rejected when override preset has require_scan=true", () => {
     const config = baseWithOverrides();
-    const result = composePolicyForSource(config, { skipScan: true }, { sourceType: "npm" });
+    const result = composePolicyForSource(
+      config,
+      { skipScan: true },
+      { sourceType: "npm" },
+    );
     // "strict" has require_scan=true
     expect(result.ok).toBe(false);
   });
@@ -474,10 +491,14 @@ describe("composePolicyForSource", () => {
   test("--semantic flag overrides override preset scan=off", () => {
     const config = baseWithOverrides();
     // trusted-tap has "none" preset (scan=off), but --semantic should upgrade
-    const result = composePolicyForSource(config, { semantic: true }, {
-      tapName: "trusted-tap",
-      sourceType: "tap",
-    });
+    const result = composePolicyForSource(
+      config,
+      { semantic: true },
+      {
+        tapName: "trusted-tap",
+        sourceType: "tap",
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.scanMode).toBe("semantic");
@@ -486,7 +507,11 @@ describe("composePolicyForSource", () => {
   test("--no-strict overrides override preset on_warn=fail", () => {
     const config = baseWithOverrides();
     // npm has "strict" preset (on_warn=fail), but --no-strict should override
-    const result = composePolicyForSource(config, { noStrict: true }, { sourceType: "npm" });
+    const result = composePolicyForSource(
+      config,
+      { noStrict: true },
+      { sourceType: "npm" },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("prompt");
@@ -496,10 +521,14 @@ describe("composePolicyForSource", () => {
     const config = baseWithOverrides();
     config["agent-mode"] = { enabled: true, scope: "project" };
     // Agent mode + trusted-tap "none" override
-    const result = composePolicyForSource(config, {}, {
-      tapName: "trusted-tap",
-      sourceType: "tap",
-    });
+    const result = composePolicyForSource(
+      config,
+      {},
+      {
+        tapName: "trusted-tap",
+        sourceType: "tap",
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     // "none" preset from override: scan=off, on_warn=allow
@@ -524,10 +553,14 @@ describe("composePolicyForSource", () => {
   test("--skip-scan allowed when override preset has require_scan=false", () => {
     const config = baseWithOverrides();
     // trusted-tap has "none" preset (require_scan=false)
-    const result = composePolicyForSource(config, { skipScan: true }, {
-      tapName: "trusted-tap",
-      sourceType: "tap",
-    });
+    const result = composePolicyForSource(
+      config,
+      { skipScan: true },
+      {
+        tapName: "trusted-tap",
+        sourceType: "tap",
+      },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.skipScan).toBe(true);

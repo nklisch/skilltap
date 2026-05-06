@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;

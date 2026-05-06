@@ -1,10 +1,10 @@
 import { confirm } from "@clack/prompts";
-import { defineCommand } from "citty";
 import { loadPlugins, removeInstalledPlugin } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { agentError, exitWithError, outputJson } from "../../ui/agent-out";
 import { ansi, errorLine, successLine } from "../../ui/format";
-import { isAgentMode } from "../../ui/policy";
 import { componentSummary } from "../../ui/plugin-format";
+import { isAgentMode } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -66,7 +66,9 @@ export default defineCommand({
       if (args.json) {
         outputJson({ removed: result.value.name, components: summary });
       } else {
-        process.stdout.write(`OK: Removed plugin ${plugin.name} (${summary})\n`);
+        process.stdout.write(
+          `OK: Removed plugin ${plugin.name} (${summary})\n`,
+        );
       }
       return;
     }

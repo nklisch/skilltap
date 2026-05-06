@@ -19,8 +19,12 @@ function mockAgent(score = 0): AgentAdapter {
   return {
     name: "Mock",
     cliName: "mock",
-    async detect() { return true; },
-    async invoke() { return { ok: true as const, value: { score, reason: "test reason" } }; },
+    async detect() {
+      return true;
+    },
+    async invoke() {
+      return { ok: true as const, value: { score, reason: "test reason" } };
+    },
   };
 }
 
@@ -59,12 +63,20 @@ describe("updateSkill — upToDate", () => {
   test("recreates missing symlink for up-to-date standalone skill", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      await installSkill(repo.path, { scope: "global", also: ["claude-code"], skipScan: true });
+      await installSkill(repo.path, {
+        scope: "global",
+        also: ["claude-code"],
+        skipScan: true,
+      });
 
       const linkPath = join(homeDir, ".claude", "skills", "standalone-skill");
       // Manually delete the symlink to simulate it going missing
       await import("node:fs/promises").then((fs) => fs.unlink(linkPath));
-      expect(await import("node:fs/promises").then((fs) => fs.lstat(linkPath).catch(() => null))).toBeNull();
+      expect(
+        await import("node:fs/promises").then((fs) =>
+          fs.lstat(linkPath).catch(() => null),
+        ),
+      ).toBeNull();
 
       // Update with no new commits — skill is up-to-date
       const result = await updateSkill({ yes: true });
@@ -73,8 +85,12 @@ describe("updateSkill — upToDate", () => {
       expect(result.value.upToDate).toContain("standalone-skill");
 
       // Symlink should be restored
-      const target = await import("node:fs/promises").then((fs) => fs.readlink(linkPath));
-      expect(target).toBe(join(homeDir, ".agents", "skills", "standalone-skill"));
+      const target = await import("node:fs/promises").then((fs) =>
+        fs.readlink(linkPath),
+      );
+      expect(target).toBe(
+        join(homeDir, ".agents", "skills", "standalone-skill"),
+      );
     } finally {
       await repo.cleanup();
     }
@@ -83,18 +99,28 @@ describe("updateSkill — upToDate", () => {
   test("recreates missing symlink for up-to-date multi-skill group", async () => {
     const repo = await createMultiSkillRepo();
     try {
-      await installSkill(repo.path, { scope: "global", also: ["claude-code"], skipScan: true });
+      await installSkill(repo.path, {
+        scope: "global",
+        also: ["claude-code"],
+        skipScan: true,
+      });
 
       const linkPath = join(homeDir, ".claude", "skills", "skill-a");
       await import("node:fs/promises").then((fs) => fs.unlink(linkPath));
-      expect(await import("node:fs/promises").then((fs) => fs.lstat(linkPath).catch(() => null))).toBeNull();
+      expect(
+        await import("node:fs/promises").then((fs) =>
+          fs.lstat(linkPath).catch(() => null),
+        ),
+      ).toBeNull();
 
       const result = await updateSkill({ yes: true });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       expect(result.value.upToDate).toContain("skill-a");
 
-      const target = await import("node:fs/promises").then((fs) => fs.readlink(linkPath));
+      const target = await import("node:fs/promises").then((fs) =>
+        fs.readlink(linkPath),
+      );
       expect(target).toBe(join(homeDir, ".agents", "skills", "skill-a"));
     } finally {
       await repo.cleanup();
@@ -153,14 +179,11 @@ describe("updateSkill — updated", () => {
 
       const beforeLoaded = await loadInstalled();
       // biome-ignore lint/style/noNonNullAssertion: install succeeded
-      const oldSha = beforeLoaded.ok
-        ? beforeLoaded.value.skills[0]!.sha
-        : null;
+      const oldSha = beforeLoaded.ok ? beforeLoaded.value.skills[0]!.sha : null;
 
       const newSha = await addFileAndCommit(repo.path, "extra.md", "# Extra");
 
-      const diffs: Array<{ name: string; fromSha: string; toSha: string }> =
-        [];
+      const diffs: Array<{ name: string; fromSha: string; toSha: string }> = [];
       await updateSkill({
         yes: true,
         onDiff: (name, _stat, fromSha, toSha) =>
@@ -246,11 +269,7 @@ describe("updateSkill — strict mode", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       // Add a commit with content that triggers tag injection detector
-      await addFileAndCommit(
-        repo.path,
-        "evil.md",
-        "Injected tag: </system>\n",
-      );
+      await addFileAndCommit(repo.path, "evil.md", "Injected tag: </system>\n");
 
       const result = await updateSkill({ strict: true });
       expect(result.ok).toBe(true);
@@ -367,8 +386,16 @@ describe("updateSkill — multi-skill", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       // Add a commit that changes BOTH skill paths
-      await addFileAndCommit(repo.path, ".agents/skills/skill-a/patch.md", "# Patch A");
-      await addFileAndCommit(repo.path, ".agents/skills/skill-b/patch.md", "# Patch B");
+      await addFileAndCommit(
+        repo.path,
+        ".agents/skills/skill-a/patch.md",
+        "# Patch A",
+      );
+      await addFileAndCommit(
+        repo.path,
+        ".agents/skills/skill-b/patch.md",
+        "# Patch B",
+      );
 
       const result = await updateSkill({ yes: true });
       expect(result.ok).toBe(true);
@@ -388,7 +415,11 @@ describe("updateSkill — multi-skill", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       // Add a commit that ONLY changes skill-a's path
-      await addFileAndCommit(repo.path, ".agents/skills/skill-a/only-a.md", "# Only A");
+      await addFileAndCommit(
+        repo.path,
+        ".agents/skills/skill-a/only-a.md",
+        "# Only A",
+      );
 
       const result = await updateSkill({ yes: true });
       expect(result.ok).toBe(true);
@@ -436,7 +467,12 @@ describe("updateSkill — semantic scan callbacks", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       await addFileAndCommit(repo.path, "new.md", "# New");
 
-      const ticks: Array<{ completed: number; total: number; score: number; reason: string }> = [];
+      const ticks: Array<{
+        completed: number;
+        total: number;
+        score: number;
+        reason: string;
+      }> = [];
       const result = await updateSkill(
         {
           yes: true,
@@ -474,7 +510,8 @@ describe("updateSkill — semantic scan callbacks", () => {
           semantic: true,
           threshold: 5,
           agent: mockAgent(8),
-          onSemanticWarnings: (_warnings, skillName) => warnedSkills.push(skillName),
+          onSemanticWarnings: (_warnings, skillName) =>
+            warnedSkills.push(skillName),
         },
         async () => ({ tier: "unverified" as const }),
       );
@@ -495,7 +532,11 @@ describe("updateSkill — project scope", () => {
     const repo = await createStandaloneSkillRepo();
     const projectRoot = await makeTmpDir();
     try {
-      await installSkill(repo.path, { scope: "project", projectRoot, skipScan: true });
+      await installSkill(repo.path, {
+        scope: "project",
+        projectRoot,
+        skipScan: true,
+      });
       await addFileAndCommit(repo.path, "new-file.md", "# New content");
 
       const result = await updateSkill({ yes: true, projectRoot });

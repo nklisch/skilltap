@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { SemanticWarning, StaticWarning } from "@skilltap/core";
-import { formatSemanticWarnings, formatWarnings, printSemanticWarnings, printWarnings } from "./scan";
+import {
+  formatSemanticWarnings,
+  formatWarnings,
+  printSemanticWarnings,
+  printWarnings,
+} from "./scan";
 
 describe("formatWarnings", () => {
   test("includes skill name in header", () => {
@@ -147,12 +152,19 @@ describe("printWarnings", () => {
     const chunks: string[] = [];
     const original = process.stderr.write.bind(process.stderr);
     process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+      chunks.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
       return true;
     };
     try {
       const warnings: StaticWarning[] = [
-        { file: "SKILL.md", line: 1, category: "HTML comment", raw: "<!-- x -->" },
+        {
+          file: "SKILL.md",
+          line: 1,
+          category: "HTML comment",
+          raw: "<!-- x -->",
+        },
       ];
       printWarnings(warnings, "my-skill");
       const output = chunks.join("");
@@ -165,7 +177,9 @@ describe("printWarnings", () => {
 });
 
 describe("formatSemanticWarnings", () => {
-  const makeWarning = (overrides?: Partial<SemanticWarning>): SemanticWarning => ({
+  const makeWarning = (
+    overrides?: Partial<SemanticWarning>,
+  ): SemanticWarning => ({
     file: "SKILL.md",
     chunkIndex: 0,
     lineRange: [10, 15],
@@ -200,7 +214,10 @@ describe("formatSemanticWarnings", () => {
   });
 
   test("handles multiple warnings", () => {
-    const warnings = [makeWarning({ score: 3 }), makeWarning({ chunkIndex: 1, score: 9 })];
+    const warnings = [
+      makeWarning({ score: 3 }),
+      makeWarning({ chunkIndex: 1, score: 9 }),
+    ];
     const result = formatSemanticWarnings(warnings, "skill");
     expect(result).toContain("risk 3/10");
     expect(result).toContain("risk 9/10");
@@ -212,7 +229,9 @@ describe("printSemanticWarnings", () => {
     const chunks: string[] = [];
     const original = process.stderr.write.bind(process.stderr);
     process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+      chunks.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
       return true;
     };
     try {

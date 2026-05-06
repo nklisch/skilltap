@@ -21,7 +21,9 @@ export function createStepLogger(verbose: boolean): StepLogger {
       log.step(`Static scan — ${ansi.dim("clean")}`);
     },
     semanticScanClean(agentName) {
-      log.step(`Semantic scan — ${ansi.dim("clean")}  ${ansi.dim(`via ${agentName}`)}`);
+      log.step(
+        `Semantic scan — ${ansi.dim("clean")}  ${ansi.dim(`via ${agentName}`)}`,
+      );
     },
   };
 }

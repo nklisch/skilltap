@@ -83,14 +83,22 @@ describe("getConfigValue", () => {
     const r = getConfigValue(DEFAULT_CONFIG, "security.human");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.value).toEqual({ scan: "static", on_warn: "prompt", require_scan: false });
+    expect(r.value).toEqual({
+      scan: "static",
+      on_warn: "prompt",
+      require_scan: false,
+    });
   });
 
   test("gets security.agent section", () => {
     const r = getConfigValue(DEFAULT_CONFIG, "security.agent");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.value).toEqual({ scan: "static", on_warn: "fail", require_scan: true });
+    expect(r.value).toEqual({
+      scan: "static",
+      on_warn: "fail",
+      require_scan: true,
+    });
   });
 
   test("gets security.agent.scan", () => {
@@ -372,9 +380,7 @@ describe("formatConfigValue", () => {
   });
 
   test("formats object array as entry count", () => {
-    expect(formatConfigValue([{ name: "home", url: "..." }])).toBe(
-      "[1 entry]",
-    );
+    expect(formatConfigValue([{ name: "home", url: "..." }])).toBe("[1 entry]");
     expect(
       formatConfigValue([
         { name: "a", url: "..." },

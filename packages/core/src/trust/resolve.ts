@@ -1,6 +1,6 @@
 import type { TapSkill } from "../schemas/tap";
 import type { TrustInfo } from "./types";
-import { verifyGitHubAttestation, parseGitHubRepo } from "./verify-github";
+import { parseGitHubRepo, verifyGitHubAttestation } from "./verify-github";
 import { verifyNpmProvenance } from "./verify-npm";
 
 export type ResolveTrustParams = {
@@ -107,8 +107,7 @@ export async function resolveTrust(
 
     if (params.adapter !== "local") {
       // Check if it's a GitHub URL — extract owner for publisher identity
-      const ghRepo =
-        params.githubRepo ?? parseGitHubRepo(params.url);
+      const ghRepo = params.githubRepo ?? parseGitHubRepo(params.url);
       if (ghRepo) {
         const owner = ghRepo.split("/")[0] ?? "unknown";
         return {

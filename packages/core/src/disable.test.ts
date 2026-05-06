@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { loadInstalled, saveInstalled } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { skillDisabledDir, skillInstallDir } from "./paths";
@@ -52,7 +57,11 @@ async function seedGlobalSkill(name: string, also: string[] = []) {
   return skillDir;
 }
 
-async function seedLinkedSkill(name: string, targetPath: string, also: string[] = []) {
+async function seedLinkedSkill(
+  name: string,
+  targetPath: string,
+  also: string[] = [],
+) {
   await saveInstalled({
     version: 1,
     skills: [
@@ -80,7 +89,13 @@ async function seedLinkedSkill(name: string, targetPath: string, also: string[] 
 describe("disableSkill", () => {
   test("disables a managed global skill — moves to .disabled/, sets active=false", async () => {
     const skillDir = await seedGlobalSkill("my-skill", ["claude-code"]);
-    const disabledDir = join(homeDir, ".agents", "skills", ".disabled", "my-skill");
+    const disabledDir = join(
+      homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "my-skill",
+    );
     const symlinkPath = join(homeDir, ".claude", "skills", "my-skill");
 
     expect(await lstat(skillDir).catch(() => null)).not.toBeNull();
@@ -153,7 +168,13 @@ describe("disableSkill", () => {
 describe("enableSkill", () => {
   test("enables a disabled global skill — moves back from .disabled/, recreates symlinks, sets active=true", async () => {
     const skillDir = await seedGlobalSkill("my-skill", ["claude-code"]);
-    const disabledDir = join(homeDir, ".agents", "skills", ".disabled", "my-skill");
+    const disabledDir = join(
+      homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "my-skill",
+    );
     const symlinkPath = join(homeDir, ".claude", "skills", "my-skill");
 
     await disableSkill("my-skill");
@@ -228,7 +249,10 @@ describe("disableSkill — project scope", () => {
     try {
       const skillDir = join(projectRoot, ".agents", "skills", "proj-skill");
       await mkdir(skillDir, { recursive: true });
-      await Bun.write(join(skillDir, "SKILL.md"), "---\nname: proj-skill\n---\n");
+      await Bun.write(
+        join(skillDir, "SKILL.md"),
+        "---\nname: proj-skill\n---\n",
+      );
       await saveInstalled(
         {
           version: 1,
@@ -252,13 +276,20 @@ describe("disableSkill — project scope", () => {
         projectRoot,
       );
 
-      const result = await disableSkill("proj-skill", { scope: "project", projectRoot });
+      const result = await disableSkill("proj-skill", {
+        scope: "project",
+        projectRoot,
+      });
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
       // Files moved to project .disabled/
       expect(await lstat(skillDir).catch(() => null)).toBeNull();
-      const disabledDir = skillDisabledDir("proj-skill", "project", projectRoot);
+      const disabledDir = skillDisabledDir(
+        "proj-skill",
+        "project",
+        projectRoot,
+      );
       expect(await lstat(disabledDir).then((s) => s.isDirectory())).toBe(true);
 
       // Record updated
@@ -279,7 +310,10 @@ describe("enableSkill — project scope", () => {
     try {
       const skillDir = join(projectRoot, ".agents", "skills", "proj-skill");
       await mkdir(skillDir, { recursive: true });
-      await Bun.write(join(skillDir, "SKILL.md"), "---\nname: proj-skill\n---\n");
+      await Bun.write(
+        join(skillDir, "SKILL.md"),
+        "---\nname: proj-skill\n---\n",
+      );
       await saveInstalled(
         {
           version: 1,
@@ -304,15 +338,25 @@ describe("enableSkill — project scope", () => {
       );
 
       // First disable
-      const disableResult = await disableSkill("proj-skill", { scope: "project", projectRoot });
+      const disableResult = await disableSkill("proj-skill", {
+        scope: "project",
+        projectRoot,
+      });
       expect(disableResult.ok).toBe(true);
 
-      const disabledDir = skillDisabledDir("proj-skill", "project", projectRoot);
+      const disabledDir = skillDisabledDir(
+        "proj-skill",
+        "project",
+        projectRoot,
+      );
       expect(await lstat(disabledDir).catch(() => null)).not.toBeNull();
       expect(await lstat(skillDir).catch(() => null)).toBeNull();
 
       // Now enable
-      const enableResult = await enableSkill("proj-skill", { scope: "project", projectRoot });
+      const enableResult = await enableSkill("proj-skill", {
+        scope: "project",
+        projectRoot,
+      });
       expect(enableResult.ok).toBe(true);
       if (!enableResult.ok) return;
 

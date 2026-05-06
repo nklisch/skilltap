@@ -1,6 +1,6 @@
 import { $ } from "bun";
-import type { AgentAdapter } from "./types";
 import { wrapInvoke } from "./factory";
+import type { AgentAdapter } from "./types";
 
 export function createOllamaAdapter(model: string): AgentAdapter {
   return {
@@ -24,7 +24,8 @@ export function createOllamaAdapter(model: string): AgentAdapter {
       const effectiveModel = model || "llama3";
       const whichResult = await $`which ollama`.quiet();
       const ollamaPath = whichResult.stdout.toString().trim();
-      const result = await $`${ollamaPath} run ${effectiveModel} ${prompt}`.quiet();
+      const result =
+        await $`${ollamaPath} run ${effectiveModel} ${prompt}`.quiet();
       return result.stdout.toString().trim();
     }),
   };

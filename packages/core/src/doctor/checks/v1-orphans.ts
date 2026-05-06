@@ -39,8 +39,14 @@ export async function checkV1Orphans(
 
   const issues: DoctorIssue[] = [];
   const candidates: { path: string; label: string }[] = [
-    { path: join(getConfigDir(), "installed.json"), label: "global installed.json" },
-    { path: join(getConfigDir(), "plugins.json"), label: "global plugins.json" },
+    {
+      path: join(getConfigDir(), "installed.json"),
+      label: "global installed.json",
+    },
+    {
+      path: join(getConfigDir(), "plugins.json"),
+      label: "global plugins.json",
+    },
   ];
   if (projectRoot) {
     candidates.push(

@@ -1,11 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  createClaudePluginRepo,
+  createCodexPluginRepo,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { installSkill } from "../install";
-import { createClaudePluginRepo, createCodexPluginRepo, createStandaloneSkillRepo, createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
 describe("installSkill with plugin detection", () => {
   test("detects Claude Code plugin and installs via callback", async () => {

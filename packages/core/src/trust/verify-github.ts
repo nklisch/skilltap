@@ -88,7 +88,9 @@ export async function verifyGitHubAttestation(
 export function parseGitHubRepo(url: string): string | null {
   // Handles: https://github.com/owner/repo, https://github.com/owner/repo.git
   // github:owner/repo, git@github.com:owner/repo.git
-  let match = url.match(/github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/.*)?$/);
+  let match = url.match(
+    /github\.com[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/.*)?$/,
+  );
   if (!match) {
     // github:owner/repo shorthand
     match = url.match(/^github:([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:\/.*)?$/);

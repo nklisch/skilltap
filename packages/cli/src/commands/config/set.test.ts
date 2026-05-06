@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
@@ -119,11 +128,7 @@ describe("skilltap config set", () => {
   });
 
   test("rejects blocked key (agent-mode.enabled)", async () => {
-    const set = await runCmd(
-      "set",
-      ["agent-mode.enabled", "true"],
-      configDir,
-    );
+    const set = await runCmd("set", ["agent-mode.enabled", "true"], configDir);
     expect(set.exitCode).toBe(1);
     expect(set.stderr).toContain("cannot be set");
     expect(set.stderr).toContain("config agent-mode");
@@ -142,7 +147,9 @@ describe("skilltap config set", () => {
       configDir,
     );
     expect(set.exitCode).toBe(0);
-    expect(set.stdout).toContain("OK: default_git_host = https://gitea.example.com");
+    expect(set.stdout).toContain(
+      "OK: default_git_host = https://gitea.example.com",
+    );
 
     const get = await runCmd("get", ["default_git_host"], configDir);
     expect(get.exitCode).toBe(0);

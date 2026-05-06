@@ -6,7 +6,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { $ } from "bun";
 import {
   addFileAndCommit,
   commitAll,
@@ -17,12 +16,13 @@ import {
   removeTmpDir,
   type TestEnv,
 } from "@skilltap/test-utils";
+import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { installSkill } from "./install";
 import type { OrphanRecord } from "./orphan";
 import { skillInstallDir } from "./paths";
-import { updateSkill } from "./update";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import { updateSkill } from "./update";
 
 let env: TestEnv;
 let homeDir: string;
@@ -249,13 +249,17 @@ describe("installSkill — phantom conflict", () => {
       expect(result.ok).toBe(true);
 
       // The stale skill should have been reported as an orphan
-      expect(orphansReceived.some((o) => o.record.name === "stale-skill")).toBe(true);
+      expect(orphansReceived.some((o) => o.record.name === "stale-skill")).toBe(
+        true,
+      );
 
       // After purge, only the newly installed skill should remain
       const reloaded = await loadInstalled();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
-      expect(reloaded.value.skills.every((s) => s.name !== "stale-skill")).toBe(true);
+      expect(reloaded.value.skills.every((s) => s.name !== "stale-skill")).toBe(
+        true,
+      );
     } finally {
       await repo.cleanup();
     }
@@ -269,8 +273,12 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
     // 1. Create a multi-skill git repo with skill-a and skill-b
     const repoDir = await makeTmpDir();
     try {
-      await mkdir(join(repoDir, ".agents", "skills", "skill-a"), { recursive: true });
-      await mkdir(join(repoDir, ".agents", "skills", "skill-b"), { recursive: true });
+      await mkdir(join(repoDir, ".agents", "skills", "skill-a"), {
+        recursive: true,
+      });
+      await mkdir(join(repoDir, ".agents", "skills", "skill-b"), {
+        recursive: true,
+      });
       await Bun.write(
         join(repoDir, ".agents", "skills", "skill-a", "SKILL.md"),
         "---\nname: skill-a\ndescription: Skill A\n---\n# A",
@@ -356,8 +364,12 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
   test("respects 'skip' action — keeps record and directory", async () => {
     const repoDir = await makeTmpDir();
     try {
-      await mkdir(join(repoDir, ".agents", "skills", "skill-a"), { recursive: true });
-      await mkdir(join(repoDir, ".agents", "skills", "skill-b"), { recursive: true });
+      await mkdir(join(repoDir, ".agents", "skills", "skill-a"), {
+        recursive: true,
+      });
+      await mkdir(join(repoDir, ".agents", "skills", "skill-b"), {
+        recursive: true,
+      });
       await Bun.write(
         join(repoDir, ".agents", "skills", "skill-a", "SKILL.md"),
         "---\nname: skill-a\ndescription: Skill A\n---\n# A",

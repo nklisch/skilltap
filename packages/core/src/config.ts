@@ -3,8 +3,8 @@ import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "./dirs";
 import { loadJsonState } from "./json-state";
 import { type Config, ConfigSchema } from "./schemas/config";
-import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
 import { parseWithResult } from "./schemas/index";
+import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
 import { loadState } from "./state/load";
 import { saveState } from "./state/save";
 import { err, ok, type Result, UserError } from "./types";
@@ -21,7 +21,9 @@ export { ensureDirs, getConfigDir };
  *
  * Idempotent — v2 config passes through unchanged.
  */
-export function migrateSecurityConfig(raw: Record<string, unknown>): Record<string, unknown> {
+export function migrateSecurityConfig(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
   const security = raw.security;
   if (!security || typeof security !== "object" || Array.isArray(security)) {
     return raw;
@@ -38,7 +40,8 @@ export function migrateSecurityConfig(raw: Record<string, unknown>): Record<stri
   // Extract v1 values
   const v1Scan = sec.scan as string;
   const v1OnWarn = typeof sec.on_warn === "string" ? sec.on_warn : "prompt";
-  const v1RequireScan = typeof sec.require_scan === "boolean" ? sec.require_scan : false;
+  const v1RequireScan =
+    typeof sec.require_scan === "boolean" ? sec.require_scan : false;
   const v1AgentCli = typeof sec.agent === "string" ? sec.agent : "";
 
   // Build v2 security object
@@ -223,7 +226,9 @@ function getInstalledPath(projectRoot?: string): string {
 // state.json is the canonical store. Reads still fall back to installed.json
 // for unmigrated v0.x users (one-time; the next saveInstalled writes state.json
 // and the fallback stops firing). Writes go ONLY to state.json.
-export async function loadInstalled(projectRoot?: string): Promise<Result<InstalledJson>> {
+export async function loadInstalled(
+  projectRoot?: string,
+): Promise<Result<InstalledJson>> {
   const stateResult = await loadState(projectRoot);
   if (stateResult.ok && stateResult.value.skills.length > 0) {
     return ok({ version: 1 as const, skills: stateResult.value.skills });

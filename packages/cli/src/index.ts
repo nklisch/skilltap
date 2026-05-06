@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { defineCommand, runMain } from "citty";
 import { isAgentEnv, VERSION } from "@skilltap/core";
+import { defineCommand, runMain } from "citty";
 import { tryFindProjectRoot } from "./ui/resolve";
 
 // Handle --get-completions before citty takes over — fast path for tab completion
@@ -16,6 +16,7 @@ if (process.argv.includes("--get-completions")) {
 // Persistent hint bar at the bottom of the terminal. Invisible when idle,
 // auto-updates when any prompt is active. No-op on non-TTY.
 import { footer } from "./ui/footer";
+
 footer().open();
 
 // ─── Ctrl+C always exits ─────────────────────────────────────────────────────
@@ -48,9 +49,9 @@ if (shouldRunStartup) {
   await runV1DetectionNotice();
   await runStartupUpdateCheck();
   await runStartupSkillUpdateCheck();
-  const shouldRunTelemetryNotice = !process.argv.slice(2).some((a) =>
-    SKIP_TELEMETRY_NOTICE_ARGS.has(a),
-  );
+  const shouldRunTelemetryNotice = !process.argv
+    .slice(2)
+    .some((a) => SKIP_TELEMETRY_NOTICE_ARGS.has(a));
   if (shouldRunTelemetryNotice) {
     await sendFirstRunPing();
     await runTelemetryNotice();
@@ -103,9 +104,15 @@ async function runTelemetryNotice(): Promise<void> {
   if (config["agent-mode"].enabled) return;
   if (process.env.CI) return;
   if (config.telemetry.notice_shown) return;
-  if (process.env.DO_NOT_TRACK === "1" || process.env.SKILLTAP_TELEMETRY_DISABLED === "1") {
+  if (
+    process.env.DO_NOT_TRACK === "1" ||
+    process.env.SKILLTAP_TELEMETRY_DISABLED === "1"
+  ) {
     // Mark shown so we don't re-display on every run
-    const updated = { ...config, telemetry: { ...config.telemetry, notice_shown: true } };
+    const updated = {
+      ...config,
+      telemetry: { ...config.telemetry, notice_shown: true },
+    };
     await saveConfig(updated);
     return;
   }
@@ -127,7 +134,12 @@ async function runTelemetryNotice(): Promise<void> {
       : config.telemetry.anonymous_id;
     const updated = {
       ...config,
-      telemetry: { ...config.telemetry, enabled, anonymous_id: anonymousId, notice_shown: true },
+      telemetry: {
+        ...config.telemetry,
+        enabled,
+        anonymous_id: anonymousId,
+        notice_shown: true,
+      },
     };
     await saveConfig(updated);
 
@@ -144,15 +156,18 @@ async function runTelemetryNotice(): Promise<void> {
     // Non-interactive: show banner, don't enable
     process.stderr.write(
       "\n┌─ Telemetry Notice ─────────────────────────────────────────────────────┐\n" +
-      "│ skilltap can send anonymous usage data (OS, arch, command              │\n" +
-      "│ success/fail). No skill names, paths, or personal info collected.      │\n" +
-      "│ Data is never sold.                                                    │\n" +
-      "│                                                                        │\n" +
-      "│ Run 'skilltap telemetry enable' to opt in.                             │\n" +
-      "│ Set DO_NOT_TRACK=1 to silence this notice without opting in.           │\n" +
-      "└────────────────────────────────────────────────────────────────────────┘\n\n",
+        "│ skilltap can send anonymous usage data (OS, arch, command              │\n" +
+        "│ success/fail). No skill names, paths, or personal info collected.      │\n" +
+        "│ Data is never sold.                                                    │\n" +
+        "│                                                                        │\n" +
+        "│ Run 'skilltap telemetry enable' to opt in.                             │\n" +
+        "│ Set DO_NOT_TRACK=1 to silence this notice without opting in.           │\n" +
+        "└────────────────────────────────────────────────────────────────────────┘\n\n",
     );
-    const updated = { ...config, telemetry: { ...config.telemetry, notice_shown: true } };
+    const updated = {
+      ...config,
+      telemetry: { ...config.telemetry, notice_shown: true },
+    };
     await saveConfig(updated);
   }
 }
@@ -183,10 +198,14 @@ async function runStartupUpdateCheck(): Promise<void> {
 
   // Major releases are never auto-updated — always just notify
   if (autoUpdateCoversType && isCompiledBinary()) {
-    process.stderr.write(`⟳  Auto-updating skilltap ${current} → ${latest} (${type})…\n`);
+    process.stderr.write(
+      `⟳  Auto-updating skilltap ${current} → ${latest} (${type})…\n`,
+    );
     const installResult = await downloadAndInstall(latest);
     if (installResult.ok) {
-      process.stderr.write(`✓  Updated to v${latest}. Changes take effect next run.\n\n`);
+      process.stderr.write(
+        `✓  Updated to v${latest}. Changes take effect next run.\n\n`,
+      );
     } else {
       // Update failed — fall through to notify instead
       printUpdateNotice(current, latest, type);
@@ -198,8 +217,7 @@ async function runStartupUpdateCheck(): Promise<void> {
 }
 
 async function runStartupSkillUpdateCheck(): Promise<void> {
-  const { checkForSkillUpdates, loadConfig } =
-    await import("@skilltap/core");
+  const { checkForSkillUpdates, loadConfig } = await import("@skilltap/core");
 
   const configResult = await loadConfig();
   const config = configResult.ok ? configResult.value : null;
@@ -220,11 +238,9 @@ function printSkillUpdateNotice(names: string[]): void {
   const DIM = "\x1b[2m";
   const RESET = "\x1b[0m";
 
-  const nameList =
-    names.length <= 3
-      ? ` (${names.join(", ")})`
-      : "";
-  const count = names.length === 1 ? "1 skill update" : `${names.length} skill updates`;
+  const nameList = names.length <= 3 ? ` (${names.join(", ")})` : "";
+  const count =
+    names.length === 1 ? "1 skill update" : `${names.length} skill updates`;
   process.stderr.write(
     `${DIM}↑  ${count} available${nameList}. Run: skilltap update${RESET}\n\n`,
   );
@@ -310,8 +326,7 @@ const main = defineCommand({
     config: () => import("./commands/config").then((m) => m.default),
     "self-update": () =>
       import("./commands/self-update").then((m) => m.default),
-    completions: () =>
-      import("./commands/completions").then((m) => m.default),
+    completions: () => import("./commands/completions").then((m) => m.default),
     tap: defineCommand({
       meta: {
         name: "tap",
@@ -323,8 +338,7 @@ const main = defineCommand({
         list: () => import("./commands/tap/list").then((m) => m.default),
         info: () => import("./commands/tap/info").then((m) => m.default),
         init: () => import("./commands/tap/init").then((m) => m.default),
-        install: () =>
-          import("./commands/tap/install").then((m) => m.default),
+        install: () => import("./commands/tap/install").then((m) => m.default),
       },
     }),
   },

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createMockAgentBinary } from "@skilltap/test-utils";
-import { createCustomAdapter } from "../custom";
 import { ScanError } from "../../types";
+import { createCustomAdapter } from "../custom";
 
 describe("createCustomAdapter — detect", () => {
   test("returns true when binary file exists", async () => {

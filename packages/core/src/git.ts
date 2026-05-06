@@ -67,9 +67,7 @@ async function wrapGit<T>(
   } catch (e) {
     const stderr = extractStderr(e);
     debug(msg, { stderr });
-    return err(
-      new GitError(`${msg}: ${stderr}`, hint),
-    );
+    return err(new GitError(`${msg}: ${stderr}`, hint));
   }
 }
 
@@ -104,7 +102,10 @@ async function tryClone(
         ),
       );
     }
-    if (stderr.includes("Permission denied") || stderr.includes("Could not read from remote repository")) {
+    if (
+      stderr.includes("Permission denied") ||
+      stderr.includes("Could not read from remote repository")
+    ) {
       return err(
         new GitError(
           `Repository not found or SSH access denied: '${url}'.`,
@@ -137,7 +138,10 @@ export async function clone(
   const alt = flipUrlProtocol(url);
   if (!alt) return result;
 
-  debug("auth failed, retrying with alternate URL", { original: url, fallback: alt });
+  debug("auth failed, retrying with alternate URL", {
+    original: url,
+    fallback: alt,
+  });
 
   // Clean partial clone before retry
   await rm(dest, { recursive: true, force: true }).catch(() => {});
@@ -149,9 +153,15 @@ export async function clone(
   return result;
 }
 
-export async function syncRemoteUrl(dir: string, url: string): Promise<Result<void, GitError>> {
+export async function syncRemoteUrl(
+  dir: string,
+  url: string,
+): Promise<Result<void, GitError>> {
   return wrapGit(
-    () => $`git -C ${dir} remote set-url origin ${url}`.quiet().then(() => undefined),
+    () =>
+      $`git -C ${dir} remote set-url origin ${url}`
+        .quiet()
+        .then(() => undefined),
     "git remote set-url failed",
   );
 }
@@ -218,12 +228,14 @@ export async function diffStat(
 ): Promise<Result<DiffStat, GitError>> {
   const extra = pathSpec ? ["--", pathSpec] : [];
   return wrapGit(async () => {
-    const numstatOut = await $`git -C ${dir} diff --numstat ${from}..${to} ${extra}`
-      .quiet()
-      .then((r) => r.stdout.toString().trim());
-    const nameStatusOut = await $`git -C ${dir} diff --name-status ${from}..${to} ${extra}`
-      .quiet()
-      .then((r) => r.stdout.toString().trim());
+    const numstatOut =
+      await $`git -C ${dir} diff --numstat ${from}..${to} ${extra}`
+        .quiet()
+        .then((r) => r.stdout.toString().trim());
+    const nameStatusOut =
+      await $`git -C ${dir} diff --name-status ${from}..${to} ${extra}`
+        .quiet()
+        .then((r) => r.stdout.toString().trim());
 
     // Parse --numstat: "<ins>\t<del>\tfilename" per line
     const numstatMap = new Map<string, { ins: number; del: number }>();
@@ -250,9 +262,9 @@ export async function diffStat(
         if (parts.length >= 2) {
           const statusChar = (parts[0] ?? "M")[0] ?? "M";
           const filePath = parts[parts.length - 1] ?? "";
-          const status = (["M", "A", "D", "R"].includes(statusChar)
-            ? statusChar
-            : "M") as "M" | "A" | "D" | "R";
+          const status = (
+            ["M", "A", "D", "R"].includes(statusChar) ? statusChar : "M"
+          ) as "M" | "A" | "D" | "R";
           const counts = numstatMap.get(filePath) ?? { ins: 0, del: 0 };
           files.push({
             status,

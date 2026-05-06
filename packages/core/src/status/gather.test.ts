@@ -1,4 +1,4 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -74,7 +74,12 @@ describe("gatherStatus — v2 state.json", () => {
             tap: null,
             components: [
               { type: "skill", name: "code-review", active: true },
-              { type: "agent", name: "reviewer", active: true, platform: "claude-code" },
+              {
+                type: "agent",
+                name: "reviewer",
+                active: true,
+                platform: "claude-code",
+              },
             ],
             installedAt: "2026-05-05T00:00:00.000Z",
             updatedAt: "2026-05-05T00:00:00.000Z",

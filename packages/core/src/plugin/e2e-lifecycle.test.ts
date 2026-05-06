@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,17 +19,27 @@ setDefaultTimeout(30_000);
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
-async function createPluginDir(): Promise<{ path: string; cleanup: () => Promise<void> }> {
+async function createPluginDir(): Promise<{
+  path: string;
+  cleanup: () => Promise<void>;
+}> {
   const dir = await mkdtemp(join(tmpdir(), "skilltap-plugin-src-"));
 
   // Plugin manifest
   await mkdir(join(dir, ".claude-plugin"), { recursive: true });
   await Bun.write(
     join(dir, ".claude-plugin", "plugin.json"),
-    JSON.stringify({ name: "lifecycle-plugin", description: "E2e lifecycle test plugin" }),
+    JSON.stringify({
+      name: "lifecycle-plugin",
+      description: "E2e lifecycle test plugin",
+    }),
   );
 
   // One skill
@@ -35,7 +52,9 @@ async function createPluginDir(): Promise<{ path: string; cleanup: () => Promise
   // One MCP server
   await Bun.write(
     join(dir, ".mcp.json"),
-    JSON.stringify({ "lifecycle-db": { command: "npx", args: ["-y", "lifecycle-mcp"] } }),
+    JSON.stringify({
+      "lifecycle-db": { command: "npx", args: ["-y", "lifecycle-mcp"] },
+    }),
   );
 
   // One agent definition
@@ -51,13 +70,19 @@ async function createPluginDir(): Promise<{ path: string; cleanup: () => Promise
   };
 }
 
-async function createMixedMcpPluginDir(): Promise<{ path: string; cleanup: () => Promise<void> }> {
+async function createMixedMcpPluginDir(): Promise<{
+  path: string;
+  cleanup: () => Promise<void>;
+}> {
   const dir = await mkdtemp(join(tmpdir(), "skilltap-mixed-mcp-"));
 
   await mkdir(join(dir, ".claude-plugin"), { recursive: true });
   await Bun.write(
     join(dir, ".claude-plugin", "plugin.json"),
-    JSON.stringify({ name: "mixed-mcp-plugin", description: "Plugin with stdio and HTTP MCP servers" }),
+    JSON.stringify({
+      name: "mixed-mcp-plugin",
+      description: "Plugin with stdio and HTTP MCP servers",
+    }),
   );
 
   // One skill
@@ -72,7 +97,11 @@ async function createMixedMcpPluginDir(): Promise<{ path: string; cleanup: () =>
     join(dir, ".mcp.json"),
     JSON.stringify({
       "local-db": { command: "npx", args: ["-y", "db-mcp"] },
-      "remote-api": { type: "http", url: "https://api.example.com/mcp", headers: { Authorization: "Bearer tok123" } },
+      "remote-api": {
+        type: "http",
+        url: "https://api.example.com/mcp",
+        headers: { Authorization: "Bearer tok123" },
+      },
     }),
   );
 
@@ -121,12 +150,12 @@ describe("plugin lifecycle e2e", () => {
       // -----------------------------------------------------------------------
       // Step 3: Verify filesystem state after install
       // -----------------------------------------------------------------------
-      const skillDir = join(env.homeDir,".agents", "skills", "helper");
+      const skillDir = join(env.homeDir, ".agents", "skills", "helper");
       expect(await pathExists(skillDir)).toBe(true);
       expect(await pathExists(join(skillDir, "SKILL.md"))).toBe(true);
 
       // Agent definition placed
-      const agentFile = join(env.homeDir,".claude", "agents", "reviewer.md");
+      const agentFile = join(env.homeDir, ".claude", "agents", "reviewer.md");
       expect(await pathExists(agentFile)).toBe(true);
 
       // plugins.json has record
@@ -138,7 +167,7 @@ describe("plugin lifecycle e2e", () => {
       expect(pluginsResult.value.plugins[0]?.active).toBe(true);
 
       // MCP injected into claude-code settings
-      const mcpConfig = join(env.homeDir,".claude", "settings.json");
+      const mcpConfig = join(env.homeDir, ".claude", "settings.json");
       if (mcpAgents.length > 0) {
         expect(await pathExists(mcpConfig)).toBe(true);
         const settings = await Bun.file(mcpConfig).json();
@@ -160,7 +189,13 @@ describe("plugin lifecycle e2e", () => {
       expect(toggleOffResult.value.nowActive).toBe(false);
 
       // Skill should now be in .disabled/
-      const disabledDir = join(env.homeDir,".agents", "skills", ".disabled", "helper");
+      const disabledDir = join(
+        env.homeDir,
+        ".agents",
+        "skills",
+        ".disabled",
+        "helper",
+      );
       expect(await pathExists(disabledDir)).toBe(true);
       expect(await pathExists(skillDir)).toBe(false);
 
@@ -256,7 +291,10 @@ describe("plugin lifecycle e2e", () => {
       const mcpConfig = join(env.homeDir, ".claude", "settings.json");
       expect(await pathExists(mcpConfig)).toBe(true);
       const settings = await Bun.file(mcpConfig).json();
-      const mcpServers = settings.mcpServers as Record<string, Record<string, unknown>>;
+      const mcpServers = settings.mcpServers as Record<
+        string,
+        Record<string, unknown>
+      >;
 
       const stdioKey = "skilltap:mixed-mcp-plugin:local-db";
       const httpKey = "skilltap:mixed-mcp-plugin:remote-api";
@@ -267,12 +305,16 @@ describe("plugin lifecycle e2e", () => {
 
       expect(mcpServers[httpKey]).toBeDefined();
       expect(mcpServers[httpKey]!.url).toBe("https://api.example.com/mcp");
-      expect(mcpServers[httpKey]!.headers).toEqual({ Authorization: "Bearer tok123" });
+      expect(mcpServers[httpKey]!.headers).toEqual({
+        Authorization: "Bearer tok123",
+      });
       expect(mcpServers[httpKey]!.command).toBeUndefined();
 
       // Toggle HTTP MCP off
       const toggleHttpOff = await toggleInstalledComponent(
-        "mixed-mcp-plugin", "mcp", "remote-api",
+        "mixed-mcp-plugin",
+        "mcp",
+        "remote-api",
       );
       expect(toggleHttpOff.ok).toBe(true);
       if (!toggleHttpOff.ok) return;
@@ -280,13 +322,18 @@ describe("plugin lifecycle e2e", () => {
 
       // Verify: HTTP key removed, stdio key remains
       const afterHttpOff = await Bun.file(mcpConfig).json();
-      const serversAfterHttpOff = afterHttpOff.mcpServers as Record<string, unknown>;
+      const serversAfterHttpOff = afterHttpOff.mcpServers as Record<
+        string,
+        unknown
+      >;
       expect(serversAfterHttpOff[httpKey]).toBeUndefined();
       expect(serversAfterHttpOff[stdioKey]).toBeDefined();
 
       // Toggle HTTP MCP back on
       const toggleHttpOn = await toggleInstalledComponent(
-        "mixed-mcp-plugin", "mcp", "remote-api",
+        "mixed-mcp-plugin",
+        "mcp",
+        "remote-api",
       );
       expect(toggleHttpOn.ok).toBe(true);
       if (!toggleHttpOn.ok) return;
@@ -294,13 +341,20 @@ describe("plugin lifecycle e2e", () => {
 
       // Verify: HTTP key restored with url shape
       const afterHttpOn = await Bun.file(mcpConfig).json();
-      const serversAfterHttpOn = afterHttpOn.mcpServers as Record<string, Record<string, unknown>>;
-      expect(serversAfterHttpOn[httpKey]!.url).toBe("https://api.example.com/mcp");
+      const serversAfterHttpOn = afterHttpOn.mcpServers as Record<
+        string,
+        Record<string, unknown>
+      >;
+      expect(serversAfterHttpOn[httpKey]!.url).toBe(
+        "https://api.example.com/mcp",
+      );
       expect(serversAfterHttpOn[stdioKey]).toBeDefined();
 
       // Toggle stdio MCP off
       const toggleStdioOff = await toggleInstalledComponent(
-        "mixed-mcp-plugin", "mcp", "local-db",
+        "mixed-mcp-plugin",
+        "mcp",
+        "local-db",
       );
       expect(toggleStdioOff.ok).toBe(true);
       if (!toggleStdioOff.ok) return;
@@ -308,7 +362,10 @@ describe("plugin lifecycle e2e", () => {
 
       // Verify: stdio key removed, HTTP key remains
       const afterStdioOff = await Bun.file(mcpConfig).json();
-      const serversAfterStdioOff = afterStdioOff.mcpServers as Record<string, unknown>;
+      const serversAfterStdioOff = afterStdioOff.mcpServers as Record<
+        string,
+        unknown
+      >;
       expect(serversAfterStdioOff[stdioKey]).toBeUndefined();
       expect(serversAfterStdioOff[httpKey]).toBeDefined();
 
@@ -319,7 +376,10 @@ describe("plugin lifecycle e2e", () => {
 
       // All MCP entries gone
       const afterRemove = await Bun.file(mcpConfig).json();
-      const serversAfterRemove = afterRemove.mcpServers as Record<string, unknown>;
+      const serversAfterRemove = afterRemove.mcpServers as Record<
+        string,
+        unknown
+      >;
       expect(serversAfterRemove[stdioKey]).toBeUndefined();
       expect(serversAfterRemove[httpKey]).toBeUndefined();
 

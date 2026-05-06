@@ -11,7 +11,7 @@
  * Tests run sequentially and share homeDir/configDir/projectRoot.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadLockfile, loadManifest } from "@skilltap/core";
 import {
@@ -155,10 +155,9 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       await writeFile(join(cloneDir, "skilltap.toml"), mfst);
       await writeFile(join(cloneDir, "skilltap.lock"), lock);
 
-      const { exitCode, stdout, stderr } = await run(
-        ["sync", "--apply"],
-        { cwd: cloneDir },
-      );
+      const { exitCode, stdout, stderr } = await run(["sync", "--apply"], {
+        cwd: cloneDir,
+      });
       if (exitCode !== 0) {
         // eslint-disable-next-line no-console
         console.error("sync stdout:", stdout);
@@ -172,7 +171,9 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
         await readFile(join(cloneDir, ".agents", "state.json"), "utf8"),
       ) as { version: number; skills: Array<{ name: string }> };
       expect(state.version).toBe(2);
-      expect(state.skills.some((s) => s.name === "standalone-skill")).toBe(true);
+      expect(state.skills.some((s) => s.name === "standalone-skill")).toBe(
+        true,
+      );
     } finally {
       await removeTmpDir(cloneDir);
     }

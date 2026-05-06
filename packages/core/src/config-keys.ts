@@ -1,5 +1,9 @@
-import { AUTO_UPDATE_MODES, SCOPE_VALUES, SHOW_DIFF_MODES } from "./schemas/config";
 import type { Config } from "./schemas/config";
+import {
+  AUTO_UPDATE_MODES,
+  SCOPE_VALUES,
+  SHOW_DIFF_MODES,
+} from "./schemas/config";
 import { err, ok, type Result, UserError } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -46,10 +50,14 @@ const BLOCKED_SET_KEYS: Record<string, string> = {
   "security.agent.require_scan": "Use 'skilltap config security'",
   "security.overrides": "Use 'skilltap config security --trust'",
   // Old v1 keys — block with migration hint
-  "security.scan": "Use 'skilltap config security' (field moved to security.human.scan / security.agent.scan)",
-  "security.on_warn": "Use 'skilltap config security' (field moved to security.human.on_warn / security.agent.on_warn)",
-  "security.require_scan": "Use 'skilltap config security' (field moved to security.human.require_scan / security.agent.require_scan)",
-  "security.agent": "Use 'skilltap config set security.agent_cli' (field renamed to security.agent_cli)",
+  "security.scan":
+    "Use 'skilltap config security' (field moved to security.human.scan / security.agent.scan)",
+  "security.on_warn":
+    "Use 'skilltap config security' (field moved to security.human.on_warn / security.agent.on_warn)",
+  "security.require_scan":
+    "Use 'skilltap config security' (field moved to security.human.require_scan / security.agent.require_scan)",
+  "security.agent":
+    "Use 'skilltap config set security.agent_cli' (field renamed to security.agent_cli)",
   taps: "Use 'skilltap tap add/remove'",
 };
 
@@ -84,9 +92,7 @@ export function getConfigValue(
 // Validate set key
 // ---------------------------------------------------------------------------
 
-export function validateSetKey(
-  key: string,
-): Result<SettableKeyDef, UserError> {
+export function validateSetKey(key: string): Result<SettableKeyDef, UserError> {
   const blocked = BLOCKED_SET_KEYS[key];
   if (blocked) {
     return err(
@@ -155,9 +161,7 @@ export function coerceValue(
     case "number": {
       const n = Number(raw);
       if (!Number.isFinite(n) || !Number.isInteger(n)) {
-        return err(
-          new UserError(`Invalid integer: '${raw}'`),
-        );
+        return err(new UserError(`Invalid integer: '${raw}'`));
       }
       return ok(n);
     }

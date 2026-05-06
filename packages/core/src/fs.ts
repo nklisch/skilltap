@@ -1,5 +1,5 @@
-import { homedir } from "node:os";
 import { lstat, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { $ } from "bun";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";

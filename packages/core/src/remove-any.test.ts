@@ -53,7 +53,10 @@ describe("removeAnySkill", () => {
       expect(beforeStat?.isDirectory()).toBe(true);
 
       // Discover the skill
-      const discoverResult = await discoverSkills({ global: true, project: false });
+      const discoverResult = await discoverSkills({
+        global: true,
+        project: false,
+      });
       expect(discoverResult.ok).toBe(true);
       if (!discoverResult.ok) return;
 
@@ -92,7 +95,10 @@ describe("removeAnySkill", () => {
       `---\nname: unmanaged-skill\ndescription: Unmanaged\n---\n# Unmanaged Skill\n`,
     );
 
-    const discoverResult = await discoverSkills({ global: true, project: false });
+    const discoverResult = await discoverSkills({
+      global: true,
+      project: false,
+    });
     expect(discoverResult.ok).toBe(true);
     if (!discoverResult.ok) return;
 
@@ -128,7 +134,10 @@ describe("removeAnySkill", () => {
       const linkPath = join(claudeSkillsDir, "real-skill");
       await symlink(realSkillDir, linkPath, "dir");
 
-      const discoverResult = await discoverSkills({ global: true, project: false });
+      const discoverResult = await discoverSkills({
+        global: true,
+        project: false,
+      });
       expect(discoverResult.ok).toBe(true);
       if (!discoverResult.ok) return;
 

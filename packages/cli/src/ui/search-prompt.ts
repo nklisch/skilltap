@@ -5,7 +5,8 @@
  * matching for instant local re-ranking. Matches clack's visual style exactly.
  */
 
-import { Prompt, getColumns, getRows } from "@clack/core";
+import type { Key } from "node:readline";
+import { getColumns, getRows, Prompt } from "@clack/core";
 import {
   limitOptions,
   S_BAR,
@@ -14,10 +15,9 @@ import {
   S_RADIO_INACTIVE,
   symbol,
 } from "@clack/prompts";
-import { Fzf, byLengthAsc } from "fzf";
 import type { FzfResultItem } from "fzf";
+import { byLengthAsc, Fzf } from "fzf";
 import pc from "picocolors";
-import type { Key } from "node:readline";
 import { footer } from "./footer";
 
 // ---------------------------------------------------------------------------
@@ -116,7 +116,8 @@ class SearchPromptImpl<T> extends Prompt<T> {
         initialUserInput: opts.initialQuery,
         validate: (value: T | undefined) => {
           if (opts.multiselect) {
-            if (!opts.allowEmpty && instance._selectedMap.size === 0) return "Select at least one item";
+            if (!opts.allowEmpty && instance._selectedMap.size === 0)
+              return "Select at least one item";
             return undefined;
           }
           if (value === undefined) return "No skill selected";
@@ -303,9 +304,12 @@ class SearchPromptImpl<T> extends Prompt<T> {
       tiebreakers: [byLengthAsc],
       casing: "case-insensitive",
     };
-    this.fzfInstance = new (Fzf as new (list: T[], opts: typeof fzfOpts) => Fzf<T[]>)(
-      this.allItems, fzfOpts,
-    );
+    this.fzfInstance = new (
+      Fzf as new (
+        list: T[],
+        opts: typeof fzfOpts,
+      ) => Fzf<T[]>
+    )(this.allItems, fzfOpts);
   }
 
   private applyFzf(query: string): void {
@@ -337,8 +341,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
     if (loading && !this.spinnerInterval) {
       this.spinnerFrame = 0;
       this.spinnerInterval = setInterval(() => {
-        this.spinnerFrame =
-          (this.spinnerFrame + 1) % SPINNER_FRAMES.length;
+        this.spinnerFrame = (this.spinnerFrame + 1) % SPINNER_FRAMES.length;
         this.rerender();
       }, 80);
     } else if (!loading && this.spinnerInterval) {
@@ -365,8 +368,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
 
   get userInputWithCursor(): string {
     if (!this.userInput) return pc.inverse(pc.hidden("_"));
-    if (this._cursor >= this.userInput.length)
-      return `${this.userInput}\u2588`;
+    if (this._cursor >= this.userInput.length) return `${this.userInput}\u2588`;
     const before = this.userInput.slice(0, this._cursor);
     const [cursor, ...after] = this.userInput.slice(this._cursor);
     return `${before}${pc.inverse(cursor)}${after.join("")}`;
@@ -404,9 +406,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
       case "cancel": {
         const lines = [`${symbol(this.state)}  ${this._opts.message}`];
         if (this.userInput) {
-          lines.push(
-            `${bar}  ${pc.strikethrough(pc.dim(this.userInput))}`,
-          );
+          lines.push(`${bar}  ${pc.strikethrough(pc.dim(this.userInput))}`);
         }
         lines.push(bar);
         return lines.join("\n");
@@ -454,7 +454,9 @@ class SearchPromptImpl<T> extends Prompt<T> {
           // Show "No matches found" when local fzf filter has 0 results,
           // even if an async source refetch is still in flight.
           if (this.isLoading) {
-            lines.push(`${cBar}  ${pc.yellow("No matches found")}  ${pc.dim("(searching…)")}`);
+            lines.push(
+              `${cBar}  ${pc.yellow("No matches found")}  ${pc.dim("(searching…)")}`,
+            );
           } else {
             lines.push(`${cBar}  ${pc.yellow("No matches found")}`);
           }
@@ -474,9 +476,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
               this._opts.renderItem(
                 fzfResult.item,
                 active,
-                fzfResult.positions.size > 0
-                  ? fzfResult.positions
-                  : undefined,
+                fzfResult.positions.size > 0 ? fzfResult.positions : undefined,
                 this._selectedMap.has(this.getKey(fzfResult.item)),
               ),
           });

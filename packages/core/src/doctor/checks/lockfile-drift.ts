@@ -1,6 +1,6 @@
 import {
-  type Lockfile,
   type LockEntry,
+  type Lockfile,
   LockfileSchema,
   loadLockfile,
   lockfileExists,
@@ -46,7 +46,11 @@ export async function checkLockfileDrift(
   >();
   for (const skill of state.skills) {
     if (skill.repo) {
-      stateSourceMap.set(skill.repo, { kind: "skill", ref: skill.ref, sha: skill.sha });
+      stateSourceMap.set(skill.repo, {
+        kind: "skill",
+        ref: skill.ref,
+        sha: skill.sha,
+      });
     }
   }
   for (const plugin of state.plugins) {
@@ -97,7 +101,12 @@ export async function checkLockfileDrift(
 
   for (const entry of [...lockfile.skill, ...lockfile.plugin]) {
     const installed = stateSourceMap.get(entry.source);
-    if (installed && entry.sha && installed.sha && entry.sha !== installed.sha) {
+    if (
+      installed &&
+      entry.sha &&
+      installed.sha &&
+      entry.sha !== installed.sha
+    ) {
       issues.push({
         message: `${entry.source}: lockfile sha ${entry.sha.slice(0, 7)} differs from installed sha ${installed.sha.slice(0, 7)}`,
         fixable: false,

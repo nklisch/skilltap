@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { TapSkill } from "../schemas/tap";
+import { resolveTrust } from "./resolve";
 import type { GitHubTrustData } from "./verify-github";
 import type { NpmTrustData } from "./verify-npm";
-import { resolveTrust } from "./resolve";
 
 // Mock verify functions
 const npmSuccess: NpmTrustData = {
@@ -252,7 +252,11 @@ describe("resolveTrust — tap signals", () => {
       description: "A cool skill",
       repo: "https://bitbucket.org/user/skill",
       tags: [],
-      trust: { verified: true, verifiedBy: "maintainer", verifiedAt: "2026-01-01" },
+      trust: {
+        verified: true,
+        verifiedBy: "maintainer",
+        verifiedAt: "2026-01-01",
+      },
     };
     const trust = await resolveTrust(
       {
@@ -304,8 +308,12 @@ describe("resolveTrust — parseGitHubRepo", () => {
   test("parses https github URL", async () => {
     const { parseGitHubRepo } = await import("./verify-github");
     expect(parseGitHubRepo("https://github.com/owner/repo")).toBe("owner/repo");
-    expect(parseGitHubRepo("https://github.com/owner/repo.git")).toBe("owner/repo");
-    expect(parseGitHubRepo("https://github.com/owner/repo/tree/main")).toBe("owner/repo");
+    expect(parseGitHubRepo("https://github.com/owner/repo.git")).toBe(
+      "owner/repo",
+    );
+    expect(parseGitHubRepo("https://github.com/owner/repo/tree/main")).toBe(
+      "owner/repo",
+    );
   });
 
   test("parses github: shorthand", async () => {

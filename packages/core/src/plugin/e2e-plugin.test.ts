@@ -1,4 +1,11 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -40,7 +47,9 @@ describe("Claude Code plugin e2e", () => {
     // --- Verify skills ---
     const skills = manifest.components.filter((c) => c.type === "skill");
     expect(skills.length).toBeGreaterThanOrEqual(1);
-    const helper = skills.find((c) => c.type === "skill" && c.name === "helper");
+    const helper = skills.find(
+      (c) => c.type === "skill" && c.name === "helper",
+    );
     expect(helper).toBeDefined();
     if (helper?.type === "skill") {
       expect(helper.path).toBe("skills/helper");
@@ -52,7 +61,9 @@ describe("Claude Code plugin e2e", () => {
     // --- Verify MCP servers ---
     const mcps = manifest.components.filter((c) => c.type === "mcp");
     expect(mcps.length).toBeGreaterThanOrEqual(1);
-    const dbMcp = mcps.find((c) => c.type === "mcp" && c.server.name === "test-db");
+    const dbMcp = mcps.find(
+      (c) => c.type === "mcp" && c.server.name === "test-db",
+    );
     expect(dbMcp).toBeDefined();
     if (dbMcp?.type === "mcp" && dbMcp.server.type === "stdio") {
       expect(dbMcp.server.command).toBe("npx");
@@ -62,7 +73,9 @@ describe("Claude Code plugin e2e", () => {
     // --- Verify agents ---
     const agents = manifest.components.filter((c) => c.type === "agent");
     expect(agents.length).toBeGreaterThanOrEqual(1);
-    const reviewer = agents.find((c) => c.type === "agent" && c.name === "reviewer");
+    const reviewer = agents.find(
+      (c) => c.type === "agent" && c.name === "reviewer",
+    );
     expect(reviewer).toBeDefined();
     if (reviewer?.type === "agent") {
       expect(reviewer.path).toBe("agents/reviewer.md");
@@ -94,12 +107,16 @@ describe("Codex plugin e2e", () => {
     // --- Skills present ---
     const skills = manifest.components.filter((c) => c.type === "skill");
     expect(skills.length).toBeGreaterThanOrEqual(1);
-    expect(skills.some((c) => c.type === "skill" && c.name === "linter")).toBe(true);
+    expect(skills.some((c) => c.type === "skill" && c.name === "linter")).toBe(
+      true,
+    );
 
     // --- MCP present ---
     const mcps = manifest.components.filter((c) => c.type === "mcp");
     expect(mcps.length).toBeGreaterThanOrEqual(1);
-    expect(mcps.some((c) => c.type === "mcp" && c.server.name === "lint-server")).toBe(true);
+    expect(
+      mcps.some((c) => c.type === "mcp" && c.server.name === "lint-server"),
+    ).toBe(true);
 
     // --- Agents NEVER present (Codex contract) ---
     const agents = manifest.components.filter((c) => c.type === "agent");
@@ -140,7 +157,11 @@ describe("rich plugin with multiple components", () => {
     await mkdir(join(dir, ".claude-plugin"), { recursive: true });
     await Bun.write(
       join(dir, ".claude-plugin", "plugin.json"),
-      JSON.stringify({ name: "dev-toolkit", description: "Full dev toolkit", version: "2.1.0" }),
+      JSON.stringify({
+        name: "dev-toolkit",
+        description: "Full dev toolkit",
+        version: "2.1.0",
+      }),
     );
 
     // 3 skills
@@ -156,7 +177,11 @@ describe("rich plugin with multiple components", () => {
     await Bun.write(
       join(dir, ".mcp.json"),
       JSON.stringify({
-        database: { command: "npx", args: ["-y", "@corp/db-mcp"], env: { DB_URL: "postgres://..." } },
+        database: {
+          command: "npx",
+          args: ["-y", "@corp/db-mcp"],
+          env: { DB_URL: "postgres://..." },
+        },
         "search-api": { type: "http", url: "https://search.example.com/mcp" },
       }),
     );
@@ -187,7 +212,11 @@ describe("rich plugin with multiple components", () => {
     const skills = manifest.components.filter((c) => c.type === "skill");
     expect(skills).toHaveLength(3);
     const skillNames = skills.map((c) => c.name).sort();
-    expect(skillNames).toEqual(["code-review", "commit-helper", "test-generator"]);
+    expect(skillNames).toEqual([
+      "code-review",
+      "commit-helper",
+      "test-generator",
+    ]);
 
     // All skill paths relative
     for (const s of skills) {
@@ -201,7 +230,9 @@ describe("rich plugin with multiple components", () => {
     const mcps = manifest.components.filter((c) => c.type === "mcp");
     expect(mcps).toHaveLength(2);
 
-    const dbMcp = mcps.find((c) => c.type === "mcp" && c.server.name === "database");
+    const dbMcp = mcps.find(
+      (c) => c.type === "mcp" && c.server.name === "database",
+    );
     expect(dbMcp).toBeDefined();
     if (dbMcp?.type === "mcp" && dbMcp.server.type === "stdio") {
       expect(dbMcp.server.command).toBe("npx");
@@ -209,7 +240,9 @@ describe("rich plugin with multiple components", () => {
       expect(dbMcp.server.env).toEqual({ DB_URL: "postgres://..." });
     }
 
-    const httpMcp = mcps.find((c) => c.type === "mcp" && c.server.name === "search-api");
+    const httpMcp = mcps.find(
+      (c) => c.type === "mcp" && c.server.name === "search-api",
+    );
     expect(httpMcp).toBeDefined();
     if (httpMcp?.type === "mcp" && httpMcp.server.type === "http") {
       expect(httpMcp.server.url).toBe("https://search.example.com/mcp");
@@ -249,7 +282,11 @@ describe("dual-format repo", () => {
     await mkdir(join(dir, ".codex-plugin"), { recursive: true });
     await Bun.write(
       join(dir, ".codex-plugin", "plugin.json"),
-      JSON.stringify({ name: "dual-codex", version: "1.0.0", description: "Codex version" }),
+      JSON.stringify({
+        name: "dual-codex",
+        version: "1.0.0",
+        description: "Codex version",
+      }),
     );
 
     const result = await detectPlugin(dir);
@@ -270,7 +307,10 @@ describe("error handling", () => {
     cleanups.push(() => removeTmpDir(dir));
 
     await mkdir(join(dir, ".claude-plugin"), { recursive: true });
-    await Bun.write(join(dir, ".claude-plugin", "plugin.json"), "{ broken json!!!}");
+    await Bun.write(
+      join(dir, ".claude-plugin", "plugin.json"),
+      "{ broken json!!!}",
+    );
 
     const result = await detectPlugin(dir);
     expect(result.ok).toBe(false);
@@ -352,9 +392,13 @@ describe("partial component plugins", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const manifest = result.value!;
-    expect(manifest.components.filter((c) => c.type === "skill")).toHaveLength(1);
+    expect(manifest.components.filter((c) => c.type === "skill")).toHaveLength(
+      1,
+    );
     expect(manifest.components.filter((c) => c.type === "mcp")).toHaveLength(0);
-    expect(manifest.components.filter((c) => c.type === "agent")).toHaveLength(0);
+    expect(manifest.components.filter((c) => c.type === "agent")).toHaveLength(
+      0,
+    );
   });
 
   test("plugin with only MCP servers (no skills, no agents)", async () => {
@@ -375,9 +419,13 @@ describe("partial component plugins", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const manifest = result.value!;
-    expect(manifest.components.filter((c) => c.type === "skill")).toHaveLength(0);
+    expect(manifest.components.filter((c) => c.type === "skill")).toHaveLength(
+      0,
+    );
     expect(manifest.components.filter((c) => c.type === "mcp")).toHaveLength(1);
-    expect(manifest.components.filter((c) => c.type === "agent")).toHaveLength(0);
+    expect(manifest.components.filter((c) => c.type === "agent")).toHaveLength(
+      0,
+    );
   });
 
   test("plugin with only agents (no skills, no MCP)", async () => {
@@ -399,9 +447,13 @@ describe("partial component plugins", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const manifest = result.value!;
-    expect(manifest.components.filter((c) => c.type === "skill")).toHaveLength(0);
+    expect(manifest.components.filter((c) => c.type === "skill")).toHaveLength(
+      0,
+    );
     expect(manifest.components.filter((c) => c.type === "mcp")).toHaveLength(0);
-    expect(manifest.components.filter((c) => c.type === "agent")).toHaveLength(1);
+    expect(manifest.components.filter((c) => c.type === "agent")).toHaveLength(
+      1,
+    );
   });
 
   test("empty plugin (manifest only, no components at all)", async () => {

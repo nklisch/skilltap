@@ -1,6 +1,6 @@
 import { discoverPublishablePlugins } from "../manifest/publish";
 import type { PluginManifest } from "../schemas/plugin";
-import { ok, type Result, UserError } from "../types";
+import { ok, type Result, type UserError } from "../types";
 import { pluginV2ToManifest } from "./normalize";
 
 // Discover all publishable v2.0 plugins in a repo and normalize them to

@@ -1,6 +1,6 @@
 import type { Config } from "./schemas/config";
 import type { Result } from "./types";
-import { err, NetworkError, ok } from "./types";
+import { err, type NetworkError, ok } from "./types";
 
 // ---------------------------------------------------------------------------
 // Registry protocol types
@@ -58,7 +58,10 @@ async function fetchWithTimeout(url: string): Promise<Response> {
   }
 }
 
-async function searchSkillsSh(query: string, limit: number): Promise<RegistrySkill[]> {
+async function searchSkillsSh(
+  query: string,
+  limit: number,
+): Promise<RegistrySkill[]> {
   try {
     const url = `${SKILLS_SH_BASE}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
     const res = await fetchWithTimeout(url);
@@ -91,7 +94,10 @@ export const skillsShRegistry: SkillRegistry = {
  *   GET {url}/api/search?q={query}&limit={n}
  *   → { skills: [{ id, name, description?, source, installs }] }
  */
-export function createCustomRegistry(name: string, baseUrl: string): SkillRegistry {
+export function createCustomRegistry(
+  name: string,
+  baseUrl: string,
+): SkillRegistry {
   const base = baseUrl.replace(/\/$/, "");
   return {
     name,
@@ -135,7 +141,9 @@ export function resolveRegistries(config: Config): SkillRegistry[] {
 
   return enabled.flatMap((name: string) => {
     if (BUILTIN_REGISTRIES[name]) return [BUILTIN_REGISTRIES[name]];
-    const customSource = sources.find((s: { name: string; url: string }) => s.name === name);
+    const customSource = sources.find(
+      (s: { name: string; url: string }) => s.name === name,
+    );
     if (customSource) return [createCustomRegistry(name, customSource.url)];
     return [];
   });

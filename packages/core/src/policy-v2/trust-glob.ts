@@ -2,7 +2,9 @@ import type { SourceForPolicy } from "./types";
 
 // Escape regex specials, preserve `*` as a multi-char wildcard.
 function patternToRegex(pattern: string): RegExp {
-  const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  const escaped = pattern
+    .replace(/[.+?^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, ".*");
   return new RegExp(`^${escaped}$`);
 }
 

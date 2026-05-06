@@ -2,14 +2,18 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
-import { savePlugins } from "./state";
-import { removeInstalledPlugin, toggleInstalledComponent } from "./lifecycle";
 import type { PluginsJson } from "../schemas/plugins";
+import { removeInstalledPlugin, toggleInstalledComponent } from "./lifecycle";
+import { savePlugins } from "./state";
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
 const NOW = new Date().toISOString();
 
@@ -96,9 +100,18 @@ describe("removeInstalledPlugin", () => {
     await setupPlugin(disabledState);
 
     // Create the skill in the disabled dir
-    const disabledDir = join(env.homeDir,".agents", "skills", ".disabled", "helper");
+    const disabledDir = join(
+      env.homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "helper",
+    );
     await mkdir(disabledDir, { recursive: true });
-    await Bun.write(join(disabledDir, "SKILL.md"), "---\nname: helper\n---\n# helper");
+    await Bun.write(
+      join(disabledDir, "SKILL.md"),
+      "---\nname: helper\n---\n# helper",
+    );
 
     const result = await removeInstalledPlugin("my-plugin");
     expect(result.ok).toBe(true);
@@ -112,14 +125,21 @@ describe("removeInstalledPlugin", () => {
       plugins: [
         {
           ...BASE_STATE.plugins[0]!,
-          components: [{ type: "agent", name: "reviewer", active: true, platform: "claude-code" }],
+          components: [
+            {
+              type: "agent",
+              name: "reviewer",
+              active: true,
+              platform: "claude-code",
+            },
+          ],
         },
       ],
     };
     await setupPlugin(stateWithAgent);
 
-    const agentFile = join(env.homeDir,".claude", "agents", "reviewer.md");
-    await mkdir(join(env.homeDir,".claude", "agents"), { recursive: true });
+    const agentFile = join(env.homeDir, ".claude", "agents", "reviewer.md");
+    await mkdir(join(env.homeDir, ".claude", "agents"), { recursive: true });
     await Bun.write(agentFile, "# Reviewer Agent");
 
     const result = await removeInstalledPlugin("my-plugin");
@@ -162,13 +182,16 @@ describe("removeInstalledPlugin", () => {
     await setupPlugin(stateWithMcp);
 
     // Set up the MCP config
-    const configPath = join(env.homeDir,".claude", "settings.json");
-    await mkdir(join(env.homeDir,".claude"), { recursive: true });
+    const configPath = join(env.homeDir, ".claude", "settings.json");
+    await mkdir(join(env.homeDir, ".claude"), { recursive: true });
     await Bun.write(
       configPath,
       JSON.stringify({
         mcpServers: {
-          "skilltap:my-plugin:test-server": { command: "node", args: ["server.js"] },
+          "skilltap:my-plugin:test-server": {
+            command: "node",
+            args: ["server.js"],
+          },
         },
       }),
     );
@@ -186,14 +209,24 @@ describe("toggleInstalledComponent", () => {
     await setupPlugin(BASE_STATE);
     const activeDir = await setupSkillDir("helper");
 
-    const result = await toggleInstalledComponent("my-plugin", "skill", "helper");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "skill",
+      "helper",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.value.nowActive).toBe(false);
     expect(await pathExists(activeDir)).toBe(false);
 
-    const disabledDir = join(env.homeDir,".agents", "skills", ".disabled", "helper");
+    const disabledDir = join(
+      env.homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "helper",
+    );
     expect(await pathExists(disabledDir)).toBe(true);
   });
 
@@ -210,18 +243,31 @@ describe("toggleInstalledComponent", () => {
     await setupPlugin(disabledState);
 
     // Place in disabled dir
-    const disabledDir = join(env.homeDir,".agents", "skills", ".disabled", "helper");
+    const disabledDir = join(
+      env.homeDir,
+      ".agents",
+      "skills",
+      ".disabled",
+      "helper",
+    );
     await mkdir(disabledDir, { recursive: true });
-    await Bun.write(join(disabledDir, "SKILL.md"), "---\nname: helper\n---\n# helper");
+    await Bun.write(
+      join(disabledDir, "SKILL.md"),
+      "---\nname: helper\n---\n# helper",
+    );
 
-    const result = await toggleInstalledComponent("my-plugin", "skill", "helper");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "skill",
+      "helper",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.value.nowActive).toBe(true);
     expect(await pathExists(disabledDir)).toBe(false);
 
-    const activeDir = join(env.homeDir,".agents", "skills", "helper");
+    const activeDir = join(env.homeDir, ".agents", "skills", "helper");
     expect(await pathExists(activeDir)).toBe(true);
   });
 
@@ -248,18 +294,25 @@ describe("toggleInstalledComponent", () => {
     };
     await setupPlugin(stateWithMcp);
 
-    const configPath = join(env.homeDir,".claude", "settings.json");
-    await mkdir(join(env.homeDir,".claude"), { recursive: true });
+    const configPath = join(env.homeDir, ".claude", "settings.json");
+    await mkdir(join(env.homeDir, ".claude"), { recursive: true });
     await Bun.write(
       configPath,
       JSON.stringify({
         mcpServers: {
-          "skilltap:my-plugin:test-server": { command: "node", args: ["server.js"] },
+          "skilltap:my-plugin:test-server": {
+            command: "node",
+            args: ["server.js"],
+          },
         },
       }),
     );
 
-    const result = await toggleInstalledComponent("my-plugin", "mcp", "test-server");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "mcp",
+      "test-server",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -292,11 +345,15 @@ describe("toggleInstalledComponent", () => {
     };
     await setupPlugin(stateWithMcp);
 
-    const configPath = join(env.homeDir,".claude", "settings.json");
-    await mkdir(join(env.homeDir,".claude"), { recursive: true });
+    const configPath = join(env.homeDir, ".claude", "settings.json");
+    await mkdir(join(env.homeDir, ".claude"), { recursive: true });
     await Bun.write(configPath, JSON.stringify({ mcpServers: {} }));
 
-    const result = await toggleInstalledComponent("my-plugin", "mcp", "test-server");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "mcp",
+      "test-server",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -313,24 +370,41 @@ describe("toggleInstalledComponent", () => {
       plugins: [
         {
           ...BASE_STATE.plugins[0]!,
-          components: [{ type: "agent", name: "reviewer", active: true, platform: "claude-code" }],
+          components: [
+            {
+              type: "agent",
+              name: "reviewer",
+              active: true,
+              platform: "claude-code",
+            },
+          ],
         },
       ],
     };
     await setupPlugin(stateWithAgent);
 
-    const agentFile = join(env.homeDir,".claude", "agents", "reviewer.md");
-    await mkdir(join(env.homeDir,".claude", "agents"), { recursive: true });
+    const agentFile = join(env.homeDir, ".claude", "agents", "reviewer.md");
+    await mkdir(join(env.homeDir, ".claude", "agents"), { recursive: true });
     await Bun.write(agentFile, "# Reviewer Agent");
 
-    const result = await toggleInstalledComponent("my-plugin", "agent", "reviewer");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "agent",
+      "reviewer",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.value.nowActive).toBe(false);
     expect(await pathExists(agentFile)).toBe(false);
 
-    const disabledPath = join(env.homeDir,".claude", "agents", ".disabled", "reviewer.md");
+    const disabledPath = join(
+      env.homeDir,
+      ".claude",
+      "agents",
+      ".disabled",
+      "reviewer.md",
+    );
     expect(await pathExists(disabledPath)).toBe(true);
   });
 
@@ -340,24 +414,43 @@ describe("toggleInstalledComponent", () => {
       plugins: [
         {
           ...BASE_STATE.plugins[0]!,
-          components: [{ type: "agent", name: "reviewer", active: false, platform: "claude-code" }],
+          components: [
+            {
+              type: "agent",
+              name: "reviewer",
+              active: false,
+              platform: "claude-code",
+            },
+          ],
         },
       ],
     };
     await setupPlugin(stateWithAgent);
 
-    const disabledPath = join(env.homeDir,".claude", "agents", ".disabled", "reviewer.md");
-    await mkdir(join(env.homeDir,".claude", "agents", ".disabled"), { recursive: true });
+    const disabledPath = join(
+      env.homeDir,
+      ".claude",
+      "agents",
+      ".disabled",
+      "reviewer.md",
+    );
+    await mkdir(join(env.homeDir, ".claude", "agents", ".disabled"), {
+      recursive: true,
+    });
     await Bun.write(disabledPath, "# Reviewer Agent");
 
-    const result = await toggleInstalledComponent("my-plugin", "agent", "reviewer");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "agent",
+      "reviewer",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.value.nowActive).toBe(true);
     expect(await pathExists(disabledPath)).toBe(false);
 
-    const activePath = join(env.homeDir,".claude", "agents", "reviewer.md");
+    const activePath = join(env.homeDir, ".claude", "agents", "reviewer.md");
     expect(await pathExists(activePath)).toBe(true);
   });
 
@@ -365,7 +458,11 @@ describe("toggleInstalledComponent", () => {
     await setupPlugin(BASE_STATE);
     await setupSkillDir("helper");
 
-    const result = await toggleInstalledComponent("my-plugin", "skill", "helper");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "skill",
+      "helper",
+    );
     expect(result.ok).toBe(true);
 
     const { loadPlugins } = await import("./state");
@@ -382,7 +479,11 @@ describe("toggleInstalledComponent", () => {
   test("returns error if plugin not found", async () => {
     await setupPlugin({ version: 1, plugins: [] });
 
-    const result = await toggleInstalledComponent("nonexistent", "skill", "helper");
+    const result = await toggleInstalledComponent(
+      "nonexistent",
+      "skill",
+      "helper",
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("nonexistent");
@@ -391,7 +492,11 @@ describe("toggleInstalledComponent", () => {
   test("returns error if component not found", async () => {
     await setupPlugin(BASE_STATE);
 
-    const result = await toggleInstalledComponent("my-plugin", "skill", "no-such-component");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "skill",
+      "no-such-component",
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("no-such-component");
@@ -425,12 +530,18 @@ describe("toggleInstalledComponent", () => {
       configPath,
       JSON.stringify({
         mcpServers: {
-          "skilltap:my-plugin:remote-api": { url: "https://api.example.com/mcp" },
+          "skilltap:my-plugin:remote-api": {
+            url: "https://api.example.com/mcp",
+          },
         },
       }),
     );
 
-    const result = await toggleInstalledComponent("my-plugin", "mcp", "remote-api");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "mcp",
+      "remote-api",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.nowActive).toBe(false);
@@ -465,7 +576,11 @@ describe("toggleInstalledComponent", () => {
     await mkdir(join(env.homeDir, ".claude"), { recursive: true });
     await Bun.write(configPath, JSON.stringify({ mcpServers: {} }));
 
-    const result = await toggleInstalledComponent("my-plugin", "mcp", "remote-api");
+    const result = await toggleInstalledComponent(
+      "my-plugin",
+      "mcp",
+      "remote-api",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.nowActive).toBe(true);

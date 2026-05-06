@@ -151,7 +151,10 @@ function getPlatformAsset(): string | null {
   return null;
 }
 
-type FetchFn = (url: string | URL, init?: { signal?: AbortSignal }) => Promise<Response>;
+type FetchFn = (
+  url: string | URL,
+  init?: { signal?: AbortSignal },
+) => Promise<Response>;
 
 async function ghDownload(
   version: string,
@@ -215,7 +218,9 @@ export async function downloadAndInstall(
 
     if (!response.ok) {
       return err(
-        new UserError(`Failed to download v${version}: HTTP ${response.status}`),
+        new UserError(
+          `Failed to download v${version}: HTTP ${response.status}`,
+        ),
       );
     }
 

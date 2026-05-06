@@ -1,14 +1,14 @@
 import { join } from "node:path";
 import { ensureDirs, getConfigDir } from "../dirs";
 import { loadJsonState, saveJsonState } from "../json-state";
+import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
 import {
-  PluginsJsonSchema,
-  type PluginsJson,
   type PluginRecord,
+  type PluginsJson,
+  PluginsJsonSchema,
   type StoredComponent,
   type StoredMcpComponent,
 } from "../schemas/plugins";
-import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
 import { loadState } from "../state/load";
 import { saveState } from "../state/save";
 import { err, ok, type Result, UserError } from "../types";
@@ -21,7 +21,9 @@ function getPluginsPath(projectRoot?: string): string {
 
 // state.json is the canonical store. Same read-fallback + state-only-write
 // pattern as loadInstalled/saveInstalled in config.ts.
-export async function loadPlugins(projectRoot?: string): Promise<Result<PluginsJson, UserError>> {
+export async function loadPlugins(
+  projectRoot?: string,
+): Promise<Result<PluginsJson, UserError>> {
   const stateResult = await loadState(projectRoot);
   if (stateResult.ok && stateResult.value.plugins.length > 0) {
     return ok({ version: 1 as const, plugins: stateResult.value.plugins });
@@ -53,23 +55,41 @@ export async function savePlugins(
 export function mcpServerToStored(server: McpServerEntry): StoredMcpComponent {
   if (server.type === "http") {
     return {
-      type: "mcp", serverType: "http", name: server.name, active: true,
-      url: server.url, headers: server.headers ?? {},
+      type: "mcp",
+      serverType: "http",
+      name: server.name,
+      active: true,
+      url: server.url,
+      headers: server.headers ?? {},
     };
   }
   return {
-    type: "mcp", serverType: "stdio", name: server.name, active: true,
-    command: server.command, args: server.args ?? [], env: server.env ?? {},
+    type: "mcp",
+    serverType: "stdio",
+    name: server.name,
+    active: true,
+    command: server.command,
+    args: server.args ?? [],
+    env: server.env ?? {},
   };
 }
 
-export function addPlugin(state: PluginsJson, record: PluginRecord): PluginsJson {
+export function addPlugin(
+  state: PluginsJson,
+  record: PluginRecord,
+): PluginsJson {
   const filtered = state.plugins.filter((p) => p.name !== record.name);
   return { ...state, plugins: [...filtered, record] };
 }
 
-export function removePlugin(state: PluginsJson, pluginName: string): PluginsJson {
-  return { ...state, plugins: state.plugins.filter((p) => p.name !== pluginName) };
+export function removePlugin(
+  state: PluginsJson,
+  pluginName: string,
+): PluginsJson {
+  return {
+    ...state,
+    plugins: state.plugins.filter((p) => p.name !== pluginName),
+  };
 }
 
 export function toggleComponent(
@@ -88,7 +108,9 @@ export function toggleComponent(
   );
   if (componentIndex === -1) {
     return err(
-      new UserError(`Component "${componentName}" of type "${componentType}" not found in plugin "${pluginName}"`),
+      new UserError(
+        `Component "${componentName}" of type "${componentType}" not found in plugin "${pluginName}"`,
+      ),
     );
   }
 
@@ -104,7 +126,10 @@ export function toggleComponent(
   return ok({ ...state, plugins: updatedPlugins });
 }
 
-export function findPlugin(state: PluginsJson, pluginName: string): PluginRecord | undefined {
+export function findPlugin(
+  state: PluginsJson,
+  pluginName: string,
+): PluginRecord | undefined {
   return state.plugins.find((p) => p.name === pluginName);
 }
 
@@ -117,7 +142,10 @@ export type PluginInstallMeta = {
   tap: string | null;
 };
 
-export function manifestToRecord(manifest: PluginManifest, meta: PluginInstallMeta): PluginRecord {
+export function manifestToRecord(
+  manifest: PluginManifest,
+  meta: PluginInstallMeta,
+): PluginRecord {
   const now = new Date().toISOString();
   const components: StoredComponent[] = [];
 
@@ -127,7 +155,12 @@ export function manifestToRecord(manifest: PluginManifest, meta: PluginInstallMe
     } else if (component.type === "mcp") {
       components.push(mcpServerToStored(component.server));
     } else if (component.type === "agent") {
-      components.push({ type: "agent", name: component.name, active: true, platform: "claude-code" });
+      components.push({
+        type: "agent",
+        name: component.name,
+        active: true,
+        platform: "claude-code",
+      });
     }
   }
 

@@ -1,6 +1,6 @@
 import { $ } from "bun";
-import type { AgentAdapter } from "./types";
 import { wrapInvoke } from "./factory";
+import type { AgentAdapter } from "./types";
 
 export function createCustomAdapter(binaryPath: string): AgentAdapter {
   const name = `Custom (${binaryPath})`;

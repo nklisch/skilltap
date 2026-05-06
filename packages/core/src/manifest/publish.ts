@@ -48,7 +48,10 @@ export async function discoverPublishablePlugins(
     }
     const parsed = PluginManifestV2Schema.safeParse(raw);
     if (!parsed.success) {
-      rejected.push({ path, reason: `Schema mismatch: ${parsed.error.message}` });
+      rejected.push({
+        path,
+        reason: `Schema mismatch: ${parsed.error.message}`,
+      });
       continue;
     }
     if (!parsed.data.publish) {

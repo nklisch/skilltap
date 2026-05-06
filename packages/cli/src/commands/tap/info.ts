@@ -25,7 +25,8 @@ export default defineCommand({
     const agentMode = await isAgentMode();
 
     const result = await getTapInfo(args.name);
-    if (!result.ok) exitWithError(agentMode, result.error.message, result.error.hint);
+    if (!result.ok)
+      exitWithError(agentMode, result.error.message, result.error.hint);
 
     const info = result.value;
 
@@ -39,7 +40,8 @@ export default defineCommand({
       process.stdout.write(`type: ${info.type}\n`);
       process.stdout.write(`url: ${info.url}\n`);
       if (info.localPath) process.stdout.write(`path: ${info.localPath}\n`);
-      if (info.lastFetched) process.stdout.write(`last-fetched: ${info.lastFetched}\n`);
+      if (info.lastFetched)
+        process.stdout.write(`last-fetched: ${info.lastFetched}\n`);
       process.stdout.write(`skills: ${info.skillCount}\n`);
       return;
     }
@@ -50,7 +52,8 @@ export default defineCommand({
       [ansi.dim("url"), info.url],
     ];
     if (info.localPath) rows.push([ansi.dim("path"), info.localPath]);
-    if (info.lastFetched) rows.push([ansi.dim("last fetched"), info.lastFetched]);
+    if (info.lastFetched)
+      rows.push([ansi.dim("last fetched"), info.lastFetched]);
     rows.push([ansi.dim("skills"), String(info.skillCount)]);
 
     process.stdout.write("\n");

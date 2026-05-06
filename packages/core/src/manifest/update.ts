@@ -1,6 +1,6 @@
 import { ok, type Result, type UserError } from "../types";
-import { loadLockfile, saveLockfile } from "./lockfile";
 import { loadManifest, manifestExists } from "./load";
+import { loadLockfile, saveLockfile } from "./lockfile";
 import { saveManifest } from "./save";
 import {
   type LockEntry,
@@ -28,13 +28,16 @@ export interface ManifestUpdateInput {
 // - Everything else: passthrough.
 export function canonicalizeSourceKey(repoOrSource: string): string {
   // SSH form: git@host:owner/repo[.git]
-  const sshMatch = /^git@([^:]+):([^/]+)\/([^/.]+?)(?:\.git)?$/.exec(repoOrSource);
+  const sshMatch = /^git@([^:]+):([^/]+)\/([^/.]+?)(?:\.git)?$/.exec(
+    repoOrSource,
+  );
   if (sshMatch && sshMatch[1] === "github.com") {
     return `github:${sshMatch[2]}/${sshMatch[3]}`;
   }
 
   // HTTPS form: https://github.com/owner/repo[.git]
-  const httpsMatch = /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(repoOrSource);
+  const httpsMatch =
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/.exec(repoOrSource);
   if (httpsMatch) {
     return `github:${httpsMatch[1]}/${httpsMatch[2]}`;
   }
@@ -106,7 +109,8 @@ async function removeManifestEntry(
   if (!lockfileResult.ok) return ok(undefined);
   const lockfile = lockfileResult.value;
 
-  const targetArray: "skill" | "plugin" = kind === "skills" ? "skill" : "plugin";
+  const targetArray: "skill" | "plugin" =
+    kind === "skills" ? "skill" : "plugin";
   const filtered = lockfile[targetArray].filter((e) => e.source !== sourceKey);
   if (filtered.length === lockfile[targetArray].length) return ok(undefined);
 
@@ -146,7 +150,8 @@ async function updateManifestEntry(
   if (!lockfileResult.ok) return ok(undefined);
   const lockfile = lockfileResult.value;
 
-  const targetArray: "skill" | "plugin" = kind === "skills" ? "skill" : "plugin";
+  const targetArray: "skill" | "plugin" =
+    kind === "skills" ? "skill" : "plugin";
   const existing = lockfile[targetArray];
   const existingIdx = existing.findIndex((e) => e.source === sourceKey);
   const newEntry: LockEntry = {

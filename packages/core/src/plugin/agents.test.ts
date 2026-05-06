@@ -10,8 +10,14 @@ describe("parseAgentDefinitions", () => {
     try {
       const agentsDir = join(dir, "agents");
       await mkdir(agentsDir, { recursive: true });
-      await Bun.write(join(agentsDir, "reviewer.md"), "---\nname: reviewer\n---\nReview content");
-      await Bun.write(join(agentsDir, "builder.md"), "---\nname: builder\n---\nBuild content");
+      await Bun.write(
+        join(agentsDir, "reviewer.md"),
+        "---\nname: reviewer\n---\nReview content",
+      );
+      await Bun.write(
+        join(agentsDir, "builder.md"),
+        "---\nname: builder\n---\nBuild content",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);
@@ -27,7 +33,10 @@ describe("parseAgentDefinitions", () => {
     try {
       const agentsDir = join(dir, "agents");
       await mkdir(agentsDir, { recursive: true });
-      await Bun.write(join(agentsDir, "code-review.md"), "---\nname: code-reviewer\nmodel: sonnet\n---\nReview code");
+      await Bun.write(
+        join(agentsDir, "code-review.md"),
+        "---\nname: code-reviewer\nmodel: sonnet\n---\nReview code",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);
@@ -43,7 +52,10 @@ describe("parseAgentDefinitions", () => {
     try {
       const agentsDir = join(dir, "agents");
       await mkdir(agentsDir, { recursive: true });
-      await Bun.write(join(agentsDir, "my-agent.md"), "# My Agent\nNo frontmatter here.");
+      await Bun.write(
+        join(agentsDir, "my-agent.md"),
+        "# My Agent\nNo frontmatter here.",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);
@@ -76,7 +88,10 @@ describe("parseAgentDefinitions", () => {
   });
 
   test("returns ok([]) for non-existent directory", async () => {
-    const result = await parseAgentDefinitions("/tmp/does-not-exist-skilltap-agents", "/tmp/does-not-exist-skilltap");
+    const result = await parseAgentDefinitions(
+      "/tmp/does-not-exist-skilltap-agents",
+      "/tmp/does-not-exist-skilltap",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toEqual([]);
@@ -104,7 +119,10 @@ describe("parseAgentDefinitions", () => {
       await mkdir(agentsDir, { recursive: true });
       await Bun.write(join(agentsDir, "README.txt"), "Not a markdown file");
       await Bun.write(join(agentsDir, "config.json"), '{"key":"value"}');
-      await Bun.write(join(agentsDir, "agent.md"), "---\nname: agent\n---\nContent");
+      await Bun.write(
+        join(agentsDir, "agent.md"),
+        "---\nname: agent\n---\nContent",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);
@@ -122,9 +140,18 @@ describe("parseAgentDefinitions", () => {
       const agentsDir = join(dir, "agents");
       await mkdir(agentsDir, { recursive: true });
       // Create in reverse alphabetical order to verify sorting
-      await Bun.write(join(agentsDir, "zebra.md"), "---\nname: zebra\n---\nContent");
-      await Bun.write(join(agentsDir, "alpha.md"), "---\nname: alpha\n---\nContent");
-      await Bun.write(join(agentsDir, "middle.md"), "---\nname: middle\n---\nContent");
+      await Bun.write(
+        join(agentsDir, "zebra.md"),
+        "---\nname: zebra\n---\nContent",
+      );
+      await Bun.write(
+        join(agentsDir, "alpha.md"),
+        "---\nname: alpha\n---\nContent",
+      );
+      await Bun.write(
+        join(agentsDir, "middle.md"),
+        "---\nname: middle\n---\nContent",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);
@@ -144,7 +171,10 @@ describe("parseAgentDefinitions", () => {
       const agentsDir = join(dir, "agents");
       await mkdir(agentsDir, { recursive: true });
       // Frontmatter exists but has model, not name
-      await Bun.write(join(agentsDir, "code-review.md"), "---\nmodel: sonnet\ncolor: blue\n---\nReview code");
+      await Bun.write(
+        join(agentsDir, "code-review.md"),
+        "---\nmodel: sonnet\ncolor: blue\n---\nReview code",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);
@@ -162,7 +192,10 @@ describe("parseAgentDefinitions", () => {
     try {
       const agentsDir = join(dir, "agents");
       await mkdir(agentsDir, { recursive: true });
-      await Bun.write(join(agentsDir, "reviewer.md"), "---\nname: reviewer\n---\nContent");
+      await Bun.write(
+        join(agentsDir, "reviewer.md"),
+        "---\nname: reviewer\n---\nContent",
+      );
 
       const result = await parseAgentDefinitions(agentsDir, dir);
       expect(result.ok).toBe(true);

@@ -32,12 +32,18 @@ describe("SecurityConfigV2Schema", () => {
   });
 
   test("rejects invalid scan", () => {
-    expect(SecurityConfigV2Schema.safeParse({ scan: "off" }).success).toBe(false);
-    expect(SecurityConfigV2Schema.safeParse({ scan: "deep" }).success).toBe(false);
+    expect(SecurityConfigV2Schema.safeParse({ scan: "off" }).success).toBe(
+      false,
+    );
+    expect(SecurityConfigV2Schema.safeParse({ scan: "deep" }).success).toBe(
+      false,
+    );
   });
 
   test("rejects invalid on_warn", () => {
-    expect(SecurityConfigV2Schema.safeParse({ on_warn: "abort" }).success).toBe(false);
+    expect(SecurityConfigV2Schema.safeParse({ on_warn: "abort" }).success).toBe(
+      false,
+    );
   });
 
   test("accepts trust patterns array", () => {
@@ -96,7 +102,9 @@ describe("ConfigV2DefaultsSchema", () => {
   });
 
   test("rejects scope=linked", () => {
-    expect(ConfigV2DefaultsSchema.safeParse({ scope: "linked" }).success).toBe(false);
+    expect(ConfigV2DefaultsSchema.safeParse({ scope: "linked" }).success).toBe(
+      false,
+    );
   });
 });
 

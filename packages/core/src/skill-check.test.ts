@@ -2,14 +2,13 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
-import type { Result } from "./types";
-import type { GitError, NetworkError } from "./types";
+import { skillCacheDir } from "./paths";
 import {
   checkForSkillUpdates,
   fetchSkillUpdateStatus,
   writeSkillUpdateCache,
 } from "./skill-check";
-import { skillCacheDir } from "./paths";
+import type { GitError, NetworkError, Result } from "./types";
 
 let env: TestEnv;
 let configDir: string;
@@ -214,9 +213,16 @@ describe("fetchSkillUpdateStatus", () => {
     // Create a fake cache dir with .git so the lstat check passes
     await mkdir(join(cacheDir, ".git"), { recursive: true });
 
-    const mockFetch = async (_dir: string): Promise<Result<void, GitError>> =>
-      ({ ok: true as const, value: undefined });
-    const mockRevParse = async (_dir: string, ref: string): Promise<Result<string, GitError>> => ({
+    const mockFetch = async (
+      _dir: string,
+    ): Promise<Result<void, GitError>> => ({
+      ok: true as const,
+      value: undefined,
+    });
+    const mockRevParse = async (
+      _dir: string,
+      ref: string,
+    ): Promise<Result<string, GitError>> => ({
       ok: true as const,
       value: ref === "HEAD" ? "abc1234abc1234abc1234" : "def5678def5678def5678",
     });
@@ -255,10 +261,16 @@ describe("fetchSkillUpdateStatus", () => {
     await mkdir(join(cacheDir, ".git"), { recursive: true });
 
     const sha = "abc1234abc1234abc1234";
-    const mockFetch = async (_dir: string): Promise<Result<void, GitError>> =>
-      ({ ok: true as const, value: undefined });
-    const mockRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
-      ({ ok: true as const, value: sha });
+    const mockFetch = async (
+      _dir: string,
+    ): Promise<Result<void, GitError>> => ({
+      ok: true as const,
+      value: undefined,
+    });
+    const mockRevParse = async (
+      _dir: string,
+      _ref: string,
+    ): Promise<Result<string, GitError>> => ({ ok: true as const, value: sha });
 
     const result = await fetchSkillUpdateStatus(null, mockFetch, mockRevParse);
     expect(result).toEqual([]);
@@ -293,10 +305,19 @@ describe("fetchSkillUpdateStatus", () => {
 
     await mkdir(join(cacheDir, ".git"), { recursive: true });
 
-    const mockFetch = async (_dir: string): Promise<Result<void, GitError>> =>
-      ({ ok: false as const, error: { name: "GitError", message: "network error", hint: undefined } });
-    const mockRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
-      ({ ok: true as const, value: "abc" });
+    const mockFetch = async (
+      _dir: string,
+    ): Promise<Result<void, GitError>> => ({
+      ok: false as const,
+      error: { name: "GitError", message: "network error", hint: undefined },
+    });
+    const mockRevParse = async (
+      _dir: string,
+      _ref: string,
+    ): Promise<Result<string, GitError>> => ({
+      ok: true as const,
+      value: "abc",
+    });
 
     const result = await fetchSkillUpdateStatus(null, mockFetch, mockRevParse);
     expect(result).toEqual([]);
@@ -326,7 +347,9 @@ describe("fetchSkillUpdateStatus", () => {
       }),
     );
 
-    const mockFetchMeta = async (_name: string): Promise<Result<any, NetworkError>> => ({
+    const mockFetchMeta = async (
+      _name: string,
+    ): Promise<Result<any, NetworkError>> => ({
       ok: true as const,
       value: {
         name: "my-skill-package",
@@ -341,12 +364,26 @@ describe("fetchSkillUpdateStatus", () => {
       },
     });
 
-    const noopGitFetch = async (_dir: string): Promise<Result<void, GitError>> =>
-      ({ ok: true as const, value: undefined });
-    const noopRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
-      ({ ok: true as const, value: "abc" });
+    const noopGitFetch = async (
+      _dir: string,
+    ): Promise<Result<void, GitError>> => ({
+      ok: true as const,
+      value: undefined,
+    });
+    const noopRevParse = async (
+      _dir: string,
+      _ref: string,
+    ): Promise<Result<string, GitError>> => ({
+      ok: true as const,
+      value: "abc",
+    });
 
-    const result = await fetchSkillUpdateStatus(null, noopGitFetch, noopRevParse, mockFetchMeta);
+    const result = await fetchSkillUpdateStatus(
+      null,
+      noopGitFetch,
+      noopRevParse,
+      mockFetchMeta,
+    );
     expect(result).toContain("npm-skill");
   });
 
@@ -374,7 +411,9 @@ describe("fetchSkillUpdateStatus", () => {
       }),
     );
 
-    const mockFetchMeta = async (_name: string): Promise<Result<any, NetworkError>> => ({
+    const mockFetchMeta = async (
+      _name: string,
+    ): Promise<Result<any, NetworkError>> => ({
       ok: true as const,
       value: {
         name: "my-skill-package",
@@ -389,12 +428,26 @@ describe("fetchSkillUpdateStatus", () => {
       },
     });
 
-    const noopGitFetch = async (_dir: string): Promise<Result<void, GitError>> =>
-      ({ ok: true as const, value: undefined });
-    const noopRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
-      ({ ok: true as const, value: "abc" });
+    const noopGitFetch = async (
+      _dir: string,
+    ): Promise<Result<void, GitError>> => ({
+      ok: true as const,
+      value: undefined,
+    });
+    const noopRevParse = async (
+      _dir: string,
+      _ref: string,
+    ): Promise<Result<string, GitError>> => ({
+      ok: true as const,
+      value: "abc",
+    });
 
-    const result = await fetchSkillUpdateStatus(null, noopGitFetch, noopRevParse, mockFetchMeta);
+    const result = await fetchSkillUpdateStatus(
+      null,
+      noopGitFetch,
+      noopRevParse,
+      mockFetchMeta,
+    );
     expect(result).toEqual([]);
   });
 
@@ -422,17 +475,38 @@ describe("fetchSkillUpdateStatus", () => {
       }),
     );
 
-    const mockFetchMeta = async (_name: string): Promise<Result<any, NetworkError>> => ({
+    const mockFetchMeta = async (
+      _name: string,
+    ): Promise<Result<any, NetworkError>> => ({
       ok: true as const,
-      value: { name: "x", description: "", distTags: { latest: "1.0.0" }, versions: {} },
+      value: {
+        name: "x",
+        description: "",
+        distTags: { latest: "1.0.0" },
+        versions: {},
+      },
     });
 
-    const noopGitFetch = async (_dir: string): Promise<Result<void, GitError>> =>
-      ({ ok: true as const, value: undefined });
-    const noopRevParse = async (_dir: string, _ref: string): Promise<Result<string, GitError>> =>
-      ({ ok: true as const, value: "abc" });
+    const noopGitFetch = async (
+      _dir: string,
+    ): Promise<Result<void, GitError>> => ({
+      ok: true as const,
+      value: undefined,
+    });
+    const noopRevParse = async (
+      _dir: string,
+      _ref: string,
+    ): Promise<Result<string, GitError>> => ({
+      ok: true as const,
+      value: "abc",
+    });
 
-    const result = await fetchSkillUpdateStatus(null, noopGitFetch, noopRevParse, mockFetchMeta);
+    const result = await fetchSkillUpdateStatus(
+      null,
+      noopGitFetch,
+      noopRevParse,
+      mockFetchMeta,
+    );
     expect(result).toEqual([]);
   });
 });

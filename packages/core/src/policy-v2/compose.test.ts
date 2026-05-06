@@ -33,7 +33,11 @@ describe("composeV2 — agent resolution", () => {
 
   test("--no-agent overrides everything else", () => {
     const config: ConfigV2 = ConfigV2Schema.parse({ agent: { default: true } });
-    const result = composeV2(config, { noAgent: true, agent: true }, { agent: true });
+    const result = composeV2(
+      config,
+      { noAgent: true, agent: true },
+      { agent: true },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.agent).toBe(false);
@@ -79,7 +83,9 @@ describe("composeV2 — scan + on_warn", () => {
   });
 
   test("config security.scan respected when no --deep", () => {
-    const config: ConfigV2 = ConfigV2Schema.parse({ security: { scan: "semantic" } });
+    const config: ConfigV2 = ConfigV2Schema.parse({
+      security: { scan: "semantic" },
+    });
     const result = composeV2(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -87,7 +93,9 @@ describe("composeV2 — scan + on_warn", () => {
   });
 
   test("config security.scan = none stays none without --deep", () => {
-    const config: ConfigV2 = ConfigV2Schema.parse({ security: { scan: "none" } });
+    const config: ConfigV2 = ConfigV2Schema.parse({
+      security: { scan: "none" },
+    });
     const result = composeV2(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -102,7 +110,9 @@ describe("composeV2 — scan + on_warn", () => {
   });
 
   test("--no-strict reverts to config", () => {
-    const config: ConfigV2 = ConfigV2Schema.parse({ security: { on_warn: "prompt" } });
+    const config: ConfigV2 = ConfigV2Schema.parse({
+      security: { on_warn: "prompt" },
+    });
     const result = composeV2(config, { strict: true, noStrict: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -112,7 +122,9 @@ describe("composeV2 — scan + on_warn", () => {
 
 describe("composeV2 — scope", () => {
   test("--project takes precedence", () => {
-    const config: ConfigV2 = ConfigV2Schema.parse({ defaults: { scope: "global" } });
+    const config: ConfigV2 = ConfigV2Schema.parse({
+      defaults: { scope: "global" },
+    });
     const result = composeV2(config, { project: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -120,7 +132,9 @@ describe("composeV2 — scope", () => {
   });
 
   test("--global takes precedence", () => {
-    const config: ConfigV2 = ConfigV2Schema.parse({ defaults: { scope: "project" } });
+    const config: ConfigV2 = ConfigV2Schema.parse({
+      defaults: { scope: "project" },
+    });
     const result = composeV2(config, { global: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -128,7 +142,9 @@ describe("composeV2 — scope", () => {
   });
 
   test("config defaults.scope used when no flag", () => {
-    const config: ConfigV2 = ConfigV2Schema.parse({ defaults: { scope: "global" } });
+    const config: ConfigV2 = ConfigV2Schema.parse({
+      defaults: { scope: "global" },
+    });
     const result = composeV2(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -165,7 +181,11 @@ describe("composeV2ForSource — trust list", () => {
     const config: ConfigV2 = ConfigV2Schema.parse({
       security: { scan: "static", trust: ["home"] },
     });
-    const result = composeV2ForSource(config, {}, { sourceUrl: "...", tapName: "home" });
+    const result = composeV2ForSource(
+      config,
+      {},
+      { sourceUrl: "...", tapName: "home" },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.trusted).toBe(true);
@@ -176,7 +196,11 @@ describe("composeV2ForSource — trust list", () => {
     const config: ConfigV2 = ConfigV2Schema.parse({
       security: { scan: "semantic", trust: ["github.com/corp/*"] },
     });
-    const result = composeV2ForSource(config, {}, { sourceUrl: "github.com/corp/foo" });
+    const result = composeV2ForSource(
+      config,
+      {},
+      { sourceUrl: "github.com/corp/foo" },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.trusted).toBe(true);
@@ -187,7 +211,11 @@ describe("composeV2ForSource — trust list", () => {
     const config: ConfigV2 = ConfigV2Schema.parse({
       security: { scan: "static", trust: ["home"] },
     });
-    const result = composeV2ForSource(config, {}, { sourceUrl: "github.com/other/repo" });
+    const result = composeV2ForSource(
+      config,
+      {},
+      { sourceUrl: "github.com/other/repo" },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.trusted).toBe(false);
@@ -195,7 +223,11 @@ describe("composeV2ForSource — trust list", () => {
   });
 
   test("trust list empty → trusted=false", () => {
-    const result = composeV2ForSource(baseConfig(), {}, { sourceUrl: "anything" });
+    const result = composeV2ForSource(
+      baseConfig(),
+      {},
+      { sourceUrl: "anything" },
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.trusted).toBe(false);

@@ -1,23 +1,27 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
+import type { PluginManifest } from "../schemas/plugin";
+import type { PluginRecord, PluginsJson } from "../schemas/plugins";
 import {
   addPlugin,
   findPlugin,
   loadPlugins,
   manifestToRecord,
+  type PluginInstallMeta,
   removePlugin,
   savePlugins,
   toggleComponent,
-  type PluginInstallMeta,
 } from "./state";
-import type { PluginRecord, PluginsJson } from "../schemas/plugins";
-import type { PluginManifest } from "../schemas/plugin";
 
 let env: TestEnv;
 
-beforeEach(async () => { env = await createTestEnv(); });
-afterEach(async () => { await env.cleanup(); });
+beforeEach(async () => {
+  env = await createTestEnv();
+});
+afterEach(async () => {
+  await env.cleanup();
+});
 
 const VALID_RECORD: PluginRecord = {
   name: "dev-toolkit",
@@ -31,7 +35,15 @@ const VALID_RECORD: PluginRecord = {
   tap: null,
   components: [
     { type: "skill", name: "code-review", active: true },
-    { type: "mcp", serverType: "stdio", name: "database", active: true, command: "npx", args: [], env: {} },
+    {
+      type: "mcp",
+      serverType: "stdio",
+      name: "database",
+      active: true,
+      command: "npx",
+      args: [],
+      env: {},
+    },
     { type: "agent", name: "reviewer", active: true, platform: "claude-code" },
   ],
   installedAt: "2026-04-10T12:00:00Z",
@@ -62,23 +74,26 @@ describe("loadPlugins", () => {
   });
 
   test("returns error for invalid JSON", async () => {
-    const configDir = join(env.configDir,"skilltap");
-    await Bun.$ `mkdir -p ${configDir}`;
+    const configDir = join(env.configDir, "skilltap");
+    await Bun.$`mkdir -p ${configDir}`;
     await Bun.write(join(configDir, "plugins.json"), "not-valid-json{{{");
     const result = await loadPlugins();
     expect(result.ok).toBe(false);
   });
 
   test("returns error for invalid schema (version 99)", async () => {
-    const configDir = join(env.configDir,"skilltap");
-    await Bun.$ `mkdir -p ${configDir}`;
-    await Bun.write(join(configDir, "plugins.json"), JSON.stringify({ version: 99, plugins: [] }));
+    const configDir = join(env.configDir, "skilltap");
+    await Bun.$`mkdir -p ${configDir}`;
+    await Bun.write(
+      join(configDir, "plugins.json"),
+      JSON.stringify({ version: 99, plugins: [] }),
+    );
     const result = await loadPlugins();
     expect(result.ok).toBe(false);
   });
 
   test("reads from project path when projectRoot given", async () => {
-    const projectDir = join(env.configDir,"myproject");
+    const projectDir = join(env.configDir, "myproject");
     const state: PluginsJson = { version: 1, plugins: [VALID_RECORD] };
     const saveResult = await savePlugins(state, projectDir);
     expect(saveResult.ok).toBe(true);
@@ -104,10 +119,12 @@ describe("savePlugins", () => {
   });
 
   test("creates .agents/ dir for project scope", async () => {
-    const projectDir = join(env.configDir,"myproject");
+    const projectDir = join(env.configDir, "myproject");
     const result = await savePlugins(EMPTY_STATE, projectDir);
     expect(result.ok).toBe(true);
-    expect(await Bun.file(join(projectDir, ".agents", "plugins.json")).exists()).toBe(true);
+    expect(
+      await Bun.file(join(projectDir, ".agents", "plugins.json")).exists(),
+    ).toBe(true);
   });
 });
 
@@ -144,7 +161,12 @@ describe("removePlugin", () => {
 describe("toggleComponent", () => {
   test("flips active on a skill component", () => {
     const state = addPlugin(EMPTY_STATE, VALID_RECORD);
-    const result = toggleComponent(state, "dev-toolkit", "skill", "code-review");
+    const result = toggleComponent(
+      state,
+      "dev-toolkit",
+      "skill",
+      "code-review",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const comp = result.value.plugins[0]?.components.find(
@@ -178,7 +200,12 @@ describe("toggleComponent", () => {
   test("updates updatedAt timestamp", () => {
     const before = new Date().toISOString();
     const state = addPlugin(EMPTY_STATE, VALID_RECORD);
-    const result = toggleComponent(state, "dev-toolkit", "skill", "code-review");
+    const result = toggleComponent(
+      state,
+      "dev-toolkit",
+      "skill",
+      "code-review",
+    );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const plugin = result.value.plugins[0];
@@ -194,7 +221,12 @@ describe("toggleComponent", () => {
 
   test("returns error if component not found", () => {
     const state = addPlugin(EMPTY_STATE, VALID_RECORD);
-    const result = toggleComponent(state, "dev-toolkit", "skill", "nonexistent");
+    const result = toggleComponent(
+      state,
+      "dev-toolkit",
+      "skill",
+      "nonexistent",
+    );
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("nonexistent");
@@ -231,7 +263,12 @@ describe("manifestToRecord", () => {
     format: "claude-code",
     pluginRoot: "/tmp/dev-toolkit",
     components: [
-      { type: "skill", name: "code-review", path: ".claude/skills/code-review", description: "" },
+      {
+        type: "skill",
+        name: "code-review",
+        path: ".claude/skills/code-review",
+        description: "",
+      },
       {
         type: "mcp",
         server: {
@@ -285,7 +322,9 @@ describe("manifestToRecord", () => {
 
   test("converts stdio MCP servers correctly", () => {
     const record = manifestToRecord(MANIFEST, META);
-    const mcp = record.components.find((c) => c.type === "mcp" && c.name === "database");
+    const mcp = record.components.find(
+      (c) => c.type === "mcp" && c.name === "database",
+    );
     expect(mcp).toBeDefined();
     if (!mcp || mcp.type !== "mcp") return;
     if (mcp.serverType !== "stdio") return;

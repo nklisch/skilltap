@@ -1,11 +1,19 @@
 import { cancel, group, intro, isCancel, note, outro } from "@clack/prompts";
 import {
+  AGENT_LABELS,
+  type Config,
+  describeSecurityMode,
+  getConfigDir,
+  loadConfig,
+  saveConfig,
+  VALID_AGENT_IDS,
+} from "@skilltap/core";
+import { defineCommand } from "citty";
+import {
   footerConfirm as confirm,
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../ui/footer";
-import { AGENT_LABELS, type Config, describeSecurityMode, getConfigDir, loadConfig, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
-import { defineCommand } from "citty";
 import { errorLine } from "../ui/format";
 
 export default defineCommand({
@@ -83,7 +91,10 @@ export default defineCommand({
         also: () =>
           multiselect({
             message: "Auto-symlink to which agents?",
-            options: VALID_AGENT_IDS.map(id => ({ value: id, label: AGENT_LABELS[id] ?? id })),
+            options: VALID_AGENT_IDS.map((id) => ({
+              value: id,
+              label: AGENT_LABELS[id] ?? id,
+            })),
             initialValues: existing.defaults.also,
             required: false,
           }),
@@ -92,8 +103,16 @@ export default defineCommand({
           select({
             message: "Show diff during updates?",
             options: [
-              { value: "full", label: "Full diff", hint: "coloured unified diff" },
-              { value: "stat", label: "Stat only", hint: "file names and line counts" },
+              {
+                value: "full",
+                label: "Full diff",
+                hint: "coloured unified diff",
+              },
+              {
+                value: "stat",
+                label: "Stat only",
+                hint: "file names and line counts",
+              },
               { value: "none", label: "None", hint: "skip to confirm prompt" },
             ],
             initialValue: existing.updates?.show_diff ?? "full",
@@ -103,7 +122,9 @@ export default defineCommand({
           confirm({
             message:
               "Search public registries (skills.sh) when using 'skilltap find'?",
-            initialValue: (existing.registry?.enabled ?? ["skills.sh"]).includes("skills.sh"),
+            initialValue: (
+              existing.registry?.enabled ?? ["skills.sh"]
+            ).includes("skills.sh"),
           }),
 
         telemetry: () =>
@@ -130,8 +151,15 @@ export default defineCommand({
 
     const searchRegistries = result.registries as boolean;
     const enabledRegistries = searchRegistries
-      ? ["skills.sh", ...(existing.registry?.enabled ?? []).filter((r: string) => r !== "skills.sh")]
-      : (existing.registry?.enabled ?? []).filter((r: string) => r !== "skills.sh");
+      ? [
+          "skills.sh",
+          ...(existing.registry?.enabled ?? []).filter(
+            (r: string) => r !== "skills.sh",
+          ),
+        ]
+      : (existing.registry?.enabled ?? []).filter(
+          (r: string) => r !== "skills.sh",
+        );
 
     const newConfig: Config = {
       ...existing,

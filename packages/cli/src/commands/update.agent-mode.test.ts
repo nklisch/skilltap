@@ -1,5 +1,3 @@
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
 import {
   afterEach,
   beforeEach,
@@ -8,7 +6,15 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { createTestEnv, type TestEnv, addFileAndCommit, createStandaloneSkillRepo, runSkilltap } from "@skilltap/test-utils";
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  addFileAndCommit,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 

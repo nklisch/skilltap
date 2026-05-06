@@ -1,19 +1,33 @@
 import { cancel, group, intro, isCancel, note, outro } from "@clack/prompts";
 import {
+  AGENT_LABELS,
+  loadConfig,
+  PRESET_VALUES,
+  type SECURITY_PRESETS,
+  saveConfig,
+  VALID_AGENT_IDS,
+} from "@skilltap/core";
+import { defineCommand } from "citty";
+import {
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../../ui/footer";
-import { AGENT_LABELS, loadConfig, PRESET_VALUES, SECURITY_PRESETS, saveConfig, VALID_AGENT_IDS } from "@skilltap/core";
-import { SCAN_MODE_OPTIONS } from "../../ui/prompts";
-import { defineCommand } from "citty";
 import { errorLine } from "../../ui/format";
-import { selectAgentForConfig } from "../../ui/prompts";
+import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../../ui/prompts";
 
 const PRESET_OPTIONS = [
   { value: "none", label: "None", hint: "no scanning" },
   { value: "relaxed", label: "Relaxed", hint: "static scan, ignore warnings" },
-  { value: "standard", label: "Standard", hint: "static scan, ask on warnings (Recommended)" },
-  { value: "strict", label: "Strict", hint: "static + semantic scan, block on warnings" },
+  {
+    value: "standard",
+    label: "Standard",
+    hint: "static scan, ask on warnings (Recommended)",
+  },
+  {
+    value: "strict",
+    label: "Strict",
+    hint: "static + semantic scan, block on warnings",
+  },
   { value: "custom", label: "Custom", hint: "set individual options" },
 ];
 
@@ -99,7 +113,10 @@ export default defineCommand({
         also: () =>
           multiselect({
             message: "Auto-symlink to which agents?",
-            options: VALID_AGENT_IDS.map(id => ({ value: id, label: AGENT_LABELS[id] ?? id })),
+            options: VALID_AGENT_IDS.map((id) => ({
+              value: id,
+              label: AGENT_LABELS[id] ?? id,
+            })),
             initialValues: config.defaults.also,
             required: false,
           }),
@@ -174,7 +191,8 @@ export default defineCommand({
       };
     }
 
-    if (settings.agentCli) config.security.agent_cli = settings.agentCli as string;
+    if (settings.agentCli)
+      config.security.agent_cli = settings.agentCli as string;
 
     const saveResult = await saveConfig(config);
     if (!saveResult.ok) {
@@ -183,9 +201,8 @@ export default defineCommand({
     }
 
     const preset = settings.preset as string;
-    const scanLabel = preset !== "custom"
-      ? preset
-      : `${settings.scan as string}`;
+    const scanLabel =
+      preset !== "custom" ? preset : `${settings.scan as string}`;
     outro(
       `Agent mode enabled\n  Scope: ${settings.scope as string}\n  Security: ${scanLabel}`,
     );

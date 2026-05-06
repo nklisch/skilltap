@@ -19,7 +19,12 @@ const DEFAULT_CONFIG: Config = {
   builtin_tap: true,
   verbose: true,
   taps: [],
-  updates: { auto_update: "off", interval_hours: 24, skill_check_interval_hours: 24, show_diff: "full" },
+  updates: {
+    auto_update: "off",
+    interval_hours: 24,
+    skill_check_interval_hours: 24,
+    show_diff: "full",
+  },
   telemetry: { enabled: false, notice_shown: false, anonymous_id: "" },
   default_git_host: "https://github.com",
 };

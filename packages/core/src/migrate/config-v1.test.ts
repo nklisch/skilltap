@@ -76,7 +76,10 @@ describe("migrateV1Config", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.v2.security.trust).toEqual(["my-tap", "github.com/corp/*"]);
+    expect(result.value.v2.security.trust).toEqual([
+      "my-tap",
+      "github.com/corp/*",
+    ]);
     expect(result.value.warnings).toEqual([]);
   });
 
@@ -92,11 +95,17 @@ describe("migrateV1Config", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.v2.security.trust).toEqual(["my-tap"]);
-    expect(result.value.warnings.some((w) => w.includes("npm") && w.includes("strict"))).toBe(true);
+    expect(
+      result.value.warnings.some(
+        (w) => w.includes("npm") && w.includes("strict"),
+      ),
+    ).toBe(true);
   });
 
   test("translates agent-mode.enabled into agent.default", () => {
-    const result = migrateV1Config({ "agent-mode": { enabled: true, scope: "project" } });
+    const result = migrateV1Config({
+      "agent-mode": { enabled: true, scope: "project" },
+    });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.v2.agent.default).toBe(true);
@@ -118,7 +127,9 @@ describe("migrateV1Config", () => {
     const result = migrateV1Config({ defaults: { yes: true } });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.warnings.some((w) => w.includes("defaults].yes"))).toBe(true);
+    expect(result.value.warnings.some((w) => w.includes("defaults].yes"))).toBe(
+      true,
+    );
   });
 
   test("rejects HTTP taps via httpTapsRejected", () => {
@@ -130,7 +141,9 @@ describe("migrateV1Config", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.v2.taps).toEqual([{ name: "git-tap", url: "https://github.com/u/r" }]);
+    expect(result.value.v2.taps).toEqual([
+      { name: "git-tap", url: "https://github.com/u/r" },
+    ]);
     expect(result.value.httpTapsRejected).toEqual([
       { name: "http-tap", url: "https://api.example.com/v1" },
     ]);
@@ -191,7 +204,9 @@ describe("migrateV1Config", () => {
     expect(result.value.v2.security.on_warn).toBe("fail"); // stricter wins
     expect(result.value.v2.security.trust).toEqual(["home"]);
     expect(result.value.v2.agent.default).toBe(false);
-    expect(result.value.v2.taps).toEqual([{ name: "home", url: "https://gitea.example.com/n/t" }]);
+    expect(result.value.v2.taps).toEqual([
+      { name: "home", url: "https://gitea.example.com/n/t" },
+    ]);
     expect(result.value.httpTapsRejected).toEqual([]);
   });
 });

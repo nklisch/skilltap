@@ -1,4 +1,10 @@
-import { BUILTIN_TAP, ensureBuiltinTap, isBuiltinTapCloned, loadConfig, loadTaps } from "@skilltap/core";
+import {
+  BUILTIN_TAP,
+  ensureBuiltinTap,
+  isBuiltinTapCloned,
+  loadConfig,
+  loadTaps,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
 import { exitWithError, outputJson } from "../../ui/agent-out";
 import { ansi, errorLine, table } from "../../ui/format";

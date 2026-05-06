@@ -18,7 +18,12 @@
 
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { chunkSkillDir, loadInstalled, scanDiff, scanStatic } from "@skilltap/core";
+import {
+  chunkSkillDir,
+  loadInstalled,
+  scanDiff,
+  scanStatic,
+} from "@skilltap/core";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -67,7 +72,10 @@ Follow these steps to complete the task successfully.
 `;
 
 for (let i = 0; i < 500; i++) {
-  await writeFile(join(SCAN_DIR, `skill-${String(i).padStart(3, "0")}.md`), SKILL_MD);
+  await writeFile(
+    join(SCAN_DIR, `skill-${String(i).padStart(3, "0")}.md`),
+    SKILL_MD,
+  );
 }
 
 // 2. Single 10,000-line file for chunkSkillDir
@@ -80,10 +88,13 @@ const tenKLines = Array.from(
 await writeFile(join(CHUNK_DIR, "SKILL.md"), tenKLines);
 
 // 3. ~1 MB diff for scanDiff
-const DIFF_LINE = "+This is a new line added to the skill documentation file.\n";
+const DIFF_LINE =
+  "+This is a new line added to the skill documentation file.\n";
 const DIFF_HEADER =
   "diff --git a/SKILL.md b/SKILL.md\n--- a/SKILL.md\n+++ b/SKILL.md\n@@ -1,1 +1,10000 @@\n";
-const linesNeeded = Math.ceil((1024 * 1024 - DIFF_HEADER.length) / DIFF_LINE.length);
+const linesNeeded = Math.ceil(
+  (1024 * 1024 - DIFF_HEADER.length) / DIFF_LINE.length,
+);
 const LARGE_DIFF = DIFF_HEADER + DIFF_LINE.repeat(linesNeeded);
 
 // 4. installed.json with 100 skills for loadInstalled
@@ -134,17 +145,17 @@ await bench(
   { iterations: 20, warmup: 3, thresholdMs: 500 },
 );
 
-await bench(
-  "scanDiff    — 1 MB diff output  ",
-  () => scanDiff(LARGE_DIFF),
-  { iterations: 5, warmup: 1, thresholdMs: 5000 },
-);
+await bench("scanDiff    — 1 MB diff output  ", () => scanDiff(LARGE_DIFF), {
+  iterations: 5,
+  warmup: 1,
+  thresholdMs: 5000,
+});
 
-await bench(
-  "loadInstalled — 100 skill records",
-  () => loadInstalled(),
-  { iterations: 50, warmup: 5, thresholdMs: 50 },
-);
+await bench("loadInstalled — 100 skill records", () => loadInstalled(), {
+  iterations: 50,
+  warmup: 5,
+  thresholdMs: 50,
+});
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 

@@ -113,7 +113,9 @@ describe("TapSchema", () => {
           description: "Dev tools",
           version: "1.0.0",
           skills: [{ name: "code-review", path: "plugins/code-review" }],
-          mcpServers: { "test-db": { command: "npx", args: ["-y", "test-mcp"] } },
+          mcpServers: {
+            "test-db": { command: "npx", args: ["-y", "test-mcp"] },
+          },
           agents: [{ name: "reviewer", path: "plugins/agents/reviewer.md" }],
           tags: ["dev"],
         },
@@ -183,7 +185,9 @@ describe("TapPluginSchema", () => {
       name: "full-plugin",
       description: "Full plugin",
       version: "2.0.0",
-      skills: [{ name: "my-skill", path: "skills/my-skill", description: "A skill" }],
+      skills: [
+        { name: "my-skill", path: "skills/my-skill", description: "A skill" },
+      ],
       mcpServers: { db: { command: "npx", args: [] } },
       agents: [{ name: "my-agent", path: "agents/my-agent.md" }],
       tags: ["a", "b"],

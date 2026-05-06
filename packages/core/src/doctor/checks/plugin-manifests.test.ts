@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { writeFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { checkPluginManifests } from "./plugin-manifests";
@@ -95,7 +95,10 @@ describe("checkPluginManifests", () => {
       join(dir, "good.toml"),
       `name = "good-plugin"\nversion = "1.0.0"\npublish = true\n`,
     );
-    await writeFile(join(dir, "broken.toml"), `totally : broken = yaml lookalike`);
+    await writeFile(
+      join(dir, "broken.toml"),
+      `totally : broken = yaml lookalike`,
+    );
     const check = await checkPluginManifests(projectRoot);
     expect(check.status).toBe("warn");
     expect(check.detail).toBe("1 valid, 1 invalid");

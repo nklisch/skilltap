@@ -54,7 +54,8 @@ export async function applySync(
     installFn: options.installFn ?? installSkill,
     removeSkillFn: options.removeSkillFn ?? removeSkill,
     installPluginFn: options.installPluginFn ?? installPlugin,
-    removeInstalledPluginFn: options.removeInstalledPluginFn ?? removeInstalledPlugin,
+    removeInstalledPluginFn:
+      options.removeInstalledPluginFn ?? removeInstalledPlugin,
   };
 
   const results: ApplyItemResult[] = [];

@@ -95,7 +95,9 @@ describe("errorLine", () => {
     const chunks: string[] = [];
     const original = process.stderr.write.bind(process.stderr);
     process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+      chunks.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
       return true;
     };
     try {
@@ -112,7 +114,9 @@ describe("errorLine", () => {
     const chunks: string[] = [];
     const original = process.stderr.write.bind(process.stderr);
     process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+      chunks.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
       return true;
     };
     try {
@@ -129,7 +133,9 @@ describe("errorLine", () => {
     const chunks: string[] = [];
     const original = process.stderr.write.bind(process.stderr);
     process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+      chunks.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
       return true;
     };
     try {
@@ -146,7 +152,9 @@ describe("successLine", () => {
     const chunks: string[] = [];
     const original = process.stdout.write.bind(process.stdout);
     process.stdout.write = (chunk: string | Uint8Array) => {
-      chunks.push(typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk));
+      chunks.push(
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
+      );
       return true;
     };
     try {
@@ -198,33 +206,38 @@ describe("formatShaChange", () => {
 
 describe("formatDiffStatSummary", () => {
   test("one file changed", () => {
-    expect(formatDiffStatSummary({ filesChanged: 1, insertions: 0, deletions: 0 })).toBe(
-      "(1 file changed)",
-    );
+    expect(
+      formatDiffStatSummary({ filesChanged: 1, insertions: 0, deletions: 0 }),
+    ).toBe("(1 file changed)");
   });
 
   test("multiple files changed with insertions and deletions", () => {
-    expect(formatDiffStatSummary({ filesChanged: 3, insertions: 10, deletions: 5 })).toBe(
-      "(3 files changed, +10, -5)",
-    );
+    expect(
+      formatDiffStatSummary({ filesChanged: 3, insertions: 10, deletions: 5 }),
+    ).toBe("(3 files changed, +10, -5)");
   });
 
   test("insertions only", () => {
-    expect(formatDiffStatSummary({ filesChanged: 2, insertions: 7, deletions: 0 })).toBe(
-      "(2 files changed, +7)",
-    );
+    expect(
+      formatDiffStatSummary({ filesChanged: 2, insertions: 7, deletions: 0 }),
+    ).toBe("(2 files changed, +7)");
   });
 
   test("deletions only", () => {
-    expect(formatDiffStatSummary({ filesChanged: 1, insertions: 0, deletions: 3 })).toBe(
-      "(1 file changed, -3)",
-    );
+    expect(
+      formatDiffStatSummary({ filesChanged: 1, insertions: 0, deletions: 3 }),
+    ).toBe("(1 file changed, -3)");
   });
 });
 
 describe("formatDiffFileLine", () => {
   test("shows status, path, and counts", () => {
-    const result = formatDiffFileLine({ status: "M", path: "SKILL.md", insertions: 5, deletions: 2 });
+    const result = formatDiffFileLine({
+      status: "M",
+      path: "SKILL.md",
+      insertions: 5,
+      deletions: 2,
+    });
     expect(result).toContain("M");
     expect(result).toContain("SKILL.md");
     expect(result).toContain("+5");
@@ -232,13 +245,23 @@ describe("formatDiffFileLine", () => {
   });
 
   test("omits counts when both zero", () => {
-    const result = formatDiffFileLine({ status: "A", path: "new.sh", insertions: 0, deletions: 0 });
+    const result = formatDiffFileLine({
+      status: "A",
+      path: "new.sh",
+      insertions: 0,
+      deletions: 0,
+    });
     expect(result).toContain("new.sh");
     expect(result).not.toContain("(");
   });
 
   test("shows only insertions when deletions zero", () => {
-    const result = formatDiffFileLine({ status: "A", path: "new.sh", insertions: 18, deletions: 0 });
+    const result = formatDiffFileLine({
+      status: "A",
+      path: "new.sh",
+      insertions: 18,
+      deletions: 0,
+    });
     expect(result).toContain("+18");
     expect(result).not.toContain("-");
   });

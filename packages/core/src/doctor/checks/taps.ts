@@ -14,10 +14,18 @@ export async function checkTaps(config: Config): Promise<DoctorCheck> {
   let validCount = 0;
 
   const hasBuiltin = config.builtin_tap !== false;
-  const allTaps: Array<{ name: string; url: string; type: "git" | "http" | "builtin" }> = [];
+  const allTaps: Array<{
+    name: string;
+    url: string;
+    type: "git" | "http" | "builtin";
+  }> = [];
 
   if (hasBuiltin) {
-    allTaps.push({ name: BUILTIN_TAP.name, url: BUILTIN_TAP.url, type: "builtin" });
+    allTaps.push({
+      name: BUILTIN_TAP.name,
+      url: BUILTIN_TAP.url,
+      type: "builtin",
+    });
   }
   for (const tap of config.taps) {
     allTaps.push({ name: tap.name, url: tap.url, type: tap.type });

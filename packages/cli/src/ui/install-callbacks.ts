@@ -1,5 +1,4 @@
 import { spinner } from "@clack/prompts";
-import { footerConfirm as confirm, footerSelect as select } from "./footer";
 import type {
   AgentAdapter,
   InstallOptions,
@@ -8,7 +7,10 @@ import type {
   StaticWarning,
   TapEntry,
 } from "@skilltap/core";
+import { footerConfirm as confirm, footerSelect as select } from "./footer";
 import { errorLine } from "./format";
+import type { StepLogger } from "./install-steps";
+import { pluginComponentSummary } from "./plugin-format";
 import {
   confirmInstall,
   confirmReadyInstall,
@@ -17,8 +19,6 @@ import {
   selectTap,
 } from "./prompts";
 import { printSemanticWarnings, printWarnings } from "./scan";
-import type { StepLogger } from "./install-steps";
-import { pluginComponentSummary } from "./plugin-format";
 
 function truncate(str: string, max: number): string {
   return str.length <= max ? str : `${str.slice(0, max - 1)}…`;
@@ -124,10 +124,14 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       : undefined,
 
     onSemanticProgress: agent
-      ? (completed: number, total: number, score: number, reason: string): void => {
+      ? (
+          completed: number,
+          total: number,
+          score: number,
+          reason: string,
+        ): void => {
           const threshold = 5;
-          const flag =
-            score >= threshold ? ` — ⚠ ${truncate(reason, 60)}` : "";
+          const flag = score >= threshold ? ` — ⚠ ${truncate(reason, 60)}` : "";
           semSpinner?.message(
             `Semantic scan: chunk ${completed}/${total}${flag}`,
           );
@@ -225,7 +229,9 @@ export function createInstallCallbacks(ctx: CallbackContext): {
         return true;
       }),
 
-    onPluginDetected: async (manifest: PluginManifest): Promise<"plugin" | "skills-only" | "cancel"> => {
+    onPluginDetected: async (
+      manifest: PluginManifest,
+    ): Promise<"plugin" | "skills-only" | "cancel"> => {
       if (yes) return "plugin";
       return withSpinnerPaused(s, async () => {
         const { isCancel: isCancelPrompt } = await import("@clack/prompts");
@@ -234,8 +240,16 @@ export function createInstallCallbacks(ctx: CallbackContext): {
         const decision = await select({
           message: `Plugin detected: ${manifest.name} (${manifest.format}) — ${summary}`,
           options: [
-            { value: "plugin" as const, label: "Install as plugin", hint: "skills + MCP servers + agents" },
-            { value: "skills-only" as const, label: "Install skills only", hint: "ignore MCP servers and agents" },
+            {
+              value: "plugin" as const,
+              label: "Install as plugin",
+              hint: "skills + MCP servers + agents",
+            },
+            {
+              value: "skills-only" as const,
+              label: "Install skills only",
+              hint: "ignore MCP servers and agents",
+            },
             { value: "cancel" as const, label: "Cancel" },
           ],
         });
@@ -246,11 +260,16 @@ export function createInstallCallbacks(ctx: CallbackContext): {
 
     onPluginWarnings: skipScan
       ? undefined
-      : async (warnings: StaticWarning[], pluginName: string): Promise<boolean> => {
+      : async (
+          warnings: StaticWarning[],
+          pluginName: string,
+        ): Promise<boolean> => {
           return withSpinnerPaused(s, async () => {
             printWarnings(warnings, pluginName);
             if (onWarn === "fail") {
-              errorLine(`Security warnings found in plugin ${pluginName} — aborting (--strict / on_warn=fail)`);
+              errorLine(
+                `Security warnings found in plugin ${pluginName} — aborting (--strict / on_warn=fail)`,
+              );
               process.exit(1);
             }
             if (onWarn === "allow") return true;

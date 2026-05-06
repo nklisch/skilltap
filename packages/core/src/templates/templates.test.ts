@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { basicTemplate } from "./basic";
-import { npmTemplate } from "./npm";
 import { multiTemplate } from "./multi";
+import { npmTemplate } from "./npm";
 
 const OPTS = {
   name: "my-skill",
@@ -101,7 +101,9 @@ describe("multiTemplate", () => {
       author: "Test User",
       skillNames: ["my-alpha", "my-beta"],
     });
-    expect(files[".agents/skills/my-alpha/SKILL.md"]).toContain("name: my-alpha");
+    expect(files[".agents/skills/my-alpha/SKILL.md"]).toContain(
+      "name: my-alpha",
+    );
     expect(files[".agents/skills/my-beta/SKILL.md"]).toContain("name: my-beta");
   });
 

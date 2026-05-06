@@ -24,7 +24,10 @@ export interface NpmPackageMetadata {
 }
 
 /** Parse `npm:<package>[@version]` into package name and version. */
-export function parseNpmSource(source: string): { name: string; version: string } {
+export function parseNpmSource(source: string): {
+  name: string;
+  version: string;
+} {
   const s = source.startsWith("npm:") ? source.slice(4) : source;
 
   if (s.startsWith("@")) {
@@ -73,11 +76,15 @@ export async function fetchPackageMetadata(
   try {
     response = await fetch(url, { headers: { Accept: "application/json" } });
   } catch {
-    return err(new NetworkError("Could not reach npm registry. Check your connection."));
+    return err(
+      new NetworkError("Could not reach npm registry. Check your connection."),
+    );
   }
 
   if (response.status === 404) {
-    return err(new NetworkError(`npm package '${name}' not found on registry.`));
+    return err(
+      new NetworkError(`npm package '${name}' not found on registry.`),
+    );
   }
   if (response.status === 401 || response.status === 403) {
     return err(
@@ -88,7 +95,9 @@ export async function fetchPackageMetadata(
     );
   }
   if (!response.ok) {
-    return err(new NetworkError(`npm registry returned HTTP ${response.status}`));
+    return err(
+      new NetworkError(`npm registry returned HTTP ${response.status}`),
+    );
   }
 
   let data: unknown;
@@ -113,7 +122,8 @@ export async function fetchPackageMetadata(
       dist: {
         tarball: dist.tarball as string,
         integrity: (dist.integrity as string) ?? "",
-        attestations: dist.attestations as NpmVersionInfo["dist"]["attestations"],
+        attestations:
+          dist.attestations as NpmVersionInfo["dist"]["attestations"],
       },
       npmUser: npmUser?.name,
     };
@@ -163,7 +173,9 @@ export async function downloadAndExtract(
   try {
     response = await fetch(tarballUrl);
   } catch {
-    return err(new NetworkError("Could not reach npm registry. Check your connection."));
+    return err(
+      new NetworkError("Could not reach npm registry. Check your connection."),
+    );
   }
 
   if (response.status === 401 || response.status === 403) {
@@ -175,7 +187,11 @@ export async function downloadAndExtract(
     );
   }
   if (!response.ok) {
-    return err(new NetworkError(`Failed to download npm tarball: HTTP ${response.status}`));
+    return err(
+      new NetworkError(
+        `Failed to download npm tarball: HTTP ${response.status}`,
+      ),
+    );
   }
 
   const buffer = await response.arrayBuffer();
@@ -206,7 +222,9 @@ export async function downloadAndExtract(
   } catch (e) {
     const detail = extractStderr(e);
     debug("tar extraction failed", { tarballUrl, error: detail });
-    return err(new NetworkError(`Failed to extract npm package tarball: ${detail}`));
+    return err(
+      new NetworkError(`Failed to extract npm package tarball: ${detail}`),
+    );
   }
 
   return ok(join(dest, "package"));

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { linkSkill } from "./link";
 
 let env: TestEnv;
@@ -35,7 +40,10 @@ Do stuff.
 async function makeSkillDir(name = "test-skill"): Promise<string> {
   const dir = join(tmpDir, name);
   await mkdir(dir, { recursive: true });
-  await Bun.write(join(dir, "SKILL.md"), VALID_SKILL_MD.replace("test-skill", name));
+  await Bun.write(
+    join(dir, "SKILL.md"),
+    VALID_SKILL_MD.replace("test-skill", name),
+  );
   return dir;
 }
 
@@ -151,7 +159,10 @@ describe("linkSkill — happy path", () => {
 
   test("creates agent symlinks when also is specified", async () => {
     const dir = await makeSkillDir();
-    const result = await linkSkill(dir, { scope: "global", also: ["claude-code"] });
+    const result = await linkSkill(dir, {
+      scope: "global",
+      also: ["claude-code"],
+    });
     expect(result.ok).toBe(true);
 
     const agentLinkPath = join(homeDir, ".claude", "skills", "test-skill");

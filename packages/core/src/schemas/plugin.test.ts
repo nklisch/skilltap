@@ -17,7 +17,13 @@ const VALID_SKILL_COMPONENT = {
 
 const VALID_MCP_COMPONENT = {
   type: "mcp" as const,
-  server: { type: "stdio" as const, name: "db", command: "npx", args: ["-y", "db-mcp"], env: {} },
+  server: {
+    type: "stdio" as const,
+    name: "db",
+    command: "npx",
+    args: ["-y", "db-mcp"],
+    env: {},
+  },
 };
 
 const VALID_AGENT_COMPONENT = {
@@ -38,7 +44,11 @@ describe("PluginManifestSchema", () => {
   test("accepts valid manifest with all component types", () => {
     const result = PluginManifestSchema.safeParse({
       ...VALID_MANIFEST,
-      components: [VALID_SKILL_COMPONENT, VALID_MCP_COMPONENT, VALID_AGENT_COMPONENT],
+      components: [
+        VALID_SKILL_COMPONENT,
+        VALID_MCP_COMPONENT,
+        VALID_AGENT_COMPONENT,
+      ],
     });
     expect(result.success).toBe(true);
     if (result.success) {
@@ -68,7 +78,10 @@ describe("PluginManifestSchema", () => {
   });
 
   test("accepts optional version", () => {
-    const result = PluginManifestSchema.safeParse({ ...VALID_MANIFEST, version: "1.2.3" });
+    const result = PluginManifestSchema.safeParse({
+      ...VALID_MANIFEST,
+      version: "1.2.3",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.version).toBe("1.2.3");
@@ -107,22 +120,32 @@ describe("ClaudePluginJsonSchema", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect((result.data as Record<string, unknown>).unknownField).toBe("value");
+      expect((result.data as Record<string, unknown>).unknownField).toBe(
+        "value",
+      );
     }
   });
 
   test("accepts skills as string", () => {
-    const result = ClaudePluginJsonSchema.safeParse({ name: "test", skills: "skills/" });
+    const result = ClaudePluginJsonSchema.safeParse({
+      name: "test",
+      skills: "skills/",
+    });
     expect(result.success).toBe(true);
   });
 
   test("accepts skills as string[]", () => {
-    const result = ClaudePluginJsonSchema.safeParse({ name: "test", skills: ["skills/a", "skills/b"] });
+    const result = ClaudePluginJsonSchema.safeParse({
+      name: "test",
+      skills: ["skills/a", "skills/b"],
+    });
     expect(result.success).toBe(true);
   });
 
   test("rejects missing name", () => {
-    expect(ClaudePluginJsonSchema.safeParse({ description: "no name" }).success).toBe(false);
+    expect(
+      ClaudePluginJsonSchema.safeParse({ description: "no name" }).success,
+    ).toBe(false);
   });
 });
 
@@ -137,11 +160,17 @@ describe("CodexPluginJsonSchema", () => {
   });
 
   test("rejects missing version", () => {
-    expect(CodexPluginJsonSchema.safeParse({ name: "test", description: "desc" }).success).toBe(false);
+    expect(
+      CodexPluginJsonSchema.safeParse({ name: "test", description: "desc" })
+        .success,
+    ).toBe(false);
   });
 
   test("rejects missing description", () => {
-    expect(CodexPluginJsonSchema.safeParse({ name: "test", version: "1.0.0" }).success).toBe(false);
+    expect(
+      CodexPluginJsonSchema.safeParse({ name: "test", version: "1.0.0" })
+        .success,
+    ).toBe(false);
   });
 
   test("tolerates unknown fields", () => {
@@ -157,7 +186,11 @@ describe("CodexPluginJsonSchema", () => {
 
 describe("McpServerEntrySchema", () => {
   test("accepts stdio server with command only", () => {
-    const result = McpServerEntrySchema.safeParse({ type: "stdio", name: "db", command: "npx" });
+    const result = McpServerEntrySchema.safeParse({
+      type: "stdio",
+      name: "db",
+      command: "npx",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.type).toBe("stdio");
@@ -181,7 +214,10 @@ describe("McpServerEntrySchema", () => {
 
   test("defaults type to 'stdio' when omitted", () => {
     // Verify the literal default actually works when type is NOT passed
-    const result = McpStdioServerSchema.safeParse({ name: "db", command: "npx" });
+    const result = McpStdioServerSchema.safeParse({
+      name: "db",
+      command: "npx",
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.type).toBe("stdio");
@@ -199,7 +235,11 @@ describe("McpServerEntrySchema", () => {
 
   test("accepts empty name string (no length constraint)", () => {
     // Plugin schemas don't enforce name length — validation is lenient
-    const result = McpServerEntrySchema.safeParse({ type: "stdio", name: "", command: "npx" });
+    const result = McpServerEntrySchema.safeParse({
+      type: "stdio",
+      name: "",
+      command: "npx",
+    });
     expect(result.success).toBe(true);
   });
 
@@ -216,7 +256,9 @@ describe("McpServerEntrySchema", () => {
   });
 
   test("rejects entry with neither command nor url", () => {
-    expect(McpServerEntrySchema.safeParse({ name: "broken" }).success).toBe(false);
+    expect(McpServerEntrySchema.safeParse({ name: "broken" }).success).toBe(
+      false,
+    );
   });
 });
 
@@ -257,6 +299,8 @@ describe("PluginComponentSchema", () => {
   });
 
   test("discriminates on type field", () => {
-    expect(PluginComponentSchema.safeParse({ type: "unknown" }).success).toBe(false);
+    expect(PluginComponentSchema.safeParse({ type: "unknown" }).success).toBe(
+      false,
+    );
   });
 });

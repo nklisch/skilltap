@@ -10,6 +10,13 @@ const DEFAULT_STATE: State = {
   mcpServers: [],
 };
 
-export async function loadState(projectRoot?: string): Promise<Result<State, UserError>> {
-  return loadJsonState(getStatePath(projectRoot), StateSchema, "state.json", DEFAULT_STATE);
+export async function loadState(
+  projectRoot?: string,
+): Promise<Result<State, UserError>> {
+  return loadJsonState(
+    getStatePath(projectRoot),
+    StateSchema,
+    "state.json",
+    DEFAULT_STATE,
+  );
 }

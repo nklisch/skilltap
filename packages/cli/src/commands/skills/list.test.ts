@@ -7,7 +7,12 @@ import {
   test,
 } from "bun:test";
 import { installSkill } from "@skilltap/core";
-import { createStandaloneSkillRepo, createTestEnv, runSkilltap, type TestEnv } from "@skilltap/test-utils";
+import {
+  createStandaloneSkillRepo,
+  createTestEnv,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -27,7 +32,11 @@ afterEach(async () => {
 
 describe("skilltap skills — empty state", () => {
   test("exits 0 and prints empty message", async () => {
-    const { exitCode, stdout } = await runSkilltap(["skills"], homeDir, configDir);
+    const { exitCode, stdout } = await runSkilltap(
+      ["skills"],
+      homeDir,
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout).toContain("No skills found");
   });
@@ -38,7 +47,11 @@ describe("skilltap skills — with installed skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runSkilltap(["skills"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["skills"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("standalone-skill");
       expect(stdout).toContain("Global");
@@ -102,7 +115,11 @@ describe("aliases", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const { exitCode, stdout } = await runSkilltap(["list"], homeDir, configDir);
+      const { exitCode, stdout } = await runSkilltap(
+        ["list"],
+        homeDir,
+        configDir,
+      );
       expect(exitCode).toBe(0);
       expect(stdout).toContain("standalone-skill");
     } finally {

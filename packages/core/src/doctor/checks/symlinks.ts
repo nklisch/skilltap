@@ -6,7 +6,10 @@ import type { InstalledJson } from "../../schemas/installed";
 import { AGENT_PATHS } from "../../symlink";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
-export async function checkSymlinks(installed: InstalledJson, projectRoot?: string): Promise<DoctorCheck> {
+export async function checkSymlinks(
+  installed: InstalledJson,
+  projectRoot?: string,
+): Promise<DoctorCheck> {
   const issues: DoctorIssue[] = [];
   let total = 0;
   let valid = 0;
@@ -17,7 +20,9 @@ export async function checkSymlinks(installed: InstalledJson, projectRoot?: stri
     const isLinked = skill.scope === "linked";
     const isProject =
       (skill.scope === "project" && !!projectRoot) ||
-      (isLinked && !!projectRoot && !!skill.path?.startsWith(join(projectRoot, ".agents")));
+      (isLinked &&
+        !!projectRoot &&
+        !!skill.path?.startsWith(join(projectRoot, ".agents")));
     const expectedTarget = isLinked
       ? (skill.path ?? skillInstallDir(skill.name, "global"))
       : isProject

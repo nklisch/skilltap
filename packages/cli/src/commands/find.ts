@@ -1,9 +1,11 @@
-import { isCancel, outro, S_RADIO_ACTIVE, S_RADIO_INACTIVE, spinner } from "@clack/prompts";
-import type {
-  Config,
-  RegistrySearchResult,
-  TapEntry,
-} from "@skilltap/core";
+import {
+  isCancel,
+  outro,
+  S_RADIO_ACTIVE,
+  S_RADIO_INACTIVE,
+  spinner,
+} from "@clack/prompts";
+import type { Config, RegistrySearchResult, TapEntry } from "@skilltap/core";
 import {
   composePolicy,
   ensureBuiltinTap,
@@ -57,8 +59,7 @@ export default defineCommand({
   args: {
     query: {
       type: "positional",
-      description:
-        "Search term (matched against name, description, tags)",
+      description: "Search term (matched against name, description, tags)",
       required: false,
     },
     interactive: {
@@ -83,7 +84,9 @@ export default defineCommand({
     // Combine the first positional with any extra words from args._
     // so "skilltap find git hooks" works without quoting
     const rest = (args as Record<string, unknown>)._ as string[] | undefined;
-    const parts = [args.query as string | undefined, ...(rest ?? [])].filter(Boolean);
+    const parts = [args.query as string | undefined, ...(rest ?? [])].filter(
+      Boolean,
+    );
     const query = parts.length > 0 ? parts.join(" ") : undefined;
 
     const configResult = await loadConfig();
@@ -110,7 +113,11 @@ export default defineCommand({
     }
 
     // Non-interactive path
-    const { filtered, tapEntries } = await search(query ?? "", args.local, config);
+    const { filtered, tapEntries } = await search(
+      query ?? "",
+      args.local,
+      config,
+    );
 
     if (filtered.length === 0 && !query) {
       if (tapEntries.length === 0) {
@@ -191,7 +198,12 @@ async function search(
     }),
   );
 
-  const filtered = applyFilter(tapEntries, tapSearchEntries, registryEntries, query);
+  const filtered = applyFilter(
+    tapEntries,
+    tapSearchEntries,
+    registryEntries,
+    query,
+  );
   return { filtered, tapEntries };
 }
 
@@ -231,7 +243,9 @@ function applyFilter(
 
   const filteredRegistry = query
     ? registryEntries.filter((e) => {
-        const terms = [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))];
+        const terms = [
+          ...new Set(query.toLowerCase().split(/\s+/).filter(Boolean)),
+        ];
         const name = e.name.toLowerCase();
         const desc = e.description.toLowerCase();
         return terms.some((t) => name.includes(t) || desc.includes(t));
@@ -255,7 +269,9 @@ function printTable(entries: SearchEntry[]): void {
   const rows = entries.map((e) => [
     (e.plugin ? ansi.dim("[plugin] ") : "") + ansi.bold(e.name),
     truncate(e.description, descWidth),
-    e.installs !== undefined ? ansi.dim(formatInstallCount(e.installs)) : (e.trustLabel ?? ""),
+    e.installs !== undefined
+      ? ansi.dim(formatInstallCount(e.installs))
+      : (e.trustLabel ?? ""),
     ansi.dim(`[${e.source}]`),
   ]);
 
@@ -301,18 +317,16 @@ async function runInteractiveSearch(
     selector: (entry) => `${entry.name} ${entry.description}`,
     renderItem: (entry, active, positions) => {
       const installs =
-        entry.installs !== undefined
-          ? formatInstallCount(entry.installs)
-          : "";
+        entry.installs !== undefined ? formatInstallCount(entry.installs) : "";
       const source = `[${entry.source}]`;
       const meta = installs ? `${source}  ${installs}` : source;
 
       // Layout: name  description  [source]  installs
       const rawName = truncate(entry.name, 30);
       const pluginBadge = entry.plugin ? pc.dim("[plugin] ") : "";
-      const name = pluginBadge + (positions
-        ? highlightMatches(rawName, positions)
-        : rawName);
+      const name =
+        pluginBadge +
+        (positions ? highlightMatches(rawName, positions) : rawName);
 
       // Fill description into remaining space between name and meta
       const fixedCols = rawName.length + 2 + meta.length + 2; // name + gaps + meta
@@ -320,7 +334,10 @@ async function runInteractiveSearch(
       const desc = entry.description
         ? truncate(entry.description, descSpace)
         : "";
-      const pad = Math.max(1, maxLabelWidth - rawName.length - desc.length - meta.length - 2);
+      const pad = Math.max(
+        1,
+        maxLabelWidth - rawName.length - desc.length - meta.length - 2,
+      );
 
       if (active) {
         return `${pc.green(S_RADIO_ACTIVE)} ${name}  ${pc.dim(desc)}${" ".repeat(pad)}${pc.dim(meta)}`;
@@ -344,7 +361,11 @@ async function installChosen(
   const policyResult = composePolicy(config, {});
   if (!policyResult.ok) throw new Error(policyResult.error.message);
   const policy = policyResult.value;
-  const { agent } = await resolveSemanticInteractive(policy, { semantic: false }, config);
+  const { agent } = await resolveSemanticInteractive(
+    policy,
+    { semantic: false },
+    config,
+  );
 
   const { scope, projectRoot } = await resolveScope({}, config);
   let also = config.defaults.also ?? [];

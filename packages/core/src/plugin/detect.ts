@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { discoverSkilltapPlugins } from "../plugin-v2/discover";
-import { type PluginManifest } from "../schemas/plugin";
+import type { PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 import { parseClaudePlugin } from "./parse-claude";
 import { parseCodexPlugin } from "./parse-codex";

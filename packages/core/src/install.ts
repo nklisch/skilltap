@@ -2,19 +2,24 @@ import { mkdir, realpath } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
-import { debug } from "./debug";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
+import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import { checkGitInstalled, clone, revParse } from "./git";
+import { addSkillToManifest } from "./manifest/update";
 import { downloadAndExtract, parseNpmSource } from "./npm-registry";
 import type { OnOrphansFound } from "./orphan";
 import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
+import { detectPlugin } from "./plugin/detect";
+import { installPlugin } from "./plugin/install";
 import type { ScannedSkill } from "./scanner";
 import { scan } from "./scanner";
 import type { ResolvedSource } from "./schemas/agent";
 import type { InstalledSkill } from "./schemas/installed";
+import type { PluginManifest } from "./schemas/plugin";
+import type { PluginRecord } from "./schemas/plugins";
 import type { StaticWarning } from "./security";
 import { scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
@@ -34,11 +39,6 @@ import {
   type ScanError,
   UserError,
 } from "./types";
-import { addSkillToManifest } from "./manifest/update";
-import { detectPlugin } from "./plugin/detect";
-import { installPlugin } from "./plugin/install";
-import type { PluginManifest } from "./schemas/plugin";
-import type { PluginRecord } from "./schemas/plugins";
 
 export type InstallOptions = {
   scope: "global" | "project";
@@ -77,7 +77,12 @@ export type InstallOptions = {
   /** Called when semantic scan begins for a skill. */
   onSemanticScanStart?: (skillName: string) => void;
   /** Called after each chunk is evaluated during semantic scan. */
-  onSemanticProgress?: (completed: number, total: number, score: number, reason: string) => void;
+  onSemanticProgress?: (
+    completed: number,
+    total: number,
+    score: number,
+    reason: string,
+  ) => void;
   /** Called after all scans pass cleanly, before placement. Return false to cancel. */
   onConfirmInstall?: (skillNames: string[]) => Promise<boolean>;
   /** Called when a skill is already installed. Return "update" to update it instead, or "abort" to cancel. */
@@ -90,9 +95,14 @@ export type InstallOptions = {
   onOrphansFound?: OnOrphansFound;
   /** Called when a plugin manifest is detected after cloning. Return "plugin" to install as plugin,
    *  "skills-only" to ignore the plugin and install skills normally, or "cancel" to abort. */
-  onPluginDetected?: (manifest: PluginManifest) => Promise<"plugin" | "skills-only" | "cancel">;
+  onPluginDetected?: (
+    manifest: PluginManifest,
+  ) => Promise<"plugin" | "skills-only" | "cancel">;
   /** Called when static security warnings found during plugin install. Return true to proceed. */
-  onPluginWarnings?: (warnings: StaticWarning[], pluginName: string) => Promise<boolean>;
+  onPluginWarnings?: (
+    warnings: StaticWarning[],
+    pluginName: string,
+  ) => Promise<boolean>;
   /** Called before plugin placement for confirmation. Return false to cancel. */
   onPluginConfirm?: (manifest: PluginManifest) => Promise<boolean>;
 };
@@ -122,16 +132,28 @@ function looksLikeTapName(source: string): boolean {
   return true;
 }
 
-function parseTapPluginRef(source: string): { tapName: string; pluginName: string } | null {
+function parseTapPluginRef(
+  source: string,
+): { tapName: string; pluginName: string } | null {
   if (!source.includes("/")) return null;
   const parts = source.split("/");
   if (parts.length !== 2) return null;
   if (/^(https?:\/\/|git@|ssh:\/\/|github:|npm:)/.test(source)) return null;
-  if (source.startsWith("./") || source.startsWith("/") || source.startsWith("~/")) return null;
+  if (
+    source.startsWith("./") ||
+    source.startsWith("/") ||
+    source.startsWith("~/")
+  )
+    return null;
   return { tapName: parts[0]!, pluginName: parts[1]! };
 }
 
-type TapResolution = { source: string; tap: string; skillName: string; ref?: string };
+type TapResolution = {
+  source: string;
+  tap: string;
+  skillName: string;
+  ref?: string;
+};
 
 /** If source looks like a tap name (or name@ref), resolve it via configured taps. Returns null if not a tap name. */
 async function resolveTapName(
@@ -230,7 +252,15 @@ async function buildPlacements(params: {
   scope: "global" | "project";
   projectRoot?: string;
 }): Promise<Placement[]> {
-  const { isStandalone, adapter, selected, contentDir, resolvedUrl, scope, projectRoot } = params;
+  const {
+    isStandalone,
+    adapter,
+    selected,
+    contentDir,
+    resolvedUrl,
+    scope,
+    projectRoot,
+  } = params;
   const placements: Placement[] = [];
 
   if (isStandalone) {
@@ -295,7 +325,19 @@ async function executePlacements(params: {
   sourceKey: string | undefined;
   cloneUrl?: string;
 }): Promise<InstalledSkill[]> {
-  const { placements, resolved, sha, options, also, now, effectiveTap, finalRef, trust, sourceKey, cloneUrl } = params;
+  const {
+    placements,
+    resolved,
+    sha,
+    options,
+    also,
+    now,
+    effectiveTap,
+    finalRef,
+    trust,
+    sourceKey,
+    cloneUrl,
+  } = params;
   const records: InstalledSkill[] = [];
 
   for (const { skill, srcPath, relPath, destDir, useMove } of placements) {
@@ -312,9 +354,28 @@ async function executePlacements(params: {
       "Check disk space and permissions.",
     );
     if (!shellResult.ok) throw shellResult.error;
-    await createAgentSymlinks(skill.name, destDir, also, options.scope, options.projectRoot);
+    await createAgentSymlinks(
+      skill.name,
+      destDir,
+      also,
+      options.scope,
+      options.projectRoot,
+    );
     records.push(
-      makeRecord(skill, resolved, sha, relPath, options, also, now, effectiveTap, finalRef, trust, sourceKey, cloneUrl),
+      makeRecord(
+        skill,
+        resolved,
+        sha,
+        relPath,
+        options,
+        also,
+        now,
+        effectiveTap,
+        finalRef,
+        trust,
+        sourceKey,
+        cloneUrl,
+      ),
     );
   }
 
@@ -330,7 +391,15 @@ async function resolveInstallTrust(params: {
   contentDir: string;
   finalRef: string | undefined;
 }): Promise<TrustInfo | undefined> {
-  const { tapResult, effectiveTap, effectiveSource, resolved, tmpDir, contentDir, finalRef } = params;
+  const {
+    tapResult,
+    effectiveTap,
+    effectiveSource,
+    resolved,
+    tmpDir,
+    contentDir,
+    finalRef,
+  } = params;
 
   let tapSkillEntry: TapEntry | undefined;
   if (tapResult.ok && tapResult.value) {
@@ -342,26 +411,20 @@ async function resolveInstallTrust(params: {
     }
   }
   const npmInfo =
-    resolved.adapter === "npm"
-      ? parseNpmSource(effectiveSource)
-      : undefined;
+    resolved.adapter === "npm" ? parseNpmSource(effectiveSource) : undefined;
   return resolveTrust({
     adapter: resolved.adapter,
     url: effectiveSource,
     tap: effectiveTap,
     tapSkill: tapSkillEntry?.skill,
     tarballPath:
-      resolved.adapter === "npm"
-        ? join(tmpDir, "_pkg.tgz")
-        : undefined,
+      resolved.adapter === "npm" ? join(tmpDir, "_pkg.tgz") : undefined,
     npmPackageName: npmInfo?.name,
     npmVersion: finalRef ?? undefined,
     npmPublisher: resolved.npmPublisher,
     skillDir: resolved.adapter !== "npm" ? contentDir : undefined,
     githubRepo:
-      resolved.adapter !== "npm"
-        ? parseGitHubRepo(resolved.url)
-        : undefined,
+      resolved.adapter !== "npm" ? parseGitHubRepo(resolved.url) : undefined,
   });
 }
 
@@ -382,7 +445,10 @@ function makeRecord(
   return {
     name: skill.name,
     description: skill.description,
-    repo: resolved.adapter === "local" && !repoUrl ? null : (sourceKey ?? repoUrl ?? resolved.url),
+    repo:
+      resolved.adapter === "local" && !repoUrl
+        ? null
+        : (sourceKey ?? repoUrl ?? resolved.url),
     ref: effectiveRef ?? null,
     sha,
     scope: options.scope,
@@ -398,14 +464,17 @@ function makeRecord(
 export async function installSkill(
   source: string,
   options: InstallOptions,
-): Promise<Result<InstallResult, UserError | GitError | ScanError | NetworkError>> {
+): Promise<
+  Result<InstallResult, UserError | GitError | ScanError | NetworkError>
+> {
   debug("installSkill", { source, scope: options.scope });
   const also = options.also ?? [];
   const allWarnings: StaticWarning[] = [];
   const allSemanticWarnings: SemanticWarning[] = [];
 
   // 1. Check already-installed (state.json canonical, with installed.json fallback for unmigrated v0.x users)
-  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const fileRoot =
+    options.scope === "project" ? options.projectRoot : undefined;
   const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
@@ -416,7 +485,9 @@ export async function installSkill(
     if (orphans.length > 0) {
       const namesToPurge = await options.onOrphansFound(orphans);
       if (namesToPurge.length > 0) {
-        const toPurge = orphans.filter((o) => namesToPurge.includes(o.record.name));
+        const toPurge = orphans.filter((o) =>
+          namesToPurge.includes(o.record.name),
+        );
         await purgeOrphanRecords(toPurge, installed, fileRoot);
       }
     }
@@ -441,29 +512,41 @@ export async function installSkill(
       const tapsResult = await loadTaps();
       if (tapsResult.ok) {
         const match = tapsResult.value.find(
-          (e) => e.tapName === tapPluginRef.tapName && e.tapPlugin?.name === tapPluginRef.pluginName,
+          (e) =>
+            e.tapName === tapPluginRef.tapName &&
+            e.tapPlugin?.name === tapPluginRef.pluginName,
         );
         if (match?.tapPlugin) {
           const tapDirPath = tapDir(tapPluginRef.tapName);
-          const manifestResult = await tapPluginToManifest(match.tapPlugin, tapDirPath);
+          const manifestResult = await tapPluginToManifest(
+            match.tapPlugin,
+            tapDirPath,
+          );
           if (!manifestResult.ok) return manifestResult;
 
           if (options.onPluginDetected) {
-            const decision = await options.onPluginDetected(manifestResult.value);
-            if (decision === "cancel") return err(new UserError("Install cancelled."));
+            const decision = await options.onPluginDetected(
+              manifestResult.value,
+            );
+            if (decision === "cancel")
+              return err(new UserError("Install cancelled."));
             if (decision !== "skills-only") {
-              const result = await installPlugin(tapDirPath, manifestResult.value, {
-                scope: options.scope,
-                projectRoot: options.projectRoot,
-                also,
-                skipScan: options.skipScan,
-                onWarnings: options.onPluginWarnings,
-                onConfirm: options.onPluginConfirm,
-                repo: match.skill.repo ?? null,
-                ref: null,
-                sha: null,
-                tap: tapPluginRef.tapName,
-              });
+              const result = await installPlugin(
+                tapDirPath,
+                manifestResult.value,
+                {
+                  scope: options.scope,
+                  projectRoot: options.projectRoot,
+                  also,
+                  skipScan: options.skipScan,
+                  onWarnings: options.onPluginWarnings,
+                  onConfirm: options.onPluginConfirm,
+                  repo: match.skill.repo ?? null,
+                  ref: null,
+                  sha: null,
+                  tap: tapPluginRef.tapName,
+                },
+              );
               if (!result.ok) return result;
               return ok({
                 records: [],
@@ -476,16 +559,20 @@ export async function installSkill(
             // decision === "skills-only": fall through to normal resolution
           } else {
             // No callback — auto-install as plugin
-            const result = await installPlugin(tapDirPath, manifestResult.value, {
-              scope: options.scope,
-              projectRoot: options.projectRoot,
-              also,
-              skipScan: options.skipScan,
-              repo: match.skill.repo ?? null,
-              ref: null,
-              sha: null,
-              tap: tapPluginRef.tapName,
-            });
+            const result = await installPlugin(
+              tapDirPath,
+              manifestResult.value,
+              {
+                scope: options.scope,
+                projectRoot: options.projectRoot,
+                also,
+                skipScan: options.skipScan,
+                repo: match.skill.repo ?? null,
+                ref: null,
+                sha: null,
+                tap: tapPluginRef.tapName,
+              },
+            );
             if (!result.ok) return result;
             return ok({
               records: [],
@@ -509,7 +596,11 @@ export async function installSkill(
   const finalRef = effectiveRef ?? resolved.ref;
 
   // 2.5. Check git is installed (skip for local paths, npm, and http tarball downloads)
-  if (resolved.adapter !== "local" && resolved.adapter !== "npm" && resolved.adapter !== "http") {
+  if (
+    resolved.adapter !== "local" &&
+    resolved.adapter !== "npm" &&
+    resolved.adapter !== "http"
+  ) {
     const gitCheck = await checkGitInstalled();
     if (!gitCheck.ok) return gitCheck;
   }
@@ -536,7 +627,10 @@ export async function installSkill(
       sha = null;
     } else if (resolved.adapter === "local") {
       // Local paths: try git clone first (preserves update capability), fall back to cp
-      const isGitRepo = await $`git -C ${resolved.url} rev-parse --git-dir`.quiet().then(() => true).catch(() => false);
+      const isGitRepo = await $`git -C ${resolved.url} rev-parse --git-dir`
+        .quiet()
+        .then(() => true)
+        .catch(() => false);
       if (isGitRepo) {
         const cloneResult = await clone(resolved.url, tmpDir, {
           branch: effectiveRef,
@@ -551,7 +645,8 @@ export async function installSkill(
       } else {
         // Non-git local dir: copy directly
         const cpResult = await wrapShell(
-          () => $`cp -a ${resolved.url}/. ${tmpDir}`.quiet().then(() => undefined),
+          () =>
+            $`cp -a ${resolved.url}/. ${tmpDir}`.quiet().then(() => undefined),
           `Failed to copy local skill from "${resolved.url}"`,
           "Check that the path exists and is readable.",
         );
@@ -585,20 +680,25 @@ export async function installSkill(
 
     if (pluginResult.value && options.onPluginDetected) {
       const decision = await options.onPluginDetected(pluginResult.value);
-      if (decision === "cancel") return err(new UserError("Install cancelled."));
+      if (decision === "cancel")
+        return err(new UserError("Install cancelled."));
       if (decision === "plugin") {
-        const pluginInstallResult = await installPlugin(contentDir, pluginResult.value, {
-          scope: options.scope,
-          projectRoot: options.projectRoot,
-          also,
-          skipScan: options.skipScan,
-          onWarnings: options.onPluginWarnings,
-          onConfirm: options.onPluginConfirm,
-          repo: cloneUrl ?? resolved.url,
-          ref: finalRef ?? null,
-          sha,
-          tap: effectiveTap,
-        });
+        const pluginInstallResult = await installPlugin(
+          contentDir,
+          pluginResult.value,
+          {
+            scope: options.scope,
+            projectRoot: options.projectRoot,
+            also,
+            skipScan: options.skipScan,
+            onWarnings: options.onPluginWarnings,
+            onConfirm: options.onPluginConfirm,
+            repo: cloneUrl ?? resolved.url,
+            ref: finalRef ?? null,
+            sha,
+            tap: effectiveTap,
+          },
+        );
         if (!pluginInstallResult.ok) return pluginInstallResult;
         return ok({
           records: [],
@@ -650,7 +750,8 @@ export async function installSkill(
     // 6.1. Check for already-installed conflicts — before running security scans
     const toUpdate: string[] = [];
     const toInstall: ScannedSkill[] = [];
-    const projectRoot = options.scope === "project" ? options.projectRoot : undefined;
+    const projectRoot =
+      options.scope === "project" ? options.projectRoot : undefined;
     for (const skill of selected) {
       const conflict = installed.skills.find(
         (s) => s.name === skill.name && s.scope === options.scope,
@@ -666,7 +767,12 @@ export async function installSkill(
         if (!(await resolvedDirExists(conflictDir))) {
           // Phantom conflict: record exists but directory is gone. Clean up and install fresh.
           installed.skills = installed.skills.filter((s) => s !== conflict);
-          await removeAgentSymlinks(conflict.name, conflict.also, conflict.scope, projectRoot);
+          await removeAgentSymlinks(
+            conflict.name,
+            conflict.also,
+            conflict.scope,
+            projectRoot,
+          );
           toInstall.push(skill);
           continue;
         }
@@ -695,13 +801,22 @@ export async function installSkill(
     }
     // If every selected skill is already installed, skip the rest and return update list
     if (toInstall.length === 0) {
-      return ok({ records: [], warnings: [], semanticWarnings: [], updates: toUpdate });
+      return ok({
+        records: [],
+        warnings: [],
+        semanticWarnings: [],
+        updates: toUpdate,
+      });
     }
     selected = toInstall;
 
     // 6.5. Security scan (unless skipped)
     if (!options.skipScan) {
-      const scanResult = await runSecurityScan(selected, options.onWarnings, options.onStaticScanStart);
+      const scanResult = await runSecurityScan(
+        selected,
+        options.onWarnings,
+        options.onStaticScanStart,
+      );
       if (!scanResult.ok) return scanResult;
       allWarnings.push(...scanResult.value);
     }
@@ -734,18 +849,31 @@ export async function installSkill(
     }
 
     // 6.7. Clean-install confirmation (fires only when no warnings were found and no --yes)
-    if (allWarnings.length === 0 && allSemanticWarnings.length === 0 && options.onConfirmInstall) {
-      const proceed = await options.onConfirmInstall(selected.map((s) => s.name));
+    if (
+      allWarnings.length === 0 &&
+      allSemanticWarnings.length === 0 &&
+      options.onConfirmInstall
+    ) {
+      const proceed = await options.onConfirmInstall(
+        selected.map((s) => s.name),
+      );
       if (!proceed) return err(new UserError("Install cancelled."));
     }
 
     // 7.5. Resolve trust (once per source, before placement)
     const trust = await resolveInstallTrust({
-      tapResult, effectiveTap, effectiveSource, resolved, tmpDir, contentDir, finalRef,
+      tapResult,
+      effectiveTap,
+      effectiveSource,
+      resolved,
+      tmpDir,
+      contentDir,
+      finalRef,
     });
 
     // 8. Build and execute placements
-    const isStandalone = scanned.length === 1 && scanned[0]?.path === contentDir;
+    const isStandalone =
+      scanned.length === 1 && scanned[0]?.path === contentDir;
     const sourceKey =
       resolved.adapter === "npm" || resolved.adapter === "http"
         ? effectiveSource
@@ -753,14 +881,29 @@ export async function installSkill(
     const now = new Date().toISOString();
 
     // For placement strategy: local git repos use the git cache path (not the npm/http copy path)
-    const placementAdapter = resolved.adapter === "local" && cloneUrl ? "git" : resolved.adapter;
+    const placementAdapter =
+      resolved.adapter === "local" && cloneUrl ? "git" : resolved.adapter;
     const placements = await buildPlacements({
-      isStandalone, adapter: placementAdapter, selected, contentDir,
-      resolvedUrl: resolved.url, scope: options.scope, projectRoot: options.projectRoot,
+      isStandalone,
+      adapter: placementAdapter,
+      selected,
+      contentDir,
+      resolvedUrl: resolved.url,
+      scope: options.scope,
+      projectRoot: options.projectRoot,
     });
     const newRecords = await executePlacements({
-      placements, resolved, sha, options, also, now,
-      effectiveTap, finalRef, trust, sourceKey, cloneUrl,
+      placements,
+      resolved,
+      sha,
+      options,
+      also,
+      now,
+      effectiveTap,
+      finalRef,
+      trust,
+      sourceKey,
+      cloneUrl,
     });
 
     debug("placements complete", { installed: newRecords.map((r) => r.name) });
@@ -781,7 +924,10 @@ export async function installSkill(
           ref: record.ref,
           sha: record.sha,
         }).catch((e) => {
-          debug("manifest update failed (non-fatal)", { name: record.name, error: String(e) });
+          debug("manifest update failed (non-fatal)", {
+            name: record.name,
+            error: String(e),
+          });
         });
       }
     }

@@ -1,5 +1,5 @@
-import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { writeFile, mkdir, mkdtemp, rm, readFile } from "node:fs/promises";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
@@ -133,7 +133,9 @@ describe("checkMcpConsistency", () => {
     const check = await checkMcpConsistency(state);
     expect(check.status).toBe("warn");
     expect(check.issues).toHaveLength(1);
-    expect(check.issues![0].message).toContain("Missing in claude-code (global)");
+    expect(check.issues![0].message).toContain(
+      "Missing in claude-code (global)",
+    );
     expect(check.issues![0].message).toContain("skilltap:my-plugin:my-server");
     expect(check.issues![0].fixable).toBe(false);
   });
@@ -168,14 +170,18 @@ describe("checkMcpConsistency", () => {
 
     // Verify key is present before fix
     const before = JSON.parse(await readFile(configPath, "utf8"));
-    expect(before.mcpServers["skilltap:orphan-plugin:stale-server"]).toBeDefined();
+    expect(
+      before.mcpServers["skilltap:orphan-plugin:stale-server"],
+    ).toBeDefined();
 
     // Run the fix
     await issue.fix!();
 
     // Verify key is removed after fix
     const after = JSON.parse(await readFile(configPath, "utf8"));
-    expect(after.mcpServers["skilltap:orphan-plugin:stale-server"]).toBeUndefined();
+    expect(
+      after.mcpServers["skilltap:orphan-plugin:stale-server"],
+    ).toBeUndefined();
   });
 
   test("skips inactive plugins and inactive MCP components", async () => {

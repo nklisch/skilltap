@@ -16,7 +16,9 @@ describe("trustMatches", () => {
   test("trailing wildcard", () => {
     expect(trustMatches("github.com/corp/*", "github.com/corp/foo")).toBe(true);
     expect(trustMatches("github.com/corp/*", "github.com/corp/")).toBe(true);
-    expect(trustMatches("github.com/corp/*", "github.com/other/foo")).toBe(false);
+    expect(trustMatches("github.com/corp/*", "github.com/other/foo")).toBe(
+      false,
+    );
   });
 
   test("leading wildcard", () => {
@@ -25,14 +27,24 @@ describe("trustMatches", () => {
   });
 
   test("middle wildcard", () => {
-    expect(trustMatches("github.com/*/skills", "github.com/corp/skills")).toBe(true);
-    expect(trustMatches("github.com/*/skills", "github.com/corp/other")).toBe(false);
+    expect(trustMatches("github.com/*/skills", "github.com/corp/skills")).toBe(
+      true,
+    );
+    expect(trustMatches("github.com/*/skills", "github.com/corp/other")).toBe(
+      false,
+    );
   });
 
   test("multiple wildcards", () => {
-    expect(trustMatches("*://github.com/corp/*", "https://github.com/corp/foo")).toBe(true);
-    expect(trustMatches("*://github.com/corp/*", "ssh://github.com/corp/bar")).toBe(true);
-    expect(trustMatches("*://github.com/corp/*", "github.com/corp/foo")).toBe(false);
+    expect(
+      trustMatches("*://github.com/corp/*", "https://github.com/corp/foo"),
+    ).toBe(true);
+    expect(
+      trustMatches("*://github.com/corp/*", "ssh://github.com/corp/bar"),
+    ).toBe(true);
+    expect(trustMatches("*://github.com/corp/*", "github.com/corp/foo")).toBe(
+      false,
+    );
   });
 
   test("npm prefix matching", () => {
@@ -64,17 +76,25 @@ describe("trustMatches", () => {
 describe("isTrusted", () => {
   test("empty trust list → never trusted", () => {
     expect(isTrusted([], { sourceUrl: "github.com/corp/foo" })).toBe(false);
-    expect(isTrusted([], { sourceUrl: "github.com/corp/foo", tapName: "home" })).toBe(false);
+    expect(
+      isTrusted([], { sourceUrl: "github.com/corp/foo", tapName: "home" }),
+    ).toBe(false);
   });
 
   test("matches against tapName when present", () => {
-    expect(isTrusted(["home"], { sourceUrl: "https://...", tapName: "home" })).toBe(true);
+    expect(
+      isTrusted(["home"], { sourceUrl: "https://...", tapName: "home" }),
+    ).toBe(true);
     expect(isTrusted(["home"], { sourceUrl: "https://..." })).toBe(false);
   });
 
   test("matches against sourceUrl", () => {
-    expect(isTrusted(["github.com/corp/*"], { sourceUrl: "github.com/corp/foo" })).toBe(true);
-    expect(isTrusted(["github.com/corp/*"], { sourceUrl: "github.com/other/foo" })).toBe(false);
+    expect(
+      isTrusted(["github.com/corp/*"], { sourceUrl: "github.com/corp/foo" }),
+    ).toBe(true);
+    expect(
+      isTrusted(["github.com/corp/*"], { sourceUrl: "github.com/other/foo" }),
+    ).toBe(false);
   });
 
   test("any one pattern in the list is sufficient", () => {
@@ -84,7 +104,10 @@ describe("isTrusted", () => {
 
   test("matches tapName OR sourceUrl, not just one", () => {
     expect(
-      isTrusted(["home"], { sourceUrl: "https://gitlab.example.com/n/r", tapName: "home" }),
+      isTrusted(["home"], {
+        sourceUrl: "https://gitlab.example.com/n/r",
+        tapName: "home",
+      }),
     ).toBe(true);
     expect(
       isTrusted(["https://gitlab.example.com/*"], {
@@ -96,8 +119,8 @@ describe("isTrusted", () => {
 
   test("first match wins (no need to evaluate the rest)", () => {
     // This is a behavioral check — function returns true on first match.
-    expect(
-      isTrusted(["github.com/*"], { sourceUrl: "github.com/foo" }),
-    ).toBe(true);
+    expect(isTrusted(["github.com/*"], { sourceUrl: "github.com/foo" })).toBe(
+      true,
+    );
   });
 });

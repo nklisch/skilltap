@@ -28,7 +28,9 @@ export async function parseClaudePlugin(
 
   const parsed = ClaudePluginJsonSchema.safeParse(raw);
   if (!parsed.success) {
-    return err(new UserError(`Invalid plugin.json: missing required field "name"`));
+    return err(
+      new UserError(`Invalid plugin.json: missing required field "name"`),
+    );
   }
   const manifest = parsed.data;
 
@@ -56,7 +58,9 @@ export async function parseClaudePlugin(
         }
       }
     } else if (typeof manifest.mcpServers === "object") {
-      const mcpResult = parseMcpObject(manifest.mcpServers as Record<string, unknown>);
+      const mcpResult = parseMcpObject(
+        manifest.mcpServers as Record<string, unknown>,
+      );
       if (!mcpResult.ok) return mcpResult;
       for (const server of mcpResult.value) {
         mcpComponents.push({ type: "mcp", server });
@@ -73,7 +77,9 @@ export async function parseClaudePlugin(
   // --- Agents ---
   const agentComponents: PluginManifest["components"] = [];
   if (manifest.agents !== undefined) {
-    const agentPaths = Array.isArray(manifest.agents) ? manifest.agents : [manifest.agents];
+    const agentPaths = Array.isArray(manifest.agents)
+      ? manifest.agents
+      : [manifest.agents];
     for (const agentPath of agentPaths) {
       const absDir = resolve(pluginDir, agentPath);
       const agentResult = await parseAgentDefinitions(absDir, pluginDir);
@@ -81,7 +87,10 @@ export async function parseClaudePlugin(
       agentComponents.push(...agentResult.value);
     }
   } else {
-    const agentResult = await parseAgentDefinitions(join(pluginDir, "agents"), pluginDir);
+    const agentResult = await parseAgentDefinitions(
+      join(pluginDir, "agents"),
+      pluginDir,
+    );
     if (!agentResult.ok) return agentResult;
     agentComponents.push(...agentResult.value);
   }

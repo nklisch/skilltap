@@ -1,17 +1,37 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, type TestEnv, commitAll, createStandaloneSkillRepo, initRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import {
+  commitAll,
+  createStandaloneSkillRepo,
+  createTestEnv,
+  initRepo,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
 /** Write a minimal config.toml with builtin_tap = false to keep tests offline. */
 async function disableBuiltinTap(configDir: string): Promise<void> {
   await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await Bun.write(join(configDir, "skilltap", "config.toml"), "builtin_tap = false\n");
+  await Bun.write(
+    join(configDir, "skilltap", "config.toml"),
+    "builtin_tap = false\n",
+  );
 }
-
 
 async function createLocalTap(
   skills: Array<{ name: string; description: string; repo: string }>,

@@ -1,7 +1,7 @@
 import { loadConfig, saveConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine } from "../../ui/format";
 import { isTelemetryEnabled } from "../../telemetry";
+import { errorLine } from "../../ui/format";
 
 const status = defineCommand({
   meta: {
@@ -20,8 +20,12 @@ const status = defineCommand({
     const disabled = process.env.SKILLTAP_TELEMETRY_DISABLED === "1";
 
     if (doNotTrack || disabled) {
-      const envVar = doNotTrack ? "DO_NOT_TRACK" : "SKILLTAP_TELEMETRY_DISABLED";
-      process.stdout.write(`Telemetry: disabled (${envVar}=1 overrides config)\n`);
+      const envVar = doNotTrack
+        ? "DO_NOT_TRACK"
+        : "SKILLTAP_TELEMETRY_DISABLED";
+      process.stdout.write(
+        `Telemetry: disabled (${envVar}=1 overrides config)\n`,
+      );
       return;
     }
 
@@ -30,12 +34,20 @@ const status = defineCommand({
       process.stdout.write(`Anonymous ID: ${config.telemetry.anonymous_id}\n`);
     } else {
       process.stdout.write(`Telemetry: disabled\n`);
-      process.stdout.write(`Run 'skilltap config telemetry enable' to opt in.\n`);
+      process.stdout.write(
+        `Run 'skilltap config telemetry enable' to opt in.\n`,
+      );
     }
 
-    process.stdout.write(`\nWhat's collected: OS, arch, CLI version, command success/failure,\n`);
-    process.stdout.write(`error type, skill count, duration. No skill names, paths, or personal info.\n`);
-    process.stdout.write(`Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.\n`);
+    process.stdout.write(
+      `\nWhat's collected: OS, arch, CLI version, command success/failure,\n`,
+    );
+    process.stdout.write(
+      `error type, skill count, duration. No skill names, paths, or personal info.\n`,
+    );
+    process.stdout.write(
+      `Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.\n`,
+    );
   },
 });
 
@@ -55,7 +67,11 @@ const enable = defineCommand({
     const anonymousId = config.telemetry.anonymous_id || crypto.randomUUID();
     const updated = {
       ...config,
-      telemetry: { ...config.telemetry, enabled: true, anonymous_id: anonymousId },
+      telemetry: {
+        ...config.telemetry,
+        enabled: true,
+        anonymous_id: anonymousId,
+      },
     };
 
     const saveResult = await saveConfig(updated);
@@ -65,7 +81,9 @@ const enable = defineCommand({
     }
 
     process.stdout.write(`Telemetry enabled. Anonymous ID: ${anonymousId}\n`);
-    process.stdout.write(`Run 'skilltap config telemetry disable' to opt out at any time.\n`);
+    process.stdout.write(
+      `Run 'skilltap config telemetry disable' to opt out at any time.\n`,
+    );
   },
 });
 

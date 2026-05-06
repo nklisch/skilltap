@@ -16,9 +16,15 @@ export function parseSkillFrontmatter(
   while (i < lines.length) {
     const line = lines[i]!;
     const sep = line.indexOf(":");
-    if (sep === -1) { i++; continue; }
+    if (sep === -1) {
+      i++;
+      continue;
+    }
     const key = line.slice(0, sep).trim();
-    if (!key) { i++; continue; }
+    if (!key) {
+      i++;
+      continue;
+    }
     const raw = line.slice(sep + 1).trim();
     if (raw === ">" || raw === "|") {
       const style = raw;
@@ -31,7 +37,8 @@ export function parseSkillFrontmatter(
           i++;
         } else break;
       }
-      data[key] = style === ">" ? parts.join(" ").trim() : parts.join("\n").trimEnd();
+      data[key] =
+        style === ">" ? parts.join(" ").trim() : parts.join("\n").trimEnd();
     } else if (raw === "") {
       // Empty value — check if next lines are indented (nested object)
       const nested: Record<string, unknown> = {};
@@ -48,7 +55,8 @@ export function parseSkillFrontmatter(
               hasNested = true;
               if (nraw === "true") nested[nkey] = true;
               else if (nraw === "false") nested[nkey] = false;
-              else if (nraw !== "" && !Number.isNaN(Number(nraw))) nested[nkey] = Number(nraw);
+              else if (nraw !== "" && !Number.isNaN(Number(nraw)))
+                nested[nkey] = Number(nraw);
               else nested[nkey] = nraw;
             }
           }
@@ -59,7 +67,8 @@ export function parseSkillFrontmatter(
     } else {
       if (raw === "true") data[key] = true;
       else if (raw === "false") data[key] = false;
-      else if (raw !== "" && !Number.isNaN(Number(raw))) data[key] = Number(raw);
+      else if (raw !== "" && !Number.isNaN(Number(raw)))
+        data[key] = Number(raw);
       else data[key] = raw;
       i++;
     }

@@ -27,7 +27,11 @@ export async function parseCodexPlugin(
 
   const parsed = CodexPluginJsonSchema.safeParse(raw);
   if (!parsed.success) {
-    return err(new UserError(`Invalid plugin.json: missing required fields (name, version, description)`));
+    return err(
+      new UserError(
+        `Invalid plugin.json: missing required fields (name, version, description)`,
+      ),
+    );
   }
   const manifest = parsed.data;
 

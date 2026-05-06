@@ -1,5 +1,14 @@
-import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+
 setDefaultTimeout(60_000);
+
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
@@ -63,7 +72,10 @@ describe("skilltap config get", () => {
   });
 
   test("gets security.human.scan default", async () => {
-    const { exitCode, stdout } = await runGet(["security.human.scan"], configDir);
+    const { exitCode, stdout } = await runGet(
+      ["security.human.scan"],
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("static");
   });
@@ -100,31 +112,46 @@ describe("skilltap config get", () => {
   });
 
   test("gets security.agent.on_warn default", async () => {
-    const { exitCode, stdout } = await runGet(["security.agent.on_warn"], configDir);
+    const { exitCode, stdout } = await runGet(
+      ["security.agent.on_warn"],
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("fail");
   });
 
   test("gets security.agent.require_scan default", async () => {
-    const { exitCode, stdout } = await runGet(["security.agent.require_scan"], configDir);
+    const { exitCode, stdout } = await runGet(
+      ["security.agent.require_scan"],
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("true");
   });
 
   test("gets security.human.on_warn default", async () => {
-    const { exitCode, stdout } = await runGet(["security.human.on_warn"], configDir);
+    const { exitCode, stdout } = await runGet(
+      ["security.human.on_warn"],
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("prompt");
   });
 
   test("gets security.agent_cli default", async () => {
-    const { exitCode, stdout } = await runGet(["security.agent_cli"], configDir);
+    const { exitCode, stdout } = await runGet(
+      ["security.agent_cli"],
+      configDir,
+    );
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("");
   });
 
   test("gets security section as object", async () => {
-    const { exitCode, stdout } = await runGet(["security", "--json"], configDir);
+    const { exitCode, stdout } = await runGet(
+      ["security", "--json"],
+      configDir,
+    );
     expect(exitCode).toBe(0);
     const sec = JSON.parse(stdout);
     expect(sec.human).toBeDefined();

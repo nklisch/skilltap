@@ -6,9 +6,9 @@ export * from "./config";
 export * from "./installed";
 export * from "./marketplace";
 export * from "./plugin";
+export * from "./plugins";
 export * from "./skill";
 export * from "./tap";
-export * from "./plugins";
 
 export function parseWithResult<T>(
   schema: z.ZodType<T>,
@@ -17,7 +17,9 @@ export function parseWithResult<T>(
 ): Result<T, UserError> {
   const result = schema.safeParse(data);
   if (!result.success) {
-    return err(new UserError(`Invalid ${label}: ${z.prettifyError(result.error)}`));
+    return err(
+      new UserError(`Invalid ${label}: ${z.prettifyError(result.error)}`),
+    );
   }
   return ok(result.data);
 }

@@ -8,7 +8,12 @@ import {
 } from "bun:test";
 import { lstat, mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { $ } from "bun";
 import { saveInstalled } from "./config";
 import { discoverSkills } from "./discover";
@@ -203,8 +208,12 @@ describe("discoverSkills", () => {
     if (!result.ok) return;
 
     expect(result.value.skills.every((s) => !s.managed)).toBe(true);
-    expect(result.value.skills.find((s) => s.name === "managed")).toBeUndefined();
-    expect(result.value.skills.find((s) => s.name === "unmanaged")).toBeDefined();
+    expect(
+      result.value.skills.find((s) => s.name === "managed"),
+    ).toBeUndefined();
+    expect(
+      result.value.skills.find((s) => s.name === "unmanaged"),
+    ).toBeDefined();
   });
 
   test("respects global/project filters — global only", async () => {
@@ -351,7 +360,10 @@ describe("discoverSkills", () => {
   test("parses description from SKILL.md without frontmatter", async () => {
     const skillDir = join(homeDir, ".agents", "skills", "no-frontmatter");
     await mkdir(skillDir, { recursive: true });
-    await Bun.write(join(skillDir, "SKILL.md"), `# My Skill\n\nSome content.\n`);
+    await Bun.write(
+      join(skillDir, "SKILL.md"),
+      `# My Skill\n\nSome content.\n`,
+    );
 
     const result = await discoverSkills({ global: true, project: false });
     expect(result.ok).toBe(true);

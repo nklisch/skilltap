@@ -1,16 +1,21 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, symlink } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { loadInstalled, saveInstalled } from "./config";
-import { skillCacheDir, skillInstallDir } from "./paths";
 import {
   findOrphanRecords,
   formatOrphanReason,
   purgeOrphanRecords,
 } from "./orphan";
-import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import { skillCacheDir, skillInstallDir } from "./paths";
 import { removeSkill } from "./remove";
+import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 
 let env: TestEnv;
 let homeDir: string;
@@ -281,7 +286,9 @@ describe("purgeOrphanRecords", () => {
     const installed = makeInstalled([healthySkill, orphanSkill]);
     await saveInstalled(installed);
 
-    const orphans = [{ record: orphanSkill, reason: "directory-missing" as const }];
+    const orphans = [
+      { record: orphanSkill, reason: "directory-missing" as const },
+    ];
     await purgeOrphanRecords(orphans, installed);
 
     const reloaded = await loadInstalled();
@@ -348,7 +355,12 @@ describe("findOrphanRecords — additional cases", () => {
     const projectRoot = await makeTmpDir();
     try {
       const skill = makeSkill({ name: "project-skill", scope: "project" });
-      const installDir = join(projectRoot, ".agents", "skills", "project-skill");
+      const installDir = join(
+        projectRoot,
+        ".agents",
+        "skills",
+        "project-skill",
+      );
       await mkdir(installDir, { recursive: true });
       const installed = makeInstalled([skill]);
 

@@ -1,7 +1,7 @@
 import { multiselect } from "@clack/prompts";
-import { defineCommand } from "citty";
-import { loadPlugins, toggleInstalledComponent } from "@skilltap/core";
 import type { StoredComponent } from "@skilltap/core";
+import { loadPlugins, toggleInstalledComponent } from "@skilltap/core";
+import { defineCommand } from "citty";
 import { agentError, exitWithError } from "../../ui/agent-out";
 import { ansi, errorLine, successLine } from "../../ui/format";
 import { componentLabel } from "../../ui/plugin-format";
@@ -65,16 +65,21 @@ export default defineCommand({
       );
     }
 
-    let toToggle: StoredComponent[] = [];
+    const toToggle: StoredComponent[] = [];
 
     const hasFilter = args.skills || args.mcps || args.agents;
 
     if (hasFilter) {
-      if (args.skills) toToggle.push(...plugin.components.filter((c) => c.type === "skill"));
-      if (args.mcps) toToggle.push(...plugin.components.filter((c) => c.type === "mcp"));
-      if (args.agents) toToggle.push(...plugin.components.filter((c) => c.type === "agent"));
+      if (args.skills)
+        toToggle.push(...plugin.components.filter((c) => c.type === "skill"));
+      if (args.mcps)
+        toToggle.push(...plugin.components.filter((c) => c.type === "mcp"));
+      if (args.agents)
+        toToggle.push(...plugin.components.filter((c) => c.type === "agent"));
     } else if (agentMode) {
-      agentError("Provide --skills, --mcps, or --agents to specify what to toggle.");
+      agentError(
+        "Provide --skills, --mcps, or --agents to specify what to toggle.",
+      );
       process.exit(1);
     } else {
       // Interactive multiselect
@@ -117,14 +122,30 @@ export default defineCommand({
       return;
     }
 
-    const results: { component: StoredComponent; nowActive: boolean; error?: string }[] = [];
+    const results: {
+      component: StoredComponent;
+      nowActive: boolean;
+      error?: string;
+    }[] = [];
 
     for (const c of toToggle) {
-      const result = await toggleInstalledComponent(plugin.name, c.type, c.name, { projectRoot });
+      const result = await toggleInstalledComponent(
+        plugin.name,
+        c.type,
+        c.name,
+        { projectRoot },
+      );
       if (!result.ok) {
-        results.push({ component: c, nowActive: c.active, error: result.error.message });
+        results.push({
+          component: c,
+          nowActive: c.active,
+          error: result.error.message,
+        });
       } else {
-        results.push({ component: result.value.component, nowActive: result.value.nowActive });
+        results.push({
+          component: result.value.component,
+          nowActive: result.value.nowActive,
+        });
       }
     }
 
@@ -135,7 +156,9 @@ export default defineCommand({
 
     for (const r of results) {
       if (r.error) {
-        errorLine(`Failed to toggle ${componentLabel(r.component)}: ${r.error}`);
+        errorLine(
+          `Failed to toggle ${componentLabel(r.component)}: ${r.error}`,
+        );
       } else {
         const action = r.nowActive ? "Enabled" : "Disabled";
         successLine(`${action} ${componentLabel(r.component)}`);

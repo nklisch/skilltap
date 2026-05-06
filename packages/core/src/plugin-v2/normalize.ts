@@ -7,11 +7,8 @@ import type {
   PluginMcpComponent,
   PluginSkillComponent,
 } from "../schemas/plugin";
-import { ok, type Result, UserError } from "../types";
-import type {
-  PluginManifestV2,
-  PluginV2Server,
-} from "./schema";
+import { ok, type Result, type UserError } from "../types";
+import type { PluginManifestV2, PluginV2Server } from "./schema";
 
 // Convert a PluginManifestV2 (native v2.0 format) into the internal
 // PluginManifest used by the existing install pipeline. Agents are read
@@ -37,7 +34,11 @@ export async function pluginV2ToManifest(
     description: v2.description,
     format: "skilltap",
     pluginRoot: repoRoot,
-    components: [...skillComponents.value, ...mcpComponents, ...agentResult.value],
+    components: [
+      ...skillComponents.value,
+      ...mcpComponents,
+      ...agentResult.value,
+    ],
   });
 }
 
@@ -123,7 +124,10 @@ async function collectAgents(
 }
 
 // Helpers exposed for tests
-export { collectSkills as _collectSkillsForTest, serverToComponent as _serverToComponentForTest };
+export {
+  collectSkills as _collectSkillsForTest,
+  serverToComponent as _serverToComponentForTest,
+};
 // Force `relative` and `join` unused-vars warnings to vanish if linter is strict —
 // they're used above.
 void [join, relative];

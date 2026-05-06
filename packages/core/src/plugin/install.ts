@@ -2,17 +2,27 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import { getConfigDir } from "../config";
+import { addPluginToManifest } from "../manifest/update";
 import { agentDefPath, skillInstallDir } from "../paths";
-import type { PluginAgentComponent, PluginManifest, PluginMcpComponent } from "../schemas/plugin";
+import type {
+  PluginAgentComponent,
+  PluginManifest,
+  PluginMcpComponent,
+} from "../schemas/plugin";
 import type { PluginRecord, StoredMcpComponent } from "../schemas/plugins";
+import type { StaticWarning } from "../security/static";
 import { scanStatic } from "../security/static";
 import { wrapShell } from "../shell";
 import { createAgentSymlinks } from "../symlink";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
-import { addPluginToManifest } from "../manifest/update";
 import { injectMcpServers } from "./mcp-inject";
-import { addPlugin, loadPlugins, manifestToRecord, mcpServerToStored, savePlugins } from "./state";
-import type { StaticWarning } from "../security/static";
+import {
+  addPlugin,
+  loadPlugins,
+  manifestToRecord,
+  mcpServerToStored,
+  savePlugins,
+} from "./state";
 
 export type PluginInstallOptions = {
   scope: "global" | "project";
@@ -20,7 +30,10 @@ export type PluginInstallOptions = {
   also?: string[];
   skipScan?: boolean;
   /** Called when static security warnings found. Return true to proceed. */
-  onWarnings?: (warnings: StaticWarning[], pluginName: string) => Promise<boolean>;
+  onWarnings?: (
+    warnings: StaticWarning[],
+    pluginName: string,
+  ) => Promise<boolean>;
   /** Called before placement for confirmation. Return false to cancel. */
   onConfirm?: (manifest: PluginManifest) => Promise<boolean>;
   /** Repo URL for recording */
@@ -76,7 +89,11 @@ export async function installPlugin(
       }
       const proceed = await options.onWarnings(warnings, manifest.name);
       if (!proceed) {
-        return err(new UserError(`Install of plugin "${manifest.name}" cancelled due to security warnings.`));
+        return err(
+          new UserError(
+            `Install of plugin "${manifest.name}" cancelled due to security warnings.`,
+          ),
+        );
       }
     }
   }
@@ -101,7 +118,13 @@ export async function installPlugin(
     if (!cpResult.ok) return cpResult;
 
     if (also.length > 0) {
-      const symlinkResult = await createAgentSymlinks(component.name, dest, also, scope, projectRoot);
+      const symlinkResult = await createAgentSymlinks(
+        component.name,
+        dest,
+        also,
+        scope,
+        projectRoot,
+      );
       if (!symlinkResult.ok) return symlinkResult;
     }
   }
@@ -140,7 +163,12 @@ export async function installPlugin(
   let agentDefsPlaced = 0;
   for (const component of agentComponents) {
     const src = join(contentDir, component.path);
-    const dest = agentDefPath(component.name, "claude-code", scope, projectRoot);
+    const dest = agentDefPath(
+      component.name,
+      "claude-code",
+      scope,
+      projectRoot,
+    );
     if (!dest) continue;
 
     try {
@@ -148,7 +176,11 @@ export async function installPlugin(
       await Bun.write(dest, Bun.file(src));
       agentDefsPlaced++;
     } catch (e) {
-      return err(new UserError(`Failed to place agent definition "${component.name}": ${e}`));
+      return err(
+        new UserError(
+          `Failed to place agent definition "${component.name}": ${e}`,
+        ),
+      );
     }
   }
 

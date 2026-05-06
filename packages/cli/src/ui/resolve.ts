@@ -3,8 +3,8 @@ import {
   type AgentAdapter,
   type Config,
   type EffectivePolicy,
-  type InstalledSkill,
   findProjectRoot,
+  type InstalledSkill,
   isInGitRepo,
   loadInstalled,
   resolveAgent,
@@ -15,6 +15,7 @@ import {
 export async function tryFindProjectRoot(): Promise<string | undefined> {
   return findProjectRoot().catch(() => undefined);
 }
+
 import { agentError } from "./agent-out";
 import { errorLine } from "./format";
 import { selectAgent } from "./prompts";
@@ -37,7 +38,11 @@ export type ScopeArgs = {
 export async function resolveScope(
   args: ScopeArgs,
   config?: Config,
-): Promise<{ scope: "global" | "project"; projectRoot?: string; inferred?: boolean }> {
+): Promise<{
+  scope: "global" | "project";
+  projectRoot?: string;
+  inferred?: boolean;
+}> {
   let scope: "global" | "project";
   let projectRoot: string | undefined;
   let inferred = false;

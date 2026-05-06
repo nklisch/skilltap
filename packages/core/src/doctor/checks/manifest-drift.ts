@@ -1,7 +1,7 @@
-import { type Lockfile, LockfileSchema } from "../../manifest/schemas";
 import { loadLockfile, loadManifest, manifestExists } from "../../manifest";
-import { detectDrift } from "../../sync/drift";
+import { type Lockfile, LockfileSchema } from "../../manifest/schemas";
 import type { State } from "../../state/schema";
+import { detectDrift } from "../../sync/drift";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
 const EMPTY_LOCKFILE: Lockfile = LockfileSchema.parse({ version: 1 });

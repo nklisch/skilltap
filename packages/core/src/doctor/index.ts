@@ -16,9 +16,16 @@ import { checkTaps } from "./checks/taps";
 import { checkV1Orphans } from "./checks/v1-orphans";
 import type { DoctorCheck, DoctorOptions, DoctorResult } from "./types";
 
-export type { DoctorCheck, DoctorIssue, DoctorOptions, DoctorResult } from "./types";
+export type {
+  DoctorCheck,
+  DoctorIssue,
+  DoctorOptions,
+  DoctorResult,
+} from "./types";
 
-export async function runDoctor(options?: DoctorOptions): Promise<DoctorResult> {
+export async function runDoctor(
+  options?: DoctorOptions,
+): Promise<DoctorResult> {
   const fix = options?.fix ?? false;
   const onCheck = options?.onCheck;
   const projectRoot = options?.projectRoot;
@@ -53,7 +60,8 @@ export async function runDoctor(options?: DoctorOptions): Promise<DoctorResult> 
   await emit(await checkDirs());
 
   // 4. installed.json (provides installed for later checks)
-  const { check: installedCheck, installed } = await checkInstalled(projectRoot);
+  const { check: installedCheck, installed } =
+    await checkInstalled(projectRoot);
   await emit(installedCheck);
 
   const safeInstalled = installed ?? { version: 1 as const, skills: [] };

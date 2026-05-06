@@ -9,7 +9,14 @@ import {
 import { lstat, mkdir, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { loadInstalled } from "@skilltap/core";
-import { createTestEnv, type TestEnv, createStandaloneSkillRepo, runSkilltap, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import {
+  createStandaloneSkillRepo,
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  runSkilltap,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
 setDefaultTimeout(60_000);
 
@@ -59,7 +66,11 @@ describe("skills link — global scope", () => {
   test("records skill with scope=linked in installed.json", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      await runSkilltap(["skills", "link", repo.path, "--global"], homeDir, configDir);
+      await runSkilltap(
+        ["skills", "link", repo.path, "--global"],
+        homeDir,
+        configDir,
+      );
 
       const installed = await loadInstalled();
       expect(installed.ok).toBe(true);
@@ -115,7 +126,12 @@ describe("skills link — agent symlinks", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Also linked for claude-code");
 
-      const agentSymlink = join(homeDir, ".claude", "skills", "standalone-skill");
+      const agentSymlink = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
       const stat = await lstat(agentSymlink);
       expect(stat.isSymbolicLink()).toBe(true);
     } finally {
@@ -135,7 +151,12 @@ describe("skills link — agent symlinks", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("Also linked for claude-code");
 
-      const agentSymlink = join(homeDir, ".claude", "skills", "standalone-skill");
+      const agentSymlink = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
       const stat = await lstat(agentSymlink);
       expect(stat.isSymbolicLink()).toBe(true);
     } finally {
@@ -153,7 +174,12 @@ describe("skills link — agent symlinks", () => {
       );
       expect(exitCode).toBe(0);
 
-      const agentSymlink = join(homeDir, ".claude", "skills", "standalone-skill");
+      const agentSymlink = join(
+        homeDir,
+        ".claude",
+        "skills",
+        "standalone-skill",
+      );
       expect(await lstat(agentSymlink).catch(() => null)).toBeNull();
     } finally {
       await repo.cleanup();
@@ -164,7 +190,14 @@ describe("skills link — agent symlinks", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["skills", "link", repo.path, "--global", "--also", "claude-code,cursor"],
+        [
+          "skills",
+          "link",
+          repo.path,
+          "--global",
+          "--also",
+          "claude-code,cursor",
+        ],
         homeDir,
         configDir,
       );

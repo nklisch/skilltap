@@ -8,7 +8,12 @@ import {
 } from "bun:test";
 import { lstat } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { createTestEnv, makeTmpDir, removeTmpDir, type TestEnv } from "@skilltap/test-utils";
+import {
+  createTestEnv,
+  makeTmpDir,
+  removeTmpDir,
+  type TestEnv,
+} from "@skilltap/test-utils";
 import { $ } from "bun";
 import { loadInstalled } from "./config";
 import { disableSkill } from "./disable";
@@ -70,7 +75,9 @@ function startMockRegistry(packages: MockPackageEntry[]): {
         if (lastSlash === -1) return new Response("Not found", { status: 404 });
         const pkgName = rest.slice(0, lastSlash);
         const filename = rest.slice(lastSlash + 1);
-        const version = filename.endsWith(".tgz") ? filename.slice(0, -4) : filename;
+        const version = filename.endsWith(".tgz")
+          ? filename.slice(0, -4)
+          : filename;
         const pkg = packages.find((p) => p.name === pkgName);
         const ver = pkg?.versions.find((v) => v.version === version);
         if (!ver) return new Response("Not found", { status: 404 });
@@ -173,10 +180,9 @@ describe("npm standalone lifecycle", () => {
           integrity: v2.integrity,
         });
 
-        const up = await updateSkill(
-          { yes: true },
-          async () => ({ tier: "unverified" as const }),
-        );
+        const up = await updateSkill({ yes: true }, async () => ({
+          tier: "unverified" as const,
+        }));
         expect(up.ok).toBe(true);
         if (!up.ok) return;
         expect(up.value.updated).toContain("npm-skill");
@@ -282,10 +288,9 @@ describe("npm multi-skill lifecycle", () => {
           integrity: v2.integrity,
         });
 
-        const up = await updateSkill(
-          { yes: true },
-          async () => ({ tier: "unverified" as const }),
-        );
+        const up = await updateSkill({ yes: true }, async () => ({
+          tier: "unverified" as const,
+        }));
         expect(up.ok).toBe(true);
         if (!up.ok) return;
         // npm replaces the whole package, so both get updated

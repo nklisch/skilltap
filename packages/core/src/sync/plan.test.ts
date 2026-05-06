@@ -42,8 +42,16 @@ describe("planSync", () => {
       { kind: "remove", target: "skill", source: "github:n/r" },
     ];
     const plan = planSync({ items, inSync: false });
-    expect(plan.ordered[0]).toMatchObject({ kind: "remove", target: "skill", source: "github:n/r" });
-    expect(plan.ordered[1]).toMatchObject({ kind: "add", target: "plugin", source: "github:c/d" });
+    expect(plan.ordered[0]).toMatchObject({
+      kind: "remove",
+      target: "skill",
+      source: "github:n/r",
+    });
+    expect(plan.ordered[1]).toMatchObject({
+      kind: "add",
+      target: "plugin",
+      source: "github:c/d",
+    });
   });
 
   test("does not mutate the input items array", () => {

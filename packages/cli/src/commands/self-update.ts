@@ -1,3 +1,4 @@
+import * as p from "@clack/prompts";
 import {
   checkForUpdate,
   downloadAndInstall,
@@ -6,7 +7,6 @@ import {
   VERSION,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import * as p from "@clack/prompts";
 import { ansi } from "../ui/format";
 
 export default defineCommand({
@@ -43,7 +43,9 @@ export default defineCommand({
       const result = await checkForUpdate(VERSION, 0);
 
       if (!result) {
-        spin.stop(`${ansi.green("✓")} Already on the latest version (v${VERSION})`);
+        spin.stop(
+          `${ansi.green("✓")} Already on the latest version (v${VERSION})`,
+        );
         p.outro("Nothing to do.");
         return;
       }
@@ -53,7 +55,9 @@ export default defineCommand({
     }
 
     if (latest === VERSION && !force) {
-      spin.stop(`${ansi.green("✓")} Already on the latest version (v${VERSION})`);
+      spin.stop(
+        `${ansi.green("✓")} Already on the latest version (v${VERSION})`,
+      );
       p.outro("Nothing to do.");
       return;
     }

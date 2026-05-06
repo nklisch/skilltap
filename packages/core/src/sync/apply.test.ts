@@ -6,7 +6,14 @@ import type { DriftItem, DriftReport } from "./types";
 
 const PROJECT_ROOT = "/tmp/skilltap-apply-test";
 
-const SKILL = (overrides: Partial<{ name: string; repo: string; ref: string; sha: string }> = {}) => ({
+const SKILL = (
+  overrides: Partial<{
+    name: string;
+    repo: string;
+    ref: string;
+    sha: string;
+  }> = {},
+) => ({
   name: overrides.name ?? "commit-helper",
   description: "",
   repo: overrides.repo ?? "github:n/commit-helper",
@@ -21,7 +28,14 @@ const SKILL = (overrides: Partial<{ name: string; repo: string; ref: string; sha
   active: true,
 });
 
-const PLUGIN = (overrides: Partial<{ name: string; repo: string; ref: string; sha: string }> = {}) => ({
+const PLUGIN = (
+  overrides: Partial<{
+    name: string;
+    repo: string;
+    ref: string;
+    sha: string;
+  }> = {},
+) => ({
   name: overrides.name ?? "dev-toolkit",
   description: "",
   format: "skilltap" as const,
@@ -37,7 +51,12 @@ const PLUGIN = (overrides: Partial<{ name: string; repo: string; ref: string; sh
   active: true,
 });
 
-const EMPTY_STATE: State = { version: 2, skills: [], plugins: [], mcpServers: [] };
+const EMPTY_STATE: State = {
+  version: 2,
+  skills: [],
+  plugins: [],
+  mcpServers: [],
+};
 
 const ITEM = (
   kind: DriftItem["kind"],
@@ -64,7 +83,10 @@ function mockInstall(behavior: "ok" | "fail" = "ok") {
     if (behavior === "fail") {
       return { ok: false, error: { message: `install failed: ${source}` } };
     }
-    return { ok: true, value: { records: [], warnings: [], semanticWarnings: [], updates: [] } };
+    return {
+      ok: true,
+      value: { records: [], warnings: [], semanticWarnings: [], updates: [] },
+    };
   };
   return { fn, calls };
 }
@@ -129,7 +151,9 @@ describe("applySync — add path", () => {
   });
 
   test("plugin add routes through installFn (auto-detects plugin)", async () => {
-    const plan = planFrom([ITEM("add", "plugin", "github:c/dev-toolkit", { range: "*" })]);
+    const plan = planFrom([
+      ITEM("add", "plugin", "github:c/dev-toolkit", { range: "*" }),
+    ]);
     const install = mockInstall();
     const result = await applySync(plan, {
       projectRoot: PROJECT_ROOT,
@@ -225,7 +249,10 @@ describe("applySync — remove path", () => {
 describe("applySync — ref-mismatch", () => {
   test("ref-mismatch routes through installFn (forces update)", async () => {
     const plan = planFrom([
-      ITEM("ref-mismatch", "skill", "github:n/foo", { range: "^2.0", ref: "v2.0.0" }),
+      ITEM("ref-mismatch", "skill", "github:n/foo", {
+        range: "^2.0",
+        ref: "v2.0.0",
+      }),
     ]);
     const install = mockInstall();
     const result = await applySync(plan, {
@@ -323,6 +350,9 @@ describe("applySync — onProgress callback", () => {
     });
     expect(events).toHaveLength(2);
     expect(events[0]).toMatchObject({ source: "github:n/a", status: "ok" });
-    expect(events[1]).toMatchObject({ source: "github:n/b", status: "skipped" });
+    expect(events[1]).toMatchObject({
+      source: "github:n/b",
+      status: "skipped",
+    });
   });
 });

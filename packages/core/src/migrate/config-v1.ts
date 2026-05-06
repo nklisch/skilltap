@@ -18,7 +18,9 @@ export interface ConfigMigrationResult {
 //
 // rawV1 may have any shape — we never trust the v1.0 schema strictly here
 // since user config files in the wild may be partial.
-export function migrateV1Config(rawV1: unknown): Result<ConfigMigrationResult, UserError> {
+export function migrateV1Config(
+  rawV1: unknown,
+): Result<ConfigMigrationResult, UserError> {
   if (rawV1 === null || rawV1 === undefined) {
     return err(new UserError("Cannot migrate: config is null or undefined"));
   }
@@ -58,9 +60,11 @@ export function migrateV1Config(rawV1: unknown): Result<ConfigMigrationResult, U
     }
 
     const pickedScan = pickStricterScan(humanScan, agentScan);
-    if (pickedScan !== undefined) security.scan = mapV1Scan(pickedScan, warnings);
+    if (pickedScan !== undefined)
+      security.scan = mapV1Scan(pickedScan, warnings);
     const pickedOnWarn = pickStricterOnWarn(humanOnWarn, agentOnWarn);
-    if (pickedOnWarn !== undefined) security.on_warn = mapV1OnWarn(pickedOnWarn, warnings);
+    if (pickedOnWarn !== undefined)
+      security.on_warn = mapV1OnWarn(pickedOnWarn, warnings);
 
     // [[security.overrides]] → security.trust (only preset = "none")
     const overrides = sec.overrides;
@@ -83,31 +87,53 @@ export function migrateV1Config(rawV1: unknown): Result<ConfigMigrationResult, U
     // Dropped fields: agent_cli, threshold, max_size, ollama_model
     for (const f of ["agent_cli", "threshold", "max_size", "ollama_model"]) {
       if (sec[f] !== undefined && sec[f] !== "" && sec[f] !== 0) {
-        warnings.push(`Dropped [security].${f} (not represented in v2.0 simple model).`);
+        warnings.push(
+          `Dropped [security].${f} (not represented in v2.0 simple model).`,
+        );
       }
     }
   }
 
   // ── [agent] (v2.0) ←── [agent-mode] (v1.0) ──────────────────────────────
-  const agentBlock: { default: boolean; block: boolean } = { default: false, block: false };
+  const agentBlock: { default: boolean; block: boolean } = {
+    default: false,
+    block: false,
+  };
   const v1AgentMode = v1["agent-mode"];
-  if (v1AgentMode && typeof v1AgentMode === "object" && !Array.isArray(v1AgentMode)) {
+  if (
+    v1AgentMode &&
+    typeof v1AgentMode === "object" &&
+    !Array.isArray(v1AgentMode)
+  ) {
     const am = v1AgentMode as Record<string, unknown>;
     if (am.enabled === true) {
       agentBlock.default = true;
     }
     if (am.scope !== undefined) {
-      warnings.push(`Dropped [agent-mode].scope = "${am.scope}". v2.0 has no per-mode scope.`);
+      warnings.push(
+        `Dropped [agent-mode].scope = "${am.scope}". v2.0 has no per-mode scope.`,
+      );
     }
   }
 
   // ── [defaults] ───────────────────────────────────────────────────────────
-  const defaults: { also: string[]; scope: "" | "global" | "project" } = { also: [], scope: "" };
+  const defaults: { also: string[]; scope: "" | "global" | "project" } = {
+    also: [],
+    scope: "",
+  };
   const v1Defaults = v1.defaults;
-  if (v1Defaults && typeof v1Defaults === "object" && !Array.isArray(v1Defaults)) {
+  if (
+    v1Defaults &&
+    typeof v1Defaults === "object" &&
+    !Array.isArray(v1Defaults)
+  ) {
     const d = v1Defaults as Record<string, unknown>;
-    if (Array.isArray(d.also)) defaults.also = d.also.filter((x): x is string => typeof x === "string");
-    if (typeof d.scope === "string" && (d.scope === "" || d.scope === "global" || d.scope === "project")) {
+    if (Array.isArray(d.also))
+      defaults.also = d.also.filter((x): x is string => typeof x === "string");
+    if (
+      typeof d.scope === "string" &&
+      (d.scope === "" || d.scope === "global" || d.scope === "project")
+    ) {
       defaults.scope = d.scope;
     }
     if (d.yes === true) {
@@ -154,10 +180,13 @@ export function migrateV1Config(rawV1: unknown): Result<ConfigMigrationResult, U
   const telemetry = (v1.telemetry as Record<string, unknown> | undefined) ?? {};
 
   // ── builtin_tap, verbose, default_git_host ───────────────────────────────
-  const builtinTap = typeof v1.builtin_tap === "boolean" ? v1.builtin_tap : true;
+  const builtinTap =
+    typeof v1.builtin_tap === "boolean" ? v1.builtin_tap : true;
   const verbose = typeof v1.verbose === "boolean" ? v1.verbose : true;
   const defaultGitHost =
-    typeof v1.default_git_host === "string" ? v1.default_git_host : "https://github.com";
+    typeof v1.default_git_host === "string"
+      ? v1.default_git_host
+      : "https://github.com";
 
   // Build the v2 candidate
   const v2Candidate = {
@@ -191,8 +220,16 @@ export function migrateV1Config(rawV1: unknown): Result<ConfigMigrationResult, U
 
 // Order: semantic > static > none (semantic is the most paranoid).
 // Returns whichever scan name is "stricter". Undefined inputs are skipped.
-function pickStricterScan(a: string | undefined, b: string | undefined): string | undefined {
-  const order: Record<string, number> = { off: 0, none: 0, static: 1, semantic: 2 };
+function pickStricterScan(
+  a: string | undefined,
+  b: string | undefined,
+): string | undefined {
+  const order: Record<string, number> = {
+    off: 0,
+    none: 0,
+    static: 1,
+    semantic: 2,
+  };
   if (a === undefined && b === undefined) return undefined;
   if (a === undefined) return b;
   if (b === undefined) return a;
@@ -200,8 +237,16 @@ function pickStricterScan(a: string | undefined, b: string | undefined): string 
 }
 
 // Order: install < prompt < fail (fail is the most blocking).
-function pickStricterOnWarn(a: string | undefined, b: string | undefined): string | undefined {
-  const order: Record<string, number> = { allow: 0, install: 0, prompt: 1, fail: 2 };
+function pickStricterOnWarn(
+  a: string | undefined,
+  b: string | undefined,
+): string | undefined {
+  const order: Record<string, number> = {
+    allow: 0,
+    install: 0,
+    prompt: 1,
+    fail: 2,
+  };
   if (a === undefined && b === undefined) return undefined;
   if (a === undefined) return b;
   if (b === undefined) return a;
@@ -211,7 +256,9 @@ function pickStricterOnWarn(a: string | undefined, b: string | undefined): strin
 function mapV1Scan(v1: string, warnings: string[]): string {
   if (v1 === "off") return "none";
   if (v1 === "static" || v1 === "semantic" || v1 === "none") return v1;
-  warnings.push(`Unknown v1 [security].scan value "${v1}" — defaulted to "static".`);
+  warnings.push(
+    `Unknown v1 [security].scan value "${v1}" — defaulted to "static".`,
+  );
   return "static";
 }
 
@@ -219,6 +266,8 @@ function mapV1OnWarn(v1: string, warnings: string[]): string {
   if (v1 === "allow") return "install";
   if (v1 === "prompt" || v1 === "fail") return v1;
   if (v1 === "install") return v1;
-  warnings.push(`Unknown v1 [security].on_warn value "${v1}" — defaulted to "install".`);
+  warnings.push(
+    `Unknown v1 [security].on_warn value "${v1}" — defaulted to "install".`,
+  );
   return "install";
 }

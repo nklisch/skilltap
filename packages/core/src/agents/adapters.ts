@@ -14,10 +14,8 @@ export const geminiAdapter = createCliAdapter(
   (prompt) => $`echo ${prompt} | gemini --non-interactive`.quiet(),
 );
 
-export const codexAdapter = createCliAdapter(
-  "Codex CLI",
-  "codex",
-  (prompt) => $`codex --prompt ${prompt} --no-tools`.quiet(),
+export const codexAdapter = createCliAdapter("Codex CLI", "codex", (prompt) =>
+  $`codex --prompt ${prompt} --no-tools`.quiet(),
 );
 
 export const opencodeAdapter = createCliAdapter(

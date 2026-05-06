@@ -80,7 +80,10 @@ describe("InstalledSkillSchema", () => {
   });
 
   test("preserves active: false through round-trip", () => {
-    const result = InstalledSkillSchema.safeParse({ ...VALID_SKILL, active: false });
+    const result = InstalledSkillSchema.safeParse({
+      ...VALID_SKILL,
+      active: false,
+    });
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.active).toBe(false);
   });

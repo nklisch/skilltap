@@ -1,7 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stat } from "node:fs/promises";
 
 export type TestEnv = {
   homeDir: string;

@@ -47,7 +47,10 @@ describe("resolveSource", () => {
   });
 
   test("routes owner/repo to custom git host when gitHost provided", async () => {
-    const result = await resolveSource("user/repo", "https://gitea.example.com");
+    const result = await resolveSource(
+      "user/repo",
+      "https://gitea.example.com",
+    );
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.adapter).toBe("github");
@@ -56,7 +59,10 @@ describe("resolveSource", () => {
   });
 
   test("routes github: prefix to custom git host", async () => {
-    const result = await resolveSource("github:user/repo", "https://forgejo.local");
+    const result = await resolveSource(
+      "github:user/repo",
+      "https://forgejo.local",
+    );
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.adapter).toBe("github");

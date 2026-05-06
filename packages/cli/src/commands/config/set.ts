@@ -32,12 +32,15 @@ export default defineCommand({
     // Extract values from process.argv for variadic support.
     // After citty routes to "set", the positionals in argv are: key, value1, value2, ...
     const setIdx = process.argv.indexOf("set");
-    const afterSet = process.argv.slice(setIdx + 1).filter((a) => !a.startsWith("-"));
+    const afterSet = process.argv
+      .slice(setIdx + 1)
+      .filter((a) => !a.startsWith("-"));
     const values = afterSet.slice(1); // everything after the key
 
     // Load config first so we can check agent mode for error formatting
     const configResult = await loadConfig();
-    const agentMode = configResult.ok && configResult.value["agent-mode"].enabled;
+    const agentMode =
+      configResult.ok && configResult.value["agent-mode"].enabled;
 
     const writeError = (msg: string, hint?: string) => {
       if (agentMode) {
