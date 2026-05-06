@@ -54,6 +54,12 @@ keep working — run `skilltap migrate` when ready.
 - **Doctor v2 checks** — `skilltap doctor` now also checks `state.json`
   validity, manifest/lockfile drift, `.skilltap/<plugin>.toml` validity, and
   MCP injection consistency (with auto-fix for orphan agent-config entries).
+- **`skilltap install mcp:<source>` / `skilltap remove mcp:<source>`** —
+  install or remove MCP servers from any source (git, local, npm) without
+  going through the skill machinery. Useful for one-off MCP-only repos.
+  Servers land under `state.json::mcpServers[]` namespaced as
+  `skilltap:<slug>:<server-name>`; remove prunes both state and the target
+  agents' MCP configs.
 
 ### Simplified
 
@@ -107,10 +113,10 @@ retirement) lands in v2.1+.
 
 ### Known gaps
 
-- **mcp-only install** (`skilltap install mcp:<source>`) — designed but not
-  yet implemented; ships in v2.1.
 - **v0.x reader retirement** — `installed.json`/`plugins.json` are still
-  read by install/update/remove for back-compat. Cutover in v2.1.
+  read AND written by install/update/remove for back-compat. The full
+  cutover to state.json reads — and retirement of the `[agent-mode]` config
+  block — lands in v2.1.
 
 ---
 

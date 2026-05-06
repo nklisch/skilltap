@@ -1,7 +1,7 @@
 # skilltap — Complete Documentation
 
 > Source: https://skilltap.dev/llms-full.txt
-> Generated: 2026-03-16
+> Generated: 2026-05-06
 >
 > This file contains the complete skilltap documentation as a single Markdown document
 > for AI coding assistant ingestion. For a navigable index see https://skilltap.dev/llms.txt.
@@ -13,7 +13,7 @@
 
 # What is skilltap?
 
-skilltap is a CLI tool for installing agent skills from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it.
+skilltap is a CLI tool for installing agent skills and plugins from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it. When a repo contains a full plugin (skills + MCP servers + agent definitions), skilltap installs and tracks all components together.
 
 ```bash
 skilltap install https://gitea.example.com/nathan/commit-helper
@@ -58,6 +58,8 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Multi-source taps.** Configure multiple skill indexes (taps) — your own, a friend's, a community collection. Search across all of them with `skilltap find`.
 
+**Plugin support.** When a repo contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. `skilltap plugin` lists, inspects, toggles, and removes installed plugins.
+
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
 **Standalone binary.** One file, no runtime dependencies. Download and run.
@@ -70,7 +72,7 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Not a runtime.** Skills are Markdown files that agents read. skilltap doesn't execute anything -- it clones, scans, and places files.
 
-**Not an agent plugin system.** Some agents have their own distribution systems (Claude Code has a full plugin marketplace with commands, hooks, and MCP servers). skilltap is simpler -- it distributes SKILL.md files, and it works across all agents.
+**Not a full agent plugin platform.** Some agents have their own distribution systems (Claude Code has a full plugin marketplace with commands, hooks, LSP servers, and more). skilltap handles SKILL.md files plus MCP servers and agent definitions that ship alongside a skill — the parts that are useful across agents. Agent-specific features (hooks, LSP, slash commands) are outside its scope.
 
 ## Quick example
 
@@ -597,6 +599,55 @@ The `npm:` prefix downloads the tarball from the npm registry and verifies its S
 
 **Updates:** npm-sourced skills update by comparing version numbers rather than git SHAs. `skilltap update` fetches the latest version from the registry and replaces the skill if the version differs.
 
+### Tap plugin
+
+If a tap defines a `plugins` array, install a full plugin by name using `tap-name/plugin-name`:
+
+```bash
+skilltap install my-tap/dev-assistant
+```
+
+This installs all plugin components in one step: SKILL.md files, MCP server entries, and agent definition files. The plugin is recorded in `plugins.json` and tracked as a single unit.
+
+Use `skilltap plugin` to see what's installed and manage individual components.
+
+### Plugin auto-detection
+
+When you install from a git URL, GitHub shorthand, or npm, skilltap checks the cloned repo for plugin metadata:
+
+- `.claude-plugin/plugin.json`
+- `.codex-plugin/plugin.json`
+
+If found, skilltap prompts:
+
+```
+This repo contains a plugin (dev-assistant). Install as a plugin (skills + MCP + agents)?
+  ● Yes — install full plugin
+  ○ No — install skills only
+```
+
+Choosing "Yes" installs all components and records the plugin. Choosing "No" installs SKILL.md files only, the same as any other repo.
+
+### MCP-only install
+
+Prefix any source with `mcp:` to install just its MCP servers, skipping skill machinery entirely. Useful when a repo only ships `.mcp.json` (or a plugin manifest with `[[servers]]`) and you want the servers wired into your agents without scanning skills.
+
+```bash
+skilltap install mcp:user/db-tools --project
+skilltap install mcp:/path/to/local/server
+skilltap install mcp:npm:@scope/search-mcp
+```
+
+Servers land under `state.json::mcpServers[]` and get injected into each `--also` target's MCP config (default: `claude-code`) namespaced as `skilltap:<slug>:<server-name>`. Re-running with the same source replaces the existing entries (idempotent).
+
+To remove, pass the same source string back:
+
+```bash
+skilltap remove mcp:user/db-tools --project
+```
+
+You cannot mix `mcp:` and regular sources in one command — run them separately.
+
 ### Multiple sources
 
 Install several skills in a single command by listing them as positional arguments:
@@ -864,6 +915,34 @@ skilltap unlink my-skill
 ```
 
 Linked skills are skipped during `skilltap update` since they're managed directly by you.
+
+## Managing plugins
+
+After installing a plugin, use `skilltap plugin` to see all installed plugins:
+
+```bash
+skilltap plugin
+```
+
+To see the components of a specific plugin:
+
+```bash
+skilltap plugin info dev-assistant
+```
+
+To toggle specific components on or off:
+
+```bash
+skilltap plugin toggle dev-assistant
+```
+
+To remove a plugin and all its components:
+
+```bash
+skilltap plugin remove dev-assistant
+```
+
+See the [CLI reference](/reference/cli#skilltap-plugin) for all plugin commands and flags.
 
 ---
 
@@ -1232,7 +1311,7 @@ See the [Security](/guide/security) guide for details on what the scanner checks
 
 # Taps
 
-A **tap** is either a git repository with a `tap.json` file or an HTTP registry endpoint that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+A **tap** is either a git repository with a `tap.json` file, an HTTP registry endpoint, or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
 
 Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
 
@@ -1404,6 +1483,35 @@ Each entry in `skills` has:
 | `description` | Yes      | Short description shown in search      |
 | `repo`        | Yes      | Source URL — git URL, `github:owner/repo`, or `npm:package-name` |
 | `tags`        | No       | Array of strings for filtering/search  |
+
+### Tap plugins
+
+Taps can also distribute full plugins — bundles that include skills, MCP server entries, and agent definition files — via a `plugins` array in `tap.json`:
+
+```json
+{
+  "name": "my-tap",
+  "skills": [...],
+  "plugins": [
+    {
+      "name": "dev-assistant",
+      "description": "Development assistant with filesystem MCP access",
+      "repo": "https://github.com/user/dev-assistant",
+      "tags": ["productivity", "filesystem"]
+    }
+  ]
+}
+```
+
+Plugins appear in `skilltap find` results with a `[plugin]` badge alongside regular skills. Install a tap plugin with:
+
+```bash
+skilltap install my-tap/dev-assistant
+```
+
+This installs all plugin components — skills, MCP servers, and agent files — in a single step. Use `skilltap plugin` to manage installed plugins.
+
+See the [tap.json format reference](/reference/tap-format#plugin-entry-fields) for the full plugin entry schema.
 
 ### Publish your tap
 
@@ -2005,9 +2113,9 @@ For each skill with `also` entries, checks that symlinks exist and point to the 
 
 ### 7. Taps
 
-For each configured tap, verifies the local clone is intact and `tap.json` is valid.
+For each configured tap, verifies the local clone is intact and the tap index (`tap.json` or `.claude-plugin/marketplace.json`) is valid.
 
-- **Warn**: tap directory missing, `tap.json` invalid, or `.git/` missing
+- **Warn**: tap directory missing, tap index invalid, or `.git/` missing
 - **Fix** (`--fix`): re-clones missing tap directories from the configured URL
 
 ### 8. Agent CLIs
@@ -2323,6 +2431,7 @@ skilltap install <source> [source...] [flags]
 | npm scoped + version | `npm:@scope/skill@1.2.0` |
 | Tap name | `commit-helper` |
 | Tap name + ref | `commit-helper@v1.2.0` |
+| Tap plugin | `tap-name/plugin-name` |
 | Local path | `./my-skill` |
 
 Source resolution order:
@@ -2331,9 +2440,37 @@ Source resolution order:
 2. `npm:` prefix — npm registry adapter
 3. `url:` prefix — HTTP tarball (used internally by HTTP registry taps)
 4. `./`, `/`, `~/` — local adapter
-5. `github:` prefix, or contains `/` with no protocol — GitHub adapter
-6. Contains `@` — split into name + ref, resolve from taps
-7. Otherwise — search taps for matching skill name
+5. `github:` prefix, or contains `/` with no protocol — GitHub adapter (unless matches `tap-name/plugin-name` pattern)
+6. `tap-name/plugin-name` — tap plugin install (resolves plugin entry from named tap)
+7. Contains `@` — split into name + ref, resolve from taps
+8. Otherwise — search taps for matching skill name
+
+### Plugin Auto-Detection
+
+When cloning a git source, skilltap checks for plugin metadata in the repo:
+
+- `.claude-plugin/plugin.json` — Claude Code plugin format
+- `.codex-plugin/plugin.json` — Codex plugin format
+
+If plugin metadata is found, skilltap prompts:
+
+```
+This repo contains a plugin (my-plugin). Install as a plugin (skills + MCP + agents)?
+  ● Yes — install full plugin
+  ○ No — install skills only
+```
+
+Choosing "Yes" installs all plugin components — SKILL.md files, MCP server entries, and agent definitions — and records everything as a plugin in `plugins.json`. Use `skilltap plugin` to manage installed plugins.
+
+### Tap Plugin Syntax
+
+To install a plugin defined in a tap's `plugins` array, use `tap-name/plugin-name`:
+
+```bash
+skilltap install my-tap/my-plugin
+```
+
+This installs the full plugin (skills + MCP + agents) as defined in the tap entry. The components are installed to the same locations as a direct plugin install.
 
 ### Flags
 
@@ -2710,6 +2847,7 @@ skilltap find [query...] [flags]
 - Install counts are shown for skills.sh results (e.g., `184.5K installs`).
 - For skills.sh multi-skill repos, the specific skill is auto-selected during install — no extra prompt.
 - Picker hints adapt to terminal width — descriptions are truncated to fit.
+- Tap plugins (entries in a tap's `plugins` array) appear in results with a `[plugin]` badge and can be installed with `skilltap install tap-name/plugin-name`.
 
 ### Examples
 
@@ -3108,7 +3246,7 @@ skilltap config agent-mode
 
 ## skilltap tap add
 
-Add a tap. Supports git repos, HTTP registry endpoints, and GitHub shorthand.
+Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`), HTTP registry endpoints, and GitHub shorthand.
 
 ```
 skilltap tap add <name> <url>
@@ -3128,7 +3266,7 @@ When two positional args are given, the first is the tap name and the second is 
 
 When one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion (e.g. `user/my-tap` → name `my-tap`).
 
-Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates `tap.json`, and records the tap in `config.toml`.
+Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates the tap index (`tap.json` or `.claude-plugin/marketplace.json`), and records the tap in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
 
 If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
 
@@ -3143,6 +3281,9 @@ skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
 
 # HTTP registry tap (auto-detected)
 skilltap tap add enterprise https://skills.example.com/api/v1
+
+# Claude Code marketplace repo (marketplace.json auto-detected)
+skilltap tap add anthropics/skills
 ```
 
 ---
@@ -3534,6 +3675,7 @@ scan: static
 agent: (none)
 also: claude-code
 taps: 2
+plugins: 3
 ```
 
 **JSON:**
@@ -3545,7 +3687,8 @@ taps: 2
   "scan": "static",
   "agent": null,
   "also": ["claude-code"],
-  "taps": 2
+  "taps": 2,
+  "plugins": 3
 }
 ```
 
@@ -3557,8 +3700,196 @@ taps: 2
 | `agent` | Configured LLM for semantic scan, or `null` |
 | `also` | Agent directories to symlink into on each install |
 | `taps` | Number of configured taps |
+| `plugins` | Number of installed plugins |
 
 Does not trigger the update check or telemetry notice.
+
+---
+
+## skilltap plugin
+
+> Also available as `skilltap plugins` (silent alias).
+
+List installed plugins.
+
+```
+skilltap plugin [flags]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--global` | boolean | `false` | Show only global plugins |
+| `--project` | boolean | `false` | Show only project plugins |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+```
+  Name            Components                     Source
+  my-plugin       2 skills, 1 MCP, 0 agents      my-tap/my-plugin
+  dev-tools       1 skill, 2 MCPs, 1 agent        github:user/dev-tools
+```
+
+Columns: Name, Components summary (skill/MCP/agent counts), Source.
+
+If no plugins installed: `No plugins installed. Run 'skilltap install <source>' or 'skilltap install tap-name/plugin-name' to install one.`
+
+### Examples
+
+```bash
+# List all plugins
+skilltap plugin
+
+# List only global plugins
+skilltap plugin --global
+
+# Machine-readable output
+skilltap plugin --json
+```
+
+---
+
+## skilltap plugin info
+
+Show details about an installed plugin.
+
+```
+skilltap plugin info <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | `false` | Output as JSON |
+
+### Output
+
+```
+name:       my-plugin
+source:     my-tap/my-plugin
+format:     claude-plugin
+ref:        v1.2.0
+scope:      global
+installed:  2026-04-01T10:00:00.000Z
+updated:    2026-04-01T10:00:00.000Z
+
+Components:
+  Skills
+    ✓  commit-helper
+    ✓  code-review
+
+  MCP Servers
+    ✓  my-plugin:filesystem
+
+  Agents
+    ✗  my-plugin-agent  (not installed)
+```
+
+Components are shown by type with a ✓ (active) or ✗ (inactive/not installed) status.
+
+### Examples
+
+```bash
+skilltap plugin info my-plugin
+skilltap plugin info dev-tools --json
+```
+
+---
+
+## skilltap plugin toggle
+
+Enable or disable individual plugin components.
+
+```
+skilltap plugin toggle <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--skills` | boolean | `false` | Toggle all skills in this plugin |
+| `--mcps` | boolean | `false` | Toggle all MCP server entries in this plugin |
+| `--agents` | boolean | `false` | Toggle all agent definitions in this plugin |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Behavior
+
+When no component flags are passed, shows an interactive multiselect listing each component with its current status. Space to toggle, Enter to apply.
+
+When `--skills`, `--mcps`, or `--agents` are passed, those component groups are toggled (enabled if any are currently disabled, disabled if all are currently enabled).
+
+### Examples
+
+```bash
+# Interactive toggle picker
+skilltap plugin toggle my-plugin
+
+# Disable only MCP entries
+skilltap plugin toggle my-plugin --mcps
+
+# Re-enable skills
+skilltap plugin toggle my-plugin --skills
+```
+
+---
+
+## skilltap plugin remove
+
+Remove an installed plugin.
+
+```
+skilltap plugin remove <name> [flags]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Plugin name |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--yes` | boolean | `false` | Skip confirmation prompt |
+| `--json` | boolean | `false` | Output as JSON |
+
+### Behavior
+
+Removes all components associated with the plugin:
+
+1. SKILL.md files for each skill in the plugin (and their agent symlinks)
+2. MCP server entries injected into agent config files
+3. Agent definition files placed by the plugin
+4. The plugin's record in `plugins.json`
+
+On success, prints a summary of what was removed. With `--yes`, skips the confirmation prompt.
+
+### Examples
+
+```bash
+# Remove with confirmation prompt
+skilltap plugin remove my-plugin
+
+# Skip confirmation
+skilltap plugin remove my-plugin --yes
+```
 
 ---
 
@@ -3889,7 +4220,7 @@ When skilltap clones a repo, it scans for SKILL.md files using the following pri
 
 ### 1. Root SKILL.md (standalone skill)
 
-If `SKILL.md` exists at the repo root, the entire repo is treated as a single standalone skill. Steps 2-4 are skipped.
+If `SKILL.md` exists at the repo root, it is included as a skill.
 
 ### 2. Standard path
 
@@ -3899,7 +4230,24 @@ If `SKILL.md` exists at the repo root, the entire repo is treated as a single st
 
 Each match is a separate skill, named by its parent directory. This is the canonical location for multi-skill repos.
 
-### 3. Agent-specific paths
+### 3. Skills directory
+
+```
+skills/SKILL.md
+skills/*/SKILL.md
+```
+
+Flat layout (`skills/SKILL.md`) or subdirectory convention (`skills/*/SKILL.md`).
+
+### 4. Plugin directory
+
+```
+plugins/*/skills/*/SKILL.md
+```
+
+Claude Code plugin convention. Discovers skills inside plugin subdirectories.
+
+### 5. Agent-specific paths
 
 ```
 .claude/skills/*/SKILL.md
@@ -3911,13 +4259,13 @@ Each match is a separate skill, named by its parent directory. This is the canon
 
 Skills in agent-specific directories are also discovered. If a skill with the same name was already found in `.agents/skills/`, the `.agents/skills/` version takes precedence.
 
-### 4. Deep scan
+### 6. Deep scan
 
 ```
 **/SKILL.md
 ```
 
-If no skills were found in steps 1-3, skilltap performs a deep scan for any SKILL.md file in the repo tree. This requires user confirmation.
+If no skills were found in steps 1-5, skilltap performs a deep scan for any SKILL.md file in the repo tree. This requires user confirmation.
 
 ### Deduplication
 
@@ -4023,6 +4371,8 @@ Agent-specific symlinks (via `--also` or config) point to the canonical `.agents
 
 A **tap** is a git repository that acts as a skill registry. It contains a `tap.json` file listing skills with their names, descriptions, source repositories, and tags. Taps are how users discover and share collections of skills -- like Homebrew taps, but for agent skills.
 
+skilltap also supports [Claude Code marketplace repos](#claude-code-marketplace-repos) as taps -- if a repo has `.claude-plugin/marketplace.json` instead of `tap.json`, skilltap automatically adapts it.
+
 ## What a Tap Does
 
 - Provides a searchable index of skills across repositories
@@ -4041,6 +4391,7 @@ The `tap.json` file must be at the root of the tap repository.
 | `name` | string | Yes | Human-readable name for the tap |
 | `description` | string | No | What this tap collection is about |
 | `skills` | array | Yes | List of skill entries |
+| `plugins` | array | No (default: `[]`) | List of plugin entries |
 
 ### Skill Entry Fields
 
@@ -4052,6 +4403,47 @@ Each entry in the `skills` array:
 | `description` | string | Yes | -- | What the skill does |
 | `repo` | string | Yes | -- | Source of the skill. Git URL, `github:owner/repo`, or `npm:package-name`. |
 | `tags` | array of strings | No | `[]` | Searchable tags for categorization |
+
+### Plugin Entry Fields
+
+Each entry in the `plugins` array describes a full plugin — a bundle of skills, MCP servers, and agent definitions distributed together.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `name` | string | Yes | -- | Plugin name, used as the install identifier |
+| `description` | string | No | `""` | What the plugin does |
+| `version` | string | No | -- | Optional version string |
+| `tags` | array of strings | No | `[]` | Searchable tags |
+| `skills` | array | No | `[]` | Skill entries bundled with this plugin |
+| `mcpServers` | string or object | No | -- | Path to `.mcp.json` within the tap repo, or inline object in `.mcp.json` `mcpServers` format |
+| `agents` | array | No | `[]` | Agent definition files to install |
+
+Install a tap plugin with:
+
+```bash
+skilltap install tap-name/plugin-name
+```
+
+Tap plugins appear in `skilltap find` results with a `[plugin]` badge.
+
+### Plugin Skill Entry
+
+Each entry in a plugin's `skills` array:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Skill name (matches SKILL.md frontmatter `name`) |
+| `description` | string | No | Short description |
+| `path` | string | Yes | Relative path within the tap repo to the skill directory |
+
+### Plugin Agent Entry
+
+Each entry in a plugin's `agents` array:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | Yes | Agent identifier (e.g. `claude-code`) |
+| `path` | string | Yes | Relative path to the agent `.md` file within the tap repo |
 
 ## Full Example
 
@@ -4077,6 +4469,23 @@ Each entry in the `skills` array:
       "description": "Development workflow for the termtube project",
       "repo": "https://gitea.example.com/nathan/termtube",
       "tags": ["termtube", "workflow"]
+    }
+  ],
+  "plugins": [
+    {
+      "name": "dev-assistant",
+      "description": "Full development assistant with skills, MCP filesystem access, and agent config",
+      "repo": "https://gitea.example.com/nathan/dev-assistant",
+      "tags": ["productivity", "filesystem"],
+      "skills": [
+        { "name": "dev-assistant", "description": "Development task assistant" }
+      ],
+      "mcpServers": {
+        "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/dev"] }
+      },
+      "agents": [
+        { "name": "claude-code", "path": "agent/claude-code.md" }
+      ]
     }
   ]
 }
@@ -4304,6 +4713,43 @@ A single repo can contain multiple skills (see [SKILL.md Format](/reference/skil
 ```
 
 When a user installs either skill by name, skilltap clones the repo and discovers both skills inside it.
+
+## Claude Code Marketplace Repos
+
+Claude Code plugin marketplaces use `.claude-plugin/marketplace.json` instead of `tap.json`. skilltap recognizes this format automatically — when you `skilltap tap add` a repo that has `marketplace.json` (and no `tap.json`), it adapts the marketplace data into skilltap's internal tap format.
+
+```bash
+# Add the official Anthropic skills marketplace as a tap
+skilltap tap add anthropics/skills
+```
+
+### How It Works
+
+- If `tap.json` exists, it is used (always takes precedence)
+- If only `.claude-plugin/marketplace.json` exists, skilltap parses it and converts each plugin entry to a skill entry
+- Plugin sources (GitHub, npm, git URL, relative path) are mapped to the `repo` field that skilltap's install flow understands
+- Plugin-only features (MCP servers, LSP servers, hooks, agents) are silently ignored — skilltap only installs SKILL.md content
+
+### Source Mapping
+
+| Marketplace source type | skilltap repo mapping |
+|---|---|
+| Relative path (`"./plugins/my-plugin"`) | The marketplace repo's own URL |
+| `github` (`{ "source": "github", "repo": "owner/repo" }`) | `owner/repo` |
+| `url` (`{ "source": "url", "url": "https://..." }`) | The URL directly |
+| `git-subdir` (`{ "source": "git-subdir", "url": "..." }`) | The URL (subdirectory path is not preserved) |
+| `npm` (`{ "source": "npm", "package": "@org/pkg" }`) | `npm:@org/pkg` |
+
+### Full Plugin Detection
+
+Marketplace plugins whose source uses a relative path (e.g. `"./plugins/my-plugin"`) point to a subdirectory within the marketplace repo itself. When cloning these, skilltap checks for `.claude-plugin/plugin.json` inside the subdirectory. If found, the entry is treated as a full plugin — skills, MCP servers, and agent definitions are all installed. Use `skilltap plugin` to manage these after install.
+
+Plugins sourced from external repos (GitHub, npm, etc.) go through the same auto-detection during install: if the cloned repo contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`, skilltap prompts to install as a full plugin.
+
+### Limitations
+
+- **No namespacing**: Claude Code plugins install skills as `/plugin-name:skill-name`. skilltap installs skills as `/skill-name` (agent-agnostic, no namespace).
+- **git-subdir**: The subdirectory path within the source repo is not preserved — skilltap clones the full repo and scans for SKILL.md files.
 
 ---
 

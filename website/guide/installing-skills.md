@@ -129,6 +129,26 @@ This repo contains a plugin (dev-assistant). Install as a plugin (skills + MCP +
 
 Choosing "Yes" installs all components and records the plugin. Choosing "No" installs SKILL.md files only, the same as any other repo.
 
+### MCP-only install
+
+Prefix any source with `mcp:` to install just its MCP servers, skipping skill machinery entirely. Useful when a repo only ships `.mcp.json` (or a plugin manifest with `[[servers]]`) and you want the servers wired into your agents without scanning skills.
+
+```bash
+skilltap install mcp:user/db-tools --project
+skilltap install mcp:/path/to/local/server
+skilltap install mcp:npm:@scope/search-mcp
+```
+
+Servers land under `state.json::mcpServers[]` and get injected into each `--also` target's MCP config (default: `claude-code`) namespaced as `skilltap:<slug>:<server-name>`. Re-running with the same source replaces the existing entries (idempotent).
+
+To remove, pass the same source string back:
+
+```bash
+skilltap remove mcp:user/db-tools --project
+```
+
+You cannot mix `mcp:` and regular sources in one command — run them separately.
+
 ### Multiple sources
 
 Install several skills in a single command by listing them as positional arguments:
