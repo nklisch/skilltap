@@ -49,7 +49,11 @@
         "rules": {
           "suspicious": {
             "noConsole": "off",
-            "noControlCharactersInRegex": "off"
+            "noControlCharactersInRegex": "off",
+            "noExplicitAny": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
           }
         }
       }
