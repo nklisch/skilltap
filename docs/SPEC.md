@@ -1134,6 +1134,57 @@ Dynamic values are fetched via a hidden `--get-completions <type>` endpoint that
 
 ---
 
+### `skilltap toggle <target>` / `skilltap enable <target>` / `skilltap disable <target>`
+
+Top-level component-ref shortcuts (Phase 34) for manipulating plugin components without the `plugin` prefix. The `target` positional accepts either a plugin name or `plugin-name:component-name`.
+
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `target` | Yes | Plugin name (e.g. `dev-toolkit`) or component reference (e.g. `dev-toolkit:database`). |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output result as JSON. |
+
+**Behavior:**
+
+- `enable <plugin>` — enables every currently-inactive component on the plugin (no-op if all active).
+- `disable <plugin>` — disables every currently-active component (no-op if all already disabled).
+- `toggle <plugin>` — opens an interactive multiselect picker pre-populated with each component's current state; selecting/deselecting a component toggles it. Picker is unavailable in agent mode (`--agent` or `SKILLTAP_AGENT=1`); agents must pass `plugin:component` to act on a single component.
+- `<command> <plugin>:<component>` — single-component form: enables, disables, or toggles just that one component.
+
+When the bare-plugin form is used (no `:component`), the `enable`/`disable` shape is bulk-set; the `toggle` shape opens the picker. Component types: `skill`, `mcp`, `agent`. Only components that exist on the plugin can be addressed; unknown component names exit 1 with a list of available names.
+
+**Exit codes:** 0 success, 1 plugin/component not found, 1 in agent mode if no component specified for `toggle`.
+
+---
+
+### `skilltap self-update`
+
+Update the locally-installed skilltap binary or npm package to the latest GitHub release. Only meaningful when running the compiled binary; npm-installed users update via `npm i -g skilltap@latest`.
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--force` | boolean | false | Bypass the update-check cache and re-install even if already on the latest version. |
+
+**Behavior:**
+
+1. If running uncompiled (e.g. `bun run dev`), exit with a hint pointing at npm.
+2. Read the cached "latest version" if not `--force`; otherwise fetch from `https://api.github.com/repos/nklisch/skilltap/releases/latest`.
+3. If already up to date and not `--force`, exit 0 with `Already on vX.Y.Z`.
+4. Download the appropriate platform binary + checksum, verify, and replace the running binary in place.
+5. Print the new version.
+
+**Exit codes:** 0 success or already up to date, 1 download/verification failure.
+
+---
+
 ### `skilltap plugin`
 
 > Also available as `skilltap plugins` (alias).
