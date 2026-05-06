@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 3
+**Phases since last refactor:** 4
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -22,7 +22,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31a | v2 policy compose + trust-glob                 | done     | 2026-05-06 |
 | 31b | HTTP registry adapter removal                  | done     | 2026-05-06 |
 | 31c-a | Manifest+lockfile writes from install        | done     | 2026-05-06 |
-| 31c-b | Manifest writes from remove + sync apply     | pending  | —         |
+| 31c-b-1 | Manifest writes from remove                | done     | 2026-05-06 |
+| 31c-b-2 | Sync apply implementation                  | pending  | —         |
 | 31c-c | state.json reads cutover + smart scope + agent | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
