@@ -165,8 +165,11 @@ async function scanSingleFile(
       const lineNum = Array.isArray(w.line) ? w.line[0] : w.line;
       if (lineNum > 0) {
         const ctx: string[] = [];
+        // biome-ignore lint/style/noNonNullAssertion: lineNum > 1 guard ensures lineNum - 2 >= 0
         if (lineNum > 1) ctx.push(fileLines[lineNum - 2]!);
+        // biome-ignore lint/style/noNonNullAssertion: lineNum > 0 guard ensures lineNum - 1 >= 0
         ctx.push(fileLines[lineNum - 1]!);
+        // biome-ignore lint/style/noNonNullAssertion: lineNum < fileLines.length guard
         if (lineNum < fileLines.length) ctx.push(fileLines[lineNum]!);
         w.context = ctx;
       }
@@ -251,6 +254,7 @@ export function scanDiff(diffOutput: string): StaticWarning[] {
     // Hunk header: @@ -old +new_start[,count] @@
     if (line.startsWith("@@ ")) {
       const m = /\+(\d+)/.exec(line);
+      // biome-ignore lint/style/noNonNullAssertion: m[1] is the (\d+) capture, defined when m is truthy
       currentLineNum = m ? parseInt(m[1]!, 10) : 1;
       continue;
     }
