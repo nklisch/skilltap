@@ -366,7 +366,7 @@ Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 dep
 
 ---
 
-## v1.0 — Plugin Support
+## v1.0 — Plugin Support (complete)
 
 ### Phase 20 — Plugin Detection and Parsing ✓
 
