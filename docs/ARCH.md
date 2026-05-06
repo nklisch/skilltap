@@ -100,9 +100,7 @@ skilltap/
 │   │   │   │   ├── verify-github.ts # GitHub attestation via `gh attestation verify`
 │   │   │   │   ├── resolve.ts  # resolveTrust() — compute tier from available signals
 │   │   │   │   └── index.ts
-│   │   │   ├── registry/
-│   │   │   │   ├── types.ts    # RegistrySkillSchema, RegistryListResponseSchema
-│   │   │   │   └── client.ts   # HTTP registry client with bearer auth
+│   │   │   │                          # (registry/ — HTTP registry client — removed in Phase 31b)
 │   │   │   ├── json-state.ts          # loadJsonState()/saveJsonState() — generic JSON file I/O
 │   │   │   ├── plugin/                # Plugin detection, parsing, and MCP injection
 │   │   │   │   ├── detect.ts          # detectPlugin(dir) — find and parse plugin manifest
@@ -254,7 +252,7 @@ core → test-utils (dev)
 
 **skill-check.ts** — Background skill update check. `checkForSkillUpdates(intervalHours, projectRoot)` reads the cache and fires a background refresh if stale. `fetchSkillUpdateStatus(projectRoot)` does the actual network check: groups git skills by cache dir (one `git fetch` per unique repo), compares `HEAD` vs `FETCH_HEAD`; fetches npm metadata for npm skills and compares versions. `writeSkillUpdateCache(updates, projectRoot)` persists results to `~/.config/skilltap/skills-update-check.json`.
 
-**taps.ts** — Manages tap repos. Clone, pull, parse tap index (`tap.json` or `.claude-plugin/marketplace.json`), search across taps. Supports git-cloned taps, HTTP registry taps (fetched live), and Claude Code marketplace repos (marketplace.json adapted to Tap via `marketplace.ts`). `loadTaps()` returns entries for both `skills` and `plugins` arrays from tap.json. `tapPluginToManifest(plugin, tapDir)` converts a `TapPlugin` entry to a `PluginManifest` for use with `installPlugin()`.
+**taps.ts** — Manages tap repos. Clone, pull, parse tap index (`tap.json` or `.claude-plugin/marketplace.json`), search across taps. Supports git-cloned taps and Claude Code marketplace repos (marketplace.json adapted to Tap via `marketplace.ts`). HTTP registry taps were retired in Phase 31b — v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning. `loadTaps()` returns entries for both `skills` and `plugins` arrays from tap.json. `tapPluginToManifest(plugin, tapDir)` converts a `TapPlugin` entry to a `PluginManifest` for use with `installPlugin()`.
 
 **marketplace.ts** — Adapts Claude Code `marketplace.json` to skilltap's internal `Tap` type. `adaptMarketplaceToTap(marketplace, tapUrl, tapDir?)` is async: for relative-path sources in a local tap directory, it auto-detects `.claude-plugin/plugin.json` via `detectPlugin()` and produces `TapPlugin` entries (with full skill/MCP/agent components) when a plugin manifest is found. Otherwise produces `TapSkill` entries with `plugin: true` flag. Non-relative sources (github, npm, url, git-subdir) always produce `TapSkill` entries. Plugin-only features (LSP, hooks, commands) are silently ignored.
 
@@ -270,9 +268,9 @@ core → test-utils (dev)
 
 **trust/** — Trust tier resolution pipeline. `resolveTrust()` computes tier from npm attestation (`verify-npm.ts` via `sigstore`), GitHub attestation (`verify-github.ts` via `gh` CLI), and tap metadata. Injectable verify functions for testing. Injected into install/update flows as an optional post-download step.
 
-**registry/** — HTTP registry client. `fetchRegistryList()`, `fetchRegistryDetail()`. Validates responses with Zod schemas (`RegistryListResponseSchema`, `RegistrySkillSchema`). Bearer auth via `Authorization: Bearer ${token}` header.
-
 **templates/** — TypeScript functions generating `Record<string, string>` (relPath → content). Embedded in the compiled binary (no runtime file reads). Three templates: `basicTemplate()`, `npmTemplate()`, `multiTemplate()`.
+
+> **registry/** module (v0.2 HTTP registry client) was removed in Phase 31b — the directory and its `fetchRegistryList()` / `fetchRegistryDetail()` helpers no longer exist. See the v2.0 changes section below for context.
 
 ### Plugin Modules
 

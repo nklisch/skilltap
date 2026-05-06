@@ -275,7 +275,7 @@ Update installed skills.
 
 **Behavior:**
 
-Before updating any skill, `skilltap update` pulls all git tap repos (equivalent to `git pull` in each tap directory) so the tap index is current. HTTP taps are always live; failures are non-fatal (warn and continue). This step is skipped in `--check` mode.
+Before updating any skill, `skilltap update` pulls all tap repos (equivalent to `git pull` in each tap directory) so the tap index is current. Pull failures are non-fatal (warn and continue). This step is skipped in `--check` mode. (HTTP registry taps were retired in v2.0; see the dedicated removal note below.)
 
 Then, per skill:
 
@@ -469,13 +469,12 @@ Pull the latest tap index (`tap.json` or `marketplace.json`) for all (or one) gi
 1. If tap directory is missing → clone fresh from the URL in config (self-heal)
 2. If tap directory exists → `git remote set-url origin <config-url>` (sync URL in case config changed), then `git pull`
 
-HTTP taps are always live — they are noted in the `http` result field and skipped (no local clone to update).
-
 The built-in tap (`skilltap-skills`) is included in an "update all" run if enabled.
 
 **Result fields:**
 - `updated` — map of tap name → skill count for taps that were pulled or cloned
-- `http` — list of HTTP tap names (no-op)
+
+(Pre-v2.0, an `http` result field listed HTTP-tap names skipped as no-ops. HTTP-tap support was retired in Phase 31b; the field no longer applies.)
 
 ---
 
@@ -495,7 +494,7 @@ Show details for a configured tap.
 |------|------|---------|-------------|
 | `--json` | boolean | false | JSON output |
 
-**Output fields:** `name`, `type` (`git`/`http`/`builtin`), `url`, `path` (git taps only — local clone path), `last-fetched` (git taps only — ISO date from `git log -1`), `skills` (count).
+**Output fields:** `name`, `type` (`git`/`builtin`), `url`, `path` (git taps only — local clone path), `last-fetched` (git taps only — ISO date from `git log -1`), `skills` (count). (Pre-v2.0, `type` could also be `http`; HTTP-tap support was retired in Phase 31b.)
 
 ---
 
@@ -1918,13 +1917,15 @@ Trust tier appears in:
 
 ---
 
-## HTTP Registry Taps
+## HTTP Registry Taps (removed in v2.0 — historical reference)
 
-In addition to git-cloned `tap.json` files, taps can be HTTP endpoints that serve skill metadata dynamically.
+> HTTP registry tap support was removed in **Phase 31b (v2.0)**. Taps are now git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning, and `skilltap migrate` lists them as needing manual conversion or removal. The endpoint specifications below are retained as historical reference; nothing here is currently implemented. Auto-detection on `tap add` is gone (the URL is treated as a git URL); the `type`/`auth_token`/`auth_env` config fields are no longer honored.
 
-### Auto-Detection
+In v0.2 through v1.0, taps could be HTTP endpoints that served skill metadata dynamically. The original behavior is below.
 
-When adding a tap, the type is detected automatically:
+### Auto-Detection (removed)
+
+When adding a tap, the type was detected automatically:
 
 ```bash
 skilltap tap add name https://registry.example.com/skilltap/v1
@@ -1934,9 +1935,9 @@ skilltap tap add name https://registry.example.com/skilltap/v1
 2. If JSON response matches registry schema → HTTP tap
 3. Otherwise → fall back to git clone
 
-### Registry Response Schema
+### Registry Response Schema (removed)
 
-HTTP registry endpoints must respond to `GET /` with:
+HTTP registry endpoints had to respond to `GET /` with:
 
 ```json
 {
@@ -1958,19 +1959,18 @@ HTTP registry endpoints must respond to `GET /` with:
 
 `source.type` values: `git`, `github`, `npm`, `url` (direct tarball download).
 
-### Auth
+### Auth (removed)
 
 ```bash
 skilltap tap add name https://registry.example.com --auth-env MY_TOKEN_VAR
 ```
 
-Sends `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. The token name is stored in the tap config; the token itself is never persisted.
+Sent `Authorization: Bearer ${process.env.MY_TOKEN_VAR}` with every request. The token name was stored in the tap config; the token itself was never persisted.
 
-### Behavior
+### Behavior (historical)
 
-- `tap list`: shows type column (`git`/`http`) and live skill count for HTTP taps
+- `tap list`: showed type column (`git`/`http`) and live skill count for HTTP taps
 - HTTP taps: no local clone; metadata fetched live on every operation
-- HTTP taps have no local clone; metadata is fetched on demand
 
 ---
 
