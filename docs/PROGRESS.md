@@ -1,14 +1,16 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope COMPLETE — pending user-action bump (38c)
+**Status:** v2.0 in-scope COMPLETE; v2.1 cutover in progress (31c-c-2a done)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 11
+**Phases since last refactor:** 12
 **Total refactor passes:** 1
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
 
-**Remaining:** `bun run bump 2.0.0` + `git tag v2.0.0` + `git push --follow-tags` (gated on user per autopilot mandate). v2.1 backlog: Phase 31c-c-2 (state.json reads cutover, `[agent-mode]` retirement) — deferred during v2.0 to keep the release additive.
+**v2.0 release ready:** `bun run bump 2.0.0` + `git tag v2.0.0` + `git push --follow-tags`. (User runs the bump.)
+
+**v2.1 progress:** Phase 31c-c-2a (state.json dual-write) shipped. Remaining cutover work (read-side, `[agent-mode]` retirement, v0.x schema deletion) tracked as 31c-c-2b/c/d.
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
 
@@ -29,7 +31,10 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 31c-b-1 | Manifest writes from remove                | done     | 2026-05-06 |
 | 31c-b-2 | Sync apply implementation                  | done     | 2026-05-06 |
 | 31c-c-1 | Smart scope default (was 33b)            | done     | 2026-05-06 |
-| 31c-c-2 | state.json reads + agent flag + mcp + v1 retire | deferred to v2.1 | — |
+| 31c-c-2a | state.json dual-write from install/update/remove | done | 2026-05-06 |
+| 31c-c-2b | state.json reads cutover (install/update/remove)   | pending  | —         |
+| 31c-c-2c | `[agent-mode]` config block retirement             | pending  | —         |
+| 31c-c-2d | v0.x schema + installed.json/plugins.json deletion | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | done (in 31c-c-1) | 2026-05-06 |
@@ -204,6 +209,28 @@ Files:
 - `cli/src/commands/install.ts`: dispatch + `runMcpInstall` handler that calls `installMcpOnly` per source and renders the result list.
 
 35b-2 (remove side) is pending — `skilltap remove mcp:<name>` should drop entries from state.mcpServers + agent configs. Smaller follow-up.
+
+### Phase 31c-c-2a complete — state.json dual-write (v2.1 cutover begins)
+
+After v2.0 shipped, the user re-invoked autopilot to push forward into v2.1. Phase 31c-c-2 was originally scoped as one big destructive batch (state.json reads cutover + `[agent-mode]` retirement + v0.x schema deletion). Splitting it into four sub-phases lets the safest piece land first:
+
+**31c-c-2a (this) — write side.** Every install/update/remove/plugin-toggle path that writes `installed.json` or `plugins.json` now also writes `state.json` as a shadow. v2 readers (`status`, `doctor`, `sync`) see new installs without requiring `skilltap migrate`. v0.x readers (still active in `install`/`update`/`remove`) keep working unchanged.
+
+The dual-write is non-fatal (`.catch(() => undefined)` on every call) — if the v2 shadow can't be written for any reason, the v0.x install already succeeded and the user isn't blocked.
+
+Files:
+- `packages/core/src/state/sync-from-v1.ts` — new `syncV1ToV2State(scope, projectRoot)` helper. Reads current `installed.json` + `plugins.json`, preserves any existing `state.mcpServers` (populated by Phase 35b's `mcp:` installs), writes the merged `state.json`.
+- `packages/core/src/state/sync-from-v1.test.ts` — 4 unit tests (project scope, mcpServers preservation, no-files default, global scope).
+- `packages/core/src/install.ts` — call after step 10 (saveInstalled).
+- `packages/core/src/update.ts` — call after the global + project saveInstalled.
+- `packages/core/src/remove.ts` — call after saveInstalled.
+- `packages/core/src/plugin/install.ts` — call after savePlugins.
+- `packages/core/src/plugin/lifecycle.ts` — call after savePlugins on remove + toggle.
+- `packages/cli/src/e2e-v2.test.ts` — extended assertions: install AND sync now produce `state.json` v2 alongside `installed.json`.
+
+What's now possible: a fresh v2.0 user who installs without ever running `skilltap migrate` still gets a working `state.json` for `status`/`doctor`/`sync` consumption. The migrate command becomes optional rather than required for v2 features.
+
+Tests: 4 sync-from-v1 + 18 CLI e2e + 305 v2-surface tests + 241/243 lifecycle tests (2 pre-existing `/tmp` symlink failures in plugin/e2e-plugin unrelated to this change).
 
 ### Phase 38d complete — v2.0 end-to-end test (roadmap 38.5)
 

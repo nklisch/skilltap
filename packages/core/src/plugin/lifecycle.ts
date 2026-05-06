@@ -4,6 +4,7 @@ import { removePluginFromManifest } from "../manifest/update";
 import { agentDefDisabledPath, agentDefPath, scopeBase, skillDisabledDir, skillInstallDir } from "../paths";
 import type { PluginsJson, StoredComponent, StoredMcpComponent } from "../schemas/plugins";
 import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
+import { syncV1ToV2State } from "../state/sync-from-v1";
 import { err, ok, type Result, UserError } from "../types";
 import { injectMcpServers, removeMcpServers } from "./mcp-inject";
 import { findPlugin, loadPlugins, removePlugin, savePlugins, toggleComponent } from "./state";
@@ -97,6 +98,11 @@ export async function removeInstalledPlugin(
   const newState = removePlugin(state, pluginName);
   const saveResult = await savePlugins(newState, scope === "project" ? projectRoot : undefined);
   if (!saveResult.ok) return saveResult;
+
+  // Phase 31c-c-2a: keep state.json in sync after plugin removal.
+  await syncV1ToV2State(scope, scope === "project" ? projectRoot : undefined).catch(
+    () => undefined,
+  );
 
   if (scope === "project" && projectRoot && record.repo) {
     await removePluginFromManifest(projectRoot, record.repo).catch(() => {
@@ -225,6 +231,11 @@ export async function toggleInstalledComponent(
     scope === "project" ? projectRoot : undefined,
   );
   if (!saveResult.ok) return saveResult;
+
+  // Phase 31c-c-2a: keep state.json in sync after toggle.
+  await syncV1ToV2State(scope, scope === "project" ? projectRoot : undefined).catch(
+    () => undefined,
+  );
 
   return ok({ component, nowActive, mcpAgents });
 }

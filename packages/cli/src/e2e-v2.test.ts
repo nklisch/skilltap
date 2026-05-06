@@ -108,8 +108,9 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     expect(typeof skillEntries[0]?.sha).toBe("string");
     expect((skillEntries[0]?.sha ?? "").length).toBeGreaterThan(0);
 
-    // v0.x dual-write: install still writes installed.json (state.json
-    // cutover deferred to v2.1 / Phase 31c-c-2). status reads either.
+    // Phase 31c-c-2a dual-write: install writes BOTH installed.json (v0.x
+    // source of truth) AND state.json (v2 shadow). v2 readers (status,
+    // doctor, sync) now see new installs without an explicit migrate.
     const installedText = await readFile(
       join(projectRoot, ".agents", "installed.json"),
       "utf8",
@@ -119,6 +120,17 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     };
     expect(installed.skills).toHaveLength(1);
     expect(installed.skills[0]?.name).toBe("standalone-skill");
+
+    const stateText = await readFile(
+      join(projectRoot, ".agents", "state.json"),
+      "utf8",
+    );
+    const state = JSON.parse(stateText) as {
+      version: number;
+      skills: Array<{ name: string }>;
+    };
+    expect(state.version).toBe(2);
+    expect(state.skills.map((s) => s.name)).toEqual(["standalone-skill"]);
   });
 
   // ── 3. status — shows the installed skill from state.json ────────────────────
@@ -165,8 +177,8 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       }
       expect(exitCode).toBe(0);
 
-      // After apply, installed.json should exist with the skill (sync
-      // delegates to install which uses the v0.x dual-write path).
+      // After apply, both installed.json AND state.json exist with the
+      // skill (sync delegates to install which now dual-writes).
       const installedExists = await Bun.file(
         join(cloneDir, ".agents", "installed.json"),
       ).exists();
@@ -175,6 +187,12 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
         await readFile(join(cloneDir, ".agents", "installed.json"), "utf8"),
       ) as { skills: Array<{ name: string }> };
       expect(installed.skills.some((s) => s.name === "standalone-skill")).toBe(true);
+
+      const state = JSON.parse(
+        await readFile(join(cloneDir, ".agents", "state.json"), "utf8"),
+      ) as { version: number; skills: Array<{ name: string }> };
+      expect(state.version).toBe(2);
+      expect(state.skills.some((s) => s.name === "standalone-skill")).toBe(true);
     } finally {
       await removeTmpDir(cloneDir);
     }

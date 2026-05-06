@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
+import { syncV1ToV2State } from "./state/sync-from-v1";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import type { DiffStat } from "./git";
@@ -714,10 +715,13 @@ export async function updateSkill(
   // Save both files
   const globalSave = await saveInstalled(globalInstalled);
   if (!globalSave.ok) return globalSave;
+  // Phase 31c-c-2a: shadow into state.json so v2 readers stay in sync.
+  await syncV1ToV2State("global").catch(() => undefined);
 
   if (projectInstalled && options.projectRoot) {
     const projectSave = await saveInstalled(projectInstalled, options.projectRoot);
     if (!projectSave.ok) return projectSave;
+    await syncV1ToV2State("project", options.projectRoot).catch(() => undefined);
   }
 
   return ok(result);

@@ -5,6 +5,7 @@ import { resolveSource } from "./adapters";
 import { debug } from "./debug";
 import type { AgentAdapter } from "./agents/types";
 import { loadInstalled, saveInstalled } from "./config";
+import { syncV1ToV2State } from "./state/sync-from-v1";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import { checkGitInstalled, clone, revParse } from "./git";
 import { downloadAndExtract, parseNpmSource } from "./npm-registry";
@@ -769,6 +770,11 @@ export async function installSkill(
     installed.skills.push(...newRecords);
     const saveResult = await saveInstalled(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
+
+    // 10b. Phase 31c-c-2a: shadow installed.json into state.json so v2
+    // readers (status, doctor, sync) see new installs without requiring
+    // an explicit migrate. Non-fatal — the install already succeeded.
+    await syncV1ToV2State(options.scope, fileRoot).catch(() => undefined);
 
     // 11. v2 manifest update (Phase 31c-a) — no-op without skilltap.toml.
     // Only fires for project-scope installs in a project root that has a

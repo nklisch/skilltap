@@ -8,6 +8,7 @@ import type { PluginRecord, StoredMcpComponent } from "../schemas/plugins";
 import { scanStatic } from "../security/static";
 import { wrapShell } from "../shell";
 import { createAgentSymlinks } from "../symlink";
+import { syncV1ToV2State } from "../state/sync-from-v1";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
 import { addPluginToManifest } from "../manifest/update";
 import { injectMcpServers } from "./mcp-inject";
@@ -167,6 +168,9 @@ export async function installPlugin(
   const newState = addPlugin(loadResult.value, record);
   const saveResult = await savePlugins(newState, projectRoot);
   if (!saveResult.ok) return saveResult;
+
+  // Phase 31c-c-2a: shadow plugins.json into state.json.
+  await syncV1ToV2State(scope, projectRoot).catch(() => undefined);
 
   // v2 manifest update (Phase 31c-a) — no-op without skilltap.toml.
   // Only fires for project-scope installs in a project root that has a
