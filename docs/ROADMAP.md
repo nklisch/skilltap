@@ -167,7 +167,7 @@ Finalize for v0.1 release.
 
 ---
 
-## v0.2 — Adapters + Ecosystem
+## v0.2 — Adapters + Ecosystem (shipped; Phase 14 retired in v2.0)
 
 ### Phase 12 — npm Source Adapter
 
@@ -215,9 +215,11 @@ Provenance verification and trust metadata — without managing users. Piggyback
 
 ---
 
-### Phase 14 — HTTP Registry Adapter
+### Phase 14 — HTTP Registry Adapter (shipped v0.2, removed in Phase 31b)
 
 > Design doc: [DESIGN-HTTP-REGISTRY.md](./DESIGN-HTTP-REGISTRY.md)
+>
+> **Status:** This phase shipped in v0.2 and ran in production through v1.0. **Phase 31b (v2.0) explicitly removed the HTTP registry tap adapter** — registry-style taps were never exercised in real workloads, the auth/error paths were a maintenance burden, and the v2.0 manifest+lockfile model assumed git-based reproducibility. v0.x configs with `type = "http"` are now silently filtered with a one-time stderr warning; `skilltap tap add <name> <https-url>` still works but only as a clone target. Items below are kept for historical reference.
 
 Support HTTP registries as a tap type — for enterprise, large indexes, and dynamic registries.
 
@@ -232,9 +234,9 @@ Support HTTP registries as a tap type — for enterprise, large indexes, and dyn
 - [x] **14.9** `tap update` is no-op for HTTP taps (always live)
 - [x] **14.10** Unit tests: response schema validation, auth header construction, type detection
 - [x] **14.11** Integration tests: tap add HTTP (mock Bun.serve), find across git + HTTP taps, install from HTTP registry
-- [ ] **14.12** Test fixture: static registry JSON files
+- [ ] **14.12** ~~Test fixture: static registry JSON files~~ — never built; phase removed in 31b before this landed.
 
-**Exit criteria:** `skilltap tap add name https://registry.example.com/skilltap/v1` works. Search and install through HTTP registries works. Auth (bearer token, env var) works. Static file hosting works as a valid registry.
+**Original exit criteria (no longer applicable):** ~~`skilltap tap add name https://registry.example.com/skilltap/v1` works. Search and install through HTTP registries works. Auth (bearer token, env var) works. Static file hosting works as a valid registry.~~ See Phase 31b for the rationale and migration path.
 
 ---
 
