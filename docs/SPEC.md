@@ -3076,14 +3076,18 @@ The schema reuses the existing `InstalledSkillSchema` and `PluginRecordSchema` s
 
 ### v2.0 Security
 
-See [SECURITY.md — v2.0](./SECURITY.md#v20-simplification) for the full rewrite. In brief:
+The v2.0 redesign retained per-mode security from v0.x rather than collapsing to a single block. The actual schema (verified at `core/src/schemas/config.ts`):
 
-- Single `[security]` block; same rules apply regardless of `--agent`.
-- `scan` ∈ {`semantic`, `static`, `none`} — default `static`.
-- `on_warn` ∈ {`prompt`, `fail`, `install`} — default `install`. ("install" = report warnings, proceed without prompting.)
-- `trust = []` — array of glob patterns. A source matching any pattern (against tap name or full source URL) skips the scan entirely.
-- `--agent` does NOT change security defaults. If `on_warn = "prompt"` is set and a warning fires under `--agent`, the run errors out (no prompts available); user must change `on_warn` or trust the source.
-- Old config keys (`[security.human]`, `[security.agent]`, `[[security.overrides]]`, presets) are read by `skilltap migrate` and translated; otherwise unsupported in v2.0.
+- **Per-mode blocks:** `[security.human]` and `[security.agent]` are independent `SecurityModeSchema` objects, each with `scan`, `on_warn`, `require_scan`.
+- **`scan`** ∈ {`semantic`, `static`, `off`} — default `static` for both modes.
+- **`on_warn`** ∈ {`prompt`, `fail`, `allow`} — default `prompt` for human, `fail` for agent.
+- **`require_scan`** boolean — default `false` for human, `true` for agent. When `true`, blocks `--skip-scan`.
+- **Shared settings (not per-mode):** `agent_cli`, `threshold` (0–10), `max_size` (bytes), `ollama_model`.
+- **Trust overrides:** `[[security.overrides]]` array of `TrustOverrideSchema` entries (`{ match, kind: "tap" | "source", preset }`). Evaluated in order, first match wins; the matched preset replaces the mode defaults for that source.
+- **Presets** (`SECURITY_PRESETS`): `none`, `relaxed`, `standard`, `strict` — applied via `skilltap config security --preset` or trust override.
+- **`--agent` activates the agent-mode security block.** Same composition mechanism either way; only the per-mode rules differ.
+
+> **Original v2.0 design vs shipped:** Earlier SPEC drafts described a single `[security]` block with `on_warn = "install"` semantics and a `trust = []` glob array. That collapse was **not** shipped — Phase 31c-c-2 kept the v0.x per-mode model. The migrate command translates v0.x's old top-level `[security]` keys (where present) into the per-mode blocks; it does not collapse them. The `policy-v2/trust-glob.ts` module retains scaffolding for the glob-based trust design but is not wired to the CLI (see `policy-v2/index.ts` header).
 
 ### v2.0 Agent Flag
 
