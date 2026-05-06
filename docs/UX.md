@@ -2065,8 +2065,8 @@ skilltap info <name>                 Skill or plugin details
 skilltap toggle <name>[:component]   Toggle plugin or component
 skilltap enable <name>[:component]   Enable plugin or component
 skilltap disable <name>[:component]  Disable plugin or component
-skilltap sync [--strict|--yes|--prune]  Reconcile manifest ↔ lockfile ↔ disk
-skilltap update [name]               Refresh lockfile to latest matching range
+skilltap sync [--apply] [--strict] [--json]  Reconcile manifest ↔ lockfile ↔ disk (read-only without --apply)
+skilltap update [name]               Pull skills, rescan, reapply (skill update, not lockfile range refresh)
 skilltap status [--json]             Same as bare `skilltap`, explicit
 skilltap try <source>                Read-only preview (no install)
 skilltap find [query]                Search across taps
