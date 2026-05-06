@@ -465,25 +465,19 @@ If the tap's destination directory already exists (from a previous failed clone)
 
 ---
 
-### `skilltap tap update [name]`
+### `skilltap tap` — implicit update behavior
 
-Pull the latest tap index (`tap.json` or `marketplace.json`) for all (or one) git tap.
+> **No `skilltap tap update` subcommand.** The `tap` command's registered subcommands are `add`, `remove`, `list`, `info`, `init`, and `install` (see `packages/cli/src/index.ts:334-341`). Tap-index refresh happens **implicitly as a step inside `skilltap update`**, not as a standalone subcommand. Pre-v2.0 SPEC drafts described a dedicated `tap update` command; that surface was never wired into the CLI router and was eventually subsumed by the auto-refresh in `skilltap update`. Documented here for the implicit behavior; calling `skilltap tap update` produces a "command not found" error.
 
-**Arguments:**
+The `skilltap update` flow refreshes every git tap before checking installed skills. Per git tap:
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Name of a specific tap to update (default: all) |
+1. If tap directory is missing → clone fresh from the URL in config (self-heal).
+2. If tap directory exists → `git remote set-url origin <config-url>` (sync URL in case config changed), then `git pull`.
 
-**Behavior (per git tap):**
+The built-in tap (`skilltap-skills`) is included in an "update all" run if enabled. Pull failures are non-fatal — a warning is shown and skill updates continue.
 
-1. If tap directory is missing → clone fresh from the URL in config (self-heal)
-2. If tap directory exists → `git remote set-url origin <config-url>` (sync URL in case config changed), then `git pull`
-
-The built-in tap (`skilltap-skills`) is included in an "update all" run if enabled.
-
-**Result fields:**
-- `updated` — map of tap name → skill count for taps that were pulled or cloned
+**Internal `updateTap()` result fields** (exposed via the `@skilltap/core` API, used by `skilltap update`):
+- `updated` — map of tap name → skill count for taps that were pulled or cloned.
 
 (Pre-v2.0, an `http` result field listed HTTP-tap names skipped as no-ops. HTTP-tap support was retired in Phase 31b; the field no longer applies.)
 
@@ -513,6 +507,18 @@ Show details for a configured tap.
 
 Remove a configured tap.
 
+**Arguments:**
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `name` | Yes | Tap name to remove |
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--yes` (`-y`) | boolean | false | Skip the confirmation prompt (required for non-TTY use). |
+
 **Behavior:**
 
 - Remove tap directory from `~/.config/skilltap/taps/{name}/`
@@ -525,6 +531,12 @@ Does **not** uninstall skills that were installed from this tap. Those skills re
 ### `skilltap tap list`
 
 List configured taps.
+
+**Options:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Output as JSON. |
 
 **Output:**
 
@@ -2724,7 +2736,7 @@ skilltap link <path>                      Symlink a local skill
 skilltap unlink <name>                    Remove a linked skill
 skilltap skills <subcommand>              Adopt, move, info, remove (less common)
 skilltap plugin <subcommand>              Info, toggle, remove (less common; dup of top-level)
-skilltap tap <subcommand>                 add, remove, list, update, info, init, install
+skilltap tap <subcommand>                 add, remove, list, info, init, install
 skilltap config <subcommand>              get, set, edit
 ```
 
