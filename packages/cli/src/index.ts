@@ -255,6 +255,21 @@ function printUpdateNotice(
   }
 }
 
+// Bare `skilltap` invocation: route to status BEFORE citty parses, since
+// citty would otherwise call BOTH main's `run` and the matched subcommand
+// when both are defined. Detecting "no args" up front avoids the double-run.
+if (process.argv.length === 2) {
+  const statusCmd = await import("./commands/status").then((m) => m.default);
+  await statusCmd.run({
+    // biome-ignore lint/suspicious/noExplicitAny: citty's RunContext is internal.
+    args: { json: false } as any,
+    // biome-ignore lint/suspicious/noExplicitAny: same.
+    rawArgs: [] as any,
+    cmd: statusCmd,
+  });
+  process.exit(0);
+}
+
 // ─── CLI definition ───────────────────────────────────────────────────────────
 
 const main = defineCommand({

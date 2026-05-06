@@ -20,8 +20,10 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 29 | Sync Engine + Command                          | done     | 2026-05-06 |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | done     | 2026-05-06 |
 | 31a | v2 policy compose + trust-glob                | done     | 2026-05-06 |
-| 31b | HTTP registry adapter removal                 | active   | —         |
+| 31b | HTTP registry adapter removal                 | pending  | —         |
 | 31c | Install/update/remove cutover + sync apply    | pending  | —         |
+| 32  | Agent flag (mostly subsumed by 31a)           | pending  | —         |
+| 33  | Smart scope + Status dashboard                | active   | —         |
 | 32 | Agent Flag                                     | pending  | —         |
 | 33 | Smart Scope + Status Dashboard                 | pending  | —         |
 | 34 | Component-Ref Syntax + Toggle Promotion        | pending  | —         |
@@ -103,6 +105,26 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 
 - Phase 30 added 3 new files (normalize/discover/index in plugin-v2/) and modified 2 existing (plugin/detect.ts, plugin/index.ts) — small surgical change, no duplication discovered.
 - Decision: skip refactor pass; revisit after Phase 32 (agent flag) which will touch many files across cli/ and core/.
+
+### Phase 31 split into 31a / 31b / 31c
+
+- Original Phase 31 (~25 implementation units) was the full security simplification + HTTP removal + install cutover. Too big for one session and high blast radius.
+- 31a (done): additive v2 policy module — composeV2, trust-glob.
+- 31b (pending): HTTP registry adapter removal. Best done together with 31c since the v1 readers also need updates.
+- 31c (pending): full install/update/remove cutover to v2 state + sync apply. Major destructive change.
+
+### Phase 31b/c deferral and Phase 32 reordering
+
+- Decision: defer 31b/c and Phase 32 cutover until after additive Phases 33–36 land.
+- Rationale: 31b/c/32 all touch the same files (install.ts, policy.ts, taps.ts, plugin/state.ts, cli command files) and risk cascading test breakage. Doing them together when the new shapes are fully in place is safer than piecemeal.
+- 33–36 are mostly additive (new commands, new doctor checks, new detect targets) and don't depend on the cutover. They can ship now and create user-visible value without the destructive churn.
+- Phase 32 (agent flag) is largely subsumed by 31a's `composeV2` (which already implements --agent flag, SKILLTAP_AGENT env, config.agent.default, agent.block). Phase 32's remaining work is the cutover — replacing v1 agent-mode checks across the codebase, which fits naturally with 31c.
+
+### Phase 33: scoped to status dashboard (additive)
+
+- 33.1 (smart scope default in policy compose) deferred to 31c — modifying v1 policy.ts is part of the cutover.
+- 33.2–33.7 (status command, bare command, --json) are purely additive: new CLI command reading v2 state.json + manifest + lockfile + drift via planSync().
+- Status command falls back gracefully when state.json doesn't exist yet (most current users), suggesting `skilltap migrate`.
 
 ---
 
