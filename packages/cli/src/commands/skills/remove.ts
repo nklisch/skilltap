@@ -18,13 +18,13 @@ import { tryFindProjectRoot } from "../../ui/resolve";
 export default defineCommand({
   meta: {
     name: "remove",
-    description: "Remove an installed skill",
+    description: "Remove an installed skill or MCP server",
   },
   args: {
     name: {
       type: "positional",
       description:
-        "Name(s) of installed skills to remove (required in agent mode)",
+        "Name(s) of installed skills or mcp:<source> to remove (required in agent mode)",
       required: false,
     },
     project: {

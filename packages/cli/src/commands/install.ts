@@ -45,7 +45,8 @@ export default defineCommand({
   args: {
     source: {
       type: "positional",
-      description: "Git URL, github:owner/repo, tap skill name, or local path",
+      description:
+        "Git URL, github:owner/repo, tap skill name, mcp:<server>, or local path",
       required: true,
     },
     project: {
