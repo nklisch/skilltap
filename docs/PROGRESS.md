@@ -1,6 +1,6 @@
 # Autopilot Progress
 
-**Status:** in-progress
+**Status:** v2.0 in-scope complete (v2.1 backlog: 31c-c-2 + 35b)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
 **Phases since last refactor:** 8
@@ -414,6 +414,63 @@ A 30-min cron loop is scheduled in this session (`6972f010`). It dies
 when this session exits. Re-arm in the new session per autopilot's
 opening steps.
 
-## Completion Summary
+## Completion Summary — v2.0 (in-scope phases complete)
 
-(written on completion)
+**Status:** v2.0 release-ready. User runs `bun run bump 2.0.0` to publish.
+
+### Phases shipped (18 + 1 refactor)
+
+- **26**: v2.0 schema foundation (manifest, lockfile, plugin-v2, config-v2, state schemas + range parser)
+- **27**: state consolidation + `skilltap migrate`
+- **28**: project manifest + lockfile I/O + publish discovery
+- **29**: sync engine — drift detection + plan generation + preview-only sync command
+- **30**: native `.skilltap/<plugin>.toml` plugin format + multi-plugin repo support
+- **31a**: v2 policy compose + trust-glob (additive, alongside v0.x policy)
+- **31b**: HTTP registry adapter removal (-984 / +113 lines)
+- **31c-a**: manifest+lockfile writes from install
+- **31c-b-1**: manifest+lockfile writes from remove
+- **31c-b-2**: sync apply implementation (`skilltap sync --apply`)
+- **31c-c-1**: smart scope default in resolveScope
+- **33a**: `skilltap status` dashboard + bare-command routing
+- **34**: top-level `toggle`/`enable`/`disable` with `<plugin>:component` syntax
+- **35a**: `skilltap try <source>` + Claude Desktop MCP target
+- **36**: doctor v2 — 5 new checks (state-v2, manifest-drift, lockfile-drift, plugin-manifests, mcp-consistency) with auto-fix for safely-fixable subset
+- **37**: command surface promotion + completion script updates (bash/zsh/fish + dynamic installed-plugins)
+- **38a**: README v2.0 manifest workflow section + comprehensive changelog entry
+- **38b**: AGENTS.md / `.claude/CLAUDE.md` updated with v2.0 conventions
+- **Refactor 1** (after Phase 34): extracted `loadPluginByName` + `componentLabel` to `cli/src/ui/plugin-format.ts` (-38 / +8 lines)
+
+### Phases deferred to v2.1+
+
+- **31c-c-2**: state.json reads cutover + `[agent-mode]` retirement + `mcp:` prefix + v1 schema retirement. The destructive cutover. v0.x readers (`installed.json` + `plugins.json`) stay active in v2.0 so existing users aren't broken on upgrade.
+- **35b**: `skilltap install mcp:<source>` standalone MCP install. Designed but not implemented; rolls into 31c-c-2.
+- **32**: dedicated agent-flag wire-up. Largely subsumed by 31a's `composeV2` (which already implements `--agent` flag, `SKILLTAP_AGENT` env var, `[agent].default`, `[agent].block`); the cutover that retires `[agent-mode]` is part of 31c-c-2.
+
+### Phase deferred to user
+
+- **38c**: `bun run bump 2.0.0` and `git push --follow-tags`. The autopilot mandate forbids pushing to remote, and the existing bump script auto-commits + tags + pushes. The user runs it when ready to release. CI workflow handles npm publish + Homebrew formula update.
+
+### Workflow practices used
+
+- `/workflow:design` produced explicit design docs at `docs/design/phase-{N}.md` before any phase that touched multiple modules. 17 design docs total.
+- `/workflow:implement-orchestrator` spawned Sonnet sub-agents for the larger phases (31b, 36) — clean splits, parallel execution, agents flagged real bugs in design (e.g., the `i.kind === "add" || "remove" || "ref-mismatch"` always-truthy expression).
+- Smaller phases used inline design + direct implementation (8–10 phases). Tradeoff: faster context use, slightly less rigor.
+- One refactor pass at the natural moment after Phase 34 (concrete duplication had appeared in toggle/enable/disable + plugin/info).
+
+### Final test counts
+
+- **v2 baseline** (additive code from Phases 26–36): 293 tests across 30 files in ~530ms.
+- **Existing v0.x** (install + remove + plugin install + lifecycle): 72 tests across 4 files in ~3s.
+- **Combined**: 365 tests passing.
+
+### Known issues / follow-ups for v2.1
+
+- Cutover (31c-c-2) — install/update/remove still read v0.x `installed.json` + `plugins.json`. Migrate writes `state.json` but the destructive switch hasn't happened. Doctor reports both layouts gracefully.
+- `mcp:` install prefix not yet implemented (35b).
+- Bump script (`scripts/bump-version.ts`) doesn't accept pre-release versions (regex is `/^\d+\.\d+\.\d+$/`); auto-pushes on tag. Two small enhancements that would make it autopilot-compatible: (a) extend regex to accept `-rc.N` suffixes; (b) support `SKILLTAP_BUMP_NO_PUSH=1` env var to skip the push.
+- The "componentLabel" function in `cli/src/commands/plugin/info.ts` has different semantics from the shared one (returns just type, not "type: name"). Renamed in a future refactor.
+- Phase 31c-c-2's split into 31c-c-2-a/b/c/d is the natural shape when v2.1 work begins.
+
+### Watchdog loop
+
+Each autopilot session scheduled its own session-local cron loop. None survive across sessions; a fresh `/workflow:autopilot` invocation re-arms it.
