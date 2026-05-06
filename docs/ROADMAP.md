@@ -372,6 +372,8 @@ Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 dep
 
 ### Phase 20 — Plugin Detection and Parsing ✓
 
+> Design doc: [DESIGN-PLUGIN-DETECTION.md](./DESIGN-PLUGIN-DETECTION.md)
+
 Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) plugin formats. Extract the portable subset: skills, MCP server configs, and agent definitions.
 
 - [x] **20.1** Define `PluginManifestSchema` (Zod) in `core/src/schemas/plugin.ts` — unified internal representation covering both Claude Code and Codex formats; component types: `skill`, `mcp`, `agent`
@@ -388,6 +390,8 @@ Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin
 
 ### Phase 21 — Plugin Storage and Data Model ✓
 
+> Design doc: [DESIGN-PLUGIN-STORAGE.md](./DESIGN-PLUGIN-STORAGE.md)
+
 Plugin as a first-class record in `plugins.json`, with per-component state tracking.
 
 - [x] **21.1** Define `PluginsJsonSchema` in `core/src/schemas/plugins.ts` — `{ version: 1, plugins: PluginRecord[] }`; each record: name, source (repo URL), ref, sha, scope, installedAt, updatedAt, active, components array
@@ -401,6 +405,8 @@ Plugin as a first-class record in `plugins.json`, with per-component state track
 ---
 
 ### Phase 22 — MCP Config Injection ✓
+
+> Design doc: [DESIGN-MCP-INJECTION.md](./DESIGN-MCP-INJECTION.md)
 
 Write MCP server entries directly into each target agent's config file.
 
@@ -420,6 +426,8 @@ Write MCP server entries directly into each target agent's config file.
 ---
 
 ### Phase 23 — Plugin Install Flow ✓
+
+> Design doc: [DESIGN-PLUGIN-INSTALL.md](./DESIGN-PLUGIN-INSTALL.md)
 
 Wire plugin detection into the existing `skilltap install` command. Auto-detect plugins and install all components.
 
@@ -441,6 +449,8 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
 ---
 
 ### Phase 24 — Plugin Management Commands ✓
+
+> Design doc: [DESIGN-PLUGIN-COMMANDS.md](./DESIGN-PLUGIN-COMMANDS.md)
 
 `skilltap plugin` subcommand group for listing, inspecting, toggling, and removing plugins.
 
@@ -464,6 +474,8 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
 ---
 
 ### Phase 25 — Plugin Polish ✓
+
+> Design doc: [DESIGN-PLUGIN-POLISH.md](./DESIGN-PLUGIN-POLISH.md)
 
 - [x] **25.1** Marketplace tap adapter update: `adaptMarketplaceToTap()` now includes a `plugin: true` flag on entries that have MCP/agent components (not just skills), so `skilltap find` can show "plugin" vs "skill" in results
 - [x] **25.2** `skilltap find` shows plugin badge for tap entries that are plugins
