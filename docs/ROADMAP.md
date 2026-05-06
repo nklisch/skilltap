@@ -754,13 +754,14 @@ Phases 28, 30, 31, 32 can run mostly in parallel after 27. Phases 33–36 can ru
 
 ---
 
-## What's Deferred to v1.1+
+## What's Deferred (no scheduled version)
+
+These are real future-work items that survived v0.1, v1.0, and v2.0 + v2.1 without making a release. They're not blocked on technical issues — they're either large efforts (Windows support, VS Code extension, agent definitions for non-Claude platforms), platform-specific features (Claude Code hooks/LSP/commands/userConfig), or design problems that haven't been prioritized (skill dependency system, direct LLM API integrations, SBOM generation, `security.require_provenance`).
 
 - Windows support
 - Linux distro packages (.deb, .rpm, AUR, Nix)
 - `security.require_provenance` config option (block unverified skills)
 - Direct LLM API integrations for semantic scan (Anthropic API, OpenAI API — bypassing CLI)
-- `skilltap tap export --format http` (generate static HTTP registry from tap.json)
 - Plugin for popular editors (VS Code extension)
 - Skill dependency system
 - SBOM generation for installed skills
@@ -769,3 +770,6 @@ Phases 28, 30, 31, 32 can run mostly in parallel after 27. Phases 33–36 can ru
 - Plugin commands support (Claude Code commands/*.md)
 - Agent definitions for non-Claude-Code platforms (when other agents adopt the format)
 - Plugin user config / secrets management (Claude Code userConfig with keychain)
+
+Removed entries (no longer planned):
+- `skilltap tap export --format http` — HTTP registry tap support was removed in v2.0 (Phase 31b). Generating a static HTTP registry from `tap.json` is now moot.
