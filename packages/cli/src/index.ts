@@ -300,6 +300,7 @@ const main = defineCommand({
     doctor: () => import("./commands/doctor").then((m) => m.default),
     migrate: () => import("./commands/migrate").then((m) => m.default),
     sync: () => import("./commands/sync").then((m) => m.default),
+    try: () => import("./commands/try").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
     "self-update": () =>
       import("./commands/self-update").then((m) => m.default),

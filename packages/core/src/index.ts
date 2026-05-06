@@ -60,3 +60,4 @@ export * from "./migrate";
 export * from "./sync";
 export * from "./policy-v2";
 export * from "./status";
+export { tryPreview, type TryReport, type TryOptions } from "./try";

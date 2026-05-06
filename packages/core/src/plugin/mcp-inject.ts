@@ -19,6 +19,24 @@ export const MCP_AGENT_CONFIGS: Record<string, string> = {
   windsurf: ".windsurf/mcp.json",
 };
 
+// Claude Desktop's config lives at an OS-specific location relative to home.
+// Populated at module load on supported platforms; absent on Windows (which
+// uses %APPDATA% — needs env-var resolution that doesn't fit relative paths).
+function claudeDesktopRelPath(): string | null {
+  if (process.platform === "darwin") {
+    return "Library/Application Support/Claude/claude_desktop_config.json";
+  }
+  if (process.platform === "linux") {
+    return ".config/Claude/claude_desktop_config.json";
+  }
+  return null;
+}
+
+const _claudeDesktopPath = claudeDesktopRelPath();
+if (_claudeDesktopPath !== null) {
+  MCP_AGENT_CONFIGS["claude-desktop"] = _claudeDesktopPath;
+}
+
 // --- Namespacing ---
 
 const SKILLTAP_MCP_PREFIX = "skilltap:";

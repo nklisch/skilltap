@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 8
+**Phases since last refactor:** 9
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -26,7 +26,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | pending  | —         |
 | 34  | Component-ref syntax + toggle promotion        | pending  | —         |
-| 35  | Try + MCP-only install + Claude Desktop        | pending  | —         |
+| 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
+| 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
 | 36  | Doctor v2.0 upgrades                           | pending  | —         |
 | 37  | Command surface promotion + aliases            | pending  | —         |
 | 38  | v2.0 polish + docs + release                   | pending  | —         |
@@ -149,6 +150,21 @@ Verification: 285 tests pass / 0 fail. 871-line net deletion (-984 / +113).
 - 8 phases since last refactor (26, 27, 28, 29, 30, 31a, 33a, 31b). The framework default is "every 3"; 8 is well past that.
 - Phases have been varied: schemas / I/O / commands / one destructive cleanup. No single duplication or pattern has emerged that would benefit from cross-phase refactoring.
 - Decision: defer one more phase. Re-evaluate after 31c lands the install cutover, which will likely surface refactor opportunities (the install code paths get rewritten and any duplication will be visible).
+
+### Phase 35a complete — try + Claude Desktop
+
+`skilltap try <source>` previews any source (URL, owner/repo, npm:, local path) without writing anywhere. Clones to a temp dir for remote sources; uses the path directly for local. Parses plugin manifests, scans for skills, runs static security scan, prints a structured summary, then cleans up. `--skip-scan` and `--json` flags supported.
+
+Claude Desktop added to `MCP_AGENT_CONFIGS` at module load via `process.platform`:
+- macOS: `Library/Application Support/Claude/claude_desktop_config.json`
+- Linux: `.config/Claude/claude_desktop_config.json`
+- Windows: deferred (needs `%APPDATA%` resolution that doesn't fit the relative-path shape)
+
+Decisions D1–D4 logged in `docs/design/phase-35a.md`. Used inline design + direct implementation (small scope: 6 files, mostly additive).
+
+The `mcp:` install prefix sub-piece from the original Phase 35 was split off as 35b and deferred — it touches `install.ts` and naturally lands with the cutover (31c).
+
+Tests: 10 new (8 try + 4 mcp claude-desktop, but `mcpConfigPath returns null for unknown agent` test counted twice because they share a describe). 295/295 v2 tests pass total.
 
 ---
 
