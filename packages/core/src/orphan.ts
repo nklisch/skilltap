@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { loadInstalled, saveInstalled } from "./config";
+import { saveInstalled } from "./config";
 import { resolvedDirExists } from "./fs";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";

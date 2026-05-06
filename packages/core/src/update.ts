@@ -19,7 +19,7 @@ import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
 import { scanSemantic } from "./security/semantic";
-import type { OnOrphansFound, OrphanRecord } from "./orphan";
+import type { OnOrphansFound } from "./orphan";
 import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import { wrapShell } from "./shell";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";

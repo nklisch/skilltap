@@ -6,7 +6,6 @@ import {
   type EffectivePolicy,
   fetchSkillUpdateStatus,
   formatOrphanReason,
-  type OnOrphansFound,
   type OrphanRecord,
   type SemanticWarning,
   type StaticWarning,
