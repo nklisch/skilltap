@@ -5,6 +5,64 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v2.1.0 — Canonical store + transparent v0.x migration (unreleased)
+
+The v2.1 release retires the dual-source-of-truth state model from v2.0.
+`state.json` is now the canonical store for installed skills and plugins.
+Existing v0.x users transition transparently — your data is read once from
+`installed.json`/`plugins.json` and written into `state.json` on the next
+install/update/remove. No explicit `skilltap migrate` is required, though
+the command remains available.
+
+### Changed
+
+- **`state.json` is the canonical state file.** `install`, `update`, `remove`,
+  `disable`, `enable`, `move`, `adopt`, `link`, plugin operations all now
+  write directly to `state.json` instead of `installed.json`/`plugins.json`.
+  Existing v0.x users get a one-time transparent read fallback so no data
+  is lost. The next save populates `state.json` and the fallback stops
+  firing for that scope.
+- **`--agent` flag and `SKILLTAP_AGENT=1` env var work as documented.** v2.0
+  advertised both as the modern way to enter agent mode, but the CLI only
+  honored the legacy `[agent-mode]` config block. `composePolicy` now
+  resolves agent mode with proper precedence: `flags.agent` >
+  `SKILLTAP_AGENT=1` > config block. CLI startup checks (telemetry notice,
+  update hint, skill-update reminder) also short-circuit on the env var.
+
+### Added
+
+- **Doctor `v0.x file orphans` check.** `skilltap doctor` now runs 15 checks
+  total. The new check detects when `state.json` is populated AND legacy
+  `installed.json`/`plugins.json` are still on disk (a common state after
+  a transparent migration). `--fix` renames each orphan to `<file>.v1.bak`.
+  Pre-migration users (empty state, populated legacy file) are intentionally
+  not flagged — their fallback is still active.
+- **`skilltap doctor` runs from real git repos correctly.** Fixed a
+  `Bun.file('.git').exists()` bug in the project-root detection that made
+  `skilltap status`/`doctor` always report "no project root" when run inside
+  a real git repo. Replaced with `lstat`.
+
+### Internals
+
+- **Module-graph cleanup.** Extracted `getConfigDir`/`ensureDirs` to a leaf
+  module (`core/src/dirs.ts`) and `SKILLTAP_AGENT` env-var check to its own
+  helper (`core/src/agent-env.ts`). The previous circular import between
+  `config.ts` ↔ `state/save.ts` (which had been worked around with dynamic
+  `await import()` calls) is gone — all callers use clean static imports.
+- **Net –355 lines of code.** The dual-write scaffolding from the early
+  v2.1 cutover (sync-from-v1.ts, read-bridge.ts) is dead code now that
+  `state.json` is canonical. Deleted.
+
+### Known gaps
+
+- **v0.x schema deletion** — `schemas/installed.ts` and `schemas/plugins.ts`
+  are still imported (mostly for type re-exports — `InstalledSkill`,
+  `PluginRecord` shapes are reused as-is in `state.json`). Wholesale deletion
+  is deferred to v2.2 after a release window for users to clear orphans
+  via `skilltap doctor --fix`.
+
+---
+
 ## v2.0.0-rc.1 — Tooling-surface redesign
 
 The v2.0 release reshapes how you manage skills and plugins around a project
