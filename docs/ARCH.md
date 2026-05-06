@@ -238,17 +238,17 @@ core → test-utils (dev)
 
 **security/semantic.ts** — Layer 2 agent-based evaluation. Chunks content, invokes agent adapter, aggregates scores. See [SPEC.md — Layer 2](./SPEC.md#layer-2-semantic-scan) for the chunking algorithm and security prompt.
 
-**config.ts** — Reads/writes `~/.config/skilltap/config.toml` and `~/.config/skilltap/installed.json`. Ensures directories exist on first use.
+**config.ts** — Reads/writes `~/.config/skilltap/config.toml` and the canonical state at `~/.config/skilltap/state.json` (since v2.1; `installed.json` and `plugins.json` are read transparently as a one-time fallback for unmigrated v0.x users and never written). Ensures directories exist on first use.
 
 **config-keys.ts** — Pure helpers for `config get`/`config set`: dot-path resolution, value coercion (string→typed), settable key allowlist/blocklist, immutable deep-set, plain-text formatting.
 
 **install.ts** — Orchestrates the install flow. Coordinates git, scanner, security, config, and symlink modules. **remove.ts**, **update.ts**, and **link.ts** handle their respective flows.
 
-**discover.ts** — `discoverSkills(options?)` scans all skill directories (`.agents/skills/` and every agent-specific dir from `AGENT_PATHS`) at both global and project scope. Detects symlinks, cross-references with `installed.json` to classify skills as managed or unmanaged, reads SKILL.md frontmatter for descriptions, and detects git remotes on unmanaged skills. Returns `DiscoverResult` with a unified skill inventory.
+**discover.ts** — `discoverSkills(options?)` scans all skill directories (`.agents/skills/` and every agent-specific dir from `AGENT_PATHS`) at both global and project scope. Detects symlinks, cross-references with the loaded skill records (from `state.json`, with v0.x fallback) to classify skills as managed or unmanaged, reads SKILL.md frontmatter for descriptions, and detects git remotes on unmanaged skills. Returns `DiscoverResult` with a unified skill inventory.
 
-**adopt.ts** — `adoptSkill(skill, options?)` brings an unmanaged `DiscoveredSkill` under skilltap management. Two modes: `move` (default) moves the skill dir to `.agents/skills/` and creates symlinks from original locations, `track-in-place` creates a "linked" record without moving. Runs static security scan, detects git remote/ref/sha, writes to `installed.json`.
+**adopt.ts** — `adoptSkill(skill, options?)` brings an unmanaged `DiscoveredSkill` under skilltap management. Two modes: `move` (default) moves the skill dir to `.agents/skills/` and creates symlinks from original locations, `track-in-place` creates a "linked" record without moving. Runs static security scan, detects git remote/ref/sha, writes to `state.json`.
 
-**move.ts** — `moveSkill(name, options)` moves a managed skill between scopes (global ↔ project). Handles symlink cleanup and recreation, installed.json record transfer across files, and linked→managed conversion.
+**move.ts** — `moveSkill(name, options)` moves a managed skill between scopes (global ↔ project). Handles symlink cleanup and recreation, `state.json` record transfer across scopes, and linked→managed conversion.
 
 **skill-check.ts** — Background skill update check. `checkForSkillUpdates(intervalHours, projectRoot)` reads the cache and fires a background refresh if stale. `fetchSkillUpdateStatus(projectRoot)` does the actual network check: groups git skills by cache dir (one `git fetch` per unique repo), compares `HEAD` vs `FETCH_HEAD`; fetches npm metadata for npm skills and compares versions. `writeSkillUpdateCache(updates, projectRoot)` persists results to `~/.config/skilltap/skills-update-check.json`.
 
@@ -292,7 +292,7 @@ core → test-utils (dev)
 
 **plugin/lifecycle.ts** — `removeInstalledPlugin()` and `toggleInstalledComponent()` — post-install plugin lifecycle. Remove cleans up all skills, MCP entries, and agent definitions. Toggle enables/disables individual components by type (skill → `.disabled/`, MCP → agent config, agent → `.disabled/`).
 
-**plugin/state.ts** — Plugin state management. `loadPlugins(scope)`, `savePlugins(scope, data)`, `addPlugin(record)`, `removePlugin(name)`, `toggleComponent(pluginName, componentName)`, `mcpServerToStored()`. Reads/writes `plugins.json`.
+**plugin/state.ts** — Plugin state management. `loadPlugins(scope)`, `savePlugins(scope, data)`, `addPlugin(record)`, `removePlugin(name)`, `toggleComponent(pluginName, componentName)`, `mcpServerToStored()`. Reads/writes the `plugins[]` slice of `state.json` (with v0.x `plugins.json` fallback at load time only).
 
 **json-state.ts** — Generic JSON file I/O. `loadJsonState(path, schema)` and `saveJsonState(path, data)`. Shared by `config.ts`, `plugin/state.ts`, and any other module that needs validated JSON read/write.
 

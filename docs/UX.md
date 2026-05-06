@@ -51,7 +51,7 @@ Silent aliases (backwards compatibility):
 - Errors to stderr, output to stdout
 - `--json` where supported outputs machine-readable JSON
 - Config at `~/.config/skilltap/config.toml` — created with defaults on first run
-- State at `~/.config/skilltap/installed.json` — machine-managed
+- State at `~/.config/skilltap/state.json` — machine-managed (v2.1+; v0.x setups using `installed.json` + `plugins.json` are read transparently as a fallback for unmigrated users)
 
 ---
 
@@ -368,8 +368,8 @@ $ skilltap remove
 ✓ Removed code-review
 ```
 
-Removes the skill directory and any agent-specific symlinks. Updates `installed.json`.
-Handles both managed and unmanaged skills — if a skill isn't in `installed.json` but exists on disk (e.g. manually placed in `~/.claude/skills/`), it can still be removed.
+Removes the skill directory and any agent-specific symlinks. Updates `state.json`.
+Handles both managed and unmanaged skills — if a skill isn't tracked in `state.json` but exists on disk (e.g. manually placed in `~/.claude/skills/`), it can still be removed.
 Omit the name to choose interactively via multiselect (no separate confirmation needed).
 
 When a skill is installed at both global and project scopes, the picker shows disambiguated entries:
@@ -391,7 +391,7 @@ skilltap skills [flags]
 
 > Also available as `skilltap list` (silent alias).
 
-The unified view shows **all** skills across all locations — `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, etc. — at both global and project scope. Skills are classified as managed (tracked by skilltap), linked, or unmanaged (manually placed, not in `installed.json`).
+The unified view shows **all** skills across all locations — `.agents/skills/`, `.claude/skills/`, `.cursor/skills/`, etc. — at both global and project scope. Skills are classified as managed (tracked by skilltap in `state.json`), linked, or unmanaged (manually placed, not in `state.json`).
 
 ### Flags
 
@@ -497,7 +497,7 @@ $ skilltap skills adopt
 skilltap skills move <name> [flags]
 ```
 
-Move a managed skill between scopes (global ↔ project). Updates installed.json, moves the skill directory, and recreates agent symlinks at the new scope.
+Move a managed skill between scopes (global ↔ project). Updates `state.json`, moves the skill directory, and recreates agent symlinks at the new scope.
 
 ### Flags
 
@@ -1797,7 +1797,7 @@ $ skilltap doctor
 ◇ dirs: all present ✓
 ◇ installed: 2 skills ✓
 ⚠ skills: 2 installed, 1 on disk
-│  broken-skill: recorded in installed.json but directory missing at ~/.agents/skills/broken-skill
+│  broken-skill: recorded in state.json but directory missing at ~/.agents/skills/broken-skill
 ◇ symlinks: all valid ✓
 ⚠ taps: 3 configured, 2 valid
 │  tap 'source-delve': directory missing. Run 'skilltap tap update source-delve' to re-clone.
@@ -1821,7 +1821,7 @@ $ skilltap doctor --fix
 ◇ dirs: all present ✓
 ◇ installed: 2 skills ✓
 ⚠ skills: 2 installed, 1 on disk
-│  broken-skill: recorded in installed.json but directory missing — removed from installed.json ✓
+│  broken-skill: recorded in state.json but directory missing — removed from state.json ✓
 ◇ symlinks: all valid ✓
 ◇ taps: 2 reachable ✓
 ◇ agents: claude detected ✓
