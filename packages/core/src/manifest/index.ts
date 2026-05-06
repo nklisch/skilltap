@@ -12,3 +12,9 @@ export { manifestExists, loadManifest } from "./load";
 export { saveManifest } from "./save";
 export { lockfileExists, loadLockfile, saveLockfile } from "./lockfile";
 export { discoverPublishablePlugins, type PublishDiscovery } from "./publish";
+export {
+  addSkillToManifest,
+  addPluginToManifest,
+  canonicalizeSourceKey,
+  type ManifestUpdateInput,
+} from "./update";

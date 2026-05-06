@@ -9,6 +9,7 @@ import { scanStatic } from "../security/static";
 import { wrapShell } from "../shell";
 import { createAgentSymlinks } from "../symlink";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
+import { addPluginToManifest } from "../manifest/update";
 import { injectMcpServers } from "./mcp-inject";
 import { addPlugin, loadPlugins, manifestToRecord, mcpServerToStored, savePlugins } from "./state";
 import type { StaticWarning } from "../security/static";
@@ -166,6 +167,19 @@ export async function installPlugin(
   const newState = addPlugin(loadResult.value, record);
   const saveResult = await savePlugins(newState, projectRoot);
   if (!saveResult.ok) return saveResult;
+
+  // v2 manifest update (Phase 31c-a) — no-op without skilltap.toml.
+  // Only fires for project-scope installs in a project root that has a
+  // manifest. Failures are non-fatal — the plugin is already installed.
+  if (options.scope === "project" && projectRoot && record.repo) {
+    await addPluginToManifest(projectRoot, {
+      source: record.repo,
+      ref: record.ref,
+      sha: record.sha,
+    }).catch(() => {
+      // non-fatal
+    });
+  }
 
   return ok({ record, warnings, mcpAgents, agentDefsPlaced });
 }

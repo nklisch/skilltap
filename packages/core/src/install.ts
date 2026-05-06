@@ -34,6 +34,7 @@ import {
   type ScanError,
   UserError,
 } from "./types";
+import { addSkillToManifest } from "./manifest/update";
 import { detectPlugin } from "./plugin/detect";
 import { installPlugin } from "./plugin/install";
 import type { PluginManifest } from "./schemas/plugin";
@@ -768,6 +769,22 @@ export async function installSkill(
     installed.skills.push(...newRecords);
     const saveResult = await saveInstalled(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
+
+    // 11. v2 manifest update (Phase 31c-a) — no-op without skilltap.toml.
+    // Only fires for project-scope installs in a project root that has a
+    // manifest. Failures are non-fatal — the skill is already installed.
+    if (options.scope === "project" && options.projectRoot) {
+      for (const record of newRecords) {
+        if (!record.repo) continue;
+        await addSkillToManifest(options.projectRoot, {
+          source: record.repo,
+          ref: record.ref,
+          sha: record.sha,
+        }).catch((e) => {
+          debug("manifest update failed (non-fatal)", { name: record.name, error: String(e) });
+        });
+      }
+    }
 
     return ok({
       records: newRecords,

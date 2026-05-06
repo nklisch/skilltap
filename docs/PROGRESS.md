@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 2
+**Phases since last refactor:** 3
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -21,7 +21,9 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 30 | Native Plugin Format + Multi-Plugin Repos      | done     | 2026-05-06 |
 | 31a | v2 policy compose + trust-glob                 | done     | 2026-05-06 |
 | 31b | HTTP registry adapter removal                  | done     | 2026-05-06 |
-| 31c | Install/update/remove cutover + sync apply     | pending  | —         |
+| 31c-a | Manifest+lockfile writes from install        | done     | 2026-05-06 |
+| 31c-b | Manifest writes from remove + sync apply     | pending  | —         |
+| 31c-c | state.json reads cutover + smart scope + agent | pending  | —         |
 | 32  | Agent flag (subsumed by 31a; cutover w/ 31c)   | pending  | —         |
 | 33a | Status dashboard (additive)                    | done     | 2026-05-06 |
 | 33b | Smart scope default in policy compose          | pending  | —         |
@@ -156,6 +158,28 @@ Verification: 285 tests pass / 0 fail. 871-line net deletion (-984 / +113).
 - 8 phases since last refactor (26, 27, 28, 29, 30, 31a, 33a, 31b). The framework default is "every 3"; 8 is well past that.
 - Phases have been varied: schemas / I/O / commands / one destructive cleanup. No single duplication or pattern has emerged that would benefit from cross-phase refactoring.
 - Decision: defer one more phase. Re-evaluate after 31c lands the install cutover, which will likely surface refactor opportunities (the install code paths get rewritten and any duplication will be visible).
+
+### Phase 31c split into a/b/c
+
+The original Phase 31c is the destructive cutover: replace v1 installed.json + plugins.json reads with state.json, wire manifest+lockfile writes, implement sync apply, retire [agent-mode] in favor of composeV2's --agent flag, add smart-scope default, add `mcp:` prefix. Easily 25+ implementation units.
+
+Split per design-skill rule (>15 units → split):
+
+- **31c-a (done)**: manifest + lockfile writes from install (skill + plugin). Purely additive — no-op without skilltap.toml. No reads change.
+- **31c-b (pending)**: manifest writes from `remove` + sync apply implementation. Sync apply uses existing v1 install/remove machinery to actually mutate state.
+- **31c-c (pending)**: state.json reads cutover + smart scope default + agent flag cutover + `mcp:` prefix + v1 schema retirement. The destructive batch.
+
+Splitting respects context limits and lets each step ship + verify in isolation.
+
+### Phase 31c-a complete — manifest writes from install
+
+`install.ts` and `plugin/install.ts` now update `skilltap.toml` + `skilltap.lock` after a successful install, but ONLY when scope=project AND `skilltap.toml` exists at the project root. Linked skills and global installs are skipped (correctly — neither belongs to a project manifest). Manifest-write failures are non-fatal — the skill/plugin is already installed; we don't roll that back.
+
+Source-key canonicalization: `https://github.com/n/r[.git]` and `git@github.com:n/r[.git]` both become `github:n/r`. npm: and unknown URLs pass through. Range defaults to `"*"`; users tighten by hand. Lockfile gets the precise ref + sha.
+
+Decisions D1–D5 logged in `docs/design/phase-31c-a.md`.
+
+Tests: 16 new in `manifest/update.test.ts` (canonicalize + addSkill/addPlugin). Existing 30 install tests + 15 plugin install tests still pass — wire-up was non-disruptive.
 
 ### Phase 37 complete — surface promotion + aliases
 
