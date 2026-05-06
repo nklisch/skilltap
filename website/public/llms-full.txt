@@ -293,6 +293,14 @@ skilltap skills --project      # only project-scoped skills
 skilltap skills --unmanaged    # only unmanaged skills (not tracked by skilltap)
 ```
 
+For a broader dashboard that includes plugins, MCP injection, taps, and (in a project) manifest drift, run:
+
+```bash
+skilltap status               # full dashboard
+skilltap                       # alias for status
+skilltap status --json         # machine-readable output for scripting
+```
+
 ## Adopt existing skills
 
 If you've placed skills manually — copied them from a colleague, cloned them yourself, or inherited them from a project — they show up as **unmanaged** in `skilltap skills`:
@@ -410,8 +418,10 @@ See the [Security](/guide/security) guide for full details.
 - [Installing Skills](./installing-skills) -- all source formats, flags, scopes, and multi-skill repos
 - [Creating Skills](./creating-skills) -- write and publish your own skills
 - [Taps](./taps) -- create and manage skill indexes
+- [Sharing with a team](./teams) -- the v2.0 project-manifest workflow (`skilltap.toml` + `skilltap sync`) for pinned, reproducible team setups
 - [Security](./security) -- how scanning works and how to configure it
-- [Configuration](./configuration) -- full config file reference
+- [Configuration](./configuration) -- full config file reference, including `--agent` flag and `SKILLTAP_AGENT=1` env var for CI/non-interactive use
+- [Doctor](./doctor) -- 15 health checks for state, manifests, drift, MCP injection, and more
 - [CLI Reference](/reference/cli) -- every command, flag, and option
 
 ---
