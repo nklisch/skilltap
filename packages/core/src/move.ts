@@ -33,7 +33,7 @@ export async function moveSkill(
   const targetProjectRoot =
     options.to.scope === "project" ? options.to.projectRoot : undefined;
 
-  // Look up the skill in global and project installed.json
+  // Look up the skill in global and project state
   const globalInstalledResult = await loadInstalled();
   if (!globalInstalledResult.ok) return globalInstalledResult;
   const globalInstalled = globalInstalledResult.value;
@@ -153,7 +153,7 @@ export async function moveSkill(
     updatedAt: now,
   };
 
-  // Remove from source installed.json
+  // Remove from source state
   const sourceFileRoot = record.scope === "project" ? sourceProjectRoot : undefined;
   const sourceInstalledResult = await loadInstalled(sourceFileRoot);
   if (!sourceInstalledResult.ok) return sourceInstalledResult;
@@ -167,7 +167,7 @@ export async function moveSkill(
   const saveSourceResult = await saveInstalled(sourceInstalled, sourceFileRoot);
   if (!saveSourceResult.ok) return saveSourceResult;
 
-  // Add to target installed.json
+  // Add to target state
   const targetFileRoot = effectiveTargetScope === "project" ? targetProjectRoot : undefined;
   const targetInstalledResult = await loadInstalled(targetFileRoot);
   if (!targetInstalledResult.ok) return targetInstalledResult;

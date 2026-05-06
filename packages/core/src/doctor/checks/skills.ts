@@ -30,7 +30,7 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
         issues.push({
           message: `${skillName}: symlink target ${skill.path} does not exist`,
           fixable: true,
-          fixDescription: `removed from installed.json`,
+          fixDescription: `removed from state.json`,
           fix: async () => {
             const r = await loadInstalled();
             if (!r.ok) return;
@@ -54,9 +54,9 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
       const skillScope = skill.scope as "global" | "project";
       const capturedRoot = projectRoot;
       issues.push({
-        message: `${skillName}: recorded in installed.json but directory missing at ${installDir}`,
+        message: `${skillName}: recorded in state.json but directory missing at ${installDir}`,
         fixable: true,
-        fixDescription: `removed from installed.json`,
+        fixDescription: `removed from state.json`,
         fix: async () => {
           const effectiveRoot = skillScope === "project" ? capturedRoot : undefined;
           const r = await loadInstalled(effectiveRoot);
@@ -80,7 +80,7 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
         if (entry.name === ".disabled") continue;
         if (!globalTracked.has(entry.name)) {
           issues.push({
-            message: `${entry.name}: directory exists at ${join(globalSkillsDir, entry.name)} but not tracked in installed.json`,
+            message: `${entry.name}: directory exists at ${join(globalSkillsDir, entry.name)} but not tracked in state.json`,
             fixable: false,
           });
         }
@@ -101,7 +101,7 @@ export async function checkSkills(installed: InstalledJson, projectRoot?: string
           if (entry.name === ".disabled") continue;
           if (!projectTracked.has(entry.name)) {
             issues.push({
-              message: `${entry.name}: directory exists at ${join(projectSkillsDir, entry.name)} but not tracked in installed.json`,
+              message: `${entry.name}: directory exists at ${join(projectSkillsDir, entry.name)} but not tracked in state.json`,
               fixable: false,
             });
           }

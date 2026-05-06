@@ -117,7 +117,7 @@ export async function linkSkill(
     updatedAt: now,
   };
 
-  // 8. Save installed.json
+  // 8. Save state
   installed.skills.push(record);
   const saveResult = await saveInstalled(installed, fileRoot);
   if (!saveResult.ok) return saveResult;

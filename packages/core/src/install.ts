@@ -765,7 +765,7 @@ export async function installSkill(
 
     debug("placements complete", { installed: newRecords.map((r) => r.name) });
 
-    // 10. Save installed.json (saveInstalled also shadows into state.json)
+    // 10. Save state (saveInstalled writes to state.json post Phase 31c-c-2d-1)
     installed.skills.push(...newRecords);
     const saveResult = await saveInstalled(installed, fileRoot);
     if (!saveResult.ok) return saveResult;

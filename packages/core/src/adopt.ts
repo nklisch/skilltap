@@ -206,7 +206,7 @@ export async function adoptSkill(
     );
     if (!symlinkResult.ok) return symlinkResult;
 
-    // Save record to appropriate installed.json
+    // Save record to appropriate state
     const fileRoot = scope === "project" ? projectRoot : undefined;
     const installedResult = await loadInstalled(fileRoot);
     if (!installedResult.ok) return installedResult;

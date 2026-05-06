@@ -34,7 +34,7 @@ export function formatOrphanReason(reason: OrphanRecord["reason"]): string {
   }
 }
 
-/** Scan installed.json for records whose corresponding filesystem state is missing.
+/** Scan state for records whose corresponding filesystem state is missing.
  *  Pure verification — does not modify anything. */
 export async function findOrphanRecords(
   installed: InstalledJson,
