@@ -3264,14 +3264,22 @@ The `mcp:` prefix bypasses skill/plugin machinery entirely. Resolves the source 
 
 ### v2.0 Removed Features
 
-- HTTP registry tap type (`type = "http"` in tap config). Removed entirely. Migration: convert HTTP taps to git taps or remove.
-- `[security.human]` / `[security.agent]` split. Use `[security]`.
-- Security presets (none/relaxed/standard/strict). Use direct `scan`/`on_warn` values.
-- `[[security.overrides]]`. Use `[security] trust = [...]`.
-- `[agent-mode]` block. Use `[agent]` block.
-- `skilltap config agent-mode` interactive wizard. Use `skilltap config set agent.default true|false`.
-- `installed.json` and `plugins.json` as separate files. Use `state.json`.
-- The "human vs agent" mental model in security. There is one security policy.
+**Actually removed in v2.0:**
+
+- **HTTP registry tap type** (`type = "http"` in tap config). Removed entirely in Phase 31b. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning; `skilltap migrate` lists them as needing manual conversion or removal.
+- **`installed.json` and `plugins.json` as separate canonical files.** Phase 31c-c-2d-1 made `state.json` canonical; the legacy files remain as one-time read-fallback for unmigrated v0.x users (slated for full deletion in v2.2).
+- **`v0.x update.ts` `ref-mismatch` re-fetch.** Update behavior unchanged in surface but internal re-fetch path simplified.
+
+**Originally planned for removal but kept in v2.1:**
+
+The original v2.0 design called for several additional removals that did not ship. Earlier SPEC drafts listed them as removed; they're still active in v2.1 and any of the following continue to work:
+
+- `[security.human]` / `[security.agent]` per-mode blocks — kept; `composePolicy` still selects between them based on agent mode.
+- Security presets (`none`, `relaxed`, `standard`, `strict`) — kept; applied via `skilltap config security --preset` or in `[[security.overrides]]`.
+- `[[security.overrides]]` trust mechanism — kept; the glob-based `trust = []` design (in `policy-v2/trust-glob.ts`) is reserved scaffolding, not wired.
+- `[agent-mode]` config block — kept (with v2.2 retirement note in CLAUDE.md). The proposed `[agent]` block with `default`/`block` was never built.
+- `skilltap config agent-mode` wizard — kept; remains the persistent-default entry point. `--agent` flag and `SKILLTAP_AGENT=1` env var were added (Phase 31c-c-2c) as per-invocation overrides without retiring the wizard.
+- "Human vs agent" security split — kept; per-mode policy is the architecture.
 
 ### v2.0 Backwards Compatibility
 
