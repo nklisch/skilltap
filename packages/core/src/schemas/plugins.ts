@@ -1,3 +1,19 @@
+/**
+ * Plugin state schemas.
+ *
+ * `Stored*ComponentSchema`, `PluginRecordSchema` / `PluginRecord` — the
+ * canonical record shapes for installed plugins and their components.
+ * **Still actively used** in v2.1: `state.json`'s `plugins[]` array uses
+ * `PluginRecord`, and every consumer (plugin install, lifecycle, status,
+ * doctor checks) references these types.
+ *
+ * `PluginsJsonSchema` / `PluginsJson` — the v0.x file-wrapper format
+ * `{ version: 1, plugins: PluginRecord[] }`. **Legacy in v2.1**: only
+ * read by `loadPlugins`'s read-fallback for unmigrated v0.x users (see
+ * `core/src/plugin/state.ts`) and by `migrate/run.ts`. Never written.
+ * Will be removed entirely in v2.2 once the read-fallback is deleted
+ * (Phase 31c-c-2d-2-final).
+ */
 import { z } from "zod/v4";
 import { PLUGIN_FORMATS } from "./plugin";
 
