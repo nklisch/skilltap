@@ -71,3 +71,4 @@ export {
 export * from "./state";
 export * from "./migrate";
 export * from "./sync";
+export * from "./policy-v2";

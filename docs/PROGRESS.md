@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 5
+**Phases since last refactor:** 6
 **Total refactor passes:** 0
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -19,7 +19,9 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 28 | Project Manifest + Lockfile                    | done     | 2026-05-06 |
 | 29 | Sync Engine + Command                          | done     | 2026-05-06 |
 | 30 | Native Plugin Format + Multi-Plugin Repos      | done     | 2026-05-06 |
-| 31 | Security Simplification                        | active   | —         |
+| 31a | v2 policy compose + trust-glob                | done     | 2026-05-06 |
+| 31b | HTTP registry adapter removal                 | active   | —         |
+| 31c | Install/update/remove cutover + sync apply    | pending  | —         |
 | 32 | Agent Flag                                     | pending  | —         |
 | 33 | Smart Scope + Status Dashboard                 | pending  | —         |
 | 34 | Component-Ref Syntax + Toggle Promotion        | pending  | —         |
