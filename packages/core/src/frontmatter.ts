@@ -14,6 +14,7 @@ export function parseSkillFrontmatter(
   const lines = block.split("\n");
   let i = 0;
   while (i < lines.length) {
+    // biome-ignore lint/style/noNonNullAssertion: while-guard ensures lines[i] is defined
     const line = lines[i]!;
     const sep = line.indexOf(":");
     if (sep === -1) {
@@ -31,6 +32,7 @@ export function parseSkillFrontmatter(
       const parts: string[] = [];
       i++;
       while (i < lines.length) {
+        // biome-ignore lint/style/noNonNullAssertion: while-guard ensures lines[i] is defined
         const next = lines[i]!;
         if (next.length > 0 && (next[0] === " " || next[0] === "\t")) {
           parts.push(next.trimStart());
@@ -45,6 +47,7 @@ export function parseSkillFrontmatter(
       let hasNested = false;
       i++;
       while (i < lines.length) {
+        // biome-ignore lint/style/noNonNullAssertion: while-guard ensures lines[i] is defined
         const next = lines[i]!;
         if (next.length > 0 && (next[0] === " " || next[0] === "\t")) {
           const nsep = next.indexOf(":");
