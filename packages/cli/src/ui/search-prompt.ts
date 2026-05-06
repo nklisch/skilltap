@@ -57,8 +57,7 @@ const SPINNER_FRAMES = ["◒", "◐", "◓", "◑"];
 
 function isThenable(value: unknown): value is PromiseLike<unknown> {
   return (
-    value != null &&
-    typeof (value as { then?: unknown }).then === "function"
+    value != null && typeof (value as { then?: unknown }).then === "function"
   );
 }
 
