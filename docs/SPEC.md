@@ -544,14 +544,15 @@ Browse and install skills from all configured taps using an interactive picker.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--tap <name>` | string | — | Only show skills from a specific tap |
-| `--project` | boolean | false | Install to `.agents/skills/` in current project |
-| `--global` | boolean | false | Install to `~/.agents/skills/` (global) |
+| `--project` | boolean | false | Install to `.agents/skills/` in current project (overrides smart-scope inference) |
+| `--global` | boolean | false | Install to `~/.agents/skills/` (overrides smart-scope inference) |
 | `--also <agent>` | string | (from config) | Create symlink in agent-specific directory. Repeatable. |
 | `--skip-scan` | boolean | false | Skip security scanning |
-| `--yes` | boolean | false | Auto-select and install (non-interactive) |
+| `--yes` (`-y`) | boolean | false | Auto-select all skills and install (non-interactive) |
 | `--strict` | boolean | (from config) | Abort on any security warning |
 | `--no-strict` | boolean | false | Override `on_warn = "fail"` for this invocation |
 | `--semantic` | boolean | false | Force semantic scan |
+| `--agent` | boolean | false | Run in non-interactive agent mode (also: `SKILLTAP_AGENT=1`). |
 
 **Behavior:**
 
@@ -563,7 +564,7 @@ Browse and install skills from all configured taps using an interactive picker.
 6. If neither set has entries, exit 0 (no changes)
 7. Remove deselected skills (calls `removeSkill` per skill)
 8. Install newly selected skills (same flow as `skilltap install`)
-9. Scope/agents prompt only shown when there are skills to install
+9. Scope follows the same smart-default rules as `install` (Phase 31c-c-1) — explicit `--project`/`--global` flag → config `defaults.scope` → cwd inference (git repo → project, else global). No interactive scope prompt.
 
 ---
 
@@ -2702,8 +2703,8 @@ skilltap info <name>                      Skill or plugin details
 skilltap toggle <name>[:component]        Toggle plugin or component
 skilltap enable <name>[:component]        Enable plugin or component
 skilltap disable <name>[:component]       Disable plugin or component
-skilltap sync [--strict|--prompt|--yes]   Reconcile manifest ↔ lockfile ↔ disk
-skilltap update [name]                    Refresh lockfile to latest matching range
+skilltap sync [--apply] [--strict] [--json]  Reconcile manifest ↔ lockfile ↔ disk (read-only without --apply)
+skilltap update [name]                       Pull skills, rescan, reapply (skill update, not lockfile range refresh)
 skilltap status [--json]                  Same as bare `skilltap`, explicit + pipeable
 skilltap try <source>                     Read-only preview (no install)
 skilltap find [query]                     Search across taps
@@ -2721,6 +2722,8 @@ skilltap config <subcommand>              get, set, edit
 ```
 
 Old paths from v1.0 that are kept as silent aliases: `skilltap skills`, `skilltap plugins`, `skilltap remove` → `skilltap skills remove`, etc.
+
+> **Update vs sync (post-cutover divergence):** The original v2.0 design split skill-update into two commands — `update` for "refresh lockfile to latest matching range" (Cargo-style, range-resolution) and `sync` for "reconcile manifest ↔ lockfile ↔ disk." The shipped v2.1 implementation kept `update` with its v0.x skill-pull-and-rescan semantics and routed all lockfile reconciliation through `sync` (read-only by default, `--apply` to execute). Range-based lockfile refresh on `update` was deferred. If/when it ships, the split returns to the original design; until then, treat `update` as "skill update" and `sync` as "manifest/lockfile reconciliation."
 
 ### Project Manifest (`skilltap.toml`)
 
