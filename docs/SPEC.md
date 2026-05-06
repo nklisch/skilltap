@@ -2981,25 +2981,46 @@ Multiple plugins per repo: drop multiple files into `.skilltap/`. Each is indepe
 
 ### v2.0 Configuration
 
-The global config (`~/.config/skilltap/config.toml`) is collapsed and renamed:
+The global config (`~/.config/skilltap/config.toml`) shipped with the v0.x schema essentially intact (per-mode security retained, `[agent-mode]` kept). Verified at `core/src/schemas/config.ts ConfigSchema`:
 
 ```toml
-# ~/.config/skilltap/config.toml — v2.0
+# ~/.config/skilltap/config.toml — v2.1
 
 [defaults]
-also  = ["claude-code", "cursor"]
-scope = ""                          # "" = smart default; "global"; "project"
+also  = []                          # array of agent IDs to symlink to by default
+yes   = false                       # auto-accept clean installs/updates
+scope = ""                          # "" = smart default (git repo → project, else global); "global"; "project"
 
-[agent]
-default = false                     # if true, --agent is on by default; --no-agent to override
-block   = false                     # if true, refuse --agent (forces interactive)
+[security.human]
+scan         = "static"             # "static" | "semantic" | "off"
+on_warn      = "prompt"             # "prompt" | "fail" | "allow"
+require_scan = false                # block --skip-scan in this mode
+
+[security.agent]
+scan         = "static"
+on_warn      = "fail"               # default agent-mode is stricter
+require_scan = true
 
 [security]
-scan    = "static"                  # "semantic" | "static" | "none"
-on_warn = "install"                 # "prompt" | "fail" | "install"
-trust   = []                        # glob patterns of tap names or source URLs to skip scan
+agent_cli     = ""                  # path or name of agent CLI for semantic scanning
+threshold     = 5                   # 0–10, semantic-chunk score gating
+max_size      = 51200               # bytes; max skill dir size
+ollama_model  = ""                  # ollama model name when agent_cli = ollama
 
-[[taps]]                            # explicit tap registrations (also configurable via `tap add`)
+[[security.overrides]]              # trust-tier overrides; first match wins
+match  = "my-corp"
+kind   = "tap"                      # "tap" | "source"
+preset = "none"                     # SECURITY_PRESETS
+
+[agent-mode]
+enabled = false
+scope   = "project"                 # "global" | "project"
+
+[registry]
+enabled = ["skills.sh"]             # registries to search, in order
+sources = []                        # custom RegistrySource entries
+
+[[taps]]
 name = "home"
 url  = "https://gitea.example.com/nathan/my-tap"
 
@@ -3010,7 +3031,7 @@ skill_check_interval_hours = 24
 show_diff                  = "full" # "full" | "stat" | "none"
 
 [telemetry]
-enabled      = false                # unchanged from v1.0
+enabled      = false
 notice_shown = false
 anonymous_id = ""
 
@@ -3019,13 +3040,18 @@ verbose          = true
 default_git_host = "https://github.com"
 ```
 
-Removed from v1.0:
-- `[security.human]`, `[security.agent]` — collapsed to `[security]`.
-- `[security].agent_cli`, `.threshold`, `.max_size`, `.ollama_model`, `.overrides` — moved to `[security.advanced]` (optional, off the main surface) or removed.
-- `[agent-mode]` — replaced by `[agent]` (`default`, `block`).
-- `[registry]` — registries (skills.sh) are now configured under `[[registries]]` only if needed, with skills.sh as a sensible default that can be disabled.
-
-Migration of v1.0 keys: see `skilltap migrate` below.
+> **Original v2.0 design vs shipped:** Earlier SPEC drafts described a substantially different config: a single collapsed `[security]` block with `on_warn = "install"` and a `trust = []` glob array; a new `[agent]` block with `default`/`block` fields replacing `[agent-mode]`; an `[[registries]]` array. **None of that landed.** Phase 31c-c-2 kept the v0.x schema with backward compatibility:
+>
+> - `[security.human]` and `[security.agent]` are current per-mode blocks (not collapsed).
+> - `[security.overrides]` (note: in `core/src/schemas/config.ts` it's `overrides: z.array(...)`, written as `[[security.overrides]]` in TOML) is the trust mechanism (not glob).
+> - `[agent-mode]` is current (slated for v2.2 retirement; not yet replaced).
+> - `[registry]` (singular, with `enabled[]` + `sources[]`) is current — not `[[registries]]`.
+>
+> **What `skilltap migrate` actually does** for v0.x configs:
+> - Translates v0.x's old top-level `[security]` keys (`scan`, `on_warn`, `require_scan`) into per-mode `[security.human]` + `[security.agent]` blocks.
+> - Keeps `[agent-mode]` intact.
+> - Renames `config.toml` → `config.toml.v1.bak` after writing the migrated version.
+> - Aborts with a list of HTTP taps if any are present (Phase 31b removal).
 
 ### state.json (v2.1 canonical state file)
 
