@@ -2943,18 +2943,27 @@ What `--agent` does NOT change:
 ### v2.0 Sync Command
 
 ```
-skilltap sync [--strict | --yes] [--prune]
+skilltap sync [--apply] [--strict] [--json]
 ```
 
-Reconciles three sources of truth: manifest, lockfile, on-disk state.
+Reconciles three sources of truth: manifest (`skilltap.toml`), lockfile (`skilltap.lock`), on-disk state (`state.json`).
 
-Default behavior (no flags): scan all three, show a summary of differences (additions, removals, ref changes), prompt to confirm. With `--yes`: auto-apply. With `--strict`: error out instead of prompting if any drift exists. With `--prune`: also remove on-disk skills/plugins not declared in the manifest.
+**Default behavior (no flags):** scan all three, print a drift report grouped by kind. If everything agrees, prints `✓ In sync. Manifest, lockfile, and state agree.` and exits 0. Otherwise prints the drift items (target, source, reason, declared/installed/locked refs) and ends with `note: run skilltap sync --apply to execute this plan.` — does **not** auto-apply or prompt; this is a read-only inspection by default.
 
-Drift categories:
-- **Declared but not installed** — install at locked ref (or resolve range if no lockfile entry yet).
-- **Installed but not declared** — leave alone unless `--prune`. (Rationale: don't accidentally delete manually-installed dev tools.)
-- **Declared with different ref than locked** — update lockfile (treat manifest as source of truth on conflict).
-- **Locked with different SHA than installed** — reinstall to match lockfile (treat lockfile as source of truth on disk).
+**Flags:**
+- `--apply` — execute the plan via `install`/`remove`. Runs the items in order: removals first, then ref-changes, then adds, then bookkeeping (lockfile-* categories).
+- `--strict` — only meaningful with `--apply`; stop on first failure instead of continuing through the plan.
+- `--json` — output the plan as JSON instead of the human-readable drift report.
+
+Drift categories (`DriftKind`):
+- `add` — declared in manifest but not installed → install at locked ref (or resolve range if no lockfile entry yet).
+- `remove` — installed but not declared → uninstall.
+- `ref-mismatch` — declared with different ref than locked → update lockfile (manifest is source of truth on conflict).
+- `lock-stale` — locked SHA differs from installed SHA → reinstall to match lockfile (lockfile is source of truth on disk).
+- `lock-missing` — installed but no lockfile entry → write lockfile entry from installed state.
+- `lock-orphan` — lockfile entry with no manifest declaration → drop lockfile entry.
+
+> The original v0.x design (in earlier SPEC drafts) called for `--yes` to auto-apply and `--prune` to remove undeclared on-disk items without explicit declaration. The shipped command took a different shape: read-only by default with an explicit `--apply` opt-in, and `remove`-kind drift fires for any item not in the manifest (no separate prune toggle). The `--yes`/`--prune` flags do not exist.
 
 ### v2.0 Multi-Plugin Repos
 
@@ -3002,10 +3011,16 @@ Drift:   manifest declares 1 plugin not installed. Run `skilltap sync`.
 ### v2.0 Try Command
 
 ```
-skilltap try <source>
+skilltap try <source> [--json] [--skip-scan]
 ```
 
-Read-only preview. Clones the source to a temp directory, parses any manifests, displays the structure, runs static security scan, prints the SKILL.md / plugin.toml contents. Never writes to install paths or state. Useful for inspecting an unfamiliar source before committing.
+`<source>` accepts a URL, `owner/repo` GitHub shorthand, `npm:` prefix, or local path.
+
+Read-only preview. Clones (or copies, for local paths) the source to a temp directory, parses any manifests, displays the structure, runs static security scan, prints the SKILL.md / plugin.toml contents. Never writes to install paths or state. Useful for inspecting an unfamiliar source before committing.
+
+**Flags:**
+- `--json` — emit the report as JSON instead of human-readable text.
+- `--skip-scan` — skip the static security scan (e.g., when previewing trusted internal sources at scale).
 
 ### v2.0 Migrate Command
 
