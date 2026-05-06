@@ -120,7 +120,7 @@ If you've been on v0.x, run `skilltap migrate` to upgrade your global state
 
 ## Taps
 
-A **tap** is a git repo (or HTTP endpoint) containing a `tap.json` index of skills. Taps make discovery and curation easy — and anyone can create one.
+A **tap** is a git repo containing a `tap.json` index of skills. Taps make discovery and curation easy — and anyone can create one.
 
 ```bash
 # Create your own tap (a git repo + tap.json index)

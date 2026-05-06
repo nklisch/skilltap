@@ -211,7 +211,9 @@ Follows git's auth model — no custom auth layer:
 3. Token-in-URL (for HTTPS, e.g. Gitea access tokens)
 4. `GH_TOKEN` / `GITLAB_TOKEN` env vars (for API-based search)
 
-## HTTP Registry (optional, for non-git sources)
+## HTTP Registry (removed in v2.0 — historical reference only)
+
+> **Note (v2.0):** The HTTP registry adapter was removed in v2.0. Taps are git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning, and `skilltap migrate` lists them as needing manual conversion. The section below describes the original v0.x design and is retained for historical reference; nothing here is currently implemented.
 
 Git is the primary transport, but some environments can't use git (locked-down CI, browser-based tools, corporate proxies). For these cases, skilltap also supports a simple HTTP registry — any server implementing a handful of JSON endpoints.
 
