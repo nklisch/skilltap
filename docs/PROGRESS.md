@@ -1,10 +1,23 @@
 # Autopilot Progress
 
-**Status:** v2.0 + v2.1 cutover COMPLETE; lint at 0/0; docs fully aligned
+**Status:** v2.0 + v2.1 cutover COMPLETE; **BLOCKED on user-action release**
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
 **Phases since last refactor:** 4
 **Total refactor passes:** 2
+
+## ⚠ Autopilot blocker (2026-05-06)
+
+The next pending roadmap step (Phase 38.7) is `bun run bump 2.0.0` (or `2.1.0`) + `git tag` + `git push`. **The autopilot mandate forbids this**: "Never force-push or push to remote — the user reviews and pushes." After 38.7, Phase 38.8 (release workflow verification) and Phase 31c-c-2d-2-final (v2.2 cleanup, needs release window first) become unblocked.
+
+Until the user runs the bump, no further autopilot phases can make progress. The codebase is fully ready: 0 lint errors, 1608/1608 tests pass, foundation + website docs aligned with v2.1, ROADMAP.md visually consistent, v2.1 changelog drafted at `website/changelog.md`.
+
+**Resume conditions for a fresh autopilot session:**
+1. After user runs the bump → Phase 38.8 release-workflow verification can be checked.
+2. After release window passes → Phase 31c-c-2d-2-final (delete v0.x read-fallback, retire `[agent-mode]` schema) becomes safe.
+3. New roadmap added → Tackle a deferred item from the "Deferred (no scheduled version)" list (Windows support, VS Code extension, etc.) which would warrant its own design doc.
+
+**Latest commit at block:** `3d82071` "Changelog: document the v2.1 lint cleanup + doc audit + CLI hint fix"
 
 ## Session completion summary (2026-05-06)
 
