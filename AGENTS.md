@@ -16,18 +16,19 @@ Read these before making architectural decisions:
 - docs/PROGRESS.md — autopilot tracking: phase status, decision log, deviations
 - docs/design/phase-{N}.md — per-phase design docs produced before implementation
 
-## v2.0 conventions (in-flight transition)
+## v2.1 conventions (post-cutover)
 
-skilltap is mid-transition from v0.x to v2.0. Both code paths coexist:
+skilltap completed the v2.0 → v2.1 cutover. Most v0.x scaffolding has been retired:
 
-- **state.json** (v2.0): consolidated `~/.config/skilltap/state.json` (or `<project>/.agents/state.json`) replaces `installed.json` + `plugins.json`. Read by `skilltap status`, `skilltap doctor`. Written by `skilltap migrate`.
-- **installed.json + plugins.json** (v0.x): still actively read AND written by `install`/`update`/`remove`. The cutover to v2 readers is deferred to v2.1+ (Phase 31c-c-2).
-- **skilltap.toml + skilltap.lock** (v2.0): project-scope manifest + lockfile. `install` and `remove` automatically update both when `skilltap.toml` is present at the project root. `skilltap sync` reconciles manifest ↔ lockfile ↔ state.
-- **`--agent` flag** (v2.0, in `composeV2`): preferred over `[agent-mode]` config block. CLI commands check both — eventually `[agent-mode]` checks should be retired.
+- **state.json** (canonical): `~/.config/skilltap/state.json` (or `<project>/.agents/state.json`) is the canonical store for installed skills + plugins + standalone MCP servers. Written by `install`/`update`/`remove`/`disable`/`enable`/`move`/`adopt`/`link` and the `migrate` command. Read by every consumer. The legacy `installed.json` + `plugins.json` files are read-fallback only (one-time, for unmigrated v0.x users) and never written.
+- **skilltap.toml + skilltap.lock** (project manifest): `install` and `remove` automatically update both when `skilltap.toml` is present at the project root. `skilltap sync` reconciles manifest ↔ lockfile ↔ state.
+- **Agent mode entry points** (precedence order): `--agent` flag > `SKILLTAP_AGENT=1` env var > `[agent-mode] enabled` config block. The flag and env var work for every command via `composePolicy`. The legacy config block remains readable for back-compat.
 - **Smart scope default**: inside a git repo, install defaults to `--project`; outside, `--global`. No prompt for the common case.
 - **HTTP registry adapter removed** — taps are git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning.
 
-When adding new code, prefer v2.0 paths (state.json, ConfigV2, composeV2). For compatibility, keep reading both layouts where existing code does.
+**Deferred to v2.2** (release-window concern, not a technical blocker): full deletion of v0.x read-fallback paths and `[agent-mode]` config block schema. Until then, `loadInstalled`/`loadPlugins` keep their fallback to legacy files for one-time transparent migration of unmigrated users.
+
+When adding new code, write directly against `state.json` (`saveInstalled`/`savePlugins`/`loadInstalled` are already wired). Don't re-introduce `installed.json` writes; the dual-write layer was deleted in Refactor 2.
 
 ## Tech Stack
 
