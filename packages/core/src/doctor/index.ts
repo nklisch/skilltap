@@ -4,8 +4,13 @@ import { checkConfig } from "./checks/config";
 import { checkDirs } from "./checks/directories";
 import { checkGit } from "./checks/git";
 import { checkInstalled } from "./checks/installed";
+import { checkLockfileDrift } from "./checks/lockfile-drift";
+import { checkManifestDrift } from "./checks/manifest-drift";
+import { checkMcpConsistency } from "./checks/mcp-consistency";
 import { checkNpm } from "./checks/npm";
+import { checkPluginManifests } from "./checks/plugin-manifests";
 import { checkSkills } from "./checks/skills";
+import { checkStateV2 } from "./checks/state-v2";
 import { checkSymlinks } from "./checks/symlinks";
 import { checkTaps } from "./checks/taps";
 import type { DoctorCheck, DoctorOptions, DoctorResult } from "./types";
@@ -68,6 +73,23 @@ export async function runDoctor(options?: DoctorOptions): Promise<DoctorResult> 
   // 9. npm (conditional)
   const npmCheck = await checkNpm(safeInstalled);
   if (npmCheck) await emit(npmCheck);
+
+  // ── v2.0 checks (Phase 36) ────────────────────────────────────────────────
+  // 10. state.json — load + corruption recovery
+  const { check: stateCheck, state } = await checkStateV2(projectRoot);
+  await emit(stateCheck);
+
+  // 11. manifest drift (skilltap.toml ↔ state.json)
+  await emit(await checkManifestDrift(state, projectRoot));
+
+  // 12. lockfile drift (skilltap.lock ↔ state.json)
+  await emit(await checkLockfileDrift(state, projectRoot));
+
+  // 13. plugin manifests (.skilltap/<name>.toml validity)
+  await emit(await checkPluginManifests(projectRoot));
+
+  // 14. MCP injection consistency (state ↔ agent configs)
+  await emit(await checkMcpConsistency(state, projectRoot));
 
   const hasFailure = checks.some((c) => c.status === "fail");
   return { ok: !hasFailure, checks };
