@@ -1311,11 +1311,13 @@ Codex plugins do not have agent definitions.
 
 ---
 
-## plugins.json
+## plugins.json (v0.x — superseded by state.json in v2.1)
+
+> **Status (v2.1+):** Plugins are stored in the `plugins[]` slice of the unified [`state.json`](#statejson-v21-canonical-state-file) — the v2.0 redesign collapsed `installed.json` + `plugins.json` into one file per scope. The `PluginsJsonSchema` below remains in the codebase but is read **only as a one-time fallback** for unmigrated v0.x users (see `core/src/plugin/state.ts`'s `loadPlugins()`); writes always target `state.json`. Schema definitions below are accurate for the in-memory shape (now embedded inside `state.json`); the file-layout claims are historical.
 
 State file for installed plugins. Separate from `installed.json` (which tracks standalone skills).
 
-**Storage locations:**
+**Storage locations (v0.x):**
 - Global: `~/.config/skilltap/plugins.json`
 - Project: `{projectRoot}/.agents/plugins.json`
 
@@ -2261,15 +2263,17 @@ User action required: review warnings and install manually with
 | Scope not set | `ERROR: Agent mode requires a scope. Set agent-mode.scope in config or pass --project / --global.` |
 | Semantic agent not configured | `ERROR: Agent mode requires security.agent_cli to be set for semantic scanning. Run 'skilltap config security' to configure.` |
 
-### installed.json
+### installed.json (v0.x — superseded by state.json in v2.1)
+
+> **Status (v2.1+):** Standalone skills are stored in the `skills[]` slice of the unified [`state.json`](#statejson-v21-canonical-state-file) — the v2.0 redesign collapsed `installed.json` + `plugins.json` into one file per scope. The `InstalledJsonSchema` and `InstalledSkillSchema` below remain in the codebase but the on-disk file is read **only as a one-time fallback** for unmigrated v0.x users (see `core/src/config.ts`'s `loadInstalled()`); writes always target `state.json`. The schema definitions and field semantics below still apply — the same shape is now embedded inside `state.json`. The file-path claims and "should be committed" guidance are v0.x-historical; in v2.1, project state lives in `<project>/.agents/state.json` and the project manifest is `<project>/skilltap.toml` + `skilltap.lock`.
 
 Machine-managed. Users should not edit these files directly.
 
-**Global** (scope: `"global"` and `"linked"` skills): `~/.config/skilltap/installed.json`
+**Global (v0.x layout)** (scope: `"global"` and `"linked"` skills): `~/.config/skilltap/installed.json`
 
-**Project** (scope: `"project"` skills): `{projectRoot}/.agents/installed.json`
+**Project (v0.x layout)** (scope: `"project"` skills): `{projectRoot}/.agents/installed.json`
 
-The project file lives inside the repository and **should be committed** alongside the code. Committing it lets teammates run `skilltap install` to restore project skills, and gives `skilltap doctor` the information it needs to verify the project's skill state.
+In v0.x the project file was committed alongside code so teammates could run `skilltap install` to restore project skills. **In v2.1, the project manifest (`skilltap.toml` + `skilltap.lock`) is what gets committed** — `state.json` is local-only machine state.
 
 Validated at read/write with `InstalledJsonSchema` (Zod 4). If the file doesn't exist, the default is `{ version: 1, skills: [] }`.
 
@@ -2823,9 +2827,9 @@ Removed from v1.0:
 
 Migration of v1.0 keys: see `skilltap migrate` below.
 
-### v2.0 State File
+### state.json (v2.1 canonical state file)
 
-A single `state.json` per scope, replacing `installed.json` + `plugins.json`:
+A single `state.json` per scope, introduced in v2.0 and made canonical by the v2.1 cutover (Phase 31c-c-2d-1). Replaces the v0.x `installed.json` + `plugins.json` pair:
 
 ```json
 {
