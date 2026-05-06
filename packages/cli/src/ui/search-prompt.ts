@@ -373,7 +373,7 @@ class SearchPromptImpl<T> extends Prompt<T> {
 
   private renderFrame(): string {
     const bar = pc.gray(S_BAR);
-    const barEnd = pc.gray(S_BAR_END);
+    const _barEnd = pc.gray(S_BAR_END);
 
     switch (this.state) {
       case "submit": {

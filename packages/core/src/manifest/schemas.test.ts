@@ -111,7 +111,7 @@ describe("ProjectManifestSchema", () => {
     if (result.success) {
       expect(Object.keys(result.data.skills)).toHaveLength(2);
       expect(Object.keys(result.data.plugins)).toHaveLength(1);
-      expect(result.data.taps["home"]).toBe(
+      expect(result.data.taps.home).toBe(
         "https://gitea.example.com/nathan/my-tap",
       );
     }

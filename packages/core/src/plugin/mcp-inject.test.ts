@@ -329,14 +329,14 @@ describe("injectMcpServers", () => {
       projectRoot,
     });
 
-    const backupExists = await Bun.file(configPath + ".skilltap.bak").exists();
+    const backupExists = await Bun.file(`${configPath}.skilltap.bak`).exists();
     expect(backupExists).toBe(true);
   });
 
   test("does not overwrite existing backup", async () => {
     const projectRoot = env.homeDir;
     const configPath = join(projectRoot, ".cursor/mcp.json");
-    const backupPath = configPath + ".skilltap.bak";
+    const backupPath = `${configPath}.skilltap.bak`;
     await Bun.write(configPath, JSON.stringify({ mcpServers: {} }, null, 2));
     await Bun.write(backupPath, JSON.stringify({ original: true }, null, 2));
 

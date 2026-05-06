@@ -164,7 +164,7 @@ async function backupIfNeeded(path: string): Promise<void> {
   const f = Bun.file(path);
   if (!(await f.exists())) return;
 
-  const backupPath = path + ".skilltap.bak";
+  const backupPath = `${path}.skilltap.bak`;
   if (await Bun.file(backupPath).exists()) return;
 
   try {

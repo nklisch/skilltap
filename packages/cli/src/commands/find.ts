@@ -209,7 +209,7 @@ async function search(
 
 function registryToEntries(results: RegistrySearchResult[]): SearchEntry[] {
   return results.map((r) => {
-    const skillName = r.id.startsWith(r.source + "/")
+    const skillName = r.id.startsWith(`${r.source}/`)
       ? r.id.slice(r.source.length + 1)
       : undefined;
     return {

@@ -58,7 +58,7 @@ describe("manifest load/save", () => {
       ref: "v2.1",
       components: { "test-skipper": false },
     });
-    expect(loadResult.value.taps["home"]).toBe("https://gitea.example.com/n/t");
+    expect(loadResult.value.taps.home).toBe("https://gitea.example.com/n/t");
   });
 
   test("loadManifest fails on invalid TOML", async () => {

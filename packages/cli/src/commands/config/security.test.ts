@@ -245,7 +245,7 @@ describe("skilltap config security (non-interactive)", () => {
     await runSecurity(["--trust", "tap:corp=none"], configDir);
     await runSecurity(["--trust", "source:npm=strict"], configDir);
 
-    const { stdout } = (await runGet(
+    const { stdout: _stdout } = (await runGet(
       "security",
       "--json",
       configDir,

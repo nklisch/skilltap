@@ -116,13 +116,13 @@ function startMockRegistry(packages: MockPackageEntry[]): {
 
 let env: TestEnv;
 let homeDir: string;
-let configDir: string;
+let _configDir: string;
 let savedNpmRegistry: string | undefined;
 
 beforeEach(async () => {
   env = await createTestEnv();
   homeDir = env.homeDir;
-  configDir = env.configDir;
+  _configDir = env.configDir;
   savedNpmRegistry = process.env.NPM_CONFIG_REGISTRY;
 });
 

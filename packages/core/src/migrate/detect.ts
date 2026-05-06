@@ -14,7 +14,7 @@ export interface V1StateMarkers {
   configHasV1Keys: boolean;
 }
 
-const V1_CONFIG_KEYS_RE =
+const _V1_CONFIG_KEYS_RE =
   /^\s*\[(security\.human|security\.agent|agent-mode|\[security\.overrides\])\]/m;
 
 async function fileExists(path: string): Promise<boolean> {

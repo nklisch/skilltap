@@ -18,19 +18,19 @@ setDefaultTimeout(45_000);
 
 let env: TestEnv;
 let homeDir: string;
-let configDir: string;
+let _configDir: string;
 
 beforeEach(async () => {
   env = await createTestEnv();
   homeDir = env.homeDir;
-  configDir = env.configDir;
+  _configDir = env.configDir;
 });
 
 afterEach(async () => {
   await env.cleanup();
 });
 
-const SKILL_MD = `---
+const _SKILL_MD = `---
 name: my-skill
 description: A test skill
 ---
@@ -55,7 +55,7 @@ describe("adoptSkill", () => {
     // Create skill in .claude/skills (outside .agents/skills)
     const claudeSkillsDir = join(homeDir, ".claude", "skills");
     await mkdir(claudeSkillsDir, { recursive: true });
-    const srcPath = await createUnmanagedSkillInDir(
+    const _srcPath = await createUnmanagedSkillInDir(
       claudeSkillsDir,
       "my-skill",
     );

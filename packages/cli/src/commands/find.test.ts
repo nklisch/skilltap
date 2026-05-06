@@ -19,7 +19,7 @@ import {
   runSkilltap,
 } from "@skilltap/test-utils";
 
-async function writeConfig(configDir: string, toml: string): Promise<void> {
+async function _writeConfig(configDir: string, toml: string): Promise<void> {
   const dir = join(configDir, "skilltap");
   await mkdir(dir, { recursive: true });
   await Bun.write(join(dir, "config.toml"), toml);

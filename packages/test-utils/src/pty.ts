@@ -119,7 +119,7 @@ export async function runInteractive(
   });
 
   let rawBuf = "";
-  let exitCode: number | null = null;
+  let _exitCode: number | null = null;
   let exitResolve!: (code: number) => void;
   const exitPromise = new Promise<number>((resolve) => {
     exitResolve = resolve;
@@ -147,7 +147,7 @@ export async function runInteractive(
             if (msg.type === "data") {
               rawBuf += msg.text;
             } else if (msg.type === "exit") {
-              exitCode = msg.code;
+              _exitCode = msg.code;
               exitResolve(msg.code);
             }
           } catch {
@@ -164,7 +164,7 @@ export async function runInteractive(
   readLoop();
 
   function sendToBridge(msg: object) {
-    const line = JSON.stringify(msg) + "\n";
+    const line = `${JSON.stringify(msg)}\n`;
     bridge.stdin.write(line);
     bridge.stdin.flush();
   }

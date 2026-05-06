@@ -143,8 +143,8 @@ function countByKind(items: { kind: string }[]): { summary: string } {
   const c: Record<string, number> = {};
   for (const item of items) c[item.kind] = (c[item.kind] ?? 0) + 1;
   const parts: string[] = [];
-  if (c["add"]) parts.push(`${c["add"]} to add`);
-  if (c["remove"]) parts.push(`${c["remove"]} to remove`);
+  if (c.add) parts.push(`${c.add} to add`);
+  if (c.remove) parts.push(`${c.remove} to remove`);
   if (c["ref-mismatch"]) parts.push(`${c["ref-mismatch"]} ref mismatch`);
   if (c["lock-stale"]) parts.push(`${c["lock-stale"]} lock stale`);
   if (c["lock-missing"]) parts.push(`${c["lock-missing"]} lock missing`);

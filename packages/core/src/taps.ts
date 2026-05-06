@@ -243,7 +243,7 @@ export async function removeTap(
     );
   }
 
-  const tap = config.taps[idx]!;
+  const _tap = config.taps[idx]!;
   config.taps.splice(idx, 1);
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) return saveResult;

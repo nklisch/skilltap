@@ -144,9 +144,9 @@ describe("FooterBar open / close", () => {
     const { stream, handlers } = makeMockStream(true);
     const bar = new FooterBar(stream as any);
     bar.open();
-    expect(handlers["resize"]?.length).toBe(1);
+    expect(handlers.resize?.length).toBe(1);
     bar.close();
-    expect(handlers["resize"]?.length ?? 0).toBe(0);
+    expect(handlers.resize?.length ?? 0).toBe(0);
   });
 });
 

@@ -118,12 +118,13 @@ describe("savePlugins", () => {
     expect(loadResult.value.plugins[0]?.components).toHaveLength(3);
   });
 
-  test("creates .agents/ dir for project scope", async () => {
+  test("creates .agents/ dir for project scope (writes state.json post-cutover)", async () => {
     const projectDir = join(env.configDir, "myproject");
     const result = await savePlugins(EMPTY_STATE, projectDir);
     expect(result.ok).toBe(true);
+    // Phase 31c-c-2d-1: savePlugins writes to state.json, not plugins.json.
     expect(
-      await Bun.file(join(projectDir, ".agents", "plugins.json")).exists(),
+      await Bun.file(join(projectDir, ".agents", "state.json")).exists(),
     ).toBe(true);
   });
 });

@@ -20,7 +20,7 @@ afterEach(async () => {
 });
 
 /** Clone a fixture tap repo into the config taps directory, mimicking what addTap does. */
-async function cloneTapToConfig(
+async function _cloneTapToConfig(
   tapName: string,
   sourcePath: string,
 ): Promise<void> {

@@ -16,7 +16,7 @@ const CLI_DIR = `${import.meta.dir}/../..`;
 
 async function runCreate(
   args: string[],
-  cwd: string,
+  _cwd: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
     ["bun", "run", "--bun", "src/index.ts", "create", ...args],

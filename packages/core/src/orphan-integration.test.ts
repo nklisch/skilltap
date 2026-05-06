@@ -24,13 +24,13 @@ import type { InstalledJson, InstalledSkill } from "./schemas/installed";
 import { updateSkill } from "./update";
 
 let env: TestEnv;
-let homeDir: string;
-let configDir: string;
+let _homeDir: string;
+let _configDir: string;
 
 beforeEach(async () => {
   env = await createTestEnv();
-  homeDir = env.homeDir;
-  configDir = env.configDir;
+  _homeDir = env.homeDir;
+  _configDir = env.configDir;
 });
 
 afterEach(async () => {
@@ -117,7 +117,7 @@ describe("updateSkill — orphan pre-flight", () => {
     const installed = makeInstalled([skill]);
     await saveInstalled(installed);
 
-    const result = await updateSkill({
+    const _result = await updateSkill({
       yes: true,
       async onOrphansFound(_orphans) {
         return []; // user declines to purge
@@ -417,7 +417,7 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
 
 // ─── Helper: create a local skill repo (mirrors taps.test.ts pattern) ─────
 
-async function createLocalSkillRepo(
+async function _createLocalSkillRepo(
   name: string,
 ): Promise<{ path: string; cleanup: () => Promise<void> }> {
   const repoDir = await makeTmpDir();

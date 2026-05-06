@@ -110,7 +110,7 @@ describe("installPlugin", () => {
       if (!result.ok) return;
 
       const symlinkPath = join(env.homeDir, ".claude", "skills", "helper");
-      const stat = await Bun.file(symlinkPath + "/SKILL.md").exists();
+      const stat = await Bun.file(`${symlinkPath}/SKILL.md`).exists();
       expect(stat).toBe(true);
     } finally {
       await rm(contentDir, { recursive: true, force: true });
@@ -471,7 +471,6 @@ describe("installPlugin", () => {
       if (!result.ok) return;
       expect(result.value.mcpAgents).toContain("claude-code");
 
-      const { getConfigDir } = await import("../config");
       const { join } = await import("node:path");
       const configPath = join(env.homeDir, ".claude", "settings.json");
       const config = await Bun.file(configPath).json();

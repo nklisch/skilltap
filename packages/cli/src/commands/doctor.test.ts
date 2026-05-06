@@ -129,7 +129,7 @@ describe("doctor --fix", () => {
     const installedFile = join(skilltapDir, "installed.json");
     await writeFile(installedFile, "not json {{{}}}");
 
-    const { exitCode } = await runSkilltap(
+    const { exitCode: _exitCode } = await runSkilltap(
       ["doctor", "--fix"],
       homeDir,
       configDir,

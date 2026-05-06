@@ -12,9 +12,9 @@
  *   bridge → stdout:  { "type": "data",   "text": "..." }
  *                     { "type": "exit",   "code": 0     }
  */
-import { createRequire } from "module";
-import path from "path";
-import { fileURLToPath } from "url";
+import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 // Resolve node-pty from test-utils' own node_modules (where it was installed)
 const __dir = path.dirname(fileURLToPath(import.meta.url));
@@ -42,12 +42,12 @@ const term = pty.spawn(cmd, args, {
 
 // Forward PTY output to stdout as JSON lines
 term.onData((text) => {
-  process.stdout.write(JSON.stringify({ type: "data", text }) + "\n");
+  process.stdout.write(`${JSON.stringify({ type: "data", text })}\n`);
 });
 
 term.onExit(({ exitCode }) => {
   process.stdout.write(
-    JSON.stringify({ type: "exit", code: exitCode ?? 0 }) + "\n",
+    `${JSON.stringify({ type: "exit", code: exitCode ?? 0 })}\n`,
   );
   process.exit(0);
 });

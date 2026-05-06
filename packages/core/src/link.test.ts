@@ -166,7 +166,7 @@ describe("linkSkill — happy path", () => {
     expect(result.ok).toBe(true);
 
     const agentLinkPath = join(homeDir, ".claude", "skills", "test-skill");
-    const stat = await Bun.file(agentLinkPath).exists();
+    const _stat = await Bun.file(agentLinkPath).exists();
     // The symlink path's parent exists (mkdir'd by createAgentSymlinks)
     // We check the symlink was created by seeing if the dir is accessible
     const { lstat } = await import("node:fs/promises");

@@ -19,10 +19,10 @@ describe("Claude Desktop in MCP_AGENT_CONFIGS", () => {
 
   test("existing 5 agents remain registered", () => {
     expect(MCP_AGENT_CONFIGS["claude-code"]).toBe(".claude/settings.json");
-    expect(MCP_AGENT_CONFIGS["cursor"]).toBe(".cursor/mcp.json");
-    expect(MCP_AGENT_CONFIGS["codex"]).toBe(".codex/mcp.json");
-    expect(MCP_AGENT_CONFIGS["gemini"]).toBe(".gemini/settings.json");
-    expect(MCP_AGENT_CONFIGS["windsurf"]).toBe(".windsurf/mcp.json");
+    expect(MCP_AGENT_CONFIGS.cursor).toBe(".cursor/mcp.json");
+    expect(MCP_AGENT_CONFIGS.codex).toBe(".codex/mcp.json");
+    expect(MCP_AGENT_CONFIGS.gemini).toBe(".gemini/settings.json");
+    expect(MCP_AGENT_CONFIGS.windsurf).toBe(".windsurf/mcp.json");
   });
 
   test("mcpConfigPath resolves Claude Desktop on supported platforms", () => {

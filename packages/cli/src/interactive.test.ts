@@ -174,7 +174,7 @@ describe("install — agents prompt", () => {
       await session.waitForText("standalone-skill?");
       session.sendKey("ENTER");
 
-      const { exitCode, output } = await session.finish();
+      const { exitCode, output: _output } = await session.finish();
       expect(exitCode).toBe(0);
 
       // Verify symlink exists — use lstat() because Bun.file().exists()

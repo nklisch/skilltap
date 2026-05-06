@@ -41,7 +41,7 @@ async function writeFiles(
 }
 
 function printNextSteps(
-  name: string,
+  _name: string,
   dir: string,
   template: string,
   fileList: string[],

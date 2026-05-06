@@ -103,7 +103,7 @@ export default defineCommand({
                 ? "linked"
                 : "managed"
               : "unmanaged";
-        const agent =
+        const _agent =
           primaryLoc.source.type === "agent-specific"
             ? primaryLoc.source.agent.toUpperCase().replace(/-/g, "_")
             : "AGENTS";
@@ -137,7 +137,7 @@ export default defineCommand({
       );
 
       const NAME_W = width < 60 ? 15 : 20;
-      const STATUS_W = 10;
+      const _STATUS_W = 10;
       const AGENTS_W = width < 60 ? 16 : 20;
       const SRC_W = width < 60 ? 16 : 24;
 

@@ -22,12 +22,12 @@ setDefaultTimeout(45_000);
 
 let env: TestEnv;
 let homeDir: string;
-let configDir: string;
+let _configDir: string;
 
 beforeEach(async () => {
   env = await createTestEnv();
   homeDir = env.homeDir;
-  configDir = env.configDir;
+  _configDir = env.configDir;
 });
 
 afterEach(async () => {

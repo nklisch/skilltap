@@ -34,13 +34,13 @@ setDefaultTimeout(60_000);
 
 let env: TestEnv;
 let homeDir: string;
-let configDir: string;
+let _configDir: string;
 const cleanups: (() => Promise<void>)[] = [];
 
 beforeEach(async () => {
   env = await createTestEnv();
   homeDir = env.homeDir;
-  configDir = env.configDir;
+  _configDir = env.configDir;
 });
 
 afterEach(async () => {
@@ -269,7 +269,7 @@ describe("adopted skill with remote lifecycle", () => {
     cleanups.push(repo.cleanup);
 
     // Clone into .claude/skills/ so discover finds it as unmanaged
-    const adoptable = await createAdoptableSkill(
+    const _adoptable = await createAdoptableSkill(
       homeDir,
       "standalone-skill",
       repo.path,

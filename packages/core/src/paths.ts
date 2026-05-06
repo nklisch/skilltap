@@ -66,7 +66,7 @@ export function agentDefPath(
 ): string | null {
   const relDir = AGENT_DEF_PATHS[platform];
   if (!relDir) return null;
-  return join(scopeBase(scope, projectRoot), relDir, name + ".md");
+  return join(scopeBase(scope, projectRoot), relDir, `${name}.md`);
 }
 
 export function agentDefDisabledPath(
@@ -77,7 +77,7 @@ export function agentDefDisabledPath(
 ): string | null {
   const relDir = AGENT_DEF_PATHS[platform];
   if (!relDir) return null;
-  return join(scopeBase(scope, projectRoot), relDir, ".disabled", name + ".md");
+  return join(scopeBase(scope, projectRoot), relDir, ".disabled", `${name}.md`);
 }
 
 export function skillCacheDir(repoUrl: string): string {

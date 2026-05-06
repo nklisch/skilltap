@@ -84,7 +84,7 @@ export default defineCommand({
 
     s.stop();
 
-    const { valid, issues, frontmatter, fileCount, totalBytes } = result.value;
+    const { issues, frontmatter, fileCount, totalBytes } = result.value;
 
     // SKILL.md found
     successLine("SKILL.md found");

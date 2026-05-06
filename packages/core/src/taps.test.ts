@@ -28,12 +28,12 @@ import {
 } from "./taps";
 
 let env: TestEnv;
-let homeDir: string;
+let _homeDir: string;
 let configDir: string;
 
 beforeEach(async () => {
   env = await createTestEnv();
-  homeDir = env.homeDir;
+  _homeDir = env.homeDir;
   configDir = env.configDir;
 });
 
@@ -602,7 +602,7 @@ describe("updateTap — builtin tap", () => {
   });
 
   test("pulls builtin tap when updating by name", async () => {
-    const { sourceDir, cleanup } = await createClonedBuiltinTap([
+    const { sourceDir: _sourceDir, cleanup } = await createClonedBuiltinTap([
       { name: "skill-a", description: "A", repo: "https://example.com/a" },
     ]);
     try {
