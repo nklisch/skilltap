@@ -133,6 +133,7 @@ export function parseGitHubTapShorthand(
 
   const [owner, repo] = parts;
   return {
+    // biome-ignore lint/style/noNonNullAssertion: parts.length === 2 guard above ensures repo defined
     name: repo!,
     url: `${host}/${owner}/${repo}.git`,
   };
@@ -243,7 +244,6 @@ export async function removeTap(
     );
   }
 
-  const _tap = config.taps[idx]!;
   config.taps.splice(idx, 1);
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) return saveResult;
@@ -541,6 +541,7 @@ export async function getTapInfo(
     let lastFetched: string | undefined;
     const logResult = await log(dir, 1);
     if (logResult.ok && logResult.value.length > 0) {
+      // biome-ignore lint/style/noNonNullAssertion: length > 0 guard ensures value[0] defined
       lastFetched = logResult.value[0]!.date;
     }
     return ok({
@@ -578,6 +579,7 @@ export async function getTapInfo(
   let lastFetched: string | undefined;
   const logResult = await log(dir, 1);
   if (logResult.ok && logResult.value.length > 0) {
+    // biome-ignore lint/style/noNonNullAssertion: length > 0 guard ensures value[0] defined
     lastFetched = logResult.value[0]!.date;
   }
   return ok({
