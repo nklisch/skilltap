@@ -43,22 +43,22 @@ Checks that all expected directories exist: `~/.config/skilltap/`, `cache/`, `ta
 - **Warn**: missing directory
 - **Fix** (`--fix`): creates missing directories
 
-### 4. installed.json
+### 4. installed (skill records)
 
-Validates the state files that track installed skills. Doctor checks **both** the global file (`~/.config/skilltap/installed.json`) and the project file (`.agents/installed.json` in the nearest `.git` root) when run inside a project.
+Validates the state files that track installed skills. As of v2.1 the canonical store is `state.json` (`~/.config/skilltap/state.json` global, `.agents/state.json` project). For unmigrated v0.x users, falls back to `installed.json` once until the next save populates `state.json`.
 
 - **Fail**: a file is corrupt (bad JSON or failed schema validation)
-- **Pass** with detail `N skills (G global, P project)` when both files are present
-- **Fix** (`--fix`): backs up the corrupt file to `installed.json.bak` and creates a fresh empty state
+- **Pass** with detail `N skills (G global, P project)` when records are present
+- **Fix** (`--fix`): backs up the corrupt file to `<file>.bak` and creates a fresh empty state
 
 ### 5. Skill Integrity
 
-For each entry in either installed.json, verifies the skill directory actually exists on disk in the correct location (`~/.agents/skills/` for global skills, `.agents/skills/` inside the project for project-scoped skills). Also scans each skills directory for untracked entries.
+For each tracked skill, verifies the skill directory actually exists on disk in the correct location (`~/.agents/skills/` for global skills, `.agents/skills/` inside the project for project-scoped skills). Also scans each skills directory for untracked entries.
 
-- **Warn — orphan record**: skill is in `installed.json` but directory is missing
-- **Warn — orphan directory**: directory exists on disk but isn't tracked in `installed.json`
+- **Warn — orphan record**: skill is in state but directory is missing
+- **Warn — orphan directory**: directory exists on disk but isn't tracked in state
 - **Warn — broken link**: a linked skill's target directory no longer exists
-- **Fix** (`--fix`): removes orphan records and broken link entries from the appropriate `installed.json`; does not delete orphan directories (they might be manually placed)
+- **Fix** (`--fix`): removes orphan records and broken link entries from `state.json`; does not delete orphan directories (they might be manually placed)
 
 ### 6. Agent Symlinks
 
@@ -86,6 +86,22 @@ Detects available agent CLIs (Claude Code, Gemini CLI, Codex, Ollama, etc.). If 
 Only checked if any installed skills use an `npm:` source.
 
 - **Warn**: npm not found on PATH
+
+### v2.0 checks (10–15)
+
+Phase 36 added five v2-specific checks. They appear in `skilltap doctor` output after the v1 checks above:
+
+**10. state.json** — Validates the v2 canonical store (one per scope). Fail on corrupt JSON / schema-invalid; `--fix` backs up to `<file>.bak` and recreates fresh.
+
+**11. manifest drift** — Compares `skilltap.toml` declared dependencies against `state.json` records. Warns about declared-but-not-installed and installed-but-not-declared entries (not fixable — manifest edits are user responsibility).
+
+**12. lockfile drift** — Compares `skilltap.lock` against `state.json` SHAs. Warns on stale (lockfile entry has no state record) or orphan (state record has no lockfile entry); `--fix` regenerates missing lockfile entries from state.
+
+**13. plugin manifests** — Validates every `.skilltap/<name>.toml` publish manifest in the working tree. Warns on parse errors or missing required fields.
+
+**14. mcp consistency** — Compares `state.json::mcpServers[]` against each agent's MCP config (Claude Code's `.claude/settings.json`, etc.). Warns on entries in state that aren't in the agent config (missing — needs fresh inject) or orphan agent-config entries with `skilltap:` prefix that have no state record. `--fix` prunes the orphans.
+
+**15. v0.x file orphans** — After the v2.1 cutover, detects when `state.json` is populated AND legacy `installed.json` / `plugins.json` are still on disk (a common state after a transparent first-write migration). `--fix` renames each orphan to `<file>.v1.bak`. Pre-migration users (empty state, populated legacy file) are intentionally not flagged — their fallback is still active.
 - Checks registry reachability and login status
 
 ## Output
