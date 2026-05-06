@@ -1325,7 +1325,9 @@ See the [Security](/guide/security) guide for details on what the scanner checks
 
 # Taps
 
-A **tap** is either a git repository with a `tap.json` file, an HTTP registry endpoint, or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+A **tap** is a git repository with a `tap.json` file or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+
+> HTTP registry taps were removed in v2.0; see [the removal note below](#http-registry-taps-removed-in-v20). Taps today are always git-based.
 
 Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
 
@@ -1345,7 +1347,7 @@ skilltap tap add <name> <url>
 skilltap tap add <owner/repo>
 ```
 
-skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
+Taps are cloned to `~/.config/skilltap/taps/<name>/`.
 
 For GitHub repos, you can use shorthand — the tap name is derived from the repo:
 
@@ -1386,9 +1388,7 @@ skilltap tap update             # all taps
 skilltap tap update home        # one tap
 ```
 
-Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every git tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
-
-HTTP taps are always live and need no refresh step.
+Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
 
 `tap update` is self-healing: if the local clone is missing it re-clones automatically, and it syncs the remote URL from config before pulling. This means you can fix a URL in `config.toml` and run `skilltap tap update <name>` — no manual directory deletion needed.
 
@@ -2458,7 +2458,7 @@ Source resolution order:
 
 1. `https://`, `http://`, `git@`, `ssh://` — git adapter
 2. `npm:` prefix — npm registry adapter
-3. `url:` prefix — HTTP tarball (used internally by HTTP registry taps)
+3. `url:` prefix — HTTP tarball (legacy; only reached via v0.x configs that pre-date the v2.0 HTTP-tap removal)
 4. `./`, `/`, `~/` — local adapter
 5. `github:` prefix, or contains `/` with no protocol — GitHub adapter (unless matches `tap-name/plugin-name` pattern)
 6. `tap-name/plugin-name` — tap plugin install (resolves plugin entry from named tap)
@@ -2797,7 +2797,7 @@ skilltap update [name] [flags]
 
 ### Behavior
 
-Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. HTTP taps are always live. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
+Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
 
 For each skill:
 
@@ -3272,7 +3272,7 @@ skilltap config agent-mode
 
 ## skilltap tap add
 
-Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`), HTTP registry endpoints, and GitHub shorthand.
+Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`) and GitHub shorthand. (HTTP registry endpoints were supported pre-v2.0 and are no longer accepted; see [the removal note](/guide/taps#http-registry-taps-removed-in-v20).)
 
 ```
 skilltap tap add <name> <url>
@@ -3284,7 +3284,7 @@ skilltap tap add <owner/repo>
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `name` | Yes | Local name for this tap, or GitHub shorthand (`owner/repo`) |
-| `url` | No | Git URL or HTTP registry URL (required unless GitHub shorthand is used) |
+| `url` | No | Git URL (required unless GitHub shorthand is used) |
 
 ### Behavior
 
@@ -3292,7 +3292,7 @@ When two positional args are given, the first is the tap name and the second is 
 
 When one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion (e.g. `user/my-tap` → name `my-tap`).
 
-Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates the tap index (`tap.json` or `.claude-plugin/marketplace.json`), and records the tap in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
+The repo is cloned to `~/.config/skilltap/taps/{name}/`, the tap index is validated (`tap.json` or `.claude-plugin/marketplace.json`), and the tap is recorded in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
 
 If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
 
@@ -3304,9 +3304,6 @@ skilltap tap add someone/awesome-skills-tap
 
 # Explicit name + URL
 skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
-
-# HTTP registry tap (auto-detected)
-skilltap tap add enterprise https://skills.example.com/api/v1
 
 # Claude Code marketplace repo (marketplace.json auto-detected)
 skilltap tap add anthropics/skills
@@ -3393,7 +3390,7 @@ For each git tap:
 
 This means fixing a tap URL in `config.toml` and running `skilltap tap update <name>` is sufficient to recover — no manual directory deletion required.
 
-HTTP taps are always live and are skipped (no local clone). The built-in `skilltap-skills` tap is included in an all-taps run.
+The built-in `skilltap-skills` tap is included in an all-taps run.
 
 ### Examples
 

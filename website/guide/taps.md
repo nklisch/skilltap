@@ -1,10 +1,12 @@
 ---
-description: Taps are curated skill registries — git repos or HTTP endpoints listing skills. Create your own, add a friend's, or subscribe to a community tap. Add, list, update, and search across all of them.
+description: Taps are curated skill registries — git repos listing skills. Create your own, add a friend's, or subscribe to a community tap. Add, list, update, and search across all of them.
 ---
 
 # Taps
 
-A **tap** is either a git repository with a `tap.json` file, an HTTP registry endpoint, or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+A **tap** is a git repository with a `tap.json` file or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
+
+> HTTP registry taps were removed in v2.0; see [the removal note below](#http-registry-taps-removed-in-v20). Taps today are always git-based.
 
 Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
 
@@ -24,7 +26,7 @@ skilltap tap add <name> <url>
 skilltap tap add <owner/repo>
 ```
 
-skilltap auto-detects whether the URL is an HTTP registry or a git repo. Git taps are cloned to `~/.config/skilltap/taps/<name>/`. HTTP taps are queried live with no local clone.
+Taps are cloned to `~/.config/skilltap/taps/<name>/`.
 
 For GitHub repos, you can use shorthand — the tap name is derived from the repo:
 
@@ -65,9 +67,7 @@ skilltap tap update             # all taps
 skilltap tap update home        # one tap
 ```
 
-Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every git tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
-
-HTTP taps are always live and need no refresh step.
+Tap indexes are refreshed automatically when you run `skilltap update`. It pulls the latest `tap.json` for every tap before checking your installed skills — so newly added skills in a tap become discoverable in the same step as your skill updates.
 
 `tap update` is self-healing: if the local clone is missing it re-clones automatically, and it syncs the remote URL from config before pulling. This means you can fix a URL in `config.toml` and run `skilltap tap update <name>` — no manual directory deletion needed.
 

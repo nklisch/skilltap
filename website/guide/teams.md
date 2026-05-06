@@ -352,7 +352,7 @@ For a smaller group, the same three commands in a message or README works just a
 
 ## Related
 
-- [Taps](/guide/taps) — full tap reference, including HTTP registry taps
+- [Taps](/guide/taps) — full tap reference
 - [Installing Skills](/guide/installing-skills) — all install options and flags
 - [Security](/guide/security) — static and semantic scanning in detail
 - [Configuration](/guide/configuration) — config file reference

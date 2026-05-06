@@ -50,7 +50,7 @@ Source resolution order:
 
 1. `https://`, `http://`, `git@`, `ssh://` — git adapter
 2. `npm:` prefix — npm registry adapter
-3. `url:` prefix — HTTP tarball (used internally by HTTP registry taps)
+3. `url:` prefix — HTTP tarball (legacy; only reached via v0.x configs that pre-date the v2.0 HTTP-tap removal)
 4. `./`, `/`, `~/` — local adapter
 5. `github:` prefix, or contains `/` with no protocol — GitHub adapter (unless matches `tap-name/plugin-name` pattern)
 6. `tap-name/plugin-name` — tap plugin install (resolves plugin entry from named tap)
@@ -389,7 +389,7 @@ skilltap update [name] [flags]
 
 ### Behavior
 
-Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. HTTP taps are always live. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
+Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
 
 For each skill:
 
@@ -864,7 +864,7 @@ skilltap config agent-mode
 
 ## skilltap tap add
 
-Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`), HTTP registry endpoints, and GitHub shorthand.
+Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`) and GitHub shorthand. (HTTP registry endpoints were supported pre-v2.0 and are no longer accepted; see [the removal note](/guide/taps#http-registry-taps-removed-in-v20).)
 
 ```
 skilltap tap add <name> <url>
@@ -876,7 +876,7 @@ skilltap tap add <owner/repo>
 | Argument | Required | Description |
 |----------|----------|-------------|
 | `name` | Yes | Local name for this tap, or GitHub shorthand (`owner/repo`) |
-| `url` | No | Git URL or HTTP registry URL (required unless GitHub shorthand is used) |
+| `url` | No | Git URL (required unless GitHub shorthand is used) |
 
 ### Behavior
 
@@ -884,7 +884,7 @@ When two positional args are given, the first is the tap name and the second is 
 
 When one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion (e.g. `user/my-tap` → name `my-tap`).
 
-Auto-detects the tap type by probing the URL. If the URL returns a valid HTTP registry response, it's registered as an HTTP tap (no local clone). Otherwise, it clones the repo to `~/.config/skilltap/taps/{name}/`, validates the tap index (`tap.json` or `.claude-plugin/marketplace.json`), and records the tap in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
+The repo is cloned to `~/.config/skilltap/taps/{name}/`, the tap index is validated (`tap.json` or `.claude-plugin/marketplace.json`), and the tap is recorded in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
 
 If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
 
@@ -896,9 +896,6 @@ skilltap tap add someone/awesome-skills-tap
 
 # Explicit name + URL
 skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
-
-# HTTP registry tap (auto-detected)
-skilltap tap add enterprise https://skills.example.com/api/v1
 
 # Claude Code marketplace repo (marketplace.json auto-detected)
 skilltap tap add anthropics/skills
@@ -985,7 +982,7 @@ For each git tap:
 
 This means fixing a tap URL in `config.toml` and running `skilltap tap update <name>` is sufficient to recover — no manual directory deletion required.
 
-HTTP taps are always live and are skipped (no local clone). The built-in `skilltap-skills` tap is included in an all-taps run.
+The built-in `skilltap-skills` tap is included in an all-taps run.
 
 ### Examples
 
