@@ -1,14 +1,38 @@
 # Autopilot Progress
 
-**Status:** v2.0 + v2.1 cutover COMPLETE; lint cleanup brought 0/0
+**Status:** v2.0 + v2.1 cutover COMPLETE; lint at 0/0; docs fully aligned
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
 **Phases since last refactor:** 4
 **Total refactor passes:** 2
 
-**Quality milestone (2026-05-06):** Project lint state went from 104 errors / 279 warnings (session start) to **0 / 0** through a sustained per-rule cleanup. macOS test-isolation bug fixed (1608+ tests now ALL pass). Every remaining `!` non-null assertion in the codebase has a comment explaining the runtime guard that makes it safe.
+## Session completion summary (2026-05-06)
 
-**Documentation milestone (2026-05-06):** All user-facing docs audited for v2.1 consistency. Stale references corrected across 14 files: HTTP registry sections marked deprecated (README, VISION, taps, config-options, tap-format), `installed.json`/`plugins.json` references updated to `state.json` (getting-started, doctor, shell-completions, installing-skills, configuration, cli, config-options — 16+ occurrences), `--agent` flag entry points documented across configuration + cli + config-options. New v2.0 feature surfacing: project manifest workflow added to teams guide, `skilltap status` + v2.0 next-steps added to getting-started, key-features bullets for project manifest + agent mode added to "What is skilltap?", 6 v2 doctor checks documented in doctor.md.
+After ~85 commits across two days, the v2.0 → v2.1 cutover is feature-complete and the codebase is in genuinely excellent shape:
+
+**Code quality**
+- Lint: 104 errors / 279 warnings (start) → **0 / 0** (end). Achieved via biome safe-fix pass (277 files), per-rule unsafe-fix passes for `noUnusedImports` / `noUnusedVariables` / `useTemplate`, file-level overrides for legitimate intentional patterns (TTY interop, ANSI escapes), and per-line `biome-ignore` comments documenting every remaining `!` non-null assertion with its runtime guard.
+- Tests: **1608/1608 pass** (50 intentional skips for network-conditional / API-key tests). macOS `/tmp` → `/private/tmp` symlink bug in `makeTmpDir` fixed mid-session, resolving 6 long-standing failures.
+- CLI builds clean: 603 modules, 2.97 MB.
+
+**Code shipped**
+- v2.0 phases 26–38 + 38d e2e test
+- v2.1 cutover phases 31c-c-2a/b/c/d-1/d-2-orphan + 31c-c-2c-flag (per-command `--agent` wiring)
+- Refactor 2: `agent-env.ts` (single-source `SKILLTAP_AGENT` check) + `dirs.ts` (leaf module breaks `config.ts` ↔ `state/` import cycle)
+- Net –355 lines from removing the dual-write scaffolding (sync-from-v1.ts, read-bridge.ts) once state.json became canonical
+
+**Documentation**
+- All foundation docs (README, AGENTS, ARCH, VISION) reflect v2.1 reality
+- All website guides (what-is, getting-started, installing-skills, configuration, doctor, taps, teams, shell-completions, security) updated for v2.1
+- All website reference docs (cli, config-options, tap-format, skill-format) audited
+- llms-full.txt regenerated (166 KB) for AI-assistant ingestion
+- Specifically corrected: HTTP registry tap claims, `--agent` flag/env-var entry points, `installed.json`/`plugins.json` → `state.json`, doctor v2 check coverage
+- New v2.0 surfacing: project manifest workflow in teams guide, `skilltap status` in getting-started, key features in "What is skilltap?"
+- CLI hint at `skilltap config set agent-mode.enabled` corrected to point at all three entry points
+
+**Remaining for release**
+- v2.0 / v2.1 version bump (gated on user; autopilot mandate forbids `bun run bump`)
+- Phase 31c-c-2d-2-final (delete v0.x read-fallback paths, drop `[agent-mode]` from ConfigSchema): explicitly deferred to v2.2 — needs a release window for users to run `skilltap doctor --fix` and clear orphans.
 
 **v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
 
