@@ -1,10 +1,14 @@
 # Autopilot Progress
 
-**Status:** v2.0 in-scope complete (v2.1 backlog: 31c-c-2)
+**Status:** v2.0 in-scope COMPLETE — pending user-action bump (38c)
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
 **Phases since last refactor:** 11
 **Total refactor passes:** 1
+
+**v2.0 Final verification (2026-05-06):** 349 v2 core tests + 18 CLI e2e tests pass. `skilltap doctor` runs all 14 checks (9 v1 + 5 v2) end-to-end in a clean env.
+
+**Remaining:** `bun run bump 2.0.0` + `git tag v2.0.0` + `git push --follow-tags` (gated on user per autopilot mandate). v2.1 backlog: Phase 31c-c-2 (state.json reads cutover, `[agent-mode]` retirement) — deferred during v2.0 to keep the release additive.
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
 
