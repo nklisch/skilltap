@@ -210,7 +210,7 @@ Move a skill from project scope to global (or vice versa):
 skilltap skills move commit-helper --global
 ```
 
-This relocates the files, updates `installed.json` in both scopes, and refreshes any agent symlinks.
+This relocates the files, updates `state.json` in both scopes, and refreshes any agent symlinks.
 
 ## Update skills
 

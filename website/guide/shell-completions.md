@@ -115,7 +115,7 @@ These are read from your local state at completion time, so they stay current:
 | `install <TAB>` | Tap skill names |
 | `tap remove <TAB>` | Configured tap names |
 
-Dynamic completions are fast — they read `installed.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
+Dynamic completions are fast — they read `state.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
 
 ## Troubleshooting
 

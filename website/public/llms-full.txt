@@ -332,7 +332,7 @@ Move a skill from project scope to global (or vice versa):
 skilltap skills move commit-helper --global
 ```
 
-This relocates the files, updates `installed.json` in both scopes, and refreshes any agent symlinks.
+This relocates the files, updates `state.json` in both scopes, and refreshes any agent symlinks.
 
 ## Update skills
 
@@ -533,7 +533,7 @@ skilltap install ssh://git@gitlab.com/team/code-review.git
 Uses your existing SSH keys. No extra configuration needed.
 
 ::: tip Automatic protocol fallback
-If an HTTPS URL fails due to authentication, skilltap automatically retries with SSH (and vice versa). The URL that works is saved to `installed.json` so future updates use it directly.
+If an HTTPS URL fails due to authentication, skilltap automatically retries with SSH (and vice versa). The URL that works is saved to `state.json` so future updates use it directly.
 :::
 
 ### GitHub shorthand
@@ -678,8 +678,8 @@ skilltap install commit-helper --project
 
 Installs to `.agents/skills/commit-helper/` inside the current project (determined by the nearest `.git` directory). Only available when working in that project.
 
-::: tip Commit `.agents/installed.json`
-When you install a project-scoped skill, skilltap records it in `.agents/installed.json` at the project root. **Commit this file** — it's the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact.
+::: tip Commit `.agents/state.json` and `skilltap.lock`
+When you install a project-scoped skill, skilltap records it in `.agents/state.json` (and `skilltap.lock` if you've run `skilltap.toml`-based dependency management). **Commit both files** — they're the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact. v0.x users with existing `.agents/installed.json` will have it transparently migrated on the next install — `skilltap doctor --fix` cleans up the orphan `installed.json` afterward.
 :::
 
 ### Prompted scope
@@ -2167,7 +2167,7 @@ When issues are found:
 ◇ dirs: ~/.config/skilltap/ ✓
 ◇ installed: 7 skills (2 global, 5 project) ✓
 ⚠ skills: 7 installed, 6 on disk
-│  commit-helper: recorded in installed.json but directory missing at ~/.agents/skills/commit-helper
+│  commit-helper: recorded in state.json but directory missing at ~/.agents/skills/commit-helper
 ⚠ symlinks: 8 symlinks, 6 valid
 │  commit-helper: missing symlink at ~/.claude/skills/commit-helper
 │  code-review: symlink at ~/.claude/skills/code-review points to wrong target
@@ -2184,7 +2184,7 @@ When issues are found:
 │
 ...
 ⚠ skills: 5 installed, 4 on disk
-│  commit-helper: directory missing — removed from installed.json ✓
+│  commit-helper: directory missing — removed from state.json ✓
 ⚠ symlinks: 8 symlinks, 6 valid
 │  commit-helper: removed (skill no longer installed) ✓
 │  code-review: recreated symlink ✓
@@ -2365,7 +2365,7 @@ These are read from your local state at completion time, so they stay current:
 | `install <TAB>` | Tap skill names |
 | `tap remove <TAB>` | Configured tap names |
 
-Dynamic completions are fast — they read `installed.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
+Dynamic completions are fast — they read `state.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
 
 ## Troubleshooting
 
@@ -2405,8 +2405,8 @@ Complete reference for all skilltap commands, arguments, flags, and behavior.
 - **Exit codes:** `0` success, `1` error, `2` user cancelled
 - **Errors** are written to stderr with an `error:` prefix and optional `hint:`
 - **Config** is stored at `~/.config/skilltap/config.toml`
-- **State** is tracked in `~/.config/skilltap/installed.json`
-- **Agent mode** (when enabled via config) changes all commands to non-interactive, strict-security, plain-text output
+- **State** is tracked in `~/.config/skilltap/state.json` (v2.1+; legacy `installed.json` + `plugins.json` are read-fallback only)
+- **Agent mode** (via `--agent` flag, `SKILLTAP_AGENT=1` env var, or persistent config) changes all commands to non-interactive, strict-security, plain-text output
 
 ---
 
@@ -4781,7 +4781,7 @@ Complete reference for `~/.config/skilltap/config.toml` -- all options, defaults
 
 Created with defaults on first run. Edit manually, use `skilltap config` for the interactive wizard, or use `skilltap config get`/`skilltap config set` for scripted access.
 
-State is tracked separately in `~/.config/skilltap/installed.json` (machine-managed, do not edit).
+State is tracked separately in `~/.config/skilltap/state.json` (machine-managed, do not edit). Pre-v2.1 used `installed.json` + `plugins.json`; those are now read-fallback only for unmigrated users.
 
 ---
 

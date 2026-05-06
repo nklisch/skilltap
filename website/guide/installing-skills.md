@@ -34,7 +34,7 @@ skilltap install ssh://git@gitlab.com/team/code-review.git
 Uses your existing SSH keys. No extra configuration needed.
 
 ::: tip Automatic protocol fallback
-If an HTTPS URL fails due to authentication, skilltap automatically retries with SSH (and vice versa). The URL that works is saved to `installed.json` so future updates use it directly.
+If an HTTPS URL fails due to authentication, skilltap automatically retries with SSH (and vice versa). The URL that works is saved to `state.json` so future updates use it directly.
 :::
 
 ### GitHub shorthand
@@ -179,8 +179,8 @@ skilltap install commit-helper --project
 
 Installs to `.agents/skills/commit-helper/` inside the current project (determined by the nearest `.git` directory). Only available when working in that project.
 
-::: tip Commit `.agents/installed.json`
-When you install a project-scoped skill, skilltap records it in `.agents/installed.json` at the project root. **Commit this file** — it's the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact.
+::: tip Commit `.agents/state.json` and `skilltap.lock`
+When you install a project-scoped skill, skilltap records it in `.agents/state.json` (and `skilltap.lock` if you've run `skilltap.toml`-based dependency management). **Commit both files** — they're the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact. v0.x users with existing `.agents/installed.json` will have it transparently migrated on the next install — `skilltap doctor --fix` cleans up the orphan `installed.json` afterward.
 :::
 
 ### Prompted scope

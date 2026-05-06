@@ -11,8 +11,8 @@ Complete reference for all skilltap commands, arguments, flags, and behavior.
 - **Exit codes:** `0` success, `1` error, `2` user cancelled
 - **Errors** are written to stderr with an `error:` prefix and optional `hint:`
 - **Config** is stored at `~/.config/skilltap/config.toml`
-- **State** is tracked in `~/.config/skilltap/installed.json`
-- **Agent mode** (when enabled via config) changes all commands to non-interactive, strict-security, plain-text output
+- **State** is tracked in `~/.config/skilltap/state.json` (v2.1+; legacy `installed.json` + `plugins.json` are read-fallback only)
+- **Agent mode** (via `--agent` flag, `SKILLTAP_AGENT=1` env var, or persistent config) changes all commands to non-interactive, strict-security, plain-text output
 
 ---
 

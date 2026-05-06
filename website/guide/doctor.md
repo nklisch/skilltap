@@ -133,7 +133,7 @@ When issues are found:
 ◇ dirs: ~/.config/skilltap/ ✓
 ◇ installed: 7 skills (2 global, 5 project) ✓
 ⚠ skills: 7 installed, 6 on disk
-│  commit-helper: recorded in installed.json but directory missing at ~/.agents/skills/commit-helper
+│  commit-helper: recorded in state.json but directory missing at ~/.agents/skills/commit-helper
 ⚠ symlinks: 8 symlinks, 6 valid
 │  commit-helper: missing symlink at ~/.claude/skills/commit-helper
 │  code-review: symlink at ~/.claude/skills/code-review points to wrong target
@@ -150,7 +150,7 @@ When issues are found:
 │
 ...
 ⚠ skills: 5 installed, 4 on disk
-│  commit-helper: directory missing — removed from installed.json ✓
+│  commit-helper: directory missing — removed from state.json ✓
 ⚠ symlinks: 8 symlinks, 6 valid
 │  commit-helper: removed (skill no longer installed) ✓
 │  code-review: recreated symlink ✓

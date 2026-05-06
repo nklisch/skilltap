@@ -14,7 +14,7 @@ Complete reference for `~/.config/skilltap/config.toml` -- all options, defaults
 
 Created with defaults on first run. Edit manually, use `skilltap config` for the interactive wizard, or use `skilltap config get`/`skilltap config set` for scripted access.
 
-State is tracked separately in `~/.config/skilltap/installed.json` (machine-managed, do not edit).
+State is tracked separately in `~/.config/skilltap/state.json` (machine-managed, do not edit). Pre-v2.1 used `installed.json` + `plugins.json`; those are now read-fallback only for unmigrated users.
 
 ---
 
