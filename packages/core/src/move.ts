@@ -166,6 +166,7 @@ export async function moveSkill(
   if (!sourceInstalledResult.ok) return sourceInstalledResult;
   const sourceInstalled = sourceInstalledResult.value;
   const sourceIdx = sourceInstalled.skills.findIndex(
+    // biome-ignore lint/style/noNonNullAssertion: record found earlier in function via findIndex check
     (s) => s.name === name && s.scope === record!.scope,
   );
   if (sourceIdx !== -1) {

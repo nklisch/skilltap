@@ -113,6 +113,7 @@ export class FooterBar {
       encodingOrCb?: any,
       cb?: any,
     ): boolean {
+      // biome-ignore lint/style/noNonNullAssertion: _originalWrite set in open() before write is intercepted
       const result = self._originalWrite!.call(
         self._output,
         chunk,

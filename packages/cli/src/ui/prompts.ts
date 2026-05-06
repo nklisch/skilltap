@@ -56,6 +56,7 @@ export async function confirmReadyInstall(
   skillNames: string[],
 ): Promise<boolean> {
   const label =
+    // biome-ignore lint/style/noNonNullAssertion: length === 1 guard ensures index 0 defined
     skillNames.length === 1 ? skillNames[0]! : `${skillNames.length} skills`;
   const result = await confirm({
     message: `Install ${label}?`,

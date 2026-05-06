@@ -117,6 +117,7 @@ export async function fetchSkillUpdateStatus(
   // Check npm skills
   for (const skill of npmSkills) {
     if (!skill.sha) continue;
+    // biome-ignore lint/style/noNonNullAssertion: npmSkills filter ensures repo is set
     const { name } = parseNpmSource(skill.repo!);
     const metaResult = await _fetchPackageMetadata(name);
     if (!metaResult.ok) continue;

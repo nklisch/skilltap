@@ -28,6 +28,7 @@ export async function checkSymlinks(
       : isProject
         ? skillInstallDir(skill.name, "project", projectRoot)
         : skillInstallDir(skill.name, "global");
+    // biome-ignore lint/style/noNonNullAssertion: isProject implies projectRoot was passed
     const base = isProject ? projectRoot! : globalBase();
 
     for (const agent of skill.also) {

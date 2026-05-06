@@ -167,7 +167,8 @@ export async function getInstalledSkillOrExit(
   ];
 
   const predicate = opts?.filter
-    ? (s: InstalledSkill) => s.name === name && opts.filter!(s)
+    ? // biome-ignore lint/style/noNonNullAssertion: opts.filter checked truthy in ternary above
+      (s: InstalledSkill) => s.name === name && opts.filter!(s)
     : (s: InstalledSkill) => s.name === name;
 
   const skill = allSkills.find(predicate);

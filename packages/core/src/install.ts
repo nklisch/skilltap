@@ -145,6 +145,7 @@ function parseTapPluginRef(
     source.startsWith("~/")
   )
     return null;
+  // biome-ignore lint/style/noNonNullAssertion: parts.length === 2 guard above
   return { tapName: parts[0]!, pluginName: parts[1]! };
 }
 

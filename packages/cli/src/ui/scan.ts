@@ -24,6 +24,7 @@ export function formatWarnings(
         if (i === matchLineIdx) {
           lines.push(`${prefix}${w.context[i]}`);
         } else {
+          // biome-ignore lint/style/noNonNullAssertion: i < context.length loop guard
           lines.push(`${prefix}${ansi.dim(w.context[i]!)}`);
         }
       }

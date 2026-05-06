@@ -294,6 +294,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
     if (semSpinner) {
       semSpinner.stop();
       semSpinner = null;
+      // biome-ignore lint/style/noNonNullAssertion: semSpinner exists ⇒ semantic scan started ⇒ agent set
       if (!hadSemanticWarnings) steps.semanticScanClean(agent!.name);
     } else if (staticStarted && !hadStaticWarnings && !semanticStarted) {
       steps.staticScanClean();

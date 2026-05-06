@@ -297,6 +297,7 @@ async function updateNpmSkill(
     // Re-verify trust for the new version
     const newTrust = await _resolveTrust({
       adapter: "npm",
+      // biome-ignore lint/style/noNonNullAssertion: this branch only runs for npm skills (record.repo set)
       url: record.repo!,
       tap: record.tap,
       tarballPath: join(tmpDir, "_pkg.tgz"),
