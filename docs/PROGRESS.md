@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 7
+**Phases since last refactor:** 8
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -35,8 +35,8 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 36  | Doctor v2.0 upgrades                           | done     | 2026-05-06 |
 | 37  | Command surface promotion + aliases            | done     | 2026-05-06 |
 | 38a | v2.0 README + changelog                        | done     | 2026-05-06 |
-| 38b | Internal docs (CLAUDE.md/AGENTS.md/llms-full.txt) | pending | —     |
-| 38c | Version bump to 2.0.0-rc.1 + release prep      | pending  | —         |
+| 38b | Internal docs (CLAUDE.md/AGENTS.md/llms-full.txt) | done   | 2026-05-06 |
+| 38c | Version bump to 2.0.0(-rc.1) + tag + push      | ready for user | — |
 
 ---
 
@@ -174,6 +174,40 @@ Split per design-skill rule (>15 units → split):
 - **31c-c (pending)**: state.json reads cutover + smart scope default + agent flag cutover + `mcp:` prefix + v1 schema retirement. The destructive batch.
 
 Splitting respects context limits and lets each step ship + verify in isolation.
+
+### Phase 38b complete — internal docs (AGENTS.md / CLAUDE.md symlink)
+
+`AGENTS.md` (which `.claude/CLAUDE.md` symlinks to) now reflects v2.0 reality:
+
+- **Key Docs section**: added PROGRESS.md and design docs as canonical references; removed the stale "11-phase plan" / "two-layer security model" framing.
+- **New "v2.0 conventions (in-flight transition)" section**: describes the dual-path state of the codebase — state.json + skilltap.toml/lock for v2.0; installed.json + plugins.json still actively read by install/update/remove until Phase 31c-c-2 cuts over in v2.1+. Calls out preferred new paths for new code: state.json, ConfigV2, composeV2, --agent flag, smart scope default.
+- **HTTP registry removed** noted as a v2.0 change.
+
+`website/public/llms-full.txt` and `llms.txt` are auto-generated from website pages by `website/scripts/gen-llms-txt.ts` — no manual update needed; they'll regenerate on the next site build.
+
+### Phase 38c — ready for user to run
+
+The autopilot mandate forbids pushing to remote, and the existing bump script (`scripts/bump-version.ts`) auto-commits + tags + pushes. Plus its regex (`/^\d+\.\d+\.\d+$/`) doesn't accept pre-release suffixes like `2.0.0-rc.1`. So **the user runs the bump themselves** when ready to release.
+
+Suggested command sequence:
+
+```bash
+# Option A: Stable v2.0 (transition release, v0.x paths still active alongside v2)
+bun run bump 2.0.0
+
+# Option B: RC first (recommended — rc.1 needs a tiny script enhancement)
+# 1. First, edit scripts/bump-version.ts: change regex to /^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/
+# 2. Then: bun run bump 2.0.0-rc.1
+```
+
+The bump script will commit, tag, and push automatically. After the tag lands, the GitHub Actions release workflow builds binaries, publishes to npm with provenance, and updates the Homebrew formula.
+
+Pre-release readiness:
+- 293 v2 tests pass (≈ 530ms)
+- Existing v0.x tests pass (install: 30/30; remove: 27/27; plugin install: 15/15)
+- README + changelog reflect v2.0
+- AGENTS.md / CLAUDE.md updated
+- Phase 31c-c-2 (the destructive cutover) explicitly deferred to v2.1+ in the changelog "Known gaps"
 
 ### Phase 38a complete — v2.0 README + changelog
 

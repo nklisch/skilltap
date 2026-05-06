@@ -7,12 +7,27 @@ skilltap — CLI tool for installing agent skills (SKILL.md) and plugins from an
 ## Key Docs
 
 Read these before making architectural decisions:
-- docs/SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases
-- docs/ARCH.md — module boundaries, tech decisions, data flow
+- docs/SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases (incl. v2.0 manifest + lockfile)
+- docs/ARCH.md — module boundaries, tech decisions, data flow (incl. v2.0 module additions)
 - docs/UX.md — CLI reference, flag combos, prompt flows
-- docs/ROADMAP.md — 11-phase implementation plan with dependency graph
-- docs/VISION.md — motivation, design principles
-- docs/SECURITY.md — two-layer security model, threat model, chunking strategy
+- docs/ROADMAP.md — phase plan with dependency graph (v0.1–v1.0 done; v2.0 phases 26–38)
+- docs/VISION.md — motivation, design principles, v2.0 direction
+- docs/SECURITY.md — security model + v2.0 simplification
+- docs/PROGRESS.md — autopilot tracking: phase status, decision log, deviations
+- docs/design/phase-{N}.md — per-phase design docs produced before implementation
+
+## v2.0 conventions (in-flight transition)
+
+skilltap is mid-transition from v0.x to v2.0. Both code paths coexist:
+
+- **state.json** (v2.0): consolidated `~/.config/skilltap/state.json` (or `<project>/.agents/state.json`) replaces `installed.json` + `plugins.json`. Read by `skilltap status`, `skilltap doctor`. Written by `skilltap migrate`.
+- **installed.json + plugins.json** (v0.x): still actively read AND written by `install`/`update`/`remove`. The cutover to v2 readers is deferred to v2.1+ (Phase 31c-c-2).
+- **skilltap.toml + skilltap.lock** (v2.0): project-scope manifest + lockfile. `install` and `remove` automatically update both when `skilltap.toml` is present at the project root. `skilltap sync` reconciles manifest ↔ lockfile ↔ state.
+- **`--agent` flag** (v2.0, in `composeV2`): preferred over `[agent-mode]` config block. CLI commands check both — eventually `[agent-mode]` checks should be retired.
+- **Smart scope default**: inside a git repo, install defaults to `--project`; outside, `--global`. No prompt for the common case.
+- **HTTP registry adapter removed** — taps are git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning.
+
+When adding new code, prefer v2.0 paths (state.json, ConfigV2, composeV2). For compatibility, keep reading both layouts where existing code does.
 
 ## Tech Stack
 
