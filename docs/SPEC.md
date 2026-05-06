@@ -918,27 +918,37 @@ Diagnose the skilltap environment and state. Runs 9 checks and reports issues wi
 | `--fix` | boolean | false | Auto-repair issues where safe |
 | `--json` | boolean | false | Output as JSON |
 
-**Checks:**
+**Checks** (15 in v2.1 — first 9 are the v0.x baseline carried forward; checks 10–15 ship with v2.0/Phase 36):
 
 | Check | What it verifies |
 |-------|-----------------|
 | git | `git` binary is available on PATH |
 | config | Config file is readable and parses without error |
 | dirs | Required directories exist (`~/.config/skilltap/`, `~/.agents/skills/`) |
-| installed.json | Global `~/.config/skilltap/installed.json` and project `.agents/installed.json` (when in a project) are valid and parseable; detail shows `"N skills (G global, P project)"` |
-| skill integrity | Every skill in installed.json has a directory at the correct scope-aware path (`~/.agents/skills/` for global, `{projectRoot}/.agents/skills/` for project); orphan dirs in both locations are reported |
+| installed | Global state (read from `state.json`, with v0.x `installed.json` fallback) and project state (when in a project) are valid and parseable; detail shows `"N skills (G global, P project)"` |
+| skills | Every skill in state has a directory at the correct scope-aware path (`~/.agents/skills/` for global, `{projectRoot}/.agents/skills/` for project); orphan dirs in both locations are reported |
 | symlinks | Agent-specific symlinks for global skills point into `~/.agents/skills/`; project-scoped skill symlinks point into `{projectRoot}/.agents/skills/` |
 | taps | Configured taps (including built-in `skilltap-skills`) have valid directories and a valid tap index (`tap.json` or `.claude-plugin/marketplace.json`); per-tap pass/fail status shown as info lines |
 | agents | At least one agent CLI is detected on PATH |
-| npm | `npm` binary is available on PATH (for `npm:` sources) |
+| npm | `npm` binary is available on PATH (for `npm:` sources) — only emitted when state contains npm-sourced skills |
+| state.json | `state.json` (canonical v2.1 state) loads and parses; corrupt files are reported with a `--fix` to back-up and reset |
+| manifest drift | Items declared in `skilltap.toml` but not in `state.json`, or vice versa (warn; not auto-fixable — user runs `skilltap sync`) |
+| lockfile drift | Locked SHAs differ from installed SHAs (warn for stale/orphan; `--fix` regenerates missing lockfile entries from state) |
+| plugin manifests | Every `.skilltap/<plugin>.toml` parses and has required fields (warn; not auto-fixable) |
+| mcp consistency | Every MCP server in state is present in the corresponding agent's MCP config; orphan `skilltap:`-prefixed entries in agent configs are reported (`--fix` prunes orphans) |
+| v0.x file orphans | When `state.json` is populated AND legacy `installed.json`/`plugins.json` are still on disk, the legacy files are flagged (`--fix` renames each to `<file>.v1.bak`) |
 
 **Check status values:** `pass`, `warn`, `fail`
 
 **`--fix` repairs where safe:**
 - `dirs`: create missing directories
-- `skill integrity`: remove orphan installed.json records (skill dir missing)
+- `skills`: remove orphan state.json records (skill dir missing)
 - `symlinks`: recreate broken symlinks
 - `taps`: re-clone missing tap repos
+- `state.json`: back up + reset on corruption
+- `lockfile drift`: regenerate missing lockfile entries from state
+- `mcp consistency`: prune state-orphan entries from agent configs
+- `v0.x file orphans`: rename legacy files to `<file>.v1.bak`
 
 **Exit codes:** 0 = all checks pass or warn-only; 1 = any check fails
 
@@ -950,15 +960,22 @@ Diagnose the skilltap environment and state. Runs 9 checks and reports issues wi
 ◇ git: available ✓
 ◇ config: readable ✓
 ◇ dirs: all present ✓
-◇ installed.json: valid (3 skills) ✓
-◇ skill integrity: all present ✓
+◇ installed: 3 skills (3 global, 0 project) ✓
+◇ skills: all present ✓
 ◇ symlinks: all valid ✓
 ◇ taps: 3 configured, 3 valid ✓
 ◇ agents: claude detected ✓
-◇ npm: available ✓
+◇ state.json: 3 skills, 0 plugins ✓
+◇ manifest drift: in sync ✓
+◇ lockfile drift: in sync ✓
+◇ plugin manifests: 0 publishable plugins ✓
+◇ mcp consistency: 0 servers tracked ✓
+◇ v0.x file orphans: n/a (no populated v2 state) ✓
 │
 └ ✓ Everything looks good!
 ```
+
+(In a fresh / pre-migration env, the v2.0 checks emit `n/a` details rather than failing — they're expected to be inert when there's nothing to compare against.)
 
 With issues (no `--fix`):
 
@@ -976,7 +993,7 @@ With issues (no `--fix`):
   "checks": [
     { "name": "git", "status": "pass" },
     {
-      "name": "skill integrity",
+      "name": "skills",
       "status": "warn",
       "detail": "1 issue",
       "issues": [
