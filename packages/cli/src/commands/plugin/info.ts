@@ -10,7 +10,7 @@ function componentStatusIcon(c: StoredComponent): string {
   return c.active ? ansi.green("✓") : ansi.dim("✗");
 }
 
-function componentLabel(c: StoredComponent): string {
+function componentKind(c: StoredComponent): string {
   return c.type;
 }
 
@@ -104,7 +104,7 @@ export default defineCommand({
         process.stdout.write(`${ansi.bold("Agent Definitions:")}\n`);
         for (const c of agents) {
           process.stdout.write(
-            `  ${componentStatusIcon(c)} ${c.name} ${ansi.dim(`(${componentLabel(c)})`)}\n`,
+            `  ${componentStatusIcon(c)} ${c.name} ${ansi.dim(`(${componentKind(c)})`)}\n`,
           );
         }
       }

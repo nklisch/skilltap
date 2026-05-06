@@ -775,11 +775,11 @@ opening steps.
 
 ### Known issues / follow-ups for v2.1
 
-- Cutover (31c-c-2) — install/update/remove still read v0.x `installed.json` + `plugins.json`. Migrate writes `state.json` but the destructive switch hasn't happened. Doctor reports both layouts gracefully.
-- `mcp:` install prefix not yet implemented (35b).
+- ~~Cutover (31c-c-2) — install/update/remove still read v0.x `installed.json` + `plugins.json`.~~ **Done** in 31c-c-2d-1: `state.json` is canonical, v0.x reads remain only as one-time fallback for unmigrated users.
+- ~~`mcp:` install prefix not yet implemented (35b).~~ **Done** in Phases 35b-1 (install) and 35b-2 (remove).
+- ~~Phase 31c-c-2's split into 31c-c-2-a/b/c/d~~ **Done** — full split shipped (a/b/c/d-1/d-2-orphan).
+- ~~The `componentLabel` function in `cli/src/commands/plugin/info.ts` has different semantics from the shared one~~ **Resolved (post-cutover doc-audit pass)**: local helper renamed `componentKind` so the collision is gone.
 - Bump script (`scripts/bump-version.ts`) doesn't accept pre-release versions (regex is `/^\d+\.\d+\.\d+$/`); auto-pushes on tag. Two small enhancements that would make it autopilot-compatible: (a) extend regex to accept `-rc.N` suffixes; (b) support `SKILLTAP_BUMP_NO_PUSH=1` env var to skip the push.
-- The "componentLabel" function in `cli/src/commands/plugin/info.ts` has different semantics from the shared one (returns just type, not "type: name"). Renamed in a future refactor.
-- Phase 31c-c-2's split into 31c-c-2-a/b/c/d is the natural shape when v2.1 work begins.
 
 ### Watchdog loop
 
