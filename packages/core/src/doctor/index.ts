@@ -59,7 +59,7 @@ export async function runDoctor(
   // 3. Dirs
   await emit(await checkDirs());
 
-  // 4. installed.json (provides installed for later checks)
+  // 4. installed (state.json with installed.json read-fallback; provides installed for later checks)
   const { check: installedCheck, installed } =
     await checkInstalled(projectRoot);
   await emit(installedCheck);

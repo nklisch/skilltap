@@ -44,7 +44,7 @@ export type UpdateOptions = {
   yes?: boolean;
   /** Skip skills that have security warnings in their diff */
   strict?: boolean;
-  /** Project root — also processes project-scoped skills from {projectRoot}/.agents/installed.json */
+  /** Project root — also processes project-scoped skills from {projectRoot}/.agents/state.json */
   projectRoot?: string;
   onProgress?: (
     skillName: string,
