@@ -6,6 +6,8 @@ skilltap is a CLI tool that installs agent skills and plugins from any git host.
 
 This document describes how skilltap is built internally — module boundaries, data flow, key abstractions, and technology decisions.
 
+> **State-store note (v2.1 cutover, Phase 31c-c-2d-1):** The references below to `installed.json` / `plugins.json` describe the v0.x file layout. As of v2.1, the canonical store is a single `state.json` per scope — `~/.config/skilltap/state.json` (global) or `<project>/.agents/state.json` (project). `loadInstalled()` and `loadPlugins()` keep the same internal API but now read from `state.json` first; legacy `installed.json` / `plugins.json` are only read once as a fallback for unmigrated v0.x users. `saveInstalled()` and `savePlugins()` write only to `state.json`. The v0.x Zod schemas remain in `core/src/schemas/{installed,plugins}.ts` because their inner record types (`InstalledSkill`, `PluginRecord`) are reused unchanged in `state.json`'s arrays. The legacy file layout described elsewhere in this doc still accurately describes the on-disk fallback shape and the migrate command's input.
+
 ## Technology Stack
 
 | Component | Choice | Rationale |
