@@ -3,7 +3,7 @@
 **Status:** in-progress
 **Started:** 2026-05-05
 **Last updated:** 2026-05-06
-**Phases since last refactor:** 0
+**Phases since last refactor:** 1
 **Total refactor passes:** 1
 
 Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) are historically complete and not tracked here.
@@ -28,7 +28,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 34  | Component-ref syntax + toggle/enable/disable   | done     | 2026-05-06 |
 | 35a | Try + Claude Desktop (additive)                | done     | 2026-05-06 |
 | 35b | mcp: install prefix (deferred to 31c cutover)  | pending  | —         |
-| 36  | Doctor v2.0 upgrades                           | pending  | —         |
+| 36  | Doctor v2.0 upgrades                           | done     | 2026-05-06 |
 | 37  | Command surface promotion + aliases            | pending  | —         |
 | 38  | v2.0 polish + docs + release                   | pending  | —         |
 
@@ -156,6 +156,28 @@ Verification: 285 tests pass / 0 fail. 871-line net deletion (-984 / +113).
 - 8 phases since last refactor (26, 27, 28, 29, 30, 31a, 33a, 31b). The framework default is "every 3"; 8 is well past that.
 - Phases have been varied: schemas / I/O / commands / one destructive cleanup. No single duplication or pattern has emerged that would benefit from cross-phase refactoring.
 - Decision: defer one more phase. Re-evaluate after 31c lands the install cutover, which will likely surface refactor opportunities (the install code paths get rewritten and any duplication will be visible).
+
+### Phase 36 complete — doctor v2.0 upgrades
+
+Used `/workflow:design` + `/workflow:implement-orchestrator`. Two parallel Sonnet agents:
+
+- Agent A — `state-v2.ts` + `manifest-drift.ts` + `lockfile-drift.ts` (consume state from state-v2). 18 tests across 3 files.
+- Agent B — `plugin-manifests.ts` + `mcp-consistency.ts` (independent). 14 tests across 2 files.
+
+Direct edits handled `doctor/index.ts` orchestrator wire-up — appended 5 new checks after the existing 9. Existing checks unchanged.
+
+Autonomous decisions D1–D7 (full text in `docs/design/phase-36.md`):
+- **D1** Coexist with v1 (no removal until 31c cutover).
+- **D2** State load chain pattern matches checkInstalled.
+- **D3** Manifest drift uses cwd / projectRoot, returns "n/a (no manifest)" gracefully.
+- **D4** `.skilltap/` walked under projectRoot.
+- **D5** Skip inactive plugins / inactive components in MCP consistency.
+- **D6** MCP orphan auto-fix via `removeMcpServers`.
+- **D7** Lockfile entry regen IS fixable; stale-sha and orphans are warn-only.
+
+Agent A flagged a real bug in the design's filter expression (`i.kind === "add" || "remove" || "ref-mismatch"` is always-truthy) and fixed it inline. Good catch.
+
+Verification: 32 doctor tests pass (existing 8 + 24 new). 224 v2 baseline pass. End-to-end `skilltap doctor` smoke test shows all 5 new checks rendering "n/a" gracefully on a fresh env.
 
 ### Phase 34 complete — component-ref toggle/enable/disable
 
