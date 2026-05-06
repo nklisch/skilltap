@@ -125,6 +125,31 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 - 33.2–33.7 (status command, bare command, --json) are purely additive: new CLI command reading v2 state.json + manifest + lockfile + drift via planSync().
 - Status command falls back gracefully when state.json doesn't exist yet (most current users), suggesting `skilltap migrate`.
 
+### Phase 31b complete — HTTP registry removed
+
+Used `/workflow:design` + `/workflow:implement-orchestrator` end-to-end (first time on this project). Three Sonnet agents in parallel:
+
+- Agent A — taps.ts surgery: filter helper + warning, removed registry imports, dropped `UpdateTapResult.http`, narrowed `addTap` signature, removed HTTP branches in `addTap`/`removeTap`/`updateTap`/`loadTaps`/`getTapInfo`, narrowed `TapInfo` type. One small divergence noted by the agent: moved the "tap not configured" check before the filter call in `updateTap` so a user explicitly naming an HTTP tap gets the warning rather than a misleading "not configured" error. Strictly safer than the design's draft.
+- Agent B — cli/commands/tap/{add,list}.ts: removed `--type` flag, "HTTP registry" labels, third arg to `addTap()`. JSON output unchanged in shape.
+- Agent C — doctor/checks/taps.ts + new `taps.http-removal.test.ts`. Replaced HTTP fast-path with a silent `continue`; wrote the filter test.
+
+Direct edits handled the registry/ deletion + index.ts export strip + grep verification.
+
+Autonomous decisions D1–D5 (full text in `docs/design/phase-31b.md`):
+- **D1**: Schema kept `type: z.enum(["git", "http"])` to parse legacy configs; v2 code filters at the call site.
+- **D2**: HTTP entries silently filtered with one stderr warning per tap name (not hard error).
+- **D3**: `UpdateTapResult.http` dropped — zero production consumers.
+- **D4**: `auth_token` / `auth_env` left parseable but inert.
+- **D5**: `--type` flag dropped (citty errors on unknown arg, clearest signal).
+
+Verification: 285 tests pass / 0 fail. 871-line net deletion (-984 / +113).
+
+### Refactor gate (after Phase 31b): defer
+
+- 8 phases since last refactor (26, 27, 28, 29, 30, 31a, 33a, 31b). The framework default is "every 3"; 8 is well past that.
+- Phases have been varied: schemas / I/O / commands / one destructive cleanup. No single duplication or pattern has emerged that would benefit from cross-phase refactoring.
+- Decision: defer one more phase. Re-evaluate after 31c lands the install cutover, which will likely surface refactor opportunities (the install code paths get rewritten and any duplication will be visible).
+
 ---
 
 ## Suggested Additions
