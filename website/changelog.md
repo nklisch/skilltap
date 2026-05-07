@@ -5,14 +5,16 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
-## v2.1.0 — Canonical store + transparent v0.x migration (unreleased)
+## v2.1.0 — Canonical store, manifest safety, comprehensive test + doc coverage
 
-The v2.1 release retires the dual-source-of-truth state model from v2.0.
-`state.json` is now the canonical store for installed skills and plugins.
-Existing v0.x users transition transparently — your data is read once from
-`installed.json`/`plugins.json` and written into `state.json` on the next
-install/update/remove. No explicit `skilltap migrate` is required, though
-the command remains available.
+The v2.1 release makes `state.json` the one canonical store for installed
+skills and plugins (replacing the v0.x `installed.json` + `plugins.json` pair),
+closes correctness gaps in `sync` and `install`, and ships a full end-to-end
+test suite and doc audit for the v2.0 surface. v0.x users transition
+transparently — your data is read once from the legacy files and written
+into `state.json` on the next install/update/remove. `skilltap migrate`
+remains available for explicit one-shot migration; `skilltap doctor --fix`
+cleans up the orphan legacy files afterward.
 
 ### Changed
 
@@ -22,75 +24,123 @@ the command remains available.
   Existing v0.x users get a one-time transparent read fallback so no data
   is lost. The next save populates `state.json` and the fallback stops
   firing for that scope.
-- **`--agent` flag and `SKILLTAP_AGENT=1` env var work as documented.** v2.0
-  advertised both as the modern way to enter agent mode, but the CLI only
-  honored the legacy `[agent-mode]` config block. `composePolicy` now
-  resolves agent mode with proper precedence: `flags.agent` >
-  `SKILLTAP_AGENT=1` > config block. CLI startup checks (telemetry notice,
-  update hint, skill-update reminder) also short-circuit on the env var.
-  The flag is wired into `install`, `update`, `tap install`,
-  `skills remove`, and `skills enable`/`disable`. The `isAgentMode()`
-  helper used by read-only commands (`disable`, `enable`, `toggle`,
-  `plugin info`, `skills info`, etc.) now also honors the `--agent` flag
-  via direct argv inspection, so the documented precedence applies
-  uniformly across every command.
+- **`--agent` flag and `SKILLTAP_AGENT=1` env var work with proper
+  precedence.** `composePolicy` resolves agent mode as: `flags.agent` >
+  `SKILLTAP_AGENT=1` > `[agent-mode]` config block. CLI startup checks
+  (telemetry notice, update hint, skill-update reminder) short-circuit on
+  the env var. The flag is wired into `install`, `update`, `tap install`,
+  `skills remove`, and `skills enable`/`disable`. The `isAgentMode()` helper
+  used by read-only commands (`disable`, `enable`, `toggle`, `plugin info`,
+  `skills info`, etc.) honors the flag via direct argv inspection, so the
+  documented precedence applies uniformly across every command.
+- **`skilltap install` refuses (or auto-recovers) when `skilltap.toml` is
+  corrupt.** Previously, install silently swallowed a corrupt manifest and
+  left the project in a half-managed state: `state.json` updated, skill
+  files placed, but manifest unchanged and lockfile missing the new entry.
+  Now: agent mode exits 1 with a pointer to `skilltap doctor --fix` (CI/scripts
+  must never silently mutate user files); interactive mode auto-recovers
+  (backs up the corrupt file to `skilltap.toml.bak`, resets to empty,
+  continues the install).
+- **`skilltap sync` now requires a project root.** Running `sync` outside
+  any git repo or project previously reported a misleading "trivially
+  in-sync" no-op (the `if (!projectRoot)` guard was dead code because
+  `tryFindProjectRoot()` fell back to cwd). It now exits 1 with a clear
+  error pointing the user to a directory containing `.git` or
+  `skilltap.toml`. Replaced internally with a new `findManifestRoot()`
+  helper that returns null when no manifest ancestor exists.
 
 ### Added
 
-- **Doctor `v0.x file orphans` check.** `skilltap doctor` now runs 15 checks
-  total. The new check detects when `state.json` is populated AND legacy
-  `installed.json`/`plugins.json` are still on disk (a common state after
-  a transparent migration). `--fix` renames each orphan to `<file>.v1.bak`.
-  Pre-migration users (empty state, populated legacy file) are intentionally
-  not flagged — their fallback is still active.
+- **Doctor v2.0 checks (10–15).** `skilltap doctor` now runs 15 checks total
+  (was 9). The six new v2.0 checks: `state.json` validity, manifest drift,
+  lockfile drift, plugin manifest validity (`.skilltap/<name>.toml`), MCP
+  injection consistency, and v0.x file orphans. **Manifest and lockfile
+  corruption are now `fixable: true`** — `--fix` backs the corrupt file to
+  `.bak` and writes a fresh empty file using the same `recoverManifest`/
+  `recoverLockfile` helper the install preflight uses. The `v0.x file
+  orphans` check detects when `state.json` is populated AND legacy
+  `installed.json`/`plugins.json` are still on disk; `--fix` renames each
+  orphan to `<file>.v1.bak`. Pre-migration users (empty state, populated
+  legacy file) are intentionally not flagged — their fallback is still
+  active.
 - **`skilltap doctor` runs from real git repos correctly.** Fixed a
   `Bun.file('.git').exists()` bug in the project-root detection that made
-  `skilltap status`/`doctor` always report "no project root" when run inside
-  a real git repo. Replaced with `lstat`.
+  `skilltap status`/`doctor` always report "no project root" when run
+  inside a real git repo. Replaced with `lstat`.
+- **Comprehensive v2.0/v2.1 test coverage.** 50+ new CLI subprocess and
+  unit tests for previously-uncovered surface: `resolveScope`
+  smart-scope-default (all 5 branches), `sync` drift workflow with
+  `--apply`/`--strict`/`--json`, `try` never-writes invariant (the safety
+  property that makes try usable on untrusted code), `migrate` idempotency
+  and HTTP-tap abort, doctor `--fix` repair workflow, agent-mode precedence
+  chain, HTTP-tap stderr warning, install-never-writes-`installed.json`
+  invariant, first-time global install (smart-default outside git),
+  skill remove drops from manifest + lockfile, `status --json`.
+
+### Documentation
+
+- **Comprehensive website audit.** All 15 website pages (11 guides + 4
+  reference) audited for v2.1 consistency. 4 Blocker fixes and ~10
+  High-priority gaps closed. Key fixes: removed the obsolete scope-prompt
+  UI mock from getting-started (smart-scope-default infers scope silently);
+  fixed `update --all` (doesn't exist, 4 occurrences) in teams guide;
+  corrected `[security]` block usage in teams + config-options worked
+  examples (per-mode keys belong in `[security.human]`/`[security.agent]`,
+  not the shared `[security]` block); corrected the false claim that
+  `install` auto-migrates v0.x state. Added complete CLI reference sections
+  for `try`, `migrate`, `toggle`/`enable`/`disable`, `mcp:` source format,
+  bare `skilltap` status. Doctor check table updated to 15 (was 9). Added
+  missing config keys (`builtin_tap`, `default_git_host`,
+  `updates.show_diff`).
+- **Foundation doc updates.** SPEC.md §v2.0 Sync gained the project-root
+  requirement; §`skilltap install` gained a Manifest Preflight callout;
+  §v2.0 Doctor Upgrades documents the new fixability for manifest and
+  lockfile checks. UX.md install + sync flows updated with the corrupt-
+  manifest handling and the no-project-root error case. CLI hint
+  correctness: `skilltap config set agent-mode.enabled true` now emits a
+  hint mentioning the `--agent` flag and `SKILLTAP_AGENT=1` env var
+  alongside the persistent wizard.
+- **End-to-end test design document.** New `docs/E2E-TEST-DESIGN-V2.md`
+  enumerates 27 golden-path tests across 13 user journeys plus 20
+  adversarial tests across 5 failure-mode categories, with spec
+  citations, fixture requirements, and prioritized implementation order.
+  ~18 of the highest-priority tests landed in this release; the rest
+  documented for a follow-up pass.
 
 ### Internals
 
 - **Module-graph cleanup.** Extracted `getConfigDir`/`ensureDirs` to a leaf
-  module (`core/src/dirs.ts`) and `SKILLTAP_AGENT` env-var check to its own
-  helper (`core/src/agent-env.ts`). The previous circular import between
-  `config.ts` ↔ `state/save.ts` (which had been worked around with dynamic
+  module (`core/src/dirs.ts`) and `SKILLTAP_AGENT` env-var check to its
+  own helper (`core/src/agent-env.ts`). The previous circular import
+  between `config.ts` ↔ `state/save.ts` (worked around with dynamic
   `await import()` calls) is gone — all callers use clean static imports.
-- **Net –355 lines of code.** The dual-write scaffolding from the early
-  v2.1 cutover (sync-from-v1.ts, read-bridge.ts) is dead code now that
-  `state.json` is canonical. Deleted.
-- **Lint state: 104 errors / 279 warnings → 0 / 0.** Project-wide
-  `bun run check` safe-fix pass + targeted unsafe-fix passes for unused
+- **Net –355 lines of code.** Dual-write scaffolding from the early v2.1
+  cutover (`sync-from-v1.ts`, `read-bridge.ts`) deleted now that
+  `state.json` is canonical.
+- **`manifest/recover.ts`** — shared `recoverManifest()` /
+  `recoverLockfile()` helpers used by both install preflight and doctor
+  `--fix`. Backup-then-replace pattern mirrors the existing `state-v2`
+  doctor fixer.
+- **Lint: 104 errors / 279 warnings → 0 / 0.** Project-wide `bun run
+  check` safe-fix pass + targeted unsafe-fix passes for unused
   imports/variables/templates + per-line documentation of every remaining
-  `!` non-null assertion with its runtime guard. macOS `/tmp` → `/private/tmp`
-  symlink bug in `makeTmpDir` fixed mid-cleanup, resolving 6 long-standing
-  test failures.
+  `!` non-null assertion with its runtime guard. macOS `/tmp` →
+  `/private/tmp` symlink bug in `makeTmpDir` fixed mid-cleanup, resolving
+  6 long-standing test failures.
 
-### Documentation
-
-- **Comprehensive v2.1 doc audit.** Foundation docs (README, AGENTS,
-  ARCH, VISION) and all website pages (8 guides, 4 reference docs)
-  audited for v2.1 consistency. HTTP registry tap support marked
-  removed where claimed as current (5 docs). `installed.json` /
-  `plugins.json` references corrected to `state.json` across 14
-  files (~16 occurrences). `--agent` / `SKILLTAP_AGENT` entry points
-  documented across configuration + cli + config-options.
-- **New v2.0 feature surfacing.** "What is skilltap?" key features now
-  list project manifest + lockfile and non-interactive agent mode.
-  Teams guide gets a project-manifest section. Getting-started surfaces
-  `skilltap status` and points at v2.0 next-steps. Doctor guide
-  documents all 15 checks (9 v1 + 6 v2).
-- **CLI hint correctness.** Running `skilltap config set
-  agent-mode.enabled true` now emits a hint that mentions the
-  `--agent` flag and `SKILLTAP_AGENT=1` env var alongside the
-  persistent wizard, not just the wizard alone.
-
-### Known gaps
+### Known gaps (deferred to v2.2)
 
 - **v0.x schema deletion** — `schemas/installed.ts` and `schemas/plugins.ts`
   are still imported (mostly for type re-exports — `InstalledSkill`,
-  `PluginRecord` shapes are reused as-is in `state.json`). Wholesale deletion
-  is deferred to v2.2 after a release window for users to clear orphans
-  via `skilltap doctor --fix`.
+  `PluginRecord` shapes are reused as-is in `state.json`). Wholesale
+  deletion is deferred to v2.2 after a release window for users to clear
+  orphans via `skilltap doctor --fix`.
+- **`[agent-mode]` config block schema retirement** — the block is read
+  for back-compat but won't be the documented entry point in v2.2.
+- **Plugin authoring guide** — `creating-skills.md` doesn't yet have a
+  section on publishing plugins via `.skilltap/<name>.toml` (`[[skills]]`,
+  `[[servers]]`, `[[agents]]`, `publish = true`). Tracked for a focused
+  doc pass.
 
 ---
 
