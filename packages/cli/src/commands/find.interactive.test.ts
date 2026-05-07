@@ -253,8 +253,9 @@ describe("find -i — search prompt", () => {
       // Select the result
       session.sendKey("ENTER");
 
-      // Should transition to install flow (scope prompt)
-      await session.waitForText("Install to:");
+      // Should transition to install flow. Smart-scope-default skips the scope
+      // prompt, so the agents multiselect is the first install-flow prompt.
+      await session.waitForText("Which agents should this skill be available to?");
 
       // Cancel out of the install flow
       session.sendKey("CTRL_C");
@@ -283,10 +284,7 @@ describe("find -i — search prompt", () => {
 
       await session.waitForText("Search for skills:");
       await session.waitForText("commit-helper");
-      session.sendKey("ENTER"); // select skill
-
-      await session.waitForText("Install to:");
-      session.sendKey("ENTER"); // accept Global scope
+      session.sendKey("ENTER"); // select skill — scope is smart-defaulted, no prompt
 
       await session.waitForText(
         "Which agents should this skill be available to?",

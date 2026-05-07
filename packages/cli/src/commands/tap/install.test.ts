@@ -89,7 +89,7 @@ async function addTap(tapPath: string): Promise<void> {
 }
 
 describe("tap install — agent selection prompt", () => {
-  test("shows agent selection prompt after scope selection when no defaults set", async () => {
+  test("shows agent selection prompt when no defaults set", async () => {
     await writeConfig("builtin_tap = false\n");
     const tap = await createLocalTap([
       {
@@ -109,10 +109,7 @@ describe("tap install — agent selection prompt", () => {
       await session.waitForText("Select tap skills to install:");
       await session.waitForText("commit-helper");
       session.sendKey("SPACE"); // toggle selection
-      session.sendKey("ENTER"); // confirm
-
-      await session.waitForText("Install to:");
-      session.sendKey("ENTER"); // accept Global
+      session.sendKey("ENTER"); // confirm — scope is smart-defaulted, no prompt
 
       await session.waitForText(
         "Which agents should this skill be available to?",

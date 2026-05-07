@@ -7,13 +7,14 @@
  * from firing when imported directly into a Bun test.
  *
  * Prompt sequence for `install` without --yes / --also:
- *   1. "Install to:"                           (scope select)
- *   2. "Which agents should this skill …?"     (agent symlinks multiselect)
- *   3. [optional] "Which skills to install?"  (multi-skill repos only)
- *   4. "Install <name>?" or "Install N skills?" (confirm)
+ *   1. "Which agents should this skill …?"     (agent symlinks multiselect)
+ *   2. [optional] "Which skills to install?"  (multi-skill repos only)
+ *   3. "Install <name>?" or "Install N skills?" (confirm)
+ *
+ * Scope is no longer prompted: smart-scope-default infers project (inside a git
+ * repo) or global (outside) automatically. Pass --global / --project to override.
  *
  * Suppression rules:
- *   --global / --project  → no scope prompt
  *   --yes                 → no agents prompt, no confirm prompt
  *   --also <agent>        → no agents prompt (but confirm still shown)
  *
@@ -27,22 +28,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat } from "node:fs/promises";
 import {
-  commitAll,
   createMultiSkillRepo,
   createStandaloneSkillRepo,
   createTestEnv,
-  initRepo,
-  makeTmpDir,
-  removeTmpDir,
   runInteractive,
   type TestEnv,
 } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/..`;
-// Relative form — bun resolves src/index.ts against cwd (use only when cwd=CLI_DIR)
 const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
-// Absolute form — works regardless of cwd (needed for project-scope tests with custom cwd)
-const CMD_ABS = ["bun", "run", "--bun", `${CLI_DIR}/src/index.ts`] as const;
 
 let testEnv: TestEnv;
 let homeDir: string;
@@ -65,88 +59,6 @@ function env() {
     DO_NOT_TRACK: "1",
   };
 }
-
-// ---------------------------------------------------------------------------
-// install — scope selection prompt
-// ---------------------------------------------------------------------------
-
-describe("install — scope prompt", () => {
-  test("pressing Enter accepts default scope (Global) and installs", async () => {
-    const repo = await createStandaloneSkillRepo();
-    try {
-      const session = await runInteractive(
-        [...CMD, "install", repo.path, "--skip-scan"],
-        { cwd: CLI_DIR, env: env() },
-      );
-
-      // 1. Scope prompt
-      await session.waitForText("Install to:");
-      session.sendKey("ENTER"); // accept Global
-
-      // 2. Agents multiselect
-      await session.waitForText("Which agents should this skill");
-      session.sendKey("ENTER"); // select none
-
-      // 3. Confirm install
-      await session.waitForText("standalone-skill?");
-      session.sendKey("ENTER"); // initialValue:true → accepts
-
-      const { exitCode, output } = await session.finish();
-      expect(exitCode).toBe(0);
-      expect(output).toContain("standalone-skill");
-    } finally {
-      await repo.cleanup();
-    }
-  }, 30_000);
-
-  test("pressing Down then Enter selects Project scope", async () => {
-    const repo = await createStandaloneSkillRepo();
-    // Need a real git project dir for project-scope installs
-    const projectDir = await makeTmpDir();
-    try {
-      await initRepo(projectDir);
-      await Bun.write(`${projectDir}/.gitkeep`, "");
-      await commitAll(projectDir, "init");
-
-      // --yes skips agents + confirm so we only need to drive the scope prompt.
-      // CMD_ABS uses absolute path so bun can find src/index.ts from projectDir.
-      const session = await runInteractive(
-        [...CMD_ABS, "install", repo.path, "--skip-scan", "--yes"],
-        { cwd: projectDir, env: env() },
-      );
-
-      await session.waitForText("Install to:");
-      session.sendKey("DOWN"); // Global → Project
-      session.sendKey("ENTER");
-
-      const { exitCode, output } = await session.finish();
-      expect(exitCode).toBe(0);
-      expect(output).toContain("standalone-skill");
-    } finally {
-      await repo.cleanup();
-      await removeTmpDir(projectDir);
-    }
-  }, 30_000);
-
-  test("Ctrl+C at scope prompt exits with code 130", async () => {
-    const repo = await createStandaloneSkillRepo();
-    try {
-      const session = await runInteractive(
-        [...CMD, "install", repo.path, "--skip-scan"],
-        { cwd: CLI_DIR, env: env() },
-      );
-
-      await session.waitForText("Install to:");
-      session.sendKey("CTRL_C");
-
-      const { exitCode, output } = await session.finish();
-      expect(exitCode).toBe(130);
-      expect(output.toLowerCase()).toMatch(/cancel/);
-    } finally {
-      await repo.cleanup();
-    }
-  }, 20_000);
-});
 
 // ---------------------------------------------------------------------------
 // install — agents multiselect

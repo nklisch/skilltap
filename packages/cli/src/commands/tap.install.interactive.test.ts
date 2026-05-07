@@ -316,8 +316,11 @@ describe("tap install — interactive multiselect", () => {
       await session.waitForText("◆");
       session.sendKey("ENTER");
 
-      // Should transition to scope prompt
-      await session.waitForText("Install to:");
+      // Should transition to install flow. Smart-scope-default skips the scope
+      // prompt, so the agents multiselect is the first install-flow prompt.
+      await session.waitForText(
+        "Which agents should this skill be available to?",
+      );
 
       session.sendKey("CTRL_C");
       const { exitCode } = await session.finish();

@@ -36,22 +36,6 @@ export async function selectSkills(skills: ScannedSkill[]): Promise<string[]> {
   return result as string[];
 }
 
-export async function selectScope(): Promise<string> {
-  const result = await select({
-    message: "Install to:",
-    options: [
-      { value: "global", label: "Global (~/.agents/skills/)" },
-      {
-        value: "project",
-        label: "Project (.agents/skills/)",
-        hint: "recommended",
-      },
-    ],
-  });
-  if (isCancel(result)) exitOnCancel();
-  return result as string;
-}
-
 export async function confirmReadyInstall(
   skillNames: string[],
 ): Promise<boolean> {
