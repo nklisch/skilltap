@@ -38,6 +38,8 @@ Each entry in the `skills` array:
 | `description` | string | Yes | -- | What the skill does |
 | `repo` | string | Yes | -- | Source of the skill. Git URL, `github:owner/repo`, or `npm:package-name`. |
 | `tags` | array of strings | No | `[]` | Searchable tags for categorization |
+| `trust` | object | No | -- | Optional trust signal — `{ verified: bool, verifiedBy?: string, verifiedAt?: string }`. Used by `skilltap find` to display verified-by-tap-publisher tags. |
+| `plugin` | boolean | No | `false` | Marks this entry as referring to a plugin (rather than a single skill). Mostly used internally by tap normalization. |
 
 ### Plugin Entry Fields
 
@@ -110,10 +112,9 @@ Each entry in a plugin's `agents` array:
     {
       "name": "dev-assistant",
       "description": "Full development assistant with skills, MCP filesystem access, and agent config",
-      "repo": "https://gitea.example.com/nathan/dev-assistant",
       "tags": ["productivity", "filesystem"],
       "skills": [
-        { "name": "dev-assistant", "description": "Development task assistant" }
+        { "name": "dev-assistant", "path": "skills/dev-assistant", "description": "Development task assistant" }
       ],
       "mcpServers": {
         "filesystem": { "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/dev"] }

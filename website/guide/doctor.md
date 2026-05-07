@@ -19,7 +19,7 @@ skilltap doctor
 
 ## What It Checks
 
-Doctor runs 9 independent checks sequentially. A failure in one doesn't skip the rest. Each check produces a **pass** (◇), **warning** (⚠), or **failure** (✗).
+Doctor runs 15 independent checks sequentially (9 legacy + 6 v2.0 additions). A failure in one doesn't skip the rest. Each check produces a **pass** (◇), **warning** (⚠), or **failure** (✗).
 
 ### 1. Git
 

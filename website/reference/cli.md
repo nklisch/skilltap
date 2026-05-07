@@ -45,6 +45,7 @@ skilltap install <source> [source...] [flags]
 | Tap name + ref | `commit-helper@v1.2.0` |
 | Tap plugin | `tap-name/plugin-name` |
 | Local path | `./my-skill` |
+| MCP-only install | `mcp:user/repo` (Phase 35b — see [MCP-only install](#mcp-only-install) below) |
 
 Source resolution order:
 
@@ -504,6 +505,239 @@ skilltap sync --apply --strict
 |------|---------|
 | `0` | In sync, OR drift reported in read-only mode, OR apply succeeded |
 | `1` | No project root found, OR apply had failures (any in non-strict; first one in strict mode) |
+
+---
+
+## skilltap try
+
+Read-only preview of a source. Clones (or copies, for local paths) to a temp directory, parses any plugin manifests, runs the static security scan, prints what would be installed — but **never writes** to install paths or `state.json`. Useful for inspecting an unfamiliar source before committing to install.
+
+```
+skilltap try <source> [--json] [--skip-scan]
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `source` | Yes | Source URL, `owner/repo` shorthand, `npm:` prefix, or local path |
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Emit the report as JSON instead of human-readable text |
+| `--skip-scan` | boolean | false | Skip the static security scan (use when previewing trusted internal sources at scale) |
+
+### Behavior
+
+`try` is the read-only twin of `install`. Step-by-step:
+
+1. Clone (or copy) the source into a temp directory
+2. Parse any `.skilltap/<name>.toml`, `.claude-plugin/plugin.json`, or `.codex-plugin/plugin.json`
+3. Discover SKILL.md files
+4. Run static security scan (unless `--skip-scan`)
+5. Print the discovered structure (skills, MCP servers, agents) plus any warnings
+6. Print a "Nothing was installed" disclaimer
+
+The temp directory is deleted before exit. No state mutation, no symlink creation, no agent-config injection.
+
+### Examples
+
+```bash
+# Preview an unfamiliar plugin
+skilltap try corp/dev-toolkit
+
+# Machine-readable preview for CI
+skilltap try corp/dev-toolkit --json
+
+# Skip scan for trusted internal previews
+skilltap try ./local-dir --skip-scan
+```
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Preview succeeded |
+| `1` | Source could not be resolved or read |
+
+---
+
+## skilltap migrate
+
+One-shot upgrade from skilltap v0.x state (`installed.json` + `plugins.json` + v1 config keys) to v2 (`state.json` + per-mode security blocks). Idempotent — re-running after a successful migration reports "Already on v2.0" and exits 0.
+
+```
+skilltap migrate [--json]
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Emit a machine-readable report instead of human-readable output |
+
+### Behavior
+
+1. Detect v1 markers (legacy `installed.json` / `plugins.json` files, v1 config keys)
+2. If v1 markers exist AND `state.json` is absent: proceed to migrate
+3. If `config.toml` references HTTP taps, **abort** before any writes with `Migration aborted: HTTP taps are not supported in v2.0...` and a list of offending tap names — the user must manually convert or remove HTTP taps and re-run
+4. Translate v1 `[security.human]` / `[security.agent]` / `[[security.overrides]]` / `[agent-mode]` config blocks into v2 form
+5. Merge `installed.json` + `plugins.json` into a unified `state.json`
+6. Rename the originals to `<file>.v1.bak`
+7. Verify the migrated state with the v2 schema; report any unmappable values as warnings
+8. If no v1 markers were found, exit 0 with `✓ Already on v2.0`
+
+`skilltap migrate` does not auto-run. The CLI prints a soft startup notice when v1 markers are detected — the user invokes migrate explicitly when ready.
+
+### Examples
+
+```bash
+# One-shot migrate (run once after upgrading from v0.x)
+skilltap migrate
+
+# CI / scripting variant
+skilltap migrate --json
+```
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Migration succeeded, or already on v2.0 (no-op) |
+| `1` | HTTP taps detected (abort), or migration error |
+
+---
+
+## skilltap toggle / enable / disable
+
+Activate or deactivate a plugin (or a single component within a plugin) without uninstalling it. Useful for temporarily turning off a noisy MCP server or skipping a skill.
+
+```
+skilltap toggle <target>     # flip current state
+skilltap enable <target>     # set to active
+skilltap disable <target>    # set to inactive
+```
+
+### Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `target` | Yes | A plugin name (`dev-toolkit`) or a component reference (`dev-toolkit:test-skipper`) |
+
+### Behavior
+
+- **`toggle`** flips the active flag of the target. If the plugin (or component) is currently active, it goes inactive. If inactive, it goes active.
+- **`enable`** sets active=true. No-op if already active (prints `already enabled`).
+- **`disable`** sets active=false. No-op if already disabled.
+
+When a plugin is disabled, all of its components (skills, MCP servers, agents) are deactivated atomically. Skill symlinks are moved to a `.disabled/` subdirectory; MCP entries are removed from the agent's MCP config; agent definitions are moved out of the platform's agents directory.
+
+When a single component is targeted (`dev-toolkit:server-name`), only that component is affected; the rest of the plugin stays active.
+
+### Examples
+
+```bash
+# Disable a whole plugin
+skilltap disable dev-toolkit
+
+# Disable just one MCP server within a plugin
+skilltap disable dev-toolkit:test-skipper
+
+# Re-enable
+skilltap enable dev-toolkit
+
+# Flip current state without checking what it is
+skilltap toggle dev-toolkit:test-skipper
+```
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | State changed (or already in the requested state) |
+| `1` | Plugin or component not found |
+
+---
+
+## skilltap (no args) and skilltap status
+
+Print the project's status dashboard. The bare form and `skilltap status` produce identical output.
+
+```
+skilltap                    # status dashboard
+skilltap status [--json]    # explicit, pipeable
+```
+
+### Flags (status only)
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | boolean | false | Emit a machine-readable status object |
+
+### Behavior
+
+Prints a dashboard combining:
+- Project context (path, scope, manifest presence, agent targets)
+- Skills (managed, linked, unmanaged counts + per-skill details)
+- Plugins (active/inactive components)
+- MCP servers injected into each agent's config
+- Configured taps
+- Pending updates from the startup-check cache
+- Drift indicators when manifest disagrees with state
+
+Drift indicators are informational — `skilltap status` does not modify any state. Run `skilltap sync` for a full drift report or `skilltap sync --apply` to reconcile.
+
+### Examples
+
+```bash
+# Bare form (most common — fastest "what's installed" check)
+skilltap
+
+# Same output, explicit form
+skilltap status
+
+# Machine-readable for CI / scripting
+skilltap status --json
+```
+
+---
+
+## skilltap install (mcp-only install)
+
+The `mcp:` source prefix activates a separate install path that bypasses skill/plugin machinery and installs **only** the MCP server entries from the source.
+
+```
+skilltap install mcp:<source> [--also <agent>...] [--global | --project]
+```
+
+### Behavior
+
+1. Resolve `<source>` as if it were a plugin
+2. Extract its `[[servers]]` blocks (or `mcpServers` from `.mcp.json`)
+3. Inject the servers into each `--also` agent's MCP config (or the configured default agents)
+4. Track them in `state.json` under a separate `mcpServers` array (not `plugins`)
+
+Skill SCAFFOLDING is not run, no `SKILL.md` is required, no symlinks are created.
+
+### Removal
+
+```bash
+skilltap remove mcp:<source>
+```
+
+Removes the previously-injected entries from each agent's MCP config and drops the `state.json.mcpServers` record.
+
+### Examples
+
+```bash
+# Install just the MCP servers from a repo, no skills
+skilltap install mcp:corp/db-tools --also claude-code
+
+# Remove
+skilltap remove mcp:corp/db-tools
+```
 
 ---
 
@@ -1022,10 +1256,9 @@ skilltap tap list
 ```
   home        git   https://gitea.example.com/nathan/my-skills-tap     3 skills
   community   git   https://github.com/someone/awesome-skills-tap      12 skills
-  enterprise  http  https://skills.example.com/api/v1                  47 skills
 ```
 
-Columns: name, type (`git`/`http`), URL, skill count.
+Columns: name, type (always `git` since v2.0; HTTP taps were removed in Phase 31b), URL, skill count.
 
 If no taps configured: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
 
@@ -1603,7 +1836,7 @@ skilltap doctor [flags]
 
 ### Checks
 
-Doctor runs 9 independent checks and streams each result as it completes:
+Doctor runs 15 independent checks (9 legacy + 6 v2.0 additions) and streams each result as it completes:
 
 | # | Check | What it verifies |
 |---|-------|-----------------|
@@ -1616,6 +1849,12 @@ Doctor runs 9 independent checks and streams each result as it completes:
 | 7 | taps | Each configured tap has a valid local clone |
 | 8 | agents | Detected agent CLIs; configured agent is available |
 | 9 | npm | npm is on PATH and registry reachable (only if npm skills are installed) |
+| 10 | state.json | Validates the v2 canonical store. Fail on corrupt JSON / schema-invalid; `--fix` backs the file up to `<file>.bak` and creates fresh empty state. |
+| 11 | manifest drift | Compares `skilltap.toml` declared deps against `state.json` records. Warns on drift items (declared-but-not-installed, etc.). When `skilltap.toml` itself fails to parse, the issue is fixable: `--fix` backs up to `skilltap.toml.bak` and writes a fresh empty manifest. |
+| 12 | lockfile drift | Compares `skilltap.lock` against `state.json` SHAs. Warns on stale or missing entries; `--fix` regenerates missing entries from state. When `skilltap.lock` itself fails to parse, the issue is fixable: `--fix` backs up to `skilltap.lock.bak` and writes a fresh empty lockfile. |
+| 13 | plugin manifests | Validates every `.skilltap/<name>.toml` publish manifest in the working tree. Warns on parse errors or missing required fields. |
+| 14 | mcp consistency | Compares `state.json::mcpServers[]` against each agent's MCP config. Warns on missing entries (state has it but agent config doesn't) or orphan entries (agent config has a `skilltap:` entry with no state record). `--fix` prunes orphans. |
+| 15 | v0.x file orphans | Detects when `state.json` is populated AND legacy `installed.json` / `plugins.json` are still on disk. `--fix` renames each orphan to `<file>.v1.bak`. |
 
 A failure in one check does not skip subsequent checks.
 

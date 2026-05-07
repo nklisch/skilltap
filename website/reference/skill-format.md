@@ -47,7 +47,7 @@ The frontmatter is YAML between `---` delimiters at the top of the file. It is v
 | `license` | string | No | -- | License identifier (e.g., `MIT`, `Apache-2.0`) |
 | `compatibility` | string | No | Max 500 chars | Runtime requirements or agent compatibility notes |
 | `metadata` | object | No | String keys, any values | Arbitrary key-value pairs for additional metadata |
-| `allowed-tools` | string | No | Space-delimited list | *(Experimental)* Pre-approved tools the skill may use (e.g. `Bash(git:*) Read`). Support varies by agent. |
+| `allowed-tools` | string | No | Space-delimited list | *(Experimental — currently informational only.)* Pre-approved tools the skill may use (e.g. `Bash(git:*) Read`). Not validated by the skilltap frontmatter schema and not enforced — agents may read the field as a hint, but support varies. Don't rely on this for security. |
 
 ### Validation
 

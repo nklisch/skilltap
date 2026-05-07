@@ -15,7 +15,7 @@ The pattern is simple:
 1. **You create** a tap repo on any git host (GitHub, GitLab, Gitea, Bitbucket, self-hosted, wherever)
 2. **Others add** your tap once with a single command
 3. **Everyone installs** skills by name from your catalog — no URLs to copy-paste
-4. **When skills change**, subscribers run `skilltap update --all` to pull the latest and review what changed
+4. **When skills change**, subscribers run `skilltap update` to pull the latest and review what changed
 
 No external dependencies, no centralized service, no per-agent configuration.
 
@@ -128,7 +128,7 @@ If your credential helper is already configured for `git clone`, skilltap requir
 When skills are updated in the tap — bug fix, improved prompt, new capability — subscribers pull the latest with:
 
 ```bash
-skilltap update --all
+skilltap update
 ```
 
 This fetches each installed skill, diffs only the changed lines, re-runs the scan on the diff, and applies the update. Developers see what changed before it lands.
@@ -136,7 +136,7 @@ This fetches each installed skill, diffs only the changed lines, re-runs the sca
 For CI/CD or automated environments:
 
 ```bash
-skilltap update --all --yes
+skilltap update --yes
 ```
 
 ## Project manifest (v2.0 — pinned dependencies)
@@ -291,11 +291,14 @@ Results from all enabled registries appear together in `skilltap find` output, e
 
 Scanning is on by default (static mode) and runs locally on each developer's machine at install time. It's a useful backstop, not the primary control mechanism for most teams.
 
-If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops:
+If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops. Note that `on_warn` lives in the per-mode blocks (`[security.human]` for interactive use, `[security.agent]` for `--agent` / CI):
 
 ```toml
-[security]
+[security.human]
 on_warn = "fail"
+
+[security.agent]
+on_warn = "fail"   # already the default for agent mode
 ```
 
 See the [Security guide](/guide/security) for what static scanning catches and how the optional semantic scan works.
@@ -348,7 +351,7 @@ For a smaller group, the same three commands in a message or README works just a
 - [ ] Create a tap repo on your git host (`skilltap tap init`)
 - [ ] Add skills to `tap.json`
 - [ ] Share the `tap add` command with whoever should subscribe
-- [ ] Let subscribers know to run `skilltap update --all` when skills are updated
+- [ ] Let subscribers know to run `skilltap update` when skills are updated
 
 ## Related
 

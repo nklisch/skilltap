@@ -207,6 +207,7 @@ Controls how skilltap checks for and applies CLI updates, and how often it check
 | `auto_update` | `"off"` \| `"patch"` \| `"minor"` | `"off"` | Automatically install updates on startup. `"patch"` applies patch releases silently; `"minor"` applies patch and minor releases. Major releases are always notify-only regardless of this setting. Only applies to compiled binaries. |
 | `interval_hours` | integer | `24` | How often (in hours) to check GitHub for a new skilltap release. The check is non-blocking — it fires in the background and updates a local cache for the next run. Set to `0` to check on every invocation. |
 | `skill_check_interval_hours` | integer | `24` | How often (in hours) to check installed skills for updates in the background. When updates are available, a dim notice is printed to stderr. Use `skilltap update --check` to force an immediate check. |
+| `show_diff` | `"full"` \| `"stat"` \| `"none"` | `"full"` | Verbosity of the diff displayed when an update changes a skill's content. `"full"` shows the full unified diff; `"stat"` shows only file-level summary stats; `"none"` suppresses the diff entirely. |
 
 ### Example
 
@@ -218,6 +219,8 @@ auto_update = "patch"
 interval_hours = 12
 # Check installed skills for updates every 6 hours
 skill_check_interval_hours = 6
+# Show only file-level stats when a skill update changes content
+show_diff = "stat"
 ```
 
 When `auto_update` triggers, you'll see on stderr:
@@ -309,6 +312,40 @@ Top-level boolean. Controls whether install step details (fetched, scan clean) a
 ```toml
 # Suppress step details during install (show only success/error lines)
 verbose = false
+```
+
+---
+
+## `builtin_tap`
+
+Top-level boolean. Controls whether the built-in `skilltap-skills` tap (a curated catalog maintained by the project) is enabled.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `builtin_tap` | boolean | `true` | When `true`, the built-in tap is auto-cloned and searchable via `skilltap find`. Set to `false` to opt out — useful for fully air-gapped or corp-only setups where you only want your own taps to appear. |
+
+### Example
+
+```toml
+# Disable the built-in skilltap-skills tap
+builtin_tap = false
+```
+
+---
+
+## `default_git_host`
+
+Top-level string. The git host used to resolve `owner/repo` shorthand into a full URL.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `default_git_host` | string | `"https://github.com"` | Base URL for `owner/repo` shorthand. For example, with `default_git_host = "https://gitea.example.com"`, `skilltap install nathan/commit-helper` resolves to `https://gitea.example.com/nathan/commit-helper`. |
+
+### Example
+
+```toml
+# Resolve owner/repo shorthand against an internal Gitea
+default_git_host = "https://gitea.corp.example.com"
 ```
 
 ---
@@ -446,17 +483,26 @@ Override priority: named tap match > source type match > mode default. CLI flags
 
 ### Worked Example: Power User
 
+`scan` / `on_warn` / `require_scan` live in the per-mode blocks (`[security.human]` for interactive use, `[security.agent]` for `--agent` / CI). The shared `[security]` block holds keys common to both modes (`agent_cli`, `threshold`, `max_size`, `ollama_model`).
+
 ```toml
 [defaults]
 also = ["claude-code", "cursor"]
 yes = true
 scope = "global"
 
-[security]
+[security.human]
 scan = "semantic"
 on_warn = "fail"
 require_scan = true
-agent = "claude"
+
+[security.agent]
+scan = "semantic"
+on_warn = "fail"
+require_scan = true
+
+[security]
+agent_cli = "claude"
 threshold = 3
 max_size = 102400
 ```
@@ -468,11 +514,11 @@ skilltap install <url>
 # -> auto-select all skills (yes = true)
 # -> scope = global (no prompt)
 # -> symlinks to claude-code + cursor
-# -> Layer 1 + Layer 2 scan
-# -> abort on any warning (on_warn = fail)
-# -> --skip-scan blocked (require_scan = true)
-# -> claude used for semantic scan
-# -> flag chunks scoring >= 3
+# -> Layer 1 + Layer 2 scan (security.human.scan = semantic)
+# -> abort on any warning (security.human.on_warn = fail)
+# -> --skip-scan blocked (security.human.require_scan = true)
+# -> claude used for semantic scan (security.agent_cli)
+# -> flag chunks scoring >= 3 (security.threshold)
 
 skilltap install <url> --no-strict
 # -> same as above but warnings prompt instead of abort
@@ -490,9 +536,16 @@ skilltap install <url> --project
 [defaults]
 also = ["claude-code"]
 
-[security]
+[security.human]
 scan = "static"
-agent = "claude"
+
+[security.agent]
+scan = "static"
+on_warn = "fail"           # default for agent mode anyway
+require_scan = true        # default for agent mode anyway
+
+[security]
+agent_cli = "claude"
 
 [agent-mode]
 enabled = true

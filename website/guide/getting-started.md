@@ -41,10 +41,6 @@ skilltap walks you through the process interactively:
 ```
 ◆ skilltap
 
-◆ Install to:
-│ ● Global (~/.agents/skills/)
-│ ○ Project (.agents/skills/)
-
 ◆ Which agents should this skill be available to?
 │ ◼ Claude Code
 │ ◻ Cursor
@@ -67,7 +63,7 @@ skilltap walks you through the process interactively:
 
 Here's what happened:
 
-1. You chose where to install (global or project scope)
+1. **Scope was inferred automatically** (smart-scope-default in v2.1): inside a git repo → project scope (`.agents/skills/`); outside → global (`~/.agents/skills/`). No prompt. Pass `--project` or `--global` to override.
 2. You selected which agents should see the skill (symlinks are created automatically)
 3. skilltap cloned the repo
 4. A static security scan checked all files for suspicious content
@@ -76,17 +72,31 @@ Here's what happened:
 
 If the scan had found warnings, skilltap would show them and offer to run a deeper [semantic scan](./security) using your local AI agent before asking you to confirm.
 
-Skip all prompts with `--yes --global` for clean CI-style installs:
+Run non-interactively for CI / scripting via `--agent` (forces plain-text output, hard-fails on warnings, auto-yes for clean installs):
+
+```bash
+skilltap install user/commit-helper --agent
+```
+
+`--yes --global` also works but doesn't activate the agent-mode security policy or plain-text output:
 
 ```bash
 skilltap install user/commit-helper --global --yes
 ```
 
-You can skip the scope prompt with `--global` or `--project`:
+To override the smart-scope inference, pass `--global` or `--project`:
 
 ```bash
 skilltap install user/commit-helper --global
 ```
+
+::: tip Preview before installing
+Use `skilltap try <source>` to clone, scan, and inspect a source repo without writing anything to your install paths. Useful for unfamiliar sources.
+:::
+
+::: info Coming from skilltap v0.x?
+Run `skilltap migrate` once to convert your `installed.json` / `plugins.json` into the canonical `state.json`. A soft startup notice will remind you if v1 markers are detected.
+:::
 
 ### Agent symlinks
 

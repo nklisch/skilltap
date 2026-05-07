@@ -49,9 +49,13 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Multi-source taps.** Configure multiple skill indexes (taps) — your own, a friend's, a community collection. Search across all of them with `skilltap find`.
 
-**Plugin support.** When a repo contains `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. `skilltap plugin` lists, inspects, toggles, and removes installed plugins.
+**Plugin support.** When a repo contains a plugin manifest, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. The native v2.0 publish format is `.skilltap/<plugin-name>.toml` (TOML, with explicit `publish = true` opt-in). The legacy `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` formats continue to be readable inputs. `skilltap plugin` lists, inspects, toggles, and removes installed plugins.
 
 **Project manifest + lockfile (v2.0).** Pin a project's skill dependencies in `skilltap.toml` and `skilltap.lock`. Teammates check out the repo and run `skilltap sync --apply` to install the exact pinned versions. Cargo-style determinism for AI-agent skill setup.
+
+**Read-only preview.** `skilltap try <source>` clones, scans, and inspects a source — without writing anything to install paths or state. Useful for vetting unfamiliar sources before committing to install.
+
+**One-shot v0.x → v2 migration.** Already running v0.x with `installed.json`? Run `skilltap migrate` once to convert your state to the canonical `state.json` and translate v1 config keys.
 
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 

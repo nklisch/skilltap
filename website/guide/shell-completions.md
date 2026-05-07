@@ -63,14 +63,21 @@ The directory is created if it doesn't exist. If a completion file already exist
 
 ```
 skilltap <TAB>
-  install  remove  list  update  find  link  unlink  info
-  create  verify  config  tap  doctor  completions
+  install  remove  list  update  status  sync  try  migrate  find
+  toggle  enable  disable  link  unlink  info  create  verify
+  doctor  completions  self-update  skills  plugin  tap  config
+
+skilltap skills <TAB>
+  remove  adopt  move  info  link  unlink
+
+skilltap plugin <TAB>
+  info  toggle  remove
 
 skilltap tap <TAB>
-  add  remove  list  update  init
+  add  remove  list  update  info  init  install
 
 skilltap config <TAB>
-  agent-mode
+  get  set  edit  security  agent-mode  telemetry
 ```
 
 ### Flags

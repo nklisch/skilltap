@@ -85,6 +85,39 @@ skilltap config set defaults.yes true
 
 Only preference keys are settable via `config set`. Security policy keys, agent mode, and telemetry are blocked -- use the interactive wizard or dedicated subcommands for those. See the [CLI reference](/reference/cli#skilltap-config-set) for the full list of settable keys.
 
+### Open the config in `$EDITOR`
+
+For sweeping edits, open the file directly:
+
+```bash
+skilltap config edit
+```
+
+This opens `~/.config/skilltap/config.toml` in your `$EDITOR` (falls back to `nano`). On exit, skilltap re-validates the file against the schema and reports parse/schema errors before considering the edit complete. Useful when you want to make several related changes at once instead of running `config set` repeatedly.
+
+### Telemetry
+
+`skilltap` collects no telemetry by default. To opt in (or check status):
+
+```bash
+skilltap config telemetry status     # show current state + reasoning
+skilltap config telemetry enable     # opt in (anonymous, see below)
+skilltap config telemetry disable    # opt out (default)
+```
+
+If enabled, an anonymous one-way `anonymous_id` (UUID written into `config.toml`) accompanies aggregated event counts. The `DO_NOT_TRACK` environment variable always wins regardless of config; setting it to any value disables telemetry for that invocation. See the [Security guide](/guide/security#telemetry) for what's collected.
+
+### Self-update
+
+To upgrade the skilltap binary itself (when installed as a prebuilt binary):
+
+```bash
+skilltap self-update           # check + interactively confirm
+skilltap self-update --yes     # apply without confirmation
+```
+
+The auto-update behavior on startup is configured via the `[updates]` block (see [config-options.md](/reference/config-options#updates)). `auto_update = "off"` (default) means startup checks are notify-only.
+
 ## Config reference
 
 ### `[defaults]`

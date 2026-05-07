@@ -180,7 +180,7 @@ skilltap install commit-helper --project
 Installs to `.agents/skills/commit-helper/` inside the current project (determined by the nearest `.git` directory). Only available when working in that project.
 
 ::: tip Commit `.agents/state.json` and `skilltap.lock`
-When you install a project-scoped skill, skilltap records it in `.agents/state.json` (and `skilltap.lock` if you've run `skilltap.toml`-based dependency management). **Commit both files** — they're the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact. v0.x users with existing `.agents/installed.json` will have it transparently migrated on the next install — `skilltap doctor --fix` cleans up the orphan `installed.json` afterward.
+When you install a project-scoped skill, skilltap records it in `.agents/state.json` (and `skilltap.lock` if you've run `skilltap.toml`-based dependency management). **Commit both files** — they're the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact. v0.x users with existing `.agents/installed.json` see a one-time soft startup notice suggesting `skilltap migrate`; install does NOT auto-migrate. After running `skilltap migrate`, the legacy `installed.json` is renamed to `installed.json.v1.bak` and `state.json` becomes the canonical store. If a project still has both files after migration, `skilltap doctor --fix` cleans up the orphan.
 :::
 
 ### Smart scope default (v2.1)
