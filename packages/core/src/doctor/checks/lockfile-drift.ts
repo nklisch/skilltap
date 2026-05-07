@@ -6,6 +6,7 @@ import {
   lockfileExists,
   saveLockfile,
 } from "../../manifest";
+import { recoverLockfile } from "../../manifest/recover";
 import type { State } from "../../state/schema";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
@@ -33,7 +34,17 @@ export async function checkLockfileDrift(
     return {
       name: "lockfile drift",
       status: "fail",
-      issues: [{ message: result.error.message, fixable: false }],
+      issues: [
+        {
+          message: `Failed to load skilltap.lock: ${result.error.message}`,
+          fixable: true,
+          fixDescription:
+            "backed up to skilltap.lock.bak, created fresh empty lockfile",
+          fix: async () => {
+            await recoverLockfile(projectRoot);
+          },
+        },
+      ],
     };
   }
   const lockfile = result.value;

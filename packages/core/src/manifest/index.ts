@@ -10,6 +10,7 @@ export {
 } from "./paths";
 export { discoverPublishablePlugins, type PublishDiscovery } from "./publish";
 export * from "./range";
+export { recoverLockfile, recoverManifest } from "./recover";
 export { saveManifest } from "./save";
 export * from "./schemas";
 export {

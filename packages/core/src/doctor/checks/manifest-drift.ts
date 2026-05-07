@@ -1,4 +1,5 @@
 import { loadLockfile, loadManifest, manifestExists } from "../../manifest";
+import { recoverManifest } from "../../manifest/recover";
 import { type Lockfile, LockfileSchema } from "../../manifest/schemas";
 import type { State } from "../../state/schema";
 import { detectDrift } from "../../sync/drift";
@@ -39,8 +40,13 @@ export async function checkManifestDrift(
       status: "fail",
       issues: [
         {
-          message: `Failed to load manifest: ${manifestResult.error.message}`,
-          fixable: false,
+          message: `Failed to load skilltap.toml: ${manifestResult.error.message}`,
+          fixable: true,
+          fixDescription:
+            "backed up to skilltap.toml.bak, created fresh empty manifest",
+          fix: async () => {
+            await recoverManifest(projectRoot);
+          },
         },
       ],
     };

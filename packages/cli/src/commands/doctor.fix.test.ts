@@ -308,3 +308,57 @@ describe("doctor --fix — v0.x installed.json renamed to .v1.bak (Test 25)", ()
     }
   });
 });
+
+// ─── Test 26: doctor --fix recovers a corrupt skilltap.toml ───────────────────
+//
+// Manifest-drift check now treats loadManifest failures as fixable: backup the
+// corrupt file to skilltap.toml.bak and write a fresh empty manifest. This is
+// the same recovery path the install preflight uses in interactive mode.
+
+describe("doctor --fix — corrupt skilltap.toml (Test 26)", () => {
+  test("backs up the corrupt manifest to .bak and writes a fresh empty manifest", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "skilltap-doctor-"));
+    try {
+      await initRepo(projectRoot);
+
+      const manifestPath = join(projectRoot, "skilltap.toml");
+      const brokenContent = '[skills\nthis = "is a broken table\n';
+      await writeFile(manifestPath, brokenContent);
+
+      // doctor needs a project-rooted state.json so the manifest-drift check
+      // actually runs (see manifest-drift.ts: it returns 'n/a' when state is null).
+      await mkdir(join(projectRoot, ".agents"), { recursive: true });
+      await writeFile(
+        join(projectRoot, ".agents", "state.json"),
+        JSON.stringify({ version: 2, skills: [], plugins: [] }),
+      );
+
+      const { exitCode, stdout } = await runSkilltap(
+        ["doctor", "--fix"],
+        homeDir,
+        configDir,
+        projectRoot,
+      );
+
+      // After fix: original content survives at .bak, manifest now parseable.
+      const bakAfter = await readFile(`${manifestPath}.bak`, "utf8");
+      expect(bakAfter).toBe(brokenContent);
+
+      const manifestAfter = await readFile(manifestPath, "utf8");
+      // Fresh manifest is empty (all-defaults). loadManifest will succeed on it.
+      expect(manifestAfter).toBe("");
+
+      // Doctor surfaces the fix (✓ marker on fixed issue).
+      expect(stdout).toContain("✓");
+
+      // Note: doctor's exit code is 1 even after a successful fix because
+      // runDoctor computes hasFailure from the original check status (which
+      // remains "fail" after the fix runs). The fix IS performed — see the
+      // bak/manifest assertions above. This mirrors the existing state-v2
+      // behavior documented in Test 23.
+      expect([0, 1]).toContain(exitCode);
+    } finally {
+      await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+});

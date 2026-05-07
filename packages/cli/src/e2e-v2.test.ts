@@ -434,50 +434,103 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     }
   });
 
-  // ── 10. Malformed skilltap.toml: install proceeds but manifest is not updated ──
+  // ── 10. Malformed skilltap.toml: agent mode aborts; interactive auto-recovers ──
 
-  test("10. malformed skilltap.toml does not block install — manifest update is silently skipped", async () => {
-    // Isolated project dir so the corrupt manifest is contained.
+  // The install preflight (cli/src/commands/install.ts: preflightManifestValidity)
+  // detects a corrupt skilltap.toml at install start and treats the two modes
+  // differently to avoid leaving the project in a half-managed state:
+  //
+  //   - Agent mode:       refuse + exit 1, point to `doctor --fix`. Scripts and
+  //                        CI must never silently mutate user files.
+  //   - Interactive mode: back up the corrupt file to skilltap.toml.bak, write
+  //                        a fresh empty manifest, announce loudly, proceed.
+  //
+  // Without this preflight, the install would proceed and addSkillToManifest's
+  // silent-skip would swallow the manifest update — leaving state.json updated
+  // but skilltap.toml still corrupt and skilltap.lock missing the new entry.
+
+  test("10a. malformed skilltap.toml in --agent mode aborts before any install work", async () => {
     const malformedDir = await makeTmpDir();
     try {
       await initRepo(malformedDir);
-      // Write a deliberately broken TOML file: unclosed bracket + unterminated string.
       await writeFile(
         join(malformedDir, "skilltap.toml"),
         '[skills\nthis = "is a broken table\n',
       );
+
+      // Note: --agent mode requires security scanning, so --skip-scan is
+      // rejected upfront. Drop it; the preflight aborts before scan runs.
+      const { exitCode, stderr } = await run(
+        ["install", skillRepo.path, "--project", "--agent"],
+        { cwd: malformedDir },
+      );
+
+      expect(exitCode).toBe(1);
+      expect(stderr).toContain("skilltap.toml is corrupt");
+      expect(stderr).toContain("doctor --fix");
+
+      // No install side effects — preflight aborts before any work.
+      const stateExists = await Bun.file(
+        join(malformedDir, ".agents", "state.json"),
+      ).exists();
+      expect(stateExists).toBe(false);
+      const installDirExists = await Bun.file(
+        join(malformedDir, ".agents", "skills", "standalone-skill"),
+      ).exists();
+      expect(installDirExists).toBe(false);
+
+      // The corrupt manifest itself is left untouched in agent mode (the user
+      // / script needs to look at it; we don't mutate user files silently).
+      const manifestOnDisk = await Bun.file(
+        join(malformedDir, "skilltap.toml"),
+      ).text();
+      expect(manifestOnDisk).toContain("[skills");
+      const bakExists = await Bun.file(
+        join(malformedDir, "skilltap.toml.bak"),
+      ).exists();
+      expect(bakExists).toBe(false);
+    } finally {
+      await removeTmpDir(malformedDir);
+    }
+  });
+
+  test("10b. malformed skilltap.toml in interactive mode auto-recovers and proceeds", async () => {
+    const malformedDir = await makeTmpDir();
+    try {
+      await initRepo(malformedDir);
+      const brokenContent = '[skills\nthis = "is a broken table\n';
+      await writeFile(join(malformedDir, "skilltap.toml"), brokenContent);
 
       const { exitCode } = await run(
         ["install", skillRepo.path, "--project", "--yes", "--skip-scan"],
         { cwd: malformedDir },
       );
 
-      // Behavioral note: core/src/manifest/update.ts silences manifest I/O errors
-      // (loadManifest failure → ok(undefined)) so install exits 0 even with a
-      // corrupt TOML file. The skill is installed and state.json is written; only
-      // the manifest update is skipped.
       expect(exitCode).toBe(0);
 
-      // state.json IS written — install succeeded at the state level.
-      const stateFile = Bun.file(join(malformedDir, ".agents", "state.json"));
-      expect(await stateFile.exists()).toBe(true);
-      const state = JSON.parse(await stateFile.text()) as {
-        version: number;
-        skills: Array<{ name: string }>;
-      };
+      // The corrupt file is preserved at .bak so the user can recover content.
+      const bakOnDisk = await Bun.file(
+        join(malformedDir, "skilltap.toml.bak"),
+      ).text();
+      expect(bakOnDisk).toBe(brokenContent);
+
+      // The fresh manifest now has the install's skill entry (no longer empty
+      // because addSkillToManifest ran successfully against the recovered
+      // file at the end of install).
+      const manifestResult = await loadManifest(malformedDir);
+      expect(manifestResult.ok).toBe(true);
+      if (!manifestResult.ok) return;
+      expect(Object.keys(manifestResult.value.skills)).toContain(
+        skillRepo.path,
+      );
+
+      // state.json reflects the install — no half-managed state.
+      const state = JSON.parse(
+        await readFile(join(malformedDir, ".agents", "state.json"), "utf8"),
+      ) as { skills: Array<{ name: string }> };
       expect(state.skills.some((s) => s.name === "standalone-skill")).toBe(
         true,
       );
-
-      // The manifest on disk must still be malformed (was not overwritten
-      // because the parse failed before the save step).
-      const manifestOnDisk = await Bun.file(
-        join(malformedDir, "skilltap.toml"),
-      ).text();
-      expect(manifestOnDisk).toContain("[skills");
-      // The newly installed skill's path should NOT appear in the manifest
-      // because the manifest write was skipped.
-      expect(manifestOnDisk).not.toContain(skillRepo.path);
     } finally {
       await removeTmpDir(malformedDir);
     }

@@ -16,14 +16,22 @@ import {
   installMcpOnly,
   installSkill,
   isBuiltinTapCloned,
+  loadManifest,
+  manifestExists,
   parseMcpRef,
+  recoverManifest,
   saveConfig,
   skillInstallDir,
   updateSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
-import { agentError, agentSecurityBlock, agentSuccess } from "../ui/agent-out";
+import {
+  agentError,
+  agentSecurityBlock,
+  agentSuccess,
+  exitWithError,
+} from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
 import { createInstallCallbacks } from "../ui/install-callbacks";
 import { createStepLogger } from "../ui/install-steps";
@@ -145,6 +153,52 @@ export default defineCommand({
   },
 });
 
+// ─── Manifest preflight (corruption recovery) ────────────────────────────────
+
+/**
+ * If the project's skilltap.toml exists but won't parse, decide what to do
+ * BEFORE the install runs any heavy work (clone, scan, file placement).
+ *
+ * Without this preflight, install would proceed and silently swallow the
+ * manifest update at the end (addSkillToManifest treats loadManifest failure
+ * as a no-op so a "manifest hiccup doesn't roll back a successful install").
+ * The result was a half-managed project: state.json updated, files placed,
+ * skilltap.toml still corrupt, lockfile missing the new entry.
+ *
+ * Behavior:
+ * - **Agent mode**: refuse and exit 1 with a pointer to `doctor --fix`. CI
+ *   and scripts should never silently mutate user files.
+ * - **Interactive mode**: auto-recover (backup to .bak, reset to empty),
+ *   announce loudly, then proceed. The user gets their install AND a clean
+ *   recovery path (their old content survives at skilltap.toml.bak).
+ */
+async function preflightManifestValidity(
+  projectRoot: string | undefined,
+  agentMode: boolean,
+): Promise<void> {
+  if (!projectRoot) return;
+  if (!(await manifestExists(projectRoot))) return;
+
+  const result = await loadManifest(projectRoot);
+  if (result.ok) return;
+
+  if (agentMode) {
+    // exitWithError's agent-mode branch drops the hint, so fold the recovery
+    // pointer into the message itself — the user/script needs to see both.
+    exitWithError(
+      true,
+      `skilltap.toml is corrupt: ${result.error.message}\n` +
+        "Run 'skilltap doctor --fix' to back up the corrupt manifest and reset to empty, then retry.",
+    );
+  }
+
+  log.warn(`skilltap.toml is corrupt: ${result.error.message}`);
+  log.info(
+    "Backing up to skilltap.toml.bak and resetting to empty before install.",
+  );
+  await recoverManifest(projectRoot);
+}
+
 // ─── MCP-only install (Phase 35b) ─────────────────────────────────────────────
 
 async function runMcpInstall(
@@ -203,6 +257,11 @@ async function runAgentMode(
 ): Promise<void> {
   const scope = policy.scope as "global" | "project";
   const projectRoot = scope === "project" ? await findProjectRoot() : undefined;
+
+  // Refuse to proceed if the project's skilltap.toml is corrupt — agent mode
+  // never silently mutates user files. (Interactive mode auto-recovers; see
+  // preflightManifestValidity.)
+  await preflightManifestValidity(projectRoot, true);
 
   let agent: AgentAdapter | undefined;
   if (policy.scanMode === "semantic") {
@@ -351,6 +410,11 @@ async function runInteractiveMode(
     scope = resolved.scope;
     projectRoot = resolved.projectRoot;
   }
+
+  // Auto-recover a corrupt skilltap.toml before doing any install work, so
+  // we don't end up with state.json updated + manifest stale. The recovery
+  // backs up the corrupt file to skilltap.toml.bak and resets to empty.
+  await preflightManifestValidity(projectRoot, false);
 
   // Prompt for agent symlinks unless --also was explicitly passed, --yes is set,
   // or the user already has a saved default in config
