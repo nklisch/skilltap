@@ -124,13 +124,22 @@ Notes:
 - The semantic offer prompt only appears when static warnings are found and `--semantic` was not passed.
 - When the semantic scan runs for the first time and no agent is configured, skilltap prompts to pick an agent CLI. The choice is saved to `config.toml`.
 
-::: info Scope always prompts
-`--yes` does **not** skip the scope prompt. Use `--yes --global` or `--yes --project` for fully non-interactive installs.
+::: info v2.1 — smart-scope-default
+The "Scope: Prompt" entries in the table above are stale relative to v2.1. When neither `--project` nor `--global` is passed and `defaults.scope` is empty, scope is **inferred** from cwd: inside a git repo → `project`; outside → `global`. There is no scope prompt. Pass an explicit flag or set `defaults.scope` to override.
 :::
 
 ::: warning Security is a hard gate
 `--yes` does **not** bypass security warnings. `--strict` goes further: any warning is a hard failure. The only way to skip scanning entirely is `--skip-scan`, which is blocked when `require_scan = true`.
 :::
+
+### Manifest preflight (corrupt skilltap.toml)
+
+When scope resolves to `project` and a `skilltap.toml` is present at the project root, install loads the manifest before any clone/scan/file work. If parsing fails:
+
+- **Agent mode** (`--agent` / `SKILLTAP_AGENT=1`): refuse with exit 1 and a pointer to `skilltap doctor --fix`. The corrupt file is not modified — scripts and CI must never silently mutate user files.
+- **Interactive mode**: back up the corrupt file to `skilltap.toml.bak`, write a fresh empty manifest, log the rename, then proceed with install. Your original content is preserved at `.bak` for recovery.
+
+The same recovery action is wired into `skilltap doctor --fix` for the `manifest drift` check (and into `lockfile drift` for `skilltap.lock`). See [Doctor — manifest drift](/guide/doctor#v2-0-checks-10-15) for details.
 
 ### Examples
 
@@ -426,6 +435,75 @@ skilltap update --check
 # Force re-apply even if already up to date (re-runs security scan)
 skilltap update --force
 ```
+
+---
+
+## skilltap sync
+
+Reconcile `skilltap.toml` (manifest) ↔ `skilltap.lock` (lockfile) ↔ `state.json` (on-disk install state). Read-only by default; `--apply` executes the plan.
+
+```
+skilltap sync [--apply] [--strict] [--json]
+```
+
+### Project-root requirement
+
+`sync` must be run inside a project — either a directory containing `skilltap.toml` or any descendant of a `.git` ancestor. Outside both, it exits 1:
+
+```
+error: skilltap sync requires a project root (looks for .git or skilltap.toml).
+```
+
+### Flags
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--apply` | boolean | false | Execute the drift plan via `install`/`remove`. Order: removes → ref-changes → adds → bookkeeping. |
+| `--strict` | boolean | false | Only meaningful with `--apply`; halt on first failure instead of continuing. |
+| `--json` | boolean | false | Emit the plan as JSON. Read-only mode: `{ inSync, items }`. With `--apply`: `{ inSync, applied, skipped, failed, results }`. |
+
+### Drift kinds
+
+| Kind | Meaning | Apply behavior |
+|------|---------|----------------|
+| `add` | declared in manifest, not installed | install at locked ref (or resolve range if no lockfile entry) |
+| `remove` | installed, not declared in manifest | uninstall |
+| `ref-mismatch` | declared range ≠ locked ref | install at the declared/resolved ref |
+| `lock-stale` | locked sha ≠ installed sha | reported, **skipped** by `--apply` (user fixes manually) |
+| `lock-missing` | installed but no lockfile entry | reported, **skipped** by `--apply` |
+| `lock-orphan` | lockfile entry, no manifest, no state | reported, **skipped** by `--apply` |
+
+Lock-only drift (the bottom three rows) is bookkeeping that `--apply` doesn't auto-resolve. Edit the lockfile or run `install`/`remove` to converge.
+
+### Behavior
+
+- **In-sync**: prints `✓ In sync. Manifest, lockfile, and state agree.` and exits 0.
+- **Drift in read-only mode**: prints a drift report grouped by kind (`+ add`, `- remove`, `~ ref mismatch`, `⚠ lock stale`, etc.) and ends with `note: run skilltap sync --apply to execute this plan.` Exits 0 — drift alone is not a failure in read-only mode.
+- **`--apply`**: runs each plan item. Without `--strict`, a per-item failure is reported but apply continues; final summary line is `Sync apply complete: <applied> applied, <skipped> skipped, <failed> failed`. Exit 1 if any failures.
+- **`--apply --strict`**: stop on first failure, exit 1.
+
+### Examples
+
+```bash
+# Read-only drift report (safe to run anywhere)
+skilltap sync
+
+# Cargo-style: clone a repo with a committed skilltap.lock, install exactly what it pins
+skilltap sync --apply
+
+# CI / scripting: machine-readable plan
+skilltap sync --json
+
+# Halt at first failure during apply
+skilltap sync --apply --strict
+```
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | In sync, OR drift reported in read-only mode, OR apply succeeded |
+| `1` | No project root found, OR apply had failures (any in non-strict; first one in strict mode) |
 
 ---
 

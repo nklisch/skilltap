@@ -183,21 +183,24 @@ Installs to `.agents/skills/commit-helper/` inside the current project (determin
 When you install a project-scoped skill, skilltap records it in `.agents/state.json` (and `skilltap.lock` if you've run `skilltap.toml`-based dependency management). **Commit both files** — they're the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact. v0.x users with existing `.agents/installed.json` will have it transparently migrated on the next install — `skilltap doctor --fix` cleans up the orphan `installed.json` afterward.
 :::
 
-### Prompted scope
+### Smart scope default (v2.1)
 
-If you don't pass `--global` or `--project`, skilltap asks:
+If you don't pass `--global` or `--project`, skilltap **infers** the scope automatically — there is no prompt:
 
-```
-Install to:
-  ● Global (~/.agents/skills/)
-  ○ Project (.agents/skills/)
-```
+- Inside a git repo → `--project`
+- Outside any git repo → `--global`
 
-You can set a default scope in your config so you're never prompted. See [Configuration](/guide/configuration).
+The inferred scope is reported in the install output. To override, pass `--project` or `--global` explicitly, or set `defaults.scope = "global"`/`"project"` in your config (`~/.config/skilltap/config.toml`).
 
-::: tip
-The `--yes` flag does **not** skip the scope prompt. Use `--yes --global` or `--yes --project` for fully non-interactive installs.
-:::
+### Recovering from a broken `skilltap.toml`
+
+If your project's `skilltap.toml` has a TOML parse error or schema mismatch, install behavior depends on the mode:
+
+- **Interactive mode**: install auto-recovers before doing any work. The corrupt file is backed up to `skilltap.toml.bak` (your original content is preserved there), a fresh empty manifest is written in its place, and the install proceeds. You'll see a warning in the install output explaining what happened.
+
+- **Agent mode** (`--agent` or `SKILLTAP_AGENT=1`): install refuses and exits 1 with a pointer to `skilltap doctor --fix`. The corrupt file is left untouched — scripts and CI shouldn't silently mutate your committed files. Run `skilltap doctor --fix` to perform the same backup-and-reset, then retry the install.
+
+You can also run `skilltap doctor --fix` directly any time to recover a corrupt `skilltap.toml` (or `skilltap.lock`) without performing an install.
 
 ## Agent symlinks
 

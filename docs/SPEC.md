@@ -74,6 +74,13 @@ Found 2 skills: termtube-dev, termtube-review
 Auto-selecting all (--yes)
 ```
 
+**Manifest preflight (corrupt skilltap.toml handling):** When scope resolves to `project` and a `skilltap.toml` exists at the project root, install attempts `loadManifest` before any other work (clone, scan, file placement). If parsing fails:
+
+- **Agent mode** (`--agent` / `SKILLTAP_AGENT=1`): refuse and exit 1 with `skilltap.toml is corrupt: <details>` followed by `Run 'skilltap doctor --fix' to back up the corrupt manifest and reset to empty, then retry.` The user's files are left untouched — scripts and CI must never silently mutate user state.
+- **Interactive mode**: back up the corrupt file to `skilltap.toml.bak`, write a fresh empty manifest, log the rename via clack's `log.warn` + `log.info`, then proceed with install. The user's original content survives at `.bak` for recovery.
+
+This guard exists because `addSkillToManifest` silently swallows manifest-load failures (so a manifest hiccup mid-install doesn't roll back a successful install) — without the upfront preflight, an install against a corrupt manifest would update `state.json` and place files but leave `skilltap.toml` corrupt and `skilltap.lock` missing the new entry. The same recovery (`recoverManifest` in `core/src/manifest/recover.ts`) is wired as the fix action for the doctor `manifest drift` and `lockfile drift` checks (see [v2.0 Doctor Upgrades](#v20-doctor-upgrades)).
+
 **Source resolution order:**
 
 1. If `source` starts with `https://`, `http://`, `git@`, `ssh://` → git adapter
@@ -3149,6 +3156,8 @@ skilltap sync [--apply] [--strict] [--json]
 
 Reconciles three sources of truth: manifest (`skilltap.toml`), lockfile (`skilltap.lock`), on-disk state (`state.json`).
 
+**Project-root requirement:** sync resolves the project root via `findManifestRoot()` (walks up looking for `skilltap.toml`) with a fallback to `isInGitRepo()`. If neither exists, sync exits 1 with `skilltap sync requires a project root (looks for .git or skilltap.toml).` — there is nothing meaningful to reconcile outside a project, and the previous "trivially in-sync" no-op was misleading.
+
 **Default behavior (no flags):** scan all three, print a drift report grouped by kind. If everything agrees, prints `✓ In sync. Manifest, lockfile, and state agree.` and exits 0. Otherwise prints the drift items (target, source, reason, declared/installed/locked refs) and ends with `note: run skilltap sync --apply to execute this plan.` — does **not** auto-apply or prompt; this is a read-only inspection by default.
 
 **Flags:**
@@ -3255,12 +3264,14 @@ The `mcp:` prefix bypasses skill/plugin machinery entirely. Resolves the source 
 
 `skilltap doctor` adds these v2.0 checks alongside the existing 9:
 
-- **Manifest drift** — declared in `skilltap.toml` but not in `state.json`, or vice versa.
-- **Lockfile drift** — locked SHA doesn't match installed SHA.
+- **Manifest drift** — declared in `skilltap.toml` but not in `state.json`, or vice versa. **When `skilltap.toml` fails to parse**, the issue is `fixable: true` (`--fix` backs the corrupt file up to `skilltap.toml.bak` and writes a fresh empty manifest via `recoverManifest` in `core/src/manifest/recover.ts`).
+- **Lockfile drift** — locked SHA doesn't match installed SHA. **When `skilltap.lock` fails to parse**, the issue is `fixable: true` (`--fix` backs the corrupt file up to `skilltap.lock.bak` and writes a fresh empty lockfile via `recoverLockfile`).
 - **Plugin manifest validity** — every `.skilltap/<plugin>.toml` parses and has required fields.
 - **MCP injection consistency** — every server in `state.json` is present in the corresponding agent's MCP config; every server in agent configs with the `skilltap:` prefix has a corresponding state entry.
 
-`--fix` extends to: prune state-orphan MCP entries from agent configs, regenerate lockfile entries from state if the lockfile is missing, recreate symlinks as before.
+`--fix` extends to: prune state-orphan MCP entries from agent configs, regenerate lockfile entries from state if the lockfile is missing, recreate symlinks as before. The manifest/lockfile corruption fixes follow the same backup-and-reset pattern that `state-v2` already used for corrupt `state.json`.
+
+**Known divergence:** when a fix is applied successfully, the originating check's `status` field stays `"fail"` (the status reflects what was found, not what was repaired), so `runDoctor` computes `hasFailure = true` and exits 1. The fix is performed correctly — the `.bak` is created and the fresh file is written — but the exit code may not be 0 even when nothing else is wrong. Recommended cleanup: have fixers flip the issue's `fixed` field to `true` (already done) AND report a synthetic `pass` status when all of a check's issues are fixed; then `hasFailure` would correctly skip the now-repaired check.
 
 ### v2.0 Removed Features
 

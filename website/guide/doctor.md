@@ -93,9 +93,9 @@ Phase 36 added five v2-specific checks. They appear in `skilltap doctor` output 
 
 **10. state.json** — Validates the v2 canonical store (one per scope). Fail on corrupt JSON / schema-invalid; `--fix` backs up to `<file>.bak` and recreates fresh.
 
-**11. manifest drift** — Compares `skilltap.toml` declared dependencies against `state.json` records. Warns about declared-but-not-installed and installed-but-not-declared entries (not fixable — manifest edits are user responsibility).
+**11. manifest drift** — Compares `skilltap.toml` declared dependencies against `state.json` records. Warns about declared-but-not-installed and installed-but-not-declared entries (drift items themselves aren't fixable — manifest edits are user responsibility; run `skilltap sync` or edit the file). **If `skilltap.toml` itself fails to parse**, the issue is fixable: `--fix` backs the corrupt file up to `skilltap.toml.bak` and writes a fresh empty manifest. The same recovery is invoked automatically when you run `skilltap install` in interactive mode against a corrupt manifest (see [Installing skills — Recovering from a broken skilltap.toml](/guide/installing-skills#recovering-from-a-broken-skilltap-toml)).
 
-**12. lockfile drift** — Compares `skilltap.lock` against `state.json` SHAs. Warns on stale (lockfile entry has no state record) or orphan (state record has no lockfile entry); `--fix` regenerates missing lockfile entries from state.
+**12. lockfile drift** — Compares `skilltap.lock` against `state.json` SHAs. Warns on stale (lockfile entry has no state record) or orphan (state record has no lockfile entry); `--fix` regenerates missing lockfile entries from state. **If `skilltap.lock` itself fails to parse**, the issue is fixable: `--fix` backs the corrupt file up to `skilltap.lock.bak` and writes a fresh empty lockfile.
 
 **13. plugin manifests** — Validates every `.skilltap/<name>.toml` publish manifest in the working tree. Warns on parse errors or missing required fields.
 

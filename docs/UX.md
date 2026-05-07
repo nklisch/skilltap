@@ -135,7 +135,29 @@ skilltap install name@v1.2.0 --project --also claude-code
   → resolve from taps, pin to v1.2.0, scope=project (no prompt), claude-code symlink
 ```
 
-Scope always prompts unless `--project` or `--global` is passed. `--yes` does **not** skip the scope prompt — use `--yes --global` or `--yes --project` for fully non-interactive installs.
+**v2.1 update — smart-scope-default:** scope is **no longer prompted**. When neither `--project` nor `--global` is passed and `defaults.scope` isn't set, scope is inferred from the cwd: inside a git repo → `project`; outside → `global`. The flow lines above that say `prompt: scope` are stale; the scope is silently chosen. Pass `--project`/`--global` to override the inference.
+
+### Manifest preflight (corrupt skilltap.toml)
+
+Before any clone/scan/file work, install loads `skilltap.toml` if scope resolves to `project` and the file exists. If it fails to parse:
+
+- **Agent mode** (`--agent` / `SKILLTAP_AGENT=1`):
+  ```
+  $ skilltap install user/repo --project --agent
+  ERROR: skilltap.toml is corrupt: Invalid TOML in /path/skilltap.toml: Error: ...
+  Run 'skilltap doctor --fix' to back up the corrupt manifest and reset to empty, then retry.
+  exit code: 1
+  ```
+  No install side-effects. The corrupt file is left untouched — scripts/CI must never silently mutate user files.
+
+- **Interactive mode**:
+  ```
+  ◇  skilltap.toml is corrupt: Invalid TOML in /path/skilltap.toml: ...
+  │  Backing up to skilltap.toml.bak and resetting to empty before install.
+  ◇  Installing standalone-skill...
+  └  ✓ Installed.
+  ```
+  The corrupt file is preserved at `skilltap.toml.bak`; the manifest is reset to empty and the install proceeds. The user gets their install AND a recovery path (their old content survives at `.bak`). The same recovery (`recoverManifest` in `core/src/manifest/recover.ts`) is wired as `doctor --fix`'s action for the manifest-drift check.
 
 ### Decision Matrix
 
@@ -144,7 +166,7 @@ source
   │
   ├── scope? ┬── --project ──→ project
   │          ├── --global ───→ global
-  │          └── neither ────→ prompt "Install to: Global / Project"
+  │          └── neither ────→ smart default: in git repo → project, else global (no prompt)
   │
   ├── agents? ┬── --also passed ────────────────→ use flag value
   │           ├── --yes ──────────────────────→ use config default
@@ -2176,33 +2198,56 @@ Drift:   manifest declares 1 plugin not installed. Run `skilltap sync`.
 
 `skilltap status --json` produces a machine-readable equivalent.
 
-### `skilltap sync` flow
+### `skilltap sync` flow (shipped)
+
+> The example below reflects the shipped v2.1 surface. `sync` is **read-only by default** and uses `--apply` to execute (not `--yes`); `--prune` does not exist. Drift items not declared in the manifest fire as `remove` automatically.
 
 ```
 $ skilltap sync
 
-Plan (project: ./termtube):
-  + install   plugin   corp/dev-toolkit          v2.1   (declared, not installed)
-  ~ update    skill    nathan/commit-helper      v1.2 → v1.3   (locked → declared range refreshes)
-  - remove    plugin   old-toolkit                       (--prune; not declared)
+skilltap sync — drift report
 
-Apply? (Y/n): y
-  + Installed corp/dev-toolkit@v2.1 (3 skills, 2 MCPs, 1 agent)
-  ~ Updated nathan/commit-helper v1.2 → v1.3
-  - Removed old-toolkit
++ add (1)
+  github:corp/dev-toolkit
+    declared: range=^2.0 ref=
+    locked:   ref=v2.1 sha=abc123… range=^2.0
 
-✓ Sync complete. State: 5 skills, 2 plugins.
+~ ref mismatch (1)
+  github:nathan/commit-helper
+    declared: range=^1.2 ref=
+    installed: ref=v1.2.0 sha=def456…
+    locked:   ref=v1.2.0 sha=def456… range=^1.2
+
+note: run skilltap sync --apply to execute this plan.
 ```
 
-With `--strict`:
+In-sync state:
 
 ```
-$ skilltap sync --strict
-error: drift detected — 1 add, 1 update, 1 remove. Strict mode aborts.
-hint: run without --strict, or with --yes to auto-apply.
+$ skilltap sync
+✓ In sync. Manifest, lockfile, and state agree.
 ```
 
-With `--yes`: same plan, auto-applies without the prompt.
+Outside a project (no `.git` ancestor and no `skilltap.toml` at cwd):
+
+```
+$ skilltap sync
+error: skilltap sync requires a project root (looks for .git or skilltap.toml).
+```
+
+`sync --apply` runs the plan in order (removes, ref-changes, adds, then bookkeeping):
+
+```
+$ skilltap sync --apply
+✓ add github:corp/dev-toolkit
+✓ ref-mismatch github:nathan/commit-helper
+
+Sync apply complete: 2 applied, 0 skipped, 0 failed
+```
+
+`--strict` only applies with `--apply` and halts at the first failure (continues otherwise). `--json` emits `{ inSync, items }` (read-only) or `{ inSync, applied, skipped, failed, results }` (--apply) instead of human output.
+
+> **Known divergence from earlier design drafts:** the original v2.0 design called for `--yes` to auto-apply and `--prune` to drop undeclared on-disk items. The shipped command is read-only by default with explicit `--apply` opt-in; the `--yes`/`--prune` flags do not exist. Lock-only drift (`lock-stale`, `lock-missing`, `lock-orphan`) is reported but skipped during `--apply` — these are bookkeeping items the user can act on by editing the lockfile or running `install`/`remove`.
 
 ### `skilltap try <source>`
 
