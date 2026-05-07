@@ -13,7 +13,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { loadLockfile, loadManifest } from "@skilltap/core";
+import { loadLockfile, loadManifest, saveManifest } from "@skilltap/core";
 import {
   createStandaloneSkillRepo,
   initRepo,
@@ -284,6 +284,202 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       expect(stdout).toContain("OK: Installed standalone-skill");
     } finally {
       await removeTmpDir(agentDir);
+    }
+  });
+
+  // ── 8. skills remove drops entry from manifest, lockfile, and state ──────────
+
+  test("8. skills remove drops the skill from manifest, lockfile, and state", async () => {
+    // Use a fresh project dir to avoid disturbing projectRoot that tests 1-7
+    // rely on. Install into it first so there's something to remove.
+    const removeDir = await makeTmpDir();
+    try {
+      await initRepo(removeDir);
+      await writeFile(join(removeDir, "skilltap.toml"), "");
+
+      // Install the skill so manifest + lockfile + state are all populated.
+      const installResult = await run(
+        ["install", skillRepo.path, "--project", "--skip-scan", "--yes"],
+        { cwd: removeDir },
+      );
+      if (installResult.exitCode !== 0) {
+        // eslint-disable-next-line no-console
+        console.error("setup install stderr:", installResult.stderr);
+      }
+      expect(installResult.exitCode).toBe(0);
+
+      // Sanity-check: manifest has the skill before remove.
+      const beforeManifest = await loadManifest(removeDir);
+      expect(beforeManifest.ok).toBe(true);
+      if (!beforeManifest.ok) return;
+      expect(Object.keys(beforeManifest.value.skills ?? {})).toHaveLength(1);
+
+      // Now remove via the CLI — must pass --project so removeSkill() gets
+      // projectRoot and calls removeSkillFromManifest() (see core/src/remove.ts:108-114).
+      const { exitCode, stderr } = await run(
+        ["skills", "remove", "standalone-skill", "--yes", "--project"],
+        { cwd: removeDir },
+      );
+      if (exitCode !== 0) {
+        // eslint-disable-next-line no-console
+        console.error("remove stderr:", stderr);
+      }
+      expect(exitCode).toBe(0);
+
+      // Manifest: skills table must be empty.
+      const afterManifest = await loadManifest(removeDir);
+      expect(afterManifest.ok).toBe(true);
+      if (!afterManifest.ok) return;
+      expect(Object.keys(afterManifest.value.skills ?? {})).toHaveLength(0);
+
+      // Lockfile: skill array must be empty.
+      const afterLock = await loadLockfile(removeDir);
+      expect(afterLock.ok).toBe(true);
+      if (!afterLock.ok) return;
+      expect(afterLock.value.skill ?? []).toHaveLength(0);
+
+      // state.json: no skill entry.
+      const stateFile = Bun.file(join(removeDir, ".agents", "state.json"));
+      expect(await stateFile.exists()).toBe(true);
+      const state = JSON.parse(await stateFile.text()) as {
+        version: number;
+        skills: Array<{ name: string }>;
+      };
+      expect(state.skills.map((s) => s.name)).not.toContain("standalone-skill");
+
+      // Install directory must be gone.
+      const installDir = join(
+        removeDir,
+        ".agents",
+        "skills",
+        "standalone-skill",
+      );
+      const installDirExists = await Bun.file(
+        join(installDir, "SKILL.md"),
+      ).exists();
+      expect(installDirExists).toBe(false);
+    } finally {
+      await removeTmpDir(removeDir);
+    }
+  });
+
+  // ── 9. status --json shape: skills, plugins, taps, drift-aware ───────────────
+
+  test("9. status --json includes skills + taps + a drift field when manifest present", async () => {
+    // projectRoot already has standalone-skill installed (from tests 1-2) and
+    // has a skilltap.toml (seeded in test 1). Introduce synthetic drift: use
+    // saveManifest() to add a declared-but-not-installed entry so the manifest
+    // and state disagree, causing drift.inSync === false.
+    const beforeManifest = await loadManifest(projectRoot);
+    expect(beforeManifest.ok).toBe(true);
+    if (!beforeManifest.ok) return;
+
+    // Add a skill to the manifest that is NOT in state.json — this is the drift.
+    const driftedManifest = {
+      ...beforeManifest.value,
+      skills: {
+        ...beforeManifest.value.skills,
+        "github:example/declared-not-installed": "*" as const,
+      },
+    };
+    await saveManifest(projectRoot, driftedManifest);
+
+    try {
+      const { exitCode, stdout, stderr } = await run(["status", "--json"]);
+      if (exitCode !== 0) {
+        // eslint-disable-next-line no-console
+        console.error("status stderr:", stderr);
+      }
+      expect(exitCode).toBe(0);
+
+      // Output must be valid JSON (no ANSI escapes polluting it).
+      const payload = JSON.parse(stdout) as {
+        scope: string;
+        hasManifest: boolean;
+        skills: Array<{ name: string }>;
+        plugins: unknown[];
+        taps: unknown[];
+        drift: { inSync: boolean; items: Array<{ kind: string }> } | null;
+      };
+
+      // The skill installed in test 2 must still appear.
+      expect(payload.skills.some((s) => s.name === "standalone-skill")).toBe(
+        true,
+      );
+
+      // Scope is "project" because projectRoot is a git repo and has a manifest.
+      expect(payload.scope).toBe("project");
+
+      // Taps array is always present (built-in tap).
+      expect(Array.isArray(payload.taps)).toBe(true);
+      expect(payload.taps.length).toBeGreaterThan(0);
+
+      // Manifest is present.
+      expect(payload.hasManifest).toBe(true);
+
+      // Drift field: because we added a declared-but-not-installed entry, the
+      // drift report should indicate inSync === false with at least one 'add' item.
+      // Note: drift detection requires loadLockfile to succeed. If the lockfile
+      // doesn't reference the new entry, the skill is 'add' drift (in manifest
+      // but not in state).
+      expect(payload.drift).not.toBeNull();
+      if (payload.drift !== null) {
+        expect(payload.drift.inSync).toBe(false);
+        const addItem = payload.drift.items.find((i) => i.kind === "add");
+        expect(addItem).toBeDefined();
+      }
+    } finally {
+      // Restore manifest to original state so subsequent tests aren't affected.
+      await saveManifest(projectRoot, beforeManifest.value);
+    }
+  });
+
+  // ── 10. Malformed skilltap.toml: install proceeds but manifest is not updated ──
+
+  test("10. malformed skilltap.toml does not block install — manifest update is silently skipped", async () => {
+    // Isolated project dir so the corrupt manifest is contained.
+    const malformedDir = await makeTmpDir();
+    try {
+      await initRepo(malformedDir);
+      // Write a deliberately broken TOML file: unclosed bracket + unterminated string.
+      await writeFile(
+        join(malformedDir, "skilltap.toml"),
+        '[skills\nthis = "is a broken table\n',
+      );
+
+      const { exitCode } = await run(
+        ["install", skillRepo.path, "--project", "--yes", "--skip-scan"],
+        { cwd: malformedDir },
+      );
+
+      // Behavioral note: core/src/manifest/update.ts silences manifest I/O errors
+      // (loadManifest failure → ok(undefined)) so install exits 0 even with a
+      // corrupt TOML file. The skill is installed and state.json is written; only
+      // the manifest update is skipped.
+      expect(exitCode).toBe(0);
+
+      // state.json IS written — install succeeded at the state level.
+      const stateFile = Bun.file(join(malformedDir, ".agents", "state.json"));
+      expect(await stateFile.exists()).toBe(true);
+      const state = JSON.parse(await stateFile.text()) as {
+        version: number;
+        skills: Array<{ name: string }>;
+      };
+      expect(state.skills.some((s) => s.name === "standalone-skill")).toBe(
+        true,
+      );
+
+      // The manifest on disk must still be malformed (was not overwritten
+      // because the parse failed before the save step).
+      const manifestOnDisk = await Bun.file(
+        join(malformedDir, "skilltap.toml"),
+      ).text();
+      expect(manifestOnDisk).toContain("[skills");
+      // The newly installed skill's path should NOT appear in the manifest
+      // because the manifest write was skipped.
+      expect(manifestOnDisk).not.toContain(skillRepo.path);
+    } finally {
+      await removeTmpDir(malformedDir);
     }
   });
 });
