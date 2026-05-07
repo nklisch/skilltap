@@ -110,7 +110,8 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
 
     // Phase 31c-c-2d-1: install writes ONLY to state.json. installed.json
     // is no longer maintained (it's read-fallback only for unmigrated
-    // v0.x users).
+    // v0.x users). CLAUDE.md "v2.1 conventions": "Don't re-introduce
+    // installed.json writes; the dual-write layer was deleted in Refactor 2."
     const stateText = await readFile(
       join(projectRoot, ".agents", "state.json"),
       "utf8",
@@ -121,6 +122,18 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     };
     expect(state.version).toBe(2);
     expect(state.skills.map((s) => s.name)).toEqual(["standalone-skill"]);
+
+    // Invariant (CLAUDE.md "dual-write deleted"): legacy installed.json
+    // and plugins.json must NOT be written by install. If a future refactor
+    // accidentally re-introduces dual-write, this assertion fires.
+    const legacyInstalledExists = await Bun.file(
+      join(projectRoot, ".agents", "installed.json"),
+    ).exists();
+    expect(legacyInstalledExists).toBe(false);
+    const legacyPluginsExists = await Bun.file(
+      join(projectRoot, ".agents", "plugins.json"),
+    ).exists();
+    expect(legacyPluginsExists).toBe(false);
   });
 
   // ── 3. status — shows the installed skill from state.json ────────────────────

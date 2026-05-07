@@ -185,6 +185,28 @@ describe("doctor --json", () => {
     expect(names).toContain("agents");
   });
 
+  // SPEC.md §v2.0 Doctor Upgrades (L3256-3263) — doctor adds these v2.0
+  // checks alongside the legacy 9. Pinning each name in the JSON output so a
+  // refactor that silently dropped or renamed a check can't slip through
+  // (the equivalent legacy assertion above would still pass).
+  test("JSON includes v2.0 check names (state.json, manifest drift, lockfile drift, mcp consistency, plugin manifests, v0.x file orphans)", async () => {
+    const { stdout } = await runSkilltap(
+      ["doctor", "--json"],
+      homeDir,
+      configDir,
+    );
+    const result = JSON.parse(stdout) as {
+      checks: Array<{ name: string }>;
+    };
+    const names = result.checks.map((c) => c.name);
+    expect(names).toContain("state.json");
+    expect(names).toContain("manifest drift");
+    expect(names).toContain("lockfile drift");
+    expect(names).toContain("mcp consistency");
+    expect(names).toContain("plugin manifests");
+    expect(names).toContain("v0.x file orphans");
+  });
+
   test("JSON check has status field", async () => {
     const { stdout } = await runSkilltap(
       ["doctor", "--json"],

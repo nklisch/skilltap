@@ -325,6 +325,66 @@ describe("composePolicy — agent precedence (Phase 31c-c-2c)", () => {
     if (!result.ok) return;
     expect(result.value.agentMode).toBe(true);
   });
+
+  // SPEC.md §v2.0 Agent Flag (L3122-3125): all three sources may be active
+  // simultaneously; precedence is flag > env > config. The individual-source
+  // tests above prove each path works in isolation, but not their ordering.
+  // The v2.0 spec is explicit about the precedence chain, so a regression
+  // that flipped the order silently would still pass the per-source tests.
+  test("--agent flag wins when env and config also enable agent mode", () => {
+    const prev = process.env.SKILLTAP_AGENT;
+    process.env.SKILLTAP_AGENT = "1";
+    try {
+      const config = baseConfig();
+      config["agent-mode"] = { enabled: true, scope: "global" };
+      const result = composePolicy(config, { agent: true });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.agentMode).toBe(true);
+      expect(result.value.yes).toBe(true); // agent-mode auto-yes
+    } finally {
+      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
+      else process.env.SKILLTAP_AGENT = prev;
+    }
+  });
+
+  test("SKILLTAP_AGENT env wins over config when no flag is passed", () => {
+    const prev = process.env.SKILLTAP_AGENT;
+    process.env.SKILLTAP_AGENT = "1";
+    try {
+      // Config disables agent mode; env var enables it. No flag.
+      // Per spec, env should win and agent mode is on.
+      const config = baseConfig();
+      config["agent-mode"] = { enabled: false, scope: "global" };
+      const result = composePolicy(config, {});
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.agentMode).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
+      else process.env.SKILLTAP_AGENT = prev;
+    }
+  });
+
+  test("config alone (no flag, no env) still enables agent mode (lowest tier)", () => {
+    // Counterpart to the precedence chain: when only the config is set, the
+    // config-only path is the actual activator. Pinned separately so a
+    // future refactor can't accidentally drop the config branch entirely
+    // without breaking *some* test.
+    const prev = process.env.SKILLTAP_AGENT;
+    delete process.env.SKILLTAP_AGENT;
+    try {
+      const config = baseConfig();
+      config["agent-mode"] = { enabled: true, scope: "project" };
+      const result = composePolicy(config, {});
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.agentMode).toBe(true);
+    } finally {
+      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
+      else process.env.SKILLTAP_AGENT = prev;
+    }
+  });
 });
 
 describe("resolveOverride", () => {
