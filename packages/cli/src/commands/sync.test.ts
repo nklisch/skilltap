@@ -219,24 +219,22 @@ describe("sync --apply on in-sync project", () => {
   });
 });
 
-describe("sync — empty cwd (no manifest, lockfile, or state)", () => {
-  test("trivially reports in-sync when run in a directory with no files", async () => {
-    // Spec is silent about how sync should behave outside a project root;
-    // the shipped behavior is that an empty cwd looks like (empty manifest,
-    // empty lockfile, empty state) — all three agree → in-sync, exit 0.
-    // sync.ts has an `if (!projectRoot)` guard that's unreachable because
-    // tryFindProjectRoot falls back to cwd; treating the trivial in-sync
-    // path as the documented behavior.
+describe("sync — no project root", () => {
+  test("exits 1 with an explanatory error when cwd has no .git and no skilltap.toml", async () => {
+    // Spec §v2.0 Project Manifest L2880: "Presence of [skilltap.toml] is
+    // what defines a 'skilltap project'." Sync needs a project root to
+    // reconcile against — without one, there's nothing to do and the
+    // misleading "trivially in-sync" no-op is worse than a clear error.
     const empty = await makeTmpDir();
     try {
-      const { exitCode, stdout } = await runSkilltap(
+      const { exitCode, stderr } = await runSkilltap(
         ["sync"],
         homeDir,
         configDir,
         empty,
       );
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("In sync");
+      expect(exitCode).toBe(1);
+      expect(stderr.toLowerCase()).toContain("project root");
     } finally {
       await removeTmpDir(empty);
     }

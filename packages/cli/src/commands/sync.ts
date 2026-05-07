@@ -2,6 +2,8 @@ import {
   applySync,
   type DriftItem,
   detectDrift,
+  findManifestRoot,
+  isInGitRepo,
   loadLockfile,
   loadManifest,
   loadState,
@@ -11,7 +13,6 @@ import {
 import { defineCommand } from "citty";
 import { outputJson } from "../ui/agent-out";
 import { ansi, errorLine, successLine } from "../ui/format";
-import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -40,7 +41,14 @@ export default defineCommand({
     const apply = args.apply as boolean;
     const strict = args.strict as boolean;
 
-    const projectRoot = await tryFindProjectRoot();
+    // Sync reconciles manifest ↔ lockfile ↔ state.json — all three live at
+    // the project root. The manifest's location wins when present (it is
+    // what defines a "skilltap project"); otherwise fall back to the
+    // enclosing git repo so a fresh checkout (no manifest yet) still works
+    // for `sync --apply`. If neither exists, sync has nothing meaningful
+    // to reconcile.
+    const projectRoot =
+      (await findManifestRoot()) ?? (await isInGitRepo());
     if (!projectRoot) {
       errorLine(
         "skilltap sync requires a project root (looks for .git or skilltap.toml).",

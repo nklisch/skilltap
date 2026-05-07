@@ -36,6 +36,23 @@ export async function isInGitRepo(startDir?: string): Promise<string | null> {
   }
 }
 
+// Walk up from startDir looking for a directory containing skilltap.toml.
+// Returns the directory if found, or null if no manifest ancestor exists.
+// Used by commands like `sync` that operate on a manifest-rooted project,
+// distinct from smart-scope-default's git-rooted check (isInGitRepo).
+export async function findManifestRoot(
+  startDir?: string,
+): Promise<string | null> {
+  let dir = startDir ?? process.cwd();
+  while (true) {
+    const stat = await lstat(join(dir, "skilltap.toml")).catch(() => null);
+    if (stat) return dir;
+    const parent = dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 export function skillInstallDir(
   name: string,
   scope: "global" | "project",
