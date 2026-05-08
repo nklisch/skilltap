@@ -11,6 +11,7 @@ import { addSkillToManifest } from "./manifest/update";
 import { downloadAndExtract, parseNpmSource } from "./npm-registry";
 import type { OnOrphansFound } from "./orphan";
 import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
+import type { Output } from "./output/types";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
 import { detectPlugin } from "./plugin/detect";
 import { installPlugin } from "./plugin/install";
@@ -50,10 +51,20 @@ export type InstallOptions = {
   /** Default git host for owner/repo shorthand resolution. */
   gitHost?: string;
   skipScan?: boolean;
-  /** Called before placement if warnings are found. Return true to proceed, false to abort. */
+  /**
+   * Optional progress reporter. When provided, core calls out.progress(label)
+   * for long-running phases (clone, scan, semantic). Replaces the removed
+   * onStaticScanStart / onSemanticScanStart / onSemanticProgress callbacks.
+   */
+  out?: Output;
+  /**
+   * Called before placement if warnings are found. Return true to proceed, false to abort.
+   * Unified callback for skill-static, plugin-static, and skill-semantic warnings.
+   */
   onWarnings?: (
-    warnings: StaticWarning[],
-    skillName: string,
+    warnings: StaticWarning[] | SemanticWarning[],
+    kind: "skill-static" | "plugin-static" | "skill-semantic",
+    name: string,
   ) => Promise<boolean>;
   /** Called after scan, before placement. Returns skill names to install. If omitted, installs all. */
   onSelectSkills?: (skills: ScannedSkill[]) => Promise<string[]>;
@@ -65,26 +76,15 @@ export type InstallOptions = {
   semantic?: boolean;
   /** Score threshold for semantic warnings (default 5). */
   threshold?: number;
-  /** Called when semantic warnings are found. Return true to proceed, false to abort. */
-  onSemanticWarnings?: (
-    warnings: SemanticWarning[],
-    skillName: string,
+  /**
+   * Called after all scans pass cleanly, before placement. Return false to cancel.
+   * Unified callback for skill confirmation (kind="skill", names=string[]) and
+   * plugin confirmation (kind="plugin", names=PluginManifest).
+   */
+  onConfirmInstall?: (
+    kind: "skill" | "plugin",
+    names: string[] | PluginManifest,
   ) => Promise<boolean>;
-  /** Called after static scan finds warnings — "Run semantic scan?" prompt. */
-  onOfferSemantic?: () => Promise<boolean>;
-  /** Called when static scan begins for a skill. */
-  onStaticScanStart?: (skillName: string) => void;
-  /** Called when semantic scan begins for a skill. */
-  onSemanticScanStart?: (skillName: string) => void;
-  /** Called after each chunk is evaluated during semantic scan. */
-  onSemanticProgress?: (
-    completed: number,
-    total: number,
-    score: number,
-    reason: string,
-  ) => void;
-  /** Called after all scans pass cleanly, before placement. Return false to cancel. */
-  onConfirmInstall?: (skillNames: string[]) => Promise<boolean>;
   /** Called when a skill is already installed. Return "update" to update it instead, or "abort" to cancel. */
   onAlreadyInstalled?: (name: string) => Promise<"update" | "abort">;
   /** Called when deep scan is triggered (no SKILL.md at standard paths). Return false to cancel. */
@@ -98,13 +98,6 @@ export type InstallOptions = {
   onPluginDetected?: (
     manifest: PluginManifest,
   ) => Promise<"plugin" | "skills-only" | "cancel">;
-  /** Called when static security warnings found during plugin install. Return true to proceed. */
-  onPluginWarnings?: (
-    warnings: StaticWarning[],
-    pluginName: string,
-  ) => Promise<boolean>;
-  /** Called before plugin placement for confirmation. Return false to cancel. */
-  onPluginConfirm?: (manifest: PluginManifest) => Promise<boolean>;
   /**
    * Called when a plugin install matches same-source standalones for capture.
    * Threaded through to installPlugin's onCaptureConfirm. Return true to
@@ -248,20 +241,26 @@ async function resolveTapName(
 
 async function runSecurityScan(
   selected: ScannedSkill[],
+  out: Output | undefined,
   onWarnings?: InstallOptions["onWarnings"],
-  onStaticScanStart?: InstallOptions["onStaticScanStart"],
 ): Promise<Result<StaticWarning[], ScanError | UserError>> {
   const allWarnings: StaticWarning[] = [];
   for (const skill of selected) {
-    onStaticScanStart?.(skill.name);
+    const p = out?.progress(`Scanning ${skill.name}`);
     const scanResult = await scanStatic(skill.path);
-    if (!scanResult.ok) return scanResult;
+    if (!scanResult.ok) {
+      p?.fail();
+      return scanResult;
+    }
     if (scanResult.value.length > 0) {
+      p?.succeed();
       allWarnings.push(...scanResult.value);
       if (onWarnings) {
-        const proceed = await onWarnings(scanResult.value, skill.name);
+        const proceed = await onWarnings(scanResult.value, "skill-static", skill.name);
         if (!proceed) return err(new UserError("Install cancelled."));
       }
+    } else {
+      p?.succeed();
     }
   }
   return ok(allWarnings);
@@ -571,8 +570,12 @@ export async function installSkill(
                   projectRoot: options.projectRoot,
                   also,
                   skipScan: options.skipScan,
-                  onWarnings: options.onPluginWarnings,
-                  onConfirm: options.onPluginConfirm,
+                  onWarnings: options.onWarnings
+                    ? async (w, n) => options.onWarnings!(w, "plugin-static", n)
+                    : undefined,
+                  onConfirm: options.onConfirmInstall
+                    ? async (m) => options.onConfirmInstall!("plugin", m)
+                    : undefined,
                   onCaptureConfirm: options.onPluginCaptureConfirm,
                   onCaptureConflict: options.onPluginCaptureConflict,
                   repo: match.skill.repo ?? null,
@@ -729,8 +732,12 @@ export async function installSkill(
             projectRoot: options.projectRoot,
             also,
             skipScan: options.skipScan,
-            onWarnings: options.onPluginWarnings,
-            onConfirm: options.onPluginConfirm,
+            onWarnings: options.onWarnings
+              ? async (w, n) => options.onWarnings!(w, "plugin-static", n)
+              : undefined,
+            onConfirm: options.onConfirmInstall
+              ? async (m) => options.onConfirmInstall!("plugin", m)
+              : undefined,
             onCaptureConfirm: options.onPluginCaptureConfirm,
             onCaptureConflict: options.onPluginCaptureConflict,
             repo: cloneUrl ?? resolved.url,
@@ -855,32 +862,34 @@ export async function installSkill(
     if (!options.skipScan) {
       const scanResult = await runSecurityScan(
         selected,
+        options.out,
         options.onWarnings,
-        options.onStaticScanStart,
       );
       if (!scanResult.ok) return scanResult;
       allWarnings.push(...scanResult.value);
     }
 
-    // 6.6. Semantic scan
-    const shouldRunSemantic =
-      options.semantic ||
-      (allWarnings.length > 0 &&
-        options.onOfferSemantic &&
-        (await options.onOfferSemantic()));
+    // 6.6. Semantic scan — runs when --semantic flag or config sets scan=semantic
+    const shouldRunSemantic = options.semantic;
 
     if (shouldRunSemantic && !options.skipScan && options.agent) {
       for (const skill of selected) {
-        options.onSemanticScanStart?.(skill.name);
+        const semP = options.out?.progress(`Semantic scan: ${skill.name}`);
         const semResult = await scanSemantic(skill.path, options.agent, {
           threshold: options.threshold,
-          onProgress: options.onSemanticProgress,
+          onProgress: (completed, total, score, reason) => {
+            const threshold = options.threshold ?? 5;
+            const flag = score >= threshold ? ` — ${reason.slice(0, 60)}` : "";
+            semP?.update(`Chunk ${completed}/${total}${flag}`);
+          },
         });
+        semP?.succeed();
         if (semResult.ok && semResult.value.length > 0) {
           allSemanticWarnings.push(...semResult.value);
-          if (options.onSemanticWarnings) {
-            const proceed = await options.onSemanticWarnings(
+          if (options.onWarnings) {
+            const proceed = await options.onWarnings(
               semResult.value,
+              "skill-semantic",
               skill.name,
             );
             if (!proceed) return err(new UserError("Install cancelled."));
@@ -896,6 +905,7 @@ export async function installSkill(
       options.onConfirmInstall
     ) {
       const proceed = await options.onConfirmInstall(
+        "skill",
         selected.map((s) => s.name),
       );
       if (!proceed) return err(new UserError("Install cancelled."));

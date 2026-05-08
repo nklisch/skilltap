@@ -54,7 +54,7 @@ describe("install orphan — installs through phantom conflict", () => {
 
       // First install
       const first = await runSkilltap(
-        ["install", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -65,7 +65,7 @@ describe("install orphan — installs through phantom conflict", () => {
       await rm(skillDir, { recursive: true, force: true });
 
       const second = await runSkilltap(
-        ["install", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -108,7 +108,7 @@ describe("install orphan — plugins layout (plugins/*/skills/*/SKILL.md)", () =
       await commitAll(repoDir, "initial commit");
 
       const { exitCode, stdout } = await runSkilltap(
-        ["install", repoDir, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repoDir, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -138,7 +138,7 @@ describe("install orphan — re-install after manual directory deletion", () => 
 
       // Initial install
       const first = await runSkilltap(
-        ["install", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -150,7 +150,7 @@ describe("install orphan — re-install after manual directory deletion", () => 
 
       // Re-install from the same repo — should succeed, not error about "already installed"
       const second = await runSkilltap(
-        ["install", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );

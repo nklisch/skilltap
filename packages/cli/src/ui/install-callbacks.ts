@@ -1,4 +1,4 @@
-import { spinner } from "@clack/prompts";
+import { log } from "@clack/prompts";
 import type {
   AgentAdapter,
   CaptureBucket,
@@ -7,6 +7,7 @@ import type {
   PluginManifest,
   Progress,
   ScannedSkill,
+  SemanticWarning,
   StaticWarning,
   TapEntry,
 } from "@skilltap/core";
@@ -16,7 +17,6 @@ import { pluginComponentSummary } from "./plugin-format";
 import {
   confirmInstall,
   confirmReadyInstall,
-  offerSemanticScan,
   selectSkills,
   selectTap,
 } from "./prompts";
@@ -153,107 +153,59 @@ export function createInstallCallbacks(ctx: CallbackContext): {
     | "onSelectSkills"
     | "onSelectTap"
     | "onAlreadyInstalled"
-    | "onSemanticWarnings"
-    | "onOfferSemantic"
-    | "onSemanticProgress"
-    | "onStaticScanStart"
-    | "onSemanticScanStart"
     | "onConfirmInstall"
     | "onDeepScan"
     | "onPluginDetected"
-    | "onPluginWarnings"
-    | "onPluginConfirm"
   >;
   logScanResults(): void;
 } {
   const { out, progress: p, onWarn, skipScan, agent, yes, source, steps } = ctx;
 
-  let staticStarted = false;
   let hadStaticWarnings = false;
-  let semanticStarted = false;
   let hadSemanticWarnings = false;
-  let semSpinner: ReturnType<typeof spinner> | null = null;
 
   const callbacks: ReturnType<typeof createInstallCallbacks>["callbacks"] = {
-    onStaticScanStart: skipScan
-      ? undefined
-      : (_skillName: string): void => {
-          // Fetch phase complete — switch from fetch spinner to scan step
-          p.pause();
-          steps.fetched(source);
-          staticStarted = true;
-        },
-
     onWarnings: skipScan
       ? undefined
-      : async (warnings, skillName): Promise<boolean> => {
+      : async (
+          warnings: StaticWarning[] | SemanticWarning[],
+          kind: "skill-static" | "plugin-static" | "skill-semantic",
+          name: string,
+        ): Promise<boolean> => {
+          if (kind === "skill-semantic") {
+            hadSemanticWarnings = true;
+            printSemanticWarnings(warnings as SemanticWarning[], name, out);
+            if (onWarn === "fail") {
+              out.error(
+                `Semantic warnings found in ${name} — aborting (--strict / on_warn=fail)`,
+              );
+              process.exit(1);
+            }
+            if (onWarn === "allow") return true;
+            const proceed = await confirmInstall(name);
+            if (proceed === false) process.exit(2);
+            return true;
+          }
+          // skill-static or plugin-static
           hadStaticWarnings = true;
-          printWarnings(warnings, skillName, out);
+          p.pause();
+          if (kind === "skill-static") steps.fetched(source);
+          printWarnings(warnings as StaticWarning[], name, out);
           if (onWarn === "fail") {
             out.error(
-              `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
+              `Security warnings found in ${name} — aborting (--strict / on_warn=fail)`,
             );
             process.exit(1);
           }
           if (onWarn === "allow") {
-            // Warnings logged for visibility; auto-continue
+            p.resume();
             return true;
           }
-          const proceed = await confirmInstall(skillName);
+          const proceed = await confirmInstall(name);
           if (proceed === false) process.exit(2);
+          p.resume();
           return true;
         },
-
-    onSemanticScanStart: agent
-      ? (skillName: string): void => {
-          // Static scan phase complete — log clean result then start semantic spinner
-          if (!hadStaticWarnings) steps.staticScanClean();
-          semSpinner = spinner();
-          semSpinner.start(
-            `Semantic scan of ${skillName} via ${agent.name}...`,
-          );
-          semanticStarted = true;
-        }
-      : undefined,
-
-    onSemanticProgress: agent
-      ? (
-          completed: number,
-          total: number,
-          score: number,
-          reason: string,
-        ): void => {
-          const threshold = 5;
-          const flag = score >= threshold ? ` — ⚠ ${truncate(reason, 60)}` : "";
-          semSpinner?.message(
-            `Semantic scan: chunk ${completed}/${total}${flag}`,
-          );
-        }
-      : undefined,
-
-    onSemanticWarnings: agent
-      ? async (warnings, skillName): Promise<boolean> => {
-          hadSemanticWarnings = true;
-          if (semSpinner) {
-            semSpinner.stop();
-            semSpinner = null;
-          }
-          printSemanticWarnings(warnings, skillName, out);
-          if (onWarn === "fail") {
-            out.error(
-              `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
-            );
-            process.exit(1);
-          }
-          if (onWarn === "allow") {
-            // Warnings logged for visibility; auto-continue
-            return true;
-          }
-          const proceed = await confirmInstall(skillName);
-          if (proceed === false) process.exit(2);
-          return true;
-        }
-      : undefined,
 
     onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> => {
       if (yes || skills.length === 1) {
@@ -288,24 +240,18 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       });
     },
 
-    onOfferSemantic: agent
-      ? async (): Promise<boolean> => {
-          return withProgressPaused(
-            p,
-            async () => {
-              const answer = await offerSemanticScan();
-              return answer;
-            },
-            "Starting semantic scan...",
-          );
-        }
-      : undefined,
-
     onConfirmInstall: yes
       ? undefined
-      : async (skillNames: string[]): Promise<boolean> =>
+      : async (
+          kind: "skill" | "plugin",
+          names: string[] | PluginManifest,
+        ): Promise<boolean> =>
           withProgressPaused(p, async () => {
-            const proceed = await confirmReadyInstall(skillNames);
+            const nameList =
+              kind === "skill"
+                ? (names as string[])
+                : [(names as PluginManifest).name];
+            const proceed = await confirmReadyInstall(nameList);
             if (proceed === false) process.exit(2);
             return true;
           }),
@@ -350,46 +296,14 @@ export function createInstallCallbacks(ctx: CallbackContext): {
         return decision as "plugin" | "skills-only" | "cancel";
       });
     },
-
-    onPluginWarnings: skipScan
-      ? undefined
-      : async (
-          warnings: StaticWarning[],
-          pluginName: string,
-        ): Promise<boolean> => {
-          return withProgressPaused(p, async () => {
-            printWarnings(warnings, pluginName, out);
-            if (onWarn === "fail") {
-              out.error(
-                `Security warnings found in plugin ${pluginName} — aborting (--strict / on_warn=fail)`,
-              );
-              process.exit(1);
-            }
-            if (onWarn === "allow") return true;
-            const proceed = await confirmInstall(pluginName);
-            if (proceed === false) process.exit(2);
-            return true;
-          });
-        },
-
-    onPluginConfirm: yes
-      ? undefined
-      : async (manifest: PluginManifest): Promise<boolean> => {
-          return withProgressPaused(p, async () => {
-            const proceed = await confirmReadyInstall([manifest.name]);
-            if (proceed === false) process.exit(2);
-            return true;
-          });
-        },
   };
 
   function logScanResults(): void {
-    if (semSpinner) {
-      semSpinner.stop();
-      semSpinner = null;
-      // biome-ignore lint/style/noNonNullAssertion: semSpinner exists ⇒ semantic scan started ⇒ agent set
-      if (!hadSemanticWarnings) steps.semanticScanClean(agent!.name);
-    } else if (staticStarted && !hadStaticWarnings && !semanticStarted) {
+    if (skipScan) return;
+    steps.fetched(source);
+    if (agent) {
+      if (!hadSemanticWarnings) steps.semanticScanClean(agent.name);
+    } else if (!hadStaticWarnings) {
       steps.staticScanClean();
     }
   }

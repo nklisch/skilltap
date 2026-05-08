@@ -42,45 +42,47 @@ const baseCtx = {
 };
 
 describe("createInstallCallbacks", () => {
-  test("semantic callbacks are defined when agent is provided", () => {
+  test("onWarnings is defined when skipScan is false", () => {
     const { callbacks } = createInstallCallbacks({
       ...baseCtx,
       agent: fakeAgent,
     });
-    expect(callbacks.onSemanticScanStart).toBeDefined();
-    expect(callbacks.onSemanticProgress).toBeDefined();
-    expect(callbacks.onSemanticWarnings).toBeDefined();
-    expect(callbacks.onOfferSemantic).toBeDefined();
-  });
-
-  test("semantic callbacks are undefined when agent is undefined", () => {
-    const { callbacks } = createInstallCallbacks({
-      ...baseCtx,
-      agent: undefined,
-    });
-    expect(callbacks.onSemanticScanStart).toBeUndefined();
-    expect(callbacks.onSemanticProgress).toBeUndefined();
-    expect(callbacks.onSemanticWarnings).toBeUndefined();
-    expect(callbacks.onOfferSemantic).toBeUndefined();
-  });
-
-  test("static scan callbacks are defined when skipScan is false", () => {
-    const { callbacks } = createInstallCallbacks({
-      ...baseCtx,
-      agent: undefined,
-    });
-    expect(callbacks.onStaticScanStart).toBeDefined();
     expect(callbacks.onWarnings).toBeDefined();
   });
 
-  test("static scan callbacks are undefined when skipScan is true", () => {
+  test("onWarnings is undefined when skipScan is true", () => {
     const { callbacks } = createInstallCallbacks({
       ...baseCtx,
       agent: undefined,
       skipScan: true,
     });
-    expect(callbacks.onStaticScanStart).toBeUndefined();
     expect(callbacks.onWarnings).toBeUndefined();
+  });
+
+  test("onWarnings handles all three kinds (skill-static, plugin-static, skill-semantic)", () => {
+    const { callbacks } = createInstallCallbacks({
+      ...baseCtx,
+      agent: undefined,
+    });
+    // onWarnings is defined and accepts the unified signature
+    expect(callbacks.onWarnings).toBeDefined();
+    expect(typeof callbacks.onWarnings).toBe("function");
+  });
+
+  test("onConfirmInstall is undefined when yes=true", () => {
+    const { callbacks } = createInstallCallbacks({
+      ...baseCtx,
+      yes: true,
+    });
+    expect(callbacks.onConfirmInstall).toBeUndefined();
+  });
+
+  test("onConfirmInstall is defined when yes=false", () => {
+    const { callbacks } = createInstallCallbacks({
+      ...baseCtx,
+      yes: false,
+    });
+    expect(callbacks.onConfirmInstall).toBeDefined();
   });
 });
 

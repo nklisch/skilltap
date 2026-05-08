@@ -367,14 +367,14 @@ const main = defineCommand({
   },
   subCommands: {
     status: () => import("./commands/status").then((m) => m.default),
-    install: () => import("./commands/install").then((m) => m.default),
+    install: () => import("./commands/install/index").then((m) => m.installCommand),
     update: () => import("./commands/update").then((m) => m.default),
     find: () => import("./commands/find").then((m) => m.default),
     skills: () => import("./commands/skills/index").then((m) => m.default),
 
     // Silent aliases — route to new locations under skills/
     list: () => import("./commands/skills/index").then((m) => m.default),
-    remove: () => import("./commands/skills/remove").then((m) => m.default),
+    remove: () => import("./commands/remove/index").then((m) => m.removeCommand),
     info: () => import("./commands/skills/info").then((m) => m.default),
     link: () => import("./commands/skills/link").then((m) => m.default),
     unlink: () => import("./commands/skills/unlink").then((m) => m.default),

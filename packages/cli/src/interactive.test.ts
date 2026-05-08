@@ -69,7 +69,7 @@ describe("install — agents prompt", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const session = await runInteractive(
-        [...CMD, "install", repo.path, "--global", "--skip-scan"],
+        [...CMD, "install", "skill", repo.path, "--global", "--skip-scan"],
         { cwd: CLI_DIR, env: env() },
       );
 
@@ -105,7 +105,7 @@ describe("install — agents prompt", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const session = await runInteractive(
-        [...CMD, "install", repo.path, "--global", "--skip-scan"],
+        [...CMD, "install", "skill", repo.path, "--global", "--skip-scan"],
         { cwd: CLI_DIR, env: env() },
       );
 
@@ -136,6 +136,7 @@ describe("install — confirm prompt", () => {
         [
           ...CMD,
           "install",
+          "skill",
           repo.path,
           "--global",
           "--skip-scan",
@@ -162,6 +163,7 @@ describe("install — confirm prompt", () => {
         [
           ...CMD,
           "install",
+          "skill",
           repo.path,
           "--global",
           "--skip-scan",
@@ -194,6 +196,7 @@ describe("install — skill selection (multi-skill repo)", () => {
         [
           ...CMD,
           "install",
+          "skill",
           repo.path,
           "--global",
           "--skip-scan",
@@ -228,6 +231,7 @@ describe("install — skill selection (multi-skill repo)", () => {
         [
           ...CMD,
           "install",
+          "skill",
           repo.path,
           "--global",
           "--skip-scan",
@@ -262,6 +266,7 @@ describe("install — skill selection (multi-skill repo)", () => {
         [
           ...CMD,
           "install",
+          "skill",
           repo.path,
           "--global",
           "--skip-scan",
@@ -293,6 +298,7 @@ describe("remove — confirm prompt", () => {
       [
         ...CMD,
         "install",
+        "skill",
         repoPath,
         "--global",
         "--skip-scan",
@@ -312,7 +318,7 @@ describe("remove — confirm prompt", () => {
       await installSkill(repo.path);
 
       const session = await runInteractive(
-        [...CMD, "remove", "standalone-skill"],
+        [...CMD, "remove", "skill", "standalone-skill"],
         { cwd: CLI_DIR, env: env() },
       );
 
@@ -335,7 +341,7 @@ describe("remove — confirm prompt", () => {
       await installSkill(repo.path);
 
       const session = await runInteractive(
-        [...CMD, "remove", "standalone-skill"],
+        [...CMD, "remove", "skill", "standalone-skill"],
         { cwd: CLI_DIR, env: env() },
       );
 
@@ -361,7 +367,7 @@ describe("install — verbose step output", () => {
     try {
       // --yes --global: no prompts, runs clone + static scan unattended
       const session = await runInteractive(
-        [...CMD, "install", repo.path, "--yes", "--global"],
+        [...CMD, "install", "skill", repo.path, "--yes", "--global"],
         { cwd: CLI_DIR, env: env() },
       );
       const { exitCode, output } = await session.finish();
@@ -378,7 +384,7 @@ describe("install — verbose step output", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const session = await runInteractive(
-        [...CMD, "install", repo.path, "--yes", "--global", "--quiet"],
+        [...CMD, "install", "skill", repo.path, "--yes", "--global", "--quiet"],
         { cwd: CLI_DIR, env: env() },
       );
       const { exitCode, output } = await session.finish();

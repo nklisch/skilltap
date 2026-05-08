@@ -73,13 +73,14 @@ describe("createTtyOutput", () => {
     expect(ANSI_RE.test(stderr.written)).toBe(true);
   });
 
-  test("quiet=true suppresses info and success", () => {
+  test("quiet=true suppresses info but not success", () => {
     const stdout = makeMockStream();
     const stderr = makeMockStream();
     const out = createTtyOutput({ isTTY: true, quiet: true, stdout, stderr });
     out.info("should not appear");
-    out.success("should not appear");
-    expect(stdout.written).toBe("");
+    out.success("still shown");
+    expect(stdout.written).not.toContain("should not appear");
+    expect(stdout.written).toContain("still shown");
   });
 
   test("quiet=true still emits error", () => {

@@ -134,13 +134,14 @@ describe("createPlainOutput", () => {
     expect(stdout.written).toBe(beforePause);
   });
 
-  test("quiet=true suppresses info and success", () => {
+  test("quiet=true suppresses info but not success", () => {
     const stdout = makeMockStream();
     const stderr = makeMockStream();
     const out = createPlainOutput({ quiet: true, stdout, stderr });
     out.info("hidden");
-    out.success("hidden");
-    expect(stdout.written).toBe("");
+    out.success("still shown");
+    expect(stdout.written).not.toContain("hidden");
+    expect(stdout.written).toContain("still shown");
   });
 
   test("quiet=true still emits error", () => {

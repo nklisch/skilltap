@@ -50,7 +50,7 @@ describe("remove orphan — remove succeeds when directory already missing", () 
 
       // Install the skill
       const install = await runSkilltap(
-        ["install", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -62,7 +62,7 @@ describe("remove orphan — remove succeeds when directory already missing", () 
 
       // Remove should succeed even though directory is already gone
       const { exitCode, stdout } = await runSkilltap(
-        ["skills", "remove", "standalone-skill", "--yes", "--global"],
+        ["remove", "skill", "standalone-skill", "--yes", "--global"],
         homeDir,
         configDir,
       );

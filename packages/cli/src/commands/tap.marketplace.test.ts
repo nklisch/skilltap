@@ -135,7 +135,7 @@ describe("tap marketplace — install from marketplace-sourced tap", () => {
 
       // Install the skill by name (it's in the tap)
       const { exitCode, stdout } = await runSkilltap(
-        ["install", "standalone-skill", "--global", "--yes", "--skip-scan"],
+        ["install", "skill", "standalone-skill", "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );

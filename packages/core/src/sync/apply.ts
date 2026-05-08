@@ -123,13 +123,10 @@ async function applyAddSkill(
     ref,
     onSelectSkills: async (skills) => skills.map((s) => s.name),
     onWarnings: async () => !options.strict,
-    onSemanticWarnings: async () => !options.strict,
     onConfirmInstall: async () => true,
     onAlreadyInstalled: async () => "update",
     onDeepScan: async () => true,
     onPluginDetected: async () => "plugin",
-    onPluginWarnings: async () => !options.strict,
-    onPluginConfirm: async () => true,
     // Capture: same-source captures auto-confirm (matches the plugin's pre-stated
     // intent in the manifest); cross-source conflicts hard-fail. Sync is the
     // path most vulnerable to silent substitution — a teammate cloning a repo

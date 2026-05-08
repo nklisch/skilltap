@@ -47,7 +47,7 @@ describe("global install — outside any git repo", () => {
 
   test("1. install defaults to global scope and writes state.json with scope=global", async () => {
     const { exitCode, stderr } = await runSkilltap(
-      ["install", skillRepo.path, "--yes", "--skip-scan"],
+      ["install", "skill", skillRepo.path, "--yes", "--skip-scan"],
       homeDir,
       configDir,
       nonGitCwd,

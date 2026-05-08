@@ -20,7 +20,6 @@ export function createPlainOutput(opts: OutputOptions): Output {
       if (hint) stderr.write(`  hint: ${hint}\n`);
     },
     success(msg) {
-      if (quiet) return;
       stdout.write(`${msg}\n`);
     },
     block(lines, blockOpts) {

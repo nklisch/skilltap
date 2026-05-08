@@ -22,7 +22,6 @@ export function createTtyOutput(opts: OutputOptions): Output {
       if (hint) stderr.write(`  ${ansi.dim("hint")}: ${hint}\n`);
     },
     success(msg) {
-      if (quiet) return;
       stdout.write(`${ansi.green("✓")} ${msg}\n`);
     },
     block(lines, blockOpts) {

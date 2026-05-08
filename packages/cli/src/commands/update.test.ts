@@ -36,7 +36,7 @@ describe("update — already up to date", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -59,7 +59,7 @@ describe("update — clean update", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -100,7 +100,7 @@ describe("update — clean update", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -156,7 +156,7 @@ describe("update — strict mode with warnings in diff", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -221,7 +221,7 @@ describe("update — show_diff config", () => {
     try {
       await writeShowDiffConfig("full");
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -246,7 +246,7 @@ describe("update — show_diff config", () => {
     try {
       await writeShowDiffConfig("stat");
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -270,7 +270,7 @@ describe("update — show_diff config", () => {
     try {
       await writeShowDiffConfig("none");
       await runSkilltap(
-        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        ["install", "skill", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );

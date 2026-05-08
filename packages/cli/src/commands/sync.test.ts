@@ -268,7 +268,7 @@ async function bootstrapProjectWithSkill(
   await initRepo(projDir);
   await writeFile(join(projDir, "skilltap.toml"), "");
   const { exitCode, stderr } = await runSkilltap(
-    ["install", skillPath, "--project", "--yes", "--skip-scan"],
+    ["install", "skill", skillPath, "--project", "--yes", "--skip-scan"],
     projHome,
     projConfig,
     projDir,

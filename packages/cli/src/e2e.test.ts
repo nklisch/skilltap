@@ -106,6 +106,7 @@ describe("E2E lifecycle", () => {
   test("5. install — installs skill", async () => {
     const { exitCode, stdout, stderr } = await run([
       "install",
+      "skill",
       skillRepo.path,
       "--yes",
       "--global",
@@ -150,6 +151,7 @@ describe("E2E lifecycle", () => {
   test("10. remove — removes skill", async () => {
     const { exitCode, stdout, stderr } = await run([
       "remove",
+      "skill",
       "standalone-skill",
       "--yes",
     ]);

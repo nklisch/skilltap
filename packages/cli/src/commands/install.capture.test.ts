@@ -142,7 +142,7 @@ describe("install capture — no overlap", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { exitCode, stdout } = await runSkilltap(
-        ["install", pluginRepo.path, "--yes", "--global"],
+        ["install", "plugin", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -158,7 +158,7 @@ describe("install capture — no overlap", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { stdout } = await runSkilltap(
-        ["install", pluginRepo.path, "--yes", "--global"],
+        ["install", "plugin", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -193,7 +193,7 @@ describe("install capture — cross-source conflict", () => {
       // In pipe mode, the cross-source conflict prompt is cancelled (non-TTY)
       // which causes the install to abort → exit non-zero.
       const { exitCode, stdout, stderr } = await runSkilltap(
-        ["install", pluginRepo.path, "--yes", "--global"],
+        ["install", "plugin", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -219,7 +219,7 @@ describe("install capture — cross-source conflict", () => {
       expect(seeded).toBe(true);
 
       await runSkilltap(
-        ["install", pluginRepo.path, "--yes", "--global"],
+        ["install", "plugin", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -266,7 +266,7 @@ describe("install capture — same-source capture", () => {
 
       // Install same repo as plugin → same-source capture → auto-confirm with --yes
       const { exitCode, stdout } = await runSkilltap(
-        ["install", pluginRepo.path, "--yes", "--global"],
+        ["install", "plugin", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
