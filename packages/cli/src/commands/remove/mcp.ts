@@ -56,8 +56,15 @@ export const mcpRemoveCommand = defineCommand({
 
     let anyFail = false;
     for (const source of sources) {
-      // Normalize: if user passes mcp:-prefixed source, strip it
-      const normalizedSource = source.startsWith("mcp:") ? source : `mcp:${source}`;
+      if (source.startsWith("mcp:")) {
+        out.error(
+          `The 'mcp:' prefix is no longer accepted as user input.`,
+          `Just pass the source directly: 'skilltap remove mcp ${source.slice(4)}'`,
+        );
+        process.exit(1);
+      }
+      // Prepend mcp: prefix for internal state lookup — state stores sources with this prefix
+      const normalizedSource = `mcp:${source}`;
 
       const result = await removeMcpInstall(normalizedSource, {
         scope,

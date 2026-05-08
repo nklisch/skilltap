@@ -4,6 +4,7 @@ import {
   type EffectivePolicy,
   fetchSkillUpdateStatus,
   formatOrphanReason,
+  loadState,
   type OrphanRecord,
   type SemanticWarning,
   type StaticWarning,
@@ -29,16 +30,24 @@ import {
 } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
 
+const VALID_UPDATE_TYPES = ["skill", "plugin", "mcp"] as const;
+type UpdateType = (typeof VALID_UPDATE_TYPES)[number];
+
 export default defineCommand({
   meta: {
     name: "update",
-    description: "Update installed skill(s)",
+    description: "Update installed skills, plugins, and MCP servers. Bare = all.",
   },
   args: {
+    type: {
+      type: "positional",
+      required: false,
+      description: "skill | plugin | mcp. Omit to update everything.",
+    },
     name: {
       type: "positional",
-      description: "Specific skill to update (omit to update all)",
       required: false,
+      description: "Specific name. Omit to update all of the chosen type.",
     },
     yes: {
       type: "boolean",
@@ -74,14 +83,36 @@ export default defineCommand({
         "Force update even if skill appears up to date (re-applies and re-scans).",
       default: false,
     },
+    "skip-scan": {
+      type: "boolean",
+      description: "Skip security scanning",
+      default: false,
+    },
+    quiet: {
+      type: "boolean",
+      description: "Suppress output details",
+      default: false,
+    },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = createOutput({ json: args.json, quiet: args.quiet ?? false });
+
+    // Validate type if provided — catch "update bogus" early
+    const typeArg = args.type as string | undefined;
+    if (typeArg && !VALID_UPDATE_TYPES.includes(typeArg as UpdateType)) {
+      out.error(
+        `Invalid type: "${typeArg}".`,
+        `Valid types: ${VALID_UPDATE_TYPES.join(", ")}. Or omit type to update everything.`,
+      );
+      process.exit(1);
+    }
+
+    const updateType = typeArg as UpdateType | undefined;
     const name = args.name as string | undefined;
     const projectRoot = await tryFindProjectRoot();
 
     if (args.check) {
-      return runCheckMode(out, projectRoot, args.json);
+      return runCheckMode(out, projectRoot, args.json ?? false);
     }
 
     const { config, policy } = await loadPolicyOrExit({
@@ -92,7 +123,7 @@ export default defineCommand({
 
     await refreshTapIndexes(out);
 
-    return runUpdate(out, name, args, config, policy, projectRoot, args.force);
+    return runUpdate(out, updateType, name, args, config, policy, projectRoot, args.force ?? false);
   },
 });
 
@@ -134,16 +165,118 @@ async function runCheckMode(
   );
 
   if (updates.length > 0) {
-    for (const name of updates) {
-      log.step(`${ansi.bold(name)} — update available`);
+    for (const skillName of updates) {
+      log.step(`${ansi.bold(skillName)} — update available`);
     }
     out.raw(`\nRun ${ansi.bold("skilltap update")} to apply.\n`);
   }
 }
 
-// ─── Update ───────────────────────────────────────────────────────────────────
+// ─── Update Dispatch ──────────────────────────────────────────────────────────
 
 async function runUpdate(
+  out: ReturnType<typeof createOutput>,
+  type: UpdateType | undefined,
+  name: string | undefined,
+  args: { strict?: boolean; semantic: boolean; json?: boolean; "skip-scan"?: boolean },
+  config: Config,
+  policy: EffectivePolicy,
+  projectRoot: string | undefined,
+  force = false,
+): Promise<void> {
+  // Dispatch by type:
+  //   undefined → update all skills (+ note plugins/mcp coming soon)
+  //   "skill"   → update skills only (optionally one by name)
+  //   "plugin"  → not yet implemented in core
+  //   "mcp"     → not yet implemented in core
+  if (type === "plugin") {
+    await runUpdatePlugins(out, name, projectRoot);
+    return;
+  }
+  if (type === "mcp") {
+    await runUpdateMcps(out, name, projectRoot);
+    return;
+  }
+
+  // skill or undefined: update skills
+  await runUpdateSkills(out, name, args, config, policy, projectRoot, force);
+}
+
+async function runUpdatePlugins(
+  out: ReturnType<typeof createOutput>,
+  name: string | undefined,
+  projectRoot: string | undefined,
+): Promise<void> {
+  const stateResult = await loadState(projectRoot);
+  if (!stateResult.ok) {
+    out.error(stateResult.error.message);
+    process.exit(1);
+  }
+  const plugins = stateResult.value.plugins;
+
+  const targets = name
+    ? plugins.filter((p) => p.name === name)
+    : plugins;
+
+  if (name && targets.length === 0) {
+    out.error(
+      `Plugin '${name}' is not installed.`,
+      "Run 'skilltap status' to see installed plugins.",
+    );
+    process.exit(1);
+  }
+
+  if (targets.length === 0) {
+    log.info("No plugins installed.");
+    return;
+  }
+
+  // Plugin update (re-install from source) is not yet implemented.
+  // Phase 42 wires the CLI surface; the core updatePlugin helper is a follow-up.
+  out.info(
+    `Plugin update is not yet implemented. Re-install with: skilltap install plugin <source>`,
+  );
+}
+
+async function runUpdateMcps(
+  out: ReturnType<typeof createOutput>,
+  name: string | undefined,
+  projectRoot: string | undefined,
+): Promise<void> {
+  const stateResult = await loadState(projectRoot);
+  if (!stateResult.ok) {
+    out.error(stateResult.error.message);
+    process.exit(1);
+  }
+  const mcpServers = stateResult.value.mcpServers;
+
+  const targets = name
+    ? mcpServers.filter((m) => m.name === name)
+    : mcpServers;
+
+  if (name && targets.length === 0) {
+    out.error(
+      `MCP server '${name}' is not installed.`,
+      "Run 'skilltap status' to see installed MCP servers.",
+    );
+    process.exit(1);
+  }
+
+  if (targets.length === 0) {
+    log.info("No MCP servers installed.");
+    return;
+  }
+
+  // MCP update (re-install from source) is not yet implemented.
+  // Phase 42 wires the CLI surface; the core updateMcpServer helper is a follow-up.
+  out.info(
+    `MCP server update is not yet implemented. Re-install with: skilltap install mcp <source>`,
+  );
+}
+
+// ─── Skill Update ─────────────────────────────────────────────────────────────
+
+async function runUpdateSkills(
   out: ReturnType<typeof createOutput>,
   name: string | undefined,
   args: { strict?: boolean; semantic: boolean; json?: boolean },

@@ -406,7 +406,6 @@ const main = defineCommand({
         list: () => import("./commands/tap/list").then((m) => m.default),
         info: () => import("./commands/tap/info").then((m) => m.default),
         init: () => import("./commands/tap/init").then((m) => m.default),
-        install: () => import("./commands/tap/install").then((m) => m.default),
       },
     }),
   },
