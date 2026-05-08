@@ -427,7 +427,7 @@ export async function adoptSkillFromPath(
  * installPath. The plugin remains owned by Claude Code; removing from
  * skilltap doesn't uninstall from Claude Code (out of scope).
  */
-export async function adoptAgentPlugin(
+export async function adoptPlugin(
   plugin: DiscoveredAgentPlugin,
   options: { also?: string[]; projectRoot?: string },
 ): Promise<Result<{ record: PluginRecord }, UserError>> {
@@ -491,3 +491,6 @@ export async function discoverAllAdoptable(
     scannerErrors: pluginScanResult.value.errors,
   });
 }
+
+/** @deprecated Use `adoptPlugin` instead. Will be removed in a future release. */
+export const adoptAgentPlugin = adoptPlugin;

@@ -1,6 +1,6 @@
 import { pickOne } from "../ui/picker";
 import {
-  adoptAgentPlugin,
+  adoptPlugin,
   adoptSkill,
   adoptSkillFromPath,
   discoverAllAdoptable,
@@ -201,7 +201,7 @@ async function runAdoptPicker(
   }
 
   // plugin
-  const adoptResult = await adoptAgentPlugin(item.plugin, { also, projectRoot });
+  const adoptResult = await adoptPlugin(item.plugin, { also, projectRoot });
   if (!adoptResult.ok) {
     out.error(adoptResult.error.message, adoptResult.error.hint);
     process.exit(1);
@@ -327,7 +327,7 @@ async function runAdoptName(
   // Check plugins by name
   const plugin = plugins.find((p) => p.name === name);
   if (plugin) {
-    const adoptResult = await adoptAgentPlugin(plugin, { also, projectRoot });
+    const adoptResult = await adoptPlugin(plugin, { also, projectRoot });
     if (!adoptResult.ok) {
       out.error(adoptResult.error.message, adoptResult.error.hint);
       process.exit(1);
