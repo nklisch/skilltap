@@ -1,15 +1,16 @@
-import { log, spinner } from "@clack/prompts";
+import { spinner } from "@clack/prompts";
 import type {
   AgentAdapter,
   CaptureBucket,
   InstallOptions,
+  Output,
   PluginManifest,
+  Progress,
   ScannedSkill,
   StaticWarning,
   TapEntry,
 } from "@skilltap/core";
 import { footerConfirm as confirm, footerSelect as select } from "./footer";
-import { errorLine } from "./format";
 import type { StepLogger } from "./install-steps";
 import { pluginComponentSummary } from "./plugin-format";
 import {
@@ -121,14 +122,9 @@ export function printCaptureSummary(
   log.info(`The plugin's bundled versions will replace them on disk.`);
 }
 
-type Spinner = {
-  start: (msg?: string) => void;
-  stop: (msg?: string, code?: number) => void;
-  message: (msg: string) => void;
-};
-
 export type CallbackContext = {
-  spinner: Spinner;
+  out: Output;
+  progress: Progress;
   onWarn: "fail" | "prompt" | "allow" | "ask" | "skip";
   skipScan: boolean;
   agent: AgentAdapter | undefined;
@@ -137,16 +133,16 @@ export type CallbackContext = {
   steps: StepLogger;
 };
 
-async function withSpinnerPaused<T>(
-  s: Spinner,
+async function withProgressPaused<T>(
+  p: Progress,
   fn: () => Promise<T>,
   resumeMsg?: string,
 ): Promise<T> {
-  s.stop();
+  p.pause();
   try {
     return await fn();
   } finally {
-    if (resumeMsg) s.start(resumeMsg);
+    if (resumeMsg) p.resume();
   }
 }
 
@@ -170,7 +166,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
   >;
   logScanResults(): void;
 } {
-  const { spinner: s, onWarn, skipScan, agent, yes, source, steps } = ctx;
+  const { out, progress: p, onWarn, skipScan, agent, yes, source, steps } = ctx;
 
   let staticStarted = false;
   let hadStaticWarnings = false;
@@ -183,7 +179,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       ? undefined
       : (_skillName: string): void => {
           // Fetch phase complete — switch from fetch spinner to scan step
-          s.stop();
+          p.pause();
           steps.fetched(source);
           staticStarted = true;
         },
@@ -194,7 +190,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
           hadStaticWarnings = true;
           printWarnings(warnings, skillName);
           if (onWarn === "fail") {
-            errorLine(
+            out.error(
               `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
             );
             process.exit(1);
@@ -244,7 +240,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
           }
           printSemanticWarnings(warnings, skillName);
           if (onWarn === "fail") {
-            errorLine(
+            out.error(
               `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
             );
             process.exit(1);
@@ -262,25 +258,25 @@ export function createInstallCallbacks(ctx: CallbackContext): {
     onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> => {
       if (yes || skills.length === 1) {
         if (yes && skills.length > 1) {
-          s.message(`Auto-selecting all ${skills.length} skills (--yes)`);
+          p.update(`Auto-selecting all ${skills.length} skills (--yes)`);
         }
         return skills.map((sk) => sk.name);
       }
-      return withSpinnerPaused(s, async () => {
+      return withProgressPaused(p, async () => {
         const selected = await selectSkills(skills);
         return selected;
       });
     },
 
     onSelectTap: async (matches: TapEntry[]): Promise<TapEntry | null> =>
-      withSpinnerPaused(s, async () => {
+      withProgressPaused(p, async () => {
         const chosen = await selectTap(matches);
         return chosen;
       }),
 
     onAlreadyInstalled: async (name: string): Promise<"update" | "abort"> => {
       if (yes) return "update";
-      return withSpinnerPaused(s, async () => {
+      return withProgressPaused(p, async () => {
         const { isCancel } = await import("@clack/prompts");
         const proceed = await confirm({
           message: `${name} is already installed. Update it instead?`,
@@ -294,8 +290,8 @@ export function createInstallCallbacks(ctx: CallbackContext): {
 
     onOfferSemantic: agent
       ? async (): Promise<boolean> => {
-          return withSpinnerPaused(
-            s,
+          return withProgressPaused(
+            p,
             async () => {
               const answer = await offerSemanticScan();
               return answer;
@@ -308,14 +304,14 @@ export function createInstallCallbacks(ctx: CallbackContext): {
     onConfirmInstall: yes
       ? undefined
       : async (skillNames: string[]): Promise<boolean> =>
-          withSpinnerPaused(s, async () => {
+          withProgressPaused(p, async () => {
             const proceed = await confirmReadyInstall(skillNames);
             if (proceed === false) process.exit(2);
             return true;
           }),
 
     onDeepScan: async (count: number): Promise<boolean> =>
-      withSpinnerPaused(s, async () => {
+      withProgressPaused(p, async () => {
         const { isCancel } = await import("@clack/prompts");
         const proceed = await confirm({
           message: `Found ${count} SKILL.md at non-standard path(s). Continue?`,
@@ -330,7 +326,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       manifest: PluginManifest,
     ): Promise<"plugin" | "skills-only" | "cancel"> => {
       if (yes) return "plugin";
-      return withSpinnerPaused(s, async () => {
+      return withProgressPaused(p, async () => {
         const { isCancel: isCancelPrompt } = await import("@clack/prompts");
         const summary = pluginComponentSummary(manifest);
 
@@ -361,10 +357,10 @@ export function createInstallCallbacks(ctx: CallbackContext): {
           warnings: StaticWarning[],
           pluginName: string,
         ): Promise<boolean> => {
-          return withSpinnerPaused(s, async () => {
+          return withProgressPaused(p, async () => {
             printWarnings(warnings, pluginName);
             if (onWarn === "fail") {
-              errorLine(
+              out.error(
                 `Security warnings found in plugin ${pluginName} — aborting (--strict / on_warn=fail)`,
               );
               process.exit(1);
@@ -379,7 +375,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
     onPluginConfirm: yes
       ? undefined
       : async (manifest: PluginManifest): Promise<boolean> => {
-          return withSpinnerPaused(s, async () => {
+          return withProgressPaused(p, async () => {
             const proceed = await confirmReadyInstall([manifest.name]);
             if (proceed === false) process.exit(2);
             return true;

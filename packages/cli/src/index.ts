@@ -59,6 +59,7 @@ function spawnSelfDetached(args: string[]): void {
 // Persistent hint bar at the bottom of the terminal. Invisible when idle,
 // auto-updates when any prompt is active. No-op on non-TTY.
 import { footer } from "./ui/footer";
+import { createOutput } from "./output";
 
 footer().open();
 
@@ -112,10 +113,10 @@ async function runV1DetectionNotice(): Promise<void> {
     if (!hasAnyV1Markers(markers)) return;
     const stateFile = Bun.file(getStatePath());
     if (await stateFile.exists()) return;
-    const DIM = "\x1b[2m";
-    const RESET = "\x1b[0m";
-    process.stderr.write(
-      `${DIM}↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.${RESET}\n\n`,
+    const out = createOutput({ json: false, quiet: false });
+    out.block(
+      ["↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.", ""],
+      { stream: "stderr" },
     );
   } catch {
     // Detection is best-effort. Never block startup.
@@ -161,7 +162,7 @@ async function runTelemetryNotice(): Promise<void> {
     // Interactive: ask the user directly
     const { isCancel } = await import("@clack/prompts");
     const { footerConfirm: confirm } = await import("./ui/footer");
-    process.stderr.write("\n");
+    process.stderr.write("\n"); // intentional newline before interactive prompt
     const opted = await confirm({
       message:
         "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)",
@@ -191,18 +192,24 @@ async function runTelemetryNotice(): Promise<void> {
       });
     }
 
-    process.stderr.write("\n");
+    process.stderr.write("\n"); // intentional newline after interactive prompt
   } else {
     // Non-interactive: show banner, don't enable
-    process.stderr.write(
-      "\n┌─ Telemetry Notice ─────────────────────────────────────────────────────┐\n" +
-        "│ skilltap can send anonymous usage data (OS, arch, command              │\n" +
-        "│ success/fail). No skill names, paths, or personal info collected.      │\n" +
-        "│ Data is never sold.                                                    │\n" +
-        "│                                                                        │\n" +
-        "│ Run 'skilltap telemetry enable' to opt in.                             │\n" +
-        "│ Set DO_NOT_TRACK=1 to silence this notice without opting in.           │\n" +
-        "└────────────────────────────────────────────────────────────────────────┘\n\n",
+    const out = createOutput({ json: false, quiet: false });
+    out.block(
+      [
+        "",
+        "┌─ Telemetry Notice ─────────────────────────────────────────────────────┐",
+        "│ skilltap can send anonymous usage data (OS, arch, command              │",
+        "│ success/fail). No skill names, paths, or personal info collected.      │",
+        "│ Data is never sold.                                                    │",
+        "│                                                                        │",
+        "│ Run 'skilltap telemetry enable' to opt in.                             │",
+        "│ Set DO_NOT_TRACK=1 to silence this notice without opting in.           │",
+        "└────────────────────────────────────────────────────────────────────────┘",
+        "",
+      ],
+      { stream: "stderr" },
     );
     const updated = {
       ...config,
@@ -244,14 +251,11 @@ async function runStartupUpdateCheck(): Promise<void> {
 
   // Major releases are never auto-updated — always just notify
   if (autoUpdateCoversType && isCompiledBinary()) {
-    process.stderr.write(
-      `⟳  Auto-updating skilltap ${current} → ${latest} (${type})…\n`,
-    );
+    const out = createOutput({ json: false, quiet: false });
+    out.block([`⟳  Auto-updating skilltap ${current} → ${latest} (${type})…`], { stream: "stderr" });
     const installResult = await downloadAndInstall(latest);
     if (installResult.ok) {
-      process.stderr.write(
-        `✓  Updated to v${latest}. Changes take effect next run.\n\n`,
-      );
+      out.block([`✓  Updated to v${latest}. Changes take effect next run.`, ""], { stream: "stderr" });
     } else {
       // Update failed — fall through to notify instead
       printUpdateNotice(current, latest, type);
@@ -290,8 +294,10 @@ function printSkillUpdateNotice(names: string[]): void {
   const nameList = names.length <= 3 ? ` (${names.join(", ")})` : "";
   const count =
     names.length === 1 ? "1 skill update" : `${names.length} skill updates`;
-  process.stderr.write(
-    `${DIM}↑  ${count} available${nameList}. Run: skilltap update${RESET}\n\n`,
+  const out = createOutput({ json: false, quiet: false });
+  out.block(
+    [`${DIM}↑  ${count} available${nameList}. Run: skilltap update${RESET}`, ""],
+    { stream: "stderr" },
   );
 }
 
@@ -305,20 +311,31 @@ function printUpdateNotice(
   const BOLD = "\x1b[1m";
   const RESET = "\x1b[0m";
 
+  const out = createOutput({ json: false, quiet: false });
   if (type === "major") {
-    process.stderr.write(
-      `${YELLOW}${BOLD}⚠  Major update available: v${current} → v${latest}${RESET}  ` +
-        `${DIM}Breaking changes may apply. Run: skilltap self-update${RESET}\n\n`,
+    out.block(
+      [
+        `${YELLOW}${BOLD}⚠  Major update available: v${current} → v${latest}${RESET}  ${DIM}Breaking changes may apply. Run: skilltap self-update${RESET}`,
+        "",
+      ],
+      { stream: "stderr" },
     );
   } else if (type === "minor") {
-    process.stderr.write(
-      `${BOLD}↑  Update available: v${current} → v${latest}${RESET}  ` +
-        `${DIM}(${type}) Run: skilltap self-update${RESET}\n\n`,
+    out.block(
+      [
+        `${BOLD}↑  Update available: v${current} → v${latest}${RESET}  ${DIM}(${type}) Run: skilltap self-update${RESET}`,
+        "",
+      ],
+      { stream: "stderr" },
     );
   } else {
     // patch — subtle
-    process.stderr.write(
-      `${DIM}↑  skilltap ${current} → ${latest} available. Run: skilltap self-update${RESET}\n\n`,
+    out.block(
+      [
+        `${DIM}↑  skilltap ${current} → ${latest} available. Run: skilltap self-update${RESET}`,
+        "",
+      ],
+      { stream: "stderr" },
     );
   }
 }

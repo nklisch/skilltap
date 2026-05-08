@@ -1,4 +1,3 @@
-import { spinner } from "@clack/prompts";
 import {
   discoverSkills,
   type InstalledSkill,
@@ -8,8 +7,8 @@ import {
   removeSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { createOutput } from "../../output";
 import { sendEvent, telemetryBase } from "../../telemetry";
-import { errorLine, successLine } from "../../ui/format";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
 import { tryFindProjectRoot } from "../../ui/resolve";
@@ -43,6 +42,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const { config, policy } = await loadPolicyOrExit({
       yes: args.yes,
       project: args.project,
@@ -57,7 +57,7 @@ export default defineCommand({
     const mcpInputs = allInputs.filter((n) => n.startsWith("mcp:"));
     if (mcpInputs.length > 0) {
       if (mcpInputs.length !== allInputs.length) {
-        errorLine(
+        out.error(
           "Cannot mix mcp: and regular sources in one remove. Run them separately.",
         );
         process.exit(1);
@@ -69,16 +69,16 @@ export default defineCommand({
       for (const source of mcpInputs) {
         const result = await removeMcpInstall(source, { scope, projectRoot });
         if (!result.ok) {
-          errorLine(result.error.message, result.error.hint);
+          out.error(result.error.message, result.error.hint);
           anyFail = true;
           continue;
         }
         const r = result.value;
-        successLine(
+        out.success(
           `Removed ${r.removed} MCP server${r.removed === 1 ? "" : "s"} from ${source} (agents: ${r.agents.join(", ")})`,
         );
         for (const name of r.names) {
-          successLine(`  • ${name}`);
+          out.success(`  • ${name}`);
         }
       }
       if (anyFail) process.exit(1);
@@ -88,7 +88,7 @@ export default defineCommand({
     const projectRoot = await tryFindProjectRoot();
     const globalResult = await loadInstalled();
     if (!globalResult.ok) {
-      errorLine(globalResult.error.message);
+      out.error(globalResult.error.message);
       process.exit(1);
     }
     const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
@@ -101,7 +101,7 @@ export default defineCommand({
 
     if (!args.name) {
       if (allSkills.length === 0) {
-        errorLine("No skills installed.");
+        out.error("No skills installed.");
         process.exit(1);
       }
       const selected = await selectSkillsToRemove(allSkills);
@@ -127,19 +127,18 @@ export default defineCommand({
                 const confirmed = await confirmRemove(name);
                 if (confirmed === false) process.exit(2);
               }
-              const s = spinner();
-              s.start(`Removing ${name}...`);
+              const p = out.progress(`Removing ${name}...`);
               const rmResult = await removeAnySkill({
                 skill: discovered,
                 removeAll: true,
               });
               if (!rmResult.ok) {
-                s.stop("Failed.");
-                errorLine(rmResult.error.message, rmResult.error.hint);
+                p.fail("Failed.");
+                out.error(rmResult.error.message, rmResult.error.hint);
                 process.exit(1);
               }
-              s.stop("Removed.");
-              successLine(`Removed ${name}`);
+              p.succeed("Removed.");
+              out.success(`Removed ${name}`);
               sendEvent(config, "remove", {
                 ...telemetryBase(),
                 success: true,
@@ -148,7 +147,7 @@ export default defineCommand({
             }
           }
 
-          errorLine(
+          out.error(
             `Skill '${name}' is not installed`,
             "Run 'skilltap skills' to see installed skills.",
           );
@@ -181,39 +180,38 @@ export default defineCommand({
         ? // biome-ignore lint/style/noNonNullAssertion: length === 1 guard
           skillsToRemove[0]!.name
         : `${skillsToRemove.length} skills`;
-    const s = spinner();
-    s.start(`Removing ${label}...`);
+    const p = out.progress(`Removing ${label}...`);
 
     for (const skill of skillsToRemove) {
       const result = await removeSkill(skill.name, {
         scope: scopeOf(skill),
         projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
         onOrphanRemoved(name) {
-          s.message(
+          p.update(
             `Note: "${name}" directory was already missing — cleaning up record only.`,
           );
         },
       });
       if (!result.ok) {
-        s.stop("Failed.");
+        p.fail("Failed.");
         sendEvent(config, "remove", {
           ...telemetryBase(),
           success: false,
           error_category: result.error.constructor.name,
           scope: scopeOf(skill),
         });
-        errorLine(result.error.message, result.error.hint);
+        out.error(result.error.message, result.error.hint);
         process.exit(1);
       }
     }
 
     sendEvent(config, "remove", { ...telemetryBase(), success: true });
-    s.stop("Removed.");
+    p.succeed("Removed.");
     if (skillsToRemove.length === 1) {
       // biome-ignore lint/style/noNonNullAssertion: length === 1 guard
-      successLine(`Removed ${skillsToRemove[0]!.name}`);
+      out.success(`Removed ${skillsToRemove[0]!.name}`);
     } else {
-      successLine(`Removed ${skillsToRemove.length} skills`);
+      out.success(`Removed ${skillsToRemove.length} skills`);
     }
   },
 });

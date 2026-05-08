@@ -1,13 +1,9 @@
-import { intro, log, outro, spinner } from "@clack/prompts";
+import { intro, log, outro } from "@clack/prompts";
 import type {
   AgentAdapter,
   Config,
   EffectivePolicy,
   OrphanRecord,
-  ScannedSkill,
-  SemanticWarning,
-  StaticWarning,
-  TapEntry,
 } from "@skilltap/core";
 import {
   ensureBuiltinTap,
@@ -25,8 +21,8 @@ import {
   updateSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { createOutput } from "../output";
 import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
-import { errorLine, securityBlock, successLine } from "../ui/format";
 import {
   createInstallCallbacks,
   printCaptureConflict,
@@ -38,7 +34,6 @@ import { loadPolicyOrExit } from "../ui/policy";
 import { confirmSaveDefault, selectAgents } from "../ui/prompts";
 import {
   parseAlsoFlag,
-  resolveAgentForAgentMode,
   resolveScope,
   resolveSemanticInteractive,
 } from "../ui/resolve";
@@ -104,6 +99,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const { config, policy } = await loadPolicyOrExit({
       strict: args.strict,
       noStrict: args["no-strict"],
@@ -130,15 +126,15 @@ export default defineCommand({
     const hasMcp = sources.some((s) => s.startsWith("mcp:"));
     if (hasMcp) {
       if (!sources.every((s) => s.startsWith("mcp:"))) {
-        errorLine(
+        out.error(
           "Cannot mix mcp: and regular sources in one install. Run them separately.",
         );
         process.exit(1);
       }
-      return runMcpInstall(sources, args, config, policy);
+      return runMcpInstall(out, sources, args, config, policy);
     }
 
-    return runInstall(sources, args, config, policy, verbose);
+    return runInstall(out, sources, args, config, policy, verbose);
   },
 });
 
@@ -163,6 +159,7 @@ async function preflightManifestValidity(
 // ─── MCP-only install (Phase 35b) ─────────────────────────────────────────────
 
 async function runMcpInstall(
+  out: ReturnType<typeof createOutput>,
   sources: string[],
   args: { also?: string },
   config: Config,
@@ -176,7 +173,7 @@ async function runMcpInstall(
   for (const source of sources) {
     const ref = parseMcpRef(source);
     if (!ref) {
-      errorLine(`Invalid mcp: source: ${source}`);
+      out.error(`Invalid mcp: source: ${source}`);
       process.exit(1);
     }
 
@@ -188,16 +185,16 @@ async function runMcpInstall(
     });
 
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
     const r = result.value;
-    successLine(
+    out.success(
       `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} → ${r.agents.join(", ")}`,
     );
     for (const record of r.records) {
-      successLine(`  • ${record.name}`);
+      out.success(`  • ${record.name}`);
     }
   }
 }
@@ -205,6 +202,7 @@ async function runMcpInstall(
 // ─── Install ──────────────────────────────────────────────────────────────────
 
 async function runInstall(
+  out: ReturnType<typeof createOutput>,
   sources: string[],
   args: {
     ref?: string;
@@ -264,12 +262,12 @@ async function runInstall(
   const errors: { source: string; message: string; hint?: string }[] = [];
 
   for (const source of sources) {
-    const s = spinner();
-    s.start(`Fetching ${source}...`);
+    const p = out.progress(`Fetching ${source}...`);
 
     const steps = createStepLogger(verbose);
     const { callbacks, logScanResults } = createInstallCallbacks({
-      spinner: s,
+      out,
+      progress: p,
       onWarn,
       skipScan,
       agent,
@@ -320,7 +318,7 @@ async function runInstall(
       ...(process.stdout.isTTY
         ? {
             async onPluginCaptureConflict(crossSource) {
-              s.stop();
+              p.pause();
               printCaptureConflict(crossSource, source);
               const { isCancel: isCancelPrompt } = await import(
                 "@clack/prompts"
@@ -343,7 +341,7 @@ async function runInstall(
                 ],
               });
               if (isCancelPrompt(decision)) {
-                s.start(`Fetching ${source}...`);
+                p.resume();
                 return "abort";
               }
               const resolved = decision as "abort" | "force";
@@ -355,14 +353,14 @@ async function runInstall(
                   forcedCaptureNames.add(c.serverName);
                 }
               }
-              s.start(`Fetching ${source}...`);
+              p.resume();
               return resolved;
             },
           }
         : {}),
       async onPluginCaptureConfirm(bucket) {
         if (policy.yes) return true;
-        s.stop();
+        p.pause();
         printCaptureSummary(bucket, source, forcedCaptureNames);
         const { isCancel: isCancelPrompt } = await import("@clack/prompts");
         const { footerConfirm: footerConf } = await import("../ui/footer");
@@ -371,16 +369,16 @@ async function runInstall(
           initialValue: true,
         });
         if (isCancelPrompt(proceed) || proceed === false) {
-          s.start(`Fetching ${source}...`);
+          p.resume();
           return false;
         }
-        s.start(`Fetching ${source}...`);
+        p.resume();
         return true;
       },
     });
 
     if (!result.ok) {
-      s.stop();
+      p.fail();
       sendEvent(config, "install", {
         ...telemetryBase(),
         adapter: inferAdapter(source),
@@ -398,7 +396,7 @@ async function runInstall(
       continue;
     }
 
-    s.stop();
+    p.succeed();
     logScanResults();
 
     sendEvent(config, "install", {
@@ -412,16 +410,16 @@ async function runInstall(
 
     for (const record of result.value.records) {
       const installDir = skillInstallDir(record.name, scope, projectRoot);
-      successLine(`Installed ${record.name} → ${installDir}`);
+      out.success(`Installed ${record.name} → ${installDir}`);
     }
 
     if (result.value.pluginRecord) {
       const pr = result.value.pluginRecord;
       const summary = componentSummary(pr);
-      successLine(`Installed plugin ${pr.name} (${summary})`);
+      out.success(`Installed plugin ${pr.name} (${summary})`);
       const cap = result.value.captured;
       if (cap && cap.skills.length + cap.mcpServers.length > 0) {
-        successLine(
+        out.success(
           `Captured ${cap.skills.length} standalone skill(s), ${cap.mcpServers.length} MCP server(s) into "${pr.name}".`,
         );
         const forced = cap.forcedCrossSource;
@@ -443,10 +441,10 @@ async function runInstall(
         threshold: config.security.threshold,
       });
       if (!updateResult.ok) {
-        errorLine(updateResult.error.message, updateResult.error.hint);
+        out.error(updateResult.error.message, updateResult.error.hint);
       } else {
         const { updated, upToDate } = updateResult.value;
-        if (updated.includes(name)) successLine(`Updated ${name}`);
+        if (updated.includes(name)) out.success(`Updated ${name}`);
         else if (upToDate.includes(name))
           log.info(`${name} is already up to date.`);
       }
@@ -455,7 +453,7 @@ async function runInstall(
 
   if (errors.length > 0) {
     for (const { source, message, hint } of errors) {
-      errorLine(`${source}: ${message}`, hint);
+      out.error(`${source}: ${message}`, hint);
     }
     outro("Finished with errors.");
     process.exit(1);

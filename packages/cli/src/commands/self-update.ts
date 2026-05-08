@@ -7,6 +7,7 @@ import {
   VERSION,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { createOutput } from "../output";
 import { ansi } from "../ui/format";
 
 export default defineCommand({
@@ -23,12 +24,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const force = args.force as boolean;
 
     p.intro(`${ansi.bold("skilltap self-update")}`);
 
-    const spin = p.spinner();
-    spin.start("Checking for latest release…");
+    const checkProgress = out.progress("Checking for latest release…");
 
     let latest: string;
     let updateType: string | undefined;
@@ -43,7 +44,7 @@ export default defineCommand({
       const result = await checkForUpdate(VERSION, 0);
 
       if (!result) {
-        spin.stop(
+        checkProgress.succeed(
           `${ansi.green("✓")} Already on the latest version (v${VERSION})`,
         );
         p.outro("Nothing to do.");
@@ -55,7 +56,7 @@ export default defineCommand({
     }
 
     if (latest === VERSION && !force) {
-      spin.stop(
+      checkProgress.succeed(
         `${ansi.green("✓")} Already on the latest version (v${VERSION})`,
       );
       p.outro("Nothing to do.");
@@ -63,11 +64,11 @@ export default defineCommand({
     }
 
     if (latest !== VERSION) {
-      spin.stop(
+      checkProgress.succeed(
         `Update available: ${ansi.dim(`v${VERSION}`)} → ${ansi.bold(`v${latest}`)}${updateType ? ` ${ansi.dim(`(${updateType})`)}` : ""}`,
       );
     } else {
-      spin.stop(`Already on v${VERSION} — reinstalling`);
+      checkProgress.succeed(`Already on v${VERSION} — reinstalling`);
     }
 
     if (!isCompiledBinary()) {
@@ -79,21 +80,17 @@ export default defineCommand({
       return;
     }
 
-    const spin2 = p.spinner();
-    spin2.start(`Downloading v${latest}…`);
+    const downloadProgress = out.progress(`Downloading v${latest}…`);
 
     const installResult = await downloadAndInstall(latest);
 
     if (!installResult.ok) {
-      spin2.stop(ansi.red("Download failed"));
-      p.log.error(installResult.error.message);
-      if (installResult.error.hint) {
-        p.log.info(installResult.error.hint);
-      }
+      downloadProgress.fail(ansi.red("Download failed"));
+      out.error(installResult.error.message, installResult.error.hint);
       process.exit(1);
     }
 
-    spin2.stop(`${ansi.green("✓")} Updated to v${latest}`);
+    downloadProgress.succeed(`${ansi.green("✓")} Updated to v${latest}`);
     p.outro("Changes take effect on the next run.");
   },
 });

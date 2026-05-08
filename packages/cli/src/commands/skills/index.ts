@@ -1,7 +1,8 @@
 import type { DiscoveredSkill } from "@skilltap/core";
 import { discoverSkills } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, jsonLine, table, termWidth, truncate } from "../../ui/format";
+import { createOutput } from "../../output";
+import { ansi, table, termWidth, truncate } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -51,6 +52,7 @@ export default defineCommand({
     // If a subcommand was matched, citty still calls this run — bail out
     if ((args._ as string[])?.length > 0) return;
 
+    const out = createOutput({ json: args.json, quiet: false });
     const projectRoot = await tryFindProjectRoot();
 
     const discoverOpts = args.global
@@ -62,7 +64,7 @@ export default defineCommand({
     const discoverResult = await discoverSkills(discoverOpts);
 
     if (!discoverResult.ok) {
-      process.stderr.write(`error: ${discoverResult.error.message}\n`);
+      out.error(discoverResult.error.message);
       process.exit(1);
     }
 
@@ -75,13 +77,13 @@ export default defineCommand({
     }
 
     if (args.json) {
-      jsonLine(skills);
+      out.json(skills);
       return;
     }
 
     if (skills.length === 0) {
-      process.stdout.write("No skills found.\n");
-      process.stdout.write("Run 'skilltap install <source>' to get started.\n");
+      out.info("No skills found.");
+      out.info("Run 'skilltap install <source>' to get started.");
       return;
     }
 

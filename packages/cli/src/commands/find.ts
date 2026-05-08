@@ -3,7 +3,6 @@ import {
   outro,
   S_RADIO_ACTIVE,
   S_RADIO_INACTIVE,
-  spinner,
 } from "@clack/prompts";
 import type { Config, RegistrySearchResult, TapEntry } from "@skilltap/core";
 import {
@@ -20,12 +19,11 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import { createOutput } from "../output";
 import {
   ansi,
-  errorLine,
   formatInstallCount,
   highlightMatches,
-  successLine,
   table,
   termWidth,
   truncate,
@@ -81,6 +79,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     // Combine the first positional with any extra words from args._
     // so "skilltap find git hooks" works without quoting
     const rest = (args as Record<string, unknown>)._ as string[] | undefined;
@@ -91,7 +90,7 @@ export default defineCommand({
 
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
@@ -117,43 +116,39 @@ export default defineCommand({
       query ?? "",
       args.local,
       config,
+      out,
     );
 
     if (filtered.length === 0 && !query) {
       if (tapEntries.length === 0) {
-        process.stdout.write(
-          "No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n",
+        out.info(
+          "No taps configured. Run 'skilltap tap add <name> <url>' to add one.",
         );
-        process.stdout.write(
-          "Tip: search the skills.sh registry with 'skilltap find <query>'.\n",
+        out.info(
+          "Tip: search the skills.sh registry with 'skilltap find <query>'.",
         );
       } else {
-        process.stdout.write("No skills found.\n");
+        out.info("No skills found.");
       }
       process.exit(0);
     }
 
     if (filtered.length === 0) {
-      process.stdout.write(`No skills found matching '${query}'.\n`);
+      out.info(`No skills found matching '${query}'.`);
       process.exit(0);
     }
 
     if (args.json) {
-      process.stdout.write(
-        JSON.stringify(
-          filtered.map((e) => ({
-            name: e.name,
-            description: e.description,
-            source: e.source,
-            installRef: e.installRef,
-            ...(e.preSelectedSkill ? { skill: e.preSelectedSkill } : {}),
-            ...(e.installs !== undefined ? { installs: e.installs } : {}),
-          })),
-          null,
-          2,
-        ),
+      out.json(
+        filtered.map((e) => ({
+          name: e.name,
+          description: e.description,
+          source: e.source,
+          installRef: e.installRef,
+          ...(e.preSelectedSkill ? { skill: e.preSelectedSkill } : {}),
+          ...(e.installs !== undefined ? { installs: e.installs } : {}),
+        })),
       );
-      process.stdout.write("\n");
       return;
     }
 
@@ -169,6 +164,7 @@ async function search(
   query: string,
   local: boolean,
   config: Config,
+  out: ReturnType<typeof createOutput>,
 ): Promise<{ filtered: SearchEntry[]; tapEntries: TapEntry[] }> {
   const registries = local ? [] : resolveRegistries(config);
 
@@ -180,7 +176,7 @@ async function search(
   ]);
 
   if (!tapsResult.ok) {
-    errorLine(tapsResult.error.message, tapsResult.error.hint);
+    out.error(tapsResult.error.message, tapsResult.error.hint);
     process.exit(1);
   }
 
@@ -311,7 +307,7 @@ async function runInteractiveSearch(
           plugin: skill.plugin || undefined,
         }));
       }
-      const { filtered } = await search(query, local, config);
+      const { filtered } = await search(query, local, config, createOutput({ json: false, quiet: true }));
       return filtered;
     },
     selector: (entry) => `${entry.name} ${entry.description}`,
@@ -358,6 +354,7 @@ async function installChosen(
   chosen: SearchEntry,
   config: Config,
 ): Promise<void> {
+  const out = createOutput({ json: false, quiet: false });
   const policyResult = composePolicy(config, {});
   if (!policyResult.ok) throw new Error(policyResult.error.message);
   const policy = policyResult.value;
@@ -383,12 +380,12 @@ async function installChosen(
     }
   }
 
-  const s = spinner();
-  s.start(`Fetching ${chosen.name}…`);
+  const p = out.progress(`Fetching ${chosen.name}…`);
 
   const steps = createStepLogger(config.verbose);
   const { callbacks, logScanResults } = createInstallCallbacks({
-    spinner: s,
+    out,
+    progress: p,
     onWarn: config.security.on_warn,
     skipScan: false,
     agent,
@@ -410,15 +407,15 @@ async function installChosen(
   });
 
   if (!installResult.ok) {
-    s.stop("Failed.");
-    errorLine(installResult.error.message, installResult.error.hint);
+    p.fail("Failed.");
+    out.error(installResult.error.message, installResult.error.hint);
     process.exit(1);
   }
 
-  s.stop();
+  p.succeed();
   logScanResults();
   for (const record of installResult.value.records) {
-    successLine(`Installed ${record.name}`);
+    out.success(`Installed ${record.name}`);
   }
   outro("Complete!");
 }

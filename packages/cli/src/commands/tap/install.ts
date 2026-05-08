@@ -1,4 +1,4 @@
-import { intro, isCancel, outro, spinner } from "@clack/prompts";
+import { intro, isCancel, outro } from "@clack/prompts";
 import type { InstalledSkill, TapEntry } from "@skilltap/core";
 import {
   ensureBuiltinTap,
@@ -14,7 +14,8 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { errorLine, successLine, termWidth, truncate } from "../../ui/format";
+import { createOutput } from "../../output";
+import { termWidth, truncate } from "../../ui/format";
 import { createInstallCallbacks } from "../../ui/install-callbacks";
 import { createStepLogger } from "../../ui/install-steps";
 import { loadPolicyOrExit } from "../../ui/policy";
@@ -77,6 +78,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const { config, policy } = await loadPolicyOrExit({
       strict: args.strict,
       noStrict: args["no-strict"],
@@ -87,18 +89,17 @@ export default defineCommand({
       global: args.global,
     });
 
-    // Ensure the built-in tap is cloned (only show spinner on first clone)
+    // Ensure the built-in tap is cloned (only show progress on first clone)
     const configResult = await loadConfig();
     if (configResult.ok && configResult.value.builtin_tap !== false) {
       const alreadyCloned = await isBuiltinTapCloned();
       if (!alreadyCloned) {
-        const s = spinner();
-        s.start("Fetching built-in skills tap…");
+        const p = out.progress("Fetching built-in skills tap…");
         const ensureResult = await ensureBuiltinTap();
         if (!ensureResult.ok) {
-          s.stop("Could not reach built-in tap — continuing without it.");
+          p.fail("Could not reach built-in tap — continuing without it.");
         } else {
-          s.stop("Built-in tap ready.");
+          p.succeed("Built-in tap ready.");
         }
       }
     }
@@ -106,14 +107,14 @@ export default defineCommand({
     // Load all tap entries
     const tapsResult = await loadTaps();
     if (!tapsResult.ok) {
-      errorLine(tapsResult.error.message, tapsResult.error.hint);
+      out.error(tapsResult.error.message, tapsResult.error.hint);
       process.exit(1);
     }
 
     let tapEntries = tapsResult.value;
 
     if (tapEntries.length === 0) {
-      errorLine(
+      out.error(
         "No skills available.",
         "Check your connection, or add a tap with 'skilltap tap add <name> <url>'.",
       );
@@ -124,7 +125,7 @@ export default defineCommand({
     if (args.tap) {
       const tapNames = [...new Set(tapEntries.map((e) => e.tapName))];
       if (!tapNames.includes(args.tap)) {
-        errorLine(
+        out.error(
           `Tap '${args.tap}' is not configured.`,
           `Configured taps: ${tapNames.join(", ")}`,
         );
@@ -274,29 +275,29 @@ export default defineCommand({
 
     // Remove deselected skills
     for (const skill of toRemove) {
-      const s = spinner();
-      s.start(`Removing ${skill.name}…`);
+      const p = out.progress(`Removing ${skill.name}…`);
       const result = await removeSkill(skill.name, {
         scope: skill.scope,
         projectRoot:
           skill.scope === "project" ? detectedProjectRoot : undefined,
       });
-      s.stop();
       if (!result.ok) {
+        p.fail();
         errors.push({ name: skill.name, message: result.error.message });
       } else {
-        successLine(`Removed ${skill.name}`);
+        p.succeed();
+        out.success(`Removed ${skill.name}`);
       }
     }
 
     for (const entry of toInstall) {
       const skillName = entry.skill.name;
-      const s = spinner();
-      s.start(`Fetching ${skillName}…`);
+      const p = out.progress(`Fetching ${skillName}…`);
 
       const steps = createStepLogger(config.verbose);
       const { callbacks, logScanResults } = createInstallCallbacks({
-        spinner: s,
+        out,
+        progress: p,
         onWarn: policy.onWarn,
         skipScan: policy.skipScan,
         agent,
@@ -318,13 +319,13 @@ export default defineCommand({
       });
 
       if (!result.ok) {
-        s.stop();
+        p.fail();
         errors.push({ name: skillName, message: result.error.message });
       } else {
-        s.stop();
+        p.succeed();
         logScanResults();
         for (const record of result.value.records) {
-          successLine(
+          out.success(
             `${record.name} → ${skillInstallDir(record.name, scope, projectRoot)}`,
           );
         }
@@ -333,7 +334,7 @@ export default defineCommand({
 
     if (errors.length > 0) {
       for (const { name, message } of errors) {
-        errorLine(`${name}: ${message}`);
+        out.error(`${name}: ${message}`);
       }
       outro("Finished with errors.");
       process.exit(1);

@@ -7,7 +7,8 @@ import {
   toggleInstalledComponent,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine, successLine } from "../ui/format";
+import { createOutput } from "../output";
+import { ansi } from "../ui/format";
 import { componentLabel, loadPluginByName } from "../ui/plugin-format";
 import { tryFindProjectRoot } from "../ui/resolve";
 
@@ -29,12 +30,13 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const ref = parseComponentRef(args.target as string);
     const projectRoot = await tryFindProjectRoot();
 
     const plugin = await loadPluginByName(ref.name, projectRoot);
     if (!plugin) {
-      errorLine(
+      out.error(
         `Plugin '${ref.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
@@ -46,7 +48,7 @@ export default defineCommand({
       if (!component) {
         const available =
           plugin.components.map((c) => c.name).join(", ") || "(none)";
-        errorLine(
+        out.error(
           `Component '${ref.component}' not found in plugin '${ref.name}'`,
           `Available: ${available}`,
         );
@@ -61,12 +63,12 @@ export default defineCommand({
         },
       );
       if (!result.ok) {
-        errorLine(result.error.message);
+        out.error(result.error.message);
         process.exit(1);
       }
       const action = result.value.nowActive ? "Enabled" : "Disabled";
       if (args.json) {
-        jsonLine({
+        out.json({
           plugin: plugin.name,
           component: result.value.component,
           nowActive: result.value.nowActive,
@@ -74,15 +76,16 @@ export default defineCommand({
         });
         return;
       }
-      successLine(`${action} ${componentLabel(result.value.component)}`);
+      out.success(`${action} ${componentLabel(result.value.component)}`);
       return;
     }
 
-    await runPicker(plugin, projectRoot, args.json as boolean);
+    await runPicker(out, plugin, projectRoot, args.json as boolean);
   },
 });
 
 async function runPicker(
+  out: ReturnType<typeof createOutput>,
   plugin: PluginRecord,
   projectRoot: string | undefined,
   json: boolean,
@@ -114,7 +117,7 @@ async function runPicker(
   }
 
   if (toToggle.length === 0) {
-    process.stdout.write("No changes.\n");
+    out.info("No changes.");
     return;
   }
 
@@ -142,15 +145,15 @@ async function runPicker(
   }
 
   if (json) {
-    jsonLine(results);
+    out.json(results);
     return;
   }
   for (const r of results) {
     if (r.error) {
-      errorLine(`Failed to toggle ${componentLabel(r.component)}: ${r.error}`);
+      out.error(`Failed to toggle ${componentLabel(r.component)}: ${r.error}`);
     } else {
       const action = r.nowActive ? "Enabled" : "Disabled";
-      successLine(`${action} ${componentLabel(r.component)}`);
+      out.success(`${action} ${componentLabel(r.component)}`);
     }
   }
 }

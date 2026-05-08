@@ -1,4 +1,4 @@
-import { isCancel, log, spinner } from "@clack/prompts";
+import { isCancel, log } from "@clack/prompts";
 import {
   type Config,
   type EffectivePolicy,
@@ -12,17 +12,15 @@ import {
   writeSkillUpdateCache,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { createOutput } from "../output";
 import { sendEvent, telemetryBase } from "../telemetry";
 import { footerConfirm as confirm } from "../ui/footer";
 import {
   ansi,
-  errorLine,
   formatDiffFileLine,
   formatDiffStatSummary,
   formatShaChange,
   formatUnifiedDiff,
-  jsonLine,
-  successLine,
 } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import {
@@ -78,11 +76,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const name = args.name as string | undefined;
     const projectRoot = await tryFindProjectRoot();
 
     if (args.check) {
-      return runCheckMode(projectRoot, args.json);
+      return runCheckMode(out, projectRoot, args.json);
     }
 
     const { config, policy } = await loadPolicyOrExit({
@@ -91,28 +90,28 @@ export default defineCommand({
       semantic: args.semantic,
     });
 
-    await refreshTapIndexes();
+    await refreshTapIndexes(out);
 
-    return runUpdate(name, args, config, policy, projectRoot, args.force);
+    return runUpdate(out, name, args, config, policy, projectRoot, args.force);
   },
 });
 
 // ─── Tap Refresh ──────────────────────────────────────────────────────────────
 
-async function refreshTapIndexes(): Promise<void> {
-  const s = spinner();
-  s.start("Refreshing tap indexes...");
+async function refreshTapIndexes(out: ReturnType<typeof createOutput>): Promise<void> {
+  const p = out.progress("Refreshing tap indexes...");
   const result = await updateTap();
   if (!result.ok) {
-    s.stop(`Could not refresh tap indexes: ${result.error.message}`);
+    p.fail(`Could not refresh tap indexes: ${result.error.message}`);
   } else {
-    s.stop("Tap indexes refreshed.");
+    p.succeed("Tap indexes refreshed.");
   }
 }
 
 // ─── Check Mode ───────────────────────────────────────────────────────────────
 
 async function runCheckMode(
+  out: ReturnType<typeof createOutput>,
   projectRoot: string | undefined,
   json = false,
 ): Promise<void> {
@@ -121,16 +120,14 @@ async function runCheckMode(
   if (json || !process.stdout.isTTY) {
     const updates = await fetchSkillUpdateStatus(pr);
     await writeSkillUpdateCache(updates, pr);
-    jsonLine({ updatesAvailable: updates });
+    out.json({ updatesAvailable: updates });
     return;
   }
 
-  const { spinner } = await import("@clack/prompts");
-  const s = spinner();
-  s.start("Checking skills for updates…");
+  const p = out.progress("Checking skills for updates…");
   const updates = await fetchSkillUpdateStatus(pr);
   await writeSkillUpdateCache(updates, pr);
-  s.stop(
+  p.succeed(
     updates.length === 0
       ? "All skills are up to date."
       : `${updates.length} skill update${updates.length === 1 ? "" : "s"} available.`,
@@ -147,6 +144,7 @@ async function runCheckMode(
 // ─── Update ───────────────────────────────────────────────────────────────────
 
 async function runUpdate(
+  out: ReturnType<typeof createOutput>,
   name: string | undefined,
   args: { strict?: boolean; semantic: boolean; json?: boolean },
   config: Config,
@@ -160,7 +158,7 @@ async function runUpdate(
     config,
   );
 
-  let semSpinner: ReturnType<typeof spinner> | null = null;
+  let semProgress: ReturnType<typeof out.progress> | null = null;
 
   const result = await updateSkill({
     name,
@@ -173,9 +171,9 @@ async function runUpdate(
     projectRoot,
 
     onProgress(skillName, status) {
-      if (semSpinner) {
-        semSpinner.stop();
-        semSpinner = null;
+      if (semProgress) {
+        semProgress.succeed();
+        semProgress = null;
       }
       if (status === "checking") {
         log.step(`Checking ${ansi.bold(skillName)}...`);
@@ -256,8 +254,7 @@ async function runUpdate(
     },
 
     onSemanticScanStart(skillName: string) {
-      semSpinner = spinner();
-      semSpinner.start(`Semantic scan of ${ansi.bold(skillName)}...`);
+      semProgress = out.progress(`Semantic scan of ${ansi.bold(skillName)}...`);
     },
 
     onSemanticProgress(
@@ -270,13 +267,13 @@ async function runUpdate(
         score >= (config.security.threshold ?? 5)
           ? ` — ⚠ ${reason.length > 60 ? `${reason.slice(0, 59)}…` : reason}`
           : "";
-      semSpinner?.message(`Semantic scan: chunk ${completed}/${total}${flag}`);
+      semProgress?.update(`Semantic scan: chunk ${completed}/${total}${flag}`);
     },
 
     onSemanticWarnings(warnings: SemanticWarning[], skillName: string) {
-      if (semSpinner) {
-        semSpinner.stop();
-        semSpinner = null;
+      if (semProgress) {
+        semProgress.fail();
+        semProgress = null;
       }
       printSemanticWarnings(warnings, skillName);
       if (policy.onWarn === "fail") {
@@ -295,7 +292,7 @@ async function runUpdate(
       updated_count: 0,
       up_to_date_count: 0,
     });
-    errorLine(result.error.message, result.error.hint);
+    out.error(result.error.message, result.error.hint);
     process.exit(1);
   }
 
@@ -309,12 +306,12 @@ async function runUpdate(
   });
 
   if (args.json) {
-    jsonLine({ updated, skipped, upToDate });
+    out.json({ updated, skipped, upToDate });
     return;
   }
 
   for (const skillName of updated) {
-    successLine(`Updated ${skillName}`);
+    out.success(`Updated ${skillName}`);
   }
 
   if (updated.length > 0 || skipped.length > 0 || upToDate.length > 0) {

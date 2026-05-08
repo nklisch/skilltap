@@ -11,7 +11,8 @@ import {
   type SyncApplyResult,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine, successLine } from "../ui/format";
+import { createOutput } from "../output";
+import { ansi } from "../ui/format";
 
 export default defineCommand({
   meta: {
@@ -36,6 +37,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const useJson = args.json as boolean;
     const apply = args.apply as boolean;
     const strict = args.strict as boolean;
@@ -49,7 +51,7 @@ export default defineCommand({
     const projectRoot =
       (await findManifestRoot()) ?? (await isInGitRepo());
     if (!projectRoot) {
-      errorLine(
+      out.error(
         "skilltap sync requires a project root (looks for .git or skilltap.toml).",
       );
       process.exit(1);
@@ -62,15 +64,15 @@ export default defineCommand({
     ]);
 
     if (!manifestResult.ok) {
-      errorLine(manifestResult.error.message);
+      out.error(manifestResult.error.message);
       process.exit(1);
     }
     if (!lockfileResult.ok) {
-      errorLine(lockfileResult.error.message);
+      out.error(lockfileResult.error.message);
       process.exit(1);
     }
     if (!stateResult.ok) {
-      errorLine(stateResult.error.message);
+      out.error(stateResult.error.message);
       process.exit(1);
     }
 
@@ -84,7 +86,7 @@ export default defineCommand({
     if (apply) {
       if (plan.inSync) {
         if (useJson) {
-          jsonLine({
+          out.json({
             inSync: true,
             applied: 0,
             skipped: 0,
@@ -92,9 +94,7 @@ export default defineCommand({
             results: [],
           });
         } else {
-          process.stdout.write(
-            `${ansi.green("✓")} In sync. Nothing to apply.\n`,
-          );
+          out.raw(`${ansi.green("✓")} In sync. Nothing to apply.\n`);
         }
         return;
       }
@@ -107,22 +107,22 @@ export default defineCommand({
           ? undefined
           : (item, status, error) => {
               const label = `${item.kind} ${item.target} ${item.source}`;
-              if (status === "ok") successLine(label);
+              if (status === "ok") out.success(label);
               else if (status === "skipped")
-                process.stdout.write(
+                out.raw(
                   `${ansi.dim("·")} ${ansi.dim(`${label} (skipped)`)}\n`,
                 );
-              else errorLine(`${label} — ${error ?? "unknown error"}`);
+              else out.error(`${label} — ${error ?? "unknown error"}`);
             },
       });
 
       if (!applyResult.ok) {
-        errorLine(applyResult.error.message);
+        out.error(applyResult.error.message);
         process.exit(1);
       }
       const summary: SyncApplyResult = applyResult.value;
       if (useJson) {
-        jsonLine({
+        out.json({
           inSync: false,
           applied: summary.applied,
           skipped: summary.skipped,
@@ -130,7 +130,7 @@ export default defineCommand({
           results: summary.results,
         });
       } else {
-        process.stdout.write(
+        out.raw(
           `\n${ansi.bold("Sync apply complete:")} ${ansi.green(`${summary.applied} applied`)}, ${ansi.dim(`${summary.skipped} skipped`)}, ${summary.failed > 0 ? ansi.red(`${summary.failed} failed`) : `${summary.failed} failed`}\n`,
         );
       }
@@ -139,7 +139,7 @@ export default defineCommand({
     }
 
     if (useJson) {
-      jsonLine({
+      out.json({
         inSync: plan.inSync,
         items: plan.ordered,
       });
@@ -147,42 +147,42 @@ export default defineCommand({
     }
 
     if (plan.inSync) {
-      process.stdout.write(
+      out.raw(
         `${ansi.green("✓")} In sync. Manifest, lockfile, and state agree.\n`,
       );
       return;
     }
 
-    process.stdout.write(`\n${ansi.bold("skilltap sync")} — drift report\n\n`);
+    out.raw(`\n${ansi.bold("skilltap sync")} — drift report\n\n`);
 
     const groups = groupByKind(plan.ordered);
     for (const [kind, items] of groups) {
-      process.stdout.write(`${kindLabel(kind)} (${items.length})\n`);
+      out.raw(`${kindLabel(kind)} (${items.length})\n`);
       for (const item of items) {
-        process.stdout.write(`  ${ansi.dim(item.target)} ${item.source}\n`);
+        out.raw(`  ${ansi.dim(item.target)} ${item.source}\n`);
         if (item.reason) {
-          process.stdout.write(`    ${ansi.dim(item.reason)}\n`);
+          out.raw(`    ${ansi.dim(item.reason)}\n`);
         }
         if (item.declared) {
-          process.stdout.write(
+          out.raw(
             `    ${ansi.dim("declared:")} range=${item.declared.range ?? ""} ref=${item.declared.ref ?? ""}\n`,
           );
         }
         if (item.installed) {
-          process.stdout.write(
+          out.raw(
             `    ${ansi.dim("installed:")} ref=${item.installed.ref ?? ""} sha=${item.installed.sha ?? ""}\n`,
           );
         }
         if (item.locked) {
-          process.stdout.write(
+          out.raw(
             `    ${ansi.dim("locked:")} ref=${item.locked.ref} sha=${item.locked.sha ?? ""} range=${item.locked.range}\n`,
           );
         }
       }
-      process.stdout.write("\n");
+      out.raw("\n");
     }
 
-    process.stdout.write(
+    out.raw(
       `${ansi.dim("note:")} run ${ansi.bold("skilltap sync --apply")} to execute this plan.\n`,
     );
   },

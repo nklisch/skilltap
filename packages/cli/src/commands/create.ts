@@ -8,8 +8,9 @@ import {
   TEMPLATE_NAMES,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { createOutput } from "../output";
 import { footerSelect as select, footerText as text } from "../ui/footer";
-import { ansi, errorLine, successLine } from "../ui/format";
+import { ansi } from "../ui/format";
 
 const NAME_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -41,50 +42,51 @@ async function writeFiles(
 }
 
 function printNextSteps(
+  out: ReturnType<typeof createOutput>,
   _name: string,
   dir: string,
   template: string,
   fileList: string[],
 ): void {
-  process.stdout.write(`\n`);
-  successLine(`Created ${dir}/`);
+  out.raw(`\n`);
+  out.success(`Created ${dir}/`);
   for (const f of fileList) {
-    process.stdout.write(`    ${ansi.dim("├──")} ${f}\n`);
+    out.raw(`    ${ansi.dim("├──")} ${f}\n`);
   }
-  process.stdout.write(`\n`);
-  process.stdout.write(`  ${ansi.bold("Next steps:")}\n`);
-  process.stdout.write(`    cd ${dir}\n`);
-  process.stdout.write(
+  out.raw(`\n`);
+  out.raw(`  ${ansi.bold("Next steps:")}\n`);
+  out.raw(`    cd ${dir}\n`);
+  out.raw(
     `    ${ansi.dim("# Edit SKILL.md with your skill instructions")}\n`,
   );
   if (template === "npm") {
-    process.stdout.write(
+    out.raw(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: ${name} is shown literally as user guidance
-      `    ${ansi.dim('# Edit package.json — set "name" to your npm scope (e.g. @yourname/${name})')}\n`,
+      `    ${ansi.dim('# Edit package.json — set "name" to your npm scope (e.g. @yourname/${_name})')}\n`,
     );
-    process.stdout.write(
+    out.raw(
       `    ${ansi.dim("# Set repository.url in package.json")}\n`,
     );
   }
-  process.stdout.write(
+  out.raw(
     `    skilltap link . --also claude-code   ${ansi.dim("# Test locally")}\n`,
   );
-  process.stdout.write(
+  out.raw(
     `    skilltap verify                        ${ansi.dim("# Validate before sharing")}\n`,
   );
-  process.stdout.write(
+  out.raw(
     `    git init && git add -A && git commit -m "Initial skill"\n`,
   );
   if (template === "npm") {
-    process.stdout.write(
+    out.raw(
       `    ${ansi.dim("# Push, then create a GitHub release to trigger publish")}\n`,
     );
   } else {
-    process.stdout.write(
+    out.raw(
       `    git remote add origin <your-git-url> && git push -u origin main\n`,
     );
   }
-  process.stdout.write(`\n`);
+  out.raw(`\n`);
 }
 
 export default defineCommand({
@@ -111,6 +113,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const author = await getGitAuthor();
 
     // Non-interactive mode: name and template both provided
@@ -118,7 +121,7 @@ export default defineCommand({
       !!(args.name as string | undefined) && !!(args.template as string);
 
     if (isNonInteractive) {
-      await runNonInteractive({
+      await runNonInteractive(out, {
         name: args.name as string,
         template: (args.template as string) || "basic",
         dir: (args.dir as string) || "",
@@ -146,7 +149,7 @@ export default defineCommand({
     } else {
       const err = validateName(name);
       if (err) {
-        errorLine(err, "Skill name must match /^[a-z0-9]+(-[a-z0-9]+)*$/");
+        out.error(err, "Skill name must match /^[a-z0-9]+(-[a-z0-9]+)*$/");
         process.exit(1);
       }
     }
@@ -225,7 +228,7 @@ export default defineCommand({
     const license = licenseResult as string;
 
     const outDir = (args.dir as string) || name;
-    await createSkill({
+    await createSkill(out, {
       name,
       description,
       license,
@@ -239,22 +242,25 @@ export default defineCommand({
   },
 });
 
-async function runNonInteractive(opts: {
-  name: string;
-  template: string;
-  dir: string;
-  author: string;
-}): Promise<void> {
+async function runNonInteractive(
+  out: ReturnType<typeof createOutput>,
+  opts: {
+    name: string;
+    template: string;
+    dir: string;
+    author: string;
+  },
+): Promise<void> {
   const { name, template, dir: dirFlag, author } = opts;
 
   const nameErr = validateName(name);
   if (nameErr) {
-    errorLine(nameErr, "Skill name must match /^[a-z0-9]+(-[a-z0-9]+)*$/");
+    out.error(nameErr, "Skill name must match /^[a-z0-9]+(-[a-z0-9]+)*$/");
     process.exit(1);
   }
 
   if (!(TEMPLATE_NAMES as readonly string[]).includes(template)) {
-    errorLine(
+    out.error(
       `Unknown template '${template}'`,
       `Use: ${TEMPLATE_NAMES.join(", ")}`,
     );
@@ -266,7 +272,7 @@ async function runNonInteractive(opts: {
   const license = "MIT";
   const skillNames = template === "multi" ? [`${name}-a`, `${name}-b`] : [];
 
-  await createSkill({
+  await createSkill(out, {
     name,
     description,
     license,
@@ -277,15 +283,18 @@ async function runNonInteractive(opts: {
   });
 }
 
-async function createSkill(opts: {
-  name: string;
-  description: string;
-  license: string;
-  author: string;
-  template: string;
-  skillNames: string[];
-  outDir: string;
-}): Promise<void> {
+async function createSkill(
+  out: ReturnType<typeof createOutput>,
+  opts: {
+    name: string;
+    description: string;
+    license: string;
+    author: string;
+    template: string;
+    skillNames: string[];
+    outDir: string;
+  },
+): Promise<void> {
   const { name, description, license, author, template, skillNames, outDir } =
     opts;
   const resolvedDir = resolve(outDir);
@@ -297,7 +306,7 @@ async function createSkill(opts: {
     const { lstat } = await import("node:fs/promises");
     try {
       await lstat(resolvedDir);
-      errorLine(
+      out.error(
         `Directory '${outDir}/' already exists.`,
         "Use --dir to specify a different location.",
       );
@@ -324,5 +333,5 @@ async function createSkill(opts: {
   await writeFiles(resolvedDir, files);
 
   const fileList = Object.keys(files).sort();
-  printNextSteps(name, outDir, template, fileList);
+  printNextSteps(out, name, outDir, template, fileList);
 }

@@ -1,7 +1,8 @@
 import type { PluginRecord } from "@skilltap/core";
 import { loadPlugins } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, jsonLine, table, termWidth, truncate } from "../../ui/format";
+import { createOutput } from "../../output";
+import { ansi, table, termWidth, truncate } from "../../ui/format";
 import { componentSummary } from "../../ui/plugin-format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
@@ -31,11 +32,12 @@ export default defineCommand({
   async run({ args }) {
     if ((args._ as string[])?.length > 0) return;
 
+    const out = createOutput({ json: args.json, quiet: false });
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      process.stderr.write(`error: ${globalResult.error.message}\n`);
+      out.error(globalResult.error.message);
       process.exit(1);
     }
 
@@ -63,15 +65,13 @@ export default defineCommand({
     }
 
     if (args.json) {
-      jsonLine(allPlugins);
+      out.json(allPlugins);
       return;
     }
 
     if (allPlugins.length === 0) {
-      process.stdout.write("No plugins installed.\n");
-      process.stdout.write(
-        "Run 'skilltap install <source>' to install a plugin.\n",
-      );
+      out.info("No plugins installed.");
+      out.info("Run 'skilltap install <source>' to install a plugin.");
       return;
     }
 

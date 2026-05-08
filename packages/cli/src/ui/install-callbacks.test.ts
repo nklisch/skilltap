@@ -1,13 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import type { AgentAdapter } from "@skilltap/core";
+import type { AgentAdapter, Output, Progress } from "@skilltap/core";
 import { Glob } from "bun";
 import { createInstallCallbacks } from "./install-callbacks";
 import { createStepLogger } from "./install-steps";
 
-const fakeSpinner = {
-  start: () => {},
-  stop: () => {},
-  message: () => {},
+const fakeProgress: Progress = {
+  update: () => {},
+  succeed: () => {},
+  fail: () => {},
+  pause: () => {},
+  resume: () => {},
+};
+
+const fakeOut: Output = {
+  mode: "plain",
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+  success: () => {},
+  block: () => {},
+  json: () => {},
+  progress: () => fakeProgress,
+  raw: () => {},
 };
 
 const fakeAgent: AgentAdapter = {
@@ -18,7 +32,8 @@ const fakeAgent: AgentAdapter = {
 };
 
 const baseCtx = {
-  spinner: fakeSpinner,
+  out: fakeOut,
+  progress: fakeProgress,
   onWarn: "prompt" as const,
   skipScan: false,
   yes: false,

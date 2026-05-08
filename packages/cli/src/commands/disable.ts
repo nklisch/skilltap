@@ -5,7 +5,7 @@ import {
   toggleInstalledComponent,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, jsonLine, successLine } from "../ui/format";
+import { createOutput } from "../output";
 import { componentLabel, loadPluginByName } from "../ui/plugin-format";
 import { tryFindProjectRoot } from "../ui/resolve";
 
@@ -28,12 +28,13 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const ref = parseComponentRef(args.target as string);
     const projectRoot = await tryFindProjectRoot();
 
     const plugin = await loadPluginByName(ref.name, projectRoot);
     if (!plugin) {
-      errorLine(
+      out.error(
         `Plugin '${ref.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
@@ -45,7 +46,7 @@ export default defineCommand({
       if (!component) {
         const available =
           plugin.components.map((c) => c.name).join(", ") || "(none)";
-        errorLine(
+        out.error(
           `Component '${ref.component}' not found in plugin '${ref.name}'`,
           `Available: ${available}`,
         );
@@ -53,14 +54,14 @@ export default defineCommand({
       }
       if (!component.active) {
         if (args.json) {
-          jsonLine({
+          out.json({
             plugin: plugin.name,
             component,
             action: "noop",
             nowActive: false,
           });
         } else {
-          successLine(`${componentLabel(component)} is already disabled`);
+          out.success(`${componentLabel(component)} is already disabled`);
         }
         return;
       }
@@ -73,11 +74,11 @@ export default defineCommand({
         },
       );
       if (!result.ok) {
-        errorLine(result.error.message);
+        out.error(result.error.message);
         process.exit(1);
       }
       if (args.json) {
-        jsonLine({
+        out.json({
           plugin: plugin.name,
           component: result.value.component,
           action: "disabled",
@@ -85,18 +86,16 @@ export default defineCommand({
         });
         return;
       }
-      successLine(`Disabled ${componentLabel(result.value.component)}`);
+      out.success(`Disabled ${componentLabel(result.value.component)}`);
       return;
     }
 
     const active = plugin.components.filter((c) => c.active);
     if (active.length === 0) {
       if (args.json)
-        jsonLine({ plugin: plugin.name, action: "noop", active: 0 });
+        out.json({ plugin: plugin.name, action: "noop", active: 0 });
       else
-        process.stdout.write(
-          `No active components in plugin '${plugin.name}'.\n`,
-        );
+        out.info(`No active components in plugin '${plugin.name}'.`);
       return;
     }
 
@@ -127,16 +126,16 @@ export default defineCommand({
     }
 
     if (args.json) {
-      jsonLine({ plugin: plugin.name, results });
+      out.json({ plugin: plugin.name, results });
       return;
     }
     for (const r of results) {
       if (r.action === "failed") {
-        errorLine(
+        out.error(
           `Failed to disable ${componentLabel(r.component)}: ${r.error}`,
         );
       } else {
-        successLine(`Disabled ${componentLabel(r.component)}`);
+        out.success(`Disabled ${componentLabel(r.component)}`);
       }
     }
   },
