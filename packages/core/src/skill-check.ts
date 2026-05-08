@@ -131,30 +131,56 @@ export async function fetchSkillUpdateStatus(
   return updatesAvailable;
 }
 
-/**
- * Read cached skill update check result. Kicks off a background refresh if stale.
- * Returns the list of skill names with updates, or null if cache is empty / no updates.
- */
-export async function checkForSkillUpdates(
+function skillCacheIsStale(
+  cache: SkillUpdateCache | null,
   intervalHours: number,
   projectRoot: string | null,
+): boolean {
+  if (!cache) return true;
+  if (cache.projectRoot !== projectRoot) return true;
+  return (
+    Date.now() - new Date(cache.checkedAt).getTime() > intervalHours * 3_600_000
+  );
+}
+
+/**
+ * True when the skill-update cache is missing, older than `intervalHours`, or
+ * recorded against a different project root. Cheap (single file read); the
+ * caller decides whether to refresh in the background.
+ */
+export async function isSkillUpdateCacheStale(
+  intervalHours: number,
+  projectRoot: string | null,
+): Promise<boolean> {
+  const cache = await readSkillCheckCache(getConfigDir());
+  return skillCacheIsStale(cache, intervalHours, projectRoot);
+}
+
+/**
+ * Synchronously fetch update status for every installed skill and write the
+ * cache. Intended for invocation from a detached background subprocess so the
+ * parent CLI can exit immediately — `fetchSkillUpdateStatus` runs many
+ * sequential `git fetch` calls (and one `fetch()` per npm skill, which has
+ * no timeout) that would otherwise keep the event loop alive.
+ */
+export async function refreshSkillUpdateCache(
+  projectRoot: string | null,
+): Promise<void> {
+  const updates = await fetchSkillUpdateStatus(projectRoot);
+  await writeSkillUpdateCache(updates, projectRoot);
+}
+
+/**
+ * Read cached skill update list. Read-only — the old behaviour spawned a
+ * fire-and-forget refresh that kept the event loop alive (Bun.$ subprocesses
+ * block exit). Staleness handling is now the caller's job: see
+ * `isSkillUpdateCacheStale` and `refreshSkillUpdateCache`.
+ */
+export async function checkForSkillUpdates(
+  _intervalHours: number,
+  _projectRoot: string | null,
 ): Promise<string[] | null> {
-  const configDir = getConfigDir();
-  const cache = await readSkillCheckCache(configDir);
-
-  const isStale =
-    !cache ||
-    Date.now() - new Date(cache.checkedAt).getTime() >
-      intervalHours * 3_600_000 ||
-    cache.projectRoot !== projectRoot;
-
-  if (isStale) {
-    // Fire-and-forget — do not block the CLI
-    fetchSkillUpdateStatus(projectRoot).then((updates) => {
-      writeSkillUpdateCache(updates, projectRoot);
-    });
-  }
-
+  const cache = await readSkillCheckCache(getConfigDir());
   if (!cache?.updatesAvailable?.length) return null;
   return cache.updatesAvailable;
 }

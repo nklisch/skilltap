@@ -61,6 +61,41 @@ async function writeCache(configDir: string, latest: string): Promise<void> {
   }
 }
 
+function cacheIsStale(
+  cache: UpdateCache | null,
+  intervalHours: number,
+): boolean {
+  if (!cache) return true;
+  return (
+    Date.now() - new Date(cache.checkedAt).getTime() > intervalHours * 3_600_000
+  );
+}
+
+/**
+ * True when the update-check cache is missing or older than `intervalHours`.
+ * Cheap (single file read); the caller decides whether to refresh in the
+ * background.
+ */
+export async function isUpdateCacheStale(
+  intervalHours: number,
+): Promise<boolean> {
+  const cache = await readCache(getConfigDir());
+  return cacheIsStale(cache, intervalHours);
+}
+
+/**
+ * Synchronously fetch the latest version from the release repo and write the
+ * cache. Intended for invocation from a detached background subprocess so the
+ * parent CLI can exit immediately — the underlying `git ls-remote` runs via
+ * `Bun.$`, which keeps the event loop alive until it completes.
+ */
+export async function refreshUpdateCache(
+  _fetchLatest: FetchLatestFn = fetchLatestVersion,
+): Promise<void> {
+  const latest = await _fetchLatest();
+  if (latest) await writeCache(getConfigDir(), latest);
+}
+
 type LsRemoteTagsFn = typeof lsRemoteTags;
 
 export async function fetchLatestVersion(
@@ -93,12 +128,17 @@ export async function fetchLatestVersion(
   return bestTag.startsWith("v") ? bestTag.slice(1) : bestTag;
 }
 
-/**
- * Read cached update result. Kicks off a background refresh if cache is stale.
- * Never throws — returns null when no update info is available yet.
- */
 type FetchLatestFn = typeof fetchLatestVersion;
 
+/**
+ * Return cached update info if available. When `intervalHours === 0` the
+ * fetch is awaited (used by `skilltap self-update` for a fresh check). For
+ * any other interval this function is read-only — staleness handling is the
+ * caller's job: see `isUpdateCacheStale` and `refreshUpdateCache`. The old
+ * behaviour spawned a fire-and-forget Bun.$ subprocess to refresh the cache,
+ * which kept the event loop alive and made the CLI hang for seconds (or
+ * indefinitely on a slow network) after its actual work was done.
+ */
 export async function checkForUpdate(
   currentVersion: string,
   intervalHours = 24,
@@ -107,27 +147,15 @@ export async function checkForUpdate(
   const configDir = getConfigDir();
   const cache = await readCache(configDir);
 
-  const isStale =
-    !cache ||
-    Date.now() - new Date(cache.checkedAt).getTime() >
-      intervalHours * 3_600_000;
-
-  if (isStale) {
-    if (intervalHours === 0) {
-      // Caller wants a fresh check — await the fetch instead of fire-and-forget
-      const fetched = await _fetchLatest();
-      if (fetched) {
-        await writeCache(configDir, fetched);
-        const type = getUpdateType(currentVersion, fetched);
-        if (!type) return null;
-        return { current: currentVersion, latest: fetched, type };
-      }
-      return null;
+  if (intervalHours === 0 && cacheIsStale(cache, intervalHours)) {
+    const fetched = await _fetchLatest();
+    if (fetched) {
+      await writeCache(configDir, fetched);
+      const type = getUpdateType(currentVersion, fetched);
+      if (!type) return null;
+      return { current: currentVersion, latest: fetched, type };
     }
-    // Fire-and-forget — do not block the CLI
-    _fetchLatest().then((latest) => {
-      if (latest) writeCache(configDir, latest);
-    });
+    return null;
   }
 
   if (!cache?.latest) return null;

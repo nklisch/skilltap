@@ -83,23 +83,20 @@ describe("checkForSkillUpdates", () => {
     expect(result).toEqual(["skill-a"]);
   });
 
-  test("returns null when projectRoot changed (treats as stale)", async () => {
+  test("returns cached data even when projectRoot has changed", async () => {
     await writeRawCache({
       checkedAt: new Date().toISOString(),
       updatesAvailable: ["skill-a"],
       projectRoot: "/old/project",
     });
-    // Different projectRoot → stale → fires background refresh, but still returns null
-    // (cache had data for a different project)
+    // The cached list is still returned. Refreshing for the new project root
+    // is the caller's job (see isSkillUpdateCacheStale + refreshSkillUpdateCache,
+    // spawned detached by the CLI).
     const result = await checkForSkillUpdates(24, "/new/project");
-    // Cache projectRoot mismatch = stale, background refresh fires, cached result still returned
-    // The old cache data is still returned since we show cached results on stale
-    // Actually per the implementation: if isStale, we fire refresh but still return cache.updatesAvailable
-    // So the old skill-a is still returned
     expect(result).toEqual(["skill-a"]);
   });
 
-  test("returns cached results even when stale (while background refresh runs)", async () => {
+  test("returns cached results even when cache is stale", async () => {
     const staleTime = new Date(Date.now() - 25 * 3_600_000).toISOString();
     await writeRawCache({
       checkedAt: staleTime,

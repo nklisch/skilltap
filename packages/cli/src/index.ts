@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { basename } from "node:path";
 import { isAgentEnv, VERSION } from "@skilltap/core";
 import { defineCommand, runMain } from "citty";
 import { tryFindProjectRoot } from "./ui/resolve";
@@ -10,6 +11,48 @@ if (process.argv.includes("--get-completions")) {
   const { printCompletions } = await import("./completions/dynamic");
   await printCompletions(type);
   process.exit(0);
+}
+
+// ─── Internal cache-refresh subcommands ───────────────────────────────────────
+// Spawned detached by the startup checks below so the foreground CLI can exit
+// immediately. Bun.$ subprocesses keep the parent event loop alive — moving
+// the network work into a detached child is what makes commands like `doctor`
+// (with warnings) actually exit instead of stalling on background `git fetch`.
+if (process.argv[2] === "_refresh-update-cache") {
+  const { refreshUpdateCache } = await import("@skilltap/core");
+  await refreshUpdateCache();
+  process.exit(0);
+}
+if (process.argv[2] === "_refresh-skill-update-cache") {
+  const { refreshSkillUpdateCache } = await import("@skilltap/core");
+  const projectRoot =
+    process.argv[3] && process.argv[3].length > 0 ? process.argv[3] : null;
+  await refreshSkillUpdateCache(projectRoot);
+  process.exit(0);
+}
+
+/**
+ * Spawn the running skilltap binary (or `bun <script>` in dev mode) detached.
+ * The child inherits no stdio and is unref'd, so the parent process can exit
+ * immediately without waiting for the child's network calls.
+ */
+function spawnSelfDetached(args: string[]): void {
+  const isCompiled = !["bun", "bun.exe"].includes(basename(process.execPath));
+  const cmd = isCompiled
+    ? [process.execPath, ...args]
+    : process.argv[1]
+      ? [process.execPath, process.argv[1], ...args]
+      : null;
+  if (!cmd) return;
+  try {
+    const proc = Bun.spawn(cmd, {
+      stdio: ["ignore", "ignore", "ignore"],
+      env: { ...process.env, SKILLTAP_NO_STARTUP: "1" },
+    });
+    proc.unref();
+  } catch {
+    // Best-effort — never block the CLI on a failed background spawn
+  }
 }
 
 // ─── Footer bar ──────────────────────────────────────────────────────────────
@@ -172,8 +215,13 @@ async function runTelemetryNotice(): Promise<void> {
 }
 
 async function runStartupUpdateCheck(): Promise<void> {
-  const { checkForUpdate, downloadAndInstall, isCompiledBinary, loadConfig } =
-    await import("@skilltap/core");
+  const {
+    checkForUpdate,
+    downloadAndInstall,
+    isCompiledBinary,
+    isUpdateCacheStale,
+    loadConfig,
+  } = await import("@skilltap/core");
 
   // Load config for update preferences — fall back gracefully if it fails
   const configResult = await loadConfig();
@@ -185,6 +233,11 @@ async function runStartupUpdateCheck(): Promise<void> {
 
   const intervalHours = config?.updates?.interval_hours ?? 24;
   const autoUpdate = config?.updates?.auto_update ?? "off";
+
+  // Kick off a detached cache refresh when stale — never blocks the CLI.
+  if (await isUpdateCacheStale(intervalHours)) {
+    spawnSelfDetached(["_refresh-update-cache"]);
+  }
 
   const result = await checkForUpdate(VERSION, intervalHours);
   if (!result) return;
@@ -216,7 +269,8 @@ async function runStartupUpdateCheck(): Promise<void> {
 }
 
 async function runStartupSkillUpdateCheck(): Promise<void> {
-  const { checkForSkillUpdates, loadConfig } = await import("@skilltap/core");
+  const { checkForSkillUpdates, isSkillUpdateCacheStale, loadConfig } =
+    await import("@skilltap/core");
 
   const configResult = await loadConfig();
   const config = configResult.ok ? configResult.value : null;
@@ -226,6 +280,11 @@ async function runStartupSkillUpdateCheck(): Promise<void> {
 
   const intervalHours = config?.updates?.skill_check_interval_hours ?? 24;
   const projectRoot = await tryFindProjectRoot();
+
+  // Kick off a detached cache refresh when stale — never blocks the CLI.
+  if (await isSkillUpdateCacheStale(intervalHours, projectRoot)) {
+    spawnSelfDetached(["_refresh-skill-update-cache", projectRoot ?? ""]);
+  }
 
   const updates = await checkForSkillUpdates(intervalHours, projectRoot);
   if (!updates || updates.length === 0) return;

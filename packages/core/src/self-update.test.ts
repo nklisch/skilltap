@@ -93,10 +93,11 @@ describe("checkForUpdate", () => {
     expect(result).toBeNull();
   });
 
-  test("returns cached data even when cache is stale (background refresh fires)", async () => {
+  test("returns cached data even when cache is stale", async () => {
     // Write a stale cache (25 hours ago)
     await writeCache("1.2.0", 25);
-    // Should still return the cached data (background fetch is fire-and-forget)
+    // Stale cache is still served — refreshing the cache is the caller's job
+    // (see isUpdateCacheStale + refreshUpdateCache, spawned detached by the CLI).
     const result = await checkForUpdate("1.0.0", 24);
     expect(result).not.toBeNull();
     expect(result?.latest).toBe("1.2.0");
