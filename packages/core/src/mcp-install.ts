@@ -208,7 +208,7 @@ export interface McpRemoveResult {
 // `source` is the same string the user passed to install (e.g., "mcp:user/repo").
 // Drops matching entries from state.mcpServers AND removes namespaced keys
 // from each target agent's MCP config.
-export async function removeMcpInstall(
+export async function removeMcp(
   source: string,
   options: McpRemoveOptions,
 ): Promise<Result<McpRemoveResult, UserError>> {
@@ -344,3 +344,6 @@ function toStoredMcp(server: McpServerEntry): {
 
 /** @deprecated Use `installMcp` instead. Will be removed in a future release. */
 export const installMcpOnly = installMcp;
+
+/** @deprecated Use `removeMcp` instead. Will be removed in a future release. */
+export const removeMcpInstall = removeMcp;

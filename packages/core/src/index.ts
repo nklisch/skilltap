@@ -28,6 +28,7 @@ export {
   type McpRemoveResult,
   type ParsedMcpRef,
   parseMcpRef,
+  removeMcp,
   removeMcpInstall,
 } from "./mcp-install";
 export * from "./migrate";

@@ -1,4 +1,4 @@
-import { removeMcpInstall } from "@skilltap/core";
+import { removeMcp } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { setupRemoveContext } from "./shared";
 
@@ -56,7 +56,7 @@ export const mcpRemoveCommand = defineCommand({
       // Prepend mcp: prefix for internal state lookup — state stores sources with this prefix
       const normalizedSource = `mcp:${source}`;
 
-      const result = await removeMcpInstall(normalizedSource, {
+      const result = await removeMcp(normalizedSource, {
         scope,
         projectRoot,
       });
