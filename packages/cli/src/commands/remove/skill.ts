@@ -6,11 +6,9 @@ import {
   removeSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../../ui/setup";
 import { sendEvent, telemetryBase } from "../../telemetry";
-import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
-import { tryFindProjectRoot } from "../../ui/resolve";
+import { setupRemoveContext } from "./shared";
 
 export const skillRemoveCommand = defineCommand({
   meta: {
@@ -46,14 +44,7 @@ export const skillRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = setupOutput(args);
-    const { config, policy } = await loadPolicyOrExit({
-      yes: args.yes,
-      project: args.project,
-      global: args.global,
-    });
-
-    const projectRoot = await tryFindProjectRoot();
+    const { out, config, projectRoot } = await setupRemoveContext(args);
     const globalResult = await loadInstalled();
     if (!globalResult.ok) {
       out.error(globalResult.error.message);

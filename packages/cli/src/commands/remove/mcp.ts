@@ -1,8 +1,6 @@
 import { removeMcpInstall } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../../ui/setup";
-import { loadPolicyOrExit } from "../../ui/policy";
-import { tryFindProjectRoot } from "../../ui/resolve";
+import { setupRemoveContext } from "./shared";
 
 export const mcpRemoveCommand = defineCommand({
   meta: {
@@ -39,20 +37,12 @@ export const mcpRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = setupOutput(args);
-    const { policy } = await loadPolicyOrExit({
-      yes: args.yes,
-      project: args.project,
-      global: args.global,
-    });
+    const ctx = await setupRemoveContext(args);
+    const { out, scope, projectRoot } = ctx;
 
     const sources = ((args._ as string[] | undefined) ?? []).filter(
       (n): n is string => typeof n === "string" && n.length > 0,
     );
-
-    const scope = (policy.scope || "project") as "global" | "project";
-    const projectRoot =
-      scope === "project" ? await tryFindProjectRoot() : undefined;
 
     let anyFail = false;
     for (const source of sources) {
