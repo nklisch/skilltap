@@ -1,5 +1,16 @@
 export { parseAgentDefinitions } from "./agents";
 export {
+  type ApplyCaptureOptions,
+  type ApplyCaptureResult,
+  applyCapture,
+  buildCrossSourceHint,
+  type CaptureBucket,
+  type CaptureCandidate,
+  type CaptureMatches,
+  detectCaptureMatches,
+  mergeBuckets,
+} from "./capture";
+export {
   findComponentInPlugin,
   type ParsedComponentRef,
   parseComponentRef,
