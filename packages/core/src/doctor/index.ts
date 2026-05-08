@@ -1,5 +1,6 @@
 import { ConfigSchema } from "../schemas/config";
 import { checkAgents } from "./checks/agents";
+import { checkCaptureCollisions } from "./checks/capture-collisions";
 import { checkConfig } from "./checks/config";
 import { checkDirs } from "./checks/directories";
 import { checkGit } from "./checks/git";
@@ -102,6 +103,10 @@ export async function runDoctor(
 
   // 15. v0.x file orphans (after canonical-store cutover in 31c-c-2d-1)
   await emit(await checkV1Orphans(state, projectRoot));
+
+  // 16. Capture collisions canary (Phase 39) — skill in both state.skills[]
+  // and a plugin's components[]. Should never fire after capture is wired.
+  await emit(await checkCaptureCollisions(state));
 
   const hasFailure = checks.some((c) => c.status === "fail");
   return { ok: !hasFailure, checks };
