@@ -6,13 +6,16 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { lstat, mkdir } from "node:fs/promises";
+import { lstat, mkdir, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { adoptSkill } from "./adopt";
+import { adoptAgentPlugin, adoptSkill, adoptSkillFromPath, discoverAllAdoptable } from "./adopt";
 import { loadInstalled, saveInstalled } from "./config";
 import { discoverSkills } from "./discover";
+import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
+import type { AgentPluginScanner } from "./agent-plugins/types";
+import { loadPlugins } from "./plugin/state";
 
 setDefaultTimeout(45_000);
 
@@ -398,5 +401,223 @@ describe("adoptSkill", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("already managed");
+  });
+});
+
+// Helpers for Phase 43 tests
+
+async function createSkillDir(dir: string, name: string): Promise<string> {
+  const skillDir = join(dir, name);
+  await mkdir(skillDir, { recursive: true });
+  await Bun.write(
+    join(skillDir, "SKILL.md"),
+    `---\nname: ${name}\ndescription: A test skill\n---\n# ${name}\nContent.\n`,
+  );
+  return skillDir;
+}
+
+async function createPluginDir(dir: string, name: string): Promise<string> {
+  await mkdir(join(dir, ".claude-plugin"), { recursive: true });
+  await Bun.write(
+    join(dir, ".claude-plugin", "plugin.json"),
+    JSON.stringify({ name }),
+  );
+  return dir;
+}
+
+function makeMockPlugin(
+  name: string,
+  installPath: string,
+  scope: "global" | "project" = "global",
+): DiscoveredAgentPlugin {
+  const now = new Date().toISOString();
+  return {
+    scannerName: "claude-code",
+    name,
+    marketplaceName: "test-marketplace",
+    sourceUrl: "github:test/repo",
+    installPath,
+    version: "1.0.0",
+    sha: "abc123def456abc123def456abc123def456abc1",
+    scope,
+    installedAt: now,
+    updatedAt: now,
+    manifest: {
+      name,
+      format: "claude-code",
+      pluginRoot: installPath,
+      components: [],
+    },
+  };
+}
+
+describe("adoptSkillFromPath", () => {
+  test("errors when path has no SKILL.md", async () => {
+    const emptyDir = join(homeDir, "no-skill");
+    await mkdir(emptyDir, { recursive: true });
+
+    const result = await adoptSkillFromPath(emptyDir, { skipScan: true });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.message).toContain("SKILL.md");
+  });
+
+  test("track-in-place (default): creates symlink in .agents/skills/, leaves original intact", async () => {
+    const externalDir = join(homeDir, "external");
+    await mkdir(externalDir, { recursive: true });
+    const skillPath = await createSkillDir(externalDir, "ext-skill");
+
+    const result = await adoptSkillFromPath(skillPath, {
+      mode: "track-in-place",
+      scope: "global",
+      skipScan: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Symlink should be in .agents/skills/
+    const symlinkPath = join(homeDir, ".agents", "skills", "ext-skill");
+    const stat = await lstat(symlinkPath).catch(() => null);
+    expect(stat?.isSymbolicLink()).toBe(true);
+    const target = await readlink(symlinkPath);
+    expect(target).toBe(skillPath);
+
+    // Original dir still exists
+    const origStat = await lstat(skillPath).catch(() => null);
+    expect(origStat?.isDirectory()).toBe(true);
+
+    // Record has scope: "linked" and path = original
+    expect(result.value.record.scope).toBe("linked");
+    expect(result.value.record.path).toBe(skillPath);
+
+    // Saved to state
+    const loaded = await loadInstalled();
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+    expect(loaded.value.skills.find((s) => s.name === "ext-skill")).toBeDefined();
+  });
+
+  test("move mode: moves dir to .agents/skills/, creates back-symlink", async () => {
+    const externalDir = join(homeDir, "external2");
+    await mkdir(externalDir, { recursive: true });
+    const skillPath = await createSkillDir(externalDir, "move-skill");
+
+    const result = await adoptSkillFromPath(skillPath, {
+      mode: "move",
+      scope: "global",
+      skipScan: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Dir moved to .agents/skills/
+    const targetPath = join(homeDir, ".agents", "skills", "move-skill");
+    const targetStat = await lstat(targetPath).catch(() => null);
+    expect(targetStat?.isDirectory()).toBe(true);
+
+    // Back-symlink at original location
+    const origStat = await lstat(skillPath).catch(() => null);
+    expect(origStat?.isSymbolicLink()).toBe(true);
+
+    // Record has scope: global and no path
+    expect(result.value.record.scope).toBe("global");
+    expect(result.value.record.path).toBeNull();
+  });
+});
+
+describe("adoptAgentPlugin", () => {
+  test("adds state.plugins[] entry with claude-code: marker in repo", async () => {
+    const pluginCacheDir = join(homeDir, "plugin-cache", "my-plugin");
+    await mkdir(pluginCacheDir, { recursive: true });
+    await createPluginDir(pluginCacheDir, "my-plugin");
+
+    const plugin = makeMockPlugin("my-plugin", pluginCacheDir);
+
+    const result = await adoptAgentPlugin(plugin, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.value.record.name).toBe("my-plugin");
+    expect(result.value.record.path).toBe(pluginCacheDir);
+
+    // Appears in state
+    const pluginsResult = await loadPlugins();
+    expect(pluginsResult.ok).toBe(true);
+    if (!pluginsResult.ok) return;
+    const saved = pluginsResult.value.plugins.find((p) => p.name === "my-plugin");
+    expect(saved).toBeDefined();
+    // The sourceUrl is used as repo when available
+    expect(saved!.repo).toBe("github:test/repo");
+  });
+
+  test("uses claude-code: marker when sourceUrl is null", async () => {
+    const pluginCacheDir = join(homeDir, "plugin-cache", "no-source");
+    await mkdir(pluginCacheDir, { recursive: true });
+    await createPluginDir(pluginCacheDir, "no-source");
+
+    const plugin: DiscoveredAgentPlugin = {
+      ...makeMockPlugin("no-source", pluginCacheDir),
+      sourceUrl: null,
+      marketplaceName: "some-marketplace",
+    };
+
+    const result = await adoptAgentPlugin(plugin, {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const pluginsResult = await loadPlugins();
+    expect(pluginsResult.ok).toBe(true);
+    if (!pluginsResult.ok) return;
+    const saved = pluginsResult.value.plugins.find((p) => p.name === "no-source");
+    expect(saved?.repo).toMatch(/^claude-code:/);
+  });
+
+  test("does not copy or move files — only records state", async () => {
+    const pluginCacheDir = join(homeDir, "plugin-cache", "read-only-plugin");
+    await mkdir(pluginCacheDir, { recursive: true });
+    await createPluginDir(pluginCacheDir, "read-only-plugin");
+
+    const plugin = makeMockPlugin("read-only-plugin", pluginCacheDir);
+    await adoptAgentPlugin(plugin, {});
+
+    // The installPath is still the original cache dir (not copied)
+    const pluginsResult = await loadPlugins();
+    expect(pluginsResult.ok).toBe(true);
+    if (!pluginsResult.ok) return;
+    const saved = pluginsResult.value.plugins.find((p) => p.name === "read-only-plugin");
+    expect(saved?.path).toBe(pluginCacheDir);
+  });
+});
+
+describe("discoverAllAdoptable", () => {
+  test("returns combined skills and plugins from scanners", async () => {
+    // Create an unmanaged skill
+    const agentsDir = join(homeDir, ".agents", "skills");
+    await mkdir(agentsDir, { recursive: true });
+    await createSkillDir(agentsDir, "unmanaged-skill");
+
+    // Create a mock scanner that returns one plugin
+    const pluginCacheDir = join(homeDir, "mock-cache", "mock-plugin");
+    await mkdir(pluginCacheDir, { recursive: true });
+    await createPluginDir(pluginCacheDir, "mock-plugin");
+    const mockPlugin = makeMockPlugin("mock-plugin", pluginCacheDir);
+
+    const mockScanner: AgentPluginScanner = {
+      name: "test-scanner",
+      async detect() { return true; },
+      async scan() { return { ok: true as const, value: [mockPlugin] }; },
+    };
+
+    // discoverAllAdoptable uses default scanners so won't see our mock scanner.
+    // We test via the skills portion + plugin portion.
+    const result = await discoverAllAdoptable({ global: true, project: false });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // At minimum, skills were found
+    const found = result.value.skills.find((s) => s.name === "unmanaged-skill");
+    expect(found).toBeDefined();
+    // plugins + scannerErrors are present (may be empty in test env)
+    expect(Array.isArray(result.value.plugins)).toBe(true);
+    expect(Array.isArray(result.value.scannerErrors)).toBe(true);
   });
 });

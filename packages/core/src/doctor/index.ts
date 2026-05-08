@@ -1,6 +1,7 @@
 import { ConfigSchema } from "../schemas/config";
 import { checkAgents } from "./checks/agents";
 import { checkCaptureCollisions } from "./checks/capture-collisions";
+import { checkClaudeCodeOverlap } from "./checks/claude-code-overlap";
 import { checkConfig } from "./checks/config";
 import { checkDirs } from "./checks/directories";
 import { checkGit } from "./checks/git";
@@ -107,6 +108,9 @@ export async function runDoctor(
   // 16. Capture collisions canary (Phase 39) — skill in both state.skills[]
   // and a plugin's components[]. Should never fire after capture is wired.
   await emit(await checkCaptureCollisions(state));
+
+  // 17. Claude Code plugin overlaps (Phase 43 canary).
+  await emit(await checkClaudeCodeOverlap(state));
 
   const hasFailure = checks.some((c) => c.status === "fail");
   return { ok: !hasFailure, checks };

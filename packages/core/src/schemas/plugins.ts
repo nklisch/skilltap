@@ -69,6 +69,8 @@ export const PluginRecordSchema = z.object({
   ref: z.string().nullable(),
   sha: z.string().nullable(),
   scope: z.enum(["global", "project"]),
+  /** Explicit on-disk path. Used for adopted plugins that point at an external cache (e.g., Claude Code's plugin cache). Null for normally-installed plugins. */
+  path: z.string().nullable().default(null),
   also: z.array(z.string()).default([]),
   tap: z.string().nullable().default(null),
   components: z.array(StoredComponentSchema),
