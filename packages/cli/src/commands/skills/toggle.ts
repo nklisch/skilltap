@@ -1,6 +1,6 @@
 import { disableSkill, enableSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
@@ -32,6 +32,7 @@ function makeToggleCommand(action: "enable" | "disable") {
       },
     },
     async run({ args }) {
+      const out = createOutput({ json: false, quiet: false });
       await loadPolicyOrExit({
         project: args.project,
         global: args.global,
@@ -45,10 +46,10 @@ function makeToggleCommand(action: "enable" | "disable") {
         scope === "project" ? await tryFindProjectRoot() : undefined;
       const result = await coreFn(args.name, { scope, projectRoot });
       if (!result.ok) {
-        errorLine(result.error.message, result.error.hint);
+        out.error(result.error.message, result.error.hint);
         process.exit(1);
       }
-      successLine(`${label} ${args.name}`);
+      out.success(`${label} ${args.name}`);
     },
   });
 }

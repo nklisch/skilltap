@@ -31,7 +31,8 @@
     "@skilltap/core": "workspace:*",
     "citty": "^0.2.1",
     "fzf": "^0.5.2",
-    "picocolors": "^1.1.1"
+    "picocolors": "^1.1.1",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@skilltap/test-utils": "workspace:*"

@@ -11,7 +11,7 @@
     },
     "packages/cli": {
       "name": "@skilltap/skilltap",
-      "version": "0.3.8",
+      "version": "2.1.1",
       "bin": {
         "skilltap": "./src/index.ts",
       },
@@ -22,6 +22,7 @@
         "citty": "^0.2.1",
         "fzf": "^0.5.2",
         "picocolors": "^1.1.1",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@skilltap/test-utils": "workspace:*",
@@ -29,7 +30,7 @@
     },
     "packages/core": {
       "name": "@skilltap/core",
-      "version": "0.3.8",
+      "version": "2.1.1",
       "dependencies": {
         "anti-trojan-source": "^1.8.1",
         "out-of-character": "^2.1.0",

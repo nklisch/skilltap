@@ -1,6 +1,6 @@
 import { formatConfigValue, getConfigValue, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, jsonLine } from "../../ui/format";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -20,9 +20,11 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
+
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
@@ -30,7 +32,7 @@ export default defineCommand({
 
     if (!key) {
       if (args.json) {
-        jsonLine(config);
+        out.json(config);
       } else {
         printFlat(config);
       }
@@ -39,14 +41,14 @@ export default defineCommand({
 
     const result = getConfigValue(config, key);
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
     if (args.json) {
-      jsonLine(result.value);
+      out.json(result.value);
     } else {
-      process.stdout.write(`${formatConfigValue(result.value)}\n`);
+      out.raw(`${formatConfigValue(result.value)}\n`);
     }
     process.exit(0);
   },

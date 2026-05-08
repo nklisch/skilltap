@@ -1,7 +1,7 @@
-import { intro, outro, spinner } from "@clack/prompts";
+import { intro, outro } from "@clack/prompts";
 import { addTap, loadConfig, parseGitHubTapShorthand } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -21,6 +21,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
     let tapName: string;
@@ -36,7 +37,7 @@ export default defineCommand({
         configResult.ok ? configResult.value.default_git_host : undefined,
       );
       if (!shorthand) {
-        errorLine(
+        out.error(
           `Cannot parse '${args.name}' as GitHub shorthand.`,
           "Use 'skilltap tap add <name> <url>' or 'skilltap tap add owner/repo'.",
         );
@@ -48,20 +49,19 @@ export default defineCommand({
 
     intro("skilltap");
 
-    const s = spinner();
-    s.start("Adding tap...");
+    const p = out.progress("Adding tap...");
 
     const result = await addTap(tapName, tapUrl);
 
     if (!result.ok) {
-      s.stop("Failed.");
-      errorLine(result.error.message, result.error.hint);
+      p.fail("Failed.");
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
-    s.stop("Done.");
+    p.succeed("Done.");
     const typeLabel = "git";
-    successLine(
+    out.success(
       `Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)`,
     );
     outro("Complete!");

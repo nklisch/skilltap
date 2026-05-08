@@ -2,7 +2,7 @@ import { cancel, isCancel } from "@clack/prompts";
 import { removeTap } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { footerConfirm as confirm } from "../../ui/footer";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -23,6 +23,8 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
+
     if (!args.yes) {
       const confirmed = await confirm({
         message: `Remove tap '${args.name}'? Installed skills from this tap will not be affected.`,
@@ -39,10 +41,10 @@ export default defineCommand({
 
     const result = await removeTap(args.name);
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
-    successLine(`Removed tap '${args.name}'`);
+    out.success(`Removed tap '${args.name}'`);
   },
 });

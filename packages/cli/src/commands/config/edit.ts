@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { getConfigDir, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 
 function resolveEditor(): string {
   return process.env.VISUAL || process.env.EDITOR || "nano";
@@ -13,15 +13,17 @@ export default defineCommand({
     description: "Open config.toml in your editor",
   },
   async run() {
+    const out = createOutput({ json: false, quiet: false });
+
     if (!process.stdin.isTTY) {
-      errorLine("'skilltap config edit' must be run interactively.");
+      out.error("'skilltap config edit' must be run interactively.");
       process.exit(1);
     }
 
     // Ensure config file exists and capture pre-edit state
     const preResult = await loadConfig();
     if (!preResult.ok) {
-      errorLine(preResult.error.message, preResult.error.hint);
+      out.error(preResult.error.message, preResult.error.hint);
       process.exit(1);
     }
 
@@ -39,7 +41,7 @@ export default defineCommand({
         stderr: "inherit",
       });
     } catch {
-      errorLine(
+      out.error(
         `Could not launch editor: ${editorStr}`,
         "Set $EDITOR or $VISUAL to your preferred editor.",
       );
@@ -48,18 +50,18 @@ export default defineCommand({
 
     const exitCode = await proc.exited;
     if (exitCode !== 0) {
-      errorLine(`Editor exited with code ${exitCode} — no changes saved.`);
+      out.error(`Editor exited with code ${exitCode} — no changes saved.`);
       process.exit(1);
     }
 
     const postResult = await loadConfig();
     if (!postResult.ok) {
       await Bun.write(configFile, backup);
-      errorLine("Config is invalid — reverted to previous version.");
-      process.stderr.write(`  ${postResult.error.message}\n`);
+      out.error("Config is invalid — reverted to previous version.");
+      out.info(`  ${postResult.error.message}`);
       process.exit(1);
     }
 
-    successLine(`Saved ${configFile}`);
+    out.success(`Saved ${configFile}`);
   },
 });

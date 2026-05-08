@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import type { Shell } from "../completions/generate";
 import { generateCompletions } from "../completions/generate";
-import { ansi } from "../ui/format";
+import { createOutput } from "../output";
 
 async function patchZshrc(home: string): Promise<string> {
   const zshrcPath = join(home, ".zshrc");
@@ -43,19 +43,19 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const shell = args.shell as string;
 
     if (shell !== "bash" && shell !== "zsh" && shell !== "fish") {
-      process.stderr.write(
-        `Error: Unknown shell '${shell}'. Valid values: bash, zsh, fish\n`,
-      );
+      out.error(`Unknown shell '${shell}'. Valid values: bash, zsh, fish`);
       process.exit(1);
     }
 
     const script = generateCompletions(shell as Shell);
 
     if (!args.install) {
-      process.stdout.write(`${script}\n`);
+      // Raw protocol output — use raw() to pass through completion script unchanged
+      out.raw(`${script}\n`);
       return;
     }
 
@@ -68,8 +68,8 @@ export default defineCommand({
       currentShell !== shell &&
       (["bash", "zsh", "fish"] as string[]).includes(currentShell)
     ) {
-      process.stderr.write(
-        `${ansi.yellow("Note:")} $SHELL is ${currentShell} — did you mean: skilltap completions ${currentShell} --install?\n`,
+      out.warn(
+        `$SHELL is ${currentShell} — did you mean: skilltap completions ${currentShell} --install?`,
       );
     }
 
@@ -108,8 +108,7 @@ export default defineCommand({
     await writeFile(targetPath, `${script}\n`);
 
     const displayPath = targetPath.replace(home, "~");
-    process.stdout.write(
-      `${ansi.green("✓")} Wrote completions to ${displayPath}\n${instructions}\n`,
-    );
+    out.success(`Wrote completions to ${displayPath}`);
+    out.info(instructions);
   },
 });

@@ -7,6 +7,7 @@ import {
   validateSetKey,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -26,6 +27,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const key = args.key as string;
 
     // Extract values from process.argv for variadic support.
@@ -38,43 +40,38 @@ export default defineCommand({
 
     const configResult = await loadConfig();
 
-    const writeError = (msg: string, hint?: string) => {
-      process.stderr.write(`error: ${msg}\n`);
-      if (hint) process.stderr.write(`  hint: ${hint}\n`);
-    };
-
     if (!configResult.ok) {
-      writeError(configResult.error.message);
+      out.error(configResult.error.message);
       process.exit(1);
     }
 
     // Validate the key is in the allowlist
     const keyResult = validateSetKey(key);
     if (!keyResult.ok) {
-      writeError(keyResult.error.message, keyResult.error.hint);
+      out.error(keyResult.error.message, keyResult.error.hint);
       process.exit(1);
     }
 
     // For non-array types, require at least one value
     if (values.length === 0 && keyResult.value.type !== "string[]") {
-      writeError("Missing value", "Usage: skilltap config set <key> <value>");
+      out.error("Missing value", "Usage: skilltap config set <key> <value>");
       process.exit(1);
     }
 
     // Coerce string values to the target type
     const coerced = coerceValue(values, keyResult.value);
     if (!coerced.ok) {
-      writeError(coerced.error.message, coerced.error.hint);
+      out.error(coerced.error.message, coerced.error.hint);
       process.exit(1);
     }
 
     const updated = setConfigValue(configResult.value, key, coerced.value);
     const saveResult = await saveConfig(updated);
     if (!saveResult.ok) {
-      writeError(saveResult.error.message);
+      out.error(saveResult.error.message);
       process.exit(1);
     }
 
-    process.stdout.write(`OK: ${key} = ${formatConfigValue(coerced.value)}\n`);
+    out.raw(`OK: ${key} = ${formatConfigValue(coerced.value)}\n`);
   },
 });

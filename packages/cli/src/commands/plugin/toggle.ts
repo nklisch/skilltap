@@ -2,9 +2,10 @@ import { multiselect } from "@clack/prompts";
 import type { StoredComponent } from "@skilltap/core";
 import { loadPlugins, toggleInstalledComponent } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, successLine } from "../../ui/format";
+import { ansi } from "../../ui/format";
 import { componentLabel } from "../../ui/plugin-format";
 import { tryFindProjectRoot } from "../../ui/resolve";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -39,11 +40,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      errorLine(globalResult.error.message);
+      out.error(globalResult.error.message);
       process.exit(1);
     }
 
@@ -56,7 +58,7 @@ export default defineCommand({
 
     const plugin = allPlugins.find((p) => p.name === args.name);
     if (!plugin) {
-      errorLine(
+      out.error(
         `Plugin '${args.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
@@ -111,7 +113,7 @@ export default defineCommand({
     }
 
     if (toToggle.length === 0) {
-      process.stdout.write("No changes.\n");
+      out.info("No changes.");
       return;
     }
 
@@ -143,18 +145,18 @@ export default defineCommand({
     }
 
     if (args.json) {
-      process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+      out.json(results);
       return;
     }
 
     for (const r of results) {
       if (r.error) {
-        errorLine(
+        out.error(
           `Failed to toggle ${componentLabel(r.component)}: ${r.error}`,
         );
       } else {
         const action = r.nowActive ? "Enabled" : "Disabled";
-        successLine(`${action} ${componentLabel(r.component)}`);
+        out.success(`${action} ${componentLabel(r.component)}`);
       }
     }
   },

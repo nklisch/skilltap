@@ -1,6 +1,6 @@
 import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 import { parseAlsoFlag, tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -27,15 +27,16 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
     if (!args.global && !args.project) {
-      errorLine("Specify target scope: --global or --project");
+      out.error("Specify target scope: --global or --project");
       process.exit(1);
     }
 
     if (args.global && args.project) {
-      errorLine("Cannot specify both --global and --project");
+      out.error("Cannot specify both --global and --project");
       process.exit(1);
     }
 
@@ -54,7 +55,7 @@ export default defineCommand({
     } else {
       const projectRoot = await tryFindProjectRoot();
       if (!projectRoot) {
-        errorLine(
+        out.error(
           "No project root found. Run from inside a project directory.",
         );
         process.exit(1);
@@ -64,11 +65,11 @@ export default defineCommand({
 
     const result = await moveSkill(args.name, { to, fromProjectRoot, also });
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
     const { from, to: destPath } = result.value;
-    successLine(`Moved ${args.name}: ${from} → ${destPath}`);
+    out.success(`Moved ${args.name}: ${from} → ${destPath}`);
   },
 });

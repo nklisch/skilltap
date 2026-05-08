@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { linkSkill, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
 
 export default defineCommand({
@@ -31,6 +31,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
     const config = configResult.ok ? configResult.value : undefined;
 
@@ -43,14 +44,14 @@ export default defineCommand({
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
     const skill = result.value;
-    successLine(`Linked ${skill.name} → ${skill.path}`);
+    out.success(`Linked ${skill.name} → ${skill.path}`);
     for (const agent of also) {
-      successLine(`  Also linked for ${agent}`);
+      out.success(`  Also linked for ${agent}`);
     }
   },
 });

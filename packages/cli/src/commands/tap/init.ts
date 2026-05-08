@@ -1,6 +1,6 @@
 import { initTap } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -15,22 +15,18 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
+
     const result = await initTap(args.name);
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
-    successLine(`Created ${args.name}/`);
-    process.stdout.write(`\n`);
-    process.stdout.write(
-      `Edit ${args.name}/tap.json to add skills, then push:\n`,
-    );
-    process.stdout.write(
-      `  cd ${args.name} && git remote add origin <url> && git push\n`,
-    );
-    process.stdout.write(`\n`);
-    process.stdout.write(`Anyone can then add your tap with:\n`);
-    process.stdout.write(`  skilltap tap add <name> <url>\n`);
+    out.success(`Created ${args.name}/`);
+    out.info(`Edit ${args.name}/tap.json to add skills, then push:`);
+    out.info(`  cd ${args.name} && git remote add origin <url> && git push`);
+    out.info(`Anyone can then add your tap with:`);
+    out.info(`  skilltap tap add <name> <url>`);
   },
 });

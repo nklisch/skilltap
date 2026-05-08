@@ -1,9 +1,10 @@
 import { confirm } from "@clack/prompts";
 import { loadPlugins, removeInstalledPlugin } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine, successLine } from "../../ui/format";
+import { ansi } from "../../ui/format";
 import { componentSummary } from "../../ui/plugin-format";
 import { tryFindProjectRoot } from "../../ui/resolve";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -29,11 +30,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      errorLine(globalResult.error.message);
+      out.error(globalResult.error.message);
       process.exit(1);
     }
 
@@ -46,7 +48,7 @@ export default defineCommand({
 
     const plugin = allPlugins.find((p) => p.name === args.name);
     if (!plugin) {
-      errorLine(
+      out.error(
         `Plugin '${args.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
@@ -68,14 +70,11 @@ export default defineCommand({
 
     const result = await removeInstalledPlugin(plugin.name, { projectRoot });
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
-    if (args.json) {
-      jsonLine({ removed: result.value.name, components: summary });
-    } else {
-      successLine(`Removed plugin ${plugin.name} (${summary})`);
-    }
+    out.json({ removed: result.value.name, components: summary });
+    out.success(`Removed plugin ${plugin.name} (${summary})`);
   },
 });

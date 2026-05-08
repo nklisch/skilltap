@@ -1,8 +1,9 @@
 import type { StoredComponent } from "@skilltap/core";
 import { loadPlugins } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine } from "../../ui/format";
+import { ansi } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
+import { createOutput } from "../../output";
 
 function componentStatusIcon(c: StoredComponent): string {
   return c.active ? ansi.green("✓") : ansi.dim("✗");
@@ -30,11 +31,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      errorLine(globalResult.error.message);
+      out.error(globalResult.error.message);
       process.exit(1);
     }
 
@@ -48,7 +50,7 @@ export default defineCommand({
     const plugin = allPlugins.find((p) => p.name === args.name);
 
     if (!plugin) {
-      errorLine(
+      out.error(
         `Plugin '${args.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
@@ -56,7 +58,7 @@ export default defineCommand({
     }
 
     if (args.json) {
-      jsonLine(plugin);
+      out.json(plugin);
       return;
     }
 
