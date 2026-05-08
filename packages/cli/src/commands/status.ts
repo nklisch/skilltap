@@ -217,7 +217,7 @@ function shorten(path: string): string {
 // ─── Unmanaged mode ───────────────────────────────────────────────────────────
 
 async function runUnmanagedMode(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   args: { global: boolean; project: boolean; json: boolean },
   projectRoot: string | undefined,
 ): Promise<void> {

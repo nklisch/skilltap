@@ -5,6 +5,7 @@ import {
   basicTemplate,
   multiTemplate,
   npmTemplate,
+  type Output,
   TEMPLATE_NAMES,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
@@ -42,7 +43,7 @@ async function writeFiles(
 }
 
 function printNextSteps(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   _name: string,
   dir: string,
   template: string,
@@ -243,7 +244,7 @@ export default defineCommand({
 });
 
 async function runNonInteractive(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   opts: {
     name: string;
     template: string;
@@ -284,7 +285,7 @@ async function runNonInteractive(
 }
 
 async function createSkill(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   opts: {
     name: string;
     description: string;

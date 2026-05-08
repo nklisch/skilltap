@@ -6,6 +6,7 @@ import {
   formatOrphanReason,
   loadState,
   type OrphanRecord,
+  type Output,
   type SemanticWarning,
   type StaticWarning,
   updateSkill,
@@ -129,7 +130,7 @@ export default defineCommand({
 
 // ─── Tap Refresh ──────────────────────────────────────────────────────────────
 
-async function refreshTapIndexes(out: ReturnType<typeof createOutput>): Promise<void> {
+async function refreshTapIndexes(out: Output): Promise<void> {
   const p = out.progress("Refreshing tap indexes...");
   const result = await updateTap();
   if (!result.ok) {
@@ -142,7 +143,7 @@ async function refreshTapIndexes(out: ReturnType<typeof createOutput>): Promise<
 // ─── Check Mode ───────────────────────────────────────────────────────────────
 
 async function runCheckMode(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   projectRoot: string | undefined,
   json = false,
 ): Promise<void> {
@@ -175,7 +176,7 @@ async function runCheckMode(
 // ─── Update Dispatch ──────────────────────────────────────────────────────────
 
 async function runUpdate(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   type: UpdateType | undefined,
   name: string | undefined,
   args: { strict?: boolean; semantic: boolean; json?: boolean; "skip-scan"?: boolean },
@@ -203,7 +204,7 @@ async function runUpdate(
 }
 
 async function runUpdatePlugins(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   name: string | undefined,
   projectRoot: string | undefined,
 ): Promise<void> {
@@ -239,7 +240,7 @@ async function runUpdatePlugins(
 }
 
 async function runUpdateMcps(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   name: string | undefined,
   projectRoot: string | undefined,
 ): Promise<void> {
@@ -277,7 +278,7 @@ async function runUpdateMcps(
 // ─── Skill Update ─────────────────────────────────────────────────────────────
 
 async function runUpdateSkills(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   name: string | undefined,
   args: { strict?: boolean; semantic: boolean; json?: boolean },
   config: Config,

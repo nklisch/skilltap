@@ -5,6 +5,7 @@ import {
   getConfigDir,
   loadConfig,
   ON_WARN_MODES,
+  type Output,
   PRESET_VALUES,
   SCAN_MODES,
   SECURITY_PRESETS,
@@ -68,7 +69,7 @@ function parseTrustFlag(trust: string): TrustOverride | null {
 }
 
 async function runNonInteractive(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   args: {
     preset?: string;
     scan?: string;
@@ -355,7 +356,7 @@ async function promptTrustOverrides(
 
 // ─── Interactive wizard ────────────────────────────────────────────────────
 
-async function runInteractive(out: ReturnType<typeof createOutput>): Promise<void> {
+async function runInteractive(out: Output): Promise<void> {
   const configResult = await loadConfig();
   if (!configResult.ok) {
     out.error(configResult.error.message, configResult.error.hint);

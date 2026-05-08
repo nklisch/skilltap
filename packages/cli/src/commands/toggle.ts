@@ -4,6 +4,7 @@ import {
   enableSkill,
   findComponentInPlugin,
   loadState,
+  type Output,
   parseComponentRef,
   type PluginRecord,
   type StoredComponent,
@@ -84,7 +85,7 @@ export default defineCommand({
 async function runToggle(
   type: ToggleType,
   target: string,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
 ): Promise<void> {
   const projectRoot = await tryFindProjectRoot();
@@ -103,7 +104,7 @@ async function runToggle(
 
 async function runToggleSkill(
   name: string,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
   projectRoot: string | undefined,
 ): Promise<void> {
@@ -149,7 +150,7 @@ async function runToggleSkill(
 
 async function runTogglePlugin(
   target: string,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
   projectRoot: string | undefined,
 ): Promise<void> {
@@ -207,7 +208,7 @@ async function runTogglePlugin(
 }
 
 async function runPluginComponentPicker(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   plugin: PluginRecord,
   projectRoot: string | undefined,
   json: boolean,
@@ -275,7 +276,7 @@ async function runPluginComponentPicker(
 
 async function runToggleMcp(
   name: string,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
   projectRoot: string | undefined,
 ): Promise<void> {
@@ -305,7 +306,7 @@ async function runToggleMcp(
 // ─── Picker (Phase 42 placeholder — Phase 44 swaps in Ink TUI) ───────────────
 
 async function runTogglePicker(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
 ): Promise<void> {
   const projectRoot = await tryFindProjectRoot();
 

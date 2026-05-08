@@ -11,7 +11,7 @@ import {
   loadState,
   loadTaps,
 } from "@skilltap/core";
-import type { PluginRecord, SkillRecord, StoredComponent } from "@skilltap/core";
+import type { Output, PluginRecord, SkillRecord, StoredComponent } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
@@ -214,7 +214,7 @@ export default infoCommand;
 
 async function renderSkillInfo(
   skill: SkillRecord,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
   projectRoot: string | undefined,
 ): Promise<void> {
@@ -290,7 +290,7 @@ function componentStatusIcon(c: StoredComponent): string {
 
 function renderPluginInfo(
   plugin: PluginRecord,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
 ): void {
   if (json) {
@@ -346,7 +346,7 @@ function renderPluginInfo(
 
 function renderMcpInfo(
   mcp: { name: string; source?: string; scope?: string; installedAt?: string },
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   json: boolean,
 ): void {
   if (json) {

@@ -1,4 +1,4 @@
-import { type TryReport, tryPreview } from "@skilltap/core";
+import { type Output, type TryReport, tryPreview } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
 import { setupOutput } from "../ui/setup";
@@ -74,7 +74,7 @@ function reportToJson(report: TryReport): unknown {
   };
 }
 
-function renderTry(out: ReturnType<typeof createOutput>, report: TryReport): void {
+function renderTry(out: Output, report: TryReport): void {
   out.info(`\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n`);
   out.info(
     `${ansi.dim("Resolved:")} ${report.resolved.url}${report.resolved.ref ? ansi.dim(`@${report.resolved.ref}`) : ""}`,

@@ -5,11 +5,12 @@ import {
   adoptSkillFromPath,
   discoverAllAdoptable,
   type DiscoveredAgentPlugin,
+  type Output,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { isAbsolute } from "node:path";
 import { setupOutput } from "../ui/setup";
-import { parseAlsoFlag, resolveScope, tryFindProjectRoot } from "../ui/resolve";
+import { parseAlsoFlag, resolveScope } from "../ui/resolve";
 
 export const adoptCommand = defineCommand({
   meta: {
@@ -109,13 +110,12 @@ type AdoptArgs = {
 // ─── Picker mode ──────────────────────────────────────────────────────────────
 
 async function runAdoptPicker(
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   args: AdoptArgs,
 ): Promise<void> {
   const progress = out.progress("Scanning for adoptable skills and plugins");
 
-  const projectRoot = await tryFindProjectRoot();
-  const scope = args.project ? "project" : args.global ? "global" : projectRoot ? "project" : "global";
+  const { scope, projectRoot } = await resolveScope(args);
 
   const result = await discoverAllAdoptable({
     ...(scope === "project" ? { project: true as const } : { global: true as const }),
@@ -233,7 +233,7 @@ async function runAdoptPicker(
 
 async function runAdoptPath(
   path: string,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   args: AdoptArgs,
 ): Promise<void> {
   const { scope, projectRoot } = await resolveScope(args);
@@ -275,7 +275,7 @@ async function runAdoptPath(
 
 async function runAdoptName(
   name: string,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
   args: AdoptArgs,
 ): Promise<void> {
   const { scope, projectRoot } = await resolveScope(args);
