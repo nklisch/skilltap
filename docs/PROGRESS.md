@@ -3,7 +3,7 @@
 **Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
 **Last updated:** 2026-05-08
-**Phases since last refactor:** 4 (39 capture, 40 cleanup, 41 output, 42 typed CLI) — refactor gate due after Phase 43 (Claude Code adoption); deferring one more phase since 43 also reshapes adopt
+**Phases since last refactor:** 5 (39 capture, 40 cleanup, 41 output, 42 typed CLI, 43 adoption) — refactor pass due before Phase 44 (TUI dashboard) since 44 will lean heavily on the existing patterns and a refactor pass could surface duplication earlier
 **Total refactor passes:** 2
 
 ## Resume context (2026-05-08)
@@ -20,6 +20,39 @@ User explicitly enabled watchdog loops mid-session (CronCreate jobs `fceab167` f
 - Stashed pre-existing user WIP rather than incorporating: WIP was partial (kept `human`/`agent` as deprecated rather than deleting) and would conflict with Phase 40 cleanup. User can `git stash pop` later to resume.
 - Used existing `docs/design/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
 - Phase 39 Units 1–3 + 5–7 implemented directly by Opus (small, self-contained units). Unit 4 (CLI rendering) orchestrated to a Sonnet agent. **User feedback mid-phase: prefer orchestration via `/implement-orchestrator` for all future implementation work.** Phases 40–46 will run the full autopilot workflow: research gate → `/design` → `/implement-orchestrator` → test checkpoint → progress + commit → refactor gate.
+
+## Phase 43 completion summary (2026-05-08)
+
+Claude Code plugin adoption shipped across two implementation agents and 2 commits. The `agent-plugins/` framework is the new pluggable port for any agent that ships a plugin system; the Claude Code adapter is the first concrete implementation.
+
+**What shipped:**
+- `packages/core/src/agent-plugins/` — port + adapters layout:
+  - `types.ts` — `AgentPluginScanner` interface (`name`, `detect()`, `scan()`) + `DiscoveredAgentPlugin` type (scanner-tagged plugin record).
+  - `claude-code.ts` — concrete scanner. Reads `~/.claude/plugins/installed_plugins.json` and `~/.claude/plugins/known_marketplaces.json` with tolerant Zod schemas (`.passthrough()` everywhere). Walks each plugin's `installPath` via existing `detectPlugin()`. Maps Claude Code's user/local scopes to skilltap's global/project. Optional `overrideEnv` parameter for test isolation.
+  - `codex.ts` — stub (Codex has no marketplace; `detect()` returns false).
+  - `registry.ts` — `defaultScanners()` + `scanAllAgentPlugins()` (fail-soft: per-scanner errors bubble up as `scannerErrors[]`, loop continues).
+- `packages/core/src/adopt.ts` extended:
+  - `adoptSkillFromPath(path, options)` — replaces what `link` did pre-Phase-42. Track-in-place (default) symlinks the path; `--move` relocates the dir.
+  - `adoptAgentPlugin(plugin, options)` — adds a `state.plugins[]` entry for a Claude Code plugin. Doesn't copy or move files; `record.path = installPath` points at Claude Code's cache. Marker convention: `record.repo` starts with `claude-code:` for adopted plugins.
+  - `discoverAllAdoptable(options)` — combines unmanaged skills (existing `discoverSkills`) + agent plugins (new `scanAllAgentPlugins`).
+- `packages/core/src/doctor/checks/claude-code-overlap.ts` — doctor check #17. Warns when a Claude Code plugin name overlaps with a skilltap-installed standalone skill or non-adopted plugin.
+- `packages/cli/src/commands/adopt.ts` rewritten:
+  - `adopt` (TTY, no args) — clack picker over unmanaged skills + Claude Code plugins.
+  - `adopt <path>` — external path (path detection: `./`, `/`, `~/`, absolute, or contains `/`).
+  - `adopt <name>` — preserved existing behavior, now also matches Claude Code plugins by name.
+  - `adopt --source claude-code` — picker filtered to one scanner.
+  - `adopt --move` flag for path mode; default is track-in-place.
+- `PluginRecord` schema gained a `path: string | null` field for adopted plugins to record `installPath`.
+
+**Verification:** Full suite 2085 pass / 51 skip / 0 fail (up from 2043; +42 new tests). Agent A added 20 agent-plugins tests + 6 adopt extension tests + 8 doctor check tests; Agent B added 7 CLI subprocess tests.
+
+**Workflow:** Two Sonnet agents — Agent A (Units 1-4+6: full core surface), Agent B (Units 5+7: CLI + tests). Orchestrator (Opus) verified intermediate gates and final suite.
+
+**Out of scope for Phase 43 (deferred follow-ups):**
+- Auto-symlinking adopted plugin skills into other agent dirs (cursor, codex). User opts in later via `--also` or future commands.
+- `--also-uninstall` for `skilltap remove plugin <claude-adopted>` (would shell out to Claude Code's `/plugin uninstall`).
+- Full TUI picker UX (Phase 44).
+- Adopting Cursor extensions, Gemini plugins, etc. (no concrete schemas yet; framework is ready).
 
 ## Phase 42 completion summary (2026-05-08)
 
@@ -241,7 +274,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 40  | Drop legacy fallbacks + agent-mode             | done     | 2026-05-08 |
 | 41  | Output mode abstraction                        | done     | 2026-05-08 |
 | 42  | Typed install/remove/update/toggle             | done     | 2026-05-08 |
-| 43  | Claude Code plugin adoption                    | pending  | — |
+| 43  | Claude Code plugin adoption                    | done     | 2026-05-08 |
 | 44  | TUI dashboard (Ink)                            | pending  | — |
 | 45  | Migrate command rewrite                        | pending  | — |
 | 46  | Polish + docs + release                        | pending  | — |
