@@ -1,8 +1,9 @@
-import type { Output, StatusReport } from "@skilltap/core";
-import { gatherStatus } from "@skilltap/core";
+import type { DiscoveredSkill, Output, StatusReport } from "@skilltap/core";
+import { discoverSkills, gatherStatus } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi } from "../ui/format";
+import { ansi, table, termWidth, truncate } from "../ui/format";
 import { createOutput } from "../output";
+import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
   meta: {
@@ -15,16 +16,77 @@ export default defineCommand({
       description: "Output as JSON",
       default: false,
     },
+    unmanaged: {
+      type: "boolean",
+      description: "Show unmanaged skills (on disk but not in state)",
+      default: false,
+    },
+    disabled: {
+      type: "boolean",
+      description: "Show only disabled items",
+      default: false,
+    },
+    active: {
+      type: "boolean",
+      description: "Show only active items",
+      default: false,
+    },
+    global: {
+      type: "boolean",
+      description: "Show only global scope",
+      default: false,
+    },
+    project: {
+      type: "boolean",
+      description: "Show only project scope",
+      default: false,
+    },
   },
   async run({ args }) {
     const out = createOutput({ json: args.json, quiet: false });
+    const projectRoot = await tryFindProjectRoot();
+
+    // Filter modes: --unmanaged, --disabled, --active
+    if (args.unmanaged) {
+      return runUnmanagedMode(out, args as { global: boolean; project: boolean; json: boolean }, projectRoot);
+    }
 
     const result = await gatherStatus();
     if (!result.ok) {
       out.error(result.error.message);
       process.exit(1);
     }
-    const report = result.value;
+    let report = result.value;
+
+    // Apply --disabled / --active filters
+    if (args.disabled) {
+      report = {
+        ...report,
+        skills: report.skills.filter((s) => !s.active),
+        plugins: report.plugins.filter((p) => !p.active),
+      };
+    } else if (args.active) {
+      report = {
+        ...report,
+        skills: report.skills.filter((s) => s.active),
+        plugins: report.plugins.filter((p) => p.active),
+      };
+    }
+
+    // Apply scope filters
+    if (args.global) {
+      report = {
+        ...report,
+        skills: report.skills.filter((s) => s.scope === "global"),
+        plugins: report.plugins.filter((p) => p.scope === "global"),
+      };
+    } else if (args.project) {
+      report = {
+        ...report,
+        skills: report.skills.filter((s) => s.scope === "project"),
+        plugins: report.plugins.filter((p) => p.scope === "project"),
+      };
+    }
 
     if (args.json) {
       out.json(reportToJson(report));
@@ -150,4 +212,56 @@ function shorten(path: string): string {
   const home = process.env.HOME;
   if (home && path.startsWith(home)) return `~${path.slice(home.length)}`;
   return path;
+}
+
+// ─── Unmanaged mode ───────────────────────────────────────────────────────────
+
+async function runUnmanagedMode(
+  out: ReturnType<typeof createOutput>,
+  args: { global: boolean; project: boolean; json: boolean },
+  projectRoot: string | undefined,
+): Promise<void> {
+  const discoverOpts = args.global
+    ? { global: true as const, unmanagedOnly: true, projectRoot }
+    : args.project
+      ? { project: true as const, unmanagedOnly: true, projectRoot }
+      : { unmanagedOnly: true, projectRoot };
+
+  const discoverResult = await discoverSkills(discoverOpts);
+  if (!discoverResult.ok) {
+    out.error(discoverResult.error.message, discoverResult.error.hint);
+    process.exit(1);
+  }
+
+  const skills = discoverResult.value.skills;
+
+  if (args.json) {
+    out.json(skills);
+    return;
+  }
+
+  if (skills.length === 0) {
+    out.info("No unmanaged skills found.");
+    return;
+  }
+
+  const width = termWidth();
+  const count = skills.length;
+  out.raw(
+    `\n${ansi.bold("Unmanaged skills")} (${count} ${count === 1 ? "skill" : "skills"})\n`,
+  );
+
+  const NAME_W = width < 60 ? 15 : 20;
+  const SRC_W = width < 60 ? 20 : 32;
+
+  const rows = skills.map((s: DiscoveredSkill) => [
+    truncate(s.name, NAME_W),
+    ansi.yellow("unmanaged"),
+    truncate(s.gitRemote ?? "(local)", SRC_W),
+  ]);
+
+  out.raw(`${table(rows, { header: ["Name", "Status", "Source"] })}\n`);
+  out.raw(
+    `\nRun 'skilltap adopt <name>' to take ownership of an unmanaged skill.\n`,
+  );
 }
