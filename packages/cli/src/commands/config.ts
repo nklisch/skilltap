@@ -14,7 +14,7 @@ import {
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../ui/footer";
-import { errorLine } from "../ui/format";
+import { createOutput } from "../output";
 
 export default defineCommand({
   meta: {
@@ -38,14 +38,16 @@ export default defineCommand({
   async run({ args }) {
     if ((args._ as string[])?.length > 0) return;
 
+    const out = createOutput({ json: false, quiet: false });
+
     if (!process.stdin.isTTY) {
-      errorLine("'skilltap config' must be run interactively.");
+      out.error("'skilltap config' must be run interactively.");
       process.exit(1);
     }
 
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const existing = configResult.value;
@@ -183,7 +185,7 @@ export default defineCommand({
 
     const saveResult = await saveConfig(newConfig);
     if (!saveResult.ok) {
-      errorLine(saveResult.error.message);
+      out.error(saveResult.error.message);
       process.exit(1);
     }
 

@@ -1,6 +1,7 @@
 import { type TryReport, tryPreview } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine } from "../ui/format";
+import { ansi } from "../ui/format";
+import { createOutput } from "../output";
 
 export default defineCommand({
   meta: {
@@ -26,25 +27,25 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
+
     const result = await tryPreview(args.source as string, {
       skipScan: args["skip-scan"] as boolean,
     });
     if (!result.ok) {
-      errorLine(result.error.message);
+      out.error(result.error.message);
       if (result.error.hint) {
-        process.stderr.write(`${ansi.dim("hint:")} ${result.error.hint}\n`);
+        out.warn(result.error.hint);
       }
       process.exit(1);
     }
 
     if (args.json as boolean) {
-      process.stdout.write(
-        `${JSON.stringify(reportToJson(result.value), null, 2)}\n`,
-      );
+      out.json(reportToJson(result.value));
       return;
     }
 
-    renderTry(result.value);
+    renderTry(out, result.value);
   },
 });
 
@@ -73,21 +74,19 @@ function reportToJson(report: TryReport): unknown {
   };
 }
 
-function renderTry(report: TryReport): void {
-  process.stdout.write(
-    `\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n\n`,
-  );
-  process.stdout.write(
-    `${ansi.dim("Resolved:")} ${report.resolved.url}${report.resolved.ref ? ansi.dim(`@${report.resolved.ref}`) : ""}\n`,
+function renderTry(out: ReturnType<typeof createOutput>, report: TryReport): void {
+  out.info(`\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n`);
+  out.info(
+    `${ansi.dim("Resolved:")} ${report.resolved.url}${report.resolved.ref ? ansi.dim(`@${report.resolved.ref}`) : ""}`,
   );
   if (report.sha) {
-    process.stdout.write(`${ansi.dim("SHA:")} ${report.sha}\n`);
+    out.info(`${ansi.dim("SHA:")} ${report.sha}`);
   }
-  process.stdout.write("\n");
+  out.info("");
 
   if (report.plugin) {
-    process.stdout.write(
-      `${ansi.bold("Plugin:")} ${report.plugin.name} ${ansi.dim(`(${report.plugin.format})`)}\n`,
+    out.info(
+      `${ansi.bold("Plugin:")} ${report.plugin.name} ${ansi.dim(`(${report.plugin.format})`)}`,
     );
     const skillCount = report.plugin.components.filter(
       (c) => c.type === "skill",
@@ -98,48 +97,42 @@ function renderTry(report: TryReport): void {
     const agentCount = report.plugin.components.filter(
       (c) => c.type === "agent",
     ).length;
-    process.stdout.write(
-      `  ${skillCount} skill${skillCount === 1 ? "" : "s"}, ${mcpCount} MCP server${mcpCount === 1 ? "" : "s"}, ${agentCount} agent${agentCount === 1 ? "" : "s"}\n\n`,
+    out.info(
+      `  ${skillCount} skill${skillCount === 1 ? "" : "s"}, ${mcpCount} MCP server${mcpCount === 1 ? "" : "s"}, ${agentCount} agent${agentCount === 1 ? "" : "s"}\n`,
     );
   }
 
   if (report.skills.length > 0) {
-    process.stdout.write(
-      `${ansi.bold("Skills")} ${ansi.dim(`(${report.skills.length})`)}\n`,
+    out.info(
+      `${ansi.bold("Skills")} ${ansi.dim(`(${report.skills.length})`)}`,
     );
     for (const skill of report.skills) {
       const desc = skill.description ? ansi.dim(` — ${skill.description}`) : "";
-      process.stdout.write(`  ${skill.name}${desc}\n`);
+      out.info(`  ${skill.name}${desc}`);
     }
-    process.stdout.write("\n");
+    out.info("");
   } else if (!report.plugin) {
-    process.stdout.write(
-      `${ansi.dim("Skills:")} ${ansi.dim("(none found)")}\n\n`,
-    );
+    out.info(`${ansi.dim("Skills:")} ${ansi.dim("(none found)")}\n`);
   }
 
   if (!report.scanned) {
-    process.stdout.write(`${ansi.dim("Scan:")} skipped\n\n`);
+    out.info(`${ansi.dim("Scan:")} skipped\n`);
   } else if (report.warnings.length === 0) {
-    process.stdout.write(`${ansi.green("✓")} No security warnings.\n\n`);
+    out.info(`${ansi.green("✓")} No security warnings.\n`);
   } else {
-    process.stdout.write(
-      `${ansi.yellow("⚠")} ${report.warnings.length} security warning${report.warnings.length === 1 ? "" : "s"}:\n`,
+    out.info(
+      `${ansi.yellow("⚠")} ${report.warnings.length} security warning${report.warnings.length === 1 ? "" : "s"}:`,
     );
     for (const w of report.warnings) {
       const lineLabel =
         typeof w.line === "number" && w.line > 0 ? `:${w.line}` : "";
-      process.stdout.write(
-        `  ${ansi.yellow(w.category)} ${w.file}${lineLabel}\n`,
+      out.info(
+        `  ${ansi.yellow(w.category)} ${w.file}${lineLabel}`,
       );
     }
-    process.stdout.write("\n");
+    out.info("");
   }
 
-  process.stdout.write(
-    `${ansi.dim("This was a preview. Nothing was installed.")}\n`,
-  );
-  process.stdout.write(
-    `${ansi.dim("To install: skilltap install ")}${report.source}\n`,
-  );
+  out.info(`${ansi.dim("This was a preview. Nothing was installed.")}`);
+  out.info(`${ansi.dim("To install: skilltap install ")}${report.source}`);
 }

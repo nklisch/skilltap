@@ -6,7 +6,8 @@ import {
   loadTaps,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine, table } from "../../ui/format";
+import { ansi, table } from "../../ui/format";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -21,9 +22,11 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
+
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
@@ -40,10 +43,10 @@ export default defineCommand({
 
     if (!hasBuiltin && config.taps.length === 0) {
       if (args.json) {
-        process.stdout.write("[]\n");
+        out.json([]);
       } else {
-        process.stdout.write(
-          `No taps configured. Run 'skilltap tap add <name> <url>' to add one.\n`,
+        out.info(
+          `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`,
         );
       }
       process.exit(0);
@@ -51,7 +54,7 @@ export default defineCommand({
 
     const tapsResult = await loadTaps();
     if (!tapsResult.ok) {
-      errorLine(tapsResult.error.message, tapsResult.error.hint);
+      out.error(tapsResult.error.message, tapsResult.error.hint);
       process.exit(1);
     }
 
@@ -81,7 +84,7 @@ export default defineCommand({
           skillCount: counts[tap.name] ?? 0,
         });
       }
-      jsonLine(tapList);
+      out.json(tapList);
       return;
     }
 

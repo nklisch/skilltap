@@ -1,7 +1,8 @@
 import { type DoctorCheck, type DoctorIssue, runDoctor } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, jsonLine } from "../ui/format";
+import { ansi } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
+import { createOutput } from "../output";
 
 export default defineCommand({
   meta: {
@@ -21,11 +22,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const useJson = args.json as boolean;
     const fix = args.fix as boolean;
 
     if (useJson) {
-      await runJson(fix);
+      await runJson(out, fix);
       return;
     }
 
@@ -143,7 +145,7 @@ async function runInteractive(fix: boolean): Promise<void> {
 
 // ─── JSON output ──────────────────────────────────────────────────────────────
 
-async function runJson(fix: boolean): Promise<void> {
+async function runJson(out: ReturnType<typeof createOutput>, fix: boolean): Promise<void> {
   const projectRoot = await tryFindProjectRoot();
   const result = await runDoctor({ fix, projectRoot });
 
@@ -165,7 +167,7 @@ async function runJson(fix: boolean): Promise<void> {
     })),
   };
 
-  jsonLine(output);
+  out.json(output);
 
   if (!result.ok) process.exit(1);
 }

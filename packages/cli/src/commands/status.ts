@@ -1,6 +1,7 @@
 import { gatherStatus, type StatusReport } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine } from "../ui/format";
+import { ansi } from "../ui/format";
+import { createOutput } from "../output";
 
 export default defineCommand({
   meta: {
@@ -15,17 +16,17 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
+
     const result = await gatherStatus();
     if (!result.ok) {
-      errorLine(result.error.message);
+      out.error(result.error.message);
       process.exit(1);
     }
     const report = result.value;
 
     if (args.json) {
-      process.stdout.write(
-        `${JSON.stringify(reportToJson(report), null, 2)}\n`,
-      );
+      out.json(reportToJson(report));
       return;
     }
 

@@ -1,7 +1,7 @@
 import { loadConfig, saveConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { isTelemetryEnabled } from "../../telemetry";
-import { errorLine } from "../../ui/format";
+import { createOutput } from "../../output";
 
 const status = defineCommand({
   meta: {
@@ -9,9 +9,11 @@ const status = defineCommand({
     description: "Show telemetry status",
   },
   async run() {
+    const out = createOutput({ json: false, quiet: false });
+
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
@@ -23,31 +25,21 @@ const status = defineCommand({
       const envVar = doNotTrack
         ? "DO_NOT_TRACK"
         : "SKILLTAP_TELEMETRY_DISABLED";
-      process.stdout.write(
-        `Telemetry: disabled (${envVar}=1 overrides config)\n`,
-      );
+      out.info(`Telemetry: disabled (${envVar}=1 overrides config)`);
       return;
     }
 
     if (isTelemetryEnabled(config)) {
-      process.stdout.write(`Telemetry: enabled\n`);
-      process.stdout.write(`Anonymous ID: ${config.telemetry.anonymous_id}\n`);
+      out.info(`Telemetry: enabled`);
+      out.info(`Anonymous ID: ${config.telemetry.anonymous_id}`);
     } else {
-      process.stdout.write(`Telemetry: disabled\n`);
-      process.stdout.write(
-        `Run 'skilltap config telemetry enable' to opt in.\n`,
-      );
+      out.info(`Telemetry: disabled`);
+      out.info(`Run 'skilltap config telemetry enable' to opt in.`);
     }
 
-    process.stdout.write(
-      `\nWhat's collected: OS, arch, CLI version, command success/failure,\n`,
-    );
-    process.stdout.write(
-      `error type, skill count, duration. No skill names, paths, or personal info.\n`,
-    );
-    process.stdout.write(
-      `Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.\n`,
-    );
+    out.info(`\nWhat's collected: OS, arch, CLI version, command success/failure,`);
+    out.info(`error type, skill count, duration. No skill names, paths, or personal info.`);
+    out.info(`Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.`);
   },
 });
 
@@ -57,9 +49,11 @@ const enable = defineCommand({
     description: "Opt in to anonymous telemetry",
   },
   async run() {
+    const out = createOutput({ json: false, quiet: false });
+
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
@@ -76,14 +70,12 @@ const enable = defineCommand({
 
     const saveResult = await saveConfig(updated);
     if (!saveResult.ok) {
-      errorLine(saveResult.error.message);
+      out.error(saveResult.error.message);
       process.exit(1);
     }
 
-    process.stdout.write(`Telemetry enabled. Anonymous ID: ${anonymousId}\n`);
-    process.stdout.write(
-      `Run 'skilltap config telemetry disable' to opt out at any time.\n`,
-    );
+    out.info(`Telemetry enabled. Anonymous ID: ${anonymousId}`);
+    out.info(`Run 'skilltap config telemetry disable' to opt out at any time.`);
   },
 });
 
@@ -93,9 +85,11 @@ const disable = defineCommand({
     description: "Opt out of telemetry",
   },
   async run() {
+    const out = createOutput({ json: false, quiet: false });
+
     const configResult = await loadConfig();
     if (!configResult.ok) {
-      errorLine(configResult.error.message, configResult.error.hint);
+      out.error(configResult.error.message, configResult.error.hint);
       process.exit(1);
     }
     const config = configResult.value;
@@ -107,11 +101,11 @@ const disable = defineCommand({
 
     const saveResult = await saveConfig(updated);
     if (!saveResult.ok) {
-      errorLine(saveResult.error.message);
+      out.error(saveResult.error.message);
       process.exit(1);
     }
 
-    process.stdout.write(`Telemetry disabled.\n`);
+    out.info(`Telemetry disabled.`);
   },
 });
 

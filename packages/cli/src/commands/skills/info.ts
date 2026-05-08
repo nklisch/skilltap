@@ -10,9 +10,10 @@ import {
   loadTaps,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine } from "../../ui/format";
+import { ansi } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 import { formatTrustLabel } from "../../ui/trust";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -32,12 +33,13 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const configResult = await loadConfig();
 
     // Try installed first (global + project)
     const globalInstalledResult = await loadInstalled();
     if (!globalInstalledResult.ok) {
-      errorLine(
+      out.error(
         globalInstalledResult.error.message,
         globalInstalledResult.error.hint,
       );
@@ -60,7 +62,7 @@ export default defineCommand({
 
     if (skill) {
       if (args.json) {
-        jsonLine(skill);
+        out.json(skill);
         return;
       }
 
@@ -140,7 +142,7 @@ export default defineCommand({
       const tapEntry = tapsResult.value.find((e) => e.skill.name === args.name);
       if (tapEntry) {
         if (args.json) {
-          jsonLine({
+          out.json({
             ...tapEntry.skill,
             tap: tapEntry.tapName,
             status: "available",
@@ -176,7 +178,7 @@ export default defineCommand({
       }
     }
 
-    errorLine(
+    out.error(
       `Skill '${args.name}' is not installed`,
       `Run 'skilltap find ${args.name}' to search`,
     );

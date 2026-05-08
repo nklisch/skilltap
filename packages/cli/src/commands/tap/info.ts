@@ -1,6 +1,7 @@
 import { getTapInfo } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine, table } from "../../ui/format";
+import { ansi, table } from "../../ui/format";
+import { createOutput } from "../../output";
 
 export default defineCommand({
   meta: {
@@ -20,16 +21,18 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
+
     const result = await getTapInfo(args.name);
     if (!result.ok) {
-      errorLine(result.error.message, result.error.hint);
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
     const info = result.value;
 
     if (args.json) {
-      jsonLine(info);
+      out.json(info);
       return;
     }
 

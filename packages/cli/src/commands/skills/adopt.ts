@@ -1,7 +1,7 @@
 import { isCancel, multiselect } from "@clack/prompts";
 import { adoptSkill, discoverSkills, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { errorLine, successLine } from "../../ui/format";
+import { createOutput } from "../../output";
 import {
   parseAlsoFlag,
   resolveScope,
@@ -51,6 +51,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
     const projectRoot = await tryFindProjectRoot();
@@ -65,7 +66,7 @@ export default defineCommand({
     const discoverResult = await discoverSkills(discoverOpts);
 
     if (!discoverResult.ok) {
-      errorLine(discoverResult.error.message, discoverResult.error.hint);
+      out.error(discoverResult.error.message, discoverResult.error.hint);
       process.exit(1);
     }
 
@@ -78,7 +79,7 @@ export default defineCommand({
       namesToAdopt = [...new Set([args.name, ...(args._ as string[])])];
     } else {
       if (unmanaged.length === 0) {
-        process.stdout.write("No unmanaged skills found.\n");
+        out.info("No unmanaged skills found.");
         return;
       }
 
@@ -100,7 +101,7 @@ export default defineCommand({
     const skillsToAdopt = namesToAdopt.map((name) => {
       const skill = unmanaged.find((s) => s.name === name);
       if (!skill) {
-        errorLine(
+        out.error(
           `Unmanaged skill '${name}' not found.`,
           "Run 'skilltap skills --unmanaged' to see unmanaged skills.",
         );
@@ -141,16 +142,16 @@ export default defineCommand({
       });
 
       if (!result.ok) {
-        errorLine(result.error.message, result.error.hint);
+        out.error(result.error.message, result.error.hint);
         process.exit(1);
       }
 
       const { record } = result.value;
       const destPath = record.path ?? `~/.agents/skills/${skill.name}`;
 
-      successLine(`Adopted ${skill.name} → ${destPath}`);
+      out.success(`Adopted ${skill.name} → ${destPath}`);
       for (const agent of also) {
-        successLine(`  Also linked for ${agent}`);
+        out.success(`  Also linked for ${agent}`);
       }
     }
   },

@@ -1,8 +1,9 @@
 import { basename, join, resolve } from "node:path";
-import { intro, outro, spinner } from "@clack/prompts";
+import { intro, outro } from "@clack/prompts";
 import { scan, validateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine, successLine } from "../ui/format";
+import { ansi } from "../ui/format";
+import { createOutput } from "../output";
 
 export default defineCommand({
   meta: {
@@ -27,10 +28,11 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const useJson = args.json as boolean;
 
     if (args.all) {
-      await runAll(useJson);
+      await runAll(out, useJson);
       return;
     }
 
@@ -50,33 +52,32 @@ export default defineCommand({
     const skillName = basename(skillPath);
 
     if (useJson) {
-      await runJson(skillPath, skillName);
+      await runJson(out, skillPath, skillName);
       return;
     }
 
     intro(`Verifying ${skillName}`);
 
-    const s = spinner();
-    s.start("Running checks...");
+    const p = out.progress("Running checks...");
 
     const result = await validateSkill(skillPath);
 
     if (!result.ok) {
-      s.stop("Failed.");
-      errorLine(result.error.message, result.error.hint);
+      p.fail("Failed.");
+      out.error(result.error.message, result.error.hint);
       process.exit(1);
     }
 
-    s.stop();
+    p.succeed();
 
     const { issues, frontmatter, fileCount, totalBytes } = result.value;
 
     // SKILL.md found
-    successLine("SKILL.md found");
+    out.success("SKILL.md found");
 
     // Frontmatter
     if (frontmatter) {
-      successLine("Frontmatter valid");
+      out.success("Frontmatter valid");
       process.stdout.write(`   ${ansi.dim("name:")} ${frontmatter.name}\n`);
       process.stdout.write(
         `   ${ansi.dim("description:")} ${frontmatter.description}\n`,
@@ -88,7 +89,7 @@ export default defineCommand({
       i.message.includes("does not match directory name"),
     );
     if (!nameIssue) {
-      successLine("Name matches directory");
+      out.success("Name matches directory");
     }
 
     // Security scan
@@ -96,7 +97,7 @@ export default defineCommand({
       (i) => i.severity === "warning" && !i.message.includes("does not match"),
     );
     if (scanWarnings.length === 0) {
-      successLine("Security scan: clean");
+      out.success("Security scan: clean");
     } else {
       for (const w of scanWarnings) {
         process.stdout.write(`  ${ansi.yellow("warning")}: ${w.message}\n`);
@@ -108,7 +109,7 @@ export default defineCommand({
       const kb = (totalBytes / 1024).toFixed(1);
       const sizeOk = totalBytes <= 51200;
       if (sizeOk) {
-        successLine(
+        out.success(
           `Size: ${kb} KB (${fileCount} ${fileCount === 1 ? "file" : "files"})`,
         );
       } else {
@@ -147,11 +148,11 @@ export default defineCommand({
   },
 });
 
-async function runAll(useJson: boolean): Promise<void> {
+async function runAll(out: ReturnType<typeof createOutput>, useJson: boolean): Promise<void> {
   const skills = await scan(process.cwd());
 
   if (skills.length === 0) {
-    process.stderr.write("No skills found in current directory.\n");
+    out.error("No skills found in current directory.");
     process.exit(1);
   }
 
@@ -178,7 +179,7 @@ async function runAll(useJson: boolean): Promise<void> {
         };
       }),
     );
-    jsonLine(results);
+    out.json(results);
     if (results.some((r) => !r.valid)) process.exit(1);
     return;
   }
@@ -191,12 +192,11 @@ async function runAll(useJson: boolean): Promise<void> {
   let failed = 0;
 
   for (const skill of skills) {
-    const s = spinner();
-    s.start(skill.name);
+    const p = out.progress(skill.name);
     const result = await validateSkill(skill.path);
 
     if (!result.ok) {
-      s.stop(`${skill.name} — ${ansi.red("error")}: ${result.error.message}`);
+      p.fail(`${skill.name} — error: ${result.error.message}`);
       failed++;
       continue;
     }
@@ -205,11 +205,11 @@ async function runAll(useJson: boolean): Promise<void> {
     const errors = issues.filter((i) => i.severity === "error");
 
     if (valid) {
-      s.stop(`${skill.name} — ${ansi.green("✓ valid")}`);
+      p.succeed(`${skill.name} — ✓ valid`);
       passed++;
     } else {
-      s.stop(
-        `${skill.name} — ${ansi.red(`✗ ${errors.length} ${errors.length === 1 ? "issue" : "issues"}`)}`,
+      p.fail(
+        `${skill.name} — ✗ ${errors.length} ${errors.length === 1 ? "issue" : "issues"}`,
       );
       for (const e of errors) {
         process.stdout.write(`    ${ansi.dim(e.message)}\n`);
@@ -228,17 +228,17 @@ async function runAll(useJson: boolean): Promise<void> {
   }
 }
 
-async function runJson(skillPath: string, skillName: string): Promise<void> {
+async function runJson(out: ReturnType<typeof createOutput>, skillPath: string, skillName: string): Promise<void> {
   const result = await validateSkill(skillPath);
 
   if (!result.ok) {
-    jsonLine({ name: skillName, valid: false, error: result.error.message });
+    out.json({ name: skillName, valid: false, error: result.error.message });
     process.exit(1);
   }
 
   const { valid, issues, frontmatter, fileCount, totalBytes } = result.value;
 
-  jsonLine({
+  out.json({
     name: skillName,
     valid,
     issues,

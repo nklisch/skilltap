@@ -1,7 +1,8 @@
 import { runMigrate } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { ansi, errorLine, jsonLine } from "../ui/format";
+import { ansi } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
+import { createOutput } from "../output";
 
 export default defineCommand({
   meta: {
@@ -16,6 +17,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: args.json, quiet: false });
     const useJson = args.json as boolean;
     const projectRoot = await tryFindProjectRoot();
 
@@ -23,13 +25,13 @@ export default defineCommand({
 
     if (!result.ok) {
       if (useJson) {
-        jsonLine({
+        out.json({
           ok: false,
           error: result.error.message,
           hint: result.error.hint,
         });
       } else {
-        errorLine(result.error.message);
+        out.error(result.error.message);
         if (result.error.hint)
           process.stderr.write(`${ansi.dim("hint:")} ${result.error.hint}\n`);
       }
@@ -39,7 +41,7 @@ export default defineCommand({
     const report = result.value;
 
     if (useJson) {
-      jsonLine({
+      out.json({
         ok: true,
         alreadyMigrated: report.alreadyMigrated,
         scopes: report.scopes,

@@ -18,7 +18,7 @@ import {
   footerSelect as select,
   footerText as text,
 } from "../../ui/footer";
-import { errorLine } from "../../ui/format";
+import { createOutput } from "../../output";
 import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../../ui/prompts";
 
 // ─── Non-interactive helpers ───────────────────────────────────────────────
@@ -67,17 +67,20 @@ function parseTrustFlag(trust: string): TrustOverride | null {
   return null;
 }
 
-async function runNonInteractive(args: {
-  preset?: string;
-  scan?: string;
-  "on-warn"?: string;
-  "require-scan"?: boolean;
-  trust?: string;
-  "remove-trust"?: string;
-}): Promise<void> {
+async function runNonInteractive(
+  out: ReturnType<typeof createOutput>,
+  args: {
+    preset?: string;
+    scan?: string;
+    "on-warn"?: string;
+    "require-scan"?: boolean;
+    trust?: string;
+    "remove-trust"?: string;
+  },
+): Promise<void> {
   const configResult = await loadConfig();
   if (!configResult.ok) {
-    errorLine(configResult.error.message, configResult.error.hint);
+    out.error(configResult.error.message, configResult.error.hint);
     process.exit(1);
   }
   const config = configResult.value;
@@ -86,23 +89,23 @@ async function runNonInteractive(args: {
     const name = args["remove-trust"];
     const idx = config.security.overrides.findIndex((o) => o.match === name);
     if (idx === -1) {
-      errorLine(`No trust override found with match '${name}'`);
+      out.error(`No trust override found with match '${name}'`);
       process.exit(1);
     }
     config.security.overrides.splice(idx, 1);
     const saveResult = await saveConfig(config);
     if (!saveResult.ok) {
-      errorLine(saveResult.error.message);
+      out.error(saveResult.error.message);
       process.exit(1);
     }
-    process.stdout.write(`OK: removed trust override '${name}'\n`);
+    out.raw(`OK: removed trust override '${name}'\n`);
     return;
   }
 
   if (args.trust) {
     const override = parseTrustFlag(args.trust);
     if (!override) {
-      errorLine(
+      out.error(
         `Invalid --trust format: '${args.trust}'\n  Expected: tap:<name>=<preset> or source:<type>=<preset>\n  Presets: ${SECURITY_PRESETS.join(", ")}\n  Source types: ${SOURCE_TYPES.join(", ")}`,
       );
       process.exit(1);
@@ -110,10 +113,10 @@ async function runNonInteractive(args: {
     config.security.overrides.push(override);
     const saveResult = await saveConfig(config);
     if (!saveResult.ok) {
-      errorLine(saveResult.error.message);
+      out.error(saveResult.error.message);
       process.exit(1);
     }
-    process.stdout.write(
+    out.raw(
       `OK: added ${override.kind} trust override '${override.match}' → ${override.preset}\n`,
     );
     return;
@@ -121,7 +124,7 @@ async function runNonInteractive(args: {
 
   if (args.preset) {
     if (!(SECURITY_PRESETS as readonly string[]).includes(args.preset)) {
-      errorLine(
+      out.error(
         `Invalid preset: '${args.preset}'. Valid presets: ${SECURITY_PRESETS.join(", ")}`,
       );
       process.exit(1);
@@ -133,7 +136,7 @@ async function runNonInteractive(args: {
 
   if (args.scan) {
     if (!(SCAN_MODES as readonly string[]).includes(args.scan)) {
-      errorLine(
+      out.error(
         `Invalid scan level: '${args.scan}'. Valid: ${SCAN_MODES.join(", ")}`,
       );
       process.exit(1);
@@ -143,7 +146,7 @@ async function runNonInteractive(args: {
 
   if (args["on-warn"]) {
     if (!(ON_WARN_MODES as readonly string[]).includes(args["on-warn"])) {
-      errorLine(
+      out.error(
         `Invalid on-warn value: '${args["on-warn"]}'. Valid: ${ON_WARN_MODES.join(", ")}`,
       );
       process.exit(1);
@@ -157,11 +160,11 @@ async function runNonInteractive(args: {
 
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) {
-    errorLine(saveResult.error.message);
+    out.error(saveResult.error.message);
     process.exit(1);
   }
 
-  process.stdout.write(
+  out.raw(
     `OK: security = ${describeSecurityMode(config.security)}\n`,
   );
 }
@@ -352,10 +355,10 @@ async function promptTrustOverrides(
 
 // ─── Interactive wizard ────────────────────────────────────────────────────
 
-async function runInteractive(): Promise<void> {
+async function runInteractive(out: ReturnType<typeof createOutput>): Promise<void> {
   const configResult = await loadConfig();
   if (!configResult.ok) {
-    errorLine(configResult.error.message, configResult.error.hint);
+    out.error(configResult.error.message, configResult.error.hint);
     process.exit(1);
   }
   const config = configResult.value;
@@ -408,7 +411,7 @@ async function runInteractive(): Promise<void> {
 
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) {
-    errorLine(saveResult.error.message);
+    out.error(saveResult.error.message);
     process.exit(1);
   }
 
@@ -443,18 +446,20 @@ export default defineCommand({
     },
   },
   async run({ args }) {
+    const out = createOutput({ json: false, quiet: false });
+
     if (isNonInteractive(args)) {
-      await runNonInteractive(args);
+      await runNonInteractive(out, args);
       return;
     }
 
     if (!process.stdin.isTTY) {
-      errorLine(
+      out.error(
         "'skilltap config security' requires a TTY for interactive mode. Use flags for non-interactive use.",
       );
       process.exit(1);
     }
 
-    await runInteractive();
+    await runInteractive(out);
   },
 });
