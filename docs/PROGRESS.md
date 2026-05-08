@@ -3,7 +3,7 @@
 **Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
 **Last updated:** 2026-05-08
-**Phases since last refactor:** 0 (reset on roadmap extension)
+**Phases since last refactor:** 3 (39 capture, 40 cleanup, 41 output) — refactor gate deferred to after Phase 42 since the codebase is mid-reshape (typed install + adoption coming)
 **Total refactor passes:** 2
 
 ## Resume context (2026-05-08)
@@ -20,6 +20,25 @@ User explicitly enabled watchdog loops mid-session (CronCreate jobs `fceab167` f
 - Stashed pre-existing user WIP rather than incorporating: WIP was partial (kept `human`/`agent` as deprecated rather than deleting) and would conflict with Phase 40 cleanup. User can `git stash pop` later to resume.
 - Used existing `docs/design/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
 - Phase 39 Units 1–3 + 5–7 implemented directly by Opus (small, self-contained units). Unit 4 (CLI rendering) orchestrated to a Sonnet agent. **User feedback mid-phase: prefer orchestration via `/implement-orchestrator` for all future implementation work.** Phases 40–46 will run the full autopilot workflow: research gate → `/design` → `/implement-orchestrator` → test checkpoint → progress + commit → refactor gate.
+
+## Phase 41 completion summary (2026-05-08)
+
+Output mode abstraction shipped across two implementation agents and 5 commits. Ports & Adapters split: `Output` interface in `packages/core/src/output/` (port), three adapters in `packages/cli/src/output/` (tty wrapping format.ts + clack, plain stripping ANSI, json emitting NDJSON).
+
+**What shipped:**
+- `Output` interface with 8 methods (info/warn/error/success/block/json/progress/raw) and `Progress` handle (update/succeed/fail/pause/resume).
+- `pickMode()` resolver: explicit `--json` > TTY detection > plain.
+- Three adapters: tty (clack + ANSI), plain (no colors, no spinners), json (NDJSON one event per line).
+- `createOutput(opts)` factory dispatches on pickMode.
+- `CaptureOutput` test helper records events in-order — no subprocess needed for unit tests.
+- Per-command Zod schemas: 5 with full discriminated unions (install/update/sync/doctor/status), 11 placeholder for follow-up tightening.
+- ~57 CLI command files migrated off `successLine`/`errorLine`/`infoLine`/`jsonLine`/`securityBlock` and direct `process.stdout/stderr.write`. Spinner imports collapsed to `out.progress()`.
+- `format.ts` slimmed: write functions removed (only pure formatting utilities remain like `ansi`, `table`, `formatLineRef`).
+- New `output/write-helpers.ts` for the few pre-initialization fatal-error paths in `ui/policy.ts` / `ui/resolve.ts`.
+
+**Verification:** Full suite 2109 pass / 51 skip / 0 fail (up from 2038; 72 new output unit tests). Source-side acceptance checks: zero direct stdout/stderr writes outside `output/` and `completions/dynamic.ts`; zero format.ts write-function imports in commands.
+
+**Workflow:** Two Sonnet agents — Agent A (Units 1-8: foundation + schemas), Agent B (Unit 9: 3-tier CLI migration + Unit 10: test rewrites). Orchestrator (Opus) verified intermediate gates and final suite.
 
 ## Phase 40 completion summary (2026-05-08)
 
@@ -195,7 +214,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 38c | Version bump to 2.0.0(-rc.1) + tag + push      | ready for user | — |
 | 39  | Plugin Capture (v2.2)                          | code complete; 39.11/39.12 user-gated | 2026-05-08 |
 | 40  | Drop legacy fallbacks + agent-mode             | done     | 2026-05-08 |
-| 41  | Output mode abstraction                        | pending  | — |
+| 41  | Output mode abstraction                        | done     | 2026-05-08 |
 | 42  | Typed install/remove/update/toggle             | pending  | — |
 | 43  | Claude Code plugin adoption                    | pending  | — |
 | 44  | TUI dashboard (Ink)                            | pending  | — |
