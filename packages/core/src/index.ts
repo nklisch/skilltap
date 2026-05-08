@@ -32,6 +32,8 @@ export * from "./migrate";
 export * from "./move";
 export * from "./npm-registry";
 export * from "./orphan";
+export type { Output, OutputMode, OutputOptions, Progress } from "./output";
+export { pickMode } from "./output";
 export * from "./paths";
 export * from "./plugin";
 export * from "./plugin-v2";
