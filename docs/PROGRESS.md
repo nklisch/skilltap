@@ -6,6 +6,34 @@
 **Phases since last refactor:** 5 (39 capture, 40 cleanup, 41 output, 42 typed CLI, 43 adoption) — refactor pass due before Phase 44 (TUI dashboard) since 44 will lean heavily on the existing patterns and a refactor pass could surface duplication earlier
 **Total refactor passes:** 2
 
+## Session-end handoff (2026-05-08, end-of-day)
+
+Five phases shipped end-to-end this session: 39 (capture), 40 (cleanup), 41 (output abstraction), 42 (typed install/remove/update/toggle), 43 (Claude Code adoption). Codebase state at `e15f2fa`:
+- Full suite: 2085 pass / 51 skip / 0 fail.
+- Lines of production code: roughly **net –4000** since session start (phase 40+41+42 were all heavy demolitions).
+- CLI surface count: 51 endpoints (v2.1) → ~19 top-level entries (v2.0 redesign).
+
+**Remaining work** (3 phases + 1 deferred refactor pass):
+- **Refactor pass** — gate triggered (5 phases since Refactor 2). Recommended before Phase 44 since the TUI work will lean on existing CLI command patterns; refactor pass surfaces duplication early. Use `/refactor-design` → `/implement-orchestrator` → `/extract-patterns`.
+- **Phase 44 (TUI dashboard)** — largest remaining. Adds Ink, multi-screen flow (dashboard, find, toggle, adopt). 10 ROADMAP units (44.1–44.10). Best in fresh context.
+- **Phase 45 (migrate command)** — medium. Most translation logic already shipped via Phase 40's incremental migrate updates. Phase 45 verifies all v2.x → redesign edge cases + adds doctor-post-migrate verification.
+- **Phase 46 (polish + release)** — docs alignment + version bump (user-gated).
+
+**Resume conditions for next /autopilot session:**
+1. Refactor gate first: `/refactor-design` to find duplication across the 5-phase reshape, then implement-orchestrator + extract-patterns.
+2. Phase 44 next (TUI dashboard) — big addition; fresh context recommended.
+3. Phase 45 + 46 to finish the v2.0 redesign.
+
+**User-gated releases pending:**
+- v2.2.0 (capture, Phase 39 done): `bun run bump 2.2.0` + `git tag v2.2.0` + `git push --follow-tags`.
+- v3.0.0 (full redesign, after 44+45+46): subsequent.
+
+**Watchdog loops still active:** `fceab167` (30m nudge) and `858edc08` (3h re-engagement). They resume from PROGRESS.md on each fire.
+
+**Stashed pre-existing user WIP:** still at `stash@{0}` ("WIP: security flatten + security.enabled kill switch (pre-autopilot v2 redesign)"). The security flatten part is now redundant (Phase 40 did it). The `security.enabled` kill switch is a fresh addition the user may want to bring forward — `git stash pop` and pick what's still relevant.
+
+---
+
 ## Resume context (2026-05-08)
 
 A foundation-doc redesign session produced two major commits on `main`:
