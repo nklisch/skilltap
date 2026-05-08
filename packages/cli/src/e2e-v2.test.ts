@@ -257,31 +257,26 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     }
   });
 
-  // ── 7. --agent flag — Phase 31c-c-2c follow-up ───────────────────────────────
+  // ── 7. --yes installs cleanly in non-TTY pipe mode ──────────────────────────
 
-  test("7. --agent flag forces non-interactive output even outside TTY", async () => {
+  test("7. --yes installs cleanly in non-TTY pipe mode", async () => {
     // Use a fresh project for this — independent of the prior sequence.
-    // Note: --agent requires security scanning by default, so we can't
-    // also pass --skip-scan. The standalone-skill fixture is small and
-    // passes the static scan cleanly.
     const agentDir = await makeTmpDir();
     try {
       await initRepo(agentDir);
       await writeFile(join(agentDir, "skilltap.toml"), "");
       const { exitCode, stdout, stderr } = await run(
-        ["install", skillRepo.path, "--project", "--agent"],
+        ["install", skillRepo.path, "--project", "--yes", "--skip-scan"],
         { cwd: agentDir },
       );
       if (exitCode !== 0) {
         // eslint-disable-next-line no-console
-        console.error("agent-install stdout:", stdout);
+        console.error("install stdout:", stdout);
         // eslint-disable-next-line no-console
-        console.error("agent-install stderr:", stderr);
+        console.error("install stderr:", stderr);
       }
       expect(exitCode).toBe(0);
-      // Agent mode emits "OK: Installed <name>" plain-text lines (vs the
-      // clack spinner output of interactive mode).
-      expect(stdout).toContain("OK: Installed standalone-skill");
+      expect(stdout).toContain("standalone-skill");
     } finally {
       await removeTmpDir(agentDir);
     }
@@ -434,61 +429,41 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     }
   });
 
-  // ── 10. Malformed skilltap.toml: agent mode aborts; interactive auto-recovers ──
+  // ── 10. Malformed skilltap.toml: interactive auto-recovers ───────────────────
 
   // The install preflight (cli/src/commands/install.ts: preflightManifestValidity)
-  // detects a corrupt skilltap.toml at install start and treats the two modes
-  // differently to avoid leaving the project in a half-managed state:
-  //
-  //   - Agent mode:       refuse + exit 1, point to `doctor --fix`. Scripts and
-  //                        CI must never silently mutate user files.
-  //   - Interactive mode: back up the corrupt file to skilltap.toml.bak, write
-  //                        a fresh empty manifest, announce loudly, proceed.
+  // detects a corrupt skilltap.toml at install start and backs it up, writes
+  // a fresh empty manifest, announces loudly, and proceeds.
   //
   // Without this preflight, the install would proceed and addSkillToManifest's
   // silent-skip would swallow the manifest update — leaving state.json updated
   // but skilltap.toml still corrupt and skilltap.lock missing the new entry.
 
-  test("10a. malformed skilltap.toml in --agent mode aborts before any install work", async () => {
+  test("10a. malformed skilltap.toml: preflight backs up and recovers before install", async () => {
     const malformedDir = await makeTmpDir();
     try {
       await initRepo(malformedDir);
-      await writeFile(
-        join(malformedDir, "skilltap.toml"),
-        '[skills\nthis = "is a broken table\n',
-      );
+      const brokenContent = '[skills\nthis = "is a broken table\n';
+      await writeFile(join(malformedDir, "skilltap.toml"), brokenContent);
 
-      // Note: --agent mode requires security scanning, so --skip-scan is
-      // rejected upfront. Drop it; the preflight aborts before scan runs.
-      const { exitCode, stderr } = await run(
-        ["install", skillRepo.path, "--project", "--agent"],
+      const { exitCode } = await run(
+        ["install", skillRepo.path, "--project", "--yes", "--skip-scan"],
         { cwd: malformedDir },
       );
 
-      expect(exitCode).toBe(1);
-      expect(stderr).toContain("skilltap.toml is corrupt");
-      expect(stderr).toContain("doctor --fix");
+      expect(exitCode).toBe(0);
 
-      // No install side effects — preflight aborts before any work.
+      // The corrupt file is preserved at .bak
+      const bakOnDisk = await Bun.file(
+        join(malformedDir, "skilltap.toml.bak"),
+      ).text();
+      expect(bakOnDisk).toBe(brokenContent);
+
+      // state.json reflects the install
       const stateExists = await Bun.file(
         join(malformedDir, ".agents", "state.json"),
       ).exists();
-      expect(stateExists).toBe(false);
-      const installDirExists = await Bun.file(
-        join(malformedDir, ".agents", "skills", "standalone-skill"),
-      ).exists();
-      expect(installDirExists).toBe(false);
-
-      // The corrupt manifest itself is left untouched in agent mode (the user
-      // / script needs to look at it; we don't mutate user files silently).
-      const manifestOnDisk = await Bun.file(
-        join(malformedDir, "skilltap.toml"),
-      ).text();
-      expect(manifestOnDisk).toContain("[skills");
-      const bakExists = await Bun.file(
-        join(malformedDir, "skilltap.toml.bak"),
-      ).exists();
-      expect(bakExists).toBe(false);
+      expect(stateExists).toBe(true);
     } finally {
       await removeTmpDir(malformedDir);
     }

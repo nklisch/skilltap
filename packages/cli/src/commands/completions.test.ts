@@ -125,7 +125,7 @@ describe("completions — bash script", () => {
       expect(stdout).toContain(cmd);
     }
     // config subcommands
-    expect(stdout).toContain("agent-mode security telemetry get set edit");
+    expect(stdout).toContain("security telemetry get set edit");
     // skills subcommands
     expect(stdout).toContain("info remove link unlink adopt move");
   });
@@ -181,7 +181,6 @@ describe("completions — zsh script", () => {
     }
     // config subcommands
     for (const sub of [
-      "agent-mode",
       "security",
       "telemetry",
       "get",

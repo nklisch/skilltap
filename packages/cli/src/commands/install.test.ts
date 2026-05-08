@@ -270,99 +270,61 @@ describe("install — agent selection", () => {
   });
 });
 
-// ── Agent Mode Tests ──
+// ── Non-interactive (--yes) install tests ──
 
-async function writeAgentModeConfig(
-  configDir: string,
-  extra = "",
-): Promise<void> {
+async function writeDefaultAlsoConfig(configDir: string): Promise<void> {
   const dir = join(configDir, "skilltap");
   await mkdir(dir, { recursive: true });
   await Bun.write(
     join(dir, "config.toml"),
-    `["agent-mode"]\nenabled = true\nscope = "global"\n\n[security]\nscan = "static"\n${extra}`,
+    `[defaults]\nalso = ["claude-code"]\n`,
   );
 }
 
-describe("install — agent mode", () => {
-  test("clean skill installs with plain text output", async () => {
-    await writeAgentModeConfig(configDir);
-    const repo = await createStandaloneSkillRepo();
-    try {
-      const { exitCode, stdout, stderr } = await runSkilltap(
-        ["install", repo.path],
-        homeDir,
-        configDir,
-      );
-      expect(exitCode).toBe(0);
-      expect(stdout).toContain("OK: Installed standalone-skill");
-      // No ANSI escape codes
-      expect(stdout).not.toMatch(/\x1b\[/);
-      expect(stderr).not.toMatch(/\x1b\[/);
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("malicious skill blocked with security directive", async () => {
-    await writeAgentModeConfig(configDir);
+describe("install — non-interactive (--yes)", () => {
+  test("malicious skill blocked when on_warn=fail (--strict)", async () => {
     const repo = await createMaliciousSkillRepo();
     try {
+      // --strict sets on_warn=fail so security warnings abort the install
       const { exitCode, stderr } = await runSkilltap(
-        ["install", repo.path],
+        ["install", repo.path, "--yes", "--global", "--strict"],
         homeDir,
         configDir,
       );
       expect(exitCode).toBe(1);
-      expect(stderr).toContain("SECURITY ISSUE FOUND");
-      expect(stderr).toContain("DO NOT install");
-      expect(stderr).toContain("User action required");
+      expect(stderr).toContain("Static warnings");
+      expect(stderr).toContain("aborting");
     } finally {
       await repo.cleanup();
     }
   });
 
-  test("--skip-scan blocked in agent mode", async () => {
-    await writeAgentModeConfig(configDir);
-    const repo = await createStandaloneSkillRepo();
-    try {
-      const { exitCode, stderr } = await runSkilltap(
-        ["install", repo.path, "--skip-scan"],
-        homeDir,
-        configDir,
-      );
-      expect(exitCode).toBe(1);
-      expect(stderr).toContain("Agent mode");
-      expect(stderr).toContain("--skip-scan");
-    } finally {
-      await repo.cleanup();
-    }
-  });
-
-  test("auto-selects all skills from multi-skill repo", async () => {
-    await writeAgentModeConfig(configDir);
+  test("auto-selects all skills from multi-skill repo with --yes", async () => {
     const repo = await createMultiSkillRepo();
     try {
       const { exitCode, stdout } = await runSkilltap(
-        ["install", repo.path],
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("OK: Installed skill-a");
-      expect(stdout).toContain("OK: Installed skill-b");
+      expect(stdout).toContain("skill-a");
+      expect(stdout).toContain("skill-b");
     } finally {
       await repo.cleanup();
     }
   });
 
   test("already installed triggers update instead of failing", async () => {
-    await writeAgentModeConfig(configDir);
     const repo = await createStandaloneSkillRepo();
     try {
-      await runSkilltap(["install", repo.path], homeDir, configDir);
+      await runSkilltap(
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
+        homeDir,
+        configDir,
+      );
       const { exitCode, stdout } = await runSkilltap(
-        ["install", repo.path],
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -373,15 +335,12 @@ describe("install — agent mode", () => {
     }
   });
 
-  test("agent mode uses config defaults.also for symlinks", async () => {
-    await writeAgentModeConfig(
-      configDir,
-      '\n[defaults]\nalso = ["claude-code"]\n',
-    );
+  test("uses config defaults.also for symlinks when --yes", async () => {
+    await writeDefaultAlsoConfig(configDir);
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", repo.path],
+        ["install", repo.path, "--yes", "--global", "--skip-scan"],
         homeDir,
         configDir,
       );

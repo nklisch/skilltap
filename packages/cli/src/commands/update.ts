@@ -1,6 +1,5 @@
 import { isCancel, log, spinner } from "@clack/prompts";
 import {
-  type AgentAdapter,
   type Config,
   type EffectivePolicy,
   fetchSkillUpdateStatus,
@@ -14,13 +13,6 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { sendEvent, telemetryBase } from "../telemetry";
-import {
-  agentError,
-  agentSecurityBlock,
-  agentSkip,
-  agentUpToDate,
-  outputJson,
-} from "../ui/agent-out";
 import { footerConfirm as confirm } from "../ui/footer";
 import {
   ansi,
@@ -29,11 +21,11 @@ import {
   formatDiffStatSummary,
   formatShaChange,
   formatUnifiedDiff,
+  jsonLine,
   successLine,
 } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
 import {
-  resolveAgentForAgentMode,
   resolveSemanticInteractive,
   tryFindProjectRoot,
 } from "../ui/resolve";
@@ -84,11 +76,6 @@ export default defineCommand({
         "Force update even if skill appears up to date (re-applies and re-scans).",
       default: false,
     },
-    agent: {
-      type: "boolean",
-      description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
-      default: false,
-    },
   },
   async run({ args }) {
     const name = args.name as string | undefined;
@@ -102,46 +89,17 @@ export default defineCommand({
       strict: args.strict,
       yes: args.yes,
       semantic: args.semantic,
-      agent: args.agent,
     });
 
-    await refreshTapIndexes(policy.agentMode);
+    await refreshTapIndexes();
 
-    if (policy.agentMode) {
-      return runAgentModeUpdate(
-        name,
-        config,
-        policy,
-        projectRoot,
-        args.json,
-        args.force,
-      );
-    }
-    return runInteractiveUpdate(
-      name,
-      args,
-      config,
-      policy,
-      projectRoot,
-      args.force,
-    );
+    return runUpdate(name, args, config, policy, projectRoot, args.force);
   },
 });
 
 // ─── Tap Refresh ──────────────────────────────────────────────────────────────
 
-async function refreshTapIndexes(agentMode: boolean): Promise<void> {
-  if (agentMode) {
-    process.stdout.write("Refreshing tap indexes...\n");
-    const result = await updateTap();
-    if (!result.ok) {
-      process.stdout.write(
-        `Warning: Could not refresh tap indexes: ${result.error.message}\n`,
-      );
-    }
-    return;
-  }
-
+async function refreshTapIndexes(): Promise<void> {
   const s = spinner();
   s.start("Refreshing tap indexes...");
   const result = await updateTap();
@@ -163,7 +121,7 @@ async function runCheckMode(
   if (json || !process.stdout.isTTY) {
     const updates = await fetchSkillUpdateStatus(pr);
     await writeSkillUpdateCache(updates, pr);
-    outputJson({ updatesAvailable: updates });
+    jsonLine({ updatesAvailable: updates });
     return;
   }
 
@@ -186,120 +144,11 @@ async function runCheckMode(
   }
 }
 
-// ─── Agent Mode ───────────────────────────────────────────────────────────────
+// ─── Update ───────────────────────────────────────────────────────────────────
 
-async function runAgentModeUpdate(
+async function runUpdate(
   name: string | undefined,
-  config: Config,
-  policy: EffectivePolicy,
-  projectRoot: string | undefined,
-  useJson = false,
-  force = false,
-): Promise<void> {
-  let agent: AgentAdapter | undefined;
-  if (policy.scanMode === "semantic") {
-    agent = await resolveAgentForAgentMode(config);
-  }
-
-  const result = await updateSkill({
-    name,
-    yes: true,
-    strict: true,
-    force,
-    agent,
-    semantic: policy.scanMode === "semantic",
-    threshold: config.security.threshold,
-    projectRoot,
-
-    onProgress(skillName, status) {
-      if (status === "upToDate") agentUpToDate(skillName);
-      else if (status === "linked") agentSkip(skillName, "is linked.");
-      else if (status === "local")
-        agentSkip(skillName, "is local (no remote).");
-      else if (status === "removed-upstream") {
-        process.stdout.write(`${skillName}: removed from upstream repo\n`);
-      }
-    },
-
-    async onOrphansFound(orphans: OrphanRecord[]) {
-      for (const o of orphans) {
-        process.stdout.write(
-          `warning: Stale record "${o.record.name}" — ${formatOrphanReason(o.reason)}. Auto-removing.\n`,
-        );
-      }
-      return orphans.map((o) => o.record.name);
-    },
-
-    async onSkillRemovedUpstream(skillName: string) {
-      process.stdout.write(
-        `warning: "${skillName}" removed from upstream repo. Auto-removing record.\n`,
-      );
-      return "remove" as const;
-    },
-
-    onDiff(skillName, stat, fromSha, toSha) {
-      process.stdout.write(
-        `Checking ${skillName}... ${fromSha.slice(0, 7)} → ${toSha.slice(0, 7)} (${stat.filesChanged} files changed)\n`,
-      );
-    },
-
-    onShowWarnings(warnings: StaticWarning[]) {
-      agentSecurityBlock(warnings, []);
-    },
-
-    async onConfirm() {
-      return true;
-    },
-
-    onSemanticWarnings(warnings: SemanticWarning[]) {
-      agentSecurityBlock([], warnings);
-    },
-  });
-
-  if (!result.ok) {
-    sendEvent(config, "update", {
-      ...telemetryBase(true),
-      success: false,
-      error_category: result.error.constructor.name,
-      updated_count: 0,
-      up_to_date_count: 0,
-    });
-    agentError(result.error.message);
-    process.exit(1);
-  }
-
-  const { updated, skipped, upToDate } = result.value;
-
-  sendEvent(config, "update", {
-    ...telemetryBase(true),
-    success: true,
-    updated_count: updated.length,
-    up_to_date_count: upToDate.length,
-  });
-
-  if (useJson) {
-    outputJson({ updated, skipped, upToDate });
-    return;
-  }
-
-  for (const skillName of updated) {
-    process.stdout.write(`OK: Updated ${skillName}\n`);
-  }
-
-  if (updated.length > 0 || skipped.length > 0 || upToDate.length > 0) {
-    process.stdout.write(
-      `\nUpdated: ${updated.length}   Skipped: ${skipped.length}   Up to date: ${upToDate.length}\n`,
-    );
-  } else if (!name) {
-    process.stdout.write("No skills installed.\n");
-  }
-}
-
-// ─── Interactive Mode ─────────────────────────────────────────────────────────
-
-async function runInteractiveUpdate(
-  name: string | undefined,
-  args: { strict?: boolean; semantic: boolean },
+  args: { strict?: boolean; semantic: boolean; json?: boolean },
   config: Config,
   policy: EffectivePolicy,
   projectRoot: string | undefined,
@@ -346,6 +195,14 @@ async function runInteractiveUpdate(
       log.warn(`Found ${orphans.length} stale record(s):`);
       for (const o of orphans) {
         log.warn(`  ${o.record.name}: ${formatOrphanReason(o.reason)}`);
+      }
+      if (policy.yes) {
+        for (const o of orphans) {
+          log.warn(
+            `Stale record "${o.record.name}" (${formatOrphanReason(o.reason)}). Auto-removing.`,
+          );
+        }
+        return orphans.map((o) => o.record.name);
       }
       const shouldClean = await confirm({
         message: "Remove stale records? (directories are already gone)",
@@ -432,7 +289,7 @@ async function runInteractiveUpdate(
 
   if (!result.ok) {
     sendEvent(config, "update", {
-      ...telemetryBase(false),
+      ...telemetryBase(),
       success: false,
       error_category: result.error.constructor.name,
       updated_count: 0,
@@ -445,11 +302,16 @@ async function runInteractiveUpdate(
   const { updated, skipped, upToDate } = result.value;
 
   sendEvent(config, "update", {
-    ...telemetryBase(false),
+    ...telemetryBase(),
     success: true,
     updated_count: updated.length,
     up_to_date_count: upToDate.length,
   });
+
+  if (args.json) {
+    jsonLine({ updated, skipped, upToDate });
+    return;
+  }
 
   for (const skillName of updated) {
     successLine(`Updated ${skillName}`);

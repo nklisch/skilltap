@@ -36,17 +36,15 @@ export function sendEvent(
   }).catch(() => {});
 }
 
-export function telemetryBase(agentMode: boolean): {
+export function telemetryBase(): {
   os: string;
   arch: string;
   ci: boolean;
-  agent_mode: boolean;
 } {
   return {
     os: process.platform,
     arch: process.arch,
     ci: Boolean(process.env.CI),
-    agent_mode: agentMode,
   };
 }
 

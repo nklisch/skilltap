@@ -389,7 +389,7 @@ async function installChosen(
   const steps = createStepLogger(config.verbose);
   const { callbacks, logScanResults } = createInstallCallbacks({
     spinner: s,
-    onWarn: config.security.human.on_warn,
+    onWarn: config.security.on_warn,
     skipScan: false,
     agent,
     yes: true, // user already picked from the search picker

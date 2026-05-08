@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { basename } from "node:path";
-import { isAgentEnv, VERSION } from "@skilltap/core";
+import { VERSION } from "@skilltap/core";
 import { defineCommand, runMain } from "citty";
 import { tryFindProjectRoot } from "./ui/resolve";
 
@@ -142,8 +142,6 @@ async function runTelemetryNotice(): Promise<void> {
   if (!configResult.ok) return;
   const config = configResult.value;
 
-  if (isAgentEnv()) return;
-  if (config["agent-mode"].enabled) return;
   if (process.env.CI) return;
   if (config.telemetry.notice_shown) return;
   if (
@@ -188,7 +186,7 @@ async function runTelemetryNotice(): Promise<void> {
     if (enabled) {
       const { sendEvent, telemetryBase } = await import("./telemetry");
       sendEvent(updated, "skilltap_installed", {
-        ...telemetryBase(false),
+        ...telemetryBase(),
         version: VERSION,
       });
     }
@@ -226,10 +224,6 @@ async function runStartupUpdateCheck(): Promise<void> {
   // Load config for update preferences — fall back gracefully if it fails
   const configResult = await loadConfig();
   const config = configResult.ok ? configResult.value : null;
-
-  // Suppress update output when running in agent mode
-  if (isAgentEnv()) return;
-  if (config?.["agent-mode"]?.enabled) return;
 
   const intervalHours = config?.updates?.interval_hours ?? 24;
   const autoUpdate = config?.updates?.auto_update ?? "off";
@@ -274,9 +268,6 @@ async function runStartupSkillUpdateCheck(): Promise<void> {
 
   const configResult = await loadConfig();
   const config = configResult.ok ? configResult.value : null;
-
-  if (isAgentEnv()) return;
-  if (config?.["agent-mode"]?.enabled) return;
 
   const intervalHours = config?.updates?.skill_check_interval_hours ?? 24;
   const projectRoot = await tryFindProjectRoot();

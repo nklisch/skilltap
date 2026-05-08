@@ -240,7 +240,7 @@ _skilltap() {
           ;;
         config)
           local -a config_commands
-          config_commands=('agent-mode:Configure agent mode' 'security:Configure security settings' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value' 'edit:Open config in editor')
+          config_commands=('security:Configure security settings' 'telemetry:Manage telemetry' 'get:Get a config value' 'set:Set a config value' 'edit:Open config in editor')
           _arguments -C \\
             '--reset[Overwrite existing config]' \\
             '1:subcommand:->config_cmd' \\

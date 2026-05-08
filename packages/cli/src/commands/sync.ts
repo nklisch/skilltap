@@ -11,8 +11,7 @@ import {
   type SyncApplyResult,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { outputJson } from "../ui/agent-out";
-import { ansi, errorLine, successLine } from "../ui/format";
+import { ansi, errorLine, jsonLine, successLine } from "../ui/format";
 
 export default defineCommand({
   meta: {
@@ -85,7 +84,7 @@ export default defineCommand({
     if (apply) {
       if (plan.inSync) {
         if (useJson) {
-          outputJson({
+          jsonLine({
             inSync: true,
             applied: 0,
             skipped: 0,
@@ -123,7 +122,7 @@ export default defineCommand({
       }
       const summary: SyncApplyResult = applyResult.value;
       if (useJson) {
-        outputJson({
+        jsonLine({
           inSync: false,
           applied: summary.applied,
           skipped: summary.skipped,
@@ -140,7 +139,7 @@ export default defineCommand({
     }
 
     if (useJson) {
-      outputJson({
+      jsonLine({
         inSync: plan.inSync,
         items: plan.ordered,
       });

@@ -1,7 +1,6 @@
 import { type DoctorCheck, type DoctorIssue, runDoctor } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { outputJson } from "../ui/agent-out";
-import { ansi } from "../ui/format";
+import { ansi, jsonLine } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
@@ -166,7 +165,7 @@ async function runJson(fix: boolean): Promise<void> {
     })),
   };
 
-  outputJson(output);
+  jsonLine(output);
 
   if (!result.ok) process.exit(1);
 }

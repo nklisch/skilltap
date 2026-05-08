@@ -1,7 +1,6 @@
 import { runMigrate } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { outputJson } from "../ui/agent-out";
-import { ansi, errorLine } from "../ui/format";
+import { ansi, errorLine, jsonLine } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
@@ -24,7 +23,7 @@ export default defineCommand({
 
     if (!result.ok) {
       if (useJson) {
-        outputJson({
+        jsonLine({
           ok: false,
           error: result.error.message,
           hint: result.error.hint,
@@ -40,7 +39,7 @@ export default defineCommand({
     const report = result.value;
 
     if (useJson) {
-      outputJson({
+      jsonLine({
         ok: true,
         alreadyMigrated: report.alreadyMigrated,
         scopes: report.scopes,

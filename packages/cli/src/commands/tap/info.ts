@@ -1,8 +1,6 @@
 import { getTapInfo } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError, outputJson } from "../../ui/agent-out";
-import { ansi, table } from "../../ui/format";
-import { isAgentMode } from "../../ui/policy";
+import { ansi, errorLine, jsonLine, table } from "../../ui/format";
 
 export default defineCommand({
   meta: {
@@ -22,27 +20,16 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agentMode = await isAgentMode();
-
     const result = await getTapInfo(args.name);
-    if (!result.ok)
-      exitWithError(agentMode, result.error.message, result.error.hint);
+    if (!result.ok) {
+      errorLine(result.error.message, result.error.hint);
+      process.exit(1);
+    }
 
     const info = result.value;
 
     if (args.json) {
-      outputJson(info);
-      return;
-    }
-
-    if (agentMode) {
-      process.stdout.write(`name: ${info.name}\n`);
-      process.stdout.write(`type: ${info.type}\n`);
-      process.stdout.write(`url: ${info.url}\n`);
-      if (info.localPath) process.stdout.write(`path: ${info.localPath}\n`);
-      if (info.lastFetched)
-        process.stdout.write(`last-fetched: ${info.lastFetched}\n`);
-      process.stdout.write(`skills: ${info.skillCount}\n`);
+      jsonLine(info);
       return;
     }
 

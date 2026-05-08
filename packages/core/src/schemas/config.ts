@@ -7,7 +7,6 @@ import { z } from "zod/v4";
 
 export const SCAN_MODES = ["static", "semantic", "off"] as const;
 export const ON_WARN_MODES = ["prompt", "fail", "allow"] as const;
-export const AGENT_MODE_SCOPES = ["global", "project"] as const;
 export const SCOPE_VALUES = ["", "global", "project"] as const;
 export const AUTO_UPDATE_MODES = ["off", "patch", "minor"] as const;
 export const SHOW_DIFF_MODES = ["full", "stat", "none"] as const;
@@ -39,16 +38,6 @@ export const PRESET_VALUES: Record<
 };
 
 // ---------------------------------------------------------------------------
-// Per-mode security settings — used independently for human and agent modes.
-// ---------------------------------------------------------------------------
-
-export const SecurityModeSchema = z.object({
-  scan: z.enum(SCAN_MODES).default("static"),
-  on_warn: z.enum(ON_WARN_MODES).default("prompt"),
-  require_scan: z.boolean().default(false),
-});
-
-// ---------------------------------------------------------------------------
 // Per-trust-tier override — maps a named tap or source type to a preset.
 // ---------------------------------------------------------------------------
 
@@ -66,27 +55,14 @@ export const TrustOverrideSchema = z.object({
 // ---------------------------------------------------------------------------
 
 export const SecurityConfigSchema = z.object({
-  // Per-mode settings
-  human: SecurityModeSchema.prefault({}),
-  agent: SecurityModeSchema.prefault({
-    scan: "static",
-    on_warn: "fail",
-    require_scan: true,
-  }),
-
-  // Shared settings (not per-mode)
+  scan: z.enum(SCAN_MODES).default("static"),
+  on_warn: z.enum(ON_WARN_MODES).default("prompt"),
+  require_scan: z.boolean().default(false),
   agent_cli: z.string().default(""),
   threshold: z.number().int().min(0).max(10).default(5),
   max_size: z.number().int().default(51200),
   ollama_model: z.string().default(""),
-
-  // Trust tier overrides — evaluated in order, first match wins
   overrides: z.array(TrustOverrideSchema).default([]),
-});
-
-export const AgentModeSchema = z.object({
-  enabled: z.boolean().default(false),
-  scope: z.enum(AGENT_MODE_SCOPES).default("project"),
 });
 
 export const UpdatesConfigSchema = z.object({
@@ -130,7 +106,6 @@ export const ConfigSchema = z.object({
     // prefault passes {} through the schema, applying nested defaults (Zod 4 vs Zod 3's default({}))
     .prefault({}),
   security: SecurityConfigSchema.prefault({}),
-  "agent-mode": AgentModeSchema.prefault({}),
   registry: RegistryConfigSchema,
   /** Whether the built-in skilltap-skills tap is enabled. Set to false to opt out. */
   builtin_tap: z.boolean().default(true),
@@ -153,10 +128,8 @@ export const ConfigSchema = z.object({
   default_git_host: z.string().default("https://github.com"),
 });
 
-export type SecurityMode = z.infer<typeof SecurityModeSchema>;
 export type TrustOverride = z.infer<typeof TrustOverrideSchema>;
 export type SecurityConfig = z.infer<typeof SecurityConfigSchema>;
-export type AgentMode = z.infer<typeof AgentModeSchema>;
 export type UpdatesConfig = z.infer<typeof UpdatesConfigSchema>;
 export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>;
 export type RegistryConfig = z.infer<typeof RegistryConfigSchema>;

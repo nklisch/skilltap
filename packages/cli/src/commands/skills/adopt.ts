@@ -1,8 +1,7 @@
 import { isCancel, multiselect } from "@clack/prompts";
 import { adoptSkill, discoverSkills, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError, exitWithError } from "../../ui/agent-out";
-import { successLine } from "../../ui/format";
+import { errorLine, successLine } from "../../ui/format";
 import {
   parseAlsoFlag,
   resolveScope,
@@ -53,8 +52,6 @@ export default defineCommand({
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode =
-      configResult.ok && configResult.value["agent-mode"].enabled;
 
     const projectRoot = await tryFindProjectRoot();
 
@@ -67,12 +64,10 @@ export default defineCommand({
 
     const discoverResult = await discoverSkills(discoverOpts);
 
-    if (!discoverResult.ok)
-      exitWithError(
-        agentMode,
-        discoverResult.error.message,
-        discoverResult.error.hint,
-      );
+    if (!discoverResult.ok) {
+      errorLine(discoverResult.error.message, discoverResult.error.hint);
+      process.exit(1);
+    }
 
     const unmanaged = discoverResult.value.skills;
 
@@ -81,9 +76,6 @@ export default defineCommand({
 
     if (args.name) {
       namesToAdopt = [...new Set([args.name, ...(args._ as string[])])];
-    } else if (agentMode) {
-      agentError("Provide skill name(s) as arguments.");
-      process.exit(1);
     } else {
       if (unmanaged.length === 0) {
         process.stdout.write("No unmanaged skills found.\n");
@@ -108,11 +100,11 @@ export default defineCommand({
     const skillsToAdopt = namesToAdopt.map((name) => {
       const skill = unmanaged.find((s) => s.name === name);
       if (!skill) {
-        exitWithError(
-          agentMode,
+        errorLine(
           `Unmanaged skill '${name}' not found.`,
           "Run 'skilltap skills --unmanaged' to see unmanaged skills.",
         );
+        process.exit(1);
       }
       return skill;
     });
@@ -134,37 +126,31 @@ export default defineCommand({
         projectRoot: resolvedProjectRoot,
         also,
         skipScan: args["skip-scan"],
-        onWarnings:
-          agentMode || args.yes
-            ? undefined
-            : async (warnings, skillName) => {
-                process.stderr.write(
-                  `\nwarning: Security warnings for '${skillName}':\n`,
-                );
-                for (const w of warnings) {
-                  process.stderr.write(`  ${w.file}: ${w.category}\n`);
-                }
-                // In interactive mode without --yes, auto-proceed (warnings were shown)
-                return true;
-              },
+        onWarnings: args.yes
+          ? undefined
+          : async (warnings, skillName) => {
+              process.stderr.write(
+                `\nwarning: Security warnings for '${skillName}':\n`,
+              );
+              for (const w of warnings) {
+                process.stderr.write(`  ${w.file}: ${w.category}\n`);
+              }
+              // In interactive mode without --yes, auto-proceed (warnings were shown)
+              return true;
+            },
       });
 
-      if (!result.ok)
-        exitWithError(agentMode, result.error.message, result.error.hint);
+      if (!result.ok) {
+        errorLine(result.error.message, result.error.hint);
+        process.exit(1);
+      }
 
-      const { record, symlinksCreated } = result.value;
+      const { record } = result.value;
       const destPath = record.path ?? `~/.agents/skills/${skill.name}`;
 
-      if (agentMode) {
-        process.stdout.write(`OK: Adopted ${skill.name} → ${destPath}\n`);
-        for (const link of symlinksCreated) {
-          process.stdout.write(`OK: Symlinked ${link}\n`);
-        }
-      } else {
-        successLine(`Adopted ${skill.name} → ${destPath}`);
-        for (const agent of also) {
-          successLine(`  Also linked for ${agent}`);
-        }
+      successLine(`Adopted ${skill.name} → ${destPath}`);
+      for (const agent of also) {
+        successLine(`  Also linked for ${agent}`);
       }
     }
   },

@@ -3,7 +3,6 @@ export const VERSION: string = version;
 
 export * from "./adapters";
 export * from "./adopt";
-export * from "./agent-env";
 export * from "./agents";
 export * from "./config";
 export * from "./config-keys";

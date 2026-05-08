@@ -2,10 +2,8 @@ import { multiselect } from "@clack/prompts";
 import type { StoredComponent } from "@skilltap/core";
 import { loadPlugins, toggleInstalledComponent } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError, exitWithError } from "../../ui/agent-out";
 import { ansi, errorLine, successLine } from "../../ui/format";
 import { componentLabel } from "../../ui/plugin-format";
-import { isAgentMode } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -41,12 +39,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agentMode = await isAgentMode();
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      exitWithError(agentMode, globalResult.error.message);
+      errorLine(globalResult.error.message);
+      process.exit(1);
     }
 
     const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
@@ -58,11 +56,11 @@ export default defineCommand({
 
     const plugin = allPlugins.find((p) => p.name === args.name);
     if (!plugin) {
-      exitWithError(
-        agentMode,
+      errorLine(
         `Plugin '${args.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
+      process.exit(1);
     }
 
     const toToggle: StoredComponent[] = [];
@@ -76,11 +74,6 @@ export default defineCommand({
         toToggle.push(...plugin.components.filter((c) => c.type === "mcp"));
       if (args.agents)
         toToggle.push(...plugin.components.filter((c) => c.type === "agent"));
-    } else if (agentMode) {
-      agentError(
-        "Provide --skills, --mcps, or --agents to specify what to toggle.",
-      );
-      process.exit(1);
     } else {
       // Interactive multiselect
       const options = plugin.components.map((c) => ({

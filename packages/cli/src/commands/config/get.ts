@@ -1,7 +1,6 @@
 import { formatConfigValue, getConfigValue, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError, outputJson } from "../../ui/agent-out";
-import { errorLine } from "../../ui/format";
+import { errorLine, jsonLine } from "../../ui/format";
 
 export default defineCommand({
   meta: {
@@ -31,7 +30,7 @@ export default defineCommand({
 
     if (!key) {
       if (args.json) {
-        outputJson(config);
+        jsonLine(config);
       } else {
         printFlat(config);
       }
@@ -39,15 +38,13 @@ export default defineCommand({
     }
 
     const result = getConfigValue(config, key);
-    if (!result.ok)
-      exitWithError(
-        config["agent-mode"].enabled,
-        result.error.message,
-        result.error.hint,
-      );
+    if (!result.ok) {
+      errorLine(result.error.message, result.error.hint);
+      process.exit(1);
+    }
 
     if (args.json) {
-      outputJson(result.value);
+      jsonLine(result.value);
     } else {
       process.stdout.write(`${formatConfigValue(result.value)}\n`);
     }

@@ -71,11 +71,8 @@ describe("skilltap config get", () => {
     expect(stdout.trim()).toBe("24");
   });
 
-  test("gets security.human.scan default", async () => {
-    const { exitCode, stdout } = await runGet(
-      ["security.human.scan"],
-      configDir,
-    );
+  test("gets security.scan default", async () => {
+    const { exitCode, stdout } = await runGet(["security.scan"], configDir);
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("static");
   });
@@ -92,7 +89,6 @@ describe("skilltap config get", () => {
     const config = JSON.parse(stdout);
     expect(config.defaults).toBeDefined();
     expect(config.security).toBeDefined();
-    expect(config["agent-mode"]).toBeDefined();
   });
 
   test("--json with key returns single value as JSON", async () => {
@@ -111,31 +107,22 @@ describe("skilltap config get", () => {
     expect(stdout).toContain("security.threshold = 5");
   });
 
-  test("gets security.agent.on_warn default", async () => {
+  test("gets security.on_warn default", async () => {
     const { exitCode, stdout } = await runGet(
-      ["security.agent.on_warn"],
-      configDir,
-    );
-    expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe("fail");
-  });
-
-  test("gets security.agent.require_scan default", async () => {
-    const { exitCode, stdout } = await runGet(
-      ["security.agent.require_scan"],
-      configDir,
-    );
-    expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe("true");
-  });
-
-  test("gets security.human.on_warn default", async () => {
-    const { exitCode, stdout } = await runGet(
-      ["security.human.on_warn"],
+      ["security.on_warn"],
       configDir,
     );
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("prompt");
+  });
+
+  test("gets security.require_scan default", async () => {
+    const { exitCode, stdout } = await runGet(
+      ["security.require_scan"],
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout.trim()).toBe("false");
   });
 
   test("gets security.agent_cli default", async () => {
@@ -154,10 +141,10 @@ describe("skilltap config get", () => {
     );
     expect(exitCode).toBe(0);
     const sec = JSON.parse(stdout);
-    expect(sec.human).toBeDefined();
-    expect(sec.agent).toBeDefined();
-    expect(sec.human.scan).toBe("static");
-    expect(sec.agent.on_warn).toBe("fail");
+    expect(sec.scan).toBeDefined();
+    expect(sec.on_warn).toBeDefined();
+    expect(sec.scan).toBe("static");
+    expect(sec.on_warn).toBe("prompt");
     expect(sec.overrides).toEqual([]);
   });
 });

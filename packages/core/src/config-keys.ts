@@ -25,6 +25,9 @@ export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
   "defaults.scope": { type: "enum", enum: SCOPE_VALUES },
   "defaults.also": { type: "string[]" },
   "defaults.yes": { type: "boolean" },
+  "security.scan": { type: "enum", enum: ["static", "semantic", "off"] },
+  "security.on_warn": { type: "enum", enum: ["prompt", "fail", "allow"] },
+  "security.require_scan": { type: "boolean" },
   "security.agent_cli": { type: "string" },
   "security.ollama_model": { type: "string" },
   "security.threshold": { type: "number" },
@@ -37,29 +40,22 @@ export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
 
 const BLOCKED_SET_KEYS: Record<string, string> = {
   "agent-mode.enabled":
-    "Use 'skilltap config agent-mode' (persistent), or pass --agent / SKILLTAP_AGENT=1 per invocation",
+    "agent-mode has been removed. Use --yes or set security.on_warn = 'allow' for unattended use.",
   "agent-mode.scope":
-    "Use 'skilltap config agent-mode' (persistent), or pass --project / --global per invocation",
+    "agent-mode has been removed. Use --project / --global per invocation.",
   "telemetry.enabled": "Use 'skilltap config telemetry enable/disable'",
   "telemetry.notice_shown": "Internal field",
   "telemetry.anonymous_id": "Internal field",
-  // New per-mode security fields — use config security wizard
-  "security.human.scan": "Use 'skilltap config security'",
-  "security.human.on_warn": "Use 'skilltap config security'",
-  "security.human.require_scan": "Use 'skilltap config security'",
-  "security.agent.scan": "Use 'skilltap config security'",
-  "security.agent.on_warn": "Use 'skilltap config security'",
-  "security.agent.require_scan": "Use 'skilltap config security'",
   "security.overrides": "Use 'skilltap config security --trust'",
-  // Old v1 keys — block with migration hint
-  "security.scan":
-    "Use 'skilltap config security' (field moved to security.human.scan / security.agent.scan)",
-  "security.on_warn":
-    "Use 'skilltap config security' (field moved to security.human.on_warn / security.agent.on_warn)",
-  "security.require_scan":
-    "Use 'skilltap config security' (field moved to security.human.require_scan / security.agent.require_scan)",
-  "security.agent":
-    "Use 'skilltap config set security.agent_cli' (field renamed to security.agent_cli)",
+  // Old per-mode keys from v1 — block with migration hint
+  "security.human.scan": "Use 'security.scan' (per-mode split removed in v2.2)",
+  "security.human.on_warn": "Use 'security.on_warn' (per-mode split removed in v2.2)",
+  "security.human.require_scan":
+    "Use 'security.require_scan' (per-mode split removed in v2.2)",
+  "security.agent.scan": "Use 'security.scan' (per-mode split removed in v2.2)",
+  "security.agent.on_warn": "Use 'security.on_warn' (per-mode split removed in v2.2)",
+  "security.agent.require_scan":
+    "Use 'security.require_scan' (per-mode split removed in v2.2)",
   taps: "Use 'skilltap tap add/remove'",
 };
 

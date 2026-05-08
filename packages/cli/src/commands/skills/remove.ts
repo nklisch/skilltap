@@ -9,7 +9,6 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { sendEvent, telemetryBase } from "../../telemetry";
-import { agentError, exitWithError } from "../../ui/agent-out";
 import { errorLine, successLine } from "../../ui/format";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
@@ -23,8 +22,7 @@ export default defineCommand({
   args: {
     name: {
       type: "positional",
-      description:
-        "Name(s) of installed skills or mcp:<source> to remove (required in agent mode)",
+      description: "Name(s) of installed skills or mcp:<source> to remove",
       required: false,
     },
     project: {
@@ -43,18 +41,12 @@ export default defineCommand({
       description: "Skip confirmation prompt",
       default: false,
     },
-    agent: {
-      type: "boolean",
-      description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
-      default: false,
-    },
   },
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({
       yes: args.yes,
       project: args.project,
       global: args.global,
-      agent: args.agent,
     });
 
     // Phase 35b-2: dispatch mcp:<source> to MCP-only remove path.
@@ -82,17 +74,11 @@ export default defineCommand({
           continue;
         }
         const r = result.value;
-        if (policy.agentMode) {
-          process.stdout.write(
-            `OK: Removed ${r.removed} MCP server${r.removed === 1 ? "" : "s"} from ${source}\n`,
-          );
-        } else {
-          successLine(
-            `Removed ${r.removed} MCP server${r.removed === 1 ? "" : "s"} from ${source} (agents: ${r.agents.join(", ")})`,
-          );
-          for (const name of r.names) {
-            successLine(`  • ${name}`);
-          }
+        successLine(
+          `Removed ${r.removed} MCP server${r.removed === 1 ? "" : "s"} from ${source} (agents: ${r.agents.join(", ")})`,
+        );
+        for (const name of r.names) {
+          successLine(`  • ${name}`);
         }
       }
       if (anyFail) process.exit(1);
@@ -102,7 +88,8 @@ export default defineCommand({
     const projectRoot = await tryFindProjectRoot();
     const globalResult = await loadInstalled();
     if (!globalResult.ok) {
-      exitWithError(policy.agentMode, globalResult.error.message);
+      errorLine(globalResult.error.message);
+      process.exit(1);
     }
     const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
     const allSkills: InstalledSkill[] = [
@@ -113,10 +100,6 @@ export default defineCommand({
     let skillsToRemove: InstalledSkill[];
 
     if (!args.name) {
-      if (policy.agentMode) {
-        agentError("Provide skill name(s) as arguments.");
-        process.exit(1);
-      }
       if (allSkills.length === 0) {
         errorLine("No skills installed.");
         process.exit(1);
@@ -140,53 +123,36 @@ export default defineCommand({
             );
             if (discovered) {
               // Confirm and remove unmanaged skill
-              if (policy.agentMode) {
-                const rmResult = await removeAnySkill({
-                  skill: discovered,
-                  removeAll: true,
-                });
-                if (!rmResult.ok) {
-                  agentError(rmResult.error.message);
-                  process.exit(1);
-                }
-                process.stdout.write(`OK: Removed ${name}\n`);
-                sendEvent(config, "remove", {
-                  ...telemetryBase(true),
-                  success: true,
-                });
-                return;
-              } else {
-                if (!args.yes) {
-                  const confirmed = await confirmRemove(name);
-                  if (confirmed === false) process.exit(2);
-                }
-                const s = spinner();
-                s.start(`Removing ${name}...`);
-                const rmResult = await removeAnySkill({
-                  skill: discovered,
-                  removeAll: true,
-                });
-                if (!rmResult.ok) {
-                  s.stop("Failed.");
-                  errorLine(rmResult.error.message, rmResult.error.hint);
-                  process.exit(1);
-                }
-                s.stop("Removed.");
-                successLine(`Removed ${name}`);
-                sendEvent(config, "remove", {
-                  ...telemetryBase(false),
-                  success: true,
-                });
-                return;
+              if (!args.yes) {
+                const confirmed = await confirmRemove(name);
+                if (confirmed === false) process.exit(2);
               }
+              const s = spinner();
+              s.start(`Removing ${name}...`);
+              const rmResult = await removeAnySkill({
+                skill: discovered,
+                removeAll: true,
+              });
+              if (!rmResult.ok) {
+                s.stop("Failed.");
+                errorLine(rmResult.error.message, rmResult.error.hint);
+                process.exit(1);
+              }
+              s.stop("Removed.");
+              successLine(`Removed ${name}`);
+              sendEvent(config, "remove", {
+                ...telemetryBase(),
+                success: true,
+              });
+              return;
             }
           }
 
-          exitWithError(
-            policy.agentMode,
+          errorLine(
             `Skill '${name}' is not installed`,
             "Run 'skilltap skills' to see installed skills.",
           );
+          process.exit(1);
         }
         skillsToRemove.push(skill);
       }
@@ -198,33 +164,6 @@ export default defineCommand({
         : args.global
           ? "global"
           : (skill.scope as "global" | "project" | "linked");
-
-    if (policy.agentMode) {
-      for (const skill of skillsToRemove) {
-        const result = await removeSkill(skill.name, {
-          scope: scopeOf(skill),
-          projectRoot: scopeOf(skill) === "project" ? projectRoot : undefined,
-          onOrphanRemoved(name) {
-            process.stdout.write(
-              `note: "${name}" directory was already missing — cleaning up record only.\n`,
-            );
-          },
-        });
-        if (!result.ok) {
-          sendEvent(config, "remove", {
-            ...telemetryBase(true),
-            success: false,
-            error_category: result.error.constructor.name,
-            scope: scopeOf(skill),
-          });
-          agentError(result.error.message);
-          process.exit(1);
-        }
-        process.stdout.write(`OK: Removed ${skill.name}\n`);
-      }
-      sendEvent(config, "remove", { ...telemetryBase(true), success: true });
-      return;
-    }
 
     // Confirm only when names were given via CLI (multiselect is implicit confirmation)
     if (!args.yes && args.name) {
@@ -258,7 +197,7 @@ export default defineCommand({
       if (!result.ok) {
         s.stop("Failed.");
         sendEvent(config, "remove", {
-          ...telemetryBase(false),
+          ...telemetryBase(),
           success: false,
           error_category: result.error.constructor.name,
           scope: scopeOf(skill),
@@ -268,7 +207,7 @@ export default defineCommand({
       }
     }
 
-    sendEvent(config, "remove", { ...telemetryBase(false), success: true });
+    sendEvent(config, "remove", { ...telemetryBase(), success: true });
     s.stop("Removed.");
     if (skillsToRemove.length === 1) {
       // biome-ignore lint/style/noNonNullAssertion: length === 1 guard

@@ -8,7 +8,6 @@ import {
   PRESET_VALUES,
   SCAN_MODES,
   SECURITY_PRESETS,
-  type SecurityMode,
   SOURCE_TYPES,
   saveConfig,
   type TrustOverride,
@@ -26,7 +25,6 @@ import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../../ui/prompts";
 
 function isNonInteractive(args: {
   preset?: string;
-  mode?: string;
   scan?: string;
   "on-warn"?: string;
   "require-scan"?: boolean;
@@ -43,30 +41,7 @@ function isNonInteractive(args: {
   );
 }
 
-function applyPresetToMode(
-  config: Config,
-  preset: (typeof SECURITY_PRESETS)[number],
-  target: "human" | "agent" | "both",
-): void {
-  const values = PRESET_VALUES[preset];
-  if (target === "human" || target === "both") {
-    config.security.human = { ...config.security.human, ...values };
-  }
-  if (target === "agent" || target === "both") {
-    config.security.agent = { ...config.security.agent, ...values };
-  }
-}
-
-function parseTarget(
-  modeArg: string | undefined,
-): "human" | "agent" | "both" | null {
-  if (!modeArg || modeArg === "both") return "both";
-  if (modeArg === "human" || modeArg === "agent") return modeArg;
-  return null;
-}
-
 function parseTrustFlag(trust: string): TrustOverride | null {
-  // Format: tap:<name>=<preset> or source:<type>=<preset>
   const tapMatch = trust.match(/^tap:([^=]+)=([^=]+)$/);
   if (tapMatch) {
     const preset = tapMatch[2] as string;
@@ -94,7 +69,6 @@ function parseTrustFlag(trust: string): TrustOverride | null {
 
 async function runNonInteractive(args: {
   preset?: string;
-  mode?: string;
   scan?: string;
   "on-warn"?: string;
   "require-scan"?: boolean;
@@ -107,12 +81,6 @@ async function runNonInteractive(args: {
     process.exit(1);
   }
   const config = configResult.value;
-
-  const target = parseTarget(args.mode);
-  if (target === null) {
-    errorLine(`Invalid mode: '${args.mode}'. Use: human, agent, or both`);
-    process.exit(1);
-  }
 
   if (args["remove-trust"]) {
     const name = args["remove-trust"];
@@ -159,7 +127,8 @@ async function runNonInteractive(args: {
       process.exit(1);
     }
     const preset = args.preset as (typeof SECURITY_PRESETS)[number];
-    applyPresetToMode(config, preset, target);
+    const values = PRESET_VALUES[preset];
+    config.security = { ...config.security, ...values };
   }
 
   if (args.scan) {
@@ -169,11 +138,7 @@ async function runNonInteractive(args: {
       );
       process.exit(1);
     }
-    const scan = args.scan as (typeof SCAN_MODES)[number];
-    if (target === "human" || target === "both")
-      config.security.human.scan = scan;
-    if (target === "agent" || target === "both")
-      config.security.agent.scan = scan;
+    config.security.scan = args.scan as (typeof SCAN_MODES)[number];
   }
 
   if (args["on-warn"]) {
@@ -183,18 +148,11 @@ async function runNonInteractive(args: {
       );
       process.exit(1);
     }
-    const onWarn = args["on-warn"] as (typeof ON_WARN_MODES)[number];
-    if (target === "human" || target === "both")
-      config.security.human.on_warn = onWarn;
-    if (target === "agent" || target === "both")
-      config.security.agent.on_warn = onWarn;
+    config.security.on_warn = args["on-warn"] as (typeof ON_WARN_MODES)[number];
   }
 
   if (args["require-scan"] !== undefined) {
-    if (target === "human" || target === "both")
-      config.security.human.require_scan = args["require-scan"];
-    if (target === "agent" || target === "both")
-      config.security.agent.require_scan = args["require-scan"];
+    config.security.require_scan = args["require-scan"];
   }
 
   const saveResult = await saveConfig(config);
@@ -203,16 +161,9 @@ async function runNonInteractive(args: {
     process.exit(1);
   }
 
-  if (target === "human" || target === "both") {
-    process.stdout.write(
-      `OK: security.human = ${describeSecurityMode(config.security.human)}\n`,
-    );
-  }
-  if (target === "agent" || target === "both") {
-    process.stdout.write(
-      `OK: security.agent = ${describeSecurityMode(config.security.agent)}\n`,
-    );
-  }
+  process.stdout.write(
+    `OK: security = ${describeSecurityMode(config.security)}\n`,
+  );
 }
 
 // ─── Preset select options ─────────────────────────────────────────────────
@@ -241,13 +192,18 @@ const ON_WARN_OPTIONS = [
 
 // ─── Interactive wizard helpers ────────────────────────────────────────────
 
-async function promptSecurityMode(
-  label: string,
-  current: SecurityMode,
+type SecurityModeFields = {
+  scan: (typeof SCAN_MODES)[number];
+  on_warn: (typeof ON_WARN_MODES)[number];
+  require_scan: boolean;
+};
+
+async function promptSecuritySettings(
+  current: SecurityModeFields,
   agentCli: string,
-): Promise<{ mode: SecurityMode; agentCli: string }> {
+): Promise<{ mode: SecurityModeFields; agentCli: string }> {
   const presetResult = await select({
-    message: `Security preset for ${label}?`,
+    message: "Security preset?",
     options: PRESET_OPTIONS,
     initialValue: "standard",
   });
@@ -406,60 +362,22 @@ async function runInteractive(): Promise<void> {
 
   intro("Security Configuration");
 
-  // Step 1: Which mode?
-  const modeResult = await select({
-    message: "Configure which mode?",
-    options: [
-      { value: "human", label: "Human", hint: "when you run skilltap" },
-      { value: "agent", label: "Agent", hint: "when AI agents run skilltap" },
-      { value: "both", label: "Both", hint: "same settings for both" },
-    ],
-    initialValue: "both",
-  });
-  if (isCancel(modeResult)) {
-    cancel("Cancelled.");
-    process.exit(130);
-  }
-  const target = modeResult as "human" | "agent" | "both";
+  const current: SecurityModeFields = {
+    scan: config.security.scan,
+    on_warn: config.security.on_warn,
+    require_scan: config.security.require_scan,
+  };
 
-  let newHuman = { ...config.security.human };
-  let newAgent = { ...config.security.agent };
-  let newAgentCli = config.security.agent_cli;
+  const { mode, agentCli } = await promptSecuritySettings(
+    current,
+    config.security.agent_cli,
+  );
 
-  if (target === "both") {
-    const { mode, agentCli } = await promptSecurityMode(
-      "both modes",
-      config.security.human,
-      newAgentCli,
-    );
-    newHuman = mode;
-    newAgent = { ...mode };
-    newAgentCli = agentCli;
-  } else if (target === "human") {
-    const { mode, agentCli } = await promptSecurityMode(
-      "human mode",
-      config.security.human,
-      newAgentCli,
-    );
-    newHuman = mode;
-    newAgentCli = agentCli;
-  } else {
-    const { mode, agentCli } = await promptSecurityMode(
-      "agent mode",
-      config.security.agent,
-      newAgentCli,
-    );
-    newAgent = mode;
-    newAgentCli = agentCli;
-  }
-
-  // Step 2: Trust overrides
+  // Trust overrides
   const newOverrides = await promptTrustOverrides(config.security.overrides);
 
-  // Step 3: Summary
-  let summaryLines =
-    `Human: ${describeSecurityMode(newHuman)}\n` +
-    `Agent: ${describeSecurityMode(newAgent)}`;
+  // Summary
+  let summaryLines = describeSecurityMode(mode);
 
   if (newOverrides.length > 0) {
     summaryLines += "\n\nTrust overrides:";
@@ -470,7 +388,6 @@ async function runInteractive(): Promise<void> {
 
   note(summaryLines, "Security Summary");
 
-  // Step 4: Confirm save
   const saveConfirm = await confirm({
     message: "Save these settings?",
     initialValue: true,
@@ -482,9 +399,10 @@ async function runInteractive(): Promise<void> {
 
   config.security = {
     ...config.security,
-    human: newHuman,
-    agent: newAgent,
-    agent_cli: newAgentCli,
+    scan: mode.scan,
+    on_warn: mode.on_warn,
+    require_scan: mode.require_scan,
+    agent_cli: agentCli,
     overrides: newOverrides,
   };
 
@@ -508,11 +426,6 @@ export default defineCommand({
     preset: {
       type: "string",
       description: "Apply a named preset: none, relaxed, standard, strict",
-    },
-    mode: {
-      type: "string",
-      description:
-        "Which mode to configure: human, agent, both (default: both)",
     },
     scan: { type: "string", description: "Scan level: static, semantic, off" },
     "on-warn": {

@@ -46,7 +46,7 @@ async function disableBuiltinTap(configDir: string): Promise<void> {
 
 // ─── Test 3: Agent mode installs through phantom conflict ─────────────────────
 
-describe("install orphan — agent mode installs through phantom conflict", () => {
+describe("install orphan — installs through phantom conflict", () => {
   test("exits 0 and installs fresh when stale record exists but directory is gone", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
@@ -64,20 +64,13 @@ describe("install orphan — agent mode installs through phantom conflict", () =
       const skillDir = join(homeDir, ".agents", "skills", "standalone-skill");
       await rm(skillDir, { recursive: true, force: true });
 
-      // Enable agent mode and try to re-install from the same repo
-      await mkdir(join(configDir, "skilltap"), { recursive: true });
-      await Bun.write(
-        join(configDir, "skilltap", "config.toml"),
-        `builtin_tap = false\n["agent-mode"]\nenabled = true\nscope = "global"\n`,
-      );
-
       const second = await runSkilltap(
-        ["install", repo.path],
+        ["install", repo.path, "--global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
       expect(second.exitCode).toBe(0);
-      expect(second.stdout).toContain("OK:");
+      expect(second.stdout).toContain("standalone-skill");
 
       // Exactly one record in installed.json
       const installed = await loadInstalled();

@@ -1,7 +1,6 @@
 import { disableSkill, enableSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError } from "../../ui/agent-out";
-import { successLine } from "../../ui/format";
+import { errorLine, successLine } from "../../ui/format";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
@@ -31,18 +30,11 @@ function makeToggleCommand(action: "enable" | "disable") {
         description: `${label} project skill`,
         default: false,
       },
-      agent: {
-        type: "boolean",
-        description:
-          "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
-        default: false,
-      },
     },
     async run({ args }) {
-      const { policy } = await loadPolicyOrExit({
+      await loadPolicyOrExit({
         project: args.project,
         global: args.global,
-        agent: args.agent,
       });
       const scope = args.project
         ? "project"
@@ -52,15 +44,9 @@ function makeToggleCommand(action: "enable" | "disable") {
       const projectRoot =
         scope === "project" ? await tryFindProjectRoot() : undefined;
       const result = await coreFn(args.name, { scope, projectRoot });
-      if (!result.ok)
-        exitWithError(
-          policy.agentMode,
-          result.error.message,
-          result.error.hint,
-        );
-      if (policy.agentMode) {
-        process.stdout.write(`OK: ${label} ${args.name}\n`);
-        return;
+      if (!result.ok) {
+        errorLine(result.error.message, result.error.hint);
+        process.exit(1);
       }
       successLine(`${label} ${args.name}`);
     },

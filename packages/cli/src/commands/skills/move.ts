@@ -1,7 +1,6 @@
 import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError } from "../../ui/agent-out";
-import { successLine } from "../../ui/format";
+import { errorLine, successLine } from "../../ui/format";
 import { parseAlsoFlag, tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -29,15 +28,15 @@ export default defineCommand({
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode =
-      configResult.ok && configResult.value["agent-mode"].enabled;
 
     if (!args.global && !args.project) {
-      exitWithError(agentMode, "Specify target scope: --global or --project");
+      errorLine("Specify target scope: --global or --project");
+      process.exit(1);
     }
 
     if (args.global && args.project) {
-      exitWithError(agentMode, "Cannot specify both --global and --project");
+      errorLine("Cannot specify both --global and --project");
+      process.exit(1);
     }
 
     const also = parseAlsoFlag(
@@ -55,28 +54,21 @@ export default defineCommand({
     } else {
       const projectRoot = await tryFindProjectRoot();
       if (!projectRoot) {
-        exitWithError(
-          agentMode,
+        errorLine(
           "No project root found. Run from inside a project directory.",
         );
+        process.exit(1);
       }
       to = { scope: "project", projectRoot };
     }
 
     const result = await moveSkill(args.name, { to, fromProjectRoot, also });
-    if (!result.ok)
-      exitWithError(agentMode, result.error.message, result.error.hint);
-
-    const { from, to: destPath, record } = result.value;
-    const fromScope = from.includes("/.agents/skills/") ? "global" : "project";
-    const toScope = record.scope;
-
-    if (agentMode) {
-      process.stdout.write(
-        `OK: Moved ${args.name} from ${fromScope} to ${toScope}\n`,
-      );
-    } else {
-      successLine(`Moved ${args.name}: ${from} → ${destPath}`);
+    if (!result.ok) {
+      errorLine(result.error.message, result.error.hint);
+      process.exit(1);
     }
+
+    const { from, to: destPath } = result.value;
+    successLine(`Moved ${args.name}: ${from} → ${destPath}`);
   },
 });

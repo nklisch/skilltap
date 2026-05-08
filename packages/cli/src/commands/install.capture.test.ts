@@ -1,12 +1,12 @@
 /**
  * CLI subprocess tests for plugin capture (Unit 4 of Phase 39).
  *
- * Tests exercise the capture callback wiring in runAgentMode via runSkilltap.
+ * Tests exercise the capture callback wiring via runSkilltap (pipe mode).
  * PTY-dependent interactive-prompt tests are omitted per testing.md §Test
  * selection (runSkilltap runs in pipe mode; clack prompts don't render fully).
  *
- * Agent mode is activated via `writeAgentModeConfig` (sets config scan=static
- * + scope=global) — skip-scan is blocked in agent mode by policy.
+ * --yes is used to bypass interactive prompts; cross-source conflicts abort
+ * automatically in pipe mode (clack prompts return cancel symbol → abort).
  */
 
 import {
@@ -51,13 +51,10 @@ afterEach(async () => {
 // Config helpers
 // ---------------------------------------------------------------------------
 
-async function writeAgentModeConfig(configDir: string): Promise<void> {
+async function disableBuiltinTap(configDir: string): Promise<void> {
   const dir = join(configDir, "skilltap");
   await mkdir(dir, { recursive: true });
-  await Bun.write(
-    join(dir, "config.toml"),
-    `["agent-mode"]\nenabled = true\nscope = "global"\n\n[security]\nscan = "static"\n`,
-  );
+  await Bun.write(join(dir, "config.toml"), "builtin_tap = false\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -136,16 +133,16 @@ process.stdout.write("ok\\n");
 }
 
 // ---------------------------------------------------------------------------
-// Agent mode — no matching standalones → normal plugin install
+// No matching standalones → normal plugin install
 // ---------------------------------------------------------------------------
 
-describe("install capture — agent mode, no overlap", () => {
+describe("install capture — no overlap", () => {
   test("plugin install with no pre-existing standalones completes normally", async () => {
-    await writeAgentModeConfig(configDir);
+    await disableBuiltinTap(configDir);
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { exitCode, stdout } = await runSkilltap(
-        ["install", pluginRepo.path],
+        ["install", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -157,11 +154,11 @@ describe("install capture — agent mode, no overlap", () => {
   });
 
   test("no capture summary line when no standalones were captured", async () => {
-    await writeAgentModeConfig(configDir);
+    await disableBuiltinTap(configDir);
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { stdout } = await runSkilltap(
-        ["install", pluginRepo.path],
+        ["install", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -173,12 +170,12 @@ describe("install capture — agent mode, no overlap", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Agent mode — cross-source conflict → hard-abort
+// Cross-source conflict → hard-abort (clack prompt cancels in pipe mode)
 // ---------------------------------------------------------------------------
 
-describe("install capture — agent mode, cross-source conflict", () => {
+describe("install capture — cross-source conflict", () => {
   test("exits non-zero when standalone installed from different source", async () => {
-    await writeAgentModeConfig(configDir);
+    await disableBuiltinTap(configDir);
     const helperRepo = await createHelperSkillRepo();
     const pluginRepo = await createClaudePluginRepo();
     try {
@@ -193,8 +190,10 @@ describe("install capture — agent mode, cross-source conflict", () => {
       expect(before.value.skills.some((s) => s.name === "helper")).toBe(true);
 
       // Install plugin from pluginRepo (different canonical source → cross-source)
+      // In pipe mode, the cross-source conflict prompt is cancelled (non-TTY)
+      // which causes the install to abort → exit non-zero.
       const { exitCode, stdout, stderr } = await runSkilltap(
-        ["install", pluginRepo.path],
+        ["install", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );
@@ -212,14 +211,18 @@ describe("install capture — agent mode, cross-source conflict", () => {
   });
 
   test("standalone state unchanged after cross-source conflict abort", async () => {
-    await writeAgentModeConfig(configDir);
+    await disableBuiltinTap(configDir);
     const helperRepo = await createHelperSkillRepo();
     const pluginRepo = await createClaudePluginRepo();
     try {
       const seeded = await seedHelperFromCoreApi(helperRepo.path, homeDir, configDir, "skills-only");
       expect(seeded).toBe(true);
 
-      await runSkilltap(["install", pluginRepo.path], homeDir, configDir);
+      await runSkilltap(
+        ["install", pluginRepo.path, "--yes", "--global"],
+        homeDir,
+        configDir,
+      );
 
       // Standalone still present
       const after = await loadInstalled();
@@ -242,12 +245,12 @@ describe("install capture — agent mode, cross-source conflict", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Agent mode — same-source capture → auto-confirm, summary in output
+// Same-source capture → auto-confirm with --yes, summary in output
 // ---------------------------------------------------------------------------
 
-describe("install capture — agent mode, same-source capture", () => {
+describe("install capture — same-source capture", () => {
   test("captures same-source standalone, emits Captured summary, exits 0", async () => {
-    await writeAgentModeConfig(configDir);
+    await disableBuiltinTap(configDir);
     const pluginRepo = await createClaudePluginRepo();
     try {
       // Seed: install helper as skills-only from the same plugin repo path.
@@ -261,9 +264,9 @@ describe("install capture — agent mode, same-source capture", () => {
       if (!before.ok) return;
       expect(before.value.skills.some((s) => s.name === "helper")).toBe(true);
 
-      // Install same repo as plugin → same-source capture → auto-confirm
+      // Install same repo as plugin → same-source capture → auto-confirm with --yes
       const { exitCode, stdout } = await runSkilltap(
-        ["install", pluginRepo.path],
+        ["install", pluginRepo.path, "--yes", "--global"],
         homeDir,
         configDir,
       );

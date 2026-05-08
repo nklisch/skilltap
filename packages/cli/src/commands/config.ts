@@ -29,7 +29,6 @@ export default defineCommand({
     },
   },
   subCommands: {
-    "agent-mode": () => import("./config/agent-mode").then((m) => m.default),
     security: () => import("./config/security").then((m) => m.default),
     telemetry: () => import("./config/telemetry").then((m) => m.default),
     get: () => import("./config/get").then((m) => m.default),
@@ -69,9 +68,7 @@ export default defineCommand({
     intro("Welcome to skilltap setup!");
 
     note(
-      `Human: ${describeSecurityMode(existing.security.human)}\n` +
-        `Agent: ${describeSecurityMode(existing.security.agent)}\n` +
-        `Run 'skilltap config security' to change.`,
+      `${describeSecurityMode(existing.security)}\nRun 'skilltap config security' to change.`,
       "Security",
     );
 

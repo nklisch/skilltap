@@ -10,8 +10,7 @@ import {
   loadTaps,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError, outputJson } from "../../ui/agent-out";
-import { ansi } from "../../ui/format";
+import { ansi, errorLine, jsonLine } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 import { formatTrustLabel } from "../../ui/trust";
 
@@ -34,17 +33,15 @@ export default defineCommand({
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode =
-      configResult.ok && configResult.value["agent-mode"].enabled;
 
     // Try installed first (global + project)
     const globalInstalledResult = await loadInstalled();
     if (!globalInstalledResult.ok) {
-      exitWithError(
-        agentMode,
+      errorLine(
         globalInstalledResult.error.message,
         globalInstalledResult.error.hint,
       );
+      process.exit(1);
     }
 
     const projectRoot = await tryFindProjectRoot();
@@ -63,7 +60,7 @@ export default defineCommand({
 
     if (skill) {
       if (args.json) {
-        outputJson(skill);
+        jsonLine(skill);
         return;
       }
 
@@ -143,7 +140,7 @@ export default defineCommand({
       const tapEntry = tapsResult.value.find((e) => e.skill.name === args.name);
       if (tapEntry) {
         if (args.json) {
-          outputJson({
+          jsonLine({
             ...tapEntry.skill,
             tap: tapEntry.tapName,
             status: "available",
@@ -179,10 +176,10 @@ export default defineCommand({
       }
     }
 
-    exitWithError(
-      agentMode,
+    errorLine(
       `Skill '${args.name}' is not installed`,
       `Run 'skilltap find ${args.name}' to search`,
     );
+    process.exit(1);
   },
 });

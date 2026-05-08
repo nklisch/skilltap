@@ -41,7 +41,9 @@ async function configIsV1(path: string): Promise<boolean> {
     const security = parsed.security;
     if (security && typeof security === "object" && !Array.isArray(security)) {
       const sec = security as Record<string, unknown>;
-      if ("human" in sec || "agent" in sec || "overrides" in sec) return true;
+      // "overrides" is intentionally NOT checked here — the new schema also has
+      // security.overrides as a flat array. Only the per-mode subkeys indicate v1.
+      if ("human" in sec || "agent" in sec) return true;
     }
     if ("agent-mode" in parsed) return true;
   } catch {

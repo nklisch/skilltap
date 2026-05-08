@@ -1,10 +1,8 @@
 import { confirm } from "@clack/prompts";
 import { loadPlugins, removeInstalledPlugin } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError, exitWithError, outputJson } from "../../ui/agent-out";
-import { ansi, errorLine, successLine } from "../../ui/format";
+import { ansi, errorLine, jsonLine, successLine } from "../../ui/format";
 import { componentSummary } from "../../ui/plugin-format";
-import { isAgentMode } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -31,12 +29,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agentMode = await isAgentMode();
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      exitWithError(agentMode, globalResult.error.message);
+      errorLine(globalResult.error.message);
+      process.exit(1);
     }
 
     const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
@@ -48,30 +46,14 @@ export default defineCommand({
 
     const plugin = allPlugins.find((p) => p.name === args.name);
     if (!plugin) {
-      exitWithError(
-        agentMode,
+      errorLine(
         `Plugin '${args.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
+      process.exit(1);
     }
 
     const summary = componentSummary(plugin);
-
-    if (agentMode) {
-      const result = await removeInstalledPlugin(plugin.name, { projectRoot });
-      if (!result.ok) {
-        agentError(result.error.message);
-        process.exit(1);
-      }
-      if (args.json) {
-        outputJson({ removed: result.value.name, components: summary });
-      } else {
-        process.stdout.write(
-          `OK: Removed plugin ${plugin.name} (${summary})\n`,
-        );
-      }
-      return;
-    }
 
     if (!args.yes) {
       process.stdout.write(
@@ -91,7 +73,7 @@ export default defineCommand({
     }
 
     if (args.json) {
-      outputJson({ removed: result.value.name, components: summary });
+      jsonLine({ removed: result.value.name, components: summary });
     } else {
       successLine(`Removed plugin ${plugin.name} (${summary})`);
     }

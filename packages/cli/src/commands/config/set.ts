@@ -7,7 +7,6 @@ import {
   validateSetKey,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError } from "../../ui/agent-out";
 
 export default defineCommand({
   meta: {
@@ -37,18 +36,11 @@ export default defineCommand({
       .filter((a) => !a.startsWith("-"));
     const values = afterSet.slice(1); // everything after the key
 
-    // Load config first so we can check agent mode for error formatting
     const configResult = await loadConfig();
-    const agentMode =
-      configResult.ok && configResult.value["agent-mode"].enabled;
 
     const writeError = (msg: string, hint?: string) => {
-      if (agentMode) {
-        agentError(msg);
-      } else {
-        process.stderr.write(`ERROR: ${msg}\n`);
-        if (hint) process.stderr.write(`  hint: ${hint}\n`);
-      }
+      process.stderr.write(`error: ${msg}\n`);
+      if (hint) process.stderr.write(`  hint: ${hint}\n`);
     };
 
     if (!configResult.ok) {

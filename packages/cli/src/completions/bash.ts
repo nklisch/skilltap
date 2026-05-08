@@ -202,13 +202,13 @@ _skilltap() {
         security)
           COMPREPLY=($(compgen -W "--preset --mode --scan --on-warn --require-scan --trust --remove-trust" -- "$cur"))
           ;;
-        set|agent-mode|telemetry|edit)
+        set|telemetry|edit)
           ;;
         *)
           if [[ "$cur" == -* ]]; then
             COMPREPLY=($(compgen -W "--reset" -- "$cur"))
           else
-            COMPREPLY=($(compgen -W "agent-mode security telemetry get set edit" -- "$cur"))
+            COMPREPLY=($(compgen -W "security telemetry get set edit" -- "$cur"))
           fi
           ;;
       esac

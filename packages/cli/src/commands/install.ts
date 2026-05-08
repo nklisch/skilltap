@@ -26,13 +26,7 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { inferAdapter, sendEvent, telemetryBase } from "../telemetry";
-import {
-  agentError,
-  agentSecurityBlock,
-  agentSuccess,
-  exitWithError,
-} from "../ui/agent-out";
-import { errorLine, successLine } from "../ui/format";
+import { errorLine, securityBlock, successLine } from "../ui/format";
 import {
   createInstallCallbacks,
   printCaptureConflict,
@@ -81,7 +75,7 @@ export default defineCommand({
     },
     "skip-scan": {
       type: "boolean",
-      description: "Skip security scanning (not available in agent mode)",
+      description: "Skip security scanning",
       default: false,
     },
     yes: {
@@ -108,11 +102,6 @@ export default defineCommand({
       description: "Force semantic scan",
       default: false,
     },
-    agent: {
-      type: "boolean",
-      description: "Run in non-interactive agent mode (also: SKILLTAP_AGENT=1)",
-      default: false,
-    },
   },
   async run({ args }) {
     const { config, policy } = await loadPolicyOrExit({
@@ -123,7 +112,6 @@ export default defineCommand({
       semantic: args.semantic,
       project: args.project,
       global: args.global,
-      agent: args.agent,
     });
 
     // Ensure built-in tap is cloned before resolving tap names
@@ -150,51 +138,20 @@ export default defineCommand({
       return runMcpInstall(sources, args, config, policy);
     }
 
-    if (policy.agentMode) {
-      return runAgentMode(sources, args, config, policy);
-    }
-    return runInteractiveMode(sources, args, config, policy, verbose);
+    return runInstall(sources, args, config, policy, verbose);
   },
 });
 
 // ─── Manifest preflight (corruption recovery) ────────────────────────────────
 
-/**
- * If the project's skilltap.toml exists but won't parse, decide what to do
- * BEFORE the install runs any heavy work (clone, scan, file placement).
- *
- * Without this preflight, install would proceed and silently swallow the
- * manifest update at the end (addSkillToManifest treats loadManifest failure
- * as a no-op so a "manifest hiccup doesn't roll back a successful install").
- * The result was a half-managed project: state.json updated, files placed,
- * skilltap.toml still corrupt, lockfile missing the new entry.
- *
- * Behavior:
- * - **Agent mode**: refuse and exit 1 with a pointer to `doctor --fix`. CI
- *   and scripts should never silently mutate user files.
- * - **Interactive mode**: auto-recover (backup to .bak, reset to empty),
- *   announce loudly, then proceed. The user gets their install AND a clean
- *   recovery path (their old content survives at skilltap.toml.bak).
- */
 async function preflightManifestValidity(
   projectRoot: string | undefined,
-  agentMode: boolean,
 ): Promise<void> {
   if (!projectRoot) return;
   if (!(await manifestExists(projectRoot))) return;
 
   const result = await loadManifest(projectRoot);
   if (result.ok) return;
-
-  if (agentMode) {
-    // exitWithError's agent-mode branch drops the hint, so fold the recovery
-    // pointer into the message itself — the user/script needs to see both.
-    exitWithError(
-      true,
-      `skilltap.toml is corrupt: ${result.error.message}\n` +
-        "Run 'skilltap doctor --fix' to back up the corrupt manifest and reset to empty, then retry.",
-    );
-  }
 
   log.warn(`skilltap.toml is corrupt: ${result.error.message}`);
   log.info(
@@ -236,169 +193,18 @@ async function runMcpInstall(
     }
 
     const r = result.value;
-    if (policy.agentMode) {
-      agentSuccess(
-        `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} into ${r.agents.join(", ")}`,
-      );
-    } else {
-      successLine(
-        `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} → ${r.agents.join(", ")}`,
-      );
-      for (const record of r.records) {
-        successLine(`  • ${record.name}`);
-      }
+    successLine(
+      `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} → ${r.agents.join(", ")}`,
+    );
+    for (const record of r.records) {
+      successLine(`  • ${record.name}`);
     }
   }
 }
 
-// ─── Agent Mode ───────────────────────────────────────────────────────────────
+// ─── Install ──────────────────────────────────────────────────────────────────
 
-async function runAgentMode(
-  sources: string[],
-  args: { ref?: string; also?: string },
-  config: Config,
-  policy: EffectivePolicy,
-): Promise<void> {
-  const scope = policy.scope as "global" | "project";
-  const projectRoot = scope === "project" ? await findProjectRoot() : undefined;
-
-  // Refuse to proceed if the project's skilltap.toml is corrupt — agent mode
-  // never silently mutates user files. (Interactive mode auto-recovers; see
-  // preflightManifestValidity.)
-  await preflightManifestValidity(projectRoot, true);
-
-  let agent: AgentAdapter | undefined;
-  if (policy.scanMode === "semantic") {
-    agent = await resolveAgentForAgentMode(config);
-  }
-
-  const also = parseAlsoFlag(args.also, config);
-
-  for (const source of sources) {
-    const result = await installSkill(source, {
-      scope,
-      projectRoot,
-      also,
-      ref: args.ref,
-      skipScan: false,
-      gitHost: config.default_git_host,
-      onWarnings: async (warnings: StaticWarning[]): Promise<boolean> => {
-        agentSecurityBlock(warnings, []);
-        process.exit(1);
-        return false;
-      },
-      onSelectSkills: async (skills: ScannedSkill[]): Promise<string[]> =>
-        skills.map((s) => s.name),
-      onSelectTap: async (matches: TapEntry[]): Promise<TapEntry | null> =>
-        matches[0] ?? null,
-      onAlreadyInstalled: async () => "update" as const,
-      agent,
-      semantic: policy.scanMode === "semantic",
-      threshold: config.security.threshold,
-      onSemanticWarnings: async (
-        warnings: SemanticWarning[],
-      ): Promise<boolean> => {
-        agentSecurityBlock([], warnings);
-        process.exit(1);
-        return false;
-      },
-      async onOrphansFound(orphans: OrphanRecord[]) {
-        for (const o of orphans) {
-          process.stdout.write(
-            `warning: Stale record "${o.record.name}" — ${formatOrphanReason(o.reason)}. Auto-removing.\n`,
-          );
-        }
-        return orphans.map((o) => o.record.name);
-      },
-      onPluginDetected: async () => "plugin" as const,
-      onPluginWarnings: async (warnings: StaticWarning[]): Promise<boolean> => {
-        agentSecurityBlock(warnings, []);
-        process.exit(1);
-        return false;
-      },
-      // Agent mode: same-source captures auto-confirm; cross-source conflicts
-      // hard-abort (the UserError carries the resolution hint).
-      onPluginCaptureConflict: async () => "abort" as const,
-      onPluginCaptureConfirm: async () => true,
-    });
-
-    if (!result.ok) {
-      sendEvent(config, "install", {
-        ...telemetryBase(true),
-        adapter: inferAdapter(source),
-        success: false,
-        error_category: result.error.constructor.name,
-        skill_count: 0,
-        scan_mode: policy.scanMode,
-        scope,
-      });
-      agentError(result.error.message);
-      process.exit(1);
-    }
-
-    sendEvent(config, "install", {
-      ...telemetryBase(true),
-      adapter: inferAdapter(source),
-      success: true,
-      skill_count: result.value.records.length,
-      scan_mode: policy.scanMode,
-      scope,
-    });
-
-    for (const record of result.value.records) {
-      const installDir = skillInstallDir(record.name, scope, projectRoot);
-      agentSuccess(record.name, installDir, record.ref, record.trust);
-    }
-
-    if (result.value.pluginRecord) {
-      const pr = result.value.pluginRecord;
-      const summary = componentSummary(pr);
-      process.stdout.write(`OK: Installed plugin ${pr.name} (${summary})\n`);
-      const cap = result.value.captured;
-      if (cap && cap.skills.length + cap.mcpServers.length > 0) {
-        process.stdout.write(
-          `Captured ${cap.skills.length} standalone skill(s), ${cap.mcpServers.length} MCP server(s) into "${pr.name}".\n`,
-        );
-        const forced = cap.forcedCrossSource;
-        if (forced.skills.length + forced.mcpServers.length > 0) {
-          const names = [...forced.skills, ...forced.mcpServers].join(", ");
-          process.stdout.write(
-            `  ⚠ Force-captured (cross-source override): ${names}\n`,
-          );
-        }
-      }
-    }
-
-    for (const name of result.value.updates) {
-      const updateResult = await updateSkill({
-        name,
-        yes: true,
-        projectRoot,
-        agent,
-        semantic: policy.scanMode === "semantic",
-        threshold: config.security.threshold,
-        onSemanticWarnings: (warnings) => {
-          agentSecurityBlock([], warnings);
-          process.exit(1);
-        },
-      });
-      if (!updateResult.ok) {
-        agentError(updateResult.error.message);
-        process.exit(1);
-      }
-      const { updated, upToDate } = updateResult.value;
-      if (updated.includes(name)) {
-        process.stdout.write(`OK: Updated ${name}\n`);
-      } else if (upToDate.includes(name)) {
-        process.stdout.write(`OK: ${name} is already up to date.\n`);
-      }
-    }
-  }
-}
-
-// ─── Interactive Mode ─────────────────────────────────────────────────────────
-
-async function runInteractiveMode(
+async function runInstall(
   sources: string[],
   args: {
     ref?: string;
@@ -432,10 +238,8 @@ async function runInteractiveMode(
     projectRoot = resolved.projectRoot;
   }
 
-  // Auto-recover a corrupt skilltap.toml before doing any install work, so
-  // we don't end up with state.json updated + manifest stale. The recovery
-  // backs up the corrupt file to skilltap.toml.bak and resets to empty.
-  await preflightManifestValidity(projectRoot, false);
+  // Auto-recover a corrupt skilltap.toml before doing any install work.
+  await preflightManifestValidity(projectRoot);
 
   // Prompt for agent symlinks unless --also was explicitly passed, --yes is set,
   // or the user already has a saved default in config
@@ -513,43 +317,49 @@ async function runInteractiveMode(
         if (!shouldClean) return [];
         return orphans.map((o) => o.record.name);
       },
-      async onPluginCaptureConflict(crossSource) {
-        s.stop();
-        printCaptureConflict(crossSource, source);
-        const { isCancel: isCancelPrompt } = await import("@clack/prompts");
-        const { footerSelect: footerSel } = await import("../ui/footer");
-        const decision = await footerSel<"abort" | "force">({
-          message:
-            "Cross-source capture conflict — what do you want to do?",
-          initialValue: "abort",
-          options: [
-            {
-              value: "abort" as const,
-              label: "Abort the install (recommended)",
+      ...(process.stdout.isTTY
+        ? {
+            async onPluginCaptureConflict(crossSource) {
+              s.stop();
+              printCaptureConflict(crossSource, source);
+              const { isCancel: isCancelPrompt } = await import(
+                "@clack/prompts"
+              );
+              const { footerSelect: footerSel } = await import("../ui/footer");
+              const decision = await footerSel<"abort" | "force">({
+                message:
+                  "Cross-source capture conflict — what do you want to do?",
+                initialValue: "abort",
+                options: [
+                  {
+                    value: "abort" as const,
+                    label: "Abort the install (recommended)",
+                  },
+                  {
+                    value: "force" as const,
+                    label:
+                      "Force capture (override and replace standalones from a different source)",
+                  },
+                ],
+              });
+              if (isCancelPrompt(decision)) {
+                s.start(`Fetching ${source}...`);
+                return "abort";
+              }
+              const resolved = decision as "abort" | "force";
+              if (resolved === "force") {
+                for (const c of crossSource.skills) {
+                  forcedCaptureNames.add(c.standalone.name);
+                }
+                for (const c of crossSource.mcpServers) {
+                  forcedCaptureNames.add(c.serverName);
+                }
+              }
+              s.start(`Fetching ${source}...`);
+              return resolved;
             },
-            {
-              value: "force" as const,
-              label:
-                "Force capture (override and replace standalones from a different source)",
-            },
-          ],
-        });
-        if (isCancelPrompt(decision)) {
-          s.start(`Fetching ${source}...`);
-          return "abort";
-        }
-        const resolved = decision as "abort" | "force";
-        if (resolved === "force") {
-          for (const c of crossSource.skills) {
-            forcedCaptureNames.add(c.standalone.name);
           }
-          for (const c of crossSource.mcpServers) {
-            forcedCaptureNames.add(c.serverName);
-          }
-        }
-        s.start(`Fetching ${source}...`);
-        return resolved;
-      },
+        : {}),
       async onPluginCaptureConfirm(bucket) {
         if (policy.yes) return true;
         s.stop();
@@ -572,7 +382,7 @@ async function runInteractiveMode(
     if (!result.ok) {
       s.stop();
       sendEvent(config, "install", {
-        ...telemetryBase(false),
+        ...telemetryBase(),
         adapter: inferAdapter(source),
         success: false,
         error_category: result.error.constructor.name,
@@ -592,7 +402,7 @@ async function runInteractiveMode(
     logScanResults();
 
     sendEvent(config, "install", {
-      ...telemetryBase(false),
+      ...telemetryBase(),
       adapter: inferAdapter(source),
       success: true,
       skill_count: result.value.records.length,

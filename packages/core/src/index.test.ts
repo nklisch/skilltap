@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { version as pkgVersion } from "../package.json";
 import {
-  AgentModeSchema,
   AgentResponseSchema,
   // schemas
   ConfigSchema,
@@ -59,7 +58,6 @@ describe("@skilltap/core", () => {
   test("exports all schemas", () => {
     expect(ConfigSchema).toBeDefined();
     expect(SecurityConfigSchema).toBeDefined();
-    expect(AgentModeSchema).toBeDefined();
     expect(InstalledSkillSchema).toBeDefined();
     expect(InstalledJsonSchema).toBeDefined();
     expect(TapSchema).toBeDefined();

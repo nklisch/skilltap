@@ -45,17 +45,9 @@ async function disableBuiltinTap(configDir: string): Promise<void> {
   );
 }
 
-async function writeAgentModeConfig(configDir: string): Promise<void> {
-  await mkdir(join(configDir, "skilltap"), { recursive: true });
-  await Bun.write(
-    join(configDir, "skilltap", "config.toml"),
-    `builtin_tap = false\n["agent-mode"]\nenabled = true\nscope = "global"\n`,
-  );
-}
+// ─── Test 1: --yes auto-cleans orphan record during update ───────────────────
 
-// ─── Test 1: Agent mode auto-cleans orphan record during update ───────────────
-
-describe("update orphan — agent mode auto-cleans orphan during update", () => {
+describe("update orphan — --yes auto-cleans orphan during update", () => {
   test("exits 0 and reports stale record with Auto-removing", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
@@ -71,11 +63,8 @@ describe("update orphan — agent mode auto-cleans orphan during update", () => 
       const skillDir = join(homeDir, ".agents", "skills", "standalone-skill");
       await rm(skillDir, { recursive: true, force: true });
 
-      // Enable agent mode
-      await writeAgentModeConfig(configDir);
-
       const { exitCode, stdout } = await runSkilltap(
-        ["update"],
+        ["update", "--yes"],
         homeDir,
         configDir,
       );
@@ -88,9 +77,9 @@ describe("update orphan — agent mode auto-cleans orphan during update", () => 
   });
 });
 
-// ─── Test 2: agent mode auto-cleans orphan and healthy skills still update ────
+// ─── Test 2: --yes auto-cleans orphan and healthy skills still update ────────
 
-describe("update orphan — agent mode cleans orphan, healthy skill still updates", () => {
+describe("update orphan — --yes cleans orphan, healthy skill still updates", () => {
   test("exits 0 and cleans stale record while processing healthy skills", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
@@ -106,11 +95,8 @@ describe("update orphan — agent mode cleans orphan, healthy skill still update
       const skillDir = join(homeDir, ".agents", "skills", "standalone-skill");
       await rm(skillDir, { recursive: true, force: true });
 
-      // Enable agent mode for auto-cleanup
-      await writeAgentModeConfig(configDir);
-
       const { exitCode, stdout } = await runSkilltap(
-        ["update"],
+        ["update", "--yes"],
         homeDir,
         configDir,
       );
@@ -144,7 +130,7 @@ describe("update orphan — one orphan + one healthy skill", () => {
       await commitAll(repoB, "initial commit");
       repoBCleanup = () => removeTmpDir(repoB);
 
-      // Install both skills (before agent mode so --skip-scan works)
+      // Install both skills
       await runSkilltap(
         ["install", repoA.path, "--global", "--yes", "--skip-scan"],
         homeDir,
@@ -168,11 +154,8 @@ describe("update orphan — one orphan + one healthy skill", () => {
         "update",
       );
 
-      // Enable agent mode so orphan cleanup is automatic
-      await writeAgentModeConfig(configDir);
-
       const { exitCode, stdout } = await runSkilltap(
-        ["update"],
+        ["update", "--yes"],
         homeDir,
         configDir,
       );
@@ -180,7 +163,7 @@ describe("update orphan — one orphan + one healthy skill", () => {
       // Orphan cleaned
       expect(stdout).toMatch(/[Ss]tale|Auto-removing/);
       // Healthy skill updated
-      expect(stdout).toContain("OK: Updated second-skill");
+      expect(stdout).toContain("second-skill");
     } finally {
       await repoA.cleanup();
       if (repoBCleanup) await repoBCleanup();
@@ -247,7 +230,7 @@ describe("update orphan — all installed skills are orphaned", () => {
       await commitAll(repoB, "initial commit");
       repoBCleanup = () => removeTmpDir(repoB);
 
-      // Install both skills (before agent mode so --skip-scan works)
+      // Install both skills
       await runSkilltap(
         ["install", repoA.path, "--global", "--yes", "--skip-scan"],
         homeDir,
@@ -269,11 +252,8 @@ describe("update orphan — all installed skills are orphaned", () => {
         force: true,
       });
 
-      // Enable agent mode for auto-cleanup
-      await writeAgentModeConfig(configDir);
-
       const { exitCode, stdout } = await runSkilltap(
-        ["update"],
+        ["update", "--yes"],
         homeDir,
         configDir,
       );
@@ -296,7 +276,7 @@ describe("update orphan — idempotent cleanup (run twice)", () => {
   test("first run cleans, second run is clean — both exit 0", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      // Install before enabling agent mode (so --skip-scan works)
+      // Install first
       await disableBuiltinTap(configDir);
       await runSkilltap(
         ["install", repo.path, "--global", "--yes", "--skip-scan"],
@@ -308,16 +288,17 @@ describe("update orphan — idempotent cleanup (run twice)", () => {
       const skillDir = join(homeDir, ".agents", "skills", "standalone-skill");
       await rm(skillDir, { recursive: true, force: true });
 
-      // Enable agent mode for auto-cleanup
-      await writeAgentModeConfig(configDir);
-
       // First run: warns and cleans
-      const first = await runSkilltap(["update"], homeDir, configDir);
+      const first = await runSkilltap(["update", "--yes"], homeDir, configDir);
       expect(first.exitCode).toBe(0);
       expect(first.stdout).toMatch(/[Ss]tale|Auto-removing/);
 
       // Second run: clean pass, no more orphans, exits 0
-      const second = await runSkilltap(["update"], homeDir, configDir);
+      const second = await runSkilltap(
+        ["update", "--yes"],
+        homeDir,
+        configDir,
+      );
       expect(second.exitCode).toBe(0);
       expect(second.stdout).not.toMatch(/[Ss]tale|Auto-removing/);
     } finally {
@@ -362,11 +343,8 @@ describe("update orphan — mixed orphan types cleaned together", () => {
       await rm(repoB, { recursive: true, force: true });
       repoBCleanup = null; // already deleted
 
-      // Enable agent mode for auto-cleanup
-      await writeAgentModeConfig(configDir);
-
       const { exitCode, stdout } = await runSkilltap(
-        ["update"],
+        ["update", "--yes"],
         homeDir,
         configDir,
       );
@@ -380,13 +358,12 @@ describe("update orphan — mixed orphan types cleaned together", () => {
   });
 });
 
-// ─── Test 14: Agent mode with stale multi-skill record (cache completely gone) ─
+// ─── Test 14: Stale multi-skill record when cache completely gone ─────────────
 
-describe("update orphan — agent mode, multi-skill cache completely deleted", () => {
+describe("update orphan — multi-skill cache completely deleted", () => {
   test("warns about stale records and exits 0 when cache dir deleted", async () => {
     const repo = await createMultiSkillRepo();
     try {
-      // Install before enabling agent mode (so --skip-scan works)
       await disableBuiltinTap(configDir);
       const install = await runSkilltap(
         ["install", repo.path, "--global", "--yes", "--skip-scan"],
@@ -400,11 +377,8 @@ describe("update orphan — agent mode, multi-skill cache completely deleted", (
       const cacheBaseDir = join(configDir, "skilltap", "cache");
       await rm(cacheBaseDir, { recursive: true, force: true });
 
-      // Enable agent mode for auto-cleanup
-      await writeAgentModeConfig(configDir);
-
       const { exitCode, stdout } = await runSkilltap(
-        ["update"],
+        ["update", "--yes"],
         homeDir,
         configDir,
       );

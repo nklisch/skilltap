@@ -1,9 +1,7 @@
 import { resolve } from "node:path";
 import { linkSkill, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError } from "../../ui/agent-out";
-import { successLine } from "../../ui/format";
-import { isAgentMode } from "../../ui/policy";
+import { errorLine, successLine } from "../../ui/format";
 import { parseAlsoFlag, resolveScope } from "../../ui/resolve";
 
 export default defineCommand({
@@ -33,7 +31,6 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agentMode = await isAgentMode();
     const configResult = await loadConfig();
     const config = configResult.ok ? configResult.value : undefined;
 
@@ -45,20 +42,15 @@ export default defineCommand({
     const also = parseAlsoFlag(args.also, config);
 
     const result = await linkSkill(localPath, { scope, projectRoot, also });
-    if (!result.ok)
-      exitWithError(agentMode, result.error.message, result.error.hint);
+    if (!result.ok) {
+      errorLine(result.error.message, result.error.hint);
+      process.exit(1);
+    }
 
     const skill = result.value;
-    if (agentMode) {
-      process.stdout.write(`OK: Linked ${skill.name} → ${skill.path}\n`);
-      for (const agent of also) {
-        process.stdout.write(`OK: Also linked for ${agent}\n`);
-      }
-    } else {
-      successLine(`Linked ${skill.name} → ${skill.path}`);
-      for (const agent of also) {
-        successLine(`  Also linked for ${agent}`);
-      }
+    successLine(`Linked ${skill.name} → ${skill.path}`);
+    for (const agent of also) {
+      successLine(`  Also linked for ${agent}`);
     }
   },
 });

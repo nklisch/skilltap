@@ -67,39 +67,22 @@ afterEach(async () => {
 });
 
 describe("skilltap config security (non-interactive)", () => {
-  test("--preset strict applies to both modes", async () => {
+  test("--preset strict applies security settings", async () => {
     const result = await runSecurity(["--preset", "strict"], configDir);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("security.human = strict");
-    expect(result.stdout).toContain("security.agent = strict");
+    expect(result.stdout).toContain("strict");
 
-    expect(await runGet("security.human.scan", configDir)).toBe("semantic");
-    expect(await runGet("security.human.on_warn", configDir)).toBe("fail");
-    expect(await runGet("security.human.require_scan", configDir)).toBe("true");
-    expect(await runGet("security.agent.scan", configDir)).toBe("semantic");
-    expect(await runGet("security.agent.on_warn", configDir)).toBe("fail");
-    expect(await runGet("security.agent.require_scan", configDir)).toBe("true");
+    expect(await runGet("security.scan", configDir)).toBe("semantic");
+    expect(await runGet("security.on_warn", configDir)).toBe("fail");
+    expect(await runGet("security.require_scan", configDir)).toBe("true");
   });
 
-  test("--preset strict --mode agent only changes agent mode", async () => {
-    // First set human to relaxed
-    await runSecurity(["--preset", "relaxed", "--mode", "human"], configDir);
-
-    const result = await runSecurity(
-      ["--preset", "strict", "--mode", "agent"],
-      configDir,
-    );
+  test("--preset relaxed applies relaxed settings", async () => {
+    const result = await runSecurity(["--preset", "relaxed"], configDir);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("security.agent = strict");
-    expect(result.stdout).not.toContain("security.human");
 
-    // Human should still be relaxed
-    expect(await runGet("security.human.scan", configDir)).toBe("static");
-    expect(await runGet("security.human.on_warn", configDir)).toBe("allow");
-    // Agent should be strict
-    expect(await runGet("security.agent.scan", configDir)).toBe("semantic");
-    expect(await runGet("security.agent.on_warn", configDir)).toBe("fail");
-    expect(await runGet("security.agent.require_scan", configDir)).toBe("true");
+    expect(await runGet("security.scan", configDir)).toBe("static");
+    expect(await runGet("security.on_warn", configDir)).toBe("allow");
   });
 
   test("--trust tap:foo=none adds override to config", async () => {
@@ -135,15 +118,6 @@ describe("skilltap config security (non-interactive)", () => {
     expect(result.stderr).toContain("bogus");
   });
 
-  test("invalid mode exits 1", async () => {
-    const result = await runSecurity(
-      ["--preset", "strict", "--mode", "invalid"],
-      configDir,
-    );
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid mode");
-  });
-
   test("invalid trust format exits 1", async () => {
     const result = await runSecurity(["--trust", "badformat"], configDir);
     expect(result.exitCode).toBe(1);
@@ -158,13 +132,13 @@ describe("skilltap config security (non-interactive)", () => {
 
   test("--scan and --on-warn apply individual field overrides", async () => {
     const result = await runSecurity(
-      ["--mode", "human", "--scan", "off", "--on-warn", "allow"],
+      ["--scan", "off", "--on-warn", "allow"],
       configDir,
     );
     expect(result.exitCode).toBe(0);
 
-    expect(await runGet("security.human.scan", configDir)).toBe("off");
-    expect(await runGet("security.human.on_warn", configDir)).toBe("allow");
+    expect(await runGet("security.scan", configDir)).toBe("off");
+    expect(await runGet("security.on_warn", configDir)).toBe("allow");
   });
 
   test("--remove-trust nonexistent exits 1", async () => {
@@ -176,30 +150,10 @@ describe("skilltap config security (non-interactive)", () => {
     expect(result.stderr).toContain("No trust override found");
   });
 
-  test("--preset none --mode human only changes human mode", async () => {
-    const result = await runSecurity(
-      ["--preset", "none", "--mode", "human"],
-      configDir,
-    );
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("security.human = none");
-    expect(result.stdout).not.toContain("security.agent");
-
-    // Human should be none
-    expect(await runGet("security.human.scan", configDir)).toBe("off");
-    expect(await runGet("security.human.on_warn", configDir)).toBe("allow");
-    // Agent should still be default (strict-like defaults)
-    expect(await runGet("security.agent.on_warn", configDir)).toBe("fail");
-    expect(await runGet("security.agent.require_scan", configDir)).toBe("true");
-  });
-
   test("--require-scan flag sets require_scan", async () => {
-    const result = await runSecurity(
-      ["--mode", "human", "--require-scan"],
-      configDir,
-    );
+    const result = await runSecurity(["--require-scan"], configDir);
     expect(result.exitCode).toBe(0);
-    expect(await runGet("security.human.require_scan", configDir)).toBe("true");
+    expect(await runGet("security.require_scan", configDir)).toBe("true");
   });
 
   test("invalid --scan value exits 1", async () => {
@@ -230,27 +184,20 @@ describe("skilltap config security (non-interactive)", () => {
   });
 
   test("--preset with --scan applies preset then overrides scan", async () => {
-    // Set relaxed first, then override scan to semantic
     const result = await runSecurity(
-      ["--preset", "relaxed", "--scan", "semantic", "--mode", "human"],
+      ["--preset", "relaxed", "--scan", "semantic"],
       configDir,
     );
     expect(result.exitCode).toBe(0);
     // scan should be semantic (flag overrides preset), on_warn should be allow (from relaxed)
-    expect(await runGet("security.human.scan", configDir)).toBe("semantic");
-    expect(await runGet("security.human.on_warn", configDir)).toBe("allow");
+    expect(await runGet("security.scan", configDir)).toBe("semantic");
+    expect(await runGet("security.on_warn", configDir)).toBe("allow");
   });
 
   test("multiple trust overrides can be added sequentially", async () => {
     await runSecurity(["--trust", "tap:corp=none"], configDir);
     await runSecurity(["--trust", "source:npm=strict"], configDir);
 
-    const { stdout: _stdout } = (await runGet(
-      "security",
-      "--json",
-      configDir,
-    )) as unknown as { stdout: string };
-    // Verify via config get --json that both exist
     const proc = Bun.spawn(
       [
         "bun",

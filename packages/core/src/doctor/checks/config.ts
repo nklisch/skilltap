@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { parse } from "smol-toml";
 import { z } from "zod/v4";
-import { getConfigDir, migrateSecurityConfig } from "../../config";
+import { getConfigDir } from "../../config";
 import { fileExists } from "../../fs";
 import type { Config } from "../../schemas/config";
 import { ConfigSchema } from "../../schemas/config";
@@ -66,8 +66,7 @@ export async function checkConfig(): Promise<{
     };
   }
 
-  const migrated = migrateSecurityConfig(raw as Record<string, unknown>);
-  const result = ConfigSchema.safeParse(migrated);
+  const result = ConfigSchema.safeParse(raw);
   if (!result.success) {
     return {
       check: {

@@ -9,7 +9,7 @@ import { ConfigSchema } from "./schemas/config";
 
 const baseConfig = () => ConfigSchema.parse({});
 
-describe("composePolicy — normal mode", () => {
+describe("composePolicy", () => {
   test("returns defaults with no flags", () => {
     const result = composePolicy(baseConfig(), {});
     expect(result.ok).toBe(true);
@@ -21,7 +21,13 @@ describe("composePolicy — normal mode", () => {
     expect(result.value.scanMode).toBe("static");
     expect(result.value.scope).toBe("");
     expect(result.value.also).toEqual([]);
-    expect(result.value.agentMode).toBe(false);
+  });
+
+  test("no agentMode field on EffectivePolicy", () => {
+    const result = composePolicy(baseConfig(), {});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect((result.value as Record<string, unknown>).agentMode).toBeUndefined();
   });
 
   test("--strict overrides on_warn=prompt", () => {
@@ -31,43 +37,43 @@ describe("composePolicy — normal mode", () => {
     expect(result.value.onWarn).toBe("fail");
   });
 
-  test("config human.on_warn=fail applies without flags", () => {
+  test("config security.on_warn=fail applies without flags", () => {
     const config = baseConfig();
-    config.security.human.on_warn = "fail";
+    config.security.on_warn = "fail";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("fail");
   });
 
-  test("config human.on_warn=allow propagates", () => {
+  test("config security.on_warn=allow propagates", () => {
     const config = baseConfig();
-    config.security.human.on_warn = "allow";
+    config.security.on_warn = "allow";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("allow");
   });
 
-  test("--no-strict overrides config human.on_warn=fail", () => {
+  test("--no-strict overrides config security.on_warn=fail", () => {
     const config = baseConfig();
-    config.security.human.on_warn = "fail";
+    config.security.on_warn = "fail";
     const result = composePolicy(config, { noStrict: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.onWarn).toBe("prompt");
   });
 
-  test("human.require_scan=true blocks --skip-scan", () => {
+  test("security.require_scan=true blocks --skip-scan", () => {
     const config = baseConfig();
-    config.security.human.require_scan = true;
+    config.security.require_scan = true;
     const result = composePolicy(config, { skipScan: true });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("require_scan");
   });
 
-  test("--skip-scan passes when human.require_scan=false", () => {
+  test("--skip-scan passes when security.require_scan=false", () => {
     const result = composePolicy(baseConfig(), { skipScan: true });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -129,18 +135,18 @@ describe("composePolicy — normal mode", () => {
     expect(result.value.scanMode).toBe("semantic");
   });
 
-  test("config human.scan=semantic without flag", () => {
+  test("config security.scan=semantic without flag", () => {
     const config = baseConfig();
-    config.security.human.scan = "semantic";
+    config.security.scan = "semantic";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.scanMode).toBe("semantic");
   });
 
-  test("config human.scan=off without --semantic stays off", () => {
+  test("config security.scan=off without --semantic stays off", () => {
     const config = baseConfig();
-    config.security.human.scan = "off";
+    config.security.scan = "off";
     const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -155,235 +161,20 @@ describe("composePolicy — normal mode", () => {
     if (!result.ok) return;
     expect(result.value.also).toEqual(["claude-code", "cursor"]);
   });
-});
 
-describe("composePolicy — agent mode", () => {
-  const agentConfig = () => {
+  test("omitted CLI flags use config defaults across all resolution paths", () => {
     const config = baseConfig();
-    config["agent-mode"] = { enabled: true, scope: "project" };
-    return config;
-  };
-
-  test("uses agent.on_warn and agent.require_scan from config", () => {
-    const result = composePolicy(agentConfig(), {});
+    config.defaults.yes = true;
+    config.defaults.scope = "global";
+    config.security.scan = "semantic";
+    config.security.on_warn = "allow";
+    const result = composePolicy(config, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // Default agent config is: on_warn=fail, require_scan=true
     expect(result.value.yes).toBe(true);
-    expect(result.value.onWarn).toBe("fail");
-    expect(result.value.requireScan).toBe(true);
-    expect(result.value.skipScan).toBe(false);
-    expect(result.value.agentMode).toBe(true);
-  });
-
-  test("agent mode with on_warn=allow config uses allow", () => {
-    const config = agentConfig();
-    config.security.agent.on_warn = "allow";
-    config.security.agent.require_scan = false;
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.onWarn).toBe("allow");
-    expect(result.value.requireScan).toBe(false);
-  });
-
-  test("agent mode with scan=off config uses off (no enforced floor)", () => {
-    const config = agentConfig();
-    config.security.agent.scan = "off";
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.scanMode).toBe("off");
-  });
-
-  test("blocks --skip-scan when agent.require_scan=true", () => {
-    const result = composePolicy(agentConfig(), { skipScan: true });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toContain("Agent mode");
-    expect(result.error.message).toContain("--skip-scan");
-  });
-
-  test("allows --skip-scan when agent.require_scan=false", () => {
-    const config = agentConfig();
-    config.security.agent.require_scan = false;
-    const result = composePolicy(config, { skipScan: true });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.skipScan).toBe(true);
-  });
-
-  test("uses agent-mode.scope when no flag", () => {
-    const result = composePolicy(agentConfig(), {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.scope).toBe("project");
-  });
-
-  test("--global overrides agent-mode.scope", () => {
-    const result = composePolicy(agentConfig(), { global: true });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
     expect(result.value.scope).toBe("global");
-  });
-
-  test("--project overrides agent-mode.scope", () => {
-    const config = agentConfig();
-    config["agent-mode"].scope = "global";
-    const result = composePolicy(config, { project: true });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.scope).toBe("project");
-  });
-
-  test("preserves agent.scan=semantic", () => {
-    const config = agentConfig();
-    config.security.agent.scan = "semantic";
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
     expect(result.value.scanMode).toBe("semantic");
-  });
-
-  test("uses defaults.also from config", () => {
-    const config = agentConfig();
-    config.defaults.also = ["claude-code"];
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.also).toEqual(["claude-code"]);
-  });
-
-  test("--strict still forces onWarn=fail", () => {
-    const config = agentConfig();
-    config.security.agent.on_warn = "allow";
-    const result = composePolicy(config, { strict: true });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.onWarn).toBe("fail");
-  });
-
-  test("--no-strict overrides agent.on_warn=fail", () => {
-    const result = composePolicy(agentConfig(), { noStrict: true });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.onWarn).toBe("prompt");
-  });
-
-  test("error when agent-mode.scope is empty and no flag passed", () => {
-    const config = baseConfig();
-    config["agent-mode"] = { enabled: true, scope: "" as "global" };
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toContain("requires a scope");
-  });
-});
-
-describe("composePolicy — agent precedence (Phase 31c-c-2c)", () => {
-  test("--agent flag enables agent mode without config block", () => {
-    const result = composePolicy(baseConfig(), { agent: true, project: true });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.agentMode).toBe(true);
-    expect(result.value.yes).toBe(true); // agent mode auto-yes
-  });
-
-  test("SKILLTAP_AGENT=1 env var enables agent mode without config block", () => {
-    const prev = process.env.SKILLTAP_AGENT;
-    process.env.SKILLTAP_AGENT = "1";
-    try {
-      const result = composePolicy(baseConfig(), { project: true });
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.agentMode).toBe(true);
-    } finally {
-      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
-      else process.env.SKILLTAP_AGENT = prev;
-    }
-  });
-
-  test("SKILLTAP_AGENT set to anything other than '1' does NOT enable agent mode", () => {
-    const prev = process.env.SKILLTAP_AGENT;
-    process.env.SKILLTAP_AGENT = "true"; // not "1"
-    try {
-      const result = composePolicy(baseConfig(), {});
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.agentMode).toBe(false);
-    } finally {
-      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
-      else process.env.SKILLTAP_AGENT = prev;
-    }
-  });
-
-  test("legacy [agent-mode].enabled config block still honored (back-compat)", () => {
-    const config = baseConfig();
-    config["agent-mode"] = { enabled: true, scope: "global" };
-    const result = composePolicy(config, {});
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value.agentMode).toBe(true);
-  });
-
-  // SPEC.md §v2.0 Agent Flag (L3122-3125): all three sources may be active
-  // simultaneously; precedence is flag > env > config. The individual-source
-  // tests above prove each path works in isolation, but not their ordering.
-  // The v2.0 spec is explicit about the precedence chain, so a regression
-  // that flipped the order silently would still pass the per-source tests.
-  test("--agent flag wins when env and config also enable agent mode", () => {
-    const prev = process.env.SKILLTAP_AGENT;
-    process.env.SKILLTAP_AGENT = "1";
-    try {
-      const config = baseConfig();
-      config["agent-mode"] = { enabled: true, scope: "global" };
-      const result = composePolicy(config, { agent: true });
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.agentMode).toBe(true);
-      expect(result.value.yes).toBe(true); // agent-mode auto-yes
-    } finally {
-      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
-      else process.env.SKILLTAP_AGENT = prev;
-    }
-  });
-
-  test("SKILLTAP_AGENT env wins over config when no flag is passed", () => {
-    const prev = process.env.SKILLTAP_AGENT;
-    process.env.SKILLTAP_AGENT = "1";
-    try {
-      // Config disables agent mode; env var enables it. No flag.
-      // Per spec, env should win and agent mode is on.
-      const config = baseConfig();
-      config["agent-mode"] = { enabled: false, scope: "global" };
-      const result = composePolicy(config, {});
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.agentMode).toBe(true);
-    } finally {
-      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
-      else process.env.SKILLTAP_AGENT = prev;
-    }
-  });
-
-  test("config alone (no flag, no env) still enables agent mode (lowest tier)", () => {
-    // Counterpart to the precedence chain: when only the config is set, the
-    // config-only path is the actual activator. Pinned separately so a
-    // future refactor can't accidentally drop the config branch entirely
-    // without breaking *some* test.
-    const prev = process.env.SKILLTAP_AGENT;
-    delete process.env.SKILLTAP_AGENT;
-    try {
-      const config = baseConfig();
-      config["agent-mode"] = { enabled: true, scope: "project" };
-      const result = composePolicy(config, {});
-      expect(result.ok).toBe(true);
-      if (!result.ok) return;
-      expect(result.value.agentMode).toBe(true);
-    } finally {
-      if (prev === undefined) delete process.env.SKILLTAP_AGENT;
-      else process.env.SKILLTAP_AGENT = prev;
-    }
+    expect(result.value.onWarn).toBe("allow");
   });
 });
 
@@ -425,7 +216,6 @@ describe("resolveOverride", () => {
       ],
       { tapName: "my-tap", sourceType: "npm" },
     );
-    // tap match wins even though source match also applies
     expect(result).toBe("none");
   });
 
@@ -460,7 +250,6 @@ describe("resolveOverride", () => {
   });
 
   test("tap override ignores source type match for same source", () => {
-    // Has both a tap match and a source:tap match — tap name wins
     const result = resolveOverride(
       [
         { match: "tap", kind: "source", preset: "strict" },
@@ -487,7 +276,6 @@ describe("composePolicyForSource", () => {
     const result = composePolicyForSource(config, {}, { sourceType: "git" });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    // no override for git → human defaults
     expect(result.value.scanMode).toBe("static");
     expect(result.value.onWarn).toBe("prompt");
   });
@@ -497,10 +285,7 @@ describe("composePolicyForSource", () => {
     const result = composePolicyForSource(
       config,
       {},
-      {
-        tapName: "trusted-tap",
-        sourceType: "tap",
-      },
+      { tapName: "trusted-tap", sourceType: "tap" },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -523,14 +308,10 @@ describe("composePolicyForSource", () => {
 
   test("CLI --strict overrides trust tier preset", () => {
     const config = baseWithOverrides();
-    // trusted-tap has "none" preset, but --strict should still set fail
     const result = composePolicyForSource(
       config,
       { strict: true },
-      {
-        tapName: "trusted-tap",
-        sourceType: "tap",
-      },
+      { tapName: "trusted-tap", sourceType: "tap" },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -544,20 +325,15 @@ describe("composePolicyForSource", () => {
       { skipScan: true },
       { sourceType: "npm" },
     );
-    // "strict" has require_scan=true
     expect(result.ok).toBe(false);
   });
 
   test("--semantic flag overrides override preset scan=off", () => {
     const config = baseWithOverrides();
-    // trusted-tap has "none" preset (scan=off), but --semantic should upgrade
     const result = composePolicyForSource(
       config,
       { semantic: true },
-      {
-        tapName: "trusted-tap",
-        sourceType: "tap",
-      },
+      { tapName: "trusted-tap", sourceType: "tap" },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -566,7 +342,6 @@ describe("composePolicyForSource", () => {
 
   test("--no-strict overrides override preset on_warn=fail", () => {
     const config = baseWithOverrides();
-    // npm has "strict" preset (on_warn=fail), but --no-strict should override
     const result = composePolicyForSource(
       config,
       { noStrict: true },
@@ -577,53 +352,30 @@ describe("composePolicyForSource", () => {
     expect(result.value.onWarn).toBe("prompt");
   });
 
-  test("works in agent mode with override", () => {
-    const config = baseWithOverrides();
-    config["agent-mode"] = { enabled: true, scope: "project" };
-    // Agent mode + trusted-tap "none" override
-    const result = composePolicyForSource(
-      config,
-      {},
-      {
-        tapName: "trusted-tap",
-        sourceType: "tap",
-      },
-    );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // "none" preset from override: scan=off, on_warn=allow
-    expect(result.value.scanMode).toBe("off");
-    expect(result.value.onWarn).toBe("allow");
-    expect(result.value.agentMode).toBe(true);
-    expect(result.value.yes).toBe(true);
-  });
-
-  test("agent mode without override uses agent mode defaults", () => {
-    const config = baseWithOverrides();
-    config["agent-mode"] = { enabled: true, scope: "project" };
-    // "git" has no override
-    const result = composePolicyForSource(config, {}, { sourceType: "git" });
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // Falls back to agent mode config: on_warn=fail, require_scan=true
-    expect(result.value.onWarn).toBe("fail");
-    expect(result.value.requireScan).toBe(true);
-  });
-
   test("--skip-scan allowed when override preset has require_scan=false", () => {
     const config = baseWithOverrides();
-    // trusted-tap has "none" preset (require_scan=false)
     const result = composePolicyForSource(
       config,
       { skipScan: true },
-      {
-        tapName: "trusted-tap",
-        sourceType: "tap",
-      },
+      { tapName: "trusted-tap", sourceType: "tap" },
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.skipScan).toBe(true);
+  });
+
+  test("patches config.security.* directly (not per-mode key)", () => {
+    const config = baseWithOverrides();
+    config.security.on_warn = "fail";
+    // trusted-tap has "none" (on_warn=allow) — should override config on_warn=fail
+    const result = composePolicyForSource(
+      config,
+      {},
+      { tapName: "trusted-tap", sourceType: "tap" },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.onWarn).toBe("allow");
   });
 });
 

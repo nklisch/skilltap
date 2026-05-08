@@ -5,10 +5,8 @@ import {
   toggleInstalledComponent,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError, outputJson } from "../ui/agent-out";
-import { errorLine, successLine } from "../ui/format";
+import { errorLine, jsonLine, successLine } from "../ui/format";
 import { componentLabel, loadPluginByName } from "../ui/plugin-format";
-import { isAgentMode } from "../ui/policy";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 export default defineCommand({
@@ -30,17 +28,16 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agentMode = await isAgentMode();
     const ref = parseComponentRef(args.target as string);
     const projectRoot = await tryFindProjectRoot();
 
     const plugin = await loadPluginByName(ref.name, projectRoot);
     if (!plugin) {
-      exitWithError(
-        agentMode,
+      errorLine(
         `Plugin '${ref.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
+      process.exit(1);
     }
 
     if (ref.component) {
@@ -48,15 +45,15 @@ export default defineCommand({
       if (!component) {
         const available =
           plugin.components.map((c) => c.name).join(", ") || "(none)";
-        exitWithError(
-          agentMode,
+        errorLine(
           `Component '${ref.component}' not found in plugin '${ref.name}'`,
           `Available: ${available}`,
         );
+        process.exit(1);
       }
       if (!component.active) {
         if (args.json) {
-          outputJson({
+          jsonLine({
             plugin: plugin.name,
             component,
             action: "noop",
@@ -80,7 +77,7 @@ export default defineCommand({
         process.exit(1);
       }
       if (args.json) {
-        outputJson({
+        jsonLine({
           plugin: plugin.name,
           component: result.value.component,
           action: "disabled",
@@ -95,7 +92,7 @@ export default defineCommand({
     const active = plugin.components.filter((c) => c.active);
     if (active.length === 0) {
       if (args.json)
-        outputJson({ plugin: plugin.name, action: "noop", active: 0 });
+        jsonLine({ plugin: plugin.name, action: "noop", active: 0 });
       else
         process.stdout.write(
           `No active components in plugin '${plugin.name}'.\n`,
@@ -130,7 +127,7 @@ export default defineCommand({
     }
 
     if (args.json) {
-      outputJson({ plugin: plugin.name, results });
+      jsonLine({ plugin: plugin.name, results });
       return;
     }
     for (const r of results) {

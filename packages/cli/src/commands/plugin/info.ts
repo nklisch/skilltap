@@ -1,9 +1,7 @@
 import type { StoredComponent } from "@skilltap/core";
 import { loadPlugins } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { exitWithError, outputJson } from "../../ui/agent-out";
-import { ansi } from "../../ui/format";
-import { isAgentMode } from "../../ui/policy";
+import { ansi, errorLine, jsonLine } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 function componentStatusIcon(c: StoredComponent): string {
@@ -32,12 +30,12 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const agentMode = await isAgentMode();
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
     if (!globalResult.ok) {
-      exitWithError(agentMode, globalResult.error.message);
+      errorLine(globalResult.error.message);
+      process.exit(1);
     }
 
     const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
@@ -50,15 +48,15 @@ export default defineCommand({
     const plugin = allPlugins.find((p) => p.name === args.name);
 
     if (!plugin) {
-      exitWithError(
-        agentMode,
+      errorLine(
         `Plugin '${args.name}' is not installed`,
         "Run 'skilltap plugin' to see installed plugins.",
       );
+      process.exit(1);
     }
 
     if (args.json) {
-      outputJson(plugin);
+      jsonLine(plugin);
       return;
     }
 

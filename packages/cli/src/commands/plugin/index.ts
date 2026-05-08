@@ -1,10 +1,8 @@
 import type { PluginRecord } from "@skilltap/core";
 import { loadPlugins } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { outputJson } from "../../ui/agent-out";
-import { ansi, table, termWidth, truncate } from "../../ui/format";
+import { ansi, jsonLine, table, termWidth, truncate } from "../../ui/format";
 import { componentSummary } from "../../ui/plugin-format";
-import { isAgentMode } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -33,7 +31,6 @@ export default defineCommand({
   async run({ args }) {
     if ((args._ as string[])?.length > 0) return;
 
-    const agentMode = await isAgentMode();
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
@@ -66,7 +63,7 @@ export default defineCommand({
     }
 
     if (args.json) {
-      outputJson(allPlugins);
+      jsonLine(allPlugins);
       return;
     }
 
@@ -75,16 +72,6 @@ export default defineCommand({
       process.stdout.write(
         "Run 'skilltap install <source>' to install a plugin.\n",
       );
-      return;
-    }
-
-    if (agentMode) {
-      for (const plugin of allPlugins) {
-        const source = plugin.repo ?? "local";
-        process.stdout.write(
-          `${plugin._scope.toUpperCase()} ${plugin.name} ${componentSummary(plugin)} source=${source}\n`,
-        );
-      }
       return;
     }
 

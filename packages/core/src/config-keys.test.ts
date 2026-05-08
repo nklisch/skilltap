@@ -50,18 +50,9 @@ describe("getConfigValue", () => {
     expect(r.value).toEqual({ also: [], yes: false, scope: "" });
   });
 
-  test("gets agent-mode section (hyphenated key)", () => {
+  test("errors on agent-mode (removed)", () => {
     const r = getConfigValue(DEFAULT_CONFIG, "agent-mode");
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.value).toEqual({ enabled: false, scope: "project" });
-  });
-
-  test("gets agent-mode.enabled", () => {
-    const r = getConfigValue(DEFAULT_CONFIG, "agent-mode.enabled");
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.value).toBe(false);
+    expect(r.ok).toBe(false);
   });
 
   test("errors on unknown top-level key", () => {
@@ -79,30 +70,18 @@ describe("getConfigValue", () => {
     expect(r.ok).toBe(false);
   });
 
-  test("gets security.human section", () => {
+  test("errors on security.human (removed per-mode key)", () => {
     const r = getConfigValue(DEFAULT_CONFIG, "security.human");
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.value).toEqual({
-      scan: "static",
-      on_warn: "prompt",
-      require_scan: false,
-    });
+    expect(r.ok).toBe(false);
   });
 
-  test("gets security.agent section", () => {
+  test("errors on security.agent (removed per-mode key)", () => {
     const r = getConfigValue(DEFAULT_CONFIG, "security.agent");
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.value).toEqual({
-      scan: "static",
-      on_warn: "fail",
-      require_scan: true,
-    });
+    expect(r.ok).toBe(false);
   });
 
-  test("gets security.agent.scan", () => {
-    const r = getConfigValue(DEFAULT_CONFIG, "security.agent.scan");
+  test("gets security.scan (flat field)", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.scan");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value).toBe("static");
@@ -146,11 +125,11 @@ describe("validateSetKey", () => {
     }
   });
 
-  test("rejects agent-mode keys with hint", () => {
+  test("rejects agent-mode keys with removal message", () => {
     const r = validateSetKey("agent-mode.enabled");
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.error.hint).toContain("config agent-mode");
+    expect(r.error.hint).toContain("agent-mode has been removed");
   });
 
   test("rejects telemetry keys with hint", () => {
@@ -160,7 +139,7 @@ describe("validateSetKey", () => {
     expect(r.error.hint).toContain("telemetry");
   });
 
-  test("rejects new per-mode security keys with config security hint", () => {
+  test("rejects per-mode security keys with config security hint", () => {
     for (const key of [
       "security.human.scan",
       "security.human.on_warn",
@@ -171,8 +150,6 @@ describe("validateSetKey", () => {
     ]) {
       const r = validateSetKey(key);
       expect(r.ok).toBe(false);
-      if (r.ok) return;
-      expect(r.error.hint).toContain("config security");
     }
   });
 
@@ -183,22 +160,22 @@ describe("validateSetKey", () => {
     expect(r.error.hint).toContain("--trust");
   });
 
-  test("rejects old v1 security keys with migration hint", () => {
-    const r1 = validateSetKey("security.scan");
-    expect(r1.ok).toBe(false);
-    if (r1.ok) return;
-    expect(r1.error.hint).toContain("config security");
+  test("accepts flat security keys (scan, on_warn, require_scan)", () => {
+    for (const key of [
+      "security.scan",
+      "security.on_warn",
+      "security.require_scan",
+    ]) {
+      const r = validateSetKey(key);
+      expect(r.ok).toBe(true);
+    }
+  });
 
-    const r2 = validateSetKey("security.on_warn");
-    expect(r2.ok).toBe(false);
-
-    const r3 = validateSetKey("security.require_scan");
-    expect(r3.ok).toBe(false);
-
-    const r4 = validateSetKey("security.agent");
-    expect(r4.ok).toBe(false);
-    if (r4.ok) return;
-    expect(r4.error.hint).toContain("agent_cli");
+  test("rejects security.agent with agent_cli hint", () => {
+    const r = validateSetKey("security.agent");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("agent_cli");
   });
 
   test("rejects taps with hint", () => {
@@ -360,7 +337,6 @@ describe("setConfigValue", () => {
   test("preserves other sections", () => {
     const updated = setConfigValue(DEFAULT_CONFIG, "defaults.scope", "global");
     expect(updated.security).toEqual(DEFAULT_CONFIG.security);
-    expect(updated["agent-mode"]).toEqual(DEFAULT_CONFIG["agent-mode"]);
   });
 });
 

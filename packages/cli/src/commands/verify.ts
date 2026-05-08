@@ -2,9 +2,7 @@ import { basename, join, resolve } from "node:path";
 import { intro, outro, spinner } from "@clack/prompts";
 import { scan, validateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError, outputJson } from "../ui/agent-out";
-import { ansi, errorLine, successLine } from "../ui/format";
-import { isAgentMode } from "../ui/policy";
+import { ansi, errorLine, jsonLine, successLine } from "../ui/format";
 
 export default defineCommand({
   meta: {
@@ -30,7 +28,6 @@ export default defineCommand({
   },
   async run({ args }) {
     const useJson = args.json as boolean;
-    const agentMode = await isAgentMode();
 
     if (args.all) {
       await runAll(useJson);
@@ -54,18 +51,6 @@ export default defineCommand({
 
     if (useJson) {
       await runJson(skillPath, skillName);
-      return;
-    }
-
-    if (agentMode) {
-      const result = await validateSkill(skillPath);
-      if (!result.ok) {
-        agentError(result.error.message);
-        process.exit(1);
-      }
-      const { valid, issues } = result.value;
-      outputJson({ name: skillName, valid, issues });
-      if (!valid) process.exit(1);
       return;
     }
 
@@ -193,7 +178,7 @@ async function runAll(useJson: boolean): Promise<void> {
         };
       }),
     );
-    outputJson(results);
+    jsonLine(results);
     if (results.some((r) => !r.valid)) process.exit(1);
     return;
   }
@@ -247,13 +232,13 @@ async function runJson(skillPath: string, skillName: string): Promise<void> {
   const result = await validateSkill(skillPath);
 
   if (!result.ok) {
-    outputJson({ name: skillName, valid: false, error: result.error.message });
+    jsonLine({ name: skillName, valid: false, error: result.error.message });
     process.exit(1);
   }
 
   const { valid, issues, frontmatter, fileCount, totalBytes } = result.value;
 
-  outputJson({
+  jsonLine({
     name: skillName,
     valid,
     issues,

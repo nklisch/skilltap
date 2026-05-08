@@ -1,9 +1,7 @@
 import type { DiscoveredSkill } from "@skilltap/core";
 import { discoverSkills } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { outputJson } from "../../ui/agent-out";
-import { ansi, table, termWidth, truncate } from "../../ui/format";
-import { isAgentMode } from "../../ui/policy";
+import { ansi, jsonLine, table, termWidth, truncate } from "../../ui/format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
 export default defineCommand({
@@ -53,8 +51,6 @@ export default defineCommand({
     // If a subcommand was matched, citty still calls this run — bail out
     if ((args._ as string[])?.length > 0) return;
 
-    const agentMode = await isAgentMode();
-
     const projectRoot = await tryFindProjectRoot();
 
     const discoverOpts = args.global
@@ -79,46 +75,13 @@ export default defineCommand({
     }
 
     if (args.json) {
-      outputJson(skills);
+      jsonLine(skills);
       return;
     }
 
     if (skills.length === 0) {
       process.stdout.write("No skills found.\n");
       process.stdout.write("Run 'skilltap install <source>' to get started.\n");
-      return;
-    }
-
-    if (agentMode) {
-      // Plain text format for agent mode
-      for (const skill of skills) {
-        const primaryLoc = skill.locations[0];
-        if (!primaryLoc) continue;
-        const scope = primaryLoc.source.scope.toUpperCase();
-        const status =
-          skill.record?.active === false
-            ? "disabled"
-            : skill.managed
-              ? skill.record?.scope === "linked"
-                ? "linked"
-                : "managed"
-              : "unmanaged";
-        const _agent =
-          primaryLoc.source.type === "agent-specific"
-            ? primaryLoc.source.agent.toUpperCase().replace(/-/g, "_")
-            : "AGENTS";
-        const extra =
-          skill.managed && skill.record
-            ? skill.record.scope !== "linked"
-              ? `source=${skill.record.repo ?? "local"}`
-              : `path=${skill.record.path ?? ""}`
-            : skill.gitRemote
-              ? `remote=${skill.gitRemote}`
-              : "";
-        process.stdout.write(
-          `${scope} ${status} ${skill.name}${extra ? ` ${extra}` : ""}\n`,
-        );
-      }
       return;
     }
 

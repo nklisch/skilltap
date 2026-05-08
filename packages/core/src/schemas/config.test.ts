@@ -3,53 +3,13 @@ import { loadConfig, saveConfig } from "@skilltap/core";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { parse, stringify } from "smol-toml";
 import {
-  AgentModeSchema,
   ConfigSchema,
   ON_WARN_MODES,
   PRESET_VALUES,
   SECURITY_PRESETS,
   SecurityConfigSchema,
-  SecurityModeSchema,
   TrustOverrideSchema,
 } from "./config";
-
-describe("SecurityModeSchema", () => {
-  test("applies all defaults", () => {
-    const result = SecurityModeSchema.parse({});
-    expect(result.scan).toBe("static");
-    expect(result.on_warn).toBe("prompt");
-    expect(result.require_scan).toBe(false);
-  });
-
-  test("accepts all valid scan values", () => {
-    expect(SecurityModeSchema.parse({ scan: "static" }).scan).toBe("static");
-    expect(SecurityModeSchema.parse({ scan: "semantic" }).scan).toBe(
-      "semantic",
-    );
-    expect(SecurityModeSchema.parse({ scan: "off" }).scan).toBe("off");
-  });
-
-  test("rejects invalid scan value", () => {
-    expect(SecurityModeSchema.safeParse({ scan: "none" }).success).toBe(false);
-    expect(SecurityModeSchema.safeParse({ scan: "both" }).success).toBe(false);
-  });
-
-  test("accepts all valid on_warn values", () => {
-    expect(SecurityModeSchema.parse({ on_warn: "prompt" }).on_warn).toBe(
-      "prompt",
-    );
-    expect(SecurityModeSchema.parse({ on_warn: "fail" }).on_warn).toBe("fail");
-    expect(SecurityModeSchema.parse({ on_warn: "allow" }).on_warn).toBe(
-      "allow",
-    );
-  });
-
-  test("rejects invalid on_warn value", () => {
-    expect(SecurityModeSchema.safeParse({ on_warn: "ignore" }).success).toBe(
-      false,
-    );
-  });
-});
 
 describe("ON_WARN_MODES", () => {
   test("includes allow", () => {
@@ -138,22 +98,11 @@ describe("TrustOverrideSchema", () => {
 });
 
 describe("SecurityConfigSchema", () => {
-  test("applies human mode defaults", () => {
+  test("applies flat defaults", () => {
     const result = SecurityConfigSchema.parse({});
-    expect(result.human.scan).toBe("static");
-    expect(result.human.on_warn).toBe("prompt");
-    expect(result.human.require_scan).toBe(false);
-  });
-
-  test("applies agent mode defaults (strict by default)", () => {
-    const result = SecurityConfigSchema.parse({});
-    expect(result.agent.scan).toBe("static");
-    expect(result.agent.on_warn).toBe("fail");
-    expect(result.agent.require_scan).toBe(true);
-  });
-
-  test("applies shared defaults", () => {
-    const result = SecurityConfigSchema.parse({});
+    expect(result.scan).toBe("static");
+    expect(result.on_warn).toBe("prompt");
+    expect(result.require_scan).toBe(false);
     expect(result.agent_cli).toBe("");
     expect(result.threshold).toBe(5);
     expect(result.max_size).toBe(51200);
@@ -161,34 +110,36 @@ describe("SecurityConfigSchema", () => {
     expect(result.overrides).toEqual([]);
   });
 
+  test("accepts all valid scan values", () => {
+    expect(SecurityConfigSchema.parse({ scan: "static" }).scan).toBe("static");
+    expect(SecurityConfigSchema.parse({ scan: "semantic" }).scan).toBe("semantic");
+    expect(SecurityConfigSchema.parse({ scan: "off" }).scan).toBe("off");
+  });
+
+  test("rejects invalid scan value", () => {
+    expect(SecurityConfigSchema.safeParse({ scan: "none" }).success).toBe(false);
+    expect(SecurityConfigSchema.safeParse({ scan: "both" }).success).toBe(false);
+  });
+
+  test("accepts all valid on_warn values", () => {
+    expect(SecurityConfigSchema.parse({ on_warn: "prompt" }).on_warn).toBe("prompt");
+    expect(SecurityConfigSchema.parse({ on_warn: "fail" }).on_warn).toBe("fail");
+    expect(SecurityConfigSchema.parse({ on_warn: "allow" }).on_warn).toBe("allow");
+  });
+
+  test("rejects invalid on_warn value", () => {
+    expect(SecurityConfigSchema.safeParse({ on_warn: "ignore" }).success).toBe(false);
+  });
+
   test("threshold min and max bounds", () => {
     expect(SecurityConfigSchema.parse({ threshold: 0 }).threshold).toBe(0);
     expect(SecurityConfigSchema.parse({ threshold: 10 }).threshold).toBe(10);
-    expect(SecurityConfigSchema.safeParse({ threshold: -1 }).success).toBe(
-      false,
-    );
-    expect(SecurityConfigSchema.safeParse({ threshold: 11 }).success).toBe(
-      false,
-    );
+    expect(SecurityConfigSchema.safeParse({ threshold: -1 }).success).toBe(false);
+    expect(SecurityConfigSchema.safeParse({ threshold: 11 }).success).toBe(false);
   });
 
   test("threshold must be integer", () => {
-    expect(SecurityConfigSchema.safeParse({ threshold: 5.5 }).success).toBe(
-      false,
-    );
-  });
-
-  test("accepts per-mode settings", () => {
-    const result = SecurityConfigSchema.parse({
-      human: { scan: "semantic", on_warn: "fail", require_scan: true },
-      agent: { scan: "off", on_warn: "allow", require_scan: false },
-    });
-    expect(result.human.scan).toBe("semantic");
-    expect(result.human.on_warn).toBe("fail");
-    expect(result.human.require_scan).toBe(true);
-    expect(result.agent.scan).toBe("off");
-    expect(result.agent.on_warn).toBe("allow");
-    expect(result.agent.require_scan).toBe(false);
+    expect(SecurityConfigSchema.safeParse({ threshold: 5.5 }).success).toBe(false);
   });
 
   test("accepts trust overrides array", () => {
@@ -202,22 +153,17 @@ describe("SecurityConfigSchema", () => {
     expect(result.overrides[0].match).toBe("my-tap");
     expect(result.overrides[1].preset).toBe("strict");
   });
-});
 
-describe("AgentModeSchema", () => {
-  test("applies all defaults", () => {
-    const result = AgentModeSchema.parse({});
-    expect(result.enabled).toBe(false);
-    expect(result.scope).toBe("project");
-  });
-
-  test("accepts all valid scope values", () => {
-    expect(AgentModeSchema.parse({ scope: "global" }).scope).toBe("global");
-    expect(AgentModeSchema.parse({ scope: "project" }).scope).toBe("project");
-  });
-
-  test("rejects invalid scope", () => {
-    expect(AgentModeSchema.safeParse({ scope: "local" }).success).toBe(false);
+  test("legacy per-mode keys silently stripped (v1 back-compat)", () => {
+    const result = SecurityConfigSchema.safeParse({
+      human: { scan: "semantic" },
+      agent: { scan: "off" },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // Zod strips unknown keys — flat fields use defaults
+    expect(result.data.scan).toBe("static");
+    expect(result.data.on_warn).toBe("prompt");
   });
 });
 
@@ -227,14 +173,16 @@ describe("ConfigSchema", () => {
     expect(result.defaults.also).toEqual([]);
     expect(result.defaults.yes).toBe(false);
     expect(result.defaults.scope).toBe("");
-    expect(result.security.human.scan).toBe("static");
-    expect(result.security.agent.scan).toBe("static");
-    expect(result.security.agent.on_warn).toBe("fail");
-    expect(result.security.agent.require_scan).toBe(true);
-    expect(result["agent-mode"].enabled).toBe(false);
-    expect(result["agent-mode"].scope).toBe("project");
+    expect(result.security.scan).toBe("static");
+    expect(result.security.on_warn).toBe("prompt");
+    expect(result.security.require_scan).toBe(false);
     expect(result.taps).toEqual([]);
     expect(result.default_git_host).toBe("https://github.com");
+  });
+
+  test("config has no agent-mode key", () => {
+    const result = ConfigSchema.parse({});
+    expect((result as Record<string, unknown>)["agent-mode"]).toBeUndefined();
   });
 
   test("default_git_host defaults to https://github.com", () => {
@@ -253,22 +201,22 @@ describe("ConfigSchema", () => {
     expect(result.data.default_git_host).toBe("https://gitea.example.com");
   });
 
-  test("accepts full valid config with v2 security", () => {
+  test("accepts full valid config with flat security", () => {
     const result = ConfigSchema.parse({
       defaults: { also: ["claude-code", "cursor"], yes: true, scope: "global" },
       security: {
-        human: { scan: "semantic", on_warn: "fail" },
-        agent: { scan: "semantic", on_warn: "fail", require_scan: true },
+        scan: "semantic",
+        on_warn: "fail",
+        require_scan: true,
         threshold: 8,
       },
-      "agent-mode": { enabled: true, scope: "project" },
       taps: [{ name: "home", url: "https://example.com/tap.git" }],
     });
     expect(result.defaults.also).toEqual(["claude-code", "cursor"]);
     expect(result.defaults.yes).toBe(true);
     expect(result.defaults.scope).toBe("global");
-    expect(result.security.human.scan).toBe("semantic");
-    expect(result["agent-mode"].enabled).toBe(true);
+    expect(result.security.scan).toBe("semantic");
+    expect(result.security.on_warn).toBe("fail");
     expect(result.taps[0].name).toBe("home");
   });
 
@@ -302,13 +250,13 @@ describe("ConfigSchema", () => {
   test("unknown keys silently ignored", () => {
     const result = ConfigSchema.safeParse({
       defaults: { also: [], yes: true, scope: "global", unknownDefault: "x" },
-      security: { human: { scan: "static" }, unknownSecurity: 99 },
+      security: { scan: "static", unknownSecurity: 99 },
       unknownTopLevel: "ignored",
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
     expect(result.data.defaults.yes).toBe(true);
-    expect(result.data.security.human.scan).toBe("static");
+    expect(result.data.security.scan).toBe("static");
     expect(
       (result.data as Record<string, unknown>).unknownTopLevel,
     ).toBeUndefined();
@@ -316,14 +264,28 @@ describe("ConfigSchema", () => {
 
   test("partial config with only [security] block uses defaults elsewhere", () => {
     const result = ConfigSchema.parse({
-      security: { human: { scan: "semantic", on_warn: "fail" } },
+      security: { scan: "semantic", on_warn: "fail" },
     });
-    expect(result.security.human.scan).toBe("semantic");
-    expect(result.security.human.on_warn).toBe("fail");
+    expect(result.security.scan).toBe("semantic");
+    expect(result.security.on_warn).toBe("fail");
     expect(result.defaults.also).toEqual([]);
     expect(result.defaults.yes).toBe(false);
-    expect(result["agent-mode"].enabled).toBe(false);
     expect(result.taps).toEqual([]);
+  });
+
+  test("v1 config with agent-mode and per-mode security keys parses without error (extras stripped)", () => {
+    const result = ConfigSchema.safeParse({
+      "agent-mode": { enabled: true, scope: "project" },
+      security: {
+        human: { scan: "semantic" },
+        agent: { scan: "off", on_warn: "allow" },
+      },
+    });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    // Flat fields use defaults; per-mode and agent-mode keys stripped
+    expect(result.data.security.scan).toBe("static");
+    expect((result.data as Record<string, unknown>)["agent-mode"]).toBeUndefined();
   });
 });
 
@@ -354,20 +316,12 @@ describe("Config I/O round-trip", () => {
       },
       security: {
         ...firstLoad.value.security,
-        human: {
-          scan: "semantic" as const,
-          on_warn: "fail" as const,
-          require_scan: false,
-        },
-        agent: {
-          scan: "semantic" as const,
-          on_warn: "fail" as const,
-          require_scan: true,
-        },
+        scan: "semantic" as const,
+        on_warn: "fail" as const,
+        require_scan: true,
         threshold: 8,
         agent_cli: "claude",
       },
-      "agent-mode": { enabled: true, scope: "project" as const },
     };
 
     const saveResult = await saveConfig(config);
@@ -380,9 +334,8 @@ describe("Config I/O round-trip", () => {
     expect(reloadResult.value.defaults.also).toEqual(["claude-code", "cursor"]);
     expect(reloadResult.value.defaults.yes).toBe(true);
     expect(reloadResult.value.defaults.scope).toBe("global");
-    expect(reloadResult.value.security.human.scan).toBe("semantic");
-    expect(reloadResult.value.security.human.on_warn).toBe("fail");
+    expect(reloadResult.value.security.scan).toBe("semantic");
+    expect(reloadResult.value.security.on_warn).toBe("fail");
     expect(reloadResult.value.security.threshold).toBe(8);
-    expect(reloadResult.value["agent-mode"].enabled).toBe(true);
   });
 });

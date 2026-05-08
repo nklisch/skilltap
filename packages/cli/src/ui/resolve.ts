@@ -16,7 +16,6 @@ export async function tryFindProjectRoot(): Promise<string | undefined> {
   return findProjectRoot().catch(() => undefined);
 }
 
-import { agentError } from "./agent-out";
 import { errorLine } from "./format";
 import { selectAgent } from "./prompts";
 
@@ -129,14 +128,14 @@ export async function resolveAgentInteractive(
   return undefined;
 }
 
-/** Resolve agent for agent mode: exit if semantic scan requires agent but none configured. */
+/** Resolve agent for semantic scanning: exit if semantic scan requires agent but none configured. */
 export async function resolveAgentForAgentMode(
   config: Config,
 ): Promise<AgentAdapter> {
   const agentResult = await resolveAgent(config);
   if (!agentResult.ok || !agentResult.value) {
-    agentError(
-      "Agent mode requires security.agent_cli to be set for semantic scanning. Run 'skilltap config' to configure.",
+    errorLine(
+      "Semantic scanning requires security.agent_cli to be set. Run 'skilltap config' to configure.",
     );
     process.exit(1);
   }

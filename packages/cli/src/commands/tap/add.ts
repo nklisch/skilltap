@@ -1,7 +1,6 @@
 import { intro, outro, spinner } from "@clack/prompts";
 import { addTap, loadConfig, parseGitHubTapShorthand } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { agentError, exitWithError } from "../../ui/agent-out";
 import { errorLine, successLine } from "../../ui/format";
 
 export default defineCommand({
@@ -23,8 +22,6 @@ export default defineCommand({
   },
   async run({ args }) {
     const configResult = await loadConfig();
-    const agentMode =
-      configResult.ok && configResult.value["agent-mode"].enabled;
 
     let tapName: string;
     let tapUrl: string;
@@ -39,27 +36,14 @@ export default defineCommand({
         configResult.ok ? configResult.value.default_git_host : undefined,
       );
       if (!shorthand) {
-        exitWithError(
-          agentMode,
+        errorLine(
           `Cannot parse '${args.name}' as GitHub shorthand.`,
           "Use 'skilltap tap add <name> <url>' or 'skilltap tap add owner/repo'.",
         );
+        process.exit(1);
       }
       tapName = shorthand.name;
       tapUrl = shorthand.url;
-    }
-
-    if (agentMode) {
-      const result = await addTap(tapName, tapUrl);
-      if (!result.ok) {
-        agentError(result.error.message);
-        process.exit(1);
-      }
-      const typeLabel = "git";
-      process.stdout.write(
-        `OK: Added tap '${tapName}' (${typeLabel}, ${result.value.skillCount} skills)\n`,
-      );
-      return;
     }
 
     intro("skilltap");

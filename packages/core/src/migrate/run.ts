@@ -112,7 +112,10 @@ export async function runMigrate(
   }
 
   // ── Write migrated config last (after state is safely on disk) ───────────
-  if (configResult && globalMarkers.configToml) {
+  // Only overwrite config.toml if it actually contained v1 keys that needed
+  // migration. If the config is already in the current format (no v1 keys),
+  // leave it untouched to avoid replacing it with the v2-schema format.
+  if (configResult && globalMarkers.configToml && globalMarkers.configHasV1Keys) {
     const newText = stringify(configResult.v2 as Record<string, unknown>);
     const tmpPath = join(getConfigDir(), "config.toml.v2.tmp");
     await Bun.write(tmpPath, newText);
