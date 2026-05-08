@@ -368,20 +368,9 @@ const main = defineCommand({
   subCommands: {
     status: () => import("./commands/status").then((m) => m.default),
     install: () => import("./commands/install/index").then((m) => m.installCommand),
+    remove: () => import("./commands/remove/index").then((m) => m.removeCommand),
     update: () => import("./commands/update").then((m) => m.default),
     find: () => import("./commands/find").then((m) => m.default),
-    skills: () => import("./commands/skills/index").then((m) => m.default),
-
-    // Silent aliases — route to new locations under skills/
-    list: () => import("./commands/skills/index").then((m) => m.default),
-    remove: () => import("./commands/remove/index").then((m) => m.removeCommand),
-    info: () => import("./commands/skills/info").then((m) => m.default),
-    link: () => import("./commands/skills/link").then((m) => m.default),
-    unlink: () => import("./commands/skills/unlink").then((m) => m.default),
-
-    plugin: () => import("./commands/plugin/index").then((m) => m.default),
-    plugins: () => import("./commands/plugin/index").then((m) => m.default),
-
     create: () => import("./commands/create").then((m) => m.default),
     verify: () => import("./commands/verify").then((m) => m.default),
     doctor: () => import("./commands/doctor").then((m) => m.default),
@@ -389,8 +378,9 @@ const main = defineCommand({
     sync: () => import("./commands/sync").then((m) => m.default),
     try: () => import("./commands/try").then((m) => m.default),
     toggle: () => import("./commands/toggle").then((m) => m.default),
-    enable: () => import("./commands/enable").then((m) => m.default),
-    disable: () => import("./commands/disable").then((m) => m.default),
+    adopt: () => import("./commands/adopt").then((m) => m.default),
+    move: () => import("./commands/move").then((m) => m.default),
+    info: () => import("./commands/info").then((m) => m.default),
     config: () => import("./commands/config").then((m) => m.default),
     "self-update": () =>
       import("./commands/self-update").then((m) => m.default),
