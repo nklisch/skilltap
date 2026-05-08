@@ -73,11 +73,11 @@ afterAll(async () => {
 });
 
 describe("E2E lifecycle", () => {
-  test("1. list — empty state", async () => {
-    const { exitCode, stdout } = await run(["list"]);
+  test("1. status — empty state", async () => {
+    const { exitCode, stdout } = await run(["status"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("No skills found");
-    expect(stdout).toContain("to get started");
+    // status shows skills section (empty) and overall layout
+    expect(stdout).toContain("skilltap status");
   });
 
   test("2. tap add", async () => {
@@ -116,8 +116,8 @@ describe("E2E lifecycle", () => {
     expect(stdout + stderr).toMatch(/installed|standalone-skill/i);
   });
 
-  test("6. list — shows installed skill", async () => {
-    const { exitCode, stdout } = await run(["list"]);
+  test("6. status — shows installed skill", async () => {
+    const { exitCode, stdout } = await run(["status"]);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("standalone-skill");
   });
@@ -129,18 +129,19 @@ describe("E2E lifecycle", () => {
     expect(stdout).toContain("global");
   });
 
-  test("8. list --json — valid JSON array", async () => {
-    const { exitCode, stdout } = await run(["list", "--json"]);
+  test("8. status --json — valid JSON with skill", async () => {
+    const { exitCode, stdout } = await run(["status", "--json"]);
     expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdout);
-    expect(Array.isArray(parsed)).toBe(true);
-    expect(parsed.length).toBeGreaterThan(0);
-    expect(parsed[0].name).toBe("standalone-skill");
+    const parsed = JSON.parse(stdout) as { skills: Array<{ name: string }> };
+    expect(Array.isArray(parsed.skills)).toBe(true);
+    expect(parsed.skills.length).toBeGreaterThan(0);
+    expect(parsed.skills[0]?.name).toBe("standalone-skill");
   });
 
-  test("9. update --yes — reports up to date", async () => {
+  test("9. update skill --yes — reports up to date", async () => {
     const { exitCode, stdout, stderr } = await run([
       "update",
+      "skill",
       "standalone-skill",
       "--yes",
     ]);
@@ -159,10 +160,11 @@ describe("E2E lifecycle", () => {
     expect(stdout + stderr).toMatch(/removed|standalone-skill/i);
   });
 
-  test("11. list — empty again", async () => {
-    const { exitCode, stdout } = await run(["list"]);
+  test("11. status — empty again", async () => {
+    const { exitCode, stdout } = await run(["status"]);
     expect(exitCode).toBe(0);
-    expect(stdout).toContain("No skills found");
+    expect(stdout).toContain("skilltap status");
+    expect(stdout).not.toContain("standalone-skill");
   });
 
   test("12. tap remove — removes tap", async () => {

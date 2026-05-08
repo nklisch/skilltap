@@ -6,7 +6,7 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { loadInstalled } from "@skilltap/core";
+import { linkSkill, loadInstalled } from "@skilltap/core";
 import {
   addFileAndCommit,
   createStandaloneSkillRepo,
@@ -107,7 +107,7 @@ describe("update — clean update", () => {
       await addFileAndCommit(repo.path, "extra.md", "extra content");
 
       const { exitCode, stdout } = await runSkilltap(
-        ["update", "standalone-skill", "--yes"],
+        ["update", "skill", "standalone-skill", "--yes"],
         homeDir,
         configDir,
       );
@@ -123,8 +123,8 @@ describe("update — linked skill skipped", () => {
   test("linked skills are skipped", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      // Link instead of install
-      await runSkilltap(["link", repo.path, "--global"], homeDir, configDir);
+      // Link directly via core (the CLI link alias was removed in Phase 42)
+      await linkSkill(repo.path, { scope: "global" });
 
       const { exitCode, stdout } = await runSkilltap(
         ["update", "--yes"],
