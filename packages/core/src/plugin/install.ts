@@ -13,8 +13,16 @@ import type { PluginRecord, StoredMcpComponent } from "../schemas/plugins";
 import type { StaticWarning } from "../security/static";
 import { scanStatic } from "../security/static";
 import { wrapShell } from "../shell";
+import { loadState } from "../state/load";
 import { createAgentSymlinks } from "../symlink";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
+import {
+  applyCapture,
+  buildCrossSourceHint,
+  type CaptureBucket,
+  detectCaptureMatches,
+  mergeBuckets,
+} from "./capture";
 import { injectMcpServers } from "./mcp-inject";
 import {
   addPlugin,
@@ -36,6 +44,31 @@ export type PluginInstallOptions = {
   ) => Promise<boolean>;
   /** Called before placement for confirmation. Return false to cancel. */
   onConfirm?: (manifest: PluginManifest) => Promise<boolean>;
+  /**
+   * Called when the plugin's components collide with already-installed
+   * standalones from the SAME canonical source. Return true to capture, false
+   * to abort. Omitted with non-empty same-source matches → auto-capture
+   * (matches the existing pattern where a missing confirm callback
+   * auto-proceeds).
+   */
+  onCaptureConfirm?: (sameSource: CaptureBucket) => Promise<boolean>;
+  /**
+   * Called when the plugin's components collide with already-installed
+   * standalones from a DIFFERENT canonical source — or with no recorded
+   * source at all. Returns:
+   *   "abort" — fail the install with a UserError.
+   *   "force" — treat conflicts as captures (user override). Conflicts merge
+   *             into the same-source bucket and flow through the normal
+   *             apply path; if `onCaptureConfirm` is provided it sees the
+   *             merged set.
+   * Omitted with non-empty cross-source conflicts → install fails with
+   * a UserError. (Auto-confirm modes opt in by passing `() => "abort"`
+   * explicitly; interactive modes that want force-override pass a real
+   * callback.)
+   */
+  onCaptureConflict?: (
+    crossSource: CaptureBucket,
+  ) => Promise<"abort" | "force">;
   /** Repo URL for recording */
   repo: string | null;
   /** Git ref */
@@ -53,6 +86,16 @@ export type PluginInstallResult = {
   mcpAgents: string[];
   /** Number of agent definitions placed */
   agentDefsPlaced: number;
+  /** Components transferred from standalone state to this plugin. */
+  captured: {
+    skills: string[];
+    mcpServers: string[];
+    /**
+     * Subset of the above whose ownership transferred via cross-source force
+     * override. Empty unless the user invoked `onCaptureConflict → "force"`.
+     */
+    forcedCrossSource: { skills: string[]; mcpServers: string[] };
+  };
 };
 
 /**
@@ -95,6 +138,72 @@ export async function installPlugin(
           ),
         );
       }
+    }
+  }
+
+  // 1.5. Capture detection — before any on-disk changes, check whether the
+  // plugin's components collide with already-installed standalones, partition
+  // by source provenance, and run the capture/conflict callbacks.
+  let capturedSkills: string[] = [];
+  let capturedMcpServers: string[] = [];
+  let forcedBucket: CaptureBucket = { skills: [], mcpServers: [] };
+
+  {
+    const stateForCapture = await loadState(
+      scope === "project" ? projectRoot : undefined,
+    );
+    if (!stateForCapture.ok) return stateForCapture;
+    const matches = detectCaptureMatches(
+      stateForCapture.value,
+      manifest,
+      options.repo,
+    );
+
+    let toCapture: CaptureBucket = matches.sameSource;
+
+    // Cross-source conflicts evaluated FIRST. A force decision merges them
+    // into the capture set.
+    if (matches.crossSourceTotal > 0) {
+      if (!options.onCaptureConflict) {
+        return err(
+          new UserError(
+            `Plugin "${manifest.name}" would replace ${matches.crossSourceTotal} standalone component(s) installed from a different source.`,
+            buildCrossSourceHint(matches.crossSource, options.repo),
+          ),
+        );
+      }
+      const decision = await options.onCaptureConflict(matches.crossSource);
+      if (decision === "abort") {
+        return err(
+          new UserError(
+            `Install of plugin "${manifest.name}" cancelled — cross-source capture conflict.`,
+          ),
+        );
+      }
+      // decision === "force"
+      forcedBucket = matches.crossSource;
+      toCapture = mergeBuckets(matches.sameSource, forcedBucket);
+    }
+
+    if (toCapture.skills.length + toCapture.mcpServers.length > 0) {
+      if (options.onCaptureConfirm) {
+        const proceed = await options.onCaptureConfirm(toCapture);
+        if (!proceed) {
+          return err(
+            new UserError(
+              `Install of plugin "${manifest.name}" cancelled.`,
+            ),
+          );
+        }
+      }
+      const applied = await applyCapture(toCapture, {
+        scope,
+        projectRoot,
+        pluginName: manifest.name,
+      });
+      if (!applied.ok) return applied;
+      capturedSkills = applied.value.capturedSkills;
+      capturedMcpServers = applied.value.capturedMcpServers;
     }
   }
 
@@ -214,5 +323,18 @@ export async function installPlugin(
     });
   }
 
-  return ok({ record, warnings, mcpAgents, agentDefsPlaced });
+  return ok({
+    record,
+    warnings,
+    mcpAgents,
+    agentDefsPlaced,
+    captured: {
+      skills: capturedSkills,
+      mcpServers: capturedMcpServers,
+      forcedCrossSource: {
+        skills: forcedBucket.skills.map((c) => c.standalone.name),
+        mcpServers: forcedBucket.mcpServers.map((c) => c.serverName),
+      },
+    },
+  });
 }
