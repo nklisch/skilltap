@@ -356,3 +356,41 @@ describe("applySync — onProgress callback", () => {
     });
   });
 });
+
+describe("applySync — capture callback wiring", () => {
+  test("plugin add passes auto-confirm + abort capture callbacks", async () => {
+    const plan = planFrom([
+      ITEM("add", "plugin", "github:c/dev-toolkit", { range: "*" }),
+    ]);
+    const install = mockInstall();
+    const result = await applySync(plan, {
+      projectRoot: PROJECT_ROOT,
+      state: EMPTY_STATE,
+      installFn: install.fn,
+    });
+    expect(result.ok).toBe(true);
+
+    // Sync's contract: auto-confirm same-source captures (manifest already
+    // declares the plugin → user pre-stated intent), but hard-fail cross-source
+    // conflicts to defend against silent substitution during teammate sync.
+    expect(install.calls).toHaveLength(1);
+    const opts = install.calls[0]?.options as {
+      onPluginCaptureConfirm?: (b: unknown) => Promise<boolean>;
+      onPluginCaptureConflict?: (b: unknown) => Promise<"abort" | "force">;
+    };
+    expect(opts.onPluginCaptureConfirm).toBeDefined();
+    expect(opts.onPluginCaptureConflict).toBeDefined();
+
+    const confirmResult = await opts.onPluginCaptureConfirm?.({
+      skills: [],
+      mcpServers: [],
+    });
+    expect(confirmResult).toBe(true);
+
+    const conflictResult = await opts.onPluginCaptureConflict?.({
+      skills: [],
+      mcpServers: [],
+    });
+    expect(conflictResult).toBe("abort");
+  });
+});

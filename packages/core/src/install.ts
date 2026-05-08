@@ -105,7 +105,29 @@ export type InstallOptions = {
   ) => Promise<boolean>;
   /** Called before plugin placement for confirmation. Return false to cancel. */
   onPluginConfirm?: (manifest: PluginManifest) => Promise<boolean>;
+  /**
+   * Called when a plugin install matches same-source standalones for capture.
+   * Threaded through to installPlugin's onCaptureConfirm. Return true to
+   * capture, false to abort. Omitted → auto-capture.
+   */
+  onPluginCaptureConfirm?: PluginCaptureConfirm;
+  /**
+   * Called when a plugin install matches cross-source standalones (different
+   * canonical source, or no recorded source). Threaded through to
+   * installPlugin's onCaptureConflict. Return "abort" to fail or "force" to
+   * override. Omitted with non-empty cross-source matches → install fails.
+   */
+  onPluginCaptureConflict?: PluginCaptureConflict;
 };
+
+// Re-export the capture callback signatures so callers don't have to import
+// from plugin/capture directly.
+type PluginCaptureConfirm = (
+  bucket: import("./plugin/capture").CaptureBucket,
+) => Promise<boolean>;
+type PluginCaptureConflict = (
+  bucket: import("./plugin/capture").CaptureBucket,
+) => Promise<"abort" | "force">;
 
 export type InstallResult = {
   records: InstalledSkill[];
@@ -542,6 +564,8 @@ export async function installSkill(
                   skipScan: options.skipScan,
                   onWarnings: options.onPluginWarnings,
                   onConfirm: options.onPluginConfirm,
+                  onCaptureConfirm: options.onPluginCaptureConfirm,
+                  onCaptureConflict: options.onPluginCaptureConflict,
                   repo: match.skill.repo ?? null,
                   ref: null,
                   sha: null,
@@ -568,6 +592,8 @@ export async function installSkill(
                 projectRoot: options.projectRoot,
                 also,
                 skipScan: options.skipScan,
+                onCaptureConfirm: options.onPluginCaptureConfirm,
+                onCaptureConflict: options.onPluginCaptureConflict,
                 repo: match.skill.repo ?? null,
                 ref: null,
                 sha: null,
@@ -694,6 +720,8 @@ export async function installSkill(
             skipScan: options.skipScan,
             onWarnings: options.onPluginWarnings,
             onConfirm: options.onPluginConfirm,
+            onCaptureConfirm: options.onPluginCaptureConfirm,
+            onCaptureConflict: options.onPluginCaptureConflict,
             repo: cloneUrl ?? resolved.url,
             ref: finalRef ?? null,
             sha,

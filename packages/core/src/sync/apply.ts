@@ -130,6 +130,14 @@ async function applyAddSkill(
     onPluginDetected: async () => "plugin",
     onPluginWarnings: async () => !options.strict,
     onPluginConfirm: async () => true,
+    // Capture: same-source captures auto-confirm (matches the plugin's pre-stated
+    // intent in the manifest); cross-source conflicts hard-fail. Sync is the
+    // path most vulnerable to silent substitution — a teammate cloning a repo
+    // shouldn't have skills they trust replaced because the manifest declared
+    // a plugin from a different author. The drift item bubbles up with
+    // status: "fail" carrying the cross-source resolution hint.
+    onPluginCaptureConfirm: async () => true,
+    onPluginCaptureConflict: async () => "abort",
   });
   if (!result.ok) return { status: "fail", error: result.error.message };
   return { status: "ok" };
