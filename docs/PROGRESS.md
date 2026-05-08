@@ -1,12 +1,53 @@
 # Autopilot Progress
 
-**Status:** v2.0 + v2.1 cutover COMPLETE; **BLOCKED on user-action release**
+**Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
-**Last updated:** 2026-05-06
-**Phases since last refactor:** 4
+**Last updated:** 2026-05-08
+**Phases since last refactor:** 0 (reset on roadmap extension)
 **Total refactor passes:** 2
 
-## ⚠ Autopilot blocker (2026-05-06)
+## Resume context (2026-05-08)
+
+A foundation-doc redesign session produced two major commits on `main`:
+- `dd4e112` — v2.0 redesign foundation docs (VISION/SPEC/ARCH/UX/ROADMAP/SECURITY).
+- `53dd0e1` — split plugin capture into v2.2 (Phase 39) ahead of redesign (Phases 40–46).
+
+Phase 39 implementation completed in this session (commits `7cc6e71` through `a4eb6a0`). Phases 40–46 are pending. Pre-existing user WIP touching security flatten + `security.enabled` kill switch was stashed for clean autopilot work (`stash@{0}` — "WIP: security flatten + security.enabled kill switch (pre-autopilot v2 redesign)").
+
+User explicitly enabled watchdog loops mid-session (CronCreate jobs `fceab167` for 30m nudge, `858edc08` for 3h re-engagement at :07).
+
+**Decision log for this session:**
+- Stashed pre-existing user WIP rather than incorporating: WIP was partial (kept `human`/`agent` as deprecated rather than deleting) and would conflict with Phase 40 cleanup. User can `git stash pop` later to resume.
+- Used existing `docs/design/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
+- Phase 39 Units 1–3 + 5–7 implemented directly by Opus (small, self-contained units). Unit 4 (CLI rendering) orchestrated to a Sonnet agent. **User feedback mid-phase: prefer orchestration via `/implement-orchestrator` for all future implementation work.** Phases 40–46 will run the full autopilot workflow: research gate → `/design` → `/implement-orchestrator` → test checkpoint → progress + commit → refactor gate.
+
+## Phase 39 completion summary (2026-05-08)
+
+Plugin capture shipped end-to-end across 5 commits. The release (39.11/39.12) is gated on user running `bun run bump 2.2.0`.
+
+**Code shipped:**
+- `core/src/plugin/capture.ts` — `detectCaptureMatches` (pure), `applyCapture` (atomic), `mergeBuckets`, `buildCrossSourceHint`. Source-aware partitioning via `canonicalizeSourceKey`.
+- `core/src/plugin/install.ts` — capture detection step between scan and placement; `onCaptureConfirm` + `onCaptureConflict` callbacks; `captured` + `forcedCrossSource` on `PluginInstallResult`.
+- `core/src/install.ts` — `onPluginCaptureConfirm` + `onPluginCaptureConflict` threaded through to all 3 `installPlugin` call sites; `captured` mirrored on `InstallResult`.
+- `core/src/sync/apply.ts` — same-source auto-confirm, cross-source hard-fail (defends teammate sync against silent substitution).
+- `core/src/doctor/checks/capture-collisions.ts` — defensive canary check #16.
+- `cli/src/ui/install-callbacks.ts` — `printCaptureConflict` + `printCaptureSummary` rendering helpers.
+- `cli/src/commands/install.ts` — interactive prompt flow (select for conflict, confirm for capture); agent-mode safe defaults; post-install `Captured N skill(s), M MCP server(s)` summary.
+
+**Tests added:**
+- `core/src/plugin/capture.test.ts` — 26 unit tests covering detection partitioning + apply side-effects.
+- `core/src/plugin/install.capture.test.ts` — 9 integration tests covering installPlugin end-to-end with state pre-seeded.
+- `core/src/sync/apply.test.ts` — 1 test verifying capture callbacks threaded through with correct defaults.
+- `core/src/doctor/checks/capture-collisions.test.ts` — 5 tests for canary check.
+- `cli/src/commands/install.capture.test.ts` — 5 CLI subprocess tests (agent-mode same-source + cross-source paths, plain-mode capture summary).
+
+**Verification:** Full suite 2102 pass / 0 fail (up from 2091 pre-Phase-39).
+
+**Released artifacts gated on user:**
+- 39.11: `bun run bump 2.2.0` + `git tag v2.2.0` + `git push --follow-tags`.
+- 39.12: Release workflow verification (binaries, npm publish, Homebrew formula update) — blocked on 39.11.
+
+## ⚠ Earlier autopilot blocker (2026-05-06)
 
 The next pending roadmap step (Phase 38.7) is the version bump. The bump script now supports `SKILLTAP_BUMP_NO_PUSH=1` (post-cutover doc-audit improvement) — autopilot can technically stage the commit + tag locally without pushing, but **picking the release version is still user-owned**: the user decides whether to ship 2.0.0, 2.0.0-rc.1, or fold further work in first. The autopilot mandate also forbids the eventual `git push --follow-tags` regardless.
 
@@ -129,6 +170,14 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 38b | Internal docs (CLAUDE.md/AGENTS.md/llms-full.txt) | done   | 2026-05-06 |
 | 38d | v2.0 end-to-end test (38.5)                    | done     | 2026-05-06 |
 | 38c | Version bump to 2.0.0(-rc.1) + tag + push      | ready for user | — |
+| 39  | Plugin Capture (v2.2)                          | code complete; 39.11/39.12 user-gated | 2026-05-08 |
+| 40  | Drop legacy fallbacks + agent-mode             | pending  | — |
+| 41  | Output mode abstraction                        | pending  | — |
+| 42  | Typed install/remove/update/toggle             | pending  | — |
+| 43  | Claude Code plugin adoption                    | pending  | — |
+| 44  | TUI dashboard (Ink)                            | pending  | — |
+| 45  | Migrate command rewrite                        | pending  | — |
+| 46  | Polish + docs + release                        | pending  | — |
 
 ---
 
