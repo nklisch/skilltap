@@ -21,7 +21,6 @@ export * from "./link";
 export * from "./manifest";
 export {
   installMcp,
-  installMcpOnly,
   type McpInstallOptions,
   type McpInstallResult,
   type McpRemoveOptions,
@@ -29,7 +28,6 @@ export {
   type ParsedMcpRef,
   parseMcpRef,
   removeMcp,
-  removeMcpInstall,
 } from "./mcp-install";
 export * from "./migrate";
 export * from "./move";

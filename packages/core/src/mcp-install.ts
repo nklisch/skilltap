@@ -341,9 +341,3 @@ function toStoredMcp(server: McpServerEntry): {
     env: server.env ?? {},
   };
 }
-
-/** @deprecated Use `installMcp` instead. Will be removed in a future release. */
-export const installMcpOnly = installMcp;
-
-/** @deprecated Use `removeMcp` instead. Will be removed in a future release. */
-export const removeMcpInstall = removeMcp;

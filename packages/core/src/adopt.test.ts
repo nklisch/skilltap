@@ -10,7 +10,7 @@ import { lstat, mkdir, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { adoptAgentPlugin, adoptSkill, adoptSkillFromPath, discoverAllAdoptable } from "./adopt";
+import { adoptPlugin, adoptSkill, adoptSkillFromPath, discoverAllAdoptable } from "./adopt";
 import { loadInstalled, saveInstalled } from "./config";
 import { discoverSkills } from "./discover";
 import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
@@ -525,7 +525,7 @@ describe("adoptSkillFromPath", () => {
   });
 });
 
-describe("adoptAgentPlugin", () => {
+describe("adoptPlugin", () => {
   test("adds state.plugins[] entry with claude-code: marker in repo", async () => {
     const pluginCacheDir = join(homeDir, "plugin-cache", "my-plugin");
     await mkdir(pluginCacheDir, { recursive: true });
@@ -533,7 +533,7 @@ describe("adoptAgentPlugin", () => {
 
     const plugin = makeMockPlugin("my-plugin", pluginCacheDir);
 
-    const result = await adoptAgentPlugin(plugin, {});
+    const result = await adoptPlugin(plugin, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -561,7 +561,7 @@ describe("adoptAgentPlugin", () => {
       marketplaceName: "some-marketplace",
     };
 
-    const result = await adoptAgentPlugin(plugin, {});
+    const result = await adoptPlugin(plugin, {});
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -578,7 +578,7 @@ describe("adoptAgentPlugin", () => {
     await createPluginDir(pluginCacheDir, "read-only-plugin");
 
     const plugin = makeMockPlugin("read-only-plugin", pluginCacheDir);
-    await adoptAgentPlugin(plugin, {});
+    await adoptPlugin(plugin, {});
 
     // The installPath is still the original cache dir (not copied)
     const pluginsResult = await loadPlugins();

@@ -491,6 +491,3 @@ export async function discoverAllAdoptable(
     scannerErrors: pluginScanResult.value.errors,
   });
 }
-
-/** @deprecated Use `adoptPlugin` instead. Will be removed in a future release. */
-export const adoptAgentPlugin = adoptPlugin;

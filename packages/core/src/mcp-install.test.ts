@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
-import { installMcpOnly, parseMcpRef, removeMcpInstall } from "./mcp-install";
+import { installMcp, parseMcpRef, removeMcp } from "./mcp-install";
 import { loadState } from "./state/load";
 
 let env: TestEnv;
@@ -60,7 +60,7 @@ describe("parseMcpRef", () => {
   });
 });
 
-describe("installMcpOnly — local source", () => {
+describe("installMcp — local source", () => {
   test("installs servers from a .mcp.json at the source root", async () => {
     await writeFile(
       join(mcpSourceDir, ".mcp.json"),
@@ -74,7 +74,7 @@ describe("installMcpOnly — local source", () => {
       }),
     );
 
-    const result = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+    const result = await installMcp(`mcp:${mcpSourceDir}`, {
       scope: "project",
       projectRoot,
       agents: ["claude-code"],
@@ -118,7 +118,7 @@ describe("installMcpOnly — local source", () => {
       }),
     );
 
-    const result = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+    const result = await installMcp(`mcp:${mcpSourceDir}`, {
       scope: "project",
       projectRoot,
     });
@@ -132,7 +132,7 @@ describe("installMcpOnly — local source", () => {
 
   test("fails when no servers are found", async () => {
     // Empty source directory
-    const result = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+    const result = await installMcp(`mcp:${mcpSourceDir}`, {
       scope: "project",
       projectRoot,
     });
@@ -142,7 +142,7 @@ describe("installMcpOnly — local source", () => {
   });
 
   test("fails on non-mcp: source", async () => {
-    const result = await installMcpOnly("github:u/r", {
+    const result = await installMcp("github:u/r", {
       scope: "project",
       projectRoot,
     });
@@ -159,7 +159,7 @@ describe("installMcpOnly — local source", () => {
       }),
     );
 
-    const r1 = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+    const r1 = await installMcp(`mcp:${mcpSourceDir}`, {
       scope: "project",
       projectRoot,
     });
@@ -172,7 +172,7 @@ describe("installMcpOnly — local source", () => {
         mcpServers: { db: { command: "node", args: ["v2.js"] } },
       }),
     );
-    const r2 = await installMcpOnly(`mcp:${mcpSourceDir}`, {
+    const r2 = await installMcp(`mcp:${mcpSourceDir}`, {
       scope: "project",
       projectRoot,
     });
@@ -188,7 +188,7 @@ describe("installMcpOnly — local source", () => {
   });
 });
 
-describe("removeMcpInstall", () => {
+describe("removeMcp", () => {
   test("removes entries from state and prunes agent config", async () => {
     await writeFile(
       join(mcpSourceDir, ".mcp.json"),
@@ -200,7 +200,7 @@ describe("removeMcpInstall", () => {
       }),
     );
     const source = `mcp:${mcpSourceDir}`;
-    const installResult = await installMcpOnly(source, {
+    const installResult = await installMcp(source, {
       scope: "project",
       projectRoot,
       agents: ["claude-code"],
@@ -212,7 +212,7 @@ describe("removeMcpInstall", () => {
     const before = JSON.parse(await readFile(settingsPath, "utf8"));
     expect(Object.keys(before.mcpServers ?? {})).toHaveLength(2);
 
-    const result = await removeMcpInstall(source, {
+    const result = await removeMcp(source, {
       scope: "project",
       projectRoot,
     });
@@ -237,7 +237,7 @@ describe("removeMcpInstall", () => {
   });
 
   test("fails when source has no installed entries", async () => {
-    const result = await removeMcpInstall("mcp:nope/missing", {
+    const result = await removeMcp("mcp:nope/missing", {
       scope: "project",
       projectRoot,
     });
@@ -264,13 +264,13 @@ describe("removeMcpInstall", () => {
       const sourceA = `mcp:${mcpSourceDir}`;
       const sourceB = `mcp:${otherDir}`;
       expect(
-        (await installMcpOnly(sourceA, { scope: "project", projectRoot })).ok,
+        (await installMcp(sourceA, { scope: "project", projectRoot })).ok,
       ).toBe(true);
       expect(
-        (await installMcpOnly(sourceB, { scope: "project", projectRoot })).ok,
+        (await installMcp(sourceB, { scope: "project", projectRoot })).ok,
       ).toBe(true);
 
-      const result = await removeMcpInstall(sourceA, {
+      const result = await removeMcp(sourceA, {
         scope: "project",
         projectRoot,
       });
