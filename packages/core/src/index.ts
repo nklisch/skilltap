@@ -20,6 +20,7 @@ export * from "./link";
 // v2.0 additions (Phase 26+) — additive, no v1.0 paths use these yet.
 export * from "./manifest";
 export {
+  installMcp,
   installMcpOnly,
   type McpInstallOptions,
   type McpInstallResult,

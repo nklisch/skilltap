@@ -1,4 +1,4 @@
-import { findProjectRoot, installMcpOnly } from "@skilltap/core";
+import { findProjectRoot, installMcp } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { setupOutput } from "../../ui/setup";
 import { loadPolicyOrExit } from "../../ui/policy";
@@ -72,10 +72,10 @@ export const mcpCommand = defineCommand({
     const effectiveAgents = agents.length > 0 ? agents : ["claude-code"];
 
     for (const source of sources) {
-      // installMcpOnly uses the mcp: prefix internally to parse the slug
+      // installMcp uses the mcp: prefix internally to parse the slug
       // and store state. Prepend it here so the internal convention is preserved.
       const internalSource = `mcp:${source}`;
-      const result = await installMcpOnly(internalSource, {
+      const result = await installMcp(internalSource, {
         scope,
         projectRoot,
         agents: effectiveAgents,

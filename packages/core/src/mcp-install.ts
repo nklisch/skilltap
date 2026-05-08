@@ -71,7 +71,7 @@ export function parseMcpRef(source: string): ParsedMcpRef | null {
 // state.json's mcpServers array.
 //
 // Phase 35b — additive. Doesn't touch v0.x reads/writes.
-export async function installMcpOnly(
+export async function installMcp(
   source: string,
   options: McpInstallOptions,
 ): Promise<Result<McpInstallResult, UserError | GitError>> {
@@ -341,3 +341,6 @@ function toStoredMcp(server: McpServerEntry): {
     env: server.env ?? {},
   };
 }
+
+/** @deprecated Use `installMcp` instead. Will be removed in a future release. */
+export const installMcpOnly = installMcp;
