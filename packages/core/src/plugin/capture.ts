@@ -16,7 +16,7 @@
  * Spec: `docs/design/plugin-capture.md`.
  */
 
-import { rm } from "node:fs/promises";
+import { $ } from "bun";
 import { canonicalizeSourceKey, removeSkillFromManifest } from "../manifest/update";
 import { skillDisabledDir } from "../paths";
 import type { InstalledSkill } from "../schemas/installed";
@@ -362,7 +362,7 @@ export async function applyCapture(
     const skill = c.standalone;
     if (skill.active !== false) continue;
     const dir = skillDisabledDir(skill.name, scope, projectRoot);
-    await rm(dir, { recursive: true, force: true }).catch(() => {
+    await $`rm -rf ${dir}`.quiet().catch(() => {
       // best effort
     });
   }
