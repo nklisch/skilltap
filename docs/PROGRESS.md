@@ -21,6 +21,29 @@ User explicitly enabled watchdog loops mid-session (CronCreate jobs `fceab167` f
 - Used existing `docs/design/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
 - Phase 39 Units 1–3 + 5–7 implemented directly by Opus (small, self-contained units). Unit 4 (CLI rendering) orchestrated to a Sonnet agent. **User feedback mid-phase: prefer orchestration via `/implement-orchestrator` for all future implementation work.** Phases 40–46 will run the full autopilot workflow: research gate → `/design` → `/implement-orchestrator` → test checkpoint → progress + commit → refactor gate.
 
+## Phase 40 completion summary (2026-05-08)
+
+Agent-mode runtime collapsed and v0.x state fallback paths removed across two implementation agents (`f0286a3` Units 1-5 + `b687d31` Unit 6). Net –2200+ production LOC.
+
+**What shipped:**
+- Flat `[security]` config schema (no per-mode `human`/`agent` split, no `[agent-mode]` block).
+- `composePolicy` returns single non-branching `EffectivePolicy` (no `agentMode` field).
+- 22 CLI call sites converted from `agent-out.ts` helpers to `format.ts` helpers (errorLine/successLine/infoLine + new `securityBlock` and `jsonLine` in format.ts).
+- `runAgentMode`/`runInteractiveMode` collapsed to single `runInstall`/`runUpdate`.
+- `loadInstalled`/`loadPlugins` read state.json only — v0.x fallback paths removed.
+- Migrate command's `[agent-mode].scope → defaults.scope` translation added.
+
+**Files deleted:**
+- `packages/cli/src/ui/agent-out.ts` (+ test)
+- `packages/core/src/agent-env.ts`
+- `packages/cli/src/commands/config/agent-mode.ts` (+ test)
+- `packages/cli/src/commands/update.agent-mode.test.ts`
+- `packages/cli/src/ui/policy.test.ts`
+
+**Verification:** Full suite 2038 pass / 51 skip / 0 fail (down from 2102 before phase — net –64 tests, all from deleted agent-mode-specific tests; underlying logic coverage preserved by rewritten `policy.test.ts` and `schemas/config.test.ts`).
+
+**Workflow note:** Used the full extend → design → implement-orchestrator → test pattern per user direction mid-Phase-39. Two Sonnet agents handled the implementation; orchestrator (Opus) verified intermediate gates and ran final suite.
+
 ## Phase 39 completion summary (2026-05-08)
 
 Plugin capture shipped end-to-end across 5 commits. The release (39.11/39.12) is gated on user running `bun run bump 2.2.0`.
@@ -171,7 +194,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 38d | v2.0 end-to-end test (38.5)                    | done     | 2026-05-06 |
 | 38c | Version bump to 2.0.0(-rc.1) + tag + push      | ready for user | — |
 | 39  | Plugin Capture (v2.2)                          | code complete; 39.11/39.12 user-gated | 2026-05-08 |
-| 40  | Drop legacy fallbacks + agent-mode             | pending  | — |
+| 40  | Drop legacy fallbacks + agent-mode             | done     | 2026-05-08 |
 | 41  | Output mode abstraction                        | pending  | — |
 | 42  | Typed install/remove/update/toggle             | pending  | — |
 | 43  | Claude Code plugin adoption                    | pending  | — |
