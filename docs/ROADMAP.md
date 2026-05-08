@@ -768,6 +768,149 @@ Phases 28, 30, 31, 32 can run mostly in parallel after 27. Phases 33–36 can ru
 
 ---
 
+## v2.0 Redesign — Phases 39–46
+
+> Second-pass redesign of the v2.x surface. Treats v2.0/v2.1 as a draft. Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction): typed install, no agent-mode, multi-screen TUI, plugin capture, Claude Code plugin adoption.
+
+### Phase 39 — Drop legacy fallbacks and agent-mode (one-shot cleanup)
+
+Single demolition phase. Everything else builds on a cleaner core.
+
+- [ ] **39.1** Delete `installed.json`/`plugins.json` read-fallback paths in `loadInstalled()` / `loadPlugins()`. `state.json` is the only source.
+- [ ] **39.2** Delete `packages/cli/src/ui/agent-out.ts` and all imports.
+- [ ] **39.3** Delete `packages/core/src/agent-env.ts` and the `SKILLTAP_AGENT` env var contract.
+- [ ] **39.4** Delete `packages/cli/src/commands/config/agent-mode.ts` and remove the wizard from the config router.
+- [ ] **39.5** Remove `--agent` flag from `install`, `update`, and any other command that registers it.
+- [ ] **39.6** Collapse `composePolicy()` in `packages/core/src/policy.ts`: no agent-mode branch, no per-mode security split. `composePolicy(config, flags)` returns a single `EffectivePolicy` regardless of caller type.
+- [ ] **39.7** Rewrite `[security]` schema in `packages/core/src/schemas/config.ts`: drop `[security.human]` / `[security.agent]` blocks, drop `[agent-mode]` block. Single `[security]` with `scan`, `on_warn`, `trust`.
+- [ ] **39.8** Update all commands that called `isAgentMode()` (enable, disable, toggle, verify, etc.) to use the unified policy and TTY-based output decisions.
+- [ ] **39.9** Update tests: remove agent-mode subprocess tests. Add subprocess tests that pipe stdin and verify headless behavior without `--agent`.
+
+**Exit criteria:** `grep -r "agentMode\|agent-mode\|SKILLTAP_AGENT\|agent-out\|agent-env" packages/` returns nothing in source files. All tests pass. Existing `--yes` and `--json` flags carry the unattended-use story.
+
+---
+
+### Phase 40 — Output mode abstraction
+
+- [ ] **40.1** Add `packages/core/src/output/` — `OutputMode = "tty" | "plain" | "json"`. `pickMode(opts)` resolves from `--json` flag, TTY detection, and explicit override.
+- [ ] **40.2** Add `Output` interface — `info(msg)`, `warn(msg)`, `error(msg)`, `success(msg)`, `json(payload)`, `progress(label)`. CLI layer constructs the right impl per mode.
+- [ ] **40.3** Migrate existing CLI commands to write through `Output` instead of mixed `successLine`/`errorLine`/`agentSuccess` calls.
+- [ ] **40.4** Replace clack spinner usage with `Output.progress()` that no-ops in plain/JSON modes.
+
+**Exit criteria:** No command writes directly to `process.stdout` / `process.stderr`. All output goes through the `Output` interface. JSON output is schema-validated per command.
+
+---
+
+### Phase 41 — Plugin capture wiring
+
+Already designed in [docs/design/plugin-capture.md](./design/plugin-capture.md). Implementation only.
+
+- [ ] **41.1** `canonicalizeSourceUrl(url)` in `packages/core/src/plugin/capture.ts` — normalize https/ssh/git@/.git suffix variations to a single canonical form.
+- [ ] **41.2** `detectCaptureMatches(state, manifest, pluginRepo)` — partition collisions into same-source vs cross-source.
+- [ ] **41.3** `applyCapture(bucket, options)` — atomic ownership transfer: remove standalone records, prune agent MCP keys, remove old symlinks, clean manifest entries.
+- [ ] **41.4** Wire into `installPlugin()`: detect → prompt or auto-confirm → apply → install plugin components.
+- [ ] **41.5** Wire into `sync/apply.ts`: pass capture callbacks through `applyAddSkill`.
+- [ ] **41.6** Add `onCaptureConfirm` and `onCaptureConflict` to `PluginInstallOptions`.
+- [ ] **41.7** CLI rendering: `printCaptureConflict()`, `printCaptureSummary()`.
+- [ ] **41.8** Doctor check: flag any skill appearing in both `state.skills[]` and `state.plugins[].components[]` (defensive canary).
+
+**Exit criteria:** Installing a plugin twice is idempotent. Installing a plugin that bundles an existing standalone offers a capture flow. Sync plays well with capture in non-interactive use.
+
+---
+
+### Phase 42 — Required-subcommand install + remove + update + toggle
+
+- [ ] **42.1** Rewrite `packages/cli/src/commands/install.ts` as a router: `install <type> <source>` dispatches to `installSkill()` / `installPlugin()` / `installMcp()`. No bare `install <source>`.
+- [ ] **42.2** Rewrite `packages/cli/src/commands/remove.ts` analogously: `remove <type> <name>`.
+- [ ] **42.3** Rewrite `update.ts`: `update [type] [name]`. Bare = all. `update <type>` = all of type. `update <type> <name>` = one.
+- [ ] **42.4** Rewrite `toggle.ts`: `toggle [type] [name[:component]]`. TUI when args missing.
+- [ ] **42.5** Drop the `mcp:` URL prefix from source parsers. `mcp` is now a subcommand only.
+- [ ] **42.6** Drop `tap install` (`packages/cli/src/commands/tap/install.ts`) — duplicate of `install skill <name>` when `<name>` resolves through a tap.
+- [ ] **42.7** Reduce `installSkill()` callbacks from ~15 to ~6 (scope, agents, scan-warnings, plugin-detected, orphans-found, semantic-offer). Decisions that only existed for agent-mode auto-fail are deleted.
+- [ ] **42.8** Remove all silent aliases from `packages/cli/src/index.ts` (`list`, bare `remove`/`info`/`link`/`unlink`, etc.). Old paths return clear error with hint.
+- [ ] **42.9** Drop `packages/cli/src/commands/skills/` entirely (subcommand group). `link`/`unlink` deleted (folded into `adopt`). `info`/`remove` move to top level. `move` becomes a flag on adopt.
+- [ ] **42.10** Drop `packages/cli/src/commands/plugin/` subcommand group. `info`/`toggle`/`remove` accessible as top-level commands or via TUI.
+
+**Exit criteria:** CLI command count drops from 51 → ~25 endpoints. All commands have typed args where required. Tab-completion is regenerated.
+
+---
+
+### Phase 43 — Claude Code plugin adoption
+
+- [ ] **43.1** `packages/core/src/agent-plugins/claude-code.ts` — read `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`. Tolerant Zod parser with `passthrough()` for forward-compat.
+- [ ] **43.2** `packages/core/src/agent-plugins/types.ts` — `AgentPluginScanner` interface: `name`, `detect()`, `scan()`. Stub `codex.ts` (no-op until OpenAI ships a marketplace).
+- [ ] **43.3** Extend `adopt()` core function: take optional `path` argument for external skills (replaces `link`); when no path, scan all registered `AgentPluginScanner`s + agent-skill dirs.
+- [ ] **43.4** Rewrite `adopt` CLI command: `adopt [path]`, TUI when no path, `--source <name>` filter when scanning. Remove `link`/`unlink` commands entirely.
+- [ ] **43.5** Doctor check: warn when a Claude Code plugin in `installed_plugins.json` has overlapping components with skilltap state.
+- [ ] **43.6** Add `--move`/`--track-in-place` flags to `adopt <path>` (default: track-in-place; matches `link` semantics).
+
+**Exit criteria:** `skilltap adopt` (TTY, no args) opens TUI showing unmanaged skills + Claude Code plugins. `adopt <path>` replaces link. Claude Code plugin format changes don't crash skilltap.
+
+---
+
+### Phase 44 — TUI dashboard (Ink)
+
+- [ ] **44.1** Add Ink + dependencies (`ink`, `ink-select-input`, `ink-text-input`, `ink-spinner`, `ink-testing-library` for tests). Verify Bun-runtime stability.
+- [ ] **44.2** `packages/cli/src/tui/` — root component, screen router, key-binding registry.
+- [ ] **44.3** Dashboard screen — tabs: Installed (skills/plugins/mcp), Taps, Updates, Drift. Quick actions: install, remove, toggle, sync.
+- [ ] **44.4** Find screen — type-ahead search across taps + registries. Detail pane on right. Enter to install (opens type-picker if ambiguous).
+- [ ] **44.5** Toggle screen — pick type → pick name → checkbox component picker for plugins. Visual state (active/disabled per component).
+- [ ] **44.6** Adopt screen — list of unmanaged things (skills + Claude Code plugins). Per-item: track-in-place vs move. Multi-select.
+- [ ] **44.7** State machine separation — pure reducers for screen state (testable with bun:test). Ink components are dumb renderers.
+- [ ] **44.8** Headless equivalents — every TUI action has a flat-command path. `find`, `toggle`, `adopt` all work in plain mode without TTY.
+- [ ] **44.9** PTY-based smoke tests (`runInteractive` with `node-pty` or Bun equivalent).
+- [ ] **44.10** Bare `skilltap` (no args) opens dashboard; errors with hint when not TTY (suggest `skilltap status`).
+
+**Exit criteria:** TUI dashboard launches in TTY. All TUI screens have headless equivalents. Tests cover both code paths.
+
+---
+
+### Phase 45 — Migrate command rewrite
+
+- [ ] **45.1** Detect markers: `[agent-mode]` block, `[security.human]` / `[security.agent]` blocks, `[[security.overrides]]`, `installed.json`, `plugins.json`. If none, exit 0 with "Already on v2.0 Redesign."
+- [ ] **45.2** Translate config: collapse per-mode security to single `[security]`, drop `[agent-mode]`, drop overrides (warn: less expressive than presets).
+- [ ] **45.3** Translate state: merge `installed.json` + `plugins.json` → `state.json` (already exists for v0.x → v2.x; just ensure clean for v2.x → redesign).
+- [ ] **45.4** Translate manifest: `skilltap.toml` shape unchanged; just confirm parse still works.
+- [ ] **45.5** Run `doctor` post-migrate to verify state. Print summary.
+- [ ] **45.6** Backups: rename originals to `*.v1.bak` / `*.v2.bak` per migration step.
+
+**Exit criteria:** `skilltap migrate` runs cleanly on a v0.x setup, a v2.x setup, and a fresh setup (no-op). Doctor reports green afterward.
+
+---
+
+### Phase 46 — Polish, docs, release
+
+- [ ] **46.1** Rewrite `docs/UX.md` to reflect new CLI surface only (drop the old, don't keep both).
+- [ ] **46.2** Update `docs/SPEC.md` redesign section to canonical reference; mark old v2.0 sections superseded.
+- [ ] **46.3** Update `docs/ARCH.md` redesign section to canonical reference.
+- [ ] **46.4** Update `README.md` quickstart with new surface.
+- [ ] **46.5** Update `website/` content with new surface, TUI screenshots, command reference.
+- [ ] **46.6** Update `llms-full.txt` for LLM ingestion.
+- [ ] **46.7** Update `CLAUDE.md` and `AGENTS.md` with new conventions.
+- [ ] **46.8** End-to-end test: clean init → install (each type) → toggle → sync → adopt Claude Code plugin → migrate from v2.x → TUI dashboard.
+- [ ] **46.9** CHANGELOG entry with migration guide for v2.x users.
+- [ ] **46.10** Bump version (next minor) *(gated on user — autopilot mandate forbids running `bun run bump`)*.
+- [ ] **46.11** Release verification (binaries, npm publish, Homebrew formula update) *(blocked on 46.10)*.
+
+**Exit criteria:** Redesign ships. Docs reflect only the new surface. v2.x users have a clean migrate path.
+
+---
+
+### v2.0 Redesign Dependency Graph
+
+```
+Phase 39 (cleanup) ─→ Phase 40 (output) ─→ Phase 42 (typed install) ─→ Phase 44 (TUI)
+                  └─→ Phase 41 (capture) ─→ Phase 43 (adopt + claude-code)
+                                                                       │
+                       Phase 45 (migrate) ────────────────────────────┤
+                                                                       ▼
+                                                            Phase 46 (polish + release)
+```
+
+Phase 39 is gating — everything depends on the cleanup. Phase 40 (output) and Phase 41 (capture) parallelize after 39. Phase 42 (typed install) needs 40. Phase 43 (adopt) needs 41. Phase 44 (TUI) needs 42 (typed commands to invoke). Phase 45 (migrate) parallels 42–44. Phase 46 is the final integration.
+
+---
+
 ## What's Deferred (no scheduled version)
 
 These are real future-work items that survived v0.1, v1.0, and v2.0 + v2.1 without making a release. They're not blocked on technical issues — they're either large efforts (Windows support, VS Code extension, agent definitions for non-Claude platforms), platform-specific features (Claude Code hooks/LSP/commands/userConfig), or design problems that haven't been prioritized (skill dependency system, direct LLM API integrations, SBOM generation, `security.require_provenance`).

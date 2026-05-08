@@ -360,13 +360,104 @@ See [SPEC.md — Version Scope](./SPEC.md#version-scope) for the detailed roadma
 - **v0.2** — npm adapter, HTTP registry, shell completions
 - **v0.3** — Community trust signals, `skilltap publish`, skill templates
 - **v1.0** — Plugin support (Claude Code + Codex formats, MCP injection, agent definitions)
-- **v2.0** — Tooling-surface redesign: unified package model, simplified security, drop agent-mode-as-concept, expanded MCP story (see below)
+- **v2.0** — Tooling-surface redesign: unified package model, simplified security, drop agent-mode-as-concept, expanded MCP story (shipped as v2.0/v2.1; see "v2.0 Direction" below for original intent)
+- **v2.0 Redesign** — Second-pass redesign of the v2.x surface: typed install (`install <type> <source>`), one runtime (no agent-mode), multi-screen TUI, plugin capture, Claude Code plugin adoption (see "v2.0 Redesign" below — current direction)
+
+---
+
+## v2.0 Redesign (current direction)
+
+> **Status:** This section supersedes [v2.0 Direction: Simplification, Unification, Project Manifest](#v20-direction-simplification-unification-project-manifest) below. The shipped v2.0/v2.1 codebase is treated as a draft we're iterating on. npm semver continues forward (next release is a v2.x minor — final label resolved at release time); the design intent below is what "v2.0" means going forward.
+
+The v2.0 draft kept too much surface and conceptual baggage from v0.x and v1.0: 51 documented commands, parallel agent-mode and human-mode runtimes, ~15 install callbacks, three places to specify the same scope, an `mcp:` URL prefix that exists only because we couldn't auto-detect, and read-fallback paths to legacy `installed.json`/`plugins.json`. This redesign collapses it.
+
+### Three principles
+
+1. **One verb per action, typed args.** `install <type> <source>`, `remove <type> <name>`, `update [type] [name]`, `toggle [type] [name[:component]]`. Type is required for install and remove, optional for update and toggle. No auto-detect, no `mcp:` URL prefix, no silent aliases.
+
+2. **One runtime, no agent mode.** Every command works headless. TTY detection picks output style; `--json` forces machine output anywhere; `--yes` resolves "do it" prompts; required args resolve "what" prompts. No `--agent` flag, no `SKILLTAP_AGENT` env var, no `[agent-mode]` config block, no per-mode security split.
+
+3. **Multi-screen TUI for browsing and discovery.** Bare `skilltap` opens a dashboard (TTY only). `find`, `toggle`, and `adopt` open TUIs when invoked without disambiguating arguments. Each has a flat command-line equivalent.
+
+### What's new
+
+- **Plugin capture** — installing a plugin owns components that pre-exist as standalones. Designed in [docs/design/plugin-capture.md](./design/plugin-capture.md); ships in this redesign.
+- **Claude Code plugin adoption** — skilltap reads `~/.claude/plugins/installed_plugins.json` and offers to adopt plugins that Claude Code's own `/plugin install` already manages. Real artifact-tracking unification.
+- **Generic agent-plugin scanner** — adoption is built on a pluggable framework (`packages/core/src/agent-plugins/`). Today: claude-code. Future: any agent that ships a plugin system. Codex stub (no marketplace exists today; placeholder for future).
+- **TUI dashboard** (Ink) — bare `skilltap` opens a multi-screen dashboard with tabs for installed skills, plugins, taps, drift, available updates. Each TUI screen has a flat-command equivalent.
+
+### What's removed
+
+- `verify` — folded into `doctor` (`doctor skill <path>` / `doctor plugin <path>`).
+- `link` / `unlink` — folded into `adopt` (`adopt <path>` for external paths replaces what `link` did).
+- `enable` / `disable` — accessed via `toggle` or TUI plugin manager.
+- `skills` subcommand group — collapsed into top-level operations.
+- `plugin` subcommand group — most operations move to top-level + TUI.
+- `mcp:` URL prefix — type is explicit via `install mcp <source>`.
+- All silent aliases (`list`, `info`/`remove`/`link`/`unlink` without explicit type, etc.).
+- `[agent-mode]` config block, `[security.agent]` / `[security.human]` split, security presets, `[[security.overrides]]`.
+- `agent-out.ts`, `agent-env.ts`, `config/agent-mode.ts`.
+- Legacy `installed.json` / `plugins.json` read-fallback paths.
+
+### CLI surface (final)
+
+```
+skilltap                              # TUI dashboard (TTY only; errors with hint when not)
+skilltap status [--json]              # headless dashboard
+skilltap install <type> <source>      # type: skill | plugin | mcp
+skilltap remove  <type> <name>
+skilltap update  [type] [name]
+skilltap toggle  [type] [name[:component]]   # TUI when args missing
+skilltap find    [query]              # TUI when interactive, --json when not
+skilltap try     <type> <source>      # readonly preview
+skilltap adopt   [path]               # TUI when no path
+skilltap sync                         # reconcile manifest/lock/state
+skilltap doctor  [skill|plugin <path>]   # env check or per-artifact validation
+skilltap migrate
+skilltap create
+skilltap completions <shell>
+skilltap self-update
+skilltap info <name>                  # auto-detect type from state
+
+skilltap tap     add|remove|list|info|init
+skilltap config  get|set|edit|security
+```
+
+~25 endpoints (down from 51 in v2.1).
+
+### Read formats unchanged — clean break only on tool surface
+
+The whole ecosystem stays compatible:
+
+- `SKILL.md` (unchanged)
+- `tap.json` (unchanged)
+- `.claude-plugin/marketplace.json` (unchanged — still readable as a tap)
+- `.claude-plugin/plugin.json` (unchanged)
+- `.codex-plugin/plugin.json` (unchanged)
+- `.skilltap/<name>.toml` (unchanged)
+- `skilltap.toml` + `skilltap.lock` (unchanged in shape)
+
+Only the **tool surface** is a clean break. State files and config files get a `migrate` command. Skills and plugins published before the redesign keep working.
+
+### Why TS+Bun stays
+
+Considered Go (bubbletea/cobra) and Rust (ratatui). Both pay 2–3 months of porting tax (sigstore, npm registry, Zod schemas, security scanners) for marginal runtime gain. The skilltap pain is **CLI ergonomics**, not the core. Stay on Bun+TypeScript; swap the TUI layer to Ink for richer multi-screen flows; keep citty for the headless command tree.
+
+### See also
+
+- [SPEC.md — v2.0 Redesign](./SPEC.md#v20-redesign) — exact behavior, file formats, algorithms.
+- [ARCH.md — v2.0 Redesign Architecture](./ARCH.md#v20-redesign-architecture) — module changes.
+- [UX.md — v2.0 Redesign CLI](./UX.md#v20-redesign-cli) — command reference and flag combinations.
+- [ROADMAP.md — v2.0 Redesign Phases](./ROADMAP.md#v20-redesign-phases-3946) — phase plan (39–46).
+- [SECURITY.md — v2.0 Redesign](./SECURITY.md#v20-redesign-single-policy) — single security policy.
 
 ---
 
 ## v2.0 Direction: Simplification, Unification, Project Manifest
 
-> **Status note (post-cutover):** This section describes the **original v2.0 design intent**. Phase 31 shipped much of it — the project manifest (§1), the plugin/skill management upgrades (§2), the new helper commands (§6), the doctor v2 checks (§6), the `skilltap try` and `skilltap migrate` additions (§6), MCP-only install (§5), and the project manifest workflow are all live. **However, sections §3 (Drop "agent mode"), §4 (Simpler security), and parts of §7 (What's deprecated) were deferred.** Phase 31c-c-2 took simpler paths: the `--agent` flag and `SKILLTAP_AGENT=1` env var were added on top of the existing v0.x per-mode security and `[agent-mode]` config block, rather than replacing them. See [SPEC.md — v2.0 Security](./SPEC.md#v20-security), [v2.0 Configuration](./SPEC.md#v20-configuration), and [v2.0 Removed Features](./SPEC.md#v20-removed-features) for the actual shipped behavior. The original-intent text below is retained as the design rationale.
+> **Status note (superseded):** This section describes the **original v2.0 design intent** and the v2.0/v2.1 cutover that shipped. It is preserved as design rationale and a record of which pieces shipped. **Current direction is the [v2.0 Redesign](#v20-redesign-current-direction) above** — the shipped v2.0/v2.1 codebase is treated as a draft. The original-intent text below is retained for historical context.
+>
+> Phase 31 shipped much of the original v2.0 — the project manifest (§1), the plugin/skill management upgrades (§2), the new helper commands (§6), the doctor v2 checks (§6), the `skilltap try` and `skilltap migrate` additions (§6), MCP-only install (§5), and the project manifest workflow are all live. **However, sections §3 (Drop "agent mode"), §4 (Simpler security), and parts of §7 (What's deprecated) were deferred.** Phase 31c-c-2 took simpler paths: the `--agent` flag and `SKILLTAP_AGENT=1` env var were added on top of the existing v0.x per-mode security and `[agent-mode]` config block, rather than replacing them. The v2.0 Redesign above retires those compromises. See [SPEC.md — v2.0 Security](./SPEC.md#v20-security), [v2.0 Configuration](./SPEC.md#v20-configuration), and [v2.0 Removed Features](./SPEC.md#v20-removed-features) for the actual shipped behavior. The original-intent text below is retained as the design rationale.
 
 By v1.0, skilltap had grown three parallel concepts (skill, plugin, tap), two security modes (human, agent), four security presets, two manifest formats we read (Claude Code, Codex) plus two we publish (tap.json, marketplace.json), and an "agent mode" with its own scope and security blocks. It worked, but the surface was wide enough that a new user couldn't predict what `skilltap install foo` would do without reading the spec.
 

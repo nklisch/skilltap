@@ -2,6 +2,8 @@
 
 Dense CLI reference, flag combinations, prompt flows, and workflows.
 
+> **Status:** This file currently documents the **shipped v2.0/v2.1** CLI surface. The v2.0 Redesign (per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction)) replaces this surface; see [v2.0 Redesign CLI](#v20-redesign-cli) at the end of this file for the new tree. UX.md will be fully rewritten in Phase 46 to reflect only the redesigned surface.
+
 ## Command Tree
 
 ```
@@ -2449,4 +2451,129 @@ In `--agent` mode, bare `your-org/my-tools` errors:
 $ skilltap install your-org/my-tools --agent
 error: multiple plugins available in your-org/my-tools: frontend-tools, backend-tools
 hint: specify with your-org/my-tools:<name> or your-org/my-tools:*
+```
+
+---
+
+## v2.0 Redesign CLI
+
+> Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction). This section is the canonical CLI reference once the redesign ships. The sections above describe the v2.0/v2.1 draft surface and are superseded by everything below. UX.md will be cut down in Phase 46 — this section becomes the whole document.
+
+### Command Tree (final)
+
+```
+skilltap                                     # TUI dashboard (TTY only)
+skilltap status [--json]                     # headless dashboard
+
+skilltap install <type> <source> [flags]     # type: skill | plugin | mcp
+skilltap remove  <type> <name>   [flags]
+skilltap update  [type] [name]   [flags]    # bare = all; type = all of type
+skilltap toggle  [type] [name[:component]]   # TUI when args missing
+
+skilltap find    [query]         [flags]    # TUI when interactive
+skilltap try     <type> <source> [flags]
+skilltap adopt   [path]          [flags]    # TUI when no path
+skilltap sync                    [flags]
+skilltap doctor  [skill|plugin <path>] [flags]
+skilltap migrate
+skilltap create  [name]          [flags]
+skilltap completions <shell>     [flags]
+skilltap self-update             [flags]
+skilltap info    <name>          [--json]
+
+skilltap tap     add|remove|list|info|init
+skilltap config  get|set|edit|security
+```
+
+~25 endpoints (down from 51).
+
+### What's gone
+
+- `verify` (use `doctor skill <path>`)
+- `link` / `unlink` (use `adopt <path>`)
+- `enable` / `disable` (use `toggle` or TUI)
+- `skills` subcommand group (top-level operations)
+- `plugin` subcommand group (top-level + TUI)
+- `tap install` (use `install skill <name>`)
+- `config agent-mode` wizard
+- All silent aliases — old paths return errors with hints
+- `mcp:` URL prefix (use `install mcp <source>`)
+- `--agent` flag and `SKILLTAP_AGENT` env var
+
+### Flag inventory (top-level)
+
+Universal flags supported on most commands:
+
+- `--json` — machine output (auto when stdout is not TTY)
+- `--yes` / `-y` — auto-accept "do it" prompts
+- `--quiet` — suppress non-essential output
+- `--scope project|global` — explicit scope (default: project if in git repo, global otherwise)
+
+Install/update flags:
+
+- `--also <agent>` — repeatable; symlink into agent dirs
+- `--ref <ref>` — branch or tag
+- `--strict` — abort on any security warning
+- `--skip-scan` — skip security scanning
+- `--semantic` — force Layer 2 scan
+
+Adopt flags:
+
+- `--source <name>` — limit scan to one agent-plugin source (e.g., `claude-code`)
+- `--move` — move external skill into canonical dir (default: track-in-place)
+
+### Output modes
+
+| Mode | Triggered | Behavior |
+|------|-----------|----------|
+| TTY | stdout is a terminal, no `--json` | Colors, spinners, prompts. |
+| plain | stdout piped/redirected | Plain text. Prompts default-fail unless `--yes` or required flag set. |
+| JSON | `--json` flag (any TTY state) | Newline-delimited JSON events. |
+
+There is no `--agent` flag. There is no agent-specific output mode. Calling skilltap from a script or from an AI agent is the same as calling it interactively from a piped shell — TTY detection plus `--yes`/`--json` covers the use case.
+
+### Quick reference: common flows
+
+```bash
+# Install a skill
+skilltap install skill commit-helper                    # tap-resolved name
+skilltap install skill owner/repo                       # github
+skilltap install skill ./my-skill                       # local
+skilltap install skill --also claude-code commit-helper # also symlink to claude-code
+
+# Install a plugin
+skilltap install plugin owner/dev-toolkit
+skilltap install plugin owner/multi-plugin-repo:frontend  # specific plugin in multi-plugin repo
+
+# Install an MCP server
+skilltap install mcp npm:@modelcontextprotocol/server-postgres
+
+# Search and browse
+skilltap find                                            # opens TUI
+skilltap find database --json                            # headless
+
+# Toggle a plugin component
+skilltap toggle plugin dev-toolkit:test-generator
+skilltap toggle plugin dev-toolkit                       # opens TUI for components
+skilltap toggle                                          # opens full TUI
+
+# Adopt
+skilltap adopt                                           # TUI: scan all sources
+skilltap adopt ~/dev/my-skill                            # external path (replaces link)
+skilltap adopt --source claude-code                      # only Claude Code plugins
+
+# Doctor
+skilltap doctor                                          # env health
+skilltap doctor --fix                                    # auto-repair
+skilltap doctor skill ./my-skill                         # validate one skill (replaces verify)
+skilltap doctor plugin ./my-plugin
+
+# Update
+skilltap update                                          # everything
+skilltap update plugin                                   # all plugins
+skilltap update skill commit-helper                      # one skill
+
+# Sync (in a project with skilltap.toml)
+skilltap sync
+skilltap sync --apply
 ```

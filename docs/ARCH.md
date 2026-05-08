@@ -872,3 +872,100 @@ export const StateSchema = z.object({
 | Multi-plugin repos | `.skilltap/<name>.toml` per plugin | Single skilltap.toml with [[publish.plugins]] | Mirrors `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` shape; one file per plugin |
 | Migration | Explicit `migrate` command | Auto-migrate on first run | Migration touches multiple files; users should be intentional, especially when HTTP taps exist |
 | Telemetry | Unchanged from v1.0 | Drop entirely | User signal valuable; behavior already privacy-preserving; no churn needed |
+
+---
+
+## v2.0 Redesign Architecture
+
+> Second-pass redesign per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction). Supersedes the architecture deltas above where they conflict. The v0.1–v2.0 foundation remains; this section describes deletions, additions, and reshapes for the redesign.
+
+### Deletions
+
+Modules removed entirely:
+
+- `packages/cli/src/ui/agent-out.ts` — `agentSuccess`/`agentError`/`agentSecurityBlock` and `exitWithError(agentMode, ...)` all gone. Output goes through the new `Output` interface (Phase 40).
+- `packages/core/src/agent-env.ts` — `isAgentEnv()` deleted. The `SKILLTAP_AGENT` env var contract is retired.
+- `packages/cli/src/commands/config/agent-mode.ts` — wizard deleted. No persistent agent-mode toggle anywhere.
+- `packages/cli/src/commands/skills/` — entire subcommand group folded into top-level. `link.ts` / `unlink.ts` deleted (replaced by extended `adopt`). `info.ts` / `remove.ts` move to top-level commands. `move.ts` becomes a flag on `adopt`.
+- `packages/cli/src/commands/plugin/` — `info`/`toggle`/`remove` accessible as top-level commands or via TUI screens. Subcommand group deleted.
+- `packages/cli/src/commands/tap/install.ts` — duplicate of `install skill <name>` when `<name>` resolves through a tap. Deleted.
+
+State-store fallbacks deleted:
+
+- `loadInstalled()` no longer falls back to `installed.json`.
+- `loadPlugins()` no longer falls back to `plugins.json`.
+- `state.json` is the only canonical source. Migration is the explicit responsibility of `skilltap migrate`.
+
+Schema fields removed:
+
+- `AgentModeSchema` (`[agent-mode]` block).
+- `[security.agent]` and `[security.human]` blocks → single `[security]`.
+- Security presets (`none`/`relaxed`/`standard`/`strict`).
+- `[[security.overrides]]` (kind/match/preset).
+
+### Reshapes
+
+**`packages/core/src/policy.ts`** — `composePolicy(config, flags)` returns a single `EffectivePolicy`. No agent-mode branch. No per-mode security selection. The function shrinks substantially.
+
+**`packages/cli/src/commands/install.ts`** — collapses `runAgentMode` + `runInteractiveMode` into one `runInstall(args, output)`. Output mode (TTY/plain/JSON) is decided once at command entry; the orchestration body is identical regardless. Callbacks reduce from ~15 to ~6 — the surplus existed only to express agent-mode auto-fail semantics, which now live in the output layer.
+
+**`packages/cli/src/commands/update.ts`** — same collapse as install. Now also accepts `[type]` and `[name]` positional args (`update skill <name>` / `update plugin <name>` / `update mcp <name>`). Bare `update` updates everything.
+
+**`packages/cli/src/commands/toggle.ts`** — accepts `[type] [name[:component]]`. Opens TUI when args missing.
+
+**`packages/cli/src/index.ts`** — subCommands shrinks from 35+ entries to ~16. Silent aliases (`list`, bare `remove`/`info`/`link`/`unlink`) removed. Old paths surface as clear errors with hints.
+
+### Additions
+
+```
+packages/cli/src/
+├── tui/                              # NEW — Ink-based TUI layer
+│   ├── index.ts                      # mountTui(initialScreen) — root component, screen router
+│   ├── screens/
+│   │   ├── dashboard/                # Bare `skilltap` — tabs: Installed, Taps, Updates, Drift
+│   │   ├── find/                     # Type-ahead search across taps + registries
+│   │   ├── toggle/                   # Pick type → name → components
+│   │   ├── adopt/                    # Unmanaged skills + Claude Code plugins
+│   │   ├── install/                  # Type picker → source picker → confirm
+│   │   └── plugin-manager/           # Plugin detail + component toggles
+│   ├── state/                        # Pure reducers per screen (testable with bun:test)
+│   ├── components/                   # Shared Ink components (List, Detail, Tabs, KeyHints)
+│   └── keys.ts                       # Key-binding registry
+└── output/                           # NEW — output mode abstraction
+    ├── tty.ts                        # Rich output for TTY (colors, spinners, clack-style)
+    ├── plain.ts                      # Plain text for non-TTY
+    └── json.ts                       # Structured JSON output (per-command schemas)
+
+packages/core/src/
+├── agent-plugins/                    # NEW — generic agent-plugin discovery framework
+│   ├── types.ts                      # AgentPluginScanner interface
+│   ├── claude-code.ts                # Reads ~/.claude/plugins/installed_plugins.json
+│   ├── codex.ts                      # Stub (no marketplace today; pluggable for future)
+│   └── index.ts                      # registerScanner(), scanAll()
+├── plugin/capture.ts                 # NEW — plugin capture (per design/plugin-capture.md)
+│   # canonicalizeSourceUrl(), detectCaptureMatches(), applyCapture()
+└── output/                           # NEW — Output interface used by both cli/ and tui/
+    └── types.ts                      # Output interface, OutputMode, JsonShapes
+```
+
+### Architecture risks
+
+- **Ink stability under Bun** — Ink targets Node.js. Bun is mostly compatible but has had quirks with raw-mode terminal handling and signal cleanup. Mitigation: PTY-based smoke tests on every supported platform; fall back to clack-style top-down prompts if Ink misbehaves on a specific screen.
+- **Claude Code plugin format drift** — `~/.claude/plugins/installed_plugins.json` is observable but undocumented. Mitigation: Zod parser uses `passthrough()` for unknown fields; doctor warns on unrecognized schema; graceful no-op when format diverges (don't crash, surface in doctor instead).
+- **TUI testability** — multi-screen UI is harder to test than top-down prompts. Mitigation: state machine per screen lives in pure reducers (testable with bun:test); Ink components only render. PTY snapshot tests catch regressions in render output.
+- **Output mode discipline** — risk of regressions where a developer writes directly to `process.stdout` instead of through `Output`. Mitigation: lint rule (or simple grep in CI) blocking direct stdout/stderr writes outside `cli/output/`.
+
+### Decision Log Additions (v2.0 Redesign)
+
+| Decision | Choice | Alternatives Considered | Rationale |
+|----------|--------|------------------------|-----------|
+| Agent-mode removal | Single runtime, TTY/JSON drives output | Keep `--agent` flag, keep config block | Agent-mode added two parallel runtimes for one concern (output style). Collapsing it removes ~330 lines of duplicated orchestration in install/update alone. |
+| Install disambiguation | Required subcommand (`install skill\|plugin\|mcp <source>`) | Auto-detect, hybrid, `--as` flag | User-driven decision. Explicit type means no auto-detect heuristics, no `mcp:` URL prefix, no prompt-on-ambiguity. Symmetric with `remove`/`update`/`toggle`. |
+| TUI library | Ink (React-for-terminals) | Custom @clack orchestrator, full TUI à la lazygit | Multi-screen flows (dashboard, find, toggle, adopt) need persistent state; clack is top-down only. lazygit-style overshoots for a CLI used a few times per project. |
+| Language migration | Stay TS+Bun | Migrate to Go/Rust | Skilltap pain is CLI ergonomics, not core. Core has substantial logic (sigstore, npm registry, security scanners, Zod schemas) that costs months to port for marginal runtime gain. |
+| `verify` retirement | Fold into `doctor` | Keep separate, fold into `create` | Both verify and doctor are check-things commands. Single verb (`doctor`) with arg-based scope: env check (no args) vs per-artifact (`doctor skill <path>`). Reduces top-level surface. |
+| `link`/`unlink` retirement | Fold into `adopt` | Keep separate | `link <path>` and `adopt --track-in-place` did the same thing for different inputs. Unifying to `adopt [path]` removes the duplicate verb. |
+| State-store fallbacks | Removed | Keep one more cycle | Pre-v2.0-redesign "no users" assumption. `migrate` command is the explicit upgrade path; no transparent fallback. |
+| Output abstraction | New `Output` interface | Keep mixed `successLine`/`agentSuccess` | Output mode (TTY/plain/JSON) is one decision; routing it through an interface makes mode-specific behavior testable and prevents per-command output drift. |
+| Adoption framework | Pluggable `AgentPluginScanner` | Hardcoded Claude Code path | Codex may ship a marketplace eventually; future agents will have plugin systems. Pluggable scanner avoids retrofit. |
+| Bare `skilltap` | TUI dashboard (TTY only) | Print status text, error always | Matches lazygit/k9s conventions. Headless callers use `skilltap status` explicitly. Bare command is humans-only. |

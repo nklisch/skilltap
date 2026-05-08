@@ -283,3 +283,61 @@ Per `core/src/schemas/config.ts SecurityConfigSchema`:
 - `[[security.overrides]]` is preserved (no schema change).
 
 See [SPEC.md — v2.0 Migrate Command](./SPEC.md#v20-migrate-command) for the full migration spec.
+
+---
+
+## v2.0 Redesign — Single Policy
+
+> Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction). This section is canonical. The "v2.0 Simplification (original design)" above describes intent that was deferred; the redesign finally retires the deferred items.
+
+### Single `[security]` block
+
+The redesign collapses security to one block. No per-mode split, no presets, no overrides records.
+
+```toml
+[security]
+scan = "static"         # "semantic" | "static" | "none". Default: "static".
+on_warn = "prompt"      # "prompt" | "fail" | "install". Default: "prompt".
+trust = []              # glob patterns of tap names or source URLs to skip scan.
+```
+
+### Removed
+
+- `[security.human]` / `[security.agent]` per-mode split.
+- `[[security.overrides]]` (replaced by `trust = []`).
+- Security presets (`none` / `relaxed` / `standard` / `strict`).
+- `require_scan` key (removed; if you want scanning required, don't set `scan = "none"`).
+- `on_warn = "allow"` (renamed to `install` for clarity — "scan and proceed regardless").
+
+### Same policy for everyone
+
+A core simplification: agents and humans get the **same security policy**. The redesign removes the agent-mode runtime entirely (per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction)). What changes is output style (TTY/plain/JSON), not security rules.
+
+In practice:
+
+- A non-TTY caller (script, CI, AI agent invocation) hits the same scan with the same `on_warn` setting.
+- If `on_warn = "prompt"` and stdout isn't a TTY, the install fails with a clear error: "scan returned warnings; cannot prompt in non-interactive mode. Pass `--yes` to install anyway, or `--strict` to fail loudly."
+- Callers that want unattended installs through warnings set `on_warn = "install"` in config or pass `--yes` per-call. No `--agent`, no env var.
+
+### Trust list (replaces overrides)
+
+```toml
+[security]
+trust = [
+  "my-company-tap",                   # tap name
+  "github.com/my-org/*",              # glob over source URL
+  "npm:@my-scope/*",                  # glob over npm packages
+]
+```
+
+Sources matching any glob skip scanning entirely. Simpler than the kind/match/preset triple from `[[security.overrides]]`; the migration command translates overrides to globs where possible and warns where not.
+
+### Migration
+
+`skilltap migrate` (per [SPEC.md — v2.0 Redesign — Migration](./SPEC.md#v20-redesign--migration)):
+
+- `[security.human]` + `[security.agent]` → `[security]` (pick stricter of the two; warn if mismatch).
+- Security presets (`preset = "..."`) → resolve to explicit `scan`/`on_warn` values per the preset table; the preset name itself is dropped.
+- `[[security.overrides]]` records → translate to `trust = [...]` glob entries where the override is a `kind = "tap"` or simple URL match. More complex overrides (preset = "strict" with kind = "source") fail with a clear error listing the unmigrated entries.
+- `require_scan = true` → if `scan = "none"`, warn and switch to `scan = "static"`. Otherwise no-op.
+- `on_warn = "allow"` → renamed to `install`.

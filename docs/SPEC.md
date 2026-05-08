@@ -3298,3 +3298,269 @@ The original v2.0 design called for several additional removals that did not shi
 - `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`, `tap.json`, `marketplace.json` formats continue to be read as plugin/tap inputs.
 - v1.0 state files are detected on startup and the user is directed to `skilltap migrate`.
 - `--also`, `--project`, `--global`, `--yes`, `--strict`, `--skip-scan`, `--semantic` flags retain v1.0 semantics where applicable.
+
+---
+
+## v2.0 Redesign
+
+> Second-pass redesign of the v2.x surface. Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction). Sections above titled "v2.0 …" describe the **shipped v2.0/v2.1 draft**. Where this redesign section conflicts with them, this section wins; the older sections are preserved as design rationale.
+
+### v2.0 Redesign — Command Surface
+
+The complete CLI tree:
+
+```
+skilltap                                     # opens TUI dashboard (TTY only)
+skilltap status [--json]                     # headless dashboard
+
+skilltap install <type> <source> [flags]     # type: skill | plugin | mcp
+skilltap remove  <type> <name>   [flags]
+skilltap update  [type] [name]   [flags]
+skilltap toggle  [type] [name[:component]]   # TUI when args missing
+
+skilltap find    [query]         [flags]     # TUI when interactive
+skilltap try     <type> <source> [flags]
+skilltap adopt   [path]          [flags]     # TUI when no path
+skilltap sync                    [flags]
+skilltap doctor  [skill|plugin <path>] [flags]
+skilltap migrate
+skilltap create  [name]          [flags]
+skilltap completions <shell>     [flags]
+skilltap self-update             [flags]
+skilltap info    <name>          [--json]
+
+skilltap tap     add|remove|list|info|init
+skilltap config  get|set|edit|security
+```
+
+**Removed commands** (relative to v2.1):
+
+- `verify` — folded into `doctor` (`doctor skill <path>` and `doctor plugin <path>`).
+- `link` / `unlink` — folded into `adopt` (`adopt <path>` for external paths).
+- `enable` / `disable` — accessed via `toggle` or TUI plugin manager.
+- `skills` subcommand group (`skills info|adopt|move|remove|link|unlink`) — collapsed into top-level operations + flags.
+- `plugin` subcommand group (`plugin info|toggle|remove`) — accessible as top-level commands or TUI screens.
+- `tap install` — `install skill <name>` covers tap-resolved names directly.
+- `config agent-mode` — wizard removed.
+- All silent aliases (`skilltap list`, `skilltap remove` without type, etc.) — old paths return clear errors with hints.
+- `mcp:` URL prefix — type is explicit via subcommand.
+- `--agent` flag and `SKILLTAP_AGENT` env var — agent-mode is gone.
+
+### v2.0 Redesign — Install Behavior
+
+Install accepts a required type subcommand. No auto-detect, no prompt-on-ambiguity.
+
+```bash
+skilltap install skill   <source> [flags]
+skilltap install plugin  <source> [flags]
+skilltap install mcp     <source> [flags]
+```
+
+**Source forms** (all types):
+
+- Tap-resolved name: `commit-helper` (resolves through configured taps).
+- GitHub shorthand: `owner/repo` or `owner/repo/path`.
+- Git URL: `https://...`, `git@...`, `ssh://...`.
+- npm package: `npm:@scope/name[@version]`.
+- Local path: `./`, `../`, `/abs`, `~/`.
+
+The same source forms work for all three types — the type subcommand decides what skilltap looks for in the source. `install skill <source>` requires a SKILL.md (or a single-skill plugin manifest); `install plugin <source>` requires a plugin manifest; `install mcp <source>` requires either an MCP-only npm package or an explicit MCP server config.
+
+**Behavior when source doesn't match type:**
+
+- `install skill` on a plugin repo → error with hint to use `install plugin`.
+- `install plugin` on a skill-only repo → error with hint to use `install skill`.
+- `install mcp` on a non-MCP package → error.
+
+**Flag inventory (install):**
+
+- `--scope project|global` — installation scope. Smart default: project if inside a git repo, global otherwise.
+- `--also <agent>` — repeatable. Symlink into agent-specific dirs (`.claude/skills/`, `.cursor/skills/`, etc.).
+- `--ref <ref>` — branch or tag.
+- `--yes` / `-y` — auto-accept "do it" prompts.
+- `--strict` — abort on any security warning (exit 1).
+- `--skip-scan` — skip security scanning.
+- `--semantic` — force Layer 2 semantic scan.
+- `--json` — machine output (also auto-selected when stdout is not a TTY).
+- `--quiet` — suppress non-essential output.
+
+**No flags exist for:** type override (replaced by subcommand), agent mode toggle (removed), or "auto-detect anyway" (no auto-detect path).
+
+### v2.0 Redesign — Remove Behavior
+
+```bash
+skilltap remove skill   <name> [--scope project|global] [--yes]
+skilltap remove plugin  <name> [--scope project|global] [--yes]
+skilltap remove mcp     <name> [--scope project|global] [--yes]
+```
+
+`remove plugin <name>` removes the plugin record and all components (skills, MCP injections, agent definitions). Calling `remove skill <name>` on a skill that's a plugin component errors with hint to `remove plugin <name>` (or use `toggle` to disable a single component).
+
+### v2.0 Redesign — Update Behavior
+
+```bash
+skilltap update                              # update all skills, plugins, mcp
+skilltap update skill                        # update all skills
+skilltap update plugin                       # update all plugins
+skilltap update mcp                          # update all standalone mcp
+skilltap update skill <name>                 # update one
+skilltap update plugin <name>
+skilltap update mcp <name>
+```
+
+Flags: `--yes`, `--strict`, `--semantic`, `--skip-scan`, `--json`, `--quiet`. Behavior matches v2.1 update otherwise (fetch → diff → scan → confirm → pull, with diff/confirm prompts in TTY mode).
+
+### v2.0 Redesign — Toggle Behavior
+
+```bash
+skilltap toggle                              # opens TUI: pick type → name → component(s)
+skilltap toggle plugin <name>                # opens TUI scoped to plugin's components
+skilltap toggle plugin <name>:<component>    # toggle one component (no TUI)
+skilltap toggle skill <name>                 # toggle whole skill
+skilltap toggle mcp <name>                   # toggle whole mcp
+```
+
+Only `plugin` accepts the `:component` suffix.
+
+### v2.0 Redesign — Adopt Behavior
+
+```bash
+skilltap adopt                               # TUI: scan all unmanaged sources
+skilltap adopt <path>                        # adopt skill at external path (track-in-place)
+skilltap adopt <path> --move                 # adopt and move to canonical agent dir
+skilltap adopt --source claude-code          # TUI scoped to one source
+```
+
+When invoked without a path, scans all registered `AgentPluginScanner`s (today: claude-code) plus loose skills in agent dirs. Multi-select TUI; per-item choice of track-in-place vs move.
+
+When invoked with a path, defaults to track-in-place (matches the old `link` semantics): symlink the external dir into the canonical agent dir, record as `scope: "linked"` with `path: <external>`. With `--move`, moves the dir into the canonical location and symlinks back.
+
+### v2.0 Redesign — Doctor Behavior
+
+```bash
+skilltap doctor                              # environment health check (existing)
+skilltap doctor --fix                        # auto-repair safe issues (existing)
+skilltap doctor skill <path>                 # validate one skill (replaces `verify <path>`)
+skilltap doctor plugin <path>                # validate one plugin
+```
+
+Per-artifact mode runs the publishability checks `verify` did: SKILL.md exists, frontmatter valid, name matches dir, static security scan, size limit. For plugins: manifest schema valid, all referenced skills/MCPs/agents resolve, name matches dir.
+
+### v2.0 Redesign — TUI Dashboard
+
+Bare `skilltap` (TTY only) opens an Ink-based dashboard. Tabs:
+
+- **Installed** — skills, plugins, mcp servers (filterable by scope).
+- **Taps** — configured taps with reachability indicator.
+- **Updates** — available updates per artifact.
+- **Drift** — manifest vs lockfile vs state divergence.
+
+Key bindings: arrow keys navigate; `i` install (opens type picker); `r` remove; `t` toggle; `u` update; `f` find; `a` adopt; `q`/`Esc` exit.
+
+When invoked without a TTY, errors with hint: `skilltap requires a TTY for the dashboard. Run 'skilltap status' for headless output.`
+
+### v2.0 Redesign — Configuration
+
+The `[security]` block collapses to three keys:
+
+```toml
+[security]
+scan = "static"           # "semantic" | "static" | "none". Default: "static".
+on_warn = "prompt"        # "prompt" | "fail" | "install". Default: "prompt".
+trust = []                # glob patterns matching tap names or source URLs to skip scanning.
+```
+
+**Removed config blocks/keys:**
+
+- `[agent-mode]` (entire block).
+- `[security.human]` and `[security.agent]` (entire per-mode split).
+- Security presets (`preset = "..."` keys).
+- `[[security.overrides]]` (entire array).
+- `agent.default` / `agent.block` (proposed in v2.0 draft, never built).
+
+**Other config keys unchanged:** `[defaults]`, `[updates]`, `[telemetry]`, `[[taps]]`, `builtin_tap`, `verbose`, `default_git_host`.
+
+### v2.0 Redesign — State Files
+
+`state.json` is the only canonical state. Schema unchanged from v2.1 (`{ version: 2, skills, plugins, mcpServers }`).
+
+**Removed:**
+
+- `loadInstalled()` no longer falls back to `installed.json`.
+- `loadPlugins()` no longer falls back to `plugins.json`.
+
+The legacy schemas (`InstalledJsonSchema`, `PluginsJsonSchema`) remain in `core/src/schemas/v1/` only for use by `migrate`. Production code paths never read them.
+
+### v2.0 Redesign — Output Modes
+
+The CLI picks one of three output modes at command entry:
+
+| Mode | Triggered by | Behavior |
+|------|--------------|----------|
+| `tty` | stdout is a TTY and `--json` not set | Colors, spinners, clack-style prompts. |
+| `plain` | stdout is not a TTY (piped, redirected) | Plain text, no colors, no spinners. Prompts default-fail unless `--yes` or required flag is set. |
+| `json` | `--json` flag set (any TTY state) | Newline-delimited JSON events per command. Schema documented per-command. |
+
+The mode is decided once and threaded through the orchestration. Core functions never decide output mode themselves; they receive an `Output` impl from the CLI layer.
+
+### v2.0 Redesign — Plugin Capture
+
+When `install plugin <source>` resolves a plugin manifest, skilltap detects component collisions with already-installed standalones and offers to capture them. Algorithm:
+
+1. **Canonicalize** all sources: `https://github.com/x/y`, `git@github.com:x/y`, `https://github.com/x/y.git` all map to a single canonical form.
+2. **Detect matches** between plugin components and existing `state.skills[]` / `state.mcpServers[]` records.
+3. **Partition** matches into:
+   - **Same-source** — standalone and plugin both came from the same canonical source. Auto-confirm in `--yes` or TTY-default prompt.
+   - **Cross-source** — same name, different source. Default: error in non-interactive mode, prompt in TTY.
+4. **Apply atomically**: remove standalone records, prune agent MCP keys with the standalone's namespace, remove old symlinks, clean manifest entries. If any step fails, roll back to pre-capture state.
+
+Detailed algorithm in [docs/design/plugin-capture.md](./design/plugin-capture.md).
+
+### v2.0 Redesign — Claude Code Plugin Adoption
+
+`AgentPluginScanner` interface in `packages/core/src/agent-plugins/types.ts`:
+
+```typescript
+interface AgentPluginScanner {
+  name: string;                                       // "claude-code", "codex", ...
+  detect(): Promise<boolean>;                         // is this agent's plugin system present?
+  scan(): Promise<Result<DiscoveredPlugin[], ...>>;   // enumerate installed plugins
+}
+```
+
+The Claude Code scanner reads `~/.claude/plugins/installed_plugins.json` and `~/.claude/plugins/known_marketplaces.json`. Each entry produces a `DiscoveredPlugin` record with: name, source (marketplace + plugin slug), version, install path (in Claude Code's cache), and a list of components (skills, MCP servers, agent defs).
+
+`adopt --source claude-code` (or interactive picker) lets the user select which Claude Code plugins to bring into skilltap state. Adoption creates `state.plugins[]` entries that point at Claude Code's cache directory; skilltap doesn't move or copy the plugin files. Removing the adopted plugin from skilltap does not remove it from Claude Code (unless the user explicitly opts in via `--also-uninstall` — TBD in implementation).
+
+Codex stub (`agent-plugins/codex.ts`) returns `detect() → false` today. Pluggable for future when/if OpenAI ships a marketplace.
+
+### v2.0 Redesign — Migration
+
+`skilltap migrate` handles all prior versions. Detection markers:
+
+- `[agent-mode]` block in config → translate to nothing (block removed).
+- `[security.human]` / `[security.agent]` blocks → collapse to `[security]` (warn if mismatch; pick stricter or prompt).
+- `[[security.overrides]]` → translate to `trust = [...]` allowlist or fail with explicit list (less expressive).
+- Security presets (`preset = "..."`) → resolve to explicit `scan`/`on_warn` values.
+- `installed.json` / `plugins.json` → consolidate into `state.json`.
+- HTTP taps → error, list affected taps for manual handling.
+
+After translation, runs `doctor` to verify. Originals renamed to `*.bak` per file.
+
+### v2.0 Redesign — Removed Behaviors and Why
+
+| Removed | Replaced by | Why |
+|---------|-------------|-----|
+| `--agent` flag | TTY detection + `--json` | One concern (output style) was leaking into security policy and runtime branching. TTY/JSON is sufficient. |
+| `SKILLTAP_AGENT=1` env | TTY detection | Same reason. |
+| `[agent-mode]` config | (deleted) | Same reason. Persistent agent-mode-as-default is solved by piping output (non-TTY) and `--yes`. |
+| `[security.human]`/`[security.agent]` | Single `[security]` | Two policies for one concern; agents and humans deserve the same security treatment. |
+| Security presets | Explicit `scan`/`on_warn` | Hidden defaults are confusing; explicit is clearer and shorter. |
+| `[[security.overrides]]` | `security.trust = [...]` | Glob-based allowlist is enough for the use case; full overrides were over-engineered. |
+| Auto-detect install type | Required type subcommand | Auto-detect required prompt-on-ambiguity and an `mcp:` URL prefix. Required type is shorter overall. |
+| `mcp:` URL prefix | `install mcp <source>` | Redundant when type is explicit. |
+| `verify` command | `doctor skill\|plugin <path>` | Two check verbs for one concern. |
+| `link`/`unlink` | `adopt [path]` | `link` and `adopt --track-in-place` did the same thing; merging removes the duplicate. |
+| `enable`/`disable` | `toggle` + TUI | Three verbs for one concern. |
+| Silent aliases | (errors with hint) | Multiple paths to the same operation make the surface harder to learn. Errors point at the canonical path. |
+| Legacy state fallbacks | `migrate` | Transparent fallback hid migration cost; explicit `migrate` is clearer. |
