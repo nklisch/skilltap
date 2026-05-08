@@ -1,7 +1,7 @@
 import { loadConfig, saveConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { isTelemetryEnabled } from "../../telemetry";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 
 const status = defineCommand({
   meta: {
@@ -9,7 +9,7 @@ const status = defineCommand({
     description: "Show telemetry status",
   },
   async run() {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     const configResult = await loadConfig();
     if (!configResult.ok) {
@@ -49,7 +49,7 @@ const enable = defineCommand({
     description: "Opt in to anonymous telemetry",
   },
   async run() {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     const configResult = await loadConfig();
     if (!configResult.ok) {
@@ -85,7 +85,7 @@ const disable = defineCommand({
     description: "Opt out of telemetry",
   },
   async run() {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     const configResult = await loadConfig();
     if (!configResult.ok) {

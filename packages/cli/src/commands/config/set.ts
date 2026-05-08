@@ -7,7 +7,7 @@ import {
   validateSetKey,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -27,7 +27,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
     const key = args.key as string;
 
     // Extract values from process.argv for variadic support.

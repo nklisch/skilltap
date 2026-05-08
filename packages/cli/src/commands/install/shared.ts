@@ -18,7 +18,7 @@ import {
   saveConfig,
 } from "@skilltap/core";
 import type { Output, Progress } from "../../output";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 import {
   createInstallCallbacks,
   printCaptureConflict,
@@ -63,10 +63,7 @@ export type InstallContext = {
 export async function setupInstallContext(
   args: SharedInstallArgs,
 ): Promise<InstallContext> {
-  const out = createOutput({
-    json: args.json ?? false,
-    quiet: args.quiet ?? false,
-  });
+  const out = setupOutput(args);
   const { config, policy } = await loadPolicyOrExit({
     strict: args.strict,
     noStrict: args["no-strict"],

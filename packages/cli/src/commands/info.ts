@@ -13,7 +13,7 @@ import {
 } from "@skilltap/core";
 import type { PluginRecord, SkillRecord, StoredComponent } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
 import { formatTrustLabel } from "../ui/trust";
@@ -42,7 +42,7 @@ export const infoCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const name = args.name as string;
     const projectRoot = await tryFindProjectRoot();
 

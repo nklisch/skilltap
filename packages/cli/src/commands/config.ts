@@ -14,7 +14,7 @@ import {
   footerMultiselect as multiselect,
   footerSelect as select,
 } from "../ui/footer";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -38,7 +38,7 @@ export default defineCommand({
   async run({ args }) {
     if ((args._ as string[])?.length > 0) return;
 
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     if (!process.stdin.isTTY) {
       out.error("'skilltap config' must be run interactively.");

@@ -18,7 +18,7 @@ import {
   footerSelect as select,
   footerText as text,
 } from "../../ui/footer";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../../ui/prompts";
 
 // ─── Non-interactive helpers ───────────────────────────────────────────────
@@ -446,7 +446,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     if (isNonInteractive(args)) {
       await runNonInteractive(out, args);

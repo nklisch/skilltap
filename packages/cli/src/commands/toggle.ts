@@ -10,7 +10,7 @@ import {
   toggleInstalledComponent,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
 import { componentLabel, loadPluginByName } from "../ui/plugin-format";
 import { tryFindProjectRoot } from "../ui/resolve";
@@ -42,7 +42,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const typeArg = args.type as string | undefined;
     const target = args.target as string | undefined;
 

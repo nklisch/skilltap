@@ -1,7 +1,7 @@
 import { confirm } from "@clack/prompts";
 import { loadPlugins, removeInstalledPlugin } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 import { ansi } from "../../ui/format";
 import { componentSummary } from "../../ui/plugin-format";
 import { tryFindProjectRoot } from "../../ui/resolve";
@@ -30,7 +30,7 @@ export const pluginRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();

@@ -19,7 +19,7 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import {
   ansi,
   formatInstallCount,
@@ -79,7 +79,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     // Combine the first positional with any extra words from args._
     // so "skilltap find git hooks" works without quoting
     const rest = (args as Record<string, unknown>)._ as string[] | undefined;
@@ -307,7 +307,7 @@ async function runInteractiveSearch(
           plugin: skill.plugin || undefined,
         }));
       }
-      const { filtered } = await search(query, local, config, createOutput({ json: false, quiet: true }));
+      const { filtered } = await search(query, local, config, setupOutput({ json: false, quiet: true }));
       return filtered;
     },
     selector: (entry) => `${entry.name} ${entry.description}`,
@@ -354,7 +354,7 @@ async function installChosen(
   chosen: SearchEntry,
   config: Config,
 ): Promise<void> {
-  const out = createOutput({ json: false, quiet: false });
+  const out = setupOutput({ json: false, quiet: false });
   const policyResult = composePolicy(config, {});
   if (!policyResult.ok) throw new Error(policyResult.error.message);
   const policy = policyResult.value;

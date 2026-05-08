@@ -8,7 +8,7 @@ import {
   TEMPLATE_NAMES,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { footerSelect as select, footerText as text } from "../ui/footer";
 import { ansi } from "../ui/format";
 
@@ -113,7 +113,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
     const author = await getGitAuthor();
 
     // Non-interactive mode: name and template both provided

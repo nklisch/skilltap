@@ -6,7 +6,7 @@ import {
   removeSkill,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 import { sendEvent, telemetryBase } from "../../telemetry";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
@@ -46,7 +46,7 @@ export const skillRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const { config, policy } = await loadPolicyOrExit({
       yes: args.yes,
       project: args.project,

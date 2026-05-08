@@ -7,7 +7,7 @@ import {
   VERSION,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
 
 export default defineCommand({
@@ -24,7 +24,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
     const force = args.force as boolean;
 
     p.intro(`${ansi.bold("skilltap self-update")}`);

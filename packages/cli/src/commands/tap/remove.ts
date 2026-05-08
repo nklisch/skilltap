@@ -2,7 +2,7 @@ import { cancel, isCancel } from "@clack/prompts";
 import { removeTap } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { footerConfirm as confirm } from "../../ui/footer";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -23,7 +23,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     if (!args.yes) {
       const confirmed = await confirm({

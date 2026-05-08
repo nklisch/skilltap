@@ -1,6 +1,6 @@
 import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { parseAlsoFlag, tryFindProjectRoot } from "../ui/resolve";
 
 export const moveCommand = defineCommand({
@@ -27,7 +27,7 @@ export const moveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
     if (!args.global && !args.project) {

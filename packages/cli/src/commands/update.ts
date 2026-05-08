@@ -13,7 +13,7 @@ import {
   writeSkillUpdateCache,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { sendEvent, telemetryBase } from "../telemetry";
 import { footerConfirm as confirm } from "../ui/footer";
 import {
@@ -95,7 +95,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: args.quiet ?? false });
+    const out = setupOutput(args);
 
     // Validate type if provided — catch "update bogus" early
     const typeArg = args.type as string | undefined;

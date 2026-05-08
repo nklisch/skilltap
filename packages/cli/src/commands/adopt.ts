@@ -8,7 +8,7 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { isAbsolute } from "node:path";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { parseAlsoFlag, resolveScope, tryFindProjectRoot } from "../ui/resolve";
 
 export const adoptCommand = defineCommand({
@@ -63,7 +63,7 @@ export const adoptCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json });
+    const out = setupOutput(args);
 
     if (!args.target) {
       // Picker mode (Phase 44 will replace with Ink TUI).

@@ -1,6 +1,6 @@
 import { findProjectRoot, installMcpOnly } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { parseAlsoFlag } from "../../ui/resolve";
 
@@ -45,7 +45,7 @@ export const mcpCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: args.quiet });
+    const out = setupOutput(args);
     const { config, policy } = await loadPolicyOrExit({
       yes: args.yes,
       project: args.project,

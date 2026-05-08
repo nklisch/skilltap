@@ -4,7 +4,7 @@ import type { Output } from "@skilltap/core";
 import { scan, validateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -29,7 +29,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const useJson = args.json as boolean;
 
     if (args.all) {

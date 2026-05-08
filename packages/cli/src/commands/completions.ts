@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { defineCommand } from "citty";
 import type { Shell } from "../completions/generate";
 import { generateCompletions } from "../completions/generate";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 
 async function patchZshrc(home: string): Promise<string> {
   const zshrcPath = join(home, ".zshrc");
@@ -43,7 +43,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
     const shell = args.shell as string;
 
     if (shell !== "bash" && shell !== "zsh" && shell !== "fish") {

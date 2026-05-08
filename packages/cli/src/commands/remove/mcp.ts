@@ -1,6 +1,6 @@
 import { removeMcpInstall } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { tryFindProjectRoot } from "../../ui/resolve";
 
@@ -39,7 +39,7 @@ export const mcpRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const { policy } = await loadPolicyOrExit({
       yes: args.yes,
       project: args.project,

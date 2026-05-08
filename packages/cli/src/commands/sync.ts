@@ -11,7 +11,7 @@ import {
   type SyncApplyResult,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../output";
+import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
 
 export default defineCommand({
@@ -37,7 +37,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
     const useJson = args.json as boolean;
     const apply = args.apply as boolean;
     const strict = args.strict as boolean;

@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { getConfigDir, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 
 function resolveEditor(): string {
   return process.env.VISUAL || process.env.EDITOR || "nano";
@@ -13,7 +13,7 @@ export default defineCommand({
     description: "Open config.toml in your editor",
   },
   async run() {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
 
     if (!process.stdin.isTTY) {
       out.error("'skilltap config edit' must be run interactively.");

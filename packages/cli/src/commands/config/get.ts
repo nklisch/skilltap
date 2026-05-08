@@ -1,7 +1,7 @@
 import type { Output } from "@skilltap/core";
 import { formatConfigValue, getConfigValue, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -21,7 +21,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: args.json, quiet: false });
+    const out = setupOutput(args);
 
     const configResult = await loadConfig();
     if (!configResult.ok) {

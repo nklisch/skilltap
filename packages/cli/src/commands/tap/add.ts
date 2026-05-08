@@ -1,7 +1,7 @@
 import { intro, outro } from "@clack/prompts";
 import { addTap, loadConfig, parseGitHubTapShorthand } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { createOutput } from "../../output";
+import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -21,7 +21,7 @@ export default defineCommand({
     },
   },
   async run({ args }) {
-    const out = createOutput({ json: false, quiet: false });
+    const out = setupOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
     let tapName: string;
