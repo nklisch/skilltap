@@ -66,11 +66,11 @@ describe("linkSkill — conflict", () => {
   test("returns error when skill is already installed", async () => {
     const dir = await makeSkillDir();
 
-    // Pre-populate installed.json with the same skill name
+    // Pre-populate state.json with the same skill name
     await Bun.write(
-      join(configDir, "skilltap", "installed.json"),
+      join(configDir, "skilltap", "state.json"),
       JSON.stringify({
-        version: 1,
+        version: 2,
         skills: [
           {
             name: "test-skill",
@@ -78,7 +78,7 @@ describe("linkSkill — conflict", () => {
             repo: null,
             ref: null,
             sha: null,
-            scope: "global",
+            scope: "linked",
             path: "/some/path",
             tap: null,
             also: [],
@@ -86,6 +86,8 @@ describe("linkSkill — conflict", () => {
             updatedAt: "2024-01-01T00:00:00.000Z",
           },
         ],
+        plugins: [],
+        mcpServers: [],
       }),
     );
 

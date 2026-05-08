@@ -52,7 +52,6 @@ async function findPluginInScopes(
 ): Promise<Result<ScopedState & { record: PluginRecord }, UserError>> {
   const { scope, projectRoot } = options;
 
-  // state.json canonical with plugins.json fallback for unmigrated users.
   if (scope === "global" || !scope) {
     const globalResult = await loadPlugins();
     if (!globalResult.ok) return globalResult;
@@ -87,7 +86,7 @@ async function findPluginInScopes(
 /**
  * Remove an installed plugin: delete skill dirs + agent symlinks,
  * remove MCP entries from agent configs, delete agent definition files,
- * and remove the record from plugins.json.
+ * and remove the record from state.json.
  */
 export async function removeInstalledPlugin(
   pluginName: string,
@@ -155,7 +154,7 @@ export async function removeInstalledPlugin(
 /**
  * Toggle a single component within an installed plugin.
  * Handles filesystem moves for skills and agents, MCP injection/removal for MCPs.
- * Updates plugins.json state.
+ * Updates state.json.
  */
 export async function toggleInstalledComponent(
   pluginName: string,

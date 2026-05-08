@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { loadInstalled } from "@skilltap/core";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { InstalledJsonSchema } from "./installed";
 
 const FIXTURES_DIR = join(
   import.meta.dir,
@@ -21,16 +22,28 @@ afterEach(async () => {
   await removeTmpDir(configDir);
 });
 
-async function writeInstalledJson(fixture: string): Promise<void> {
+// Write fixture skills into state.json (v2 format) so loadInstalled can read them.
+// The fixtures test that old-format skills (missing optional fields) are still parseable.
+async function writeStateFromFixture(fixture: string): Promise<void> {
   const dir = join(configDir, "skilltap");
   await mkdir(dir, { recursive: true });
   const content = await Bun.file(join(FIXTURES_DIR, fixture)).text();
-  await Bun.write(join(dir, "installed.json"), content);
+  const raw = JSON.parse(content);
+  // Parse through InstalledJsonSchema to apply defaults (as migrate would do)
+  const parsed = InstalledJsonSchema.safeParse(raw);
+  if (!parsed.success) throw new Error(`Fixture parse failed: ${parsed.error}`);
+  const state = {
+    version: 2,
+    skills: parsed.data.skills,
+    plugins: [],
+    mcpServers: [],
+  };
+  await Bun.write(join(dir, "state.json"), JSON.stringify(state));
 }
 
 describe("installed.json backward compatibility", () => {
   test("skill missing description loads with empty string default", async () => {
-    await writeInstalledJson("installed-no-description.json");
+    await writeStateFromFixture("installed-no-description.json");
     const result = await loadInstalled();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -39,7 +52,7 @@ describe("installed.json backward compatibility", () => {
   });
 
   test("skill missing sha and updatedAt loads with null/sentinel defaults", async () => {
-    await writeInstalledJson("installed-no-sha.json");
+    await writeStateFromFixture("installed-no-sha.json");
     const result = await loadInstalled();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -48,7 +61,7 @@ describe("installed.json backward compatibility", () => {
   });
 
   test("skill missing also and tap loads with empty array and null defaults", async () => {
-    await writeInstalledJson("installed-no-also.json");
+    await writeStateFromFixture("installed-no-also.json");
     const result = await loadInstalled();
     expect(result.ok).toBe(true);
     if (!result.ok) return;

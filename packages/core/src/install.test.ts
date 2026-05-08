@@ -549,13 +549,13 @@ describe("idempotency", () => {
 });
 
 describe("installed.json state integrity", () => {
-  test("truncated JSON returns error without crashing", async () => {
+  test("truncated JSON in state.json returns error without crashing", async () => {
     const { mkdir } = await import("node:fs/promises");
     const dir = join(configDir, "skilltap");
     await mkdir(dir, { recursive: true });
     await Bun.write(
-      join(dir, "installed.json"),
-      '{"version": 1, "skills": [{"name"',
+      join(dir, "state.json"),
+      '{"version": 2, "skills": [{"name"',
     );
 
     const result = await loadInstalled();

@@ -1,11 +1,7 @@
-import { join } from "node:path";
-import { getConfigDir } from "../dirs";
-import { loadJsonState } from "../json-state";
 import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
 import {
   type PluginRecord,
   type PluginsJson,
-  PluginsJsonSchema,
   type StoredComponent,
   type StoredMcpComponent,
 } from "../schemas/plugins";
@@ -13,28 +9,14 @@ import { loadState } from "../state/load";
 import { saveState } from "../state/save";
 import { err, ok, type Result, UserError } from "../types";
 
-function getPluginsPath(projectRoot?: string): string {
-  return projectRoot
-    ? join(projectRoot, ".agents", "plugins.json")
-    : join(getConfigDir(), "plugins.json");
-}
-
-// state.json is the canonical store. Same read-fallback + state-only-write
-// pattern as loadInstalled/saveInstalled in config.ts.
+// state.json is the only canonical store. v0.x plugins.json fallback removed.
+// Users on v0.x must run `skilltap migrate` to populate state.json.
 export async function loadPlugins(
   projectRoot?: string,
 ): Promise<Result<PluginsJson, UserError>> {
   const stateResult = await loadState(projectRoot);
-  if (stateResult.ok && stateResult.value.plugins.length > 0) {
-    return ok({ version: 1 as const, plugins: stateResult.value.plugins });
-  }
   if (!stateResult.ok) return stateResult;
-  return loadJsonState(
-    getPluginsPath(projectRoot),
-    PluginsJsonSchema,
-    "plugins.json",
-    { version: 1 as const, plugins: [] },
-  );
+  return ok({ version: 1 as const, plugins: [...stateResult.value.plugins] });
 }
 
 export async function savePlugins(

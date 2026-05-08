@@ -10,11 +10,11 @@ export interface StatusReport {
   /** Resolved [defaults.also] list (from project manifest if present, else config). */
   also: string[];
 
-  /** Skills loaded from v2 state.json if present, else v1 installed.json. */
+  /** Skills loaded from state.json. */
   skills: StatusSkill[];
-  /** Plugins loaded from v2 state.json if present, else v1 plugins.json. */
+  /** Plugins loaded from state.json. */
   plugins: StatusPlugin[];
-  /** True if state.json was read (post-migration); false if reading v1 fallback. */
+  /** True if state.json exists on disk; false if using empty defaults. */
   fromV2State: boolean;
 
   /** Taps from config + the built-in tap if enabled. */

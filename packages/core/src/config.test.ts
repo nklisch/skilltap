@@ -150,7 +150,7 @@ describe("saveConfig", () => {
 });
 
 describe("loadInstalled", () => {
-  test("returns default when installed.json is missing", async () => {
+  test("returns empty state when state.json is missing", async () => {
     const result = await loadInstalled();
     expect(result.ok).toBe(true);
     if (result.ok) {
@@ -159,7 +159,7 @@ describe("loadInstalled", () => {
     }
   });
 
-  test("parses existing installed.json", async () => {
+  test("installed.json is ignored (v0.x fallback removed)", async () => {
     const configDir = join(tmpDir, "skilltap");
     await ensureDirs();
     await Bun.write(
@@ -182,34 +182,12 @@ describe("loadInstalled", () => {
         ],
       }),
     );
+    // state.json is absent — loadInstalled returns empty, not installed.json contents
     const result = await loadInstalled();
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.skills).toHaveLength(1);
-      expect(result.value.skills[0].name).toBe("commit-helper");
+      expect(result.value.skills).toHaveLength(0);
     }
-  });
-
-  test("returns error for invalid JSON", async () => {
-    const configDir = join(tmpDir, "skilltap");
-    await ensureDirs();
-    await Bun.write(join(configDir, "installed.json"), "{not valid json");
-    const result = await loadInstalled();
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.message).toContain("Invalid JSON");
-  });
-
-  test("returns error for invalid schema", async () => {
-    const configDir = join(tmpDir, "skilltap");
-    await ensureDirs();
-    await Bun.write(
-      join(configDir, "installed.json"),
-      JSON.stringify({ version: 99, skills: [] }),
-    );
-    const result = await loadInstalled();
-    expect(result.ok).toBe(false);
-    if (!result.ok)
-      expect(result.error.message).toContain("Invalid installed.json");
   });
 });
 

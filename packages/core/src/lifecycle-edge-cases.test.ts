@@ -180,12 +180,11 @@ describe("scope interaction", () => {
 // Error recovery & corrupt state
 // ---------------------------------------------------------------------------
 describe("error recovery", () => {
-  test("corrupt installed.json returns clear error", async () => {
-    // installed.json lives in the config dir, not homeDir/.agents/
+  test("corrupt state.json returns clear error", async () => {
     const configSkiltapDir = join(configDir, "skilltap");
     await mkdir(configSkiltapDir, { recursive: true });
     await Bun.write(
-      join(configSkiltapDir, "installed.json"),
+      join(configSkiltapDir, "state.json"),
       "NOT VALID JSON {{{{",
     );
 

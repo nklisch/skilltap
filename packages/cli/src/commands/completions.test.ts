@@ -331,13 +331,13 @@ describe("--get-completions — empty state", () => {
 
 describe("--get-completions — with state", () => {
   test("installed-skills: returns skill names", async () => {
-    // Write an installed.json with two skills
+    // Write state.json with two skills
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(
-      join(skilltapDir, "installed.json"),
+      join(skilltapDir, "state.json"),
       JSON.stringify({
-        version: 1,
+        version: 2,
         skills: [
           {
             name: "my-skill",
@@ -366,6 +366,8 @@ describe("--get-completions — with state", () => {
             updatedAt: new Date().toISOString(),
           },
         ],
+        plugins: [],
+        mcpServers: [],
       }),
     );
 
@@ -384,9 +386,9 @@ describe("--get-completions — with state", () => {
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(
-      join(skilltapDir, "installed.json"),
+      join(skilltapDir, "state.json"),
       JSON.stringify({
-        version: 1,
+        version: 2,
         skills: [
           {
             name: "global-skill",
@@ -415,6 +417,8 @@ describe("--get-completions — with state", () => {
             updatedAt: new Date().toISOString(),
           },
         ],
+        plugins: [],
+        mcpServers: [],
       }),
     );
 

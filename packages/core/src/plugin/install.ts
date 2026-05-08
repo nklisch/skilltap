@@ -105,7 +105,7 @@ export type PluginInstallResult = {
  * 2. Place skills in .agents/skills/ with agent symlinks
  * 3. Inject MCP server configs into target agent config files
  * 4. Place agent definitions in .claude/agents/
- * 5. Record plugin in plugins.json
+ * 5. Record plugin in state.json
  */
 export async function installPlugin(
   contentDir: string,
@@ -293,7 +293,7 @@ export async function installPlugin(
     }
   }
 
-  // 5. Record in plugins.json
+  // 5. Record in state.json
   const record = manifestToRecord(manifest, {
     repo: options.repo,
     ref: options.ref,
@@ -303,7 +303,6 @@ export async function installPlugin(
     tap: options.tap,
   });
 
-  // state.json canonical with plugins.json fallback for unmigrated users.
   const loadResult = await loadPlugins(projectRoot);
   if (!loadResult.ok) return loadResult;
   const newState = addPlugin(loadResult.value, record);

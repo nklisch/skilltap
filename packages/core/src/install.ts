@@ -504,7 +504,7 @@ export async function installSkill(
   const allWarnings: StaticWarning[] = [];
   const allSemanticWarnings: SemanticWarning[] = [];
 
-  // 1. Check already-installed (state.json canonical, with installed.json fallback for unmigrated v0.x users)
+  // 1. Check already-installed (reads state.json)
   const fileRoot =
     options.scope === "project" ? options.projectRoot : undefined;
   const installedResult = await loadInstalled(fileRoot);

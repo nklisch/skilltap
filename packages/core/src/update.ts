@@ -700,7 +700,6 @@ export async function updateSkill(
 > {
   debug("updateSkill", { name: options.name ?? "all" });
 
-  // Load global installed (state.json canonical with installed.json fallback)
   const globalInstalledResult = await loadInstalled();
   if (!globalInstalledResult.ok) return globalInstalledResult;
   const globalInstalled = globalInstalledResult.value;

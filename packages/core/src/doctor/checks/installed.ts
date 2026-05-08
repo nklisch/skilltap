@@ -65,9 +65,8 @@ export async function checkInstalled(projectRoot?: string): Promise<{
   const globalFile = join(getConfigDir(), "installed.json");
   const issues: DoctorIssue[] = [];
 
-  // Phase 31c-c-2d-1: state.json is canonical. Read it first; fall back
-  // to installed.json only when state.json's skills array is empty (the
-  // unmigrated v0.x case the read-fallback in loadInstalled handles).
+  // state.json is canonical. For diagnostic purposes, also check installed.json
+  // so the doctor can advise unmigrated v0.x users to run `migrate`.
   const globalState = await loadState();
   const projectState = projectRoot ? await loadState(projectRoot) : null;
 

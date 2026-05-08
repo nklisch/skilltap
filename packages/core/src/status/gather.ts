@@ -27,8 +27,7 @@ export interface GatherStatusOptions {
 }
 
 // Aggregate everything `skilltap status` needs into a single report.
-// Reads v2 state.json if present; falls back to v1 installed.json + plugins.json
-// for users who haven't migrated yet. Drift only computed when a manifest exists.
+// Reads from state.json (canonical). Drift only computed when a manifest exists.
 export async function gatherStatus(
   options: GatherStatusOptions = {},
 ): Promise<Result<StatusReport, UserError>> {

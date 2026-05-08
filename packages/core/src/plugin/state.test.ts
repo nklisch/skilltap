@@ -73,23 +73,15 @@ describe("loadPlugins", () => {
     expect(loadResult.value.plugins[0]?.name).toBe("dev-toolkit");
   });
 
-  test("returns error for invalid JSON", async () => {
+  test("plugins.json is ignored (v0.x fallback removed)", async () => {
     const configDir = join(env.configDir, "skilltap");
     await Bun.$`mkdir -p ${configDir}`;
+    // Writing plugins.json has no effect — state.json is absent, so empty state returned
     await Bun.write(join(configDir, "plugins.json"), "not-valid-json{{{");
     const result = await loadPlugins();
-    expect(result.ok).toBe(false);
-  });
-
-  test("returns error for invalid schema (version 99)", async () => {
-    const configDir = join(env.configDir, "skilltap");
-    await Bun.$`mkdir -p ${configDir}`;
-    await Bun.write(
-      join(configDir, "plugins.json"),
-      JSON.stringify({ version: 99, plugins: [] }),
-    );
-    const result = await loadPlugins();
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.plugins).toHaveLength(0);
   });
 
   test("reads from project path when projectRoot given", async () => {

@@ -102,9 +102,10 @@ describe("gatherStatus — v2 state.json", () => {
   });
 });
 
-describe("gatherStatus — v1 fallback", () => {
-  test("falls back to installed.json + plugins.json when state.json absent", async () => {
+describe("gatherStatus — state.json only", () => {
+  test("installed.json is ignored; only state.json is read", async () => {
     const cfgDir = join(env.configDir, "skilltap");
+    // Write a skill to installed.json only — it should NOT appear in results
     await writeFile(
       join(cfgDir, "installed.json"),
       JSON.stringify({
@@ -125,17 +126,11 @@ describe("gatherStatus — v1 fallback", () => {
         ],
       }),
     );
-    await writeFile(
-      join(cfgDir, "plugins.json"),
-      JSON.stringify({ version: 1, plugins: [] }),
-    );
 
     const result = await gatherStatus({ projectRootHint: null });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.fromV2State).toBe(false);
-    expect(result.value.skills).toHaveLength(1);
-    expect(result.value.skills[0].name).toBe("old-skill");
+    expect(result.value.skills).toHaveLength(0);
   });
 });
 

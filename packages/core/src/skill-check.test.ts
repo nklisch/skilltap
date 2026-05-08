@@ -32,6 +32,13 @@ async function writeRawCache(data: object): Promise<void> {
   );
 }
 
+async function writeStateSkills(skills: object[]): Promise<void> {
+  await Bun.write(
+    join(configDir, "skilltap", "state.json"),
+    JSON.stringify({ version: 2, skills, plugins: [], mcpServers: [] }),
+  );
+}
+
 // ─── writeSkillUpdateCache ─────────────────────────────────────────────────────
 
 describe("writeSkillUpdateCache", () => {
@@ -181,31 +188,24 @@ describe("fetchSkillUpdateStatus", () => {
   });
 
   test("marks git skill as having update when HEAD differs from FETCH_HEAD", async () => {
-    const installedDir = join(configDir, "skilltap");
     const repoUrl = "https://github.com/owner/repo-update-test";
     const cacheDir = skillCacheDir(repoUrl);
 
-    await Bun.write(
-      join(installedDir, "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            name: "git-skill",
-            description: "",
-            repo: repoUrl,
-            ref: "main",
-            sha: "abc1234",
-            scope: "global",
-            path: join(homeDir, ".agents", "skills", "git-skill"),
-            tap: null,
-            also: [],
-            installedAt: "2024-01-01T00:00:00.000Z",
-            updatedAt: "2024-01-01T00:00:00.000Z",
-          },
-        ],
-      }),
-    );
+    await writeStateSkills([
+      {
+        name: "git-skill",
+        description: "",
+        repo: repoUrl,
+        ref: "main",
+        sha: "abc1234",
+        scope: "global",
+        path: join(homeDir, ".agents", "skills", "git-skill"),
+        tap: null,
+        also: [],
+        installedAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
 
     // Create a fake cache dir with .git so the lstat check passes
     await mkdir(join(cacheDir, ".git"), { recursive: true });
@@ -321,28 +321,21 @@ describe("fetchSkillUpdateStatus", () => {
   });
 
   test("marks npm skill as having update when version differs from sha", async () => {
-    const installedDir = join(configDir, "skilltap");
-    await Bun.write(
-      join(installedDir, "installed.json"),
-      JSON.stringify({
-        version: 1,
-        skills: [
-          {
-            name: "npm-skill",
-            description: "",
-            repo: "npm:my-skill-package",
-            ref: null,
-            sha: "1.0.0",
-            scope: "global",
-            path: join(homeDir, ".agents", "skills", "npm-skill"),
-            tap: null,
-            also: [],
-            installedAt: "2024-01-01T00:00:00.000Z",
-            updatedAt: "2024-01-01T00:00:00.000Z",
-          },
-        ],
-      }),
-    );
+    await writeStateSkills([
+      {
+        name: "npm-skill",
+        description: "",
+        repo: "npm:my-skill-package",
+        ref: null,
+        sha: "1.0.0",
+        scope: "global",
+        path: join(homeDir, ".agents", "skills", "npm-skill"),
+        tap: null,
+        also: [],
+        installedAt: "2024-01-01T00:00:00.000Z",
+        updatedAt: "2024-01-01T00:00:00.000Z",
+      },
+    ]);
 
     const mockFetchMeta = async (
       _name: string,

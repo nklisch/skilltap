@@ -102,15 +102,39 @@ describe("migrateV1Config", () => {
     ).toBe(true);
   });
 
-  test("translates agent-mode.enabled into agent.default", () => {
+  test("translates agent-mode.enabled into agent.default and transfers scope to defaults", () => {
     const result = migrateV1Config({
       "agent-mode": { enabled: true, scope: "project" },
     });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.v2.agent.default).toBe(true);
-    // scope dropped → warning
+    // scope transferred to defaults.scope → warning
+    expect(result.value.v2.defaults.scope).toBe("project");
     expect(result.value.warnings.some((w) => w.includes("scope"))).toBe(true);
+  });
+
+  test("[agent-mode].scope = 'global' with empty defaults.scope → defaults.scope set to 'global'", () => {
+    const result = migrateV1Config({
+      "agent-mode": { enabled: false, scope: "global" },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.v2.defaults.scope).toBe("global");
+    expect(result.value.warnings.some((w) => w.includes("scope"))).toBe(true);
+  });
+
+  test("[security.human] on_warn='prompt' + [security.agent] on_warn='fail' → flat on_warn='fail'", () => {
+    const result = migrateV1Config({
+      security: {
+        human: { on_warn: "prompt" },
+        agent: { on_warn: "fail" },
+      },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.v2.security.on_warn).toBe("fail");
+    expect(result.value.warnings.some((w) => w.includes("on_warn"))).toBe(true);
   });
 
   test("preserves defaults.also and defaults.scope", () => {

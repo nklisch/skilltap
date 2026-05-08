@@ -25,7 +25,6 @@ export async function removeSkill(
   debug("removeSkill", { name, scope: options.scope });
   const fileRoot =
     options.scope === "project" ? options.projectRoot : undefined;
-  // state.json canonical with installed.json fallback for unmigrated users.
   const installedResult = await loadInstalled(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;

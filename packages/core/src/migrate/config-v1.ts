@@ -99,6 +99,7 @@ export function migrateV1Config(
     default: false,
     block: false,
   };
+  let agentModeScope: string | undefined;
   const v1AgentMode = v1["agent-mode"];
   if (
     v1AgentMode &&
@@ -109,10 +110,11 @@ export function migrateV1Config(
     if (am.enabled === true) {
       agentBlock.default = true;
     }
-    if (am.scope !== undefined) {
-      warnings.push(
-        `Dropped [agent-mode].scope = "${am.scope}". v2.0 has no per-mode scope.`,
-      );
+    if (
+      typeof am.scope === "string" &&
+      (am.scope === "global" || am.scope === "project")
+    ) {
+      agentModeScope = am.scope;
     }
   }
 
@@ -141,6 +143,15 @@ export function migrateV1Config(
         `Dropped [defaults].yes = true. v2.0 has no global yes default; use --yes per call or [agent].default.`,
       );
     }
+  }
+
+  // Transfer [agent-mode].scope to defaults.scope if defaults.scope is not set
+  if (agentModeScope && !defaults.scope) {
+    defaults.scope = agentModeScope as "global" | "project";
+    warnings.push(
+      `[agent-mode].scope = "${agentModeScope}" transferred to [defaults].scope. ` +
+        `v2.0 uses [defaults].scope for the install scope default.`,
+    );
   }
 
   // ── [[taps]] — reject HTTP, keep git ─────────────────────────────────────

@@ -1,10 +1,9 @@
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "./dirs";
-import { loadJsonState } from "./json-state";
 import { type Config, ConfigSchema } from "./schemas/config";
 import { parseWithResult } from "./schemas/index";
-import { type InstalledJson, InstalledJsonSchema } from "./schemas/installed";
+import type { InstalledJson } from "./schemas/installed";
 import { loadState } from "./state/load";
 import { saveState } from "./state/save";
 import { err, ok, type Result, UserError } from "./types";
@@ -140,31 +139,14 @@ export async function saveConfig(config: Config): Promise<Result<void>> {
   }
 }
 
-const _DEFAULT_INSTALLED: InstalledJson = { version: 1, skills: [] };
-
-function getInstalledPath(projectRoot?: string): string {
-  return projectRoot
-    ? join(projectRoot, ".agents", "installed.json")
-    : join(getConfigDir(), "installed.json");
-}
-
-// state.json is the canonical store. Reads still fall back to installed.json
-// for unmigrated v0.x users (one-time; the next saveInstalled writes state.json
-// and the fallback stops firing). Writes go ONLY to state.json.
+// state.json is the only canonical store. v0.x installed.json fallback removed.
+// Users on v0.x must run `skilltap migrate` to populate state.json.
 export async function loadInstalled(
   projectRoot?: string,
 ): Promise<Result<InstalledJson>> {
   const stateResult = await loadState(projectRoot);
-  if (stateResult.ok && stateResult.value.skills.length > 0) {
-    return ok({ version: 1 as const, skills: stateResult.value.skills });
-  }
   if (!stateResult.ok) return stateResult;
-  return loadJsonState(
-    getInstalledPath(projectRoot),
-    InstalledJsonSchema,
-    "installed.json",
-    { version: 1 as const, skills: [] },
-  );
+  return ok({ version: 1 as const, skills: [...stateResult.value.skills] });
 }
 
 export async function saveInstalled(
