@@ -3,7 +3,7 @@
 **Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
 **Last updated:** 2026-05-08
-**Phases since last refactor:** 3 (39 capture, 40 cleanup, 41 output) — refactor gate deferred to after Phase 42 since the codebase is mid-reshape (typed install + adoption coming)
+**Phases since last refactor:** 4 (39 capture, 40 cleanup, 41 output, 42 typed CLI) — refactor gate due after Phase 43 (Claude Code adoption); deferring one more phase since 43 also reshapes adopt
 **Total refactor passes:** 2
 
 ## Resume context (2026-05-08)
@@ -20,6 +20,31 @@ User explicitly enabled watchdog loops mid-session (CronCreate jobs `fceab167` f
 - Stashed pre-existing user WIP rather than incorporating: WIP was partial (kept `human`/`agent` as deprecated rather than deleting) and would conflict with Phase 40 cleanup. User can `git stash pop` later to resume.
 - Used existing `docs/design/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
 - Phase 39 Units 1–3 + 5–7 implemented directly by Opus (small, self-contained units). Unit 4 (CLI rendering) orchestrated to a Sonnet agent. **User feedback mid-phase: prefer orchestration via `/implement-orchestrator` for all future implementation work.** Phases 40–46 will run the full autopilot workflow: research gate → `/design` → `/implement-orchestrator` → test checkpoint → progress + commit → refactor gate.
+
+## Phase 42 completion summary (2026-05-08)
+
+Typed CLI surface shipped across three implementation agents and 5 commits. The 51-endpoint surface from v2.1 is collapsed to 19 top-level entries with consistent typed semantics for install/remove/update/toggle.
+
+**What shipped:**
+- `install <type> <source>` — citty subcommand group (skill | plugin | mcp). New directory `cli/commands/install/` with `index.ts`, `skill.ts`, `plugin.ts`, `mcp.ts`, `shared.ts`. Original `commands/install.ts` deleted.
+- `remove <type> <name>` — citty subcommand group. New directory `cli/commands/remove/` mirroring install.
+- `update [type] [name]` — optional positional. Bare = update everything; `update skill` = all skills; `update skill <name>` = one. Plugin/MCP types validate but are stubbed with "not yet implemented" (`updatePlugin` / `updateMcpServer` core helpers deferred to a follow-up unit).
+- `toggle [type] [name[:component]]` — optional positional. Bare opens a clack picker (Phase 44 will replace with Ink TUI). MCP toggle stubbed (StoredMcpStandalone schema lacks an `active` field; deferred).
+- `mcp:` URL prefix removed from user input. Internal state-storage convention (`state.mcpServers[].source` may begin with `mcp:` for legacy entries) is preserved.
+- `tap install` deleted entirely.
+- 23 files deleted: `commands/skills/` directory (11 files), `commands/plugin/` directory (4 files), `enable.ts`, `disable.ts`, plus orphaned tests.
+- 3 new top-level commands: `info <name>` (auto-detects type from state), `adopt <name>` (lifted from `skills/adopt.ts`), `move <name>` (lifted from `skills/move.ts`).
+- `status` extended with `--unmanaged`, `--disabled`, `--active` filter flags (absorbed from the deleted `skills` listing).
+- `InstallOptions` callbacks reduced 17 → 10 by merging similar shapes (`onWarnings(warnings, kind)` and `onConfirmInstall(kind, manifest?)` now cover skill + plugin paths). Dropped: `onStaticScanStart`, `onSemanticScanStart`, `onSemanticProgress`, `onOfferSemantic` (replaced by `options.out?.progress(...)`).
+- Phase 39 capture callbacks (`onPluginCaptureConfirm`, `onPluginCaptureConflict`) preserved unchanged.
+
+**Verification:** Full suite 2043 pass / 51 skip / 0 fail (down from 2109 — net –66 tests, all from deleted alias/skills/plugin/enable/disable test files; coverage of underlying logic preserved).
+
+**Workflow:** Three Sonnet agents — Agent A (Units 1+2+7: foundation), Agent B (Units 3+4+5+6: update/toggle/mcp/tap), Agent C (Units 8+9+10+11+12: deletions + top-level + tests). Orchestrator (Opus) verified intermediate gates and final suite.
+
+**Deviations:** Two stubs noted for follow-up:
+- `updatePlugin` / `updateMcpServer` core helpers — emit "not yet implemented" message; full re-install logic deferred.
+- MCP standalone toggle — `StoredMcpStandalone.active` field doesn't exist; deferred to a follow-up.
 
 ## Phase 41 completion summary (2026-05-08)
 
@@ -215,7 +240,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 39  | Plugin Capture (v2.2)                          | code complete; 39.11/39.12 user-gated | 2026-05-08 |
 | 40  | Drop legacy fallbacks + agent-mode             | done     | 2026-05-08 |
 | 41  | Output mode abstraction                        | done     | 2026-05-08 |
-| 42  | Typed install/remove/update/toggle             | pending  | — |
+| 42  | Typed install/remove/update/toggle             | done     | 2026-05-08 |
 | 43  | Claude Code plugin adoption                    | pending  | — |
 | 44  | TUI dashboard (Ink)                            | pending  | — |
 | 45  | Migrate command rewrite                        | pending  | — |
