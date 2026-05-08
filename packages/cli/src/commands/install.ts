@@ -33,7 +33,11 @@ import {
   exitWithError,
 } from "../ui/agent-out";
 import { errorLine, successLine } from "../ui/format";
-import { createInstallCallbacks } from "../ui/install-callbacks";
+import {
+  createInstallCallbacks,
+  printCaptureConflict,
+  printCaptureSummary,
+} from "../ui/install-callbacks";
 import { createStepLogger } from "../ui/install-steps";
 import { componentSummary } from "../ui/plugin-format";
 import { loadPolicyOrExit } from "../ui/policy";
@@ -312,6 +316,10 @@ async function runAgentMode(
         process.exit(1);
         return false;
       },
+      // Agent mode: same-source captures auto-confirm; cross-source conflicts
+      // hard-abort (the UserError carries the resolution hint).
+      onPluginCaptureConflict: async () => "abort" as const,
+      onPluginCaptureConfirm: async () => true,
     });
 
     if (!result.ok) {
@@ -346,6 +354,19 @@ async function runAgentMode(
       const pr = result.value.pluginRecord;
       const summary = componentSummary(pr);
       process.stdout.write(`OK: Installed plugin ${pr.name} (${summary})\n`);
+      const cap = result.value.captured;
+      if (cap && cap.skills.length + cap.mcpServers.length > 0) {
+        process.stdout.write(
+          `Captured ${cap.skills.length} standalone skill(s), ${cap.mcpServers.length} MCP server(s) into "${pr.name}".\n`,
+        );
+        const forced = cap.forcedCrossSource;
+        if (forced.skills.length + forced.mcpServers.length > 0) {
+          const names = [...forced.skills, ...forced.mcpServers].join(", ");
+          process.stdout.write(
+            `  ⚠ Force-captured (cross-source override): ${names}\n`,
+          );
+        }
+      }
     }
 
     for (const name of result.value.updates) {
@@ -453,6 +474,10 @@ async function runInteractiveMode(
       steps,
     });
 
+    // Closure shared between onPluginCaptureConflict and onPluginCaptureConfirm
+    // to track which names were force-overridden.
+    const forcedCaptureNames = new Set<string>();
+
     const result = await installSkill(source, {
       scope,
       projectRoot,
@@ -487,6 +512,60 @@ async function runInteractiveMode(
         if (isCancelPrompt(shouldClean)) process.exit(130);
         if (!shouldClean) return [];
         return orphans.map((o) => o.record.name);
+      },
+      async onPluginCaptureConflict(crossSource) {
+        s.stop();
+        printCaptureConflict(crossSource, source);
+        const { isCancel: isCancelPrompt } = await import("@clack/prompts");
+        const { footerSelect: footerSel } = await import("../ui/footer");
+        const decision = await footerSel<"abort" | "force">({
+          message:
+            "Cross-source capture conflict — what do you want to do?",
+          initialValue: "abort",
+          options: [
+            {
+              value: "abort" as const,
+              label: "Abort the install (recommended)",
+            },
+            {
+              value: "force" as const,
+              label:
+                "Force capture (override and replace standalones from a different source)",
+            },
+          ],
+        });
+        if (isCancelPrompt(decision)) {
+          s.start(`Fetching ${source}...`);
+          return "abort";
+        }
+        const resolved = decision as "abort" | "force";
+        if (resolved === "force") {
+          for (const c of crossSource.skills) {
+            forcedCaptureNames.add(c.standalone.name);
+          }
+          for (const c of crossSource.mcpServers) {
+            forcedCaptureNames.add(c.serverName);
+          }
+        }
+        s.start(`Fetching ${source}...`);
+        return resolved;
+      },
+      async onPluginCaptureConfirm(bucket) {
+        if (policy.yes) return true;
+        s.stop();
+        printCaptureSummary(bucket, source, forcedCaptureNames);
+        const { isCancel: isCancelPrompt } = await import("@clack/prompts");
+        const { footerConfirm: footerConf } = await import("../ui/footer");
+        const proceed = await footerConf({
+          message: `Capture these components into the plugin?`,
+          initialValue: true,
+        });
+        if (isCancelPrompt(proceed) || proceed === false) {
+          s.start(`Fetching ${source}...`);
+          return false;
+        }
+        s.start(`Fetching ${source}...`);
+        return true;
       },
     });
 
@@ -530,6 +609,17 @@ async function runInteractiveMode(
       const pr = result.value.pluginRecord;
       const summary = componentSummary(pr);
       successLine(`Installed plugin ${pr.name} (${summary})`);
+      const cap = result.value.captured;
+      if (cap && cap.skills.length + cap.mcpServers.length > 0) {
+        successLine(
+          `Captured ${cap.skills.length} standalone skill(s), ${cap.mcpServers.length} MCP server(s) into "${pr.name}".`,
+        );
+        const forced = cap.forcedCrossSource;
+        if (forced.skills.length + forced.mcpServers.length > 0) {
+          const names = [...forced.skills, ...forced.mcpServers].join(", ");
+          log.warn(`  ⚠ Force-captured (cross-source override): ${names}`);
+        }
+      }
     }
 
     // Run updates for skills that were already installed

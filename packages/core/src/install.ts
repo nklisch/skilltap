@@ -137,6 +137,15 @@ export type InstallResult = {
   updates: string[];
   /** If a plugin was installed, the plugin record. */
   pluginRecord?: PluginRecord;
+  /**
+   * Components transferred from standalone state into the plugin (only set
+   * when a plugin was installed and capture occurred).
+   */
+  captured?: {
+    skills: string[];
+    mcpServers: string[];
+    forcedCrossSource: { skills: string[]; mcpServers: string[] };
+  };
 };
 
 function looksLikeTapName(source: string): boolean {
@@ -579,6 +588,7 @@ export async function installSkill(
                 semanticWarnings: [],
                 updates: [],
                 pluginRecord: result.value.record,
+                captured: result.value.captured,
               });
             }
             // decision === "skills-only": fall through to normal resolution
@@ -607,6 +617,7 @@ export async function installSkill(
               semanticWarnings: [],
               updates: [],
               pluginRecord: result.value.record,
+              captured: result.value.captured,
             });
           }
         }
@@ -735,6 +746,7 @@ export async function installSkill(
           semanticWarnings: [],
           updates: [],
           pluginRecord: pluginInstallResult.value.record,
+          captured: pluginInstallResult.value.captured,
         });
       }
       // decision === "skills-only" → fall through to normal skill scanning

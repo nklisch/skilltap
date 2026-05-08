@@ -1,6 +1,7 @@
-import { spinner } from "@clack/prompts";
+import { log, spinner } from "@clack/prompts";
 import type {
   AgentAdapter,
+  CaptureBucket,
   InstallOptions,
   PluginManifest,
   ScannedSkill,
@@ -22,6 +23,102 @@ import { printSemanticWarnings, printWarnings } from "./scan";
 
 function truncate(str: string, max: number): string {
   return str.length <= max ? str : `${str.slice(0, max - 1)}…`;
+}
+
+/**
+ * Render the cross-source conflict block — called before the select prompt
+ * that asks the user whether to abort or force.
+ */
+export function printCaptureConflict(
+  matches: CaptureBucket,
+  pluginRepo: string | null,
+): void {
+  const pluginLabel = pluginRepo ?? "(no recorded source)";
+
+  log.warn(
+    `Plugin wants to replace standalone components from a DIFFERENT source.`,
+  );
+
+  if (matches.skills.length > 0) {
+    log.info(`  Skills (${matches.skills.length}):`);
+    for (const c of matches.skills) {
+      const standaloneLabel = c.standalone.repo
+        ? c.standalone.repo
+        : c.standalone.scope === "linked"
+          ? `linked at ${c.standalone.path ?? "(unknown path)"}`
+          : "(no recorded source)";
+      log.info(`    • ${c.standalone.name}`);
+      log.info(`        standalone: ${standaloneLabel}`);
+      log.info(`        plugin:     ${pluginLabel}`);
+      log.warn(`        Different sources. The plugin's version would replace the standalone's content.`);
+    }
+  }
+
+  if (matches.mcpServers.length > 0) {
+    log.info(`  MCP servers (${matches.mcpServers.length}):`);
+    for (const c of matches.mcpServers) {
+      const standaloneLabel = c.standalone.source ?? "(no recorded source)";
+      const slug = c.standalone.name.split(":")[1] ?? "";
+      const keyDisplay = slug
+        ? ` (slug=${slug} → ${c.standalone.name})`
+        : "";
+      log.info(`    • ${c.serverName}`);
+      log.info(`        standalone: ${standaloneLabel}${keyDisplay}`);
+      log.info(`        plugin:     ${pluginLabel}`);
+    }
+  }
+
+  log.warn(`This is silent substitution. Choose carefully.`);
+}
+
+/**
+ * Render the capture summary — called before the confirm prompt that asks
+ * whether to proceed with the transfer of ownership.
+ *
+ * `forced` is the set of names whose ownership would transfer via a cross-source
+ * override (i.e., the user said "force" in the conflict prompt). These rows
+ * are rendered with a [FORCED] prefix so the user gets one last look.
+ */
+export function printCaptureSummary(
+  matches: CaptureBucket,
+  pluginName: string,
+  forced: Set<string>,
+): void {
+  log.info(`Plugin "${pluginName}" wants to take ownership of:`);
+
+  if (matches.skills.length > 0) {
+    log.info(`  Skills (${matches.skills.length}):`);
+    for (const c of matches.skills) {
+      const skill = c.standalone;
+      const isForced = forced.has(skill.name);
+      const sourceLabel =
+        skill.scope === "linked"
+          ? `linked at ${skill.path ?? "(unknown path)"}`
+          : skill.repo
+            ? `${skill.repo}, ${skill.scope}`
+            : skill.scope;
+      const forcedTag = isForced ? ` [FORCED]` : "";
+      log.info(`    • ${skill.name}${forcedTag}  (was: ${sourceLabel})`);
+    }
+  }
+
+  if (matches.mcpServers.length > 0) {
+    log.info(`  MCP servers (${matches.mcpServers.length}):`);
+    for (const c of matches.mcpServers) {
+      const isForced = forced.has(c.serverName);
+      const targets = c.standalone.targets.join(", ");
+      const targetsLabel = targets ? ` → ${targets}` : "";
+      const forcedTag = isForced ? ` [FORCED]` : "";
+      log.info(
+        `    • ${c.serverName}${forcedTag}  (was: ${c.standalone.name}${targetsLabel})`,
+      );
+    }
+  }
+
+  log.info(
+    `These standalones will be removed from skilltap.toml and skilltap.lock.`,
+  );
+  log.info(`The plugin's bundled versions will replace them on disk.`);
 }
 
 type Spinner = {
