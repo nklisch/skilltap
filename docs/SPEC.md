@@ -3505,6 +3505,8 @@ The mode is decided once and threaded through the orchestration. Core functions 
 
 ### v2.0 Redesign — Plugin Capture
 
+> Plugin capture is shipped in v2.2 ([ROADMAP.md — Phase 39](./ROADMAP.md#phase-39--plugin-capture-implementation)), not in the redesign itself. The redesign assumes capture is in place. This subsection documents the contract the redesign relies on.
+
 When `install plugin <source>` resolves a plugin manifest, skilltap detects component collisions with already-installed standalones and offers to capture them. Algorithm:
 
 1. **Canonicalize** all sources: `https://github.com/x/y`, `git@github.com:x/y`, `https://github.com/x/y.git` all map to a single canonical form.

@@ -944,6 +944,7 @@ packages/core/src/
 │   └── index.ts                      # registerScanner(), scanAll()
 ├── plugin/capture.ts                 # NEW — plugin capture (per design/plugin-capture.md)
 │   # canonicalizeSourceUrl(), detectCaptureMatches(), applyCapture()
+│   # Lands in v2.2 (Phase 39), not in the redesign — shown here for completeness
 └── output/                           # NEW — Output interface used by both cli/ and tui/
     └── types.ts                      # Output interface, OutputMode, JsonShapes
 ```

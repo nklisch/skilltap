@@ -768,53 +768,61 @@ Phases 28, 30, 31, 32 can run mostly in parallel after 27. Phases 33–36 can ru
 
 ---
 
-## v2.0 Redesign — Phases 39–46
+## v2.2 — Plugin Capture (current; in flight)
 
-> Second-pass redesign of the v2.x surface. Treats v2.0/v2.1 as a draft. Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction): typed install, no agent-mode, multi-screen TUI, plugin capture, Claude Code plugin adoption.
+> In-flight work, not part of the v2.0 redesign. Ships as the next minor on the v2.x line. Designed in [docs/design/plugin-capture.md](./design/plugin-capture.md). Two design commits already landed (b070824, 46417b4); Phase 39 is the implementation. The redesign (Phases 40+) builds on this and assumes capture is shipped.
 
-### Phase 39 — Drop legacy fallbacks and agent-mode (one-shot cleanup)
+### Phase 39 — Plugin Capture implementation
 
-Single demolition phase. Everything else builds on a cleaner core.
+Make plugin install idempotent when components collide with already-installed standalones. Make `sync` robust against the same.
 
-- [ ] **39.1** Delete `installed.json`/`plugins.json` read-fallback paths in `loadInstalled()` / `loadPlugins()`. `state.json` is the only source.
-- [ ] **39.2** Delete `packages/cli/src/ui/agent-out.ts` and all imports.
-- [ ] **39.3** Delete `packages/core/src/agent-env.ts` and the `SKILLTAP_AGENT` env var contract.
-- [ ] **39.4** Delete `packages/cli/src/commands/config/agent-mode.ts` and remove the wizard from the config router.
-- [ ] **39.5** Remove `--agent` flag from `install`, `update`, and any other command that registers it.
-- [ ] **39.6** Collapse `composePolicy()` in `packages/core/src/policy.ts`: no agent-mode branch, no per-mode security split. `composePolicy(config, flags)` returns a single `EffectivePolicy` regardless of caller type.
-- [ ] **39.7** Rewrite `[security]` schema in `packages/core/src/schemas/config.ts`: drop `[security.human]` / `[security.agent]` blocks, drop `[agent-mode]` block. Single `[security]` with `scan`, `on_warn`, `trust`.
-- [ ] **39.8** Update all commands that called `isAgentMode()` (enable, disable, toggle, verify, etc.) to use the unified policy and TTY-based output decisions.
-- [ ] **39.9** Update tests: remove agent-mode subprocess tests. Add subprocess tests that pipe stdin and verify headless behavior without `--agent`.
+- [ ] **39.1** `canonicalizeSourceUrl(url)` in `packages/core/src/plugin/capture.ts` — normalize https/ssh/git@/.git suffix variations to a single canonical form.
+- [ ] **39.2** `detectCaptureMatches(state, manifest, pluginRepo)` — partition collisions into same-source vs cross-source per the design doc.
+- [ ] **39.3** `applyCapture(bucket, options)` — atomic ownership transfer: remove standalone records, prune agent MCP keys with the standalone's namespace, remove old symlinks, clean manifest entries. Roll back on failure.
+- [ ] **39.4** Wire into `installPlugin()` (`packages/core/src/plugin/install.ts`): detect → prompt or auto-confirm → apply → install plugin components. Touches the in-progress changes already in your working tree.
+- [ ] **39.5** Wire into `sync/apply.ts`: pass capture callbacks through `applyAddSkill`.
+- [ ] **39.6** Extend `PluginInstallOptions` with `onCaptureConfirm` and `onCaptureConflict`.
+- [ ] **39.7** CLI rendering: `printCaptureConflict()`, `printCaptureSummary()` in `packages/cli/src/ui/`.
+- [ ] **39.8** Add `--force-capture` and `--no-capture` flags on `install plugin` for explicit override (cross-source defaults to error in non-interactive mode).
+- [ ] **39.9** Doctor check: flag any skill appearing in both `state.skills[]` and `state.plugins[].components[]` (defensive canary).
+- [ ] **39.10** Tests: idempotent re-install, same-source capture, cross-source conflict (interactive vs non-interactive), sync-with-capture, doctor canary.
+- [ ] **39.11** Bump version to v2.2.0 *(gated on user — autopilot mandate forbids running `bun run bump`)*.
+- [ ] **39.12** Release verification (binaries, npm publish, Homebrew formula update) *(blocked on 39.11)*.
+
+**Exit criteria:** Installing a plugin twice is idempotent. Installing a plugin that bundles an existing standalone offers the capture flow (interactive prompt or auto-confirm via `--yes`). Sync handles capture in non-interactive use. v2.2.0 ships.
+
+---
+
+## v2.0 Redesign — Phases 40–46
+
+> Second-pass redesign of the v2.x surface. Treats v2.0/v2.1 as a draft. Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction): typed install, no agent-mode, multi-screen TUI, Claude Code plugin adoption. **Assumes Phase 39 (plugin capture) has shipped in v2.2.**
+
+### Phase 40 — Drop legacy fallbacks and agent-mode (one-shot cleanup)
+
+Single demolition phase. Everything else builds on a cleaner core. Depends on Phase 39 (capture must be in `state.json` before legacy fallbacks are removed).
+
+- [ ] **40.1** Delete `installed.json`/`plugins.json` read-fallback paths in `loadInstalled()` / `loadPlugins()`. `state.json` is the only source.
+- [ ] **40.2** Delete `packages/cli/src/ui/agent-out.ts` and all imports.
+- [ ] **40.3** Delete `packages/core/src/agent-env.ts` and the `SKILLTAP_AGENT` env var contract.
+- [ ] **40.4** Delete `packages/cli/src/commands/config/agent-mode.ts` and remove the wizard from the config router.
+- [ ] **40.5** Remove `--agent` flag from `install`, `update`, and any other command that registers it.
+- [ ] **40.6** Collapse `composePolicy()` in `packages/core/src/policy.ts`: no agent-mode branch, no per-mode security split. `composePolicy(config, flags)` returns a single `EffectivePolicy` regardless of caller type.
+- [ ] **40.7** Rewrite `[security]` schema in `packages/core/src/schemas/config.ts`: drop `[security.human]` / `[security.agent]` blocks, drop `[agent-mode]` block. Single `[security]` with `scan`, `on_warn`, `trust`.
+- [ ] **40.8** Update all commands that called `isAgentMode()` (enable, disable, toggle, verify, etc.) to use the unified policy and TTY-based output decisions.
+- [ ] **40.9** Update tests: remove agent-mode subprocess tests. Add subprocess tests that pipe stdin and verify headless behavior without `--agent`.
 
 **Exit criteria:** `grep -r "agentMode\|agent-mode\|SKILLTAP_AGENT\|agent-out\|agent-env" packages/` returns nothing in source files. All tests pass. Existing `--yes` and `--json` flags carry the unattended-use story.
 
 ---
 
-### Phase 40 — Output mode abstraction
+### Phase 41 — Output mode abstraction
 
-- [ ] **40.1** Add `packages/core/src/output/` — `OutputMode = "tty" | "plain" | "json"`. `pickMode(opts)` resolves from `--json` flag, TTY detection, and explicit override.
-- [ ] **40.2** Add `Output` interface — `info(msg)`, `warn(msg)`, `error(msg)`, `success(msg)`, `json(payload)`, `progress(label)`. CLI layer constructs the right impl per mode.
-- [ ] **40.3** Migrate existing CLI commands to write through `Output` instead of mixed `successLine`/`errorLine`/`agentSuccess` calls.
-- [ ] **40.4** Replace clack spinner usage with `Output.progress()` that no-ops in plain/JSON modes.
+- [ ] **41.1** Add `packages/core/src/output/` — `OutputMode = "tty" | "plain" | "json"`. `pickMode(opts)` resolves from `--json` flag, TTY detection, and explicit override.
+- [ ] **41.2** Add `Output` interface — `info(msg)`, `warn(msg)`, `error(msg)`, `success(msg)`, `json(payload)`, `progress(label)`. CLI layer constructs the right impl per mode.
+- [ ] **41.3** Migrate existing CLI commands to write through `Output` instead of mixed `successLine`/`errorLine`/`agentSuccess` calls.
+- [ ] **41.4** Replace clack spinner usage with `Output.progress()` that no-ops in plain/JSON modes.
 
 **Exit criteria:** No command writes directly to `process.stdout` / `process.stderr`. All output goes through the `Output` interface. JSON output is schema-validated per command.
-
----
-
-### Phase 41 — Plugin capture wiring
-
-Already designed in [docs/design/plugin-capture.md](./design/plugin-capture.md). Implementation only.
-
-- [ ] **41.1** `canonicalizeSourceUrl(url)` in `packages/core/src/plugin/capture.ts` — normalize https/ssh/git@/.git suffix variations to a single canonical form.
-- [ ] **41.2** `detectCaptureMatches(state, manifest, pluginRepo)` — partition collisions into same-source vs cross-source.
-- [ ] **41.3** `applyCapture(bucket, options)` — atomic ownership transfer: remove standalone records, prune agent MCP keys, remove old symlinks, clean manifest entries.
-- [ ] **41.4** Wire into `installPlugin()`: detect → prompt or auto-confirm → apply → install plugin components.
-- [ ] **41.5** Wire into `sync/apply.ts`: pass capture callbacks through `applyAddSkill`.
-- [ ] **41.6** Add `onCaptureConfirm` and `onCaptureConflict` to `PluginInstallOptions`.
-- [ ] **41.7** CLI rendering: `printCaptureConflict()`, `printCaptureSummary()`.
-- [ ] **41.8** Doctor check: flag any skill appearing in both `state.skills[]` and `state.plugins[].components[]` (defensive canary).
-
-**Exit criteria:** Installing a plugin twice is idempotent. Installing a plugin that bundles an existing standalone offers a capture flow. Sync plays well with capture in non-interactive use.
 
 ---
 
@@ -826,7 +834,7 @@ Already designed in [docs/design/plugin-capture.md](./design/plugin-capture.md).
 - [ ] **42.4** Rewrite `toggle.ts`: `toggle [type] [name[:component]]`. TUI when args missing.
 - [ ] **42.5** Drop the `mcp:` URL prefix from source parsers. `mcp` is now a subcommand only.
 - [ ] **42.6** Drop `tap install` (`packages/cli/src/commands/tap/install.ts`) — duplicate of `install skill <name>` when `<name>` resolves through a tap.
-- [ ] **42.7** Reduce `installSkill()` callbacks from ~15 to ~6 (scope, agents, scan-warnings, plugin-detected, orphans-found, semantic-offer). Decisions that only existed for agent-mode auto-fail are deleted.
+- [ ] **42.7** Reduce `installSkill()` callbacks from ~15 to ~6 (scope, agents, scan-warnings, plugin-detected, orphans-found, semantic-offer). Decisions that only existed for agent-mode auto-fail are deleted. Capture callbacks (`onCaptureConfirm`/`onCaptureConflict`) from Phase 39 stay.
 - [ ] **42.8** Remove all silent aliases from `packages/cli/src/index.ts` (`list`, bare `remove`/`info`/`link`/`unlink`, etc.). Old paths return clear error with hint.
 - [ ] **42.9** Drop `packages/cli/src/commands/skills/` entirely (subcommand group). `link`/`unlink` deleted (folded into `adopt`). `info`/`remove` move to top level. `move` becomes a flag on adopt.
 - [ ] **42.10** Drop `packages/cli/src/commands/plugin/` subcommand group. `info`/`toggle`/`remove` accessible as top-level commands or via TUI.
@@ -896,18 +904,24 @@ Already designed in [docs/design/plugin-capture.md](./design/plugin-capture.md).
 
 ---
 
-### v2.0 Redesign Dependency Graph
+### v2.2 + v2.0 Redesign Dependency Graph
 
 ```
-Phase 39 (cleanup) ─→ Phase 40 (output) ─→ Phase 42 (typed install) ─→ Phase 44 (TUI)
-                  └─→ Phase 41 (capture) ─→ Phase 43 (adopt + claude-code)
-                                                                       │
-                       Phase 45 (migrate) ────────────────────────────┤
-                                                                       ▼
-                                                            Phase 46 (polish + release)
+[v2.2 release line]
+Phase 39 (capture) ──────────┐
+                             │
+[v2.0 redesign line]         ▼
+Phase 40 (cleanup) ─→ Phase 41 (output) ─→ Phase 42 (typed install) ─→ Phase 44 (TUI)
+                                                              └─────→ Phase 43 (adopt + claude-code)
+                                                                                       │
+                                                Phase 45 (migrate) ───────────────────┤
+                                                                                       ▼
+                                                                             Phase 46 (polish + release)
 ```
 
-Phase 39 is gating — everything depends on the cleanup. Phase 40 (output) and Phase 41 (capture) parallelize after 39. Phase 42 (typed install) needs 40. Phase 43 (adopt) needs 41. Phase 44 (TUI) needs 42 (typed commands to invoke). Phase 45 (migrate) parallels 42–44. Phase 46 is the final integration.
+**v2.2 line:** Phase 39 (plugin capture) ships first as the next minor release on the v2.x line. It's prerequisite to the redesign because Phase 40 (cleanup) drops the legacy state-fallback paths that pre-capture installs may still be relying on, and Phase 42 (typed install) preserves the capture callbacks added in 39.
+
+**v2.0 redesign line:** Phase 40 is gating — the cleanup unblocks everything downstream. Phase 41 (output) is a self-contained refactor. Phase 42 (typed install) needs 41. Phase 43 (adopt) needs 42. Phase 44 (TUI) needs 42 (typed commands to invoke). Phase 45 (migrate) parallels 42–44. Phase 46 is the final integration.
 
 ---
 

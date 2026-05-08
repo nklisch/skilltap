@@ -361,7 +361,8 @@ See [SPEC.md — Version Scope](./SPEC.md#version-scope) for the detailed roadma
 - **v0.3** — Community trust signals, `skilltap publish`, skill templates
 - **v1.0** — Plugin support (Claude Code + Codex formats, MCP injection, agent definitions)
 - **v2.0** — Tooling-surface redesign: unified package model, simplified security, drop agent-mode-as-concept, expanded MCP story (shipped as v2.0/v2.1; see "v2.0 Direction" below for original intent)
-- **v2.0 Redesign** — Second-pass redesign of the v2.x surface: typed install (`install <type> <source>`), one runtime (no agent-mode), multi-screen TUI, plugin capture, Claude Code plugin adoption (see "v2.0 Redesign" below — current direction)
+- **v2.2** — Plugin capture (in flight; ships next on the v2.x line, prerequisite to the redesign)
+- **v2.0 Redesign** — Second-pass redesign of the v2.x surface: typed install (`install <type> <source>`), one runtime (no agent-mode), multi-screen TUI, Claude Code plugin adoption (see "v2.0 Redesign" below — current direction; assumes capture from v2.2)
 
 ---
 
@@ -381,7 +382,7 @@ The v2.0 draft kept too much surface and conceptual baggage from v0.x and v1.0: 
 
 ### What's new
 
-- **Plugin capture** — installing a plugin owns components that pre-exist as standalones. Designed in [docs/design/plugin-capture.md](./design/plugin-capture.md); ships in this redesign.
+- **Plugin capture** — installing a plugin owns components that pre-exist as standalones. Designed in [docs/design/plugin-capture.md](./design/plugin-capture.md); ships in v2.2 (Phase 39) ahead of the redesign and is a prerequisite to it.
 - **Claude Code plugin adoption** — skilltap reads `~/.claude/plugins/installed_plugins.json` and offers to adopt plugins that Claude Code's own `/plugin install` already manages. Real artifact-tracking unification.
 - **Generic agent-plugin scanner** — adoption is built on a pluggable framework (`packages/core/src/agent-plugins/`). Today: claude-code. Future: any agent that ships a plugin system. Codex stub (no marketplace exists today; placeholder for future).
 - **TUI dashboard** (Ink) — bare `skilltap` opens a multi-screen dashboard with tabs for installed skills, plugins, taps, drift, available updates. Each TUI screen has a flat-command equivalent.
@@ -448,7 +449,7 @@ Considered Go (bubbletea/cobra) and Rust (ratatui). Both pay 2–3 months of por
 - [SPEC.md — v2.0 Redesign](./SPEC.md#v20-redesign) — exact behavior, file formats, algorithms.
 - [ARCH.md — v2.0 Redesign Architecture](./ARCH.md#v20-redesign-architecture) — module changes.
 - [UX.md — v2.0 Redesign CLI](./UX.md#v20-redesign-cli) — command reference and flag combinations.
-- [ROADMAP.md — v2.0 Redesign Phases](./ROADMAP.md#v20-redesign-phases-3946) — phase plan (39–46).
+- [ROADMAP.md — v2.2 Plugin Capture](./ROADMAP.md#v22--plugin-capture-current-in-flight) (Phase 39) and [v2.0 Redesign Phases](./ROADMAP.md#v20-redesign--phases-4046) (Phases 40–46).
 - [SECURITY.md — v2.0 Redesign](./SECURITY.md#v20-redesign-single-policy) — single security policy.
 
 ---
