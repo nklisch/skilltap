@@ -123,7 +123,7 @@ export default defineCommand({
       }
 
       for (const [key, val] of rows) {
-        process.stdout.write(`${ansi.dim(key.padEnd(13))} ${val}\n`);
+        out.raw(`${ansi.dim(key.padEnd(13))} ${val}\n`);
       }
       return;
     }
@@ -169,9 +169,9 @@ export default defineCommand({
         ];
 
         for (const [key, val] of rows) {
-          process.stdout.write(`${ansi.dim(key.padEnd(13))} ${val}\n`);
+          out.raw(`${ansi.dim(key.padEnd(13))} ${val}\n`);
         }
-        process.stdout.write(
+        out.raw(
           `\nRun 'skilltap install ${args.name}' to install.\n`,
         );
         return;

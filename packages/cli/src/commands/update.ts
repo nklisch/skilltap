@@ -137,7 +137,7 @@ async function runCheckMode(
     for (const name of updates) {
       log.step(`${ansi.bold(name)} — update available`);
     }
-    process.stdout.write(`\nRun ${ansi.bold("skilltap update")} to apply.\n`);
+    out.raw(`\nRun ${ansi.bold("skilltap update")} to apply.\n`);
   }
 }
 
@@ -228,15 +228,15 @@ async function runUpdate(
       const statSummary = formatDiffStatSummary(stat);
       log.info(`${shaChange} ${ansi.dim(statSummary)}`);
       for (const file of stat.files) {
-        process.stdout.write(`${formatDiffFileLine(file)}\n`);
+        out.raw(`${formatDiffFileLine(file)}\n`);
       }
       if (level === "full" && rawDiff.trim()) {
-        process.stdout.write(`\n${formatUnifiedDiff(rawDiff)}\n`);
+        out.raw(`\n${formatUnifiedDiff(rawDiff)}\n`);
       }
     },
 
     onShowWarnings(warnings: StaticWarning[], skillName: string) {
-      printWarnings(warnings, skillName);
+      printWarnings(warnings, skillName, out);
       if (policy.onWarn === "fail") {
         log.warn(
           `Security warnings in ${ansi.bold(skillName)} (strict mode). Skipping.`,
@@ -275,7 +275,7 @@ async function runUpdate(
         semProgress.fail();
         semProgress = null;
       }
-      printSemanticWarnings(warnings, skillName);
+      printSemanticWarnings(warnings, skillName, out);
       if (policy.onWarn === "fail") {
         log.warn(
           `Semantic warnings in ${ansi.bold(skillName)} (strict mode). Skipping.`,
@@ -320,7 +320,7 @@ async function runUpdate(
       `Skipped: ${skipped.length}`,
       `Up to date: ${upToDate.length}`,
     ].join("   ");
-    process.stdout.write(`\n${ansi.dim(summary)}\n`);
+    out.raw(`\n${ansi.dim(summary)}\n`);
   } else if (!name) {
     log.info("No skills installed.");
   }

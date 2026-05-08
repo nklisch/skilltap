@@ -58,12 +58,10 @@ export default defineCommand({
     const summary = componentSummary(plugin);
 
     if (!args.yes) {
-      process.stdout.write(
-        `Remove plugin ${ansi.bold(plugin.name)}? This will remove ${summary}.\n`,
-      );
+      out.info(`Remove plugin ${ansi.bold(plugin.name)}? This will remove ${summary}.`);
       const confirmed = await confirm({ message: "Continue?" });
       if (!confirmed || typeof confirmed === "symbol") {
-        process.stdout.write("Cancelled.\n");
+        out.info("Cancelled.");
         process.exit(0);
       }
     }

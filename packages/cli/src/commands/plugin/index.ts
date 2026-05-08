@@ -83,7 +83,7 @@ export default defineCommand({
     function printSection(label: string, plugins: ScopedPlugin[]) {
       if (plugins.length === 0) return;
       const count = plugins.length;
-      process.stdout.write(
+      out.raw(
         `\n${ansi.bold(label)} — ${count} ${count === 1 ? "plugin" : "plugins"}\n`,
       );
 
@@ -97,7 +97,7 @@ export default defineCommand({
         truncate(p.repo ?? "local", SRC_W),
       ]);
 
-      process.stdout.write(
+      out.raw(
         `${table(rows, { header: ["Name", "Components", "Source"] })}\n`,
       );
     }
@@ -105,6 +105,6 @@ export default defineCommand({
     printSection("Global plugins", globalPlugins);
     printSection("Project plugins", projectPlugins);
 
-    process.stdout.write("\n");
+    out.raw("\n");
   },
 });

@@ -5,7 +5,7 @@ import {
   type EffectivePolicy,
   loadConfig,
 } from "@skilltap/core";
-import { errorLine } from "./format";
+import { errorLine } from "../output/write-helpers";
 
 export async function loadPolicyOrExit(
   flags: CliFlags,

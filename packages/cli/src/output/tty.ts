@@ -1,6 +1,6 @@
 import { spinner } from "@clack/prompts";
 import type { Output, OutputOptions, Progress } from "@skilltap/core";
-import { ansi, errorLine, infoLine, successLine } from "../ui/format";
+import { ansi } from "../ui/format";
 
 export function createTtyOutput(opts: OutputOptions): Output {
   const quiet = opts.quiet ?? false;
@@ -11,31 +11,19 @@ export function createTtyOutput(opts: OutputOptions): Output {
     mode: "tty",
     info(msg) {
       if (quiet) return;
-      if (opts.stdout) {
-        stdout.write(`${msg}\n`);
-      } else {
-        infoLine(msg);
-      }
+      stdout.write(`${msg}\n`);
     },
     warn(msg, hint) {
       stderr.write(`${ansi.yellow("warning")}: ${msg}\n`);
       if (hint) stderr.write(`  ${ansi.dim("hint")}: ${hint}\n`);
     },
     error(msg, hint) {
-      if (opts.stderr) {
-        stderr.write(`${ansi.red("error")}: ${msg}\n`);
-        if (hint) stderr.write(`  ${ansi.dim("hint")}: ${hint}\n`);
-      } else {
-        errorLine(msg, hint);
-      }
+      stderr.write(`${ansi.red("error")}: ${msg}\n`);
+      if (hint) stderr.write(`  ${ansi.dim("hint")}: ${hint}\n`);
     },
     success(msg) {
       if (quiet) return;
-      if (opts.stdout) {
-        stdout.write(`${ansi.green("✓")} ${msg}\n`);
-      } else {
-        successLine(msg);
-      }
+      stdout.write(`${ansi.green("✓")} ${msg}\n`);
     },
     block(lines, blockOpts) {
       const out = (blockOpts?.stream ?? "stderr") === "stdout" ? stdout : stderr;

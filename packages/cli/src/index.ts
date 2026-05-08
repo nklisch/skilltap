@@ -158,11 +158,13 @@ async function runTelemetryNotice(): Promise<void> {
     return;
   }
 
+  const noticeOut = createOutput({ json: false, quiet: false });
+
   if (process.stdin.isTTY && process.stderr.isTTY) {
     // Interactive: ask the user directly
     const { isCancel } = await import("@clack/prompts");
     const { footerConfirm: confirm } = await import("./ui/footer");
-    process.stderr.write("\n"); // intentional newline before interactive prompt
+    noticeOut.block([""], { stream: "stderr" }); // blank line before interactive prompt
     const opted = await confirm({
       message:
         "Share anonymous usage data? (OS, arch, command success/fail — no skill names or paths. Never sold.)",
@@ -192,7 +194,7 @@ async function runTelemetryNotice(): Promise<void> {
       });
     }
 
-    process.stderr.write("\n"); // intentional newline after interactive prompt
+    noticeOut.block([""], { stream: "stderr" }); // blank line after interactive prompt
   } else {
     // Non-interactive: show banner, don't enable
     const out = createOutput({ json: false, quiet: false });

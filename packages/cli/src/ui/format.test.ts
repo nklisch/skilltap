@@ -1,13 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { errorLine } from "../output/write-helpers";
 import {
-  errorLine,
   formatDiffFileLine,
   formatDiffStatSummary,
   formatInstallCount,
   formatShaChange,
   formatUnifiedDiff,
   highlightMatches,
-  successLine,
   table,
   termWidth,
   truncate,
@@ -147,26 +146,6 @@ describe("errorLine", () => {
   });
 });
 
-describe("successLine", () => {
-  test("writes success message to stdout", () => {
-    const chunks: string[] = [];
-    const original = process.stdout.write.bind(process.stdout);
-    process.stdout.write = (chunk: string | Uint8Array) => {
-      chunks.push(
-        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
-      );
-      return true;
-    };
-    try {
-      successLine("installed my-skill");
-      const output = chunks.join("");
-      expect(output).toContain("✓");
-      expect(output).toContain("installed my-skill");
-    } finally {
-      process.stdout.write = original;
-    }
-  });
-});
 
 describe("formatInstallCount", () => {
   test("formats single install", () => {

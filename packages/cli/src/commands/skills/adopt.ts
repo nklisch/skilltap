@@ -130,11 +130,9 @@ export default defineCommand({
         onWarnings: args.yes
           ? undefined
           : async (warnings, skillName) => {
-              process.stderr.write(
-                `\nwarning: Security warnings for '${skillName}':\n`,
-              );
+              out.warn(`Security warnings for '${skillName}':`);
               for (const w of warnings) {
-                process.stderr.write(`  ${w.file}: ${w.category}\n`);
+                out.warn(`  ${w.file}: ${w.category}`);
               }
               // In interactive mode without --yes, auto-proceed (warnings were shown)
               return true;

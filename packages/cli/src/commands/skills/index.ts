@@ -97,7 +97,7 @@ export default defineCommand({
     function printManagedSection(label: string, section: DiscoveredSkill[]) {
       if (section.length === 0) return;
       const count = section.length;
-      process.stdout.write(
+      out.raw(
         `\n${ansi.bold(label)} (${count} ${count === 1 ? "skill" : "skills"})\n`,
       );
 
@@ -127,7 +127,7 @@ export default defineCommand({
         ];
       });
 
-      process.stdout.write(
+      out.raw(
         `${table(rows, { header: ["Name", "Status", "Agents", "Source"] })}\n`,
       );
     }
@@ -135,7 +135,7 @@ export default defineCommand({
     function printUnmanagedSection(label: string, section: DiscoveredSkill[]) {
       if (section.length === 0) return;
       const count = section.length;
-      process.stdout.write(
+      out.raw(
         `\n${ansi.bold(label)} (${count} ${count === 1 ? "skill" : "skills"})\n`,
       );
 
@@ -148,7 +148,7 @@ export default defineCommand({
         truncate(s.gitRemote ?? "(local)", SRC_W),
       ]);
 
-      process.stdout.write(
+      out.raw(
         `${table(rows, { header: ["Name", "Status", "Source"] })}\n`,
       );
     }
@@ -178,6 +178,6 @@ export default defineCommand({
     printManagedSection("Project (.agents/skills/)", projectManaged);
     printUnmanagedSection("Project — unmanaged", projectUnmanaged);
 
-    process.stdout.write("\n");
+    out.raw("\n");
   },
 });

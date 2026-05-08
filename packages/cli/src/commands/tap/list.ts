@@ -108,8 +108,8 @@ export default defineCommand({
       ]);
     }
 
-    process.stdout.write("\n");
-    process.stdout.write(table(rows));
-    process.stdout.write("\n\n");
+    out.raw("\n");
+    out.raw(table(rows));
+    out.raw("\n\n");
   },
 });

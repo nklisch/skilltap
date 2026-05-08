@@ -188,7 +188,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
       ? undefined
       : async (warnings, skillName): Promise<boolean> => {
           hadStaticWarnings = true;
-          printWarnings(warnings, skillName);
+          printWarnings(warnings, skillName, out);
           if (onWarn === "fail") {
             out.error(
               `Security warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
@@ -238,7 +238,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
             semSpinner.stop();
             semSpinner = null;
           }
-          printSemanticWarnings(warnings, skillName);
+          printSemanticWarnings(warnings, skillName, out);
           if (onWarn === "fail") {
             out.error(
               `Semantic warnings found in ${skillName} — aborting (--strict / on_warn=fail)`,
@@ -358,7 +358,7 @@ export function createInstallCallbacks(ctx: CallbackContext): {
           pluginName: string,
         ): Promise<boolean> => {
           return withProgressPaused(p, async () => {
-            printWarnings(warnings, pluginName);
+            printWarnings(warnings, pluginName, out);
             if (onWarn === "fail") {
               out.error(
                 `Security warnings found in plugin ${pluginName} — aborting (--strict / on_warn=fail)`,

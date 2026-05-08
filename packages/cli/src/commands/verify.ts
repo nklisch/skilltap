@@ -1,5 +1,6 @@
 import { basename, join, resolve } from "node:path";
 import { intro, outro } from "@clack/prompts";
+import type { Output } from "@skilltap/core";
 import { scan, validateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
@@ -78,10 +79,8 @@ export default defineCommand({
     // Frontmatter
     if (frontmatter) {
       out.success("Frontmatter valid");
-      process.stdout.write(`   ${ansi.dim("name:")} ${frontmatter.name}\n`);
-      process.stdout.write(
-        `   ${ansi.dim("description:")} ${frontmatter.description}\n`,
-      );
+      out.raw(`   ${ansi.dim("name:")} ${frontmatter.name}\n`);
+      out.raw(`   ${ansi.dim("description:")} ${frontmatter.description}\n`);
     }
 
     // Name match check
@@ -100,7 +99,7 @@ export default defineCommand({
       out.success("Security scan: clean");
     } else {
       for (const w of scanWarnings) {
-        process.stdout.write(`  ${ansi.yellow("warning")}: ${w.message}\n`);
+        out.raw(`  ${ansi.yellow("warning")}: ${w.message}\n`);
       }
     }
 
@@ -113,28 +112,26 @@ export default defineCommand({
           `Size: ${kb} KB (${fileCount} ${fileCount === 1 ? "file" : "files"})`,
         );
       } else {
-        process.stdout.write(
-          `  ${ansi.yellow("warning")}: Size ${kb} KB exceeds 50 KB limit\n`,
-        );
+        out.raw(`  ${ansi.yellow("warning")}: Size ${kb} KB exceeds 50 KB limit\n`);
       }
     }
 
-    process.stdout.write("\n");
+    out.raw("\n");
 
     // Errors
     const errors = issues.filter((i) => i.severity === "error");
     if (errors.length > 0) {
       for (const e of errors) {
-        process.stdout.write(`  ${ansi.red("✗")} ${e.message}\n`);
+        out.raw(`  ${ansi.red("✗")} ${e.message}\n`);
       }
-      process.stdout.write("\n");
+      out.raw("\n");
       outro(
         `✗ Fix ${errors.length} ${errors.length === 1 ? "issue" : "issues"} before sharing.`,
       );
 
       // Print tap.json snippet even on error so user knows what to aim for
       if (frontmatter) {
-        printTapSnippet(frontmatter.name, frontmatter.description);
+        printTapSnippet(out, frontmatter.name, frontmatter.description);
       }
 
       process.exit(1);
@@ -143,12 +140,12 @@ export default defineCommand({
     outro("✓ Skill is valid and ready to share.");
 
     if (frontmatter) {
-      printTapSnippet(frontmatter.name, frontmatter.description);
+      printTapSnippet(out, frontmatter.name, frontmatter.description);
     }
   },
 });
 
-async function runAll(out: ReturnType<typeof createOutput>, useJson: boolean): Promise<void> {
+async function runAll(out: Output, useJson: boolean): Promise<void> {
   const skills = await scan(process.cwd());
 
   if (skills.length === 0) {
@@ -212,13 +209,13 @@ async function runAll(out: ReturnType<typeof createOutput>, useJson: boolean): P
         `${skill.name} — ✗ ${errors.length} ${errors.length === 1 ? "issue" : "issues"}`,
       );
       for (const e of errors) {
-        process.stdout.write(`    ${ansi.dim(e.message)}\n`);
+        out.raw(`    ${ansi.dim(e.message)}\n`);
       }
       failed++;
     }
   }
 
-  process.stdout.write("\n");
+  out.raw("\n");
 
   if (failed === 0) {
     outro(`✓ All ${passed} ${passed === 1 ? "skill" : "skills"} valid.`);
@@ -228,7 +225,7 @@ async function runAll(out: ReturnType<typeof createOutput>, useJson: boolean): P
   }
 }
 
-async function runJson(out: ReturnType<typeof createOutput>, skillPath: string, skillName: string): Promise<void> {
+async function runJson(out: Output, skillPath: string, skillName: string): Promise<void> {
   const result = await validateSkill(skillPath);
 
   if (!result.ok) {
@@ -250,18 +247,16 @@ async function runJson(out: ReturnType<typeof createOutput>, skillPath: string, 
   if (!valid) process.exit(1);
 }
 
-function printTapSnippet(name: string, description: string): void {
-  process.stdout.write(`\n`);
-  process.stdout.write(
+function printTapSnippet(out: Output, name: string, description: string): void {
+  out.raw(`\n`);
+  out.raw(
     `  ${ansi.dim("To make this discoverable via taps, add to your tap's tap.json:")}\n`,
   );
-  process.stdout.write(`  ${ansi.dim("{")} \n`);
-  process.stdout.write(`    ${ansi.dim(`"name": "${name}",`)}\n`);
-  process.stdout.write(`    ${ansi.dim(`"description": "${description}",`)}\n`);
-  process.stdout.write(
-    `    ${ansi.dim(`"repo": "https://github.com/you/${name}",`)}\n`,
-  );
-  process.stdout.write(`    ${ansi.dim(`"tags": []`)}\n`);
-  process.stdout.write(`  ${ansi.dim("}")}\n`);
-  process.stdout.write(`\n`);
+  out.raw(`  ${ansi.dim("{")} \n`);
+  out.raw(`    ${ansi.dim(`"name": "${name}",`)}\n`);
+  out.raw(`    ${ansi.dim(`"description": "${description}",`)}\n`);
+  out.raw(`    ${ansi.dim(`"repo": "https://github.com/you/${name}",`)}\n`);
+  out.raw(`    ${ansi.dim(`"tags": []`)}\n`);
+  out.raw(`  ${ansi.dim("}")}\n`);
+  out.raw(`\n`);
 }

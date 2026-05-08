@@ -1,4 +1,5 @@
-import { type DoctorCheck, type DoctorIssue, runDoctor } from "@skilltap/core";
+import type { DoctorCheck, DoctorIssue, Output } from "@skilltap/core";
+import { runDoctor } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
@@ -31,7 +32,7 @@ export default defineCommand({
       return;
     }
 
-    await runInteractive(fix);
+    await runInteractive(out, fix);
   },
 });
 
@@ -52,58 +53,54 @@ function issuePrefix(): string {
   return ansi.dim("│");
 }
 
-function printCheck(check: DoctorCheck, fix: boolean): void {
+function printCheck(out: Output, check: DoctorCheck, fix: boolean): void {
   const sym = statusSymbol(check.status);
   const detail = check.detail ? `: ${check.detail}` : "";
   const suffix = check.status === "pass" ? ` ${ansi.green("✓")}` : "";
-  process.stdout.write(`${sym} ${check.name}${detail}${suffix}\n`);
+  out.raw(`${sym} ${check.name}${detail}${suffix}\n`);
 
   if (check.issues) {
     for (const issue of check.issues) {
-      printIssue(issue, fix);
+      printIssue(out, issue, fix);
     }
   }
 
   if (check.info) {
     for (const line of check.info) {
-      process.stdout.write(`${issuePrefix()}  ${ansi.dim(line)}\n`);
+      out.raw(`${issuePrefix()}  ${ansi.dim(line)}\n`);
     }
   }
 }
 
-function printIssue(issue: DoctorIssue, fix: boolean): void {
+function printIssue(out: Output, issue: DoctorIssue, fix: boolean): void {
   const prefix = issuePrefix();
   if (fix && issue.fixed) {
     const fixText = issue.fixDescription
       ? ` — ${issue.fixDescription} ${ansi.green("✓")}`
       : ` ${ansi.green("✓")}`;
-    process.stdout.write(`${prefix}  ${issue.message}${fixText}\n`);
+    out.raw(`${prefix}  ${issue.message}${fixText}\n`);
   } else if (fix && issue.fixable && !issue.fixed) {
-    process.stdout.write(
-      `${prefix}  ${issue.message} ${ansi.red("(fix failed)")}\n`,
-    );
+    out.raw(`${prefix}  ${issue.message} ${ansi.red("(fix failed)")}\n`);
   } else if (fix && !issue.fixable) {
-    process.stdout.write(
+    out.raw(
       `${prefix}  ${ansi.dim("(cannot auto-fix — ")}${issue.message}${ansi.dim(")")}\n`,
     );
   } else {
-    process.stdout.write(`${prefix}  ${issue.message}\n`);
+    out.raw(`${prefix}  ${issue.message}\n`);
   }
 }
 
-async function runInteractive(fix: boolean): Promise<void> {
-  process.stdout.write(
-    `\n${ansi.dim("┌")} skilltap doctor\n${ansi.dim("│")}\n`,
-  );
+async function runInteractive(out: Output, fix: boolean): Promise<void> {
+  out.raw(`\n${ansi.dim("┌")} skilltap doctor\n${ansi.dim("│")}\n`);
 
   const projectRoot = await tryFindProjectRoot();
   const result = await runDoctor({
     fix,
     projectRoot,
-    onCheck: (check) => printCheck(check, fix),
+    onCheck: (check) => printCheck(out, check, fix),
   });
 
-  process.stdout.write(`${ansi.dim("│")}\n`);
+  out.raw(`${ansi.dim("│")}\n`);
 
   // Summary
   const allIssues = result.checks.flatMap((c) => c.issues ?? []);
@@ -113,29 +110,27 @@ async function runInteractive(fix: boolean): Promise<void> {
   const hasFailures = result.checks.some((c) => c.status === "fail");
 
   if (totalIssues === 0) {
-    process.stdout.write(
-      `${ansi.dim("└")} ${ansi.green("✓")} Everything looks good!\n\n`,
-    );
+    out.raw(`${ansi.dim("└")} ${ansi.green("✓")} Everything looks good!\n\n`);
     process.exit(0);
   }
 
   if (fix) {
     if (fixedCount > 0 && unfixable === 0 && !hasFailures) {
-      process.stdout.write(
+      out.raw(
         `${ansi.dim("└")} ${ansi.green("✓")} Fixed ${fixedCount} ${fixedCount === 1 ? "issue" : "issues"}.\n\n`,
       );
     } else if (fixedCount > 0) {
       const remaining = totalIssues - fixedCount;
-      process.stdout.write(
+      out.raw(
         `${ansi.dim("└")} ${ansi.yellow("⚠")} Fixed ${fixedCount} of ${totalIssues} ${totalIssues === 1 ? "issue" : "issues"}. ${remaining} ${remaining === 1 ? "requires" : "require"} manual action.\n\n`,
       );
     } else {
-      process.stdout.write(
+      out.raw(
         `${ansi.dim("└")} ${ansi.yellow("⚠")} ${totalIssues} ${totalIssues === 1 ? "issue" : "issues"} found. None could be auto-fixed.\n\n`,
       );
     }
   } else {
-    process.stdout.write(
+    out.raw(
       `${ansi.dim("└")} ${ansi.yellow("⚠")} ${totalIssues} ${totalIssues === 1 ? "issue" : "issues"} found. Run '${ansi.bold("skilltap doctor --fix")}' to auto-fix where possible.\n\n`,
     );
   }
@@ -145,7 +140,7 @@ async function runInteractive(fix: boolean): Promise<void> {
 
 // ─── JSON output ──────────────────────────────────────────────────────────────
 
-async function runJson(out: ReturnType<typeof createOutput>, fix: boolean): Promise<void> {
+async function runJson(out: Output, fix: boolean): Promise<void> {
   const projectRoot = await tryFindProjectRoot();
   const result = await runDoctor({ fix, projectRoot });
 

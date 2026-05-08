@@ -4,7 +4,7 @@ import {
   S_RADIO_ACTIVE,
   S_RADIO_INACTIVE,
 } from "@clack/prompts";
-import type { Config, RegistrySearchResult, TapEntry } from "@skilltap/core";
+import type { Config, Output, RegistrySearchResult, TapEntry } from "@skilltap/core";
 import {
   composePolicy,
   ensureBuiltinTap,
@@ -152,7 +152,7 @@ export default defineCommand({
       return;
     }
 
-    printTable(filtered);
+    printTable(filtered, out);
   },
 });
 
@@ -164,7 +164,7 @@ async function search(
   query: string,
   local: boolean,
   config: Config,
-  out: ReturnType<typeof createOutput>,
+  out: Output,
 ): Promise<{ filtered: SearchEntry[]; tapEntries: TapEntry[] }> {
   const registries = local ? [] : resolveRegistries(config);
 
@@ -259,7 +259,7 @@ function applyFilter(
 // Table output
 // ---------------------------------------------------------------------------
 
-function printTable(entries: SearchEntry[]): void {
+function printTable(entries: SearchEntry[], out: Output): void {
   const width = termWidth();
   const descWidth = Math.max(20, width - 66);
   const rows = entries.map((e) => [
@@ -271,9 +271,9 @@ function printTable(entries: SearchEntry[]): void {
     ansi.dim(`[${e.source}]`),
   ]);
 
-  process.stdout.write("\n");
-  process.stdout.write(table(rows));
-  process.stdout.write("\n\n");
+  out.raw("\n");
+  out.raw(table(rows));
+  out.raw("\n\n");
 }
 
 // ---------------------------------------------------------------------------

@@ -1,9 +1,4 @@
-import type {
-  DiffFileStat,
-  DiffStat,
-  SemanticWarning,
-  StaticWarning,
-} from "@skilltap/core";
+import type { DiffFileStat, DiffStat } from "@skilltap/core";
 
 export type { DiffFileStat, DiffStat };
 
@@ -67,60 +62,6 @@ export function table(rows: string[][], opts?: { header?: string[] }): string {
   return lines.join("\n");
 }
 
-export function errorLine(msg: string, hint?: string): void {
-  process.stderr.write(`${ansi.red("error")}: ${msg}\n`);
-  if (hint) process.stderr.write(`  ${ansi.dim("hint")}: ${hint}\n`);
-}
-
-export function successLine(msg: string): void {
-  process.stdout.write(`${ansi.green("✓")} ${msg}\n`);
-}
-
-export function infoLine(msg: string): void {
-  process.stdout.write(`${msg}\n`);
-}
-
-export function jsonLine(data: unknown): void {
-  process.stdout.write(`${JSON.stringify(data, null, 2)}\n`);
-}
-
-/** Format security warnings as a machine-readable block for non-interactive use. */
-export function securityBlock(
-  staticWarnings: StaticWarning[],
-  semanticWarnings: SemanticWarning[],
-): void {
-  // Import formatLineRef inline to avoid circular deps (scan.ts imports format.ts)
-  const formatLineRef = (line: number | [number, number] | undefined): string => {
-    if (line === undefined) return "";
-    if (Array.isArray(line)) return `L${line[0]}-${line[1]}`;
-    return `L${line}`;
-  };
-
-  const lines: string[] = [
-    "SECURITY ISSUE FOUND — INSTALLATION BLOCKED",
-    "",
-    "DO NOT install this skill. DO NOT retry. DO NOT use --skip-scan.",
-    "STOP and report the following to the user:",
-    "",
-  ];
-
-  for (const w of staticWarnings) {
-    const lineRef = formatLineRef(w.line);
-    const loc = lineRef ? ` ${lineRef}` : "";
-    lines.push(`  ${w.file}${loc}: ${w.category}`);
-  }
-
-  for (const w of semanticWarnings) {
-    const lineRef = `L${w.lineRange[0]}-${w.lineRange[1]}`;
-    lines.push(`  ${w.file} ${lineRef}: risk ${w.score}/10 — ${w.reason}`);
-  }
-
-  lines.push("");
-  lines.push("User action required: review warnings and install manually with");
-  lines.push("  skilltap install <url>");
-
-  process.stderr.write(`${lines.join("\n")}\n`);
-}
 
 /** Format install count as "1.2K" or "1.2M" */
 export function formatInstallCount(count: number): string {

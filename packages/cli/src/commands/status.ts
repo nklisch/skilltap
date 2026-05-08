@@ -1,4 +1,5 @@
-import { gatherStatus, type StatusReport } from "@skilltap/core";
+import type { Output, StatusReport } from "@skilltap/core";
+import { gatherStatus } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
 import { createOutput } from "../output";
@@ -30,7 +31,7 @@ export default defineCommand({
       return;
     }
 
-    renderStatus(report);
+    renderStatus(out, report);
   },
 });
 
@@ -48,34 +49,32 @@ function reportToJson(report: StatusReport): unknown {
   };
 }
 
-function renderStatus(report: StatusReport): void {
+function renderStatus(out: Output, report: StatusReport): void {
   // ── Header ───────────────────────────────────────────────────────────────
   const projectLabel = report.projectRoot
     ? `${ansi.bold(`project: ${shorten(report.projectRoot)}`)}${ansi.dim(report.hasManifest ? " (manifest)" : " (no manifest)")}`
     : ansi.bold("global (no project root)");
-  process.stdout.write(
-    `\n${ansi.bold("skilltap status")} ${ansi.dim("—")} ${projectLabel}\n\n`,
-  );
+  out.raw(`\n${ansi.bold("skilltap status")} ${ansi.dim("—")} ${projectLabel}\n\n`);
 
   // ── Scope + targets ──────────────────────────────────────────────────────
-  process.stdout.write(`${ansi.dim("Scope:")} ${report.scope}\n`);
-  process.stdout.write(
+  out.raw(`${ansi.dim("Scope:")} ${report.scope}\n`);
+  out.raw(
     `${ansi.dim("Targets:")} ${report.also.length === 0 ? ansi.dim("(none)") : report.also.join(", ")}\n`,
   );
   if (!report.fromV2State) {
-    process.stdout.write(
+    out.raw(
       `${ansi.dim("State:")} reading v1.0 (run ${ansi.bold("skilltap migrate")} to upgrade)\n`,
     );
   }
-  process.stdout.write("\n");
+  out.raw("\n");
 
   // ── Skills ───────────────────────────────────────────────────────────────
   if (report.skills.length === 0) {
-    process.stdout.write(`${ansi.dim("Skills:")} ${ansi.dim("(none)")}\n\n`);
+    out.raw(`${ansi.dim("Skills:")} ${ansi.dim("(none)")}\n\n`);
   } else {
     const managed = report.skills.filter((s) => s.scope !== "linked").length;
     const linked = report.skills.filter((s) => s.scope === "linked").length;
-    process.stdout.write(
+    out.raw(
       `${ansi.bold(`Skills`)} ${ansi.dim(`(${managed} managed, ${linked} linked)`)}\n`,
     );
     for (const skill of report.skills) {
@@ -85,36 +84,30 @@ function renderStatus(report: StatusReport): void {
         : ansi.dim("(local)");
       const alsoText =
         skill.also.length > 0 ? ansi.dim(` [${skill.also.join(", ")}]`) : "";
-      process.stdout.write(
-        `  ${flag} ${skill.name} ${ansi.dim(skill.scope)}${alsoText} ${sourceText}\n`,
-      );
+      out.raw(`  ${flag} ${skill.name} ${ansi.dim(skill.scope)}${alsoText} ${sourceText}\n`);
     }
-    process.stdout.write("\n");
+    out.raw("\n");
   }
 
   // ── Plugins ──────────────────────────────────────────────────────────────
   if (report.plugins.length === 0) {
-    process.stdout.write(`${ansi.dim("Plugins:")} ${ansi.dim("(none)")}\n\n`);
+    out.raw(`${ansi.dim("Plugins:")} ${ansi.dim("(none)")}\n\n`);
   } else {
-    process.stdout.write(
-      `${ansi.bold(`Plugins`)} ${ansi.dim(`(${report.plugins.length})`)}\n`,
-    );
+    out.raw(`${ansi.bold(`Plugins`)} ${ansi.dim(`(${report.plugins.length})`)}\n`);
     for (const plugin of report.plugins) {
       const flag = plugin.active ? ansi.green("✓") : ansi.dim("✗");
       const sourceText = plugin.source
         ? `${ansi.dim(plugin.source)}${plugin.ref ? ansi.dim(`@${plugin.ref}`) : ""}`
         : ansi.dim("(local)");
-      process.stdout.write(
+      out.raw(
         `  ${flag} ${plugin.name} ${ansi.dim(plugin.scope)} ${ansi.dim(`(${plugin.componentSummary})`)} ${sourceText}\n`,
       );
     }
-    process.stdout.write("\n");
+    out.raw("\n");
   }
 
   // ── Taps ─────────────────────────────────────────────────────────────────
-  process.stdout.write(
-    `${ansi.bold("Taps")} ${ansi.dim(`(${report.taps.length})`)}\n`,
-  );
+  out.raw(`${ansi.bold("Taps")} ${ansi.dim(`(${report.taps.length})`)}\n`);
   for (const tap of report.taps) {
     const label = tap.builtin
       ? `${tap.name} ${ansi.dim("(built-in)")}`
@@ -123,19 +116,17 @@ function renderStatus(report: StatusReport): void {
       tap.type === "http"
         ? ansi.yellow(" (http — removed in v2.0; run 'skilltap migrate')")
         : "";
-    process.stdout.write(`  ${label}${typeLabel} ${ansi.dim(tap.url)}\n`);
+    out.raw(`  ${label}${typeLabel} ${ansi.dim(tap.url)}\n`);
   }
-  process.stdout.write("\n");
+  out.raw("\n");
 
   // ── Drift ────────────────────────────────────────────────────────────────
   if (report.drift) {
     if (report.drift.inSync) {
-      process.stdout.write(
-        `${ansi.green("✓")} Manifest in sync with installed state.\n`,
-      );
+      out.raw(`${ansi.green("✓")} Manifest in sync with installed state.\n`);
     } else {
       const counts = countByKind(report.drift.items);
-      process.stdout.write(
+      out.raw(
         `${ansi.yellow("Drift:")} ${counts.summary}. Run ${ansi.bold("skilltap sync")} for details.\n`,
       );
     }

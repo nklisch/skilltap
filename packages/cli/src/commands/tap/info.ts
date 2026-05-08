@@ -46,8 +46,8 @@ export default defineCommand({
       rows.push([ansi.dim("last fetched"), info.lastFetched]);
     rows.push([ansi.dim("skills"), String(info.skillCount)]);
 
-    process.stdout.write("\n");
-    process.stdout.write(table(rows));
-    process.stdout.write("\n\n");
+    out.raw("\n");
+    out.raw(table(rows));
+    out.raw("\n\n");
   },
 });

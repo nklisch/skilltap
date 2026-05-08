@@ -19,7 +19,7 @@ export function sendEvent(
   if (!isTelemetryEnabled(config) && !debug) return;
 
   if (debug) {
-    process.stderr.write(`[telemetry] ${name}: ${JSON.stringify(params)}\n`);
+    console.error(`[telemetry] ${name}: ${JSON.stringify(params)}`);
     if (!isTelemetryEnabled(config)) return;
   }
 

@@ -1,4 +1,4 @@
-import type { SemanticWarning, StaticWarning } from "@skilltap/core";
+import type { Output, SemanticWarning, StaticWarning } from "@skilltap/core";
 import { ansi } from "./format";
 
 export function formatWarnings(
@@ -40,8 +40,9 @@ export function formatWarnings(
 export function printWarnings(
   warnings: StaticWarning[],
   skillName: string,
+  out: Output,
 ): void {
-  process.stderr.write(`${formatWarnings(warnings, skillName)}\n`);
+  out.block([formatWarnings(warnings, skillName)]);
 }
 
 export function formatSemanticWarnings(
@@ -69,8 +70,9 @@ export function formatSemanticWarnings(
 export function printSemanticWarnings(
   warnings: SemanticWarning[],
   skillName: string,
+  out: Output,
 ): void {
-  process.stderr.write(`${formatSemanticWarnings(warnings, skillName)}\n`);
+  out.block([formatSemanticWarnings(warnings, skillName)]);
 }
 
 /** Format a StaticWarning line reference into a location string like "L42" or "L10-15". Returns "" for file-level warnings (line 0). */

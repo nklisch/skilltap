@@ -76,34 +76,34 @@ export default defineCommand({
     ];
 
     for (const [key, val] of rows) {
-      process.stdout.write(`${ansi.dim(key.padEnd(13))} ${val}\n`);
+      out.raw(`${ansi.dim(key.padEnd(13))} ${val}\n`);
     }
 
     if (plugin.components.length > 0) {
-      process.stdout.write("\n");
+      out.raw("\n");
 
       const skills = plugin.components.filter((c) => c.type === "skill");
       const mcps = plugin.components.filter((c) => c.type === "mcp");
       const agents = plugin.components.filter((c) => c.type === "agent");
 
       if (skills.length > 0) {
-        process.stdout.write(`${ansi.bold("Skills:")}\n`);
+        out.raw(`${ansi.bold("Skills:")}\n`);
         for (const c of skills) {
-          process.stdout.write(`  ${componentStatusIcon(c)} ${c.name}\n`);
+          out.raw(`  ${componentStatusIcon(c)} ${c.name}\n`);
         }
       }
 
       if (mcps.length > 0) {
-        process.stdout.write(`${ansi.bold("MCP Servers:")}\n`);
+        out.raw(`${ansi.bold("MCP Servers:")}\n`);
         for (const c of mcps) {
-          process.stdout.write(`  ${componentStatusIcon(c)} ${c.name}\n`);
+          out.raw(`  ${componentStatusIcon(c)} ${c.name}\n`);
         }
       }
 
       if (agents.length > 0) {
-        process.stdout.write(`${ansi.bold("Agent Definitions:")}\n`);
+        out.raw(`${ansi.bold("Agent Definitions:")}\n`);
         for (const c of agents) {
-          process.stdout.write(
+          out.raw(
             `  ${componentStatusIcon(c)} ${c.name} ${ansi.dim(`(${componentKind(c)})`)}\n`,
           );
         }

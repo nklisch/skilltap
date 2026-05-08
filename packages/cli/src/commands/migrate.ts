@@ -31,9 +31,7 @@ export default defineCommand({
           hint: result.error.hint,
         });
       } else {
-        out.error(result.error.message);
-        if (result.error.hint)
-          process.stderr.write(`${ansi.dim("hint:")} ${result.error.hint}\n`);
+        out.error(result.error.message, result.error.hint);
       }
       process.exit(1);
     }
@@ -52,41 +50,37 @@ export default defineCommand({
     }
 
     if (report.alreadyMigrated) {
-      process.stdout.write(
-        `${ansi.green("✓")} Already on v2.0. Nothing to do.\n`,
-      );
+      out.raw(`${ansi.green("✓")} Already on v2.0. Nothing to do.\n`);
       return;
     }
 
-    process.stdout.write(
-      `\n${ansi.bold("skilltap migrate")} — v1.0 → v2.0\n\n`,
-    );
+    out.raw(`\n${ansi.bold("skilltap migrate")} — v1.0 → v2.0\n\n`);
 
     if (report.changes.written.length > 0) {
-      process.stdout.write(`${ansi.green("Wrote:")}\n`);
+      out.raw(`${ansi.green("Wrote:")}\n`);
       for (const path of report.changes.written) {
-        process.stdout.write(`  ${ansi.green("+")} ${path}\n`);
+        out.raw(`  ${ansi.green("+")} ${path}\n`);
       }
-      process.stdout.write("\n");
+      out.raw("\n");
     }
 
     if (report.changes.renamed.length > 0) {
-      process.stdout.write(`${ansi.dim("Renamed:")}\n`);
+      out.raw(`${ansi.dim("Renamed:")}\n`);
       for (const { from, to } of report.changes.renamed) {
-        process.stdout.write(`  ${ansi.dim(from)} → ${ansi.dim(to)}\n`);
+        out.raw(`  ${ansi.dim(from)} → ${ansi.dim(to)}\n`);
       }
-      process.stdout.write("\n");
+      out.raw("\n");
     }
 
     if (report.warnings.length > 0) {
-      process.stdout.write(`${ansi.yellow("Warnings:")}\n`);
+      out.raw(`${ansi.yellow("Warnings:")}\n`);
       for (const warning of report.warnings) {
-        process.stdout.write(`  ${ansi.yellow("!")} ${warning}\n`);
+        out.raw(`  ${ansi.yellow("!")} ${warning}\n`);
       }
-      process.stdout.write("\n");
+      out.raw("\n");
     }
 
-    process.stdout.write(
+    out.raw(
       `${ansi.green("✓")} Migrated ${report.scopes.join(" and ") || "configuration"}. ` +
         `Run ${ansi.bold("skilltap doctor")} to verify.\n`,
     );

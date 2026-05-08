@@ -1,3 +1,4 @@
+import type { Output } from "@skilltap/core";
 import { formatConfigValue, getConfigValue, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { createOutput } from "../../output";
@@ -34,7 +35,7 @@ export default defineCommand({
       if (args.json) {
         out.json(config);
       } else {
-        printFlat(config);
+        printFlat(config, out);
       }
       process.exit(0);
     }
@@ -54,15 +55,15 @@ export default defineCommand({
   },
 });
 
-function printFlat(config: Record<string, unknown>): void {
+function printFlat(config: Record<string, unknown>, out: Output): void {
   for (const [section, value] of Object.entries(config)) {
     if (Array.isArray(value)) {
-      process.stdout.write(`${section} = ${formatConfigValue(value)}\n`);
+      out.raw(`${section} = ${formatConfigValue(value)}\n`);
     } else if (value != null && typeof value === "object") {
       for (const [field, v] of Object.entries(
         value as Record<string, unknown>,
       )) {
-        process.stdout.write(`${section}.${field} = ${formatConfigValue(v)}\n`);
+        out.raw(`${section}.${field} = ${formatConfigValue(v)}\n`);
       }
     }
   }

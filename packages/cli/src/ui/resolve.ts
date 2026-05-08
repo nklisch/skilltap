@@ -16,7 +16,7 @@ export async function tryFindProjectRoot(): Promise<string | undefined> {
   return findProjectRoot().catch(() => undefined);
 }
 
-import { errorLine } from "./format";
+import { errorLine } from "../output/write-helpers";
 import { selectAgent } from "./prompts";
 
 export type ScopeArgs = {
