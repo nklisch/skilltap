@@ -1,4 +1,4 @@
-import { isCancel, select } from "@clack/prompts";
+import { pickOne } from "../ui/picker";
 import {
   adoptAgentPlugin,
   adoptSkill,
@@ -162,22 +162,13 @@ async function runAdoptPicker(
 
   progress.succeed("Scan complete");
 
-  if (options.length === 0) {
-    out.info("Nothing to adopt.");
-    return;
-  }
-
-  const chosen = await select({
+  const item = await pickOne<PickerItem>({
     message: "Select a skill or plugin to adopt:",
     options,
+    emptyMessage: "Nothing to adopt.",
+    out,
   });
-
-  if (isCancel(chosen)) {
-    out.info("Cancelled.");
-    return;
-  }
-
-  const item = chosen as PickerItem;
+  if (!item) return;
   const also = parseAlsoFlag(args.also, undefined);
   const mode = args.move ? "move" : "track-in-place";
 

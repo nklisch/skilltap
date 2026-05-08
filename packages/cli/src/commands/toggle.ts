@@ -1,4 +1,5 @@
-import { isCancel, multiselect, select } from "@clack/prompts";
+import { multiselect } from "@clack/prompts";
+import { pickOne } from "../ui/picker";
 import {
   disableSkill,
   enableSkill,
@@ -310,21 +311,16 @@ async function runTogglePicker(
 ): Promise<void> {
   const projectRoot = await tryFindProjectRoot();
 
-  // Step 1: choose type
-  const typeChoice = await select({
+  const type = await pickOne<ToggleType>({
     message: "What do you want to toggle?",
     options: [
       { value: "skill" as const, label: "Skill" },
       { value: "plugin" as const, label: "Plugin" },
       { value: "mcp" as const, label: "MCP server" },
     ],
+    out,
   });
-  if (isCancel(typeChoice)) {
-    out.info("Cancelled.");
-    return;
-  }
-
-  const type = typeChoice as ToggleType;
+  if (!type) return;
 
   // Step 2: load items for the chosen type
   const stateResult = await loadState(projectRoot);
@@ -334,44 +330,31 @@ async function runTogglePicker(
   }
 
   if (type === "skill") {
-    const skills = stateResult.value.skills;
-    if (skills.length === 0) {
-      out.info("No skills installed.");
-      return;
-    }
-    const choice = await select({
+    const skillName = await pickOne<string>({
       message: "Which skill?",
-      options: skills.map((s) => ({
+      options: stateResult.value.skills.map((s) => ({
         value: s.name,
         label: s.name,
         hint: s.active !== false ? "enabled" : "disabled",
       })),
+      emptyMessage: "No skills installed.",
+      out,
     });
-    if (isCancel(choice)) {
-      out.info("Cancelled.");
-      return;
-    }
-    return runToggleSkill(choice as string, out, false, projectRoot);
+    if (!skillName) return;
+    return runToggleSkill(skillName, out, false, projectRoot);
   }
 
   if (type === "plugin") {
-    const plugins = stateResult.value.plugins;
-    if (plugins.length === 0) {
-      out.info("No plugins installed.");
-      return;
-    }
-    const choice = await select({
+    const pluginName = await pickOne<string>({
       message: "Which plugin?",
-      options: plugins.map((p) => ({
+      options: stateResult.value.plugins.map((p) => ({
         value: p.name,
         label: p.name,
       })),
+      emptyMessage: "No plugins installed.",
+      out,
     });
-    if (isCancel(choice)) {
-      out.info("Cancelled.");
-      return;
-    }
-    const pluginName = choice as string;
+    if (!pluginName) return;
     const plugin = await loadPluginByName(pluginName, projectRoot);
     if (!plugin) {
       out.error(`Plugin '${pluginName}' could not be loaded.`);
@@ -381,21 +364,15 @@ async function runTogglePicker(
   }
 
   // type === "mcp"
-  const mcpServers = stateResult.value.mcpServers;
-  if (mcpServers.length === 0) {
-    out.info("No MCP servers installed.");
-    return;
-  }
-  const choice = await select({
+  const mcpName = await pickOne<string>({
     message: "Which MCP server?",
-    options: mcpServers.map((m) => ({
+    options: stateResult.value.mcpServers.map((m) => ({
       value: m.name,
       label: m.name,
     })),
+    emptyMessage: "No MCP servers installed.",
+    out,
   });
-  if (isCancel(choice)) {
-    out.info("Cancelled.");
-    return;
-  }
-  return runToggleMcp(choice as string, out, false, projectRoot);
+  if (!mcpName) return;
+  return runToggleMcp(mcpName, out, false, projectRoot);
 }
