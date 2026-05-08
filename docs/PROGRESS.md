@@ -3,8 +3,32 @@
 **Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
 **Last updated:** 2026-05-08
-**Phases since last refactor:** 5 (39 capture, 40 cleanup, 41 output, 42 typed CLI, 43 adoption) — refactor pass due before Phase 44 (TUI dashboard) since 44 will lean heavily on the existing patterns and a refactor pass could surface duplication earlier
-**Total refactor passes:** 2
+**Phases since last refactor:** 0 (Refactor 3 just completed)
+**Total refactor passes:** 3
+
+## Refactor 3 (after Phase 43, 2026-05-08)
+
+Triggered by 5 phases since Refactor 2. Plan in `docs/design/refactor-after-phase-43.md` (10 steps); 9 executed, 3 skipped with rationale (one orchestrator agent committed all 9). Net ~250 lines consolidated across the codebase.
+
+**What landed (9 commits, hashes f92bf4a → b71579e):**
+- `setupOutput(args)` helper extracted to `cli/src/ui/setup.ts`. ~46 `createOutput()` boilerplate sites collapsed to one helper call (`f92bf4a`).
+- `Bun.$` replaces the lone `node:fs/promises` `rm` in `plugin/capture.ts` (`c94fb14`).
+- `resolveScope(args, config)` helper used consistently — inline ternaries in adopt/status/move/info replaced (`4941fd0`). Also fixed `ReturnType<typeof createOutput>` annotations to `Output` directly.
+- `remove/shared.ts` mirrors `install/shared.ts` — three remove handlers now share `setupRemoveContext()` (`d062a4b`).
+- `pickOne()` helper in `ui/picker.ts` consolidates clack picker boilerplate; toggle.ts and adopt.ts migrated (`a31ad55`).
+- Three rename commits with deprecated aliases for one cycle: `installMcpOnly` → `installMcp` (`04d7984`), `removeMcpInstall` → `removeMcp` (`19c84ed`), `adoptAgentPlugin` → `adoptPlugin` (`7f3b01d`).
+- Deprecated aliases removed (`b71579e`). Final canonical names only.
+
+**Skipped with rationale (planning audit was based on stale information):**
+- **Step 7** (delete `onDeepScan`) — IS actually invoked in `scanner.ts:198-199` and threaded through `install.ts:763`. Plan's "never invoked" claim was wrong.
+- **Step 8** (migrate 3 plugin tests to `createTestEnv()`) — they already use `createTestEnv()` for state isolation; remaining `mkdtemp()` calls are for fixture content directories (a different concern). No migration needed.
+- **Step 3** (`install/mcp.ts` → `setupInstallContext()`) — `setupInstallContext()` runs interactive prompts (agent selection, intro, builtin tap check, selectAgents) that don't belong in MCP install. The current MCP file already uses the appropriate shared helpers.
+
+**Verification:** Full suite 2085 pass / 51 skip / 0 fail.
+
+**Workflow:** One Sonnet agent executed all 9 steps sequentially, committing per step. Orchestrator (Opus) wrote the plan and verified final state.
+
+---
 
 ## Session-end handoff (2026-05-08, end-of-day)
 
