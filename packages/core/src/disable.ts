@@ -1,10 +1,11 @@
 import { mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
-import { loadSkillState, saveSkillState } from "./config";
+import { loadSkillState } from "./config";
 import { debug } from "./debug";
 import { manifestExists, setManifestComponentActive } from "./manifest";
 import { skillDisabledDir, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
+import { applySkillStateChange } from "./state/apply";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
@@ -89,12 +90,23 @@ export async function disableSkill(
     await rename(src, dest);
   }
 
-  record.active = false;
-  record.updatedAt = new Date().toISOString();
+  const now = new Date().toISOString();
+  const applyResult = await applySkillStateChange({
+    scope: options.scope === "project" ? "project" : "global",
+    projectRoot: options.scope === "project" ? options.projectRoot : undefined,
+    mutate: (current) =>
+      current.map((s) =>
+        s.name === name && (!options.scope || s.scope === options.scope)
+          ? { ...s, active: false as const, updatedAt: now }
+          : s,
+      ),
+  });
+  if (!applyResult.ok) return applyResult;
 
-  const saveResult = await saveSkillState(installed, fileRoot);
-  if (!saveResult.ok) return saveResult;
-  await syncDisableToManifest(record, false, options.projectRoot);
+  const updated = applyResult.value.find(
+    (s) => s.name === name && (!options.scope || s.scope === options.scope),
+  ) ?? record;
+  await syncDisableToManifest(updated, false, options.projectRoot);
 
   return ok(undefined);
 }
@@ -164,12 +176,23 @@ export async function enableSkill(
     if (!symlinkResult.ok) return symlinkResult;
   }
 
-  record.active = true;
-  record.updatedAt = new Date().toISOString();
+  const now = new Date().toISOString();
+  const applyResult = await applySkillStateChange({
+    scope: options.scope === "project" ? "project" : "global",
+    projectRoot: options.scope === "project" ? options.projectRoot : undefined,
+    mutate: (current) =>
+      current.map((s) =>
+        s.name === name && (!options.scope || s.scope === options.scope)
+          ? { ...s, active: true as const, updatedAt: now }
+          : s,
+      ),
+  });
+  if (!applyResult.ok) return applyResult;
 
-  const saveResult = await saveSkillState(installed, fileRoot);
-  if (!saveResult.ok) return saveResult;
-  await syncDisableToManifest(record, true, options.projectRoot);
+  const updated = applyResult.value.find(
+    (s) => s.name === name && (!options.scope || s.scope === options.scope),
+  ) ?? record;
+  await syncDisableToManifest(updated, true, options.projectRoot);
 
   return ok(undefined);
 }
