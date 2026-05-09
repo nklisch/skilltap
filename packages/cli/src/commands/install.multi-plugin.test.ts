@@ -1,5 +1,5 @@
 /**
- * Subprocess tests for multi-plugin install syntax (Unit 3.13 of v2.2-cleanup).
+ * Subprocess tests for multi-plugin install syntax.
  *
  * Exercises:
  *   - `install plugin user/repo:auth` selects a single plugin from a multi-plugin repo

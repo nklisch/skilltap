@@ -36,7 +36,7 @@ Checks that `~/.config/skilltap/config.toml` exists, is valid TOML, and passes s
 - **Warn**: file doesn't exist → run `skilltap config` to create one
 - **Fix** (`--fix`): missing config → creates a default config file
 
-If the loader rejects the file because of a legacy schema marker (`[security.human]`, `[[security.overrides]]`, `[agent-mode]`, etc.), the failure message points at `skilltap migrate` — `loadConfig` hard-fails on legacy keys instead of silently translating.
+If the loader rejects the file because the schema doesn't match, the failure message points at `skilltap migrate`.
 
 ### 3. Directories
 
@@ -101,7 +101,7 @@ These run when there's a project root (a `.git` directory or `skilltap.toml`) be
 
 **13. mcp consistency** — Compares `state.json::mcpServers[]` against each agent's MCP config (Claude Code's `.claude/settings.json`, etc.). Warns on entries in state that aren't in the agent config (missing — needs fresh inject) or orphan agent-config entries with `skilltap:` prefix that have no state record. `--fix` prunes the orphans.
 
-**14. legacy file orphans** — Detects leftover `installed.json` / `plugins.json` / pre-v2.2 config blocks. `--fix` renames each orphan file to `<file>.v1.bak` and points you at `skilltap migrate` if a config translation is needed.
+**14. legacy file orphans** — Detects leftover `installed.json` / `plugins.json` files. `--fix` renames each orphan file to `<file>.v1.bak` and points you at `skilltap migrate` if a config translation is needed.
 
 ## Output
 

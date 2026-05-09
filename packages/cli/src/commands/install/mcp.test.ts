@@ -1,5 +1,5 @@
 /**
- * Subprocess tests for `install mcp <source>` (Unit 3.20 of v2.2-cleanup).
+ * Subprocess tests for `install mcp <source>`.
  *
  * Coverage:
  *   - happy path: a local repo with `.mcp.json` registers a server, writes

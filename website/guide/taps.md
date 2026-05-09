@@ -6,8 +6,6 @@ description: Taps are curated skill registries — git repos listing skills. Cre
 
 A **tap** is a git repository with a `tap.json` file or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
 
-> HTTP registry taps were removed in v2.0; see [the removal note below](#http-registry-taps-removed-in-v20). Taps today are always git-based.
-
 Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
 
 ## Why taps?
@@ -46,7 +44,7 @@ skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
 skilltap tap list
 ```
 
-Shows all registered taps with their names, URLs, and skill count. (Pre-v2.0, the type column also distinguished `git` from `http` taps; HTTP support was removed in v2.0.)
+Shows all registered taps with their names, URLs, and skill count.
 
 ## Inspecting a tap
 
@@ -211,14 +209,6 @@ skilltap tap add my-tap https://github.com/you/my-tap
 ```
 
 Anyone with access to the repo can add it as a tap.
-
-## HTTP registry taps (removed in v2.0)
-
-::: warning Removed in v2.0
-HTTP registry taps were removed in v2.0 — taps are now git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning, and `skilltap migrate` lists them as needing manual conversion or removal. The original design is described in [VISION.md](https://github.com/nklisch/skilltap/blob/main/docs/VISION.md#http-registry-removed-in-v20--historical-reference-only) for historical reference.
-
-If you need a non-git distribution path, host your `tap.json` in a private git repo (Gitea, GitLab self-hosted, or any HTTP-accessible bare repo). `skilltap tap add` works against any git URL.
-:::
 
 ## Auth errors and URL fallback
 

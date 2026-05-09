@@ -55,8 +55,6 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Read-only preview.** `skilltap try <type> <source>` (where type is `skill`, `plugin`, or `mcp`) clones, scans, and inspects a source — without writing anything to install paths or state. Useful for vetting unfamiliar sources before committing to install.
 
-**One-shot legacy migration.** Coming from a pre-v2.2 install? Run `skilltap migrate` once to convert your state to the canonical `state.json`, translate legacy config keys (e.g. `[security.human]`, `[[security.overrides]]`, `[agent-mode]`) into the flat `[security]` + `[scanner]` blocks, and rename leftover `installed.json` / `plugins.json` to `*.v1.bak`. After migration, `loadConfig` hard-fails on any remaining legacy markers — no silent translation at runtime.
-
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
 **Non-interactive automation.** TTY detection plus `--yes` (auto-confirm) and `--json` (machine-readable output) cover AI agents, CI pipelines, and cron jobs. Set `[security] on_warn = "fail"` to hard-fail on security warnings instead of prompting. No separate "agent mode" flag, env var, or config block — every invocation is the same command surface.

@@ -6,8 +6,6 @@
  *             Verifies state.json records scope="global" and no manifest is created.
  *   - Test 2: status --json from the same non-git cwd lists the installed skill
  *             and reports scope="global".
- *
- * Design: docs/designs/completed/e2e-v2.md §"Journey: First-time global install"
  */
 import {
   afterAll,

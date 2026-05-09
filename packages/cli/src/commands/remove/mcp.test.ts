@@ -1,5 +1,5 @@
 /**
- * Subprocess tests for `remove mcp <source>` (Unit 3.20 of v2.2-cleanup).
+ * Subprocess tests for `remove mcp <source>`.
  *
  * Coverage:
  *   - removing an installed MCP server clears the namespaced key from the

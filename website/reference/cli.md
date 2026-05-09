@@ -31,8 +31,6 @@ Most commands accept:
 | `--quiet` | Suppress non-essential output |
 | `--scope project\|global` | Explicit scope. Default: smart-scope (project inside a git repo, global otherwise). |
 
-`info` and `status` deliberately retain the legacy boolean pair (`--global` / `--project`) — they are read-only and the boolean shape matches their per-scope filtering UX.
-
 ---
 
 ## skilltap install
@@ -338,9 +336,7 @@ One-shot upgrade from any prior config/state version. Run once after upgrading. 
 - Splits operational keys (`agent_cli`, `ollama_model`, `threshold`, `max_size`) into the sibling `[scanner]` block
 - Drops `[agent-mode]`, `[agent]`, `[[security.overrides]]`, `preset = …`, `require_scan` (with notes printed for each removed key)
 - Consolidates `installed.json` / `plugins.json` → `state.json`; renames originals to `*.v1.bak`
-- Converts legacy HTTP taps into errors with a list for manual handling
-
-After migration, `loadConfig` hard-fails on any remaining legacy markers — there is no silent translation at runtime, the migration is the explicit upgrade path.
+- Errors on HTTP taps with a list for manual handling
 
 ---
 
@@ -362,8 +358,6 @@ Headless dashboard — skills, plugins, MCPs, taps, drift. Safe to pipe. Equival
 | `--active` | boolean | `false` | Show only active items |
 | `--global` | boolean | `false` | Show only global scope |
 | `--project` | boolean | `false` | Show only project scope |
-
-Note: `status` retains the legacy boolean `--global` / `--project` pair instead of the canonical `--scope` (deliberate carve-out — this is a read-only filter, not an install scope).
 
 ---
 
@@ -393,8 +387,6 @@ Show details about an installed skill, plugin, or MCP server.
 | `--global` | boolean | `false` | Restrict lookup to global scope |
 | `--project` | boolean | `false` | Restrict lookup to project scope |
 | `--json` | boolean | `false` | Output as JSON |
-
-Note: `info` retains the legacy boolean `--global` / `--project` pair (deliberate carve-out — read-only filter).
 
 ---
 
@@ -459,7 +451,7 @@ skilltap config security           # interactive security wizard
 skilltap config telemetry          # telemetry status / enable / disable
 ```
 
-`config set` is restricted to settable keys (the V2 surface). Internal fields (`telemetry.notice_shown`, `telemetry.anonymous_id`) and tap entries are blocked — use `tap add` / `tap remove` and `config telemetry` for those.
+`config set` is restricted to settable keys. Internal fields (`telemetry.notice_shown`, `telemetry.anonymous_id`) and tap entries are blocked — use `tap add` / `tap remove` and `config telemetry` for those.
 
 See [config-options.md](/reference/config-options) for the full settable-key list and value rules.
 
@@ -496,26 +488,3 @@ Update the running binary in place from GitHub Releases.
 |------|------|---------|-------------|
 | `--force` | boolean | `false` | Bypass cache and re-install even if already on the latest version |
 
----
-
-## Removed in v2.2
-
-The following commands were removed in the v2.2 redesign and emit a hint pointing at the canonical replacement:
-
-| Removed | Replacement |
-|---------|-------------|
-| `verify <path>` | `doctor skill <path>` (or `doctor plugin <path>`) |
-| `link <path>` | `adopt <path>` |
-| `unlink <name>` | `remove <type> <name>` |
-| `enable <name>` | `toggle <type> <name>[:<component>]` |
-| `disable <name>` | `toggle <type> <name>[:<component>]` |
-| `skills [...]` | Top-level `list` / `install` / `remove` / `update` / `toggle` |
-| `plugin info\|toggle\|remove` | Top-level `info`, `toggle`, `remove` |
-| `tap install` | `install skill <name>` (tap-resolved names work directly) |
-| `config agent-mode` | No replacement — agent mode (flag, env var, config block) was removed entirely |
-| `install <source>` (no type) | `install skill\|plugin\|mcp <source>` |
-| `remove <name>` (no type) | `remove skill\|plugin\|mcp <name>` |
-| `--no-strict` | Removed; `--strict` remains for one-shot hard-fail. |
-| `--project` / `--global` boolean pair (install/remove/update/etc.) | `--scope project\|global` (`info` and `status` keep the legacy pair) |
-
-Old paths return clear errors with hints pointing at the canonical command.

@@ -86,10 +86,6 @@ There is no `--agent` flag. TTY detection + `--yes` + `--json` covers all automa
 Use `skilltap try skill <source>` to clone, scan, and inspect a source without writing anything. Safe to run on unfamiliar sources.
 :::
 
-::: info Coming from v0.x or v2.1?
-Run `skilltap migrate` once to translate your config and state files. Migrates `[security.human]`/`[security.agent]` blocks, removes `[agent-mode]` and `[[security.overrides]]`, collapses operational keys into `[scanner]`, and consolidates `installed.json` / `plugins.json` → `state.json`. After migration, `loadConfig` hard-fails if any legacy schema marker is still on disk — that's how skilltap tells you the migration didn't run.
-:::
-
 ### Agent symlinks
 
 Pass `--also` to symlink into agent-specific directories:

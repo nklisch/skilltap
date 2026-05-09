@@ -1,5 +1,5 @@
 /**
- * Subprocess tests for the `toggle` command (Unit 3.20 of v2.2-cleanup).
+ * Subprocess tests for the `toggle` command.
  *
  * Coverage:
  *   - `toggle skill <name>` flips the active flag and re-flips on second call.
