@@ -15,7 +15,7 @@ import {
   resolveVersion,
 } from "./npm-registry";
 import type { OnOrphansFound } from "./orphan";
-import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
+import { purgeOrphansWithCallback } from "./orphan";
 import { currentSkillDir, skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
@@ -707,44 +707,19 @@ export async function updateSkill(
   }
 
   // Detect and optionally purge orphan records before updating
-  if (options.onOrphansFound) {
-    const globalOrphans = await findOrphanRecords(globalInstalled.skills);
-    if (globalOrphans.length > 0) {
-      const namesToPurge = await options.onOrphansFound(globalOrphans);
-      if (namesToPurge.length > 0) {
-        const toPurge = globalOrphans.filter((o) =>
-          namesToPurge.includes(o.record.name),
-        );
-        await purgeOrphanRecords(toPurge, globalInstalled.skills);
-        const purgedNames = new Set(namesToPurge);
-        globalInstalled.skills = globalInstalled.skills.filter(
-          (s) => !purgedNames.has(s.name),
-        );
-      }
-    }
-    if (projectInstalled) {
-      const projectOrphans = await findOrphanRecords(
-        projectInstalled.skills,
-        options.projectRoot,
-      );
-      if (projectOrphans.length > 0) {
-        const namesToPurge = await options.onOrphansFound(projectOrphans);
-        if (namesToPurge.length > 0) {
-          const toPurge = projectOrphans.filter((o) =>
-            namesToPurge.includes(o.record.name),
-          );
-          await purgeOrphanRecords(
-            toPurge,
-            projectInstalled.skills,
-            options.projectRoot,
-          );
-          const purgedNames = new Set(namesToPurge);
-          projectInstalled.skills = projectInstalled.skills.filter(
-            (s) => !purgedNames.has(s.name),
-          );
-        }
-      }
-    }
+  globalInstalled.skills = await purgeOrphansWithCallback(
+    globalInstalled.skills,
+    undefined,
+    undefined,
+    options.onOrphansFound,
+  );
+  if (projectInstalled) {
+    projectInstalled.skills = await purgeOrphansWithCallback(
+      projectInstalled.skills,
+      options.projectRoot,
+      options.projectRoot,
+      options.onOrphansFound,
+    );
   }
 
   // Filter by name if specified — check both files

@@ -114,6 +114,26 @@ export async function findOrphanRecords(
   return orphans;
 }
 
+/** Orchestrate orphan detection, callback, and purge.
+ *  Returns the updated list with purged records removed.
+ *  If onOrphansFound is undefined, returns installed unchanged. */
+export async function purgeOrphansWithCallback(
+  installed: InstalledSkill[],
+  fileRoot: string | undefined,
+  projectRoot: string | undefined,
+  onOrphansFound: ((orphans: OrphanRecord[]) => Promise<string[]>) | undefined,
+): Promise<InstalledSkill[]> {
+  if (!onOrphansFound) return installed;
+  const orphans = await findOrphanRecords(installed, projectRoot);
+  if (orphans.length === 0) return installed;
+  const namesToPurge = await onOrphansFound(orphans);
+  if (namesToPurge.length === 0) return installed;
+  const toPurge = orphans.filter((o) => namesToPurge.includes(o.record.name));
+  await purgeOrphanRecords(toPurge, installed, fileRoot);
+  const purgedNames = new Set(namesToPurge);
+  return installed.filter((s) => !purgedNames.has(s.name));
+}
+
 /** Remove orphan records from the skills list and save.
  *  Returns the names of removed records. */
 export async function purgeOrphanRecords(

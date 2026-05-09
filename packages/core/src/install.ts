@@ -10,7 +10,7 @@ import { checkGitInstalled, clone, revParse } from "./git";
 import { addSkillToManifest } from "./manifest/update";
 import { downloadAndExtract, parseNpmSource } from "./npm-registry";
 import type { OnOrphansFound } from "./orphan";
-import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
+import { purgeOrphansWithCallback } from "./orphan";
 import type { Output } from "./output/types";
 import { currentSkillDir, skillCacheDir, skillInstallDir } from "./paths";
 import { detectPlugin } from "./plugin/detect";
@@ -565,24 +565,13 @@ export async function installSkill(
   const installed = installedResult.value;
 
   // 1.1. Detect and optionally purge orphan records before installing
-  if (options.onOrphansFound) {
-    const orphans = await findOrphanRecords(installed, options.projectRoot);
-    if (orphans.length > 0) {
-      const namesToPurge = await options.onOrphansFound(orphans);
-      if (namesToPurge.length > 0) {
-        const toPurge = orphans.filter((o) =>
-          namesToPurge.includes(o.record.name),
-        );
-        await purgeOrphanRecords(toPurge, installed, fileRoot);
-        const purgedNames = new Set(namesToPurge);
-        installed.splice(
-          0,
-          installed.length,
-          ...installed.filter((s) => !purgedNames.has(s.name)),
-        );
-      }
-    }
-  }
+  const purged = await purgeOrphansWithCallback(
+    installed,
+    fileRoot,
+    options.projectRoot,
+    options.onOrphansFound,
+  );
+  installed.splice(0, installed.length, ...purged);
 
   // 1.5. Tap pre-resolution
   const tapResult = await resolveTapName(
