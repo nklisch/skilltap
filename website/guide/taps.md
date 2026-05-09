@@ -234,12 +234,12 @@ This means you can add a tap with an HTTPS URL, and if your machine only has SSH
 Git also applies `url.insteadOf` rewrites transparently before connecting, so the actual connection may use a different URL than what you configured. Use `skilltap tap info <name>` to see what URL is stored.
 :::
 
-For repos where neither HTTPS nor SSH can succeed through skilltap (e.g. complex auth, custom URL schemes, VPN-only servers), use `skilltap link` to symlink a local clone instead:
+For repos where neither HTTPS nor SSH can succeed through skilltap (e.g. complex auth, custom URL schemes, VPN-only servers), use `skilltap adopt` to track a local clone instead:
 
 ```bash
 # Clone manually however your auth requires
 git clone git@internal.corp:team/my-skill ~/dev/my-skill
 
-# Then link the local clone — no cloning through skilltap
-skilltap link ~/dev/my-skill
+# Then adopt the local clone — no cloning through skilltap
+skilltap adopt ~/dev/my-skill
 ```
