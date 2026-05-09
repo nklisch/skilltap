@@ -7,28 +7,29 @@ skilltap — CLI tool for installing agent skills (SKILL.md) and plugins from an
 ## Key Docs
 
 Read these before making architectural decisions:
-- docs/SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases (incl. v2.0 manifest + lockfile)
-- docs/ARCH.md — module boundaries, tech decisions, data flow (incl. v2.0 module additions)
+- docs/SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases
+- docs/ARCH.md — module boundaries, tech decisions, data flow
 - docs/UX.md — CLI reference, flag combos, prompt flows
-- docs/ROADMAP.md — phase plan with dependency graph (v0.1–v1.0 done; v2.0 phases 26–38)
-- docs/VISION.md — motivation, design principles, v2.0 direction
-- docs/SECURITY.md — security model + v2.0 simplification
+- docs/ROADMAP.md — phase plan with dependency graph (v0.1–v2.2 done)
+- docs/VISION.md — motivation, design principles, V2 direction
+- docs/SECURITY.md — security model
 - docs/PROGRESS.md — autopilot tracking: phase status, decision log, deviations
 - docs/designs/completed/phase-{N}.md — per-phase design docs produced before implementation
 
-## v2.0 Redesign conventions
+## v2.2 conventions
 
-The v2.0 redesign (Phases 39–46) is complete. Key conventions for new code:
+skilltap shipped a full V2 cutover in v2.2.0. Key conventions:
 
-- **CLI surface**: `install <type> <source>` where type is `skill | plugin | mcp`. No auto-detect. `remove <type> <name>`, `update [type] [name]`, `toggle [type] [name[:component]]`. No `link`, `unlink`, `verify`, `enable`, `disable` commands — use `adopt`, `doctor`, `toggle`.
-- **No `--agent` flag, no `SKILLTAP_AGENT` env var**: removed entirely. TTY detection + `--yes` + `--json` drives non-interactive behavior. There is no `[agent-mode]` config block. `composePolicy` no longer has an agent-mode branch.
-- **Flat `[security]` block**: `scan`, `on_warn`, `require_scan`, `agent_cli`, `threshold`, `max_size`, `ollama_model`, `overrides` (array of `{match, kind, preset}`) — no `[security.human]`/`[security.agent]` per-mode split. The `trust = [...]` glob design and `policy-v2/` module are unshipped scaffolding (see Gaps section). `composePolicy` reads `config.security.overrides` and resolves the `preset` (`none`/`relaxed`/`standard`/`strict`) to concrete `scan`/`on_warn`/`require_scan` values.
-- **state.json** (canonical): `~/.config/skilltap/state.json` (or `<project>/.agents/state.json`) is the only state store. Written by `install`/`update`/`remove`/`move`/`adopt`/`toggle`/`migrate`. No legacy `installed.json`/`plugins.json` fallback — `migrate` is the explicit upgrade path.
-- **skilltap.toml + skilltap.lock** (project manifest): `install` and `remove` update both when `skilltap.toml` is present. `skilltap sync` reconciles manifest ↔ lockfile ↔ state.
-- **Smart scope default**: inside a git repo, install defaults to `project`; outside, `global`. Use `--scope project|global` to override.
-- **Output interface**: all output goes through `Output` (from `core/src/output/types.ts`). Core functions never write to stdout/stderr. `setupOutput(args)` in CLI commands wires the concrete implementation.
+- **CLI surface**: `install <type> <source>` where type is `skill | plugin | mcp`. No auto-detect. `remove <type> <name>`, `update [type] [name]`, `toggle [type] [name[:component]]`. Removed entirely (no aliases): `link`, `unlink`, `verify`, `enable`, `disable`. Use `adopt`, `doctor`, `toggle`.
+- **Non-interactive**: TTY detection + `--yes` + `--json`. No `--agent` flag, no `SKILLTAP_AGENT` env var, no `[agent]` or `[agent-mode]` config.
+- **Flat `[security]` block**: `scan` (`semantic|static|none`), `on_warn` (`prompt|fail|install`), `trust` (glob array matched against tap name or source URL).
+- **`[scanner]` block** (operational, separate from policy): `agent_cli`, `ollama_model`, `threshold`, `max_size`.
+- **`composePolicy`** in `core/src/policy/` is the canonical resolver. No per-mode branching, no preset resolution, no override array.
+- **state.json** is the only state store. Pre-v2.2 configs/state files trigger a hard error pointing at `skilltap migrate`. No silent fallback anywhere.
+- **skilltap.toml + skilltap.lock** project manifest gained `[[mcps]]` + `[[mcps.lock]]` tables in v2.2. Sync reconciles skills, plugins, and mcps.
+- **Smart scope default**: inside a git repo, `install` defaults to `project`; outside, `global`. The inferred scope is reported in the install output.
+- **`Output` interface**: all output goes through `setupOutput(args)` in CLI commands.
 - **HTTP registry adapter removed** — taps are git-only.
-- **No silent aliases**: old command paths return errors with hints. Don't add aliases.
 
 When adding new code, write against `state.json` directly. Don't re-introduce `installed.json` writes or any per-mode agent branching.
 
