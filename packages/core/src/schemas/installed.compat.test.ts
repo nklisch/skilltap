@@ -3,7 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { loadSkillState } from "@skilltap/core";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
-import { InstalledJsonSchema } from "./installed";
+import { LegacyInstalledJsonSchema as InstalledJsonSchema } from "../migrate/legacy-schemas";
 
 const FIXTURES_DIR = join(
   import.meta.dir,
@@ -47,8 +47,8 @@ describe("installed.json backward compatibility", () => {
     const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.skills).toHaveLength(1);
-    expect(result.value.skills[0]?.description).toBe("");
+    expect(result.value).toHaveLength(1);
+    expect(result.value[0]?.description).toBe("");
   });
 
   test("skill missing sha and updatedAt loads with null/sentinel defaults", async () => {
@@ -56,8 +56,8 @@ describe("installed.json backward compatibility", () => {
     const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.skills[0]?.sha).toBeNull();
-    expect(result.value.skills[0]?.updatedAt).toBe("1970-01-01T00:00:00.000Z");
+    expect(result.value[0]?.sha).toBeNull();
+    expect(result.value[0]?.updatedAt).toBe("1970-01-01T00:00:00.000Z");
   });
 
   test("skill missing also and tap loads with empty array and null defaults", async () => {
@@ -65,7 +65,7 @@ describe("installed.json backward compatibility", () => {
     const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.skills[0]?.also).toEqual([]);
-    expect(result.value.skills[0]?.tap).toBeNull();
+    expect(result.value[0]?.also).toEqual([]);
+    expect(result.value[0]?.tap).toBeNull();
   });
 });

@@ -3,18 +3,18 @@ import { join } from "node:path";
 import { loadSkillState, saveSkillState } from "../../config";
 import { globalBase, resolvedDirExists } from "../../fs";
 import { skillDisabledDir, skillInstallDir } from "../../paths";
-import type { InstalledJson } from "../../schemas/installed";
+import type { InstalledSkill } from "../../schemas/installed";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
 export async function checkSkills(
-  installed: InstalledJson,
+  skills: InstalledSkill[],
   projectRoot?: string,
 ): Promise<DoctorCheck> {
   const issues: DoctorIssue[] = [];
   const globalTracked = new Set<string>();
   const projectTracked = new Set<string>();
 
-  for (const skill of installed.skills) {
+  for (const skill of skills) {
     if (skill.scope === "project") {
       projectTracked.add(skill.name);
     } else if (skill.scope === "linked") {
@@ -37,10 +37,7 @@ export async function checkSkills(
           fix: async () => {
             const r = await loadSkillState();
             if (!r.ok) return;
-            await saveSkillState({
-              ...r.value,
-              skills: r.value.skills.filter((s) => s.name !== skillName),
-            });
+            await saveSkillState(r.value.filter((s) => s.name !== skillName));
           },
         });
       }
@@ -71,10 +68,7 @@ export async function checkSkills(
           const r = await loadSkillState(effectiveRoot);
           if (!r.ok) return;
           await saveSkillState(
-            {
-              ...r.value,
-              skills: r.value.skills.filter((s) => s.name !== skillName),
-            },
+            r.value.filter((s) => s.name !== skillName),
             effectiveRoot,
           );
         },
@@ -126,7 +120,7 @@ export async function checkSkills(
     }
   }
 
-  const total = installed.skills.length;
+  const total = skills.length;
   const missing = issues.filter((i) => i.fixable).length;
   const onDisk = total - missing;
 

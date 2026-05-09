@@ -178,7 +178,7 @@ describe("updateSkill — updated", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const beforeLoaded = await loadSkillState();
-      const oldSha = beforeLoaded.ok ? beforeLoaded.value.skills[0]!.sha : null;
+      const oldSha = beforeLoaded.ok ? beforeLoaded.value[0]!.sha : null;
 
       const newSha = await addFileAndCommit(repo.path, "extra.md", "# Extra");
 
@@ -205,7 +205,7 @@ describe("updateSkill — updated", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
       const before = await loadSkillState();
-      const oldUpdatedAt = before.ok ? before.value.skills[0]!.updatedAt : null;
+      const oldUpdatedAt = before.ok ? before.value[0]!.updatedAt : null;
 
       const newSha = await addFileAndCommit(repo.path, "patch.md", "# Patch");
       await updateSkill({ yes: true });
@@ -213,7 +213,7 @@ describe("updateSkill — updated", () => {
       const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      const record = after.value.skills[0]!;
+      const record = after.value[0]!;
       expect(record.sha).toBe(newSha);
       if (oldUpdatedAt) {
         expect(record.updatedAt).not.toBe(oldUpdatedAt);
@@ -226,24 +226,21 @@ describe("updateSkill — updated", () => {
 
 describe("updateSkill — linked skills", () => {
   test("skips linked skills and fires onProgress with 'linked'", async () => {
-    await saveSkillState({
-      version: 1,
-      skills: [
-        {
-          name: "linked-skill",
-          description: "",
-          repo: null,
-          ref: null,
-          sha: null,
-          scope: "linked",
-          path: "/some/path",
-          tap: null,
-          also: [],
-          installedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await saveSkillState([
+      {
+        name: "linked-skill",
+        description: "",
+        repo: null,
+        ref: null,
+        sha: null,
+        scope: "linked",
+        path: "/some/path",
+        tap: null,
+        also: [],
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
 
     const progress: Array<{ name: string; status: string }> = [];
     const result = await updateSkill({
@@ -545,7 +542,7 @@ describe("updateSkill — project scope", () => {
       const projectInstalled = await loadSkillState(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
-      expect(projectInstalled.value.skills[0]?.sha).toBeTruthy();
+      expect(projectInstalled.value[0]?.sha).toBeTruthy();
     } finally {
       await repo.cleanup();
       await removeTmpDir(projectRoot);

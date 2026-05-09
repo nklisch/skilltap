@@ -67,7 +67,7 @@ async function linkSkillFixture(
   const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) throw installedResult.error;
   const now = new Date().toISOString();
-  installedResult.value.skills.push({
+  installedResult.value.push({
     name: skill.name,
     description: skill.description,
     repo: null,
@@ -147,7 +147,7 @@ describe("git standalone lifecycle", () => {
     const loaded1 = await loadSkillState();
     expect(loaded1.ok).toBe(true);
     if (!loaded1.ok) return;
-    const afterUpdateSha = loaded1.value.skills.find(
+    const afterUpdateSha = loaded1.value.find(
       (s) => s.name === "standalone-skill",
     )?.sha;
     expect(afterUpdateSha).not.toBe(initialSha);
@@ -170,7 +170,7 @@ describe("git standalone lifecycle", () => {
     expect(loaded2.ok).toBe(true);
     if (!loaded2.ok) return;
     expect(
-      loaded2.value.skills.find((s) => s.name === "standalone-skill")?.active,
+      loaded2.value.find((s) => s.name === "standalone-skill")?.active,
     ).toBe(false);
 
     // --- Update while disabled (named → still updates) ---
@@ -195,7 +195,7 @@ describe("git standalone lifecycle", () => {
     expect(loaded3.ok).toBe(true);
     if (!loaded3.ok) return;
     expect(
-      loaded3.value.skills.find((s) => s.name === "standalone-skill")?.active,
+      loaded3.value.find((s) => s.name === "standalone-skill")?.active,
     ).toBe(true);
 
     // --- Move global → project ---
@@ -221,14 +221,14 @@ describe("git standalone lifecycle", () => {
     expect(globalLoaded.ok).toBe(true);
     if (!globalLoaded.ok) return;
     expect(
-      globalLoaded.value.skills.find((s) => s.name === "standalone-skill"),
+      globalLoaded.value.find((s) => s.name === "standalone-skill"),
     ).toBeUndefined();
 
     const projectLoaded = await loadSkillState(projectDir);
     expect(projectLoaded.ok).toBe(true);
     if (!projectLoaded.ok) return;
     expect(
-      projectLoaded.value.skills.find((s) => s.name === "standalone-skill"),
+      projectLoaded.value.find((s) => s.name === "standalone-skill"),
     ).toBeDefined();
 
     // --- Remove ---
@@ -242,7 +242,7 @@ describe("git standalone lifecycle", () => {
     const finalLoaded = await loadSkillState(projectDir);
     expect(finalLoaded.ok).toBe(true);
     if (!finalLoaded.ok) return;
-    expect(finalLoaded.value.skills).toHaveLength(0);
+    expect(finalLoaded.value).toHaveLength(0);
   });
 });
 
@@ -297,10 +297,10 @@ describe("git multi-skill lifecycle", () => {
     expect(loaded1.ok).toBe(true);
     if (!loaded1.ok) return;
     expect(
-      loaded1.value.skills.find((s) => s.name === "skill-b"),
+      loaded1.value.find((s) => s.name === "skill-b"),
     ).toBeDefined();
     expect(
-      loaded1.value.skills.find((s) => s.name === "skill-a"),
+      loaded1.value.find((s) => s.name === "skill-a"),
     ).toBeUndefined();
 
     // --- Remove skill-b (last from this repo) ---
@@ -310,7 +310,7 @@ describe("git multi-skill lifecycle", () => {
     const loaded2 = await loadSkillState();
     expect(loaded2.ok).toBe(true);
     if (!loaded2.ok) return;
-    expect(loaded2.value.skills).toHaveLength(0);
+    expect(loaded2.value).toHaveLength(0);
   });
 });
 
@@ -369,7 +369,7 @@ describe("adopted skill with remote lifecycle", () => {
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills).toHaveLength(0);
+    expect(loaded.value).toHaveLength(0);
   });
 });
 
@@ -419,7 +419,7 @@ describe("adopted local skill (no remote) lifecycle", () => {
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills).toHaveLength(0);
+    expect(loaded.value).toHaveLength(0);
   });
 });
 
@@ -474,7 +474,7 @@ describe("track-in-place adoption lifecycle", () => {
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills).toHaveLength(0);
+    expect(loaded.value).toHaveLength(0);
   });
 });
 
@@ -514,7 +514,7 @@ describe("linked skill lifecycle", () => {
     expect(loaded1.ok).toBe(true);
     if (!loaded1.ok) return;
     expect(
-      loaded1.value.skills.find((s) => s.name === "dev-skill")?.active,
+      loaded1.value.find((s) => s.name === "dev-skill")?.active,
     ).toBe(false);
 
     // --- Enable ---
@@ -527,7 +527,7 @@ describe("linked skill lifecycle", () => {
     expect(loaded2.ok).toBe(true);
     if (!loaded2.ok) return;
     expect(
-      loaded2.value.skills.find((s) => s.name === "dev-skill")?.active,
+      loaded2.value.find((s) => s.name === "dev-skill")?.active,
     ).toBe(true);
 
     // --- Remove ---
@@ -537,6 +537,6 @@ describe("linked skill lifecycle", () => {
     const loaded3 = await loadSkillState();
     expect(loaded3.ok).toBe(true);
     if (!loaded3.ok) return;
-    expect(loaded3.value.skills).toHaveLength(0);
+    expect(loaded3.value).toHaveLength(0);
   });
 });

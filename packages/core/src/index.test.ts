@@ -11,7 +11,6 @@ import {
   ensureDirs,
   err,
   GitError,
-  InstalledJsonSchema,
   InstalledSkillSchema,
   loadConfig,
   loadSkillState,
@@ -59,7 +58,6 @@ describe("@skilltap/core", () => {
     expect(ConfigSchema).toBeDefined();
     expect(SecurityConfigSchema).toBeDefined();
     expect(InstalledSkillSchema).toBeDefined();
-    expect(InstalledJsonSchema).toBeDefined();
     expect(TapSchema).toBeDefined();
     expect(TapSkillSchema).toBeDefined();
     expect(SkillFrontmatterSchema).toBeDefined();

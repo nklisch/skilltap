@@ -82,7 +82,7 @@ describe("remove orphan — remove succeeds when directory already missing", () 
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills).toHaveLength(0);
+      expect(installed.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }

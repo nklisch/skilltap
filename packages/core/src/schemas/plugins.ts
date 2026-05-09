@@ -5,10 +5,6 @@
  * canonical record shapes for installed plugins and their components.
  * `state.json`'s `plugins[]` array uses `PluginRecord`, and every consumer
  * (plugin install, lifecycle, status, doctor checks) references these types.
- *
- * `PluginsJsonSchema` / `PluginsJson` — the v0.x file-wrapper format
- * `{ version: 1, plugins: PluginRecord[] }`. Legacy: only read by
- * `migrate/run.ts` for one-shot upgrades. Never written.
  */
 import { z } from "zod/v4";
 import { PLUGIN_FORMATS } from "./plugin";
@@ -75,11 +71,6 @@ export const PluginRecordSchema = z.object({
   active: z.boolean().default(true),
 });
 
-export const PluginsJsonSchema = z.object({
-  version: z.literal(1),
-  plugins: z.array(PluginRecordSchema).default([]),
-});
-
 export type StoredSkillComponent = z.infer<typeof StoredSkillComponentSchema>;
 export type StoredMcpStdioComponent = z.infer<
   typeof StoredMcpStdioComponentSchema
@@ -91,4 +82,3 @@ export type StoredMcpComponent = z.infer<typeof StoredMcpComponentSchema>;
 export type StoredAgentComponent = z.infer<typeof StoredAgentComponentSchema>;
 export type StoredComponent = z.infer<typeof StoredComponentSchema>;
 export type PluginRecord = z.infer<typeof PluginRecordSchema>;
-export type PluginsJson = z.infer<typeof PluginsJsonSchema>;

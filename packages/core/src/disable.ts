@@ -49,7 +49,7 @@ export async function disableSkill(
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
-  const record = installed.skills.find(
+  const record = installed.find(
     (s) => s.name === name && (!options.scope || s.scope === options.scope),
   );
 
@@ -109,7 +109,7 @@ export async function enableSkill(
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
-  const record = installed.skills.find(
+  const record = installed.find(
     (s) => s.name === name && (!options.scope || s.scope === options.scope),
   );
 

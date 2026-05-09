@@ -47,7 +47,7 @@ export async function moveSkill(
   let record: InstalledSkill | undefined;
   let sourceProjectRoot: string | undefined;
 
-  const globalRecord = globalInstalled.skills.find(
+  const globalRecord = globalInstalled.find(
     (s) => s.name === name && (s.scope === "global" || s.scope === "linked"),
   );
 
@@ -71,7 +71,7 @@ export async function moveSkill(
     for (const root of candidateRoots) {
       const projectInstalledResult = await loadSkillState(root);
       if (!projectInstalledResult.ok) continue;
-      const projectRecord = projectInstalledResult.value.skills.find(
+      const projectRecord = projectInstalledResult.value.find(
         (s) => s.name === name && s.scope === "project",
       );
       if (projectRecord) {
@@ -171,12 +171,12 @@ export async function moveSkill(
   const sourceInstalledResult = await loadSkillState(sourceFileRoot);
   if (!sourceInstalledResult.ok) return sourceInstalledResult;
   const sourceInstalled = sourceInstalledResult.value;
-  const sourceIdx = sourceInstalled.skills.findIndex(
+  const sourceIdx = sourceInstalled.findIndex(
     // biome-ignore lint/style/noNonNullAssertion: record found earlier in function via findIndex check
     (s) => s.name === name && s.scope === record!.scope,
   );
   if (sourceIdx !== -1) {
-    sourceInstalled.skills.splice(sourceIdx, 1);
+    sourceInstalled.splice(sourceIdx, 1);
   }
   const saveSourceResult = await saveSkillState(
     sourceInstalled,
@@ -190,7 +190,7 @@ export async function moveSkill(
   const targetInstalledResult = await loadSkillState(targetFileRoot);
   if (!targetInstalledResult.ok) return targetInstalledResult;
   const targetInstalled = targetInstalledResult.value;
-  targetInstalled.skills.push(newRecord);
+  targetInstalled.push(newRecord);
   const saveTargetResult = await saveSkillState(
     targetInstalled,
     targetFileRoot,

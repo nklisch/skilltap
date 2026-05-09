@@ -58,8 +58,8 @@ describe("install — standalone skill", () => {
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills).toHaveLength(1);
-      expect(installed.value.skills[0]?.name).toBe("standalone-skill");
+      expect(installed.value).toHaveLength(1);
+      expect(installed.value[0]?.name).toBe("standalone-skill");
     } finally {
       await repo.cleanup();
     }
@@ -123,8 +123,8 @@ describe("install — multi-skill repo", () => {
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills).toHaveLength(2);
-      const names = installed.value.skills.map((s) => s.name).sort();
+      expect(installed.value).toHaveLength(2);
+      const names = installed.value.map((s) => s.name).sort();
       expect(names).toEqual(["skill-a", "skill-b"]);
     } finally {
       await repo.cleanup();

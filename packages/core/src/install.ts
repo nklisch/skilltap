@@ -536,6 +536,12 @@ export async function installSkill(
           namesToPurge.includes(o.record.name),
         );
         await purgeOrphanRecords(toPurge, installed, fileRoot);
+        const purgedNames = new Set(namesToPurge);
+        installed.splice(
+          0,
+          installed.length,
+          ...installed.filter((s) => !purgedNames.has(s.name)),
+        );
       }
     }
   }
@@ -815,7 +821,7 @@ export async function installSkill(
     const projectRoot =
       options.scope === "project" ? options.projectRoot : undefined;
     for (const skill of selected) {
-      const conflict = installed.skills.find(
+      const conflict = installed.find(
         (s) => s.name === skill.name && s.scope === options.scope,
       );
       if (conflict) {
@@ -828,7 +834,7 @@ export async function installSkill(
 
         if (!(await resolvedDirExists(conflictDir))) {
           // Phantom conflict: record exists but directory is gone. Clean up and install fresh.
-          installed.skills = installed.skills.filter((s) => s !== conflict);
+          installed.splice(installed.indexOf(conflict), 1);
           await removeAgentSymlinks(
             conflict.name,
             conflict.also,
@@ -971,7 +977,7 @@ export async function installSkill(
     debug("placements complete", { installed: newRecords.map((r) => r.name) });
 
     // 10. Save state — writes to state.json.
-    installed.skills.push(...newRecords);
+    installed.push(...newRecords);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 

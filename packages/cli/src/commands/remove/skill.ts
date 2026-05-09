@@ -56,8 +56,8 @@ export const skillRemoveCommand = defineCommand({
       ? await loadSkillState(projectRoot)
       : null;
     const allSkills: InstalledSkill[] = [
-      ...globalResult.value.skills,
-      ...(projectResult?.ok ? projectResult.value.skills : []),
+      ...globalResult.value,
+      ...(projectResult?.ok ? projectResult.value : []),
     ];
 
     let skillsToRemove: InstalledSkill[];

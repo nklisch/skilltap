@@ -76,7 +76,7 @@ export async function runDoctor(
     await checkInstalled(projectRoot);
   await emit(installedCheck);
 
-  const safeInstalled = installed ?? { version: 1 as const, skills: [] };
+  const safeInstalled = installed ?? [];
   const safeConfig = config ?? ConfigSchema.parse({});
 
   // 5. Skills integrity

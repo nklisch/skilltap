@@ -29,7 +29,7 @@ export async function removeSkill(
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
-  const idx = installed.skills.findIndex(
+  const idx = installed.findIndex(
     (s) => s.name === name && (!options.scope || s.scope === options.scope),
   );
 
@@ -43,7 +43,7 @@ export async function removeSkill(
   }
 
   // biome-ignore lint/style/noNonNullAssertion: idx was found via findIndex, guaranteed in range
-  const record = installed.skills[idx]!;
+  const record = installed[idx]!;
 
   // Remove agent symlinks
   await removeAgentSymlinks(
@@ -81,7 +81,7 @@ export async function removeSkill(
 
   // Remove cache if this was the last skill from the repo
   if (record.path !== null && record.repo) {
-    const remainingFromSameRepo = installed.skills.filter(
+    const remainingFromSameRepo = installed.filter(
       (s, i) => i !== idx && s.repo === record.repo,
     );
     if (remainingFromSameRepo.length === 0) {
@@ -100,7 +100,7 @@ export async function removeSkill(
     }
   }
 
-  installed.skills.splice(idx, 1);
+  installed.splice(idx, 1);
   const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 

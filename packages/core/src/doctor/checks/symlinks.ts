@@ -2,19 +2,19 @@ import { mkdir, readlink, symlink, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { globalBase, isSymlinkAt, resolvedDirExists } from "../../fs";
 import { skillInstallDir } from "../../paths";
-import type { InstalledJson } from "../../schemas/installed";
+import type { InstalledSkill } from "../../schemas/installed";
 import { AGENT_PATHS } from "../../symlink";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
 export async function checkSymlinks(
-  installed: InstalledJson,
+  skills: InstalledSkill[],
   projectRoot?: string,
 ): Promise<DoctorCheck> {
   const issues: DoctorIssue[] = [];
   let total = 0;
   let valid = 0;
 
-  for (const skill of installed.skills) {
+  for (const skill of skills) {
     if (skill.also.length === 0) continue;
 
     const isLinked = skill.scope === "linked";

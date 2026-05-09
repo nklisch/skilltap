@@ -15,7 +15,6 @@ import {
 } from "../paths";
 import type {
   PluginRecord,
-  PluginsJson,
   StoredComponent,
   StoredMcpComponent,
 } from "../schemas/plugins";
@@ -46,7 +45,7 @@ export type ToggleResult = {
 };
 
 type ScopedState = {
-  state: PluginsJson;
+  state: PluginRecord[];
   scope: "global" | "project";
   projectRoot?: string;
 };

@@ -3,7 +3,7 @@ import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "./dirs";
 import { type Config, ConfigSchema } from "./schemas/config";
 import { parseWithResult } from "./schemas/index";
-import type { InstalledJson } from "./schemas/installed";
+import type { InstalledSkill } from "./schemas/installed";
 import { loadState } from "./state/load";
 import { saveState } from "./state/save";
 import { err, ok, type Result, UserError } from "./types";
@@ -175,25 +175,24 @@ export async function saveConfig(config: Config): Promise<Result<void>> {
   }
 }
 
-// state.json is the only canonical store. The skill-slice accessor: read/write
-// just the `skills[]` array, leaving plugins and mcpServers untouched.
+/** state.json is the only canonical store. Skill-slice accessor: read just skills[]. */
 export async function loadSkillState(
   projectRoot?: string,
-): Promise<Result<InstalledJson>> {
+): Promise<Result<InstalledSkill[]>> {
   const stateResult = await loadState(projectRoot);
   if (!stateResult.ok) return stateResult;
-  return ok({ version: 1 as const, skills: [...stateResult.value.skills] });
+  return ok([...stateResult.value.skills]);
 }
 
 export async function saveSkillState(
-  installed: InstalledJson,
+  skills: InstalledSkill[],
   projectRoot?: string,
 ): Promise<Result<void>> {
   const stateResult = await loadState(projectRoot);
   if (!stateResult.ok) return stateResult;
   const newState = {
     version: 2 as const,
-    skills: installed.skills,
+    skills,
     plugins: stateResult.value.plugins,
     mcpServers: stateResult.value.mcpServers,
   };

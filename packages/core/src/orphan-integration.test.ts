@@ -20,7 +20,7 @@ import { loadSkillState, saveSkillState } from "./config";
 import { installSkill } from "./install";
 import type { OrphanRecord } from "./orphan";
 import { skillInstallDir } from "./paths";
-import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import type { InstalledSkill } from "./schemas/installed";
 import { updateSkill } from "./update";
 
 let env: TestEnv;
@@ -57,8 +57,8 @@ function makeSkill(overrides: Partial<InstalledSkill>): InstalledSkill {
   };
 }
 
-function makeInstalled(skills: InstalledSkill[]): InstalledJson {
-  return { version: 1, skills };
+function makeInstalled(skills: InstalledSkill[]): InstalledSkill[] {
+  return skills;
 }
 
 // ─── Gap #11-12: updateSkill orphan pre-flight ─────────────────────────────
@@ -88,7 +88,7 @@ describe("updateSkill — orphan pre-flight", () => {
     const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
-    expect(reloaded.value.skills).toHaveLength(0);
+    expect(reloaded.value).toHaveLength(0);
 
     // updateSkill itself should succeed (nothing to update after purge)
     expect(result.ok).toBe(true);
@@ -128,15 +128,15 @@ describe("updateSkill — orphan pre-flight", () => {
     const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
-    expect(reloaded.value.skills).toHaveLength(1);
-    expect(reloaded.value.skills[0]!.name).toBe("keep-me");
+    expect(reloaded.value).toHaveLength(1);
+    expect(reloaded.value[0]!.name).toBe("keep-me");
 
     // updateSkill fails because the skill was requested by name (via "all" pass)
     // but it has no directory. updateSkill without a name processes all active skills.
     // The ghost skill is still in the list and will try to update — but since it's a
     // standalone git skill with no real repo, the git fetch will fail.
     // We just verify the purge wasn't done, not the update result.
-    expect(reloaded.value.skills[0]!.name).toBe("keep-me");
+    expect(reloaded.value[0]!.name).toBe("keep-me");
   });
 });
 
@@ -221,7 +221,7 @@ describe("installSkill — phantom conflict", () => {
       const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
-      expect(reloaded.value.skills).toHaveLength(1);
+      expect(reloaded.value).toHaveLength(1);
     } finally {
       await repo.cleanup();
     }
@@ -256,7 +256,7 @@ describe("installSkill — phantom conflict", () => {
       const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
-      expect(reloaded.value.skills.every((s) => s.name !== "stale-skill")).toBe(
+      expect(reloaded.value.every((s) => s.name !== "stale-skill")).toBe(
         true,
       );
     } finally {
@@ -347,7 +347,7 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
       const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
-      const names = reloaded.value.skills.map((s) => s.name);
+      const names = reloaded.value.map((s) => s.name);
       expect(names).toContain("skill-a");
       expect(names).not.toContain("skill-b");
 
@@ -407,7 +407,7 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
       const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
-      const names = reloaded.value.skills.map((s) => s.name);
+      const names = reloaded.value.map((s) => s.name);
       expect(names).toContain("skill-b");
     } finally {
       await removeTmpDir(repoDir);

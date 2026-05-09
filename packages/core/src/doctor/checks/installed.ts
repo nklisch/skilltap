@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { z } from "zod/v4";
 import { getConfigDir } from "../../dirs";
 import { fileExists } from "../../fs";
-import type { InstalledJson } from "../../schemas/installed";
-import { InstalledJsonSchema } from "../../schemas/installed";
+import type { InstalledSkill } from "../../schemas/installed";
+import { LegacyInstalledJsonSchema } from "../../migrate/legacy-schemas";
+import type { LegacyInstalledJson } from "../../migrate/legacy-schemas";
 import { loadState } from "../../state/load";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
@@ -12,7 +13,7 @@ async function readInstalledFile(
   file: string,
   label: string,
   issues: DoctorIssue[],
-): Promise<InstalledJson | null> {
+): Promise<LegacyInstalledJson | null> {
   if (!(await fileExists(file))) return null;
 
   let raw: unknown;
@@ -36,7 +37,7 @@ async function readInstalledFile(
     return null;
   }
 
-  const result = InstalledJsonSchema.safeParse(raw);
+  const result = LegacyInstalledJsonSchema.safeParse(raw);
   if (!result.success) {
     const backupFile = `${file}.bak`;
     const backupName = `${label}.bak`;
@@ -60,7 +61,7 @@ async function readInstalledFile(
 
 export async function checkInstalled(projectRoot?: string): Promise<{
   check: DoctorCheck;
-  installed: InstalledJson | null;
+  installed: InstalledSkill[] | null;
 }> {
   const globalFile = join(getConfigDir(), "installed.json");
   const issues: DoctorIssue[] = [];
@@ -88,8 +89,10 @@ export async function checkInstalled(projectRoot?: string): Promise<{
           )?.skills ?? null)
         : null;
 
-  const allSkills = [...(globalSkills ?? []), ...(projectSkills ?? [])];
-  const merged: InstalledJson = { version: 1 as const, skills: allSkills };
+  const merged: InstalledSkill[] = [
+    ...(globalSkills ?? []),
+    ...(projectSkills ?? []),
+  ];
 
   if (issues.length > 0) {
     return {
@@ -100,7 +103,7 @@ export async function checkInstalled(projectRoot?: string): Promise<{
 
   const globalCount = globalSkills?.length ?? 0;
   const projectCount = projectSkills?.length ?? 0;
-  const total = allSkills.length;
+  const total = merged.length;
 
   let detail: string;
   if (globalSkills === null && projectSkills === null) {

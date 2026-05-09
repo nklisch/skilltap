@@ -11,8 +11,8 @@ async function loadAllSkills() {
   const projectRoot = await tryFindProjectRoot();
   const projectResult = projectRoot ? await loadSkillState(projectRoot) : null;
   return [
-    ...(globalResult.ok ? globalResult.value.skills : []),
-    ...(projectResult?.ok ? projectResult.value.skills : []),
+    ...(globalResult.ok ? globalResult.value : []),
+    ...(projectResult?.ok ? projectResult.value : []),
   ];
 }
 
@@ -21,8 +21,8 @@ async function loadAllPlugins() {
   const projectRoot = await tryFindProjectRoot();
   const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
   return [
-    ...(globalResult.ok ? globalResult.value.plugins : []),
-    ...(projectResult?.ok ? projectResult.value.plugins : []),
+    ...(globalResult.ok ? globalResult.value : []),
+    ...(projectResult?.ok ? projectResult.value : []),
   ];
 }
 

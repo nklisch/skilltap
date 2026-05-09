@@ -66,12 +66,12 @@ export async function fetchSkillUpdateStatus(
   _fetchPackageMetadata: FetchPackageMetadataFn = fetchPackageMetadata,
 ): Promise<string[]> {
   const globalResult = await loadSkillState();
-  const globalSkills = globalResult.ok ? globalResult.value.skills : [];
+  const globalSkills = globalResult.ok ? globalResult.value : [];
 
   const projectSkills: InstalledSkill[] = [];
   if (projectRoot) {
     const projectResult = await loadSkillState(projectRoot);
-    if (projectResult.ok) projectSkills.push(...projectResult.value.skills);
+    if (projectResult.ok) projectSkills.push(...projectResult.value);
   }
 
   const allSkills = [...globalSkills, ...projectSkills];

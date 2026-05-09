@@ -216,7 +216,7 @@ describe("installSkill — npm standalone", () => {
         expect(installedResult.ok).toBe(true);
         if (!installedResult.ok) return;
 
-        const { skills } = installedResult.value;
+        const skills = installedResult.value;
         expect(skills).toHaveLength(1);
         const record = skills[0]!;
         expect(record.repo).toBe("npm:npm-skill");
@@ -470,7 +470,7 @@ describe("updateSkill — npm", () => {
         const installedResult = await loadSkillState();
         expect(installedResult.ok).toBe(true);
         if (!installedResult.ok) return;
-        expect(installedResult.value.skills[0]!.ref).toBe("2.0.0");
+        expect(installedResult.value[0]!.ref).toBe("2.0.0");
       } finally {
         registry.stop();
       }

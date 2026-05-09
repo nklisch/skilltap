@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
-import type { PluginsJson } from "../schemas/plugins";
+import type { PluginRecord } from "../schemas/plugins";
 import { removeInstalledPlugin, toggleInstalledComponent } from "./lifecycle";
 import { savePlugins } from "./state";
 
@@ -17,8 +17,8 @@ afterEach(async () => {
 
 const NOW = new Date().toISOString();
 
-async function setupPlugin(state: PluginsJson): Promise<void> {
-  const result = await savePlugins(state);
+async function setupPlugin(plugins: PluginRecord[]): Promise<void> {
+  const result = await savePlugins(plugins);
   expect(result.ok).toBe(true);
 }
 
@@ -29,26 +29,23 @@ async function setupSkillDir(name: string): Promise<string> {
   return dir;
 }
 
-const BASE_STATE: PluginsJson = {
-  version: 1,
-  plugins: [
-    {
-      name: "my-plugin",
-      description: "A test plugin",
-      format: "claude-code",
-      repo: "https://github.com/test/my-plugin",
-      ref: "main",
-      sha: "abc123",
-      scope: "global",
-      also: [],
-      tap: null,
-      components: [{ type: "skill", name: "helper", active: true }],
-      installedAt: NOW,
-      updatedAt: NOW,
-      active: true,
-    },
-  ],
+const BASE_PLUGIN: PluginRecord = {
+  name: "my-plugin",
+  description: "A test plugin",
+  format: "claude-code",
+  repo: "https://github.com/test/my-plugin",
+  ref: "main",
+  sha: "abc123",
+  scope: "global",
+  also: [],
+  tap: null,
+  components: [{ type: "skill", name: "helper", active: true }],
+  installedAt: NOW,
+  updatedAt: NOW,
+  active: true,
 };
+
+const BASE_STATE: PluginRecord[] = [BASE_PLUGIN];
 
 describe("removeInstalledPlugin", () => {
   test("removes skill directories", async () => {
@@ -75,11 +72,11 @@ describe("removeInstalledPlugin", () => {
     const reloaded = await loadPlugins();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
-    expect(reloaded.value.plugins).toHaveLength(0);
+    expect(reloaded.value).toHaveLength(0);
   });
 
   test("returns error if plugin not found", async () => {
-    await setupPlugin({ version: 1, plugins: [] });
+    await setupPlugin([]);
 
     const result = await removeInstalledPlugin("nonexistent");
     expect(result.ok).toBe(false);
@@ -88,15 +85,12 @@ describe("removeInstalledPlugin", () => {
   });
 
   test("handles disabled skills in .disabled/", async () => {
-    const disabledState: PluginsJson = {
-      version: 1,
-      plugins: [
+    const disabledState: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           components: [{ type: "skill", name: "helper", active: false }],
         },
-      ],
-    };
+    ];
     await setupPlugin(disabledState);
 
     // Create the skill in the disabled dir
@@ -120,11 +114,9 @@ describe("removeInstalledPlugin", () => {
   });
 
   test("removes agent definition files", async () => {
-    const stateWithAgent: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithAgent: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           components: [
             {
               type: "agent",
@@ -134,8 +126,7 @@ describe("removeInstalledPlugin", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithAgent);
 
     const agentFile = join(env.homeDir, ".claude", "agents", "reviewer.md");
@@ -159,11 +150,9 @@ describe("removeInstalledPlugin", () => {
   });
 
   test("removes MCP entries from agent configs", async () => {
-    const stateWithMcp: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithMcp: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           also: ["claude-code"],
           components: [
             {
@@ -177,8 +166,7 @@ describe("removeInstalledPlugin", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithMcp);
 
     // Set up the MCP config
@@ -231,15 +219,12 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("activates a skill (moves from .disabled/, returns nowActive=true)", async () => {
-    const disabledState: PluginsJson = {
-      version: 1,
-      plugins: [
+    const disabledState: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           components: [{ type: "skill", name: "helper", active: false }],
         },
-      ],
-    };
+    ];
     await setupPlugin(disabledState);
 
     // Place in disabled dir
@@ -272,11 +257,9 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("deactivates an MCP server (removes from agent configs)", async () => {
-    const stateWithMcp: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithMcp: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           also: ["claude-code"],
           components: [
             {
@@ -290,8 +273,7 @@ describe("toggleInstalledComponent", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithMcp);
 
     const configPath = join(env.homeDir, ".claude", "settings.json");
@@ -323,11 +305,9 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("activates an MCP server (injects into agent configs)", async () => {
-    const stateWithMcp: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithMcp: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           also: ["claude-code"],
           components: [
             {
@@ -341,8 +321,7 @@ describe("toggleInstalledComponent", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithMcp);
 
     const configPath = join(env.homeDir, ".claude", "settings.json");
@@ -365,11 +344,9 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("deactivates an agent (moves to .disabled/)", async () => {
-    const stateWithAgent: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithAgent: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           components: [
             {
               type: "agent",
@@ -379,8 +356,7 @@ describe("toggleInstalledComponent", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithAgent);
 
     const agentFile = join(env.homeDir, ".claude", "agents", "reviewer.md");
@@ -409,11 +385,9 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("activates an agent (moves from .disabled/ back)", async () => {
-    const stateWithAgent: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithAgent: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           components: [
             {
               type: "agent",
@@ -423,8 +397,7 @@ describe("toggleInstalledComponent", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithAgent);
 
     const disabledPath = join(
@@ -470,14 +443,14 @@ describe("toggleInstalledComponent", () => {
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
 
-    const plugin = reloaded.value.plugins.find((p) => p.name === "my-plugin");
+    const plugin = reloaded.value.find((p) => p.name === "my-plugin");
     expect(plugin).toBeDefined();
     const comp = plugin!.components.find((c) => c.name === "helper");
     expect(comp?.active).toBe(false);
   });
 
   test("returns error if plugin not found", async () => {
-    await setupPlugin({ version: 1, plugins: [] });
+    await setupPlugin([]);
 
     const result = await toggleInstalledComponent(
       "nonexistent",
@@ -503,11 +476,9 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("toggle HTTP MCP component off removes from agent config", async () => {
-    const stateWithHttpMcp: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithHttpMcp: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           also: ["claude-code"],
           components: [
             {
@@ -520,8 +491,7 @@ describe("toggleInstalledComponent", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithHttpMcp);
 
     const configPath = join(env.homeDir, ".claude", "settings.json");
@@ -551,11 +521,9 @@ describe("toggleInstalledComponent", () => {
   });
 
   test("toggle HTTP MCP component on re-injects { url } entry", async () => {
-    const stateWithHttpMcp: PluginsJson = {
-      version: 1,
-      plugins: [
+    const stateWithHttpMcp: PluginRecord[] = [
         {
-          ...BASE_STATE.plugins[0]!,
+          ...BASE_PLUGIN,
           also: ["claude-code"],
           components: [
             {
@@ -568,8 +536,7 @@ describe("toggleInstalledComponent", () => {
             },
           ],
         },
-      ],
-    };
+    ];
     await setupPlugin(stateWithHttpMcp);
 
     const configPath = join(env.homeDir, ".claude", "settings.json");

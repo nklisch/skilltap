@@ -32,25 +32,22 @@ async function seedGlobalSkill(name: string, also: string[] = []) {
   const skillDir = join(homeDir, ".agents", "skills", name);
   await mkdir(skillDir, { recursive: true });
   await Bun.write(join(skillDir, "SKILL.md"), `---\nname: ${name}\n---\n`);
-  await saveSkillState({
-    version: 1,
-    skills: [
-      {
-        name,
-        description: "",
-        repo: "https://github.com/example/repo",
-        ref: "main",
-        sha: null,
-        scope: "global",
-        path: null,
-        tap: null,
-        also,
-        installedAt: NOW,
-        updatedAt: NOW,
-        active: true,
-      },
-    ],
-  });
+  await saveSkillState([
+    {
+      name,
+      description: "",
+      repo: "https://github.com/example/repo",
+      ref: "main",
+      sha: null,
+      scope: "global",
+      path: null,
+      tap: null,
+      also,
+      installedAt: NOW,
+      updatedAt: NOW,
+      active: true,
+    },
+  ]);
   if (also.length > 0) {
     await createAgentSymlinks(name, skillDir, also, "global");
   }
@@ -62,25 +59,22 @@ async function seedLinkedSkill(
   targetPath: string,
   also: string[] = [],
 ) {
-  await saveSkillState({
-    version: 1,
-    skills: [
-      {
-        name,
-        description: "",
-        repo: null,
-        ref: null,
-        sha: null,
-        scope: "linked",
-        path: targetPath,
-        tap: null,
-        also,
-        installedAt: NOW,
-        updatedAt: NOW,
-        active: true,
-      },
-    ],
-  });
+  await saveSkillState([
+    {
+      name,
+      description: "",
+      repo: null,
+      ref: null,
+      sha: null,
+      scope: "linked",
+      path: targetPath,
+      tap: null,
+      also,
+      installedAt: NOW,
+      updatedAt: NOW,
+      active: true,
+    },
+  ]);
   if (also.length > 0) {
     await createAgentSymlinks(name, targetPath, also, "global");
   }
@@ -116,7 +110,7 @@ describe("disableSkill", () => {
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    const record = loaded.value.skills.find((s) => s.name === "my-skill");
+    const record = loaded.value.find((s) => s.name === "my-skill");
     expect(record?.active).toBe(false);
   });
 
@@ -140,7 +134,7 @@ describe("disableSkill", () => {
       const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
-      const record = loaded.value.skills.find((s) => s.name === "linked-skill");
+      const record = loaded.value.find((s) => s.name === "linked-skill");
       expect(record?.active).toBe(false);
     } finally {
       await removeTmpDir(targetDir);
@@ -196,7 +190,7 @@ describe("enableSkill", () => {
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    const record = loaded.value.skills.find((s) => s.name === "my-skill");
+    const record = loaded.value.find((s) => s.name === "my-skill");
     expect(record?.active).toBe(true);
   });
 
@@ -219,7 +213,7 @@ describe("enableSkill", () => {
       const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
-      const record = loaded.value.skills.find((s) => s.name === "linked-skill");
+      const record = loaded.value.find((s) => s.name === "linked-skill");
       expect(record?.active).toBe(true);
     } finally {
       await removeTmpDir(targetDir);
@@ -254,25 +248,22 @@ describe("disableSkill — project scope", () => {
         "---\nname: proj-skill\n---\n",
       );
       await saveSkillState(
-        {
-          version: 1,
-          skills: [
-            {
-              name: "proj-skill",
-              description: "",
-              repo: "https://github.com/example/repo",
-              ref: "main",
-              sha: null,
-              scope: "project",
-              path: null,
-              tap: null,
-              also: [],
-              installedAt: NOW,
-              updatedAt: NOW,
-              active: true,
-            },
-          ],
-        },
+        [
+          {
+            name: "proj-skill",
+            description: "",
+            repo: "https://github.com/example/repo",
+            ref: "main",
+            sha: null,
+            scope: "project",
+            path: null,
+            tap: null,
+            also: [],
+            installedAt: NOW,
+            updatedAt: NOW,
+            active: true,
+          },
+        ],
         projectRoot,
       );
 
@@ -296,7 +287,7 @@ describe("disableSkill — project scope", () => {
       const loaded = await loadSkillState(projectRoot);
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
-      const record = loaded.value.skills.find((s) => s.name === "proj-skill");
+      const record = loaded.value.find((s) => s.name === "proj-skill");
       expect(record?.active).toBe(false);
     } finally {
       await removeTmpDir(projectRoot);
@@ -315,25 +306,22 @@ describe("enableSkill — project scope", () => {
         "---\nname: proj-skill\n---\n",
       );
       await saveSkillState(
-        {
-          version: 1,
-          skills: [
-            {
-              name: "proj-skill",
-              description: "",
-              repo: "https://github.com/example/repo",
-              ref: "main",
-              sha: null,
-              scope: "project",
-              path: null,
-              tap: null,
-              also: [],
-              installedAt: NOW,
-              updatedAt: NOW,
-              active: true,
-            },
-          ],
-        },
+        [
+          {
+            name: "proj-skill",
+            description: "",
+            repo: "https://github.com/example/repo",
+            ref: "main",
+            sha: null,
+            scope: "project",
+            path: null,
+            tap: null,
+            also: [],
+            installedAt: NOW,
+            updatedAt: NOW,
+            active: true,
+          },
+        ],
         projectRoot,
       );
 
@@ -368,7 +356,7 @@ describe("enableSkill — project scope", () => {
       const loaded = await loadSkillState(projectRoot);
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
-      const record = loaded.value.skills.find((s) => s.name === "proj-skill");
+      const record = loaded.value.find((s) => s.name === "proj-skill");
       expect(record?.active).toBe(true);
     } finally {
       await removeTmpDir(projectRoot);

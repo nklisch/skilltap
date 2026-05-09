@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { saveSkillState } from "./config";
 import { resolvedDirExists } from "./fs";
 import { skillCacheDir, skillInstallDir } from "./paths";
-import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import type { InstalledSkill } from "./schemas/installed";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { ok, type UserError } from "./types";
@@ -37,12 +37,12 @@ export function formatOrphanReason(reason: OrphanRecord["reason"]): string {
 /** Scan state for records whose corresponding filesystem state is missing.
  *  Pure verification — does not modify anything. */
 export async function findOrphanRecords(
-  installed: InstalledJson,
+  skills: InstalledSkill[],
   projectRoot?: string,
 ): Promise<OrphanRecord[]> {
   const orphans: OrphanRecord[] = [];
 
-  for (const record of installed.skills) {
+  for (const record of skills) {
     // Disabled skills are expected to have missing install dirs/symlinks — skip them
     if (record.active === false) continue;
 
@@ -114,11 +114,11 @@ export async function findOrphanRecords(
   return orphans;
 }
 
-/** Remove orphan records from installed data and save.
+/** Remove orphan records from the skills list and save.
  *  Returns the names of removed records. */
 export async function purgeOrphanRecords(
   orphans: OrphanRecord[],
-  installed: InstalledJson,
+  skills: InstalledSkill[],
   fileRoot?: string,
 ): Promise<Result<string[], UserError>> {
   if (orphans.length === 0) return ok([]);
@@ -134,9 +134,9 @@ export async function purgeOrphanRecords(
     );
   }
 
-  installed.skills = installed.skills.filter((s) => !namesToPurge.has(s.name));
+  const remaining = skills.filter((s) => !namesToPurge.has(s.name));
 
-  const saveResult = await saveSkillState(installed, fileRoot);
+  const saveResult = await saveSkillState(remaining, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   return ok([...namesToPurge]);

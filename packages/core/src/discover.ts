@@ -118,14 +118,14 @@ export async function discoverSkills(
   if (globalInstalledResult && !globalInstalledResult.ok) {
     return globalInstalledResult;
   }
-  const globalInstalled = globalInstalledResult?.value.skills ?? [];
+  const globalInstalled = globalInstalledResult?.value ?? [];
 
   const projectInstalledResult =
     scanProject && projectRoot ? await loadSkillState(projectRoot) : null;
   if (projectInstalledResult && !projectInstalledResult.ok) {
     return projectInstalledResult;
   }
-  const projectInstalled = projectInstalledResult?.value.skills ?? [];
+  const projectInstalled = projectInstalledResult?.value ?? [];
 
   // Build a map of name -> InstalledSkill from all scopes
   const installedMap = new Map<string, InstalledSkill>();

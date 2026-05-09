@@ -15,7 +15,7 @@ import {
 } from "./orphan";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import { removeSkill } from "./remove";
-import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import type { InstalledSkill } from "./schemas/installed";
 
 let env: TestEnv;
 let homeDir: string;
@@ -51,8 +51,8 @@ function makeSkill(overrides: Partial<InstalledSkill>): InstalledSkill {
   };
 }
 
-function makeInstalled(skills: InstalledSkill[]): InstalledJson {
-  return { version: 1, skills };
+function makeInstalled(skills: InstalledSkill[]): InstalledSkill[] {
+  return skills;
 }
 
 describe("formatOrphanReason", () => {
@@ -231,7 +231,10 @@ describe("purgeOrphanRecords", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toContain("orphan-skill");
-    expect(installed.skills).toHaveLength(0);
+    const reloaded = await loadSkillState();
+    expect(reloaded.ok).toBe(true);
+    if (!reloaded.ok) return;
+    expect(reloaded.value).toHaveLength(0);
   });
 
   test("saves installed.json after purging", async () => {
@@ -246,7 +249,7 @@ describe("purgeOrphanRecords", () => {
     const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
-    expect(reloaded.value.skills).toHaveLength(0);
+    expect(reloaded.value).toHaveLength(0);
   });
 
   test("returns names of purged records", async () => {
@@ -277,7 +280,7 @@ describe("purgeOrphanRecords", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toHaveLength(0);
-    expect(installed.skills).toHaveLength(1);
+    expect(installed).toHaveLength(1);
   });
 
   test("preserves healthy records when purging orphans", async () => {
@@ -294,8 +297,8 @@ describe("purgeOrphanRecords", () => {
     const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
-    expect(reloaded.value.skills).toHaveLength(1);
-    expect(reloaded.value.skills[0]!.name).toBe("healthy");
+    expect(reloaded.value).toHaveLength(1);
+    expect(reloaded.value[0]!.name).toBe("healthy");
   });
 
   // Gap #8: purgeOrphanRecords must remove agent symlinks for purged records

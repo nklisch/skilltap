@@ -197,7 +197,7 @@ describe("npm standalone lifecycle", () => {
         const loaded1 = await loadSkillState();
         expect(loaded1.ok).toBe(true);
         if (!loaded1.ok) return;
-        expect(loaded1.value.skills[0]!.ref).toBe("2.0.0");
+        expect(loaded1.value[0]!.ref).toBe("2.0.0");
 
         // --- Disable ---
         const dis = await disableSkill("npm-skill");
@@ -219,7 +219,7 @@ describe("npm standalone lifecycle", () => {
         const loaded2 = await loadSkillState();
         expect(loaded2.ok).toBe(true);
         if (!loaded2.ok) return;
-        expect(loaded2.value.skills).toHaveLength(0);
+        expect(loaded2.value).toHaveLength(0);
       } finally {
         registry.stop();
       }
@@ -309,8 +309,8 @@ describe("npm multi-skill lifecycle", () => {
         const loaded1 = await loadSkillState();
         expect(loaded1.ok).toBe(true);
         if (!loaded1.ok) return;
-        expect(loaded1.value.skills).toHaveLength(1);
-        expect(loaded1.value.skills[0]!.name).toBe("beta");
+        expect(loaded1.value).toHaveLength(1);
+        expect(loaded1.value[0]!.name).toBe("beta");
 
         // --- Remove beta ---
         const rm2 = await removeSkill("beta");
@@ -319,7 +319,7 @@ describe("npm multi-skill lifecycle", () => {
         const loaded2 = await loadSkillState();
         expect(loaded2.ok).toBe(true);
         if (!loaded2.ok) return;
-        expect(loaded2.value.skills).toHaveLength(0);
+        expect(loaded2.value).toHaveLength(0);
       } finally {
         registry.stop();
       }

@@ -245,7 +245,7 @@ export async function adoptSkill(
     const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
-    installed.skills.push(record);
+    installed.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
     await syncAdoptToManifest(record, projectRoot);
@@ -282,7 +282,7 @@ export async function adoptSkill(
     const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
-    installed.skills.push(record);
+    installed.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
     await syncAdoptToManifest(record, projectRoot);
@@ -419,7 +419,7 @@ export async function adoptSkillFromPath(
     const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
-    installed.skills.push(record);
+    installed.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
     await syncAdoptToManifest(record, projectRoot);
@@ -471,7 +471,7 @@ export async function adoptSkillFromPath(
     const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
-    installed.skills.push(record);
+    installed.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
     await syncAdoptToManifest(record, projectRoot);

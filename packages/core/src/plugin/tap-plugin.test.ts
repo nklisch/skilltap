@@ -122,7 +122,7 @@ describe("tap plugin install flow", () => {
       const pluginsResult = await loadPlugins(undefined);
       expect(pluginsResult.ok).toBe(true);
       if (!pluginsResult.ok) return;
-      const record = pluginsResult.value.plugins.find(
+      const record = pluginsResult.value.find(
         (p) => p.name === "dev-toolkit",
       );
       expect(record).toBeDefined();

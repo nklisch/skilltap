@@ -1,11 +1,11 @@
 import { $ } from "bun";
-import type { InstalledJson } from "../../schemas/installed";
+import type { InstalledSkill } from "../../schemas/installed";
 import type { DoctorCheck } from "../types";
 
 export async function checkNpm(
-  installed: InstalledJson,
+  skills: InstalledSkill[],
 ): Promise<DoctorCheck | null> {
-  const hasNpmSkills = installed.skills.some((s) => s.repo?.startsWith("npm:"));
+  const hasNpmSkills = skills.some((s) => s.repo?.startsWith("npm:"));
   if (!hasNpmSkills) return null;
 
   let npmPath: string;

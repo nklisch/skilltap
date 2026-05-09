@@ -17,7 +17,7 @@ import {
 import type { OnOrphansFound } from "./orphan";
 import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
-import type { InstalledJson, InstalledSkill } from "./schemas/installed";
+import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
 import type { SemanticWarning } from "./security/semantic";
@@ -211,7 +211,7 @@ function patchRecord(
 /** Handle updates for npm-sourced skills (version comparison instead of git SHA). */
 async function updateNpmSkill(
   record: InstalledSkill,
-  installed: { skills: InstalledSkill[] },
+  installed: { skills: InstalledSkill[] }, // mutable container for in-place patching
   options: UpdateOptions,
   result: UpdateResult,
   _resolveTrust: ResolveTrustFn,
@@ -637,7 +637,7 @@ function groupSkillsByRepo(skills: InstalledSkill[]): SkillGroup[] {
 
 async function runUpdatePass(
   skills: InstalledSkill[],
-  installed: InstalledJson,
+  installed: { skills: InstalledSkill[] },
   options: UpdateOptions,
   result: UpdateResult,
   _resolveTrust: ResolveTrustFn,
@@ -703,31 +703,36 @@ export async function updateSkill(
 
   const globalInstalledResult = await loadSkillState();
   if (!globalInstalledResult.ok) return globalInstalledResult;
-  const globalInstalled = globalInstalledResult.value;
+  // Wrap in a mutable container so inner functions can patch records in-place.
+  const globalInstalled = { skills: globalInstalledResult.value };
 
   // Optionally load project installed
-  let projectInstalled: InstalledJson | null = null;
+  let projectInstalled: { skills: InstalledSkill[] } | null = null;
   if (options.projectRoot) {
     const r = await loadSkillState(options.projectRoot);
     if (!r.ok) return r;
-    projectInstalled = r.value;
+    projectInstalled = { skills: r.value };
   }
 
   // Detect and optionally purge orphan records before updating
   if (options.onOrphansFound) {
-    const globalOrphans = await findOrphanRecords(globalInstalled);
+    const globalOrphans = await findOrphanRecords(globalInstalled.skills);
     if (globalOrphans.length > 0) {
       const namesToPurge = await options.onOrphansFound(globalOrphans);
       if (namesToPurge.length > 0) {
         const toPurge = globalOrphans.filter((o) =>
           namesToPurge.includes(o.record.name),
         );
-        await purgeOrphanRecords(toPurge, globalInstalled);
+        await purgeOrphanRecords(toPurge, globalInstalled.skills);
+        const purgedNames = new Set(namesToPurge);
+        globalInstalled.skills = globalInstalled.skills.filter(
+          (s) => !purgedNames.has(s.name),
+        );
       }
     }
     if (projectInstalled) {
       const projectOrphans = await findOrphanRecords(
-        projectInstalled,
+        projectInstalled.skills,
         options.projectRoot,
       );
       if (projectOrphans.length > 0) {
@@ -738,8 +743,12 @@ export async function updateSkill(
           );
           await purgeOrphanRecords(
             toPurge,
-            projectInstalled,
+            projectInstalled.skills,
             options.projectRoot,
+          );
+          const purgedNames = new Set(namesToPurge);
+          projectInstalled.skills = projectInstalled.skills.filter(
+            (s) => !purgedNames.has(s.name),
           );
         }
       }
@@ -790,13 +799,13 @@ export async function updateSkill(
     if (!projectPass.ok) return projectPass;
   }
 
-  // Save both files (saveSkillState also shadows into state.json)
-  const globalSave = await saveSkillState(globalInstalled);
+  // Save updated state
+  const globalSave = await saveSkillState(globalInstalled.skills);
   if (!globalSave.ok) return globalSave;
 
   if (projectInstalled && options.projectRoot) {
     const projectSave = await saveSkillState(
-      projectInstalled,
+      projectInstalled.skills,
       options.projectRoot,
     );
     if (!projectSave.ok) return projectSave;

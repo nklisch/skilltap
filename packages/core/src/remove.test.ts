@@ -46,7 +46,7 @@ describe("removeSkill — global skill", () => {
       const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
-      expect(loaded.value.skills).toHaveLength(0);
+      expect(loaded.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }
@@ -100,7 +100,7 @@ describe("removeSkill — project skill", () => {
 
       const loaded = await loadSkillState();
       if (!loaded.ok) return;
-      expect(loaded.value.skills).toHaveLength(0);
+      expect(loaded.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
       await removeTmpDir(projectRoot);
@@ -118,24 +118,21 @@ describe("removeSkill — linked skill", () => {
       await $`ln -s ${targetDir} ${symlinkPath}`.quiet();
 
       // Write linked skill record directly
-      await saveSkillState({
-        version: 1,
-        skills: [
-          {
-            name: "linked-skill",
-            description: "",
-            repo: null,
-            ref: null,
-            sha: null,
-            scope: "linked",
-            path: symlinkPath,
-            tap: null,
-            also: [],
-            installedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        ],
-      });
+      await saveSkillState([
+        {
+          name: "linked-skill",
+          description: "",
+          repo: null,
+          ref: null,
+          sha: null,
+          scope: "linked",
+          path: symlinkPath,
+          tap: null,
+          also: [],
+          installedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      ]);
 
       expect(await lstat(symlinkPath).catch(() => null)).not.toBeNull();
 
@@ -177,7 +174,7 @@ describe("removeSkill — error cases", () => {
       // Skill still installed
       const loaded = await loadSkillState();
       if (!loaded.ok) return;
-      expect(loaded.value.skills).toHaveLength(1);
+      expect(loaded.value).toHaveLength(1);
     } finally {
       await repo.cleanup();
     }
@@ -208,7 +205,7 @@ describe("removeSkill — disabled skill", () => {
       const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
-      expect(loaded.value.skills).toHaveLength(0);
+      expect(loaded.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }
@@ -226,7 +223,7 @@ describe("removeSkill — cache cleanup", () => {
       });
       const loaded = await loadSkillState();
       if (!loaded.ok) return;
-      const record = loaded.value.skills[0]!;
+      const record = loaded.value[0]!;
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
       expect(await lstat(cacheRoot).then((s) => s.isDirectory())).toBe(true);
@@ -244,7 +241,7 @@ describe("removeSkill — cache cleanup", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       const loaded = await loadSkillState();
       if (!loaded.ok) return;
-      const record = loaded.value.skills[0]!;
+      const record = loaded.value[0]!;
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
 

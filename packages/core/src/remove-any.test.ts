@@ -80,7 +80,7 @@ describe("removeAnySkill", () => {
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       expect(
-        loaded.value.skills.find((s) => s.name === "standalone-skill"),
+        loaded.value.find((s) => s.name === "standalone-skill"),
       ).toBeUndefined();
     } finally {
       await repo.cleanup();

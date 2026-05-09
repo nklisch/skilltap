@@ -1,7 +1,6 @@
 import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
 import type {
   PluginRecord,
-  PluginsJson,
   StoredComponent,
   StoredMcpComponent,
 } from "../schemas/plugins";
@@ -9,18 +8,17 @@ import { loadState } from "../state/load";
 import { saveState } from "../state/save";
 import { err, ok, type Result, UserError } from "../types";
 
-// state.json is the only canonical store. v0.x plugins.json fallback removed.
-// Users on v0.x must run `skilltap migrate` to populate state.json.
+// state.json is the only canonical store. Plugin-slice accessor: read/write just plugins[].
 export async function loadPlugins(
   projectRoot?: string,
-): Promise<Result<PluginsJson, UserError>> {
+): Promise<Result<PluginRecord[], UserError>> {
   const stateResult = await loadState(projectRoot);
   if (!stateResult.ok) return stateResult;
-  return ok({ version: 1 as const, plugins: [...stateResult.value.plugins] });
+  return ok([...stateResult.value.plugins]);
 }
 
 export async function savePlugins(
-  plugins: PluginsJson,
+  plugins: PluginRecord[],
   projectRoot?: string,
 ): Promise<Result<void, UserError>> {
   const stateResult = await loadState(projectRoot);
@@ -28,7 +26,7 @@ export async function savePlugins(
   const newState = {
     version: 2 as const,
     skills: stateResult.value.skills,
-    plugins: plugins.plugins,
+    plugins,
     mcpServers: stateResult.value.mcpServers,
   };
   return saveState(newState, projectRoot);
@@ -57,30 +55,27 @@ export function mcpServerToStored(server: McpServerEntry): StoredMcpComponent {
 }
 
 export function addPlugin(
-  state: PluginsJson,
+  plugins: PluginRecord[],
   record: PluginRecord,
-): PluginsJson {
-  const filtered = state.plugins.filter((p) => p.name !== record.name);
-  return { ...state, plugins: [...filtered, record] };
+): PluginRecord[] {
+  const filtered = plugins.filter((p) => p.name !== record.name);
+  return [...filtered, record];
 }
 
 export function removePlugin(
-  state: PluginsJson,
+  plugins: PluginRecord[],
   pluginName: string,
-): PluginsJson {
-  return {
-    ...state,
-    plugins: state.plugins.filter((p) => p.name !== pluginName),
-  };
+): PluginRecord[] {
+  return plugins.filter((p) => p.name !== pluginName);
 }
 
 export function toggleComponent(
-  state: PluginsJson,
+  plugins: PluginRecord[],
   pluginName: string,
   componentType: StoredComponent["type"],
   componentName: string,
-): Result<PluginsJson, UserError> {
-  const plugin = state.plugins.find((p) => p.name === pluginName);
+): Result<PluginRecord[], UserError> {
+  const plugin = plugins.find((p) => p.name === pluginName);
   if (!plugin) {
     return err(new UserError(`Plugin "${pluginName}" not found`));
   }
@@ -101,18 +96,14 @@ export function toggleComponent(
     i === componentIndex ? { ...c, active: !c.active } : c,
   );
   const updatedPlugin = { ...plugin, components: updatedComponents, updatedAt };
-  const updatedPlugins = state.plugins.map((p) =>
-    p.name === pluginName ? updatedPlugin : p,
-  );
-
-  return ok({ ...state, plugins: updatedPlugins });
+  return ok(plugins.map((p) => (p.name === pluginName ? updatedPlugin : p)));
 }
 
 export function findPlugin(
-  state: PluginsJson,
+  plugins: PluginRecord[],
   pluginName: string,
 ): PluginRecord | undefined {
-  return state.plugins.find((p) => p.name === pluginName);
+  return plugins.find((p) => p.name === pluginName);
 }
 
 export type PluginInstallMeta = {

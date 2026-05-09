@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import type { PluginManifest } from "../schemas/plugin";
-import type { PluginRecord, PluginsJson } from "../schemas/plugins";
+import type { PluginRecord } from "../schemas/plugins";
 import {
   addPlugin,
   findPlugin,
@@ -51,26 +51,25 @@ const VALID_RECORD: PluginRecord = {
   active: true,
 };
 
-const EMPTY_STATE: PluginsJson = { version: 1, plugins: [] };
+const EMPTY_STATE: PluginRecord[] = [];
 
 describe("loadPlugins", () => {
   test("returns default empty state when file missing", async () => {
     const result = await loadPlugins();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value).toEqual({ version: 1, plugins: [] });
+    expect(result.value).toEqual([]);
   });
 
   test("parses valid plugins.json", async () => {
-    const state: PluginsJson = { version: 1, plugins: [VALID_RECORD] };
-    const saveResult = await savePlugins(state);
+    const saveResult = await savePlugins([VALID_RECORD]);
     expect(saveResult.ok).toBe(true);
 
     const loadResult = await loadPlugins();
     expect(loadResult.ok).toBe(true);
     if (!loadResult.ok) return;
-    expect(loadResult.value.plugins).toHaveLength(1);
-    expect(loadResult.value.plugins[0]?.name).toBe("dev-toolkit");
+    expect(loadResult.value).toHaveLength(1);
+    expect(loadResult.value[0]?.name).toBe("dev-toolkit");
   });
 
   test("plugins.json is ignored (v0.x fallback removed)", async () => {
@@ -81,33 +80,31 @@ describe("loadPlugins", () => {
     const result = await loadPlugins();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value.plugins).toHaveLength(0);
+    expect(result.value).toHaveLength(0);
   });
 
   test("reads from project path when projectRoot given", async () => {
     const projectDir = join(env.configDir, "myproject");
-    const state: PluginsJson = { version: 1, plugins: [VALID_RECORD] };
-    const saveResult = await savePlugins(state, projectDir);
+    const saveResult = await savePlugins([VALID_RECORD], projectDir);
     expect(saveResult.ok).toBe(true);
 
     const loadResult = await loadPlugins(projectDir);
     expect(loadResult.ok).toBe(true);
     if (!loadResult.ok) return;
-    expect(loadResult.value.plugins[0]?.name).toBe("dev-toolkit");
+    expect(loadResult.value[0]?.name).toBe("dev-toolkit");
   });
 });
 
 describe("savePlugins", () => {
   test("writes valid JSON that round-trips through loadPlugins", async () => {
-    const state: PluginsJson = { version: 1, plugins: [VALID_RECORD] };
-    const saveResult = await savePlugins(state);
+    const saveResult = await savePlugins([VALID_RECORD]);
     expect(saveResult.ok).toBe(true);
 
     const loadResult = await loadPlugins();
     expect(loadResult.ok).toBe(true);
     if (!loadResult.ok) return;
-    expect(loadResult.value.plugins[0]?.name).toBe("dev-toolkit");
-    expect(loadResult.value.plugins[0]?.components).toHaveLength(3);
+    expect(loadResult.value[0]?.name).toBe("dev-toolkit");
+    expect(loadResult.value[0]?.components).toHaveLength(3);
   });
 
   test("creates .agents/ dir for project scope (writes state.json post-cutover)", async () => {
@@ -124,16 +121,16 @@ describe("savePlugins", () => {
 describe("addPlugin", () => {
   test("appends a new plugin", () => {
     const result = addPlugin(EMPTY_STATE, VALID_RECORD);
-    expect(result.plugins).toHaveLength(1);
-    expect(result.plugins[0]?.name).toBe("dev-toolkit");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.name).toBe("dev-toolkit");
   });
 
   test("replaces existing plugin with same name", () => {
     const initial = addPlugin(EMPTY_STATE, VALID_RECORD);
     const updated = { ...VALID_RECORD, description: "Updated" };
     const result = addPlugin(initial, updated);
-    expect(result.plugins).toHaveLength(1);
-    expect(result.plugins[0]?.description).toBe("Updated");
+    expect(result).toHaveLength(1);
+    expect(result[0]?.description).toBe("Updated");
   });
 });
 
@@ -141,13 +138,13 @@ describe("removePlugin", () => {
   test("removes by name", () => {
     const state = addPlugin(EMPTY_STATE, VALID_RECORD);
     const result = removePlugin(state, "dev-toolkit");
-    expect(result.plugins).toHaveLength(0);
+    expect(result).toHaveLength(0);
   });
 
   test("returns unchanged state if name not found", () => {
     const state = addPlugin(EMPTY_STATE, VALID_RECORD);
     const result = removePlugin(state, "nonexistent");
-    expect(result.plugins).toHaveLength(1);
+    expect(result).toHaveLength(1);
   });
 });
 
@@ -162,7 +159,7 @@ describe("toggleComponent", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const comp = result.value.plugins[0]?.components.find(
+    const comp = result.value[0]?.components.find(
       (c) => c.type === "skill" && c.name === "code-review",
     );
     expect(comp?.active).toBe(false);
@@ -173,7 +170,7 @@ describe("toggleComponent", () => {
     const result = toggleComponent(state, "dev-toolkit", "mcp", "database");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const comp = result.value.plugins[0]?.components.find(
+    const comp = result.value[0]?.components.find(
       (c) => c.type === "mcp" && c.name === "database",
     );
     expect(comp?.active).toBe(false);
@@ -184,7 +181,7 @@ describe("toggleComponent", () => {
     const result = toggleComponent(state, "dev-toolkit", "agent", "reviewer");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const comp = result.value.plugins[0]?.components.find(
+    const comp = result.value[0]?.components.find(
       (c) => c.type === "agent" && c.name === "reviewer",
     );
     expect(comp?.active).toBe(false);
@@ -201,7 +198,7 @@ describe("toggleComponent", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const plugin = result.value.plugins[0];
+    const plugin = result.value[0];
     expect(plugin?.updatedAt >= before).toBe(true);
   });
 
@@ -235,7 +232,7 @@ describe("findPlugin", () => {
   });
 
   test("returns undefined if not found", () => {
-    const found = findPlugin(EMPTY_STATE, "nonexistent");
+    const found = findPlugin([], "nonexistent");
     expect(found).toBeUndefined();
   });
 });

@@ -102,7 +102,7 @@ describe("adoptSkill", () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
-      loaded.value.skills.find((s) => s.name === "my-skill"),
+      loaded.value.find((s) => s.name === "my-skill"),
     ).toBeDefined();
   });
 
@@ -177,7 +177,7 @@ describe("adoptSkill", () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
-      loaded.value.skills.find((s) => s.name === "my-skill"),
+      loaded.value.find((s) => s.name === "my-skill"),
     ).toBeDefined();
   });
 
@@ -317,7 +317,7 @@ describe("adoptSkill", () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
-      loaded.value.skills.find((s) => s.name === "sus-skill"),
+      loaded.value.find((s) => s.name === "sus-skill"),
     ).toBeUndefined();
   });
 
@@ -362,7 +362,7 @@ describe("adoptSkill", () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
-      loaded.value.skills.find((s) => s.name === "sus-skill2"),
+      loaded.value.find((s) => s.name === "sus-skill2"),
     ).toBeDefined();
   });
 
@@ -372,24 +372,21 @@ describe("adoptSkill", () => {
     await createUnmanagedSkillInDir(agentsSkillsDir, "my-skill");
 
     // Write a managed record
-    await saveSkillState({
-      version: 1,
-      skills: [
-        {
-          name: "my-skill",
-          description: "A test skill",
-          repo: null,
-          ref: null,
-          sha: null,
-          scope: "global",
-          path: null,
-          tap: null,
-          also: [],
-          installedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await saveSkillState([
+      {
+        name: "my-skill",
+        description: "A test skill",
+        repo: null,
+        ref: null,
+        sha: null,
+        scope: "global",
+        path: null,
+        tap: null,
+        also: [],
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
 
     const discoverResult = await discoverSkills({
       global: true,
@@ -502,7 +499,7 @@ describe("adoptSkillFromPath", () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
-      loaded.value.skills.find((s) => s.name === "ext-skill"),
+      loaded.value.find((s) => s.name === "ext-skill"),
     ).toBeDefined();
   });
 
@@ -553,7 +550,7 @@ describe("adoptPlugin", () => {
     const pluginsResult = await loadPlugins();
     expect(pluginsResult.ok).toBe(true);
     if (!pluginsResult.ok) return;
-    const saved = pluginsResult.value.plugins.find(
+    const saved = pluginsResult.value.find(
       (p) => p.name === "my-plugin",
     );
     expect(saved).toBeDefined();
@@ -579,7 +576,7 @@ describe("adoptPlugin", () => {
     const pluginsResult = await loadPlugins();
     expect(pluginsResult.ok).toBe(true);
     if (!pluginsResult.ok) return;
-    const saved = pluginsResult.value.plugins.find(
+    const saved = pluginsResult.value.find(
       (p) => p.name === "no-source",
     );
     expect(saved?.repo).toMatch(/^claude-code:/);
@@ -597,7 +594,7 @@ describe("adoptPlugin", () => {
     const pluginsResult = await loadPlugins();
     expect(pluginsResult.ok).toBe(true);
     if (!pluginsResult.ok) return;
-    const saved = pluginsResult.value.plugins.find(
+    const saved = pluginsResult.value.find(
       (p) => p.name === "read-only-plugin",
     );
     expect(saved?.path).toBe(pluginCacheDir);

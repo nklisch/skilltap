@@ -116,24 +116,21 @@ describe("discoverSkills", () => {
     );
 
     // Write a record into installed.json
-    await saveSkillState({
-      version: 1,
-      skills: [
-        {
-          name: "managed-skill",
-          description: "Managed",
-          repo: null,
-          ref: null,
-          sha: null,
-          scope: "global",
-          path: null,
-          tap: null,
-          also: [],
-          installedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await saveSkillState([
+      {
+        name: "managed-skill",
+        description: "Managed",
+        repo: null,
+        ref: null,
+        sha: null,
+        scope: "global",
+        path: null,
+        tap: null,
+        also: [],
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
 
     const result = await discoverSkills({ global: true, project: false });
     expect(result.ok).toBe(true);
@@ -172,24 +169,21 @@ describe("discoverSkills", () => {
       join(managedDir, "SKILL.md"),
       `---\nname: managed\ndescription: Managed skill\n---\n`,
     );
-    await saveSkillState({
-      version: 1,
-      skills: [
-        {
-          name: "managed",
-          description: "Managed skill",
-          repo: null,
-          ref: null,
-          sha: null,
-          scope: "global",
-          path: null,
-          tap: null,
-          also: [],
-          installedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await saveSkillState([
+      {
+        name: "managed",
+        description: "Managed skill",
+        repo: null,
+        ref: null,
+        sha: null,
+        scope: "global",
+        path: null,
+        tap: null,
+        also: [],
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
 
     // Create an unmanaged skill
     const unmanagedDir = join(homeDir, ".agents", "skills", "unmanaged");

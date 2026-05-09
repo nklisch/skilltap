@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { InstalledJsonSchema, InstalledSkillSchema } from "./installed";
+import { LegacyInstalledJsonSchema as InstalledJsonSchema } from "../migrate/legacy-schemas";
+import { InstalledSkillSchema } from "./installed";
 
 const VALID_SKILL = {
   name: "commit-helper",

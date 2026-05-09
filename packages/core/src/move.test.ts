@@ -90,7 +90,7 @@ describe("moveSkill", () => {
       const projectInstalled = await loadSkillState(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
-      const projectRecord = projectInstalled.value.skills.find(
+      const projectRecord = projectInstalled.value.find(
         (s) => s.name === "standalone-skill",
       );
       expect(projectRecord).toBeDefined();
@@ -101,7 +101,7 @@ describe("moveSkill", () => {
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
       expect(
-        globalInstalled.value.skills.find((s) => s.name === "standalone-skill"),
+        globalInstalled.value.find((s) => s.name === "standalone-skill"),
       ).toBeUndefined();
     } finally {
       await repo.cleanup();
@@ -164,7 +164,7 @@ describe("moveSkill", () => {
       const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
-      const globalRecord = globalInstalled.value.skills.find(
+      const globalRecord = globalInstalled.value.find(
         (s) => s.name === "standalone-skill",
       );
       expect(globalRecord).toBeDefined();

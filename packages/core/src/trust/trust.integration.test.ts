@@ -336,7 +336,7 @@ describe("trust integration — install from verified tap", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      const skill = installedResult.value.skills.find(
+      const skill = installedResult.value.find(
         (s) => s.name === "persisted-skill",
       );
 

@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
   PluginRecordSchema,
-  PluginsJsonSchema,
   StoredComponentSchema,
 } from "./plugins";
+import { LegacyPluginsJsonSchema as PluginsJsonSchema } from "../migrate/legacy-schemas";
 
 const VALID_RECORD = {
   name: "dev-toolkit",

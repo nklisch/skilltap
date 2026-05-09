@@ -24,8 +24,8 @@ export async function loadPluginByName(
   if (!globalResult.ok) return null;
   const projectResult = projectRoot ? await loadPlugins(projectRoot) : null;
   const all = [
-    ...globalResult.value.plugins,
-    ...(projectResult?.ok ? projectResult.value.plugins : []),
+    ...globalResult.value,
+    ...(projectResult?.ok ? projectResult.value : []),
   ];
   return all.find((p) => p.name === name) ?? null;
 }

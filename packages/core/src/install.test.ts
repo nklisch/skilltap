@@ -70,7 +70,7 @@ describe("installSkill — standalone", () => {
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
 
-      const { skills } = installedResult.value;
+      const skills = installedResult.value;
       expect(skills).toHaveLength(1);
       expect(skills[0]?.name).toBe("standalone-skill");
       expect(skills[0]?.scope).toBe("global");
@@ -173,7 +173,7 @@ describe("installSkill — multi-skill", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      const record = installedResult.value.skills[0]!;
+      const record = installedResult.value[0]!;
       expect(record.repo).toBe(repo.path);
     } finally {
       await repo.cleanup();
@@ -257,7 +257,7 @@ describe("installSkill — multi-skill", () => {
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      const aEntries = installed.value.skills.filter(
+      const aEntries = installed.value.filter(
         (s) => s.name === "skill-a",
       );
       expect(aEntries).toHaveLength(1);
@@ -307,7 +307,7 @@ describe("installSkill — project scope", () => {
       const projectInstalled = await loadSkillState(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
-      expect(projectInstalled.value.skills.map((s) => s.name)).toContain(
+      expect(projectInstalled.value.map((s) => s.name)).toContain(
         "standalone-skill",
       );
 
@@ -315,7 +315,7 @@ describe("installSkill — project scope", () => {
       const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
-      expect(globalInstalled.value.skills).toHaveLength(0);
+      expect(globalInstalled.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
       await removeTmpDir(projectRoot);
@@ -344,14 +344,14 @@ describe("installSkill — project scope", () => {
       // Both project files have the record
       const aInstalled = await loadSkillState(projectA);
       const bInstalled = await loadSkillState(projectB);
-      expect(aInstalled.ok && aInstalled.value.skills).toHaveLength(1);
-      expect(bInstalled.ok && bInstalled.value.skills).toHaveLength(1);
+      expect(aInstalled.ok && aInstalled.value).toHaveLength(1);
+      expect(bInstalled.ok && bInstalled.value).toHaveLength(1);
 
       // Global file is empty
       const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
-      expect(globalInstalled.value.skills).toHaveLength(0);
+      expect(globalInstalled.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
       await removeTmpDir(projectA);
@@ -375,7 +375,7 @@ describe("removeSkill", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      expect(installedResult.value.skills).toHaveLength(0);
+      expect(installedResult.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }
@@ -404,7 +404,7 @@ describe("removeSkill", () => {
       });
       const installedResult = await loadSkillState();
       if (!installedResult.ok) return;
-      const record = installedResult.value.skills[0]!;
+      const record = installedResult.value[0]!;
 
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
@@ -423,7 +423,7 @@ describe("removeSkill", () => {
       await installSkill(repo.path, { scope: "global" });
       const installedResult = await loadSkillState();
       if (!installedResult.ok) return;
-      const record = installedResult.value.skills[0]!;
+      const record = installedResult.value[0]!;
 
       const hash = Bun.hash(record.repo!).toString(16);
       const cacheRoot = join(configDir, "skilltap", "cache", hash);
@@ -475,7 +475,7 @@ describe("installSkill — security scanning", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      expect(installedResult.value.skills).toHaveLength(0);
+      expect(installedResult.value).toHaveLength(0);
     } finally {
       await repo.cleanup();
     }
@@ -520,7 +520,7 @@ describe("idempotency", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      expect(installedResult.value.skills).toHaveLength(1);
+      expect(installedResult.value).toHaveLength(1);
     } finally {
       await repo.cleanup();
     }
@@ -540,8 +540,8 @@ describe("idempotency", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      expect(installedResult.value.skills).toHaveLength(1);
-      expect(installedResult.value.skills[0]?.name).toBe("standalone-skill");
+      expect(installedResult.value).toHaveLength(1);
+      expect(installedResult.value[0]?.name).toBe("standalone-skill");
     } finally {
       await repo.cleanup();
     }
@@ -584,15 +584,15 @@ describe("installed.json state integrity", () => {
       name: `skill-${i.toString().padStart(3, "0")}`,
     }));
 
-    const saveResult = await saveSkillState({ version: 1, skills });
+    const saveResult = await saveSkillState(skills);
     expect(saveResult.ok).toBe(true);
 
     const reloadResult = await loadSkillState();
     expect(reloadResult.ok).toBe(true);
     if (!reloadResult.ok) return;
-    expect(reloadResult.value.skills).toHaveLength(100);
-    expect(reloadResult.value.skills[0]?.name).toBe("skill-000");
-    expect(reloadResult.value.skills[99]?.name).toBe("skill-099");
+    expect(reloadResult.value).toHaveLength(100);
+    expect(reloadResult.value[0]?.name).toBe("skill-000");
+    expect(reloadResult.value[99]?.name).toBe("skill-099");
   });
 });
 
@@ -650,8 +650,8 @@ describe("installSkill — tap name resolution", () => {
       const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
-      expect(installedResult.value.skills).toHaveLength(1);
-      expect(installedResult.value.skills[0]?.name).toBe("skill-a");
+      expect(installedResult.value).toHaveLength(1);
+      expect(installedResult.value[0]?.name).toBe("skill-a");
     } finally {
       await repo.cleanup();
     }

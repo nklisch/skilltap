@@ -164,7 +164,7 @@ describe("install plugin — multi-plugin source syntax", () => {
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      const names = plugins.value.plugins.map((p) => p.name);
+      const names = plugins.value.map((p) => p.name);
       expect(names).toContain("auth");
       expect(names).not.toContain("billing");
     } finally {
@@ -197,7 +197,7 @@ describe("install plugin — multi-plugin source syntax", () => {
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      const names = plugins.value.plugins.map((p) => p.name).sort();
+      const names = plugins.value.map((p) => p.name).sort();
       expect(names).toEqual(["auth", "billing"]);
     } finally {
       await repo.cleanup();
@@ -278,7 +278,7 @@ describe("install plugin — multi-plugin source syntax", () => {
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(plugins.value.plugins.map((p) => p.name)).toContain("solo");
+      expect(plugins.value.map((p) => p.name)).toContain("solo");
     } finally {
       await repo.cleanup();
     }

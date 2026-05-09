@@ -92,7 +92,7 @@ describe("install orphan — installs through phantom conflict", () => {
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills).toHaveLength(1);
+      expect(installed.value).toHaveLength(1);
     } finally {
       await repo.cleanup();
     }
@@ -143,7 +143,7 @@ describe("install orphan — plugins layout (plugins/*/skills/*/SKILL.md)", () =
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills.some((s) => s.name === "my-skill")).toBe(
+      expect(installed.value.some((s) => s.name === "my-skill")).toBe(
         true,
       );
     } finally {
@@ -200,8 +200,8 @@ describe("install orphan — re-install after manual directory deletion", () => 
       const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
-      expect(installed.value.skills).toHaveLength(1);
-      expect(installed.value.skills[0]?.name).toBe("standalone-skill");
+      expect(installed.value).toHaveLength(1);
+      expect(installed.value[0]?.name).toBe("standalone-skill");
 
       // Directory should exist again
       const stat = await Bun.file(join(skillDir, "SKILL.md")).exists();

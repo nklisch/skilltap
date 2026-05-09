@@ -162,9 +162,9 @@ describe("plugin lifecycle e2e", () => {
       const pluginsResult = await loadPlugins();
       expect(pluginsResult.ok).toBe(true);
       if (!pluginsResult.ok) return;
-      expect(pluginsResult.value.plugins).toHaveLength(1);
-      expect(pluginsResult.value.plugins[0]?.name).toBe("lifecycle-plugin");
-      expect(pluginsResult.value.plugins[0]?.active).toBe(true);
+      expect(pluginsResult.value).toHaveLength(1);
+      expect(pluginsResult.value[0]?.name).toBe("lifecycle-plugin");
+      expect(pluginsResult.value[0]?.active).toBe(true);
 
       // MCP injected into claude-code settings
       const mcpConfig = join(env.homeDir, ".claude", "settings.json");
@@ -203,7 +203,7 @@ describe("plugin lifecycle e2e", () => {
       const afterToggleOff = await loadPlugins();
       expect(afterToggleOff.ok).toBe(true);
       if (!afterToggleOff.ok) return;
-      const skillComp = afterToggleOff.value.plugins[0]?.components.find(
+      const skillComp = afterToggleOff.value[0]?.components.find(
         (c) => c.type === "skill" && c.name === "helper",
       );
       expect(skillComp?.active).toBe(false);
@@ -228,7 +228,7 @@ describe("plugin lifecycle e2e", () => {
       const afterToggleOn = await loadPlugins();
       expect(afterToggleOn.ok).toBe(true);
       if (!afterToggleOn.ok) return;
-      const skillCompOn = afterToggleOn.value.plugins[0]?.components.find(
+      const skillCompOn = afterToggleOn.value[0]?.components.find(
         (c) => c.type === "skill" && c.name === "helper",
       );
       expect(skillCompOn?.active).toBe(true);
@@ -250,7 +250,7 @@ describe("plugin lifecycle e2e", () => {
       const afterRemove = await loadPlugins();
       expect(afterRemove.ok).toBe(true);
       if (!afterRemove.ok) return;
-      expect(afterRemove.value.plugins).toHaveLength(0);
+      expect(afterRemove.value).toHaveLength(0);
     } finally {
       await plugin.cleanup();
     }
@@ -387,7 +387,7 @@ describe("plugin lifecycle e2e", () => {
       const pluginsResult = await loadPlugins();
       expect(pluginsResult.ok).toBe(true);
       if (!pluginsResult.ok) return;
-      expect(pluginsResult.value.plugins).toHaveLength(0);
+      expect(pluginsResult.value).toHaveLength(0);
     } finally {
       await plugin.cleanup();
     }

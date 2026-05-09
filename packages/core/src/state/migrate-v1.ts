@@ -1,5 +1,7 @@
-import type { InstalledJson } from "../schemas/installed";
-import type { PluginsJson } from "../schemas/plugins";
+import type {
+  LegacyInstalledJson,
+  LegacyPluginsJson,
+} from "../migrate/legacy-schemas";
 import type { State } from "./schema";
 
 // Pure structural merge: InstalledSkill + PluginRecord schemas are reused
@@ -7,8 +9,8 @@ import type { State } from "./schema";
 // Standalone MCP servers (`mcp:` prefix installs) start empty after migration
 // — only `install mcp` populates that array.
 export function migrateV1State(
-  installed: InstalledJson,
-  plugins: PluginsJson,
+  installed: LegacyInstalledJson,
+  plugins: LegacyPluginsJson,
 ): State {
   return {
     version: 2,

@@ -206,8 +206,8 @@ export async function getInstalledSkillOrExit(
   const projectResult = projectRoot ? await loadSkillState(projectRoot) : null;
 
   const allSkills = [
-    ...globalResult.value.skills,
-    ...(projectResult?.ok ? projectResult.value.skills : []),
+    ...globalResult.value,
+    ...(projectResult?.ok ? projectResult.value : []),
   ];
 
   const predicate = opts?.filter

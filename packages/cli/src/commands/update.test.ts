@@ -58,7 +58,7 @@ async function linkSkillFixture(
   const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) throw installedResult.error;
   const now = new Date().toISOString();
-  installedResult.value.skills.push({
+  installedResult.value.push({
     name: skill.name,
     description: skill.description,
     repo: null,
@@ -144,7 +144,7 @@ describe("update — clean update", () => {
       const beforeInstalled = await loadSkillState();
       expect(beforeInstalled.ok).toBe(true);
       if (!beforeInstalled.ok) return;
-      const initialSha = beforeInstalled.value.skills[0]?.sha;
+      const initialSha = beforeInstalled.value[0]?.sha;
 
       // Add a new commit to the fixture repo
       await addFileAndCommit(
@@ -165,7 +165,7 @@ describe("update — clean update", () => {
       const afterInstalled = await loadSkillState();
       expect(afterInstalled.ok).toBe(true);
       if (!afterInstalled.ok) return;
-      const newSha = afterInstalled.value.skills[0]?.sha;
+      const newSha = afterInstalled.value[0]?.sha;
       expect(newSha).not.toBe(initialSha);
     } finally {
       await repo.cleanup();
@@ -258,7 +258,7 @@ describe("update — strict mode with warnings in diff", () => {
       const beforeInstalled = await loadSkillState();
       expect(beforeInstalled.ok).toBe(true);
       if (!beforeInstalled.ok) return;
-      const initialSha = beforeInstalled.value.skills[0]?.sha;
+      const initialSha = beforeInstalled.value[0]?.sha;
 
       // Add a commit with a suspicious URL pattern
       await addFileAndCommit(
@@ -279,7 +279,7 @@ describe("update — strict mode with warnings in diff", () => {
       const afterInstalled = await loadSkillState();
       expect(afterInstalled.ok).toBe(true);
       if (!afterInstalled.ok) return;
-      expect(afterInstalled.value.skills[0]?.sha).toBe(initialSha);
+      expect(afterInstalled.value[0]?.sha).toBe(initialSha);
     } finally {
       await repo.cleanup();
     }

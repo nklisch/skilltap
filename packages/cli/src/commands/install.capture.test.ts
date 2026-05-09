@@ -189,7 +189,7 @@ describe("install capture — cross-source conflict", () => {
       const before = await loadSkillState();
       expect(before.ok).toBe(true);
       if (!before.ok) return;
-      expect(before.value.skills.some((s) => s.name === "helper")).toBe(true);
+      expect(before.value.some((s) => s.name === "helper")).toBe(true);
 
       // Install plugin from pluginRepo (different canonical source → cross-source)
       // In pipe mode, the cross-source conflict prompt is cancelled (non-TTY)
@@ -235,13 +235,13 @@ describe("install capture — cross-source conflict", () => {
       const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      expect(after.value.skills.some((s) => s.name === "helper")).toBe(true);
+      expect(after.value.some((s) => s.name === "helper")).toBe(true);
 
       // Plugin NOT recorded
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+      expect(plugins.value.some((p) => p.name === "test-plugin")).toBe(
         false,
       );
     } finally {
@@ -274,7 +274,7 @@ describe("install capture — same-source capture", () => {
       const before = await loadSkillState();
       expect(before.ok).toBe(true);
       if (!before.ok) return;
-      expect(before.value.skills.some((s) => s.name === "helper")).toBe(true);
+      expect(before.value.some((s) => s.name === "helper")).toBe(true);
 
       // Install same repo as plugin → same-source capture → auto-confirm with --yes
       const { exitCode, stdout } = await runSkilltap(
@@ -292,13 +292,13 @@ describe("install capture — same-source capture", () => {
       const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      expect(after.value.skills.some((s) => s.name === "helper")).toBe(false);
+      expect(after.value.some((s) => s.name === "helper")).toBe(false);
 
       // Plugin recorded
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+      expect(plugins.value.some((p) => p.name === "test-plugin")).toBe(
         true,
       );
     } finally {
@@ -344,13 +344,13 @@ describe("install capture — --force-capture and --no-capture flags", () => {
       const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      expect(after.value.skills.some((s) => s.name === "helper")).toBe(false);
+      expect(after.value.some((s) => s.name === "helper")).toBe(false);
 
       // Plugin recorded
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+      expect(plugins.value.some((p) => p.name === "test-plugin")).toBe(
         true,
       );
     } finally {
@@ -391,13 +391,13 @@ describe("install capture — --force-capture and --no-capture flags", () => {
       const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      expect(after.value.skills.some((s) => s.name === "helper")).toBe(true);
+      expect(after.value.some((s) => s.name === "helper")).toBe(true);
 
       // Plugin recorded
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+      expect(plugins.value.some((p) => p.name === "test-plugin")).toBe(
         true,
       );
     } finally {

@@ -12,8 +12,12 @@ import {
   manifestExists,
 } from "../manifest";
 import { parseWithResult } from "../schemas/index";
-import { type InstalledJson, InstalledJsonSchema } from "../schemas/installed";
-import { type PluginsJson, PluginsJsonSchema } from "../schemas/plugins";
+import {
+  type LegacyInstalledJson as InstalledJson,
+  LegacyInstalledJsonSchema as InstalledJsonSchema,
+  type LegacyPluginsJson as PluginsJson,
+  LegacyPluginsJsonSchema as PluginsJsonSchema,
+} from "./legacy-schemas";
 import { loadState } from "../state/load";
 import { migrateV1State } from "../state/migrate-v1";
 import { saveState } from "../state/save";

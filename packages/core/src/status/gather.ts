@@ -86,8 +86,8 @@ export async function gatherStatus(
     );
     if (!installedResult.ok) return installedResult;
     if (!pluginsResult.ok) return pluginsResult;
-    skills = installedResult.value.skills.map(skillToStatus);
-    plugins = pluginsResult.value.plugins.map(pluginToStatus);
+    skills = installedResult.value.map(skillToStatus);
+    plugins = pluginsResult.value.map(pluginToStatus);
   }
 
   // ── Taps ─────────────────────────────────────────────────────────────────

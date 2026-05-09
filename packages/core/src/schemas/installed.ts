@@ -5,10 +5,6 @@
  * for an installed skill. `state.json`'s `skills[]` array uses this exact
  * shape, and every consumer (install, update, remove, doctor checks,
  * status, sync) references the type.
- *
- * `InstalledJsonSchema` / `InstalledJson` — the v0.x file-wrapper format
- * `{ version: 1, skills: InstalledSkill[] }`. Legacy: only read by
- * `migrate/run.ts` for one-shot upgrades. Never written by current code.
  */
 import { z } from "zod/v4";
 import { TrustInfoSchema } from "../trust/types";
@@ -29,10 +25,4 @@ export const InstalledSkillSchema = z.object({
   active: z.boolean().default(true),
 });
 
-export const InstalledJsonSchema = z.object({
-  version: z.literal(1),
-  skills: z.array(InstalledSkillSchema),
-});
-
 export type InstalledSkill = z.infer<typeof InstalledSkillSchema>;
-export type InstalledJson = z.infer<typeof InstalledJsonSchema>;

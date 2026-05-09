@@ -181,24 +181,21 @@ describe("error recovery", () => {
       "---\nname: old-local-skill\ndescription: test\n---\n# Skill\n",
     );
 
-    await saveSkillState({
-      version: 1,
-      skills: [
-        {
-          name: "old-local-skill",
-          description: "test",
-          repo: "/tmp/deleted-source-path",
-          ref: null,
-          sha: null,
-          scope: "global",
-          path: null,
-          tap: null,
-          also: [],
-          installedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await saveSkillState([
+      {
+        name: "old-local-skill",
+        description: "test",
+        repo: "/tmp/deleted-source-path",
+        ref: null,
+        sha: null,
+        scope: "global",
+        path: null,
+        tap: null,
+        also: [],
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
 
     // Update should skip this gracefully (not crash with git fetch error)
     const progressStatuses: string[] = [];
@@ -227,24 +224,21 @@ describe("error recovery", () => {
     await commitAll(skillDir);
     await $`git -C ${skillDir} remote add origin /tmp/skilltap-definitely-deleted-12345`.quiet();
 
-    await saveSkillState({
-      version: 1,
-      skills: [
-        {
-          name: "dead-remote-skill",
-          description: "test",
-          repo: "/tmp/skilltap-definitely-deleted-12345",
-          ref: null,
-          sha: "abc123",
-          scope: "global",
-          path: null,
-          tap: null,
-          also: [],
-          installedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-      ],
-    });
+    await saveSkillState([
+      {
+        name: "dead-remote-skill",
+        description: "test",
+        repo: "/tmp/skilltap-definitely-deleted-12345",
+        ref: null,
+        sha: "abc123",
+        scope: "global",
+        path: null,
+        tap: null,
+        also: [],
+        installedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
 
     const progressStatuses: string[] = [];
     const up = await updateSkill({
@@ -288,7 +282,7 @@ describe("DX error messages", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("not installed");
-    expect(result.error.hint).toContain("list");
+    expect(result.error.hint).toContain("status");
   });
 
   test("install non-existent path mentions 'does not exist'", async () => {
@@ -387,7 +381,7 @@ describe("DX error messages", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toContain("not installed");
-    expect(result.error.hint).toContain("list");
+    expect(result.error.hint).toContain("status");
   });
 });
 
@@ -445,7 +439,7 @@ describe("disable + update interaction", () => {
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
-      loaded.value.skills.find((s) => s.name === "standalone-skill")?.active,
+      loaded.value.find((s) => s.name === "standalone-skill")?.active,
     ).toBe(false);
   });
 });

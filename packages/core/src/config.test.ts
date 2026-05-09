@@ -9,7 +9,7 @@ import {
   saveSkillState,
 } from "./config";
 import { ConfigSchema } from "./schemas/config";
-import type { InstalledJson } from "./schemas/installed";
+import type { InstalledSkill } from "./schemas/installed";
 
 let env: TestEnv;
 let tmpDir: string;
@@ -234,8 +234,7 @@ describe("loadSkillState", () => {
     const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.version).toBe(1);
-      expect(result.value.skills).toEqual([]);
+      expect(result.value).toEqual([]);
     }
   });
 
@@ -266,7 +265,7 @@ describe("loadSkillState", () => {
     const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.skills).toHaveLength(0);
+      expect(result.value).toHaveLength(0);
     }
   });
 });
@@ -291,40 +290,38 @@ describe("loadConfig — V2 split security/scanner blocks", () => {
 });
 
 describe("saveSkillState", () => {
-  test("writes state.json to disk (Phase 31c-c-2d-1: state.json is canonical)", async () => {
-    const installed: InstalledJson = { version: 1, skills: [] };
+  test("writes state.json to disk", async () => {
+    const installed: InstalledSkill[] = [];
     const result = await saveSkillState(installed);
     expect(result.ok).toBe(true);
     expect(await fileExists(join(tmpDir, "skilltap", "state.json"))).toBe(true);
   });
 
   test("round-trip: save then load produces equivalent data", async () => {
-    const installed: InstalledJson = {
-      version: 1,
-      skills: [
-        {
-          name: "my-skill",
-          description: "",
-          repo: "https://example.com/repo.git",
-          ref: "main",
-          sha: "deadbeef",
-          scope: "global",
-          path: null,
-          tap: "home",
-          also: ["claude-code"],
-          installedAt: "2026-02-28T12:00:00.000Z",
-          updatedAt: "2026-02-28T12:00:00.000Z",
-        },
-      ],
-    };
+    const installed: InstalledSkill[] = [
+      {
+        name: "my-skill",
+        description: "",
+        repo: "https://example.com/repo.git",
+        ref: "main",
+        sha: "deadbeef",
+        scope: "global",
+        path: null,
+        tap: "home",
+        also: ["claude-code"],
+        installedAt: "2026-02-28T12:00:00.000Z",
+        updatedAt: "2026-02-28T12:00:00.000Z",
+        active: true,
+      },
+    ];
     await saveSkillState(installed);
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (loaded.ok) {
-      expect(loaded.value.skills).toHaveLength(1);
-      expect(loaded.value.skills[0].name).toBe("my-skill");
-      expect(loaded.value.skills[0].tap).toBe("home");
-      expect(loaded.value.skills[0].also).toEqual(["claude-code"]);
+      expect(loaded.value).toHaveLength(1);
+      expect(loaded.value[0].name).toBe("my-skill");
+      expect(loaded.value[0].tap).toBe("home");
+      expect(loaded.value[0].also).toEqual(["claude-code"]);
     }
   });
 });
