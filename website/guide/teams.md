@@ -298,13 +298,26 @@ If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops. Th
 on_warn = "fail"
 ```
 
-To allow-list sources you control (your own taps, your npm scope) without disabling scanning globally, add glob patterns to `[security] trust`:
+To allow-list a tap you maintain or an entire source type without disabling scanning globally, add `[[security.overrides]]` entries. The `none` preset skips scanning; `relaxed` keeps the static scan but auto-allows warnings.
 
 ```toml
 [security]
 on_warn = "fail"
-trust = ["github:my-corp/*", "npm:@my-corp/*"]
+
+# Skip scanning entirely for the team tap.
+[[security.overrides]]
+match = "my-corp"
+kind = "tap"
+preset = "none"
+
+# Trust everything published under your npm scope (still static-scanned, no prompts).
+[[security.overrides]]
+match = "npm"
+kind = "source"
+preset = "relaxed"
 ```
+
+Named tap overrides take priority over source-type overrides; first match wins.
 
 See the [Security guide](/guide/security) for what static scanning catches and how the optional semantic scan works.
 

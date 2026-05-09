@@ -156,18 +156,40 @@ skilltap install skill some-skill --no-strict   # override on_warn=fail for this
 
 ### Trusted sources
 
-To skip scanning for sources you control, add glob patterns to `[security] trust`:
+To relax scanning for sources you control, add `[[security.overrides]]` entries that map a tap name or source type to a preset. The `none` preset disables scanning entirely; `relaxed` keeps the static scan but auto-allows warnings.
 
 ```toml
-[security]
-trust = [
-  "github:my-corp/*",       # any repo under your org
-  "npm:@my-corp/*",         # any npm package under your scope
-  "tap:my-corp",            # any skill installed via your tap by name
-]
+# Skip scanning for any skill installed via your team tap.
+[[security.overrides]]
+match = "my-corp"
+kind = "tap"
+preset = "none"
+
+# Or trust an entire source type (e.g. all npm-published skills).
+[[security.overrides]]
+match = "npm"
+kind = "source"
+preset = "relaxed"
 ```
 
-Sources matching any glob are installed without running the static or semantic scan. Globs match against the install source string skilltap records in `state.json`.
+Each override has three fields:
+
+| Field    | Values                                            | Description                                          |
+| -------- | ------------------------------------------------- | ---------------------------------------------------- |
+| `match`  | string                                            | Tap name (when `kind = "tap"`) or source type        |
+| `kind`   | `"tap"` \| `"source"`                             | Whether `match` is a tap name or one of `tap`/`git`/`npm`/`local` |
+| `preset` | `"none"` \| `"relaxed"` \| `"standard"` \| `"strict"` | Preset applied to matching installs               |
+
+Presets resolve to concrete values:
+
+| Preset     | `scan`     | `on_warn` | `require_scan` |
+| ---------- | ---------- | --------- | -------------- |
+| `none`     | `off`      | `allow`   | `false`        |
+| `relaxed`  | `static`   | `allow`   | `false`        |
+| `standard` | `static`   | `prompt`  | `false`        |
+| `strict`   | `semantic` | `fail`    | `true`         |
+
+Named tap overrides take priority over source-type overrides; first match wins.
 
 ### Skipping scans per-command
 
@@ -248,4 +270,4 @@ A typical CI invocation:
 skilltap install skill user/commit-helper --yes --strict --json
 ```
 
-Use `[security] trust` globs to allow-list sources you control without disabling scanning globally. Security failures still emit non-zero exit codes and structured error output for the calling process to handle.
+Use `[[security.overrides]]` entries with `preset = "none"` to allow-list a tap or source type you control without disabling scanning globally. Security failures still emit non-zero exit codes and structured error output for the calling process to handle.

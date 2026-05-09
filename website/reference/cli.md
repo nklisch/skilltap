@@ -259,9 +259,8 @@ skilltap migrate
 One-shot upgrade from any prior config/state version. Detection markers:
 
 - `[agent-mode]` block → removed
-- `[security.human]` / `[security.agent]` → collapsed to `[security]`
-- `[[security.overrides]]` → translated to `trust = [...]`
-- Security presets → resolved to explicit `scan`/`on_warn`
+- `[security.human]` / `[security.agent]` → collapsed to a single flat `[security]` block
+- `[[security.overrides]]` → kept as-is (still part of the live schema)
 - `installed.json` / `plugins.json` → consolidated to `state.json`
 - HTTP taps → error; list affected taps for manual handling
 

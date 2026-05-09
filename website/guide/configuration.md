@@ -26,7 +26,7 @@ This walks you through each setting with prompts and sensible defaults. Existing
 
 ## Security setup
 
-Security settings live in a single `[security]` block with `scan`, `on_warn`, and `trust` (a glob array of source patterns to skip scanning for). Use the dedicated security wizard:
+Security settings live in a single flat `[security]` block. Per-source exemptions go in `[[security.overrides]]` entries that map a tap or source type to a preset. Use the dedicated security wizard:
 
 ```bash
 skilltap config security                       # interactive wizard
@@ -131,19 +131,37 @@ General defaults for install and update commands.
 
 ### `[security]`
 
-A single flat block controls scanning, warning behavior, and per-source trust.
+A single flat block controls scanning and warning behavior. Per-source trust is configured via `[[security.overrides]]` entries that apply a preset to a named tap or source type.
 
 | Key             | Type     | Default    | Description                                                   |
 | --------------- | -------- | ---------- | ------------------------------------------------------------- |
 | `scan`          | string   | `"static"` | Scan mode: `"off"`, `"static"`, or `"semantic"`               |
 | `on_warn`       | string   | `"prompt"` | Warning behavior: `"prompt"`, `"fail"`, or `"allow"`          |
-| `trust`         | string[] | `[]`       | Glob patterns of sources to skip scanning for (see Security)  |
+| `require_scan`  | boolean  | `false`    | When `true`, `--skip-scan` is blocked                         |
 | `agent_cli`     | string   | `""`       | Agent CLI for semantic scan (e.g. `"claude"`)                 |
 | `threshold`     | number   | `5`        | Semantic score threshold (0-10, chunks >= this flagged)       |
 | `max_size`      | number   | `51200`    | Max total skill size in bytes before warning (default 50 KB)  |
 | `ollama_model`  | string   | `""`       | Ollama model name for semantic scanning                       |
+| `overrides`     | table[]  | `[]`       | Per-tap or per-source preset overrides (see below)            |
 
-For non-interactive runs (CI, agents) set `on_warn = "fail"` so warnings hard-fail instead of prompting.
+Each `[[security.overrides]]` entry has three fields:
+
+| Field    | Values                                            | Description                                          |
+| -------- | ------------------------------------------------- | ---------------------------------------------------- |
+| `match`  | string                                            | Tap name or source type (`tap`, `git`, `npm`, `local`) |
+| `kind`   | `"tap"` \| `"source"`                             | What `match` refers to                               |
+| `preset` | `"none"` \| `"relaxed"` \| `"standard"` \| `"strict"` | Preset applied to matching installs               |
+
+Presets resolve to concrete scan/on_warn/require_scan values:
+
+| Preset     | `scan`     | `on_warn` | `require_scan` |
+| ---------- | ---------- | --------- | -------------- |
+| `none`     | `off`      | `allow`   | `false`        |
+| `relaxed`  | `static`   | `allow`   | `false`        |
+| `standard` | `static`   | `prompt`  | `false`        |
+| `strict`   | `semantic` | `fail`    | `true`         |
+
+Named tap overrides take priority over source-type overrides; first match wins. For non-interactive runs (CI, agents) set `on_warn = "fail"` so warnings hard-fail instead of prompting.
 
 ### `[registry]`
 
@@ -162,8 +180,8 @@ When a CLI flag and a config value conflict, the **most restrictive** option win
 
 - `--strict` overrides `on_warn` to `"fail"`
 - `--no-strict` overrides `on_warn` to `"prompt"`
-- `--skip-scan` bypasses scanning unless the source matches a `[security] trust` glob — trust globs are the only persistent scan-skip mechanism
-- `[security] trust` globs match against the install source string (e.g. `"github:my-corp/*"`, `"npm:@my-corp/*"`)
+- `--skip-scan` bypasses scanning unless `require_scan = true` (or the resolved preset for the source sets it)
+- `[[security.overrides]]` entries with `preset = "none"` are the persistent way to opt a tap or source type out of scanning entirely
 
 Flags always override config for non-security settings like `scope` and `yes`.
 
@@ -178,9 +196,14 @@ yes = false
 [security]
 scan = "static"
 on_warn = "prompt"
-trust = ["github:my-corp/*"]
 agent_cli = "claude"
 threshold = 5
+
+# Skip scanning for skills installed from a tap you control.
+[[security.overrides]]
+match = "my-corp"
+kind = "tap"
+preset = "none"
 
 [registry]
 enabled = ["skills.sh"]

@@ -268,20 +268,27 @@ skilltap scans every skill for suspicious content before installing. Fine-tune s
 skilltap config security
 ```
 
-The `[security]` block in `config.toml` has three keys:
+The `[security]` block in `config.toml` controls scan mode and warning behavior:
 
 ```toml
 [security]
-scan = "static"      # "semantic" | "static" | "none"
-on_warn = "prompt"   # "prompt" | "fail" | "install"
-trust = []           # tap names or source URL globs to skip scanning
+scan = "static"      # "semantic" | "static" | "off"
+on_warn = "prompt"   # "prompt" | "fail" | "allow"
 ```
 
-For non-interactive use:
+For non-interactive use, hard-fail on any warning:
 
 ```bash
 skilltap config set security.on_warn fail
-skilltap config set security.trust my-corp-tap
+```
+
+To skip scanning for a tap you control, add an override entry to `config.toml`:
+
+```toml
+[[security.overrides]]
+match = "my-corp"
+kind = "tap"
+preset = "none"
 ```
 
 See the [Security](/guide/security) guide for full details.
