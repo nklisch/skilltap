@@ -1,4 +1,5 @@
 import { join, resolve } from "node:path";
+import { claudePluginManifestPath } from "../manifest/paths";
 import { ClaudePluginJsonSchema, type PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 import { parseAgentDefinitions } from "./agents";
@@ -13,7 +14,7 @@ import { discoverSkills } from "./parse-common";
 export async function parseClaudePlugin(
   pluginDir: string,
 ): Promise<Result<PluginManifest, UserError>> {
-  const manifestPath = join(pluginDir, ".claude-plugin", "plugin.json");
+  const manifestPath = claudePluginManifestPath(pluginDir);
   const file = Bun.file(manifestPath);
   if (!(await file.exists())) {
     return err(new UserError(`No plugin.json found at ${manifestPath}`));

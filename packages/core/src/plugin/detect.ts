@@ -3,6 +3,10 @@ import { join } from "node:path";
 import { resolveSource } from "../adapters";
 import { makeTmpDir, removeTmpDir } from "../fs";
 import { clone, type GitError } from "../git";
+import {
+  claudePluginManifestPath,
+  codexPluginManifestPath,
+} from "../manifest/paths";
 import { discoverSkilltapPlugins } from "../skilltap-plugin/discover";
 import type { PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
@@ -67,11 +71,11 @@ export async function detectPlugin(
     );
   }
 
-  if (await Bun.file(join(dir, ".claude-plugin", "plugin.json")).exists()) {
+  if (await Bun.file(claudePluginManifestPath(dir)).exists()) {
     return parseClaudePlugin(dir);
   }
 
-  if (await Bun.file(join(dir, ".codex-plugin", "plugin.json")).exists()) {
+  if (await Bun.file(codexPluginManifestPath(dir)).exists()) {
     return parseCodexPlugin(dir);
   }
 
@@ -167,13 +171,13 @@ export async function detectAllPlugins(
     return ok(skilltapResult.value.manifests);
   }
 
-  if (await Bun.file(join(dir, ".claude-plugin", "plugin.json")).exists()) {
+  if (await Bun.file(claudePluginManifestPath(dir)).exists()) {
     const parsed = await parseClaudePlugin(dir);
     if (!parsed.ok) return parsed;
     return ok(parsed.value ? [parsed.value] : []);
   }
 
-  if (await Bun.file(join(dir, ".codex-plugin", "plugin.json")).exists()) {
+  if (await Bun.file(codexPluginManifestPath(dir)).exists()) {
     const parsed = await parseCodexPlugin(dir);
     if (!parsed.ok) return parsed;
     return ok(parsed.value ? [parsed.value] : []);

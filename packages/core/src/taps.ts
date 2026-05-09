@@ -5,6 +5,7 @@ import { getConfigDir, loadConfig, saveConfig } from "./config";
 import { parseSkillFrontmatter } from "./frontmatter";
 import { checkGitInstalled, clone, log, pull, syncRemoteUrl } from "./git";
 import { adaptMarketplaceToTap } from "./marketplace";
+import { marketplaceManifestPath } from "./manifest/paths";
 import { parseMcpJson, parseMcpObject } from "./plugin/mcp";
 import type { Config } from "./schemas/config";
 import { parseWithResult } from "./schemas/index";
@@ -80,9 +81,7 @@ async function loadTapJson(
   }
 
   // 2. Fall back to .claude-plugin/marketplace.json
-  const marketplaceFile = Bun.file(
-    join(dir, ".claude-plugin", "marketplace.json"),
-  );
+  const marketplaceFile = Bun.file(marketplaceManifestPath(dir));
   if (await marketplaceFile.exists()) {
     let raw: unknown;
     try {

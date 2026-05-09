@@ -1,4 +1,5 @@
 import { join, resolve } from "node:path";
+import { codexPluginManifestPath } from "../manifest/paths";
 import { CodexPluginJsonSchema, type PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 import { parseMcpJson } from "./mcp";
@@ -12,7 +13,7 @@ import { discoverSkills } from "./parse-common";
 export async function parseCodexPlugin(
   pluginDir: string,
 ): Promise<Result<PluginManifest, UserError>> {
-  const manifestPath = join(pluginDir, ".codex-plugin", "plugin.json");
+  const manifestPath = codexPluginManifestPath(pluginDir);
   const file = Bun.file(manifestPath);
   if (!(await file.exists())) {
     return err(new UserError(`No plugin.json found at ${manifestPath}`));
