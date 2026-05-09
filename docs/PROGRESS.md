@@ -3,8 +3,31 @@
 **Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
 **Last updated:** 2026-05-08
-**Phases since last refactor:** 0 (Refactor 3 just completed)
+**Phases since last refactor:** 1 (44 TUI)
 **Total refactor passes:** 3
+
+## Phase 44 completion summary (2026-05-08)
+
+TUI dashboard shipped across 4 implementation agents and 5 commits (`c74610d` Spike, `9b23393` state, `ea6a1c4` components, `ba8f9cb` integration). Suite up to 2187 pass / 51 skip / 0 fail.
+
+**What shipped:**
+- **Spike Unit (Unit 0)** — `c74610d`. Validated Ink-on-Bun stability before any production code committed. ink@7.0.2, react@19.2.6, ink-testing-library@4.0.0 installed; PTY-driven smoke test confirms clean exit on `q` and Ctrl+C; terminal restored cleanly. Phase 41's "riskiest assumption" cleared.
+- **State machine** (`packages/cli/src/tui/state/`) — pure types + per-screen reducers (Dashboard, Find, Toggle, Adopt) + root reducer + `keys.ts` registry. 55 unit tests cover every action type and boundary case. No Ink imports anywhere — fully testable in isolation.
+- **Ink components** (`packages/cli/src/tui/screens/`) — 4 screen renderers + 4 shared components (`Tabs`, `List`, `DetailPane`, `Footer`). Pure components: state + dispatch as props, no internal state. 43 snapshot tests via `ink-testing-library`.
+- **App root** (`packages/cli/src/tui/App.tsx`) — `useReducer(appReducer)` + global `useInput` for navigation/exit + per-screen key dispatch + `useEffect` data loading with cancellation flag.
+- **Integration** (`packages/cli/src/tui/index.ts` + `context.ts` + bare-skilltap routing) — `mountTui()` entry + `AppContext` factory wires TUI dispatchers to existing core functions (Phase 39 capture, Phase 42 typed install/remove, Phase 43 adopt). 4 PTY smoke tests pass reliably.
+- Bare `skilltap` (TTY) opens dashboard; piped/non-TTY errors with hint to use `skilltap status`.
+
+**Workflow:** Spike (1 agent) gated → 3 sequential implementation agents (state, components, integration). Pattern from Phase 41's design carried forward — pure reducers in core, Ink adapters in CLI.
+
+**Deferred follow-ups (functional but minimal):**
+- `loadFindResults` returns `[]` — Find screen renders the search box and accepts input, but no actual search results yet. Wire to tap-registry search in a follow-up.
+- `dispatchSync` returns "not yet implemented" — sync trigger isn't exposed in any screen yet.
+- Dashboard "Updates" tab returns `[]` — wire to `checkForUpdates` in a follow-up.
+
+These are intentional Phase-44 cuts; the dashboard scaffolding is sound and the data wiring is straightforward to complete.
+
+---
 
 ## Refactor 3 (after Phase 43, 2026-05-08)
 
@@ -327,7 +350,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 41  | Output mode abstraction                        | done     | 2026-05-08 |
 | 42  | Typed install/remove/update/toggle             | done     | 2026-05-08 |
 | 43  | Claude Code plugin adoption                    | done     | 2026-05-08 |
-| 44  | TUI dashboard (Ink)                            | pending  | — |
+| 44  | TUI dashboard (Ink)                            | done     | 2026-05-08 |
 | 45  | Migrate command rewrite                        | pending  | — |
 | 46  | Polish + docs + release                        | pending  | — |
 
