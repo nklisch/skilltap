@@ -16,9 +16,9 @@ unit cluster, followed by a verification gate (`bun test` + optional `bun run bu
 
 | Wave | Phase | Units | Status | Notes |
 |---|---|---|---|---|
-| 1A | 1 | 1.1, 1.2, 1.3, 1.11, 1.12, 1.13 | pending | Schema + policy promotion + sweep exports |
+| 1A | 1 | 1.1, 1.2, 1.3, 1.11, 1.12, 1.13 + (1.10 + partial 1.7) | done | Schema + policy promotion + sweep exports. Pulled 1.10 + minimal 1.7 forward to keep build green; agent `a2cfe3baf6c0fa8f4`, commit `44fd2b1` |
 | 1B | 1 | 1.4, 1.5, 1.6 | pending | loadConfig hard-fail + migrate + round-trip test |
-| 1C | 1 | 1.7, 1.8, 1.9, 1.10, 1.14, 1.15 | pending | CLI security + SETTABLE_KEYS + template + scanner consumers + manifest [[mcps]] + sync |
+| 1C | 1 | 1.7 (refine), 1.8, 1.9, 1.14, 1.15 | pending | CLI security refine + SETTABLE_KEYS + template + manifest [[mcps]] + sync. Unit 1.10 already done in 1A. |
 | 2  | 2 | 2.1–2.5 | pending | Dead code deletions (parallel) |
 | 3a | 3 | 3.1–3.8 | pending | Code cleanups (parallel-safe) |
 | 3b | 3 | 3.9, 3.10, 3.11, 3.12 | pending | CLI surface changes (`--scope`, `try` typed, drop `--no-strict`, repeatable `--also`, mcp smart-scope) |
@@ -53,17 +53,19 @@ Final verification: run the full checklist from `docs/designs/v2.2-cleanup.md` V
 
 Decisions made autonomously during the run that aren't already captured in the design itself.
 
-(empty)
+- **2026-05-08 Wave 1A** — Wave 1A pulled forward Unit 1.10 (scanner-consumer rewire across `agents/detect.ts`, `doctor/checks/agents.ts`, `cli/commands/find.ts`, `install/skill.ts`, `install/plugin.ts`, `update.ts`, `ui/resolve.ts`) because deleting the legacy `[security].agent_cli`/`threshold`/`max_size`/`ollama_model` fields would otherwise leave the build broken. The agent also wrote a minimal V2-shape `cli/commands/config/security.ts` to replace the legacy file (which imported deleted `PRESET_VALUES`/`SECURITY_PRESETS`/`TrustOverride`). Wave 1C still owns refining `config security` per design spec and updating its tests.
+- **2026-05-08 Wave 1A** — `migrate/config-v1.ts` import flipped from `../schemas/config-v2` → `../schemas/config` (typecheck-only edit); body still emits the legacy `agent` block (silently stripped by Zod). Wave 1B owns the full body rewrite per Unit 1.5.
+- **2026-05-08 Wave 1A** — `security/describe.ts` reduced to a 1-line `${scan} + ${on_warn}` formatter; `matchPreset` removed (no production callers). `security/describe.test.ts` will fail until Wave 1C / Phase 3 cleanup retires the test.
 
 ## Deviation log
 
 Things that didn't go as planned: failed assertions, design assumptions that turned out wrong,
 substitutions that diverged from the design.
 
-(empty)
+- **2026-05-08 Wave 1A** — full `bun test` reports 45 failures at the wave boundary (test-fixture residue: `agents/__tests__/detect.test.ts` legacy fixture, `security/describe.test.ts` deleted-symbol imports, `cli/config/security.test.ts` legacy assertions, etc.). Expected; resolved by Wave 1B (Unit 1.4 hard-fail makes legacy fixtures fail loudly and forces rewrite) + Wave 1C (Unit 1.8 SETTABLE_KEYS) + Phase 3 (Unit 3.6 fixture sweep). Build (`bun run build`) is clean and the binary verifies — typecheck-clean wave boundary held.
 
 ## Completion log
 
 Wave-by-wave completion entries with date, agent IDs, and summary.
 
-(empty)
+- **2026-05-08 Wave 1A** — Units 1.1, 1.2, 1.3, 1.10, 1.11, 1.12, 1.13 + minimal 1.7 done. 27 files changed (modified/renamed/deleted). 60 schema+policy tests pass. Build clean, binary verifies. Agent `a2cfe3baf6c0fa8f4`. Commit `44fd2b1`.
