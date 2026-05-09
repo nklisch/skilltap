@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
 import { App } from "./App";
 import type { AppContext } from "./state/types";
 
@@ -60,7 +59,7 @@ describe("App", () => {
 
 // ─── Unit 3.17 — TUI bug fixes ────────────────────────────────────────────────
 
-const ARROW_UP = "[A";
+const _ARROW_UP = "[A";
 const ARROW_DOWN = "[B";
 
 function sleep(ms: number): Promise<void> {
@@ -104,7 +103,9 @@ describe("Dashboard tab keys (Unit 3.17 bug 1)", () => {
     await sleep(20);
     // After 1, we should have re-loaded "installed" (already in calls; check
     // we hit it at least twice since the first time was the initial mount).
-    expect(calls.filter((c) => c === "installed").length).toBeGreaterThanOrEqual(2);
+    expect(
+      calls.filter((c) => c === "installed").length,
+    ).toBeGreaterThanOrEqual(2);
   });
 });
 

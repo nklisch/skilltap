@@ -18,7 +18,6 @@ import {
   saveConfig,
 } from "@skilltap/core";
 import type { Output, Progress } from "../../output";
-import { setupOutput } from "../../ui/setup";
 import {
   createInstallCallbacks,
   printCaptureConflict,
@@ -33,6 +32,7 @@ import {
   resolveScope,
   resolveSemanticInteractive,
 } from "../../ui/resolve";
+import { setupOutput } from "../../ui/setup";
 
 export type SharedInstallArgs = {
   source: string;
@@ -123,7 +123,11 @@ export async function setupInstallContext(
 
   const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
   let also = parseAlsoFlag(repeatedAlso, config.defaults.also);
-  if (repeatedAlso === undefined && !policy.yes && !config.defaults.also.length) {
+  if (
+    repeatedAlso === undefined &&
+    !policy.yes &&
+    !config.defaults.also.length
+  ) {
     const selected = await selectAgents(also);
     also = selected;
 
@@ -229,9 +233,7 @@ export function buildSourceCallbacks(
   };
 
   let conflictCallback:
-    | ((
-        crossSource: CaptureBucket,
-      ) => Promise<"abort" | "force" | "skip">)
+    | ((crossSource: CaptureBucket) => Promise<"abort" | "force" | "skip">)
     | undefined;
 
   if (captureMode === "force") {
@@ -320,8 +322,9 @@ export function buildSourceCallbacks(
     for (const o of orphans) {
       log.warn(`  ${o.record.name}: ${formatOrphanReason(o.reason)}`);
     }
-    const { confirm: confirmPrompt, isCancel: isCancelPrompt } =
-      await import("@clack/prompts");
+    const { confirm: confirmPrompt, isCancel: isCancelPrompt } = await import(
+      "@clack/prompts"
+    );
     const shouldClean = await confirmPrompt({
       message: "Remove stale records? (directories are already gone)",
       initialValue: true,

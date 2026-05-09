@@ -36,20 +36,34 @@ import { updateSkill } from "./update";
 // directory into the install location and writes a "linked" record to state.
 async function linkSkillFixture(
   localPath: string,
-  options: { scope: "global" | "project"; projectRoot?: string; also?: string[] },
+  options: {
+    scope: "global" | "project";
+    projectRoot?: string;
+    also?: string[];
+  },
 ): Promise<void> {
   const scanned = await scan(localPath);
   if (scanned.length === 0) throw new Error(`no skill in ${localPath}`);
-  // biome-ignore lint/style/noNonNullAssertion: scanned.length > 0
   const skill = scanned[0]!;
-  const installPath = skillInstallDir(skill.name, options.scope, options.projectRoot);
+  const installPath = skillInstallDir(
+    skill.name,
+    options.scope,
+    options.projectRoot,
+  );
   await mkdir(dirname(installPath), { recursive: true });
   await symlink(localPath, installPath, "dir");
   const also = options.also ?? [];
   if (also.length > 0) {
-    await createAgentSymlinks(skill.name, installPath, also, options.scope, options.projectRoot);
+    await createAgentSymlinks(
+      skill.name,
+      installPath,
+      also,
+      options.scope,
+      options.projectRoot,
+    );
   }
-  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const fileRoot =
+    options.scope === "project" ? options.projectRoot : undefined;
   const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) throw installedResult.error;
   const now = new Date().toISOString();

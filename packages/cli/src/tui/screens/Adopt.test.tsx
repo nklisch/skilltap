@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
-import { Adopt } from "./Adopt";
 import { initialAdoptState } from "../state/adopt";
+import { Adopt } from "./Adopt";
 
 describe("Adopt", () => {
   test("renders heading", () => {

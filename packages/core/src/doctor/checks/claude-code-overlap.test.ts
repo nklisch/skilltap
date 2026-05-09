@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { checkClaudeCodeOverlap } from "./claude-code-overlap";
-import type { AgentPluginScanner, DiscoveredAgentPlugin } from "../../agent-plugins/types";
 import { scanAllAgentPlugins } from "../../agent-plugins/registry";
+import type {
+  AgentPluginScanner,
+  DiscoveredAgentPlugin,
+} from "../../agent-plugins/types";
 import type { State } from "../../state/schema";
+import { checkClaudeCodeOverlap } from "./claude-code-overlap";
 
 // We test checkClaudeCodeOverlap indirectly by controlling what scanAllAgentPlugins sees.
 // Since checkClaudeCodeOverlap calls scanAllAgentPlugins() with no args (uses defaultScanners),
@@ -95,23 +98,29 @@ async function runOverlapCheckWithMockPlugins(
     components: [],
   };
 
-  const mockPlugins: DiscoveredAgentPlugin[] = claudeCodePluginNames.map((name) => ({
-    scannerName: "claude-code",
-    name,
-    sourceUrl: null,
-    installPath: "/mock/path",
-    version: "1.0.0",
-    sha: null,
-    scope: "global" as const,
-    installedAt: "2026-01-01T00:00:00.000Z",
-    updatedAt: "2026-01-01T00:00:00.000Z",
-    manifest: { ...mockManifest, name },
-  }));
+  const mockPlugins: DiscoveredAgentPlugin[] = claudeCodePluginNames.map(
+    (name) => ({
+      scannerName: "claude-code",
+      name,
+      sourceUrl: null,
+      installPath: "/mock/path",
+      version: "1.0.0",
+      sha: null,
+      scope: "global" as const,
+      installedAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      manifest: { ...mockManifest, name },
+    }),
+  );
 
   const mockScanner: AgentPluginScanner = {
     name: "claude-code",
-    async detect() { return mockPlugins.length > 0; },
-    async scan() { return { ok: true as const, value: mockPlugins }; },
+    async detect() {
+      return mockPlugins.length > 0;
+    },
+    async scan() {
+      return { ok: true as const, value: mockPlugins };
+    },
   };
 
   // We replicate the core logic of checkClaudeCodeOverlap using mock scanners
@@ -120,15 +129,27 @@ async function runOverlapCheckWithMockPlugins(
     return {
       name: "Claude Code overlaps",
       status: "warn",
-      issues: [{ message: `Could not scan: ${scanResult.error.message}`, fixable: false }],
+      issues: [
+        {
+          message: `Could not scan: ${scanResult.error.message}`,
+          fixable: false,
+        },
+      ],
     };
   }
 
-  const claudePlugins = scanResult.value.plugins.filter((p) => p.scannerName === "claude-code");
-  if (claudePlugins.length === 0) return { name: "Claude Code overlaps", status: "pass" };
+  const claudePlugins = scanResult.value.plugins.filter(
+    (p) => p.scannerName === "claude-code",
+  );
+  if (claudePlugins.length === 0)
+    return { name: "Claude Code overlaps", status: "pass" };
 
   const adoptedSourceMarker = "claude-code:";
-  const issues: { message: string; fixable: boolean; fixDescription?: string }[] = [];
+  const issues: {
+    message: string;
+    fixable: boolean;
+    fixDescription?: string;
+  }[] = [];
 
   for (const plugin of claudePlugins) {
     const skillCollision = state.skills.find((s) => s.name === plugin.name);
@@ -193,7 +214,9 @@ describe("checkClaudeCodeOverlap logic (mock scanners)", () => {
   test("no warning when plugin collision is itself an adopted Claude Code plugin", async () => {
     // An adopted plugin has repo starting with "claude-code:"
     const state = makeState({
-      plugins: [makePluginRecord("my-plugin", "claude-code:my-marketplace:my-plugin")],
+      plugins: [
+        makePluginRecord("my-plugin", "claude-code:my-marketplace:my-plugin"),
+      ],
     });
     const check = await runOverlapCheckWithMockPlugins(state, ["my-plugin"]);
     expect(check.status).toBe("pass");

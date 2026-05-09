@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
 import { DetailPane } from "./DetailPane";
 
 describe("DetailPane", () => {
   test("renders title", () => {
-    const { lastFrame } = render(<DetailPane title="My Title" body="Some body text" />);
+    const { lastFrame } = render(
+      <DetailPane title="My Title" body="Some body text" />,
+    );
     expect(lastFrame()).toContain("My Title");
   });
 
@@ -15,7 +16,9 @@ describe("DetailPane", () => {
   });
 
   test("renders array body lines", () => {
-    const { lastFrame } = render(<DetailPane title="T" body={["Line one", "Line two"]} />);
+    const { lastFrame } = render(
+      <DetailPane title="T" body={["Line one", "Line two"]} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Line one");
     expect(frame).toContain("Line two");

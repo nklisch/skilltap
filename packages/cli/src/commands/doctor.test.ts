@@ -285,7 +285,9 @@ describe("doctor --json", () => {
 
     // At least one check should have a non-empty `detail` field —
     // git/state.json/manifest checks all populate it.
-    const withDetail = result.checks.filter((c) => typeof c.detail === "string");
+    const withDetail = result.checks.filter(
+      (c) => typeof c.detail === "string",
+    );
     expect(withDetail.length).toBeGreaterThan(0);
 
     // Whenever a check has fixable issues planted, those issues should expose

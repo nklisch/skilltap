@@ -1,4 +1,4 @@
-import type { Output, OutputOptions, Progress } from "@skilltap/core";
+import type { Output, OutputOptions } from "@skilltap/core";
 
 export function createPlainOutput(opts: OutputOptions): Output {
   const quiet = opts.quiet ?? false;
@@ -23,7 +23,8 @@ export function createPlainOutput(opts: OutputOptions): Output {
       stdout.write(`${msg}\n`);
     },
     block(lines, blockOpts) {
-      const out = (blockOpts?.stream ?? "stderr") === "stdout" ? stdout : stderr;
+      const out =
+        (blockOpts?.stream ?? "stderr") === "stdout" ? stdout : stderr;
       out.write(`${lines.join("\n")}\n`);
     },
     json() {},

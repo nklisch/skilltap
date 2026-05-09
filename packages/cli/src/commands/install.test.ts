@@ -40,7 +40,15 @@ describe("install — standalone skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode, stdout } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -61,12 +69,28 @@ describe("install — standalone skill", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -82,7 +106,15 @@ describe("install — multi-skill repo", () => {
     const repo = await createMultiSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -105,7 +137,15 @@ describe("install — security scanning", () => {
     const repo = await createMaliciousSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -119,7 +159,15 @@ describe("install — security scanning", () => {
     const repo = await createMaliciousSkillRepo();
     try {
       const { exitCode, stderr } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--strict"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--strict",
+        ],
         homeDir,
         configDir,
       );
@@ -145,7 +193,15 @@ describe("install — agent selection", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -174,7 +230,8 @@ describe("install — agent selection", () => {
           "skill",
           repo.path,
           "--yes",
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -201,7 +258,15 @@ describe("install — agent selection", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -229,7 +294,8 @@ describe("install — agent selection", () => {
           "skill",
           repo.path,
           "--yes",
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -258,7 +324,15 @@ describe("install — agent selection", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -291,7 +365,15 @@ describe("install — non-interactive (--yes)", () => {
     try {
       // --strict sets on_warn=fail so security warnings abort the install
       const { exitCode, stderr } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--strict"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--strict",
+        ],
         homeDir,
         configDir,
       );
@@ -307,7 +389,15 @@ describe("install — non-interactive (--yes)", () => {
     const repo = await createMultiSkillRepo();
     try {
       const { exitCode, stdout } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -323,12 +413,28 @@ describe("install — non-interactive (--yes)", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
       const { exitCode, stdout } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -344,7 +450,15 @@ describe("install — non-interactive (--yes)", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );

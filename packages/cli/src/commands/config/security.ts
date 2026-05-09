@@ -5,8 +5,8 @@ import {
   loadConfig,
   ON_WARN_MODES,
   type Output,
-  saveConfig,
   SCAN_MODES,
+  saveConfig,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import {

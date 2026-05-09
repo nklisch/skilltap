@@ -1,9 +1,9 @@
 import { Box, Text } from "ink";
-import React from "react";
+import type React from "react";
 import type { Action, DashboardState } from "../state/types";
-import { Tabs } from "./shared/Tabs";
-import { List } from "./shared/List";
 import { Footer } from "./shared/Footer";
+import { List } from "./shared/List";
+import { Tabs } from "./shared/Tabs";
 
 interface Props {
   state: DashboardState;
@@ -29,7 +29,9 @@ const FOOTER_HINTS = [
   { key: "q", description: "quit" },
 ];
 
-function dataToItems(data: unknown): { key: string; label: string; hint?: string }[] {
+function dataToItems(
+  data: unknown,
+): { key: string; label: string; hint?: string }[] {
   if (!Array.isArray(data)) return [];
   return data.map((item, i) => {
     if (typeof item === "string") return { key: String(i), label: item };
@@ -57,7 +59,11 @@ export const Dashboard: React.FC<Props> = ({ state, dispatch, data }) => {
         {state.loading ? (
           <Text dimColor>Loading…</Text>
         ) : (
-          <List items={items} focusIndex={state.selectedIndex} emptyMessage="(nothing here)" />
+          <List
+            items={items}
+            focusIndex={state.selectedIndex}
+            emptyMessage="(nothing here)"
+          />
         )}
       </Box>
       <Footer hints={FOOTER_HINTS} />

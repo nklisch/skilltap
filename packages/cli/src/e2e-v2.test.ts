@@ -79,7 +79,8 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       "install",
       "skill",
       skillRepo.path,
-      "--scope", "project",
+      "--scope",
+      "project",
       "--skip-scan",
       "--yes",
     ]);
@@ -266,7 +267,15 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       await initRepo(agentDir);
       await writeFile(join(agentDir, "skilltap.toml"), "");
       const { exitCode, stdout, stderr } = await run(
-        ["install", "skill", skillRepo.path, "--scope", "project", "--yes", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          skillRepo.path,
+          "--scope",
+          "project",
+          "--yes",
+          "--skip-scan",
+        ],
         { cwd: agentDir },
       );
       if (exitCode !== 0) {
@@ -294,7 +303,15 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
 
       // Install the skill so manifest + lockfile + state are all populated.
       const installResult = await run(
-        ["install", "skill", skillRepo.path, "--scope", "project", "--skip-scan", "--yes"],
+        [
+          "install",
+          "skill",
+          skillRepo.path,
+          "--scope",
+          "project",
+          "--skip-scan",
+          "--yes",
+        ],
         { cwd: removeDir },
       );
       if (installResult.exitCode !== 0) {
@@ -447,7 +464,15 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       await writeFile(join(malformedDir, "skilltap.toml"), brokenContent);
 
       const { exitCode } = await run(
-        ["install", "skill", skillRepo.path, "--scope", "project", "--yes", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          skillRepo.path,
+          "--scope",
+          "project",
+          "--yes",
+          "--skip-scan",
+        ],
         { cwd: malformedDir },
       );
 
@@ -477,7 +502,15 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
       await writeFile(join(malformedDir, "skilltap.toml"), brokenContent);
 
       const { exitCode } = await run(
-        ["install", "skill", skillRepo.path, "--scope", "project", "--yes", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          skillRepo.path,
+          "--scope",
+          "project",
+          "--yes",
+          "--skip-scan",
+        ],
         { cwd: malformedDir },
       );
 

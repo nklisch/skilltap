@@ -178,7 +178,10 @@ export async function moveSkill(
   if (sourceIdx !== -1) {
     sourceInstalled.skills.splice(sourceIdx, 1);
   }
-  const saveSourceResult = await saveSkillState(sourceInstalled, sourceFileRoot);
+  const saveSourceResult = await saveSkillState(
+    sourceInstalled,
+    sourceFileRoot,
+  );
   if (!saveSourceResult.ok) return saveSourceResult;
 
   // Add to target state
@@ -188,14 +191,22 @@ export async function moveSkill(
   if (!targetInstalledResult.ok) return targetInstalledResult;
   const targetInstalled = targetInstalledResult.value;
   targetInstalled.skills.push(newRecord);
-  const saveTargetResult = await saveSkillState(targetInstalled, targetFileRoot);
+  const saveTargetResult = await saveSkillState(
+    targetInstalled,
+    targetFileRoot,
+  );
   if (!saveTargetResult.ok) return saveTargetResult;
 
   // Lifecycle drift fix (Unit 3.15): keep project manifest+lockfile in sync
   // with the move. Globals are unmanaged, so a project→global move drops the
   // entry from the source project; a global→project move adds it; a
   // project→project move rewrites both. Best-effort.
-  await syncManifestForMove(record, newRecord, sourceProjectRoot, targetProjectRoot);
+  await syncManifestForMove(
+    record,
+    newRecord,
+    sourceProjectRoot,
+    targetProjectRoot,
+  );
 
   return ok({ record: newRecord, from: sourcePath, to: destPath });
 }

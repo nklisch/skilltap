@@ -168,4 +168,3 @@ export async function searchRegistries(
   );
   return all.flat();
 }
-

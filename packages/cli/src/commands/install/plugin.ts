@@ -1,16 +1,11 @@
 import { outro } from "@clack/prompts";
-import {
-  discoverPluginsAt,
-  installSkill,
-  updateSkill,
-} from "@skilltap/core";
+import { discoverPluginsAt, installSkill, updateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { inferAdapter, sendEvent, telemetryBase } from "../../telemetry";
 import { componentSummary } from "../../ui/plugin-format";
 import { hasRawFlag } from "../../ui/resolve";
-import { inferAdapter, sendEvent, telemetryBase } from "../../telemetry";
-import type { CaptureMode, InstallContext } from "./shared";
+import type { CaptureMode, InstallContext, SharedInstallArgs } from "./shared";
 import { buildSourceCallbacks, setupInstallContext } from "./shared";
-import type { SharedInstallArgs } from "./shared";
 
 export const pluginCommand = defineCommand({
   meta: { name: "plugin", description: "Install a plugin" },
@@ -119,7 +114,7 @@ async function runInstallPlugin(
   args: SharedInstallArgs & { source: string },
   rawArgs: readonly string[],
 ): Promise<void> {
-  const sources = (args as any)._ as string[];
+  const sources = (args as unknown as { _: string[] })._;
 
   const ctx = await setupInstallContext(args, rawArgs);
   const { out } = ctx;
@@ -247,11 +242,11 @@ async function runSinglePluginInstall(
     ctx;
   const errors: SourceError[] = [];
 
-  const { progress: p, logScanResults, installOptions } = buildSourceCallbacks(
-    ctx,
-    source,
-    captureMode,
-  );
+  const {
+    progress: p,
+    logScanResults,
+    installOptions,
+  } = buildSourceCallbacks(ctx, source, captureMode);
 
   let pluginDetected = false;
 

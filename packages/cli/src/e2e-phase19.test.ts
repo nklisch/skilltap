@@ -96,7 +96,10 @@ describe("E2E Phase 19 — create → verify → doctor → completions", () => 
   // ── verify (removed in v2.2 — assert replacement-hint behavior) ─────────────
 
   test("5. verify command — exits 1 with removed-command hint", async () => {
-    const { exitCode, stderr } = await run(["verify", join(workDir, "my-e2e-skill")]);
+    const { exitCode, stderr } = await run([
+      "verify",
+      join(workDir, "my-e2e-skill"),
+    ]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("removed");
     expect(stderr).toContain("doctor");
@@ -113,7 +116,10 @@ describe("E2E Phase 19 — create → verify → doctor → completions", () => 
   });
 
   test("7. verify on npm skill — same removed-command hint", async () => {
-    const { exitCode, stderr } = await run(["verify", join(workDir, "my-npm-skill")]);
+    const { exitCode, stderr } = await run([
+      "verify",
+      join(workDir, "my-npm-skill"),
+    ]);
     expect(exitCode).toBe(1);
     expect(stderr).toContain("doctor");
   });

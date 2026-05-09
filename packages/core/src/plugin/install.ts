@@ -204,9 +204,7 @@ export async function installPlugin(
         const proceed = await options.onCaptureConfirm(toCapture);
         if (!proceed) {
           return err(
-            new UserError(
-              `Install of plugin "${manifest.name}" cancelled.`,
-            ),
+            new UserError(`Install of plugin "${manifest.name}" cancelled.`),
           );
         }
       }

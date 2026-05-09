@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "../config";
 import { debug } from "../debug";
-import { runDoctor, type DoctorResult } from "../doctor";
+import { type DoctorResult, runDoctor } from "../doctor";
 import {
   addMcpToLockfile,
   addMcpToManifest,
@@ -127,7 +127,11 @@ export async function runMigrate(
   // Only overwrite config.toml if it actually contained v1 keys that needed
   // migration. If the config is already in the current format (no v1 keys),
   // leave it untouched to avoid replacing it with the v2-schema format.
-  if (configResult && globalMarkers.configToml && globalMarkers.configHasV1Keys) {
+  if (
+    configResult &&
+    globalMarkers.configToml &&
+    globalMarkers.configHasV1Keys
+  ) {
     const newText = stringify(configResult.migrated as Record<string, unknown>);
     const tmpPath = join(getConfigDir(), "config.toml.v2.tmp");
     await Bun.write(tmpPath, newText);
@@ -214,8 +218,7 @@ async function migrateScopeState(
   // legacy installed.json/plugins.json. The legacy formats have no MCP
   // tracking, so this is purely additive.
   const existingState = await loadState(projectRoot).catch(() => null);
-  const preservedMcps =
-    existingState && existingState.ok ? existingState.value.mcpServers : [];
+  const preservedMcps = existingState?.ok ? existingState.value.mcpServers : [];
 
   const saveResult = await saveState(
     { ...newState, mcpServers: preservedMcps },

@@ -19,22 +19,40 @@ describe("pickMode", () => {
   test("no opts + process.stdout.isTTY falsy → 'plain'", () => {
     // In test/subprocess context isTTY is undefined (piped) — plain
     const original = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: undefined, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: undefined,
+      configurable: true,
+    });
     expect(pickMode()).toBe("plain");
-    Object.defineProperty(process.stdout, "isTTY", { value: original, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: original,
+      configurable: true,
+    });
   });
 
   test("no opts + process.stdout.isTTY === true → 'tty'", () => {
     const original = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: true,
+      configurable: true,
+    });
     expect(pickMode()).toBe("tty");
-    Object.defineProperty(process.stdout, "isTTY", { value: original, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: original,
+      configurable: true,
+    });
   });
 
   test("isTTY override takes precedence over process.stdout.isTTY", () => {
     const original = process.stdout.isTTY;
-    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: true,
+      configurable: true,
+    });
     expect(pickMode({ isTTY: false })).toBe("plain");
-    Object.defineProperty(process.stdout, "isTTY", { value: original, configurable: true });
+    Object.defineProperty(process.stdout, "isTTY", {
+      value: original,
+      configurable: true,
+    });
   });
 });

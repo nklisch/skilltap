@@ -81,19 +81,16 @@ async function createLocalTap(
 }
 
 async function addTap(tapPath: string): Promise<void> {
-  const proc = Bun.spawn(
-    [...CMD, "tap", "add", "home", tapPath],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
+  const proc = Bun.spawn([...CMD, "tap", "add", "home", tapPath], {
+    cwd: CLI_DIR,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      SKILLTAP_HOME: homeDir,
+      XDG_CONFIG_HOME: configDir,
     },
-  );
+  });
   const exitCode = await proc.exited;
   if (exitCode !== 0) {
     const stderr = await new Response(proc.stderr).text();
@@ -256,7 +253,9 @@ describe("find -i — search prompt", () => {
 
       // Should transition to install flow. Smart-scope-default skips the scope
       // prompt, so the agents multiselect is the first install-flow prompt.
-      await session.waitForText("Which agents should this skill be available to?");
+      await session.waitForText(
+        "Which agents should this skill be available to?",
+      );
 
       // Cancel out of the install flow
       session.sendKey("CTRL_C");

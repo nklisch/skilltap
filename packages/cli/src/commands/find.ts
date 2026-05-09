@@ -4,7 +4,12 @@ import {
   S_RADIO_ACTIVE,
   S_RADIO_INACTIVE,
 } from "@clack/prompts";
-import type { Config, Output, RegistrySearchResult, TapEntry } from "@skilltap/core";
+import type {
+  Config,
+  Output,
+  RegistrySearchResult,
+  TapEntry,
+} from "@skilltap/core";
 import {
   composePolicy,
   ensureBuiltinTap,
@@ -19,7 +24,6 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import pc from "picocolors";
-import { setupOutput } from "../ui/setup";
 import {
   ansi,
   formatInstallCount,
@@ -33,6 +37,7 @@ import { createStepLogger } from "../ui/install-steps";
 import { confirmSaveDefault, selectAgents } from "../ui/prompts";
 import { resolveScope, resolveSemanticInteractive } from "../ui/resolve";
 import { searchPrompt } from "../ui/search-prompt";
+import { setupOutput } from "../ui/setup";
 import { formatTapTrust } from "../ui/trust";
 
 type SearchEntry = {
@@ -307,7 +312,12 @@ async function runInteractiveSearch(
           plugin: skill.plugin || undefined,
         }));
       }
-      const { filtered } = await search(query, local, config, setupOutput({ json: false, quiet: true }));
+      const { filtered } = await search(
+        query,
+        local,
+        config,
+        setupOutput({ json: false, quiet: true }),
+      );
       return filtered;
     },
     selector: (entry) => `${entry.name} ${entry.description}`,

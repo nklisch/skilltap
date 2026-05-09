@@ -26,21 +26,35 @@ import {
 // Test fixture: install a skill in "linked" scope (the deleted linkSkill helper).
 async function linkSkillFixture(
   localPath: string,
-  options: { scope: "global" | "project"; projectRoot?: string; also?: string[] },
+  options: {
+    scope: "global" | "project";
+    projectRoot?: string;
+    also?: string[];
+  },
 ): Promise<void> {
   const scanned = await scan(localPath);
   if (scanned.length === 0) throw new Error(`no skill in ${localPath}`);
-  // biome-ignore lint/style/noNonNullAssertion: scanned.length > 0
   const skill = scanned[0]!;
-  const installPath = skillInstallDir(skill.name, options.scope, options.projectRoot);
+  const installPath = skillInstallDir(
+    skill.name,
+    options.scope,
+    options.projectRoot,
+  );
   await mkdir(dirname(installPath), { recursive: true });
   await rm(installPath, { recursive: true, force: true });
   await symlink(localPath, installPath, "dir");
   const also = options.also ?? [];
   if (also.length > 0) {
-    await createAgentSymlinks(skill.name, installPath, also, options.scope, options.projectRoot);
+    await createAgentSymlinks(
+      skill.name,
+      installPath,
+      also,
+      options.scope,
+      options.projectRoot,
+    );
   }
-  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const fileRoot =
+    options.scope === "project" ? options.projectRoot : undefined;
   const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) throw installedResult.error;
   const now = new Date().toISOString();
@@ -60,7 +74,6 @@ async function linkSkillFixture(
   const saveResult = await saveSkillState(installedResult.value, fileRoot);
   if (!saveResult.ok) throw saveResult.error;
 }
-
 
 setDefaultTimeout(60_000);
 
@@ -83,7 +96,15 @@ describe("update — already up to date", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -106,7 +127,15 @@ describe("update — clean update", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -147,7 +176,15 @@ describe("update — clean update", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -204,7 +241,15 @@ describe("update — strict mode with warnings in diff", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -269,7 +314,15 @@ describe("update — show_diff config", () => {
     try {
       await writeShowDiffConfig("full");
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -294,7 +347,15 @@ describe("update — show_diff config", () => {
     try {
       await writeShowDiffConfig("stat");
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );
@@ -318,7 +379,15 @@ describe("update — show_diff config", () => {
     try {
       await writeShowDiffConfig("none");
       await runSkilltap(
-        ["install", "skill", repo.path, "--yes", "--scope", "global", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
       );

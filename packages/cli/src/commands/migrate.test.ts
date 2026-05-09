@@ -16,11 +16,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import {
-  makeTmpDir,
-  removeTmpDir,
-  runSkilltap,
-} from "@skilltap/test-utils";
+import { makeTmpDir, removeTmpDir, runSkilltap } from "@skilltap/test-utils";
 
 let homeDir: string;
 let configDir: string;
@@ -115,9 +111,7 @@ type = "http"
       expect(stderr).toContain("legacy-http-tap");
 
       // Verify abort happened BEFORE any writes — state.json must not exist.
-      const stateExists = await Bun.file(
-        join(cfgDir, "state.json"),
-      ).exists();
+      const stateExists = await Bun.file(join(cfgDir, "state.json")).exists();
       expect(stateExists).toBe(false);
     } finally {
       await env.cleanup();
@@ -204,11 +198,7 @@ describe("migrate — idempotency", () => {
       );
 
       // First run — should migrate successfully.
-      const first = await runSkilltap(
-        ["migrate"],
-        env.homeDir,
-        env.configDir,
-      );
+      const first = await runSkilltap(["migrate"], env.homeDir, env.configDir);
       expect(first.exitCode).toBe(0);
       expect(first.stdout).not.toContain("Already on v2.0");
 
@@ -217,17 +207,11 @@ describe("migrate — idempotency", () => {
         join(cfgDir, "installed.json.v1.bak"),
       ).exists();
       expect(bakExists).toBe(true);
-      const stateExists = await Bun.file(
-        join(cfgDir, "state.json"),
-      ).exists();
+      const stateExists = await Bun.file(join(cfgDir, "state.json")).exists();
       expect(stateExists).toBe(true);
 
       // Second run — must be the alreadyMigrated path.
-      const second = await runSkilltap(
-        ["migrate"],
-        env.homeDir,
-        env.configDir,
-      );
+      const second = await runSkilltap(["migrate"], env.homeDir, env.configDir);
       expect(second.exitCode).toBe(0);
       expect(second.stdout).toContain("Already on v2.0");
     } finally {

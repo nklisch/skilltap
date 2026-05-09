@@ -12,7 +12,13 @@ import {
   loadState,
   toggleInstalledComponent,
 } from "@skilltap/core";
-import type { AdoptCandidate, AppContext, DashboardTab, FindResult, ToggleState } from "./state/types";
+import type {
+  AdoptCandidate,
+  AppContext,
+  DashboardTab,
+  FindResult,
+  ToggleState,
+} from "./state/types";
 
 export async function createAppContext(): Promise<AppContext> {
   const projectRoot = (await isInGitRepo()) ?? undefined;
@@ -68,7 +74,8 @@ export async function createAppContext(): Promise<AppContext> {
       try {
         if (type === "skill") {
           const stateResult = await loadState(projectRoot);
-          if (!stateResult.ok) return { ok: false, error: stateResult.error.message };
+          if (!stateResult.ok)
+            return { ok: false, error: stateResult.error.message };
           const skill = stateResult.value.skills.find((s) => s.name === name);
           if (!skill) return { ok: false, error: `Skill '${name}' not found` };
           const isActive = skill.active !== false;
@@ -79,19 +86,37 @@ export async function createAppContext(): Promise<AppContext> {
           return { ok: true };
         }
         if (type === "plugin") {
-          if (!component) return { ok: false, error: "component name required for plugin toggle" };
+          if (!component)
+            return {
+              ok: false,
+              error: "component name required for plugin toggle",
+            };
           const stateResult = await loadState(projectRoot);
-          if (!stateResult.ok) return { ok: false, error: stateResult.error.message };
+          if (!stateResult.ok)
+            return { ok: false, error: stateResult.error.message };
           const plugin = stateResult.value.plugins.find((p) => p.name === name);
-          if (!plugin) return { ok: false, error: `Plugin '${name}' not found` };
+          if (!plugin)
+            return { ok: false, error: `Plugin '${name}' not found` };
           const comp = findComponentInPlugin(plugin, component);
-          if (!comp) return { ok: false, error: `Component '${component}' not found in plugin '${name}'` };
-          const result = await toggleInstalledComponent(name, comp.type, comp.name, { projectRoot });
+          if (!comp)
+            return {
+              ok: false,
+              error: `Component '${component}' not found in plugin '${name}'`,
+            };
+          const result = await toggleInstalledComponent(
+            name,
+            comp.type,
+            comp.name,
+            { projectRoot },
+          );
           if (!result.ok) return { ok: false, error: result.error.message };
           return { ok: true };
         }
         if (type === "mcp") {
-          return { ok: false, error: "MCP server toggle is not yet implemented. Use remove mcp." };
+          return {
+            ok: false,
+            error: "MCP server toggle is not yet implemented. Use remove mcp.",
+          };
         }
         return { ok: false, error: `unknown type: ${type}` };
       } catch (e) {
@@ -105,7 +130,8 @@ export async function createAppContext(): Promise<AppContext> {
           scope: projectRoot ? "project" : "global",
           projectRoot,
         });
-        if (!candidates.ok) return { ok: false, error: candidates.error.message };
+        if (!candidates.ok)
+          return { ok: false, error: candidates.error.message };
         if (kind === "skill") {
           const skill = candidates.value.skills.find((s) => s.name === name);
           if (!skill) return { ok: false, error: `Skill '${name}' not found` };
@@ -121,7 +147,8 @@ export async function createAppContext(): Promise<AppContext> {
         }
         if (kind === "plugin") {
           const plugin = candidates.value.plugins.find((p) => p.name === name);
-          if (!plugin) return { ok: false, error: `Plugin '${name}' not found` };
+          if (!plugin)
+            return { ok: false, error: `Plugin '${name}' not found` };
           const result = await adoptPlugin(plugin, { projectRoot });
           if (!result.ok) return { ok: false, error: result.error.message };
           return { ok: true };
@@ -133,7 +160,10 @@ export async function createAppContext(): Promise<AppContext> {
     },
 
     dispatchSync: async () => {
-      return { ok: false, error: "Sync is not yet implemented in TUI. Run `skilltap sync`." };
+      return {
+        ok: false,
+        error: "Sync is not yet implemented in TUI. Run `skilltap sync`.",
+      };
     },
 
     loadDashboardData: async (tab: DashboardTab): Promise<unknown> => {
@@ -168,7 +198,10 @@ export async function createAppContext(): Promise<AppContext> {
         if (!stateResult.ok) return [];
         const plugin = stateResult.value.plugins.find((p) => p.name === name);
         if (!plugin) return [];
-        return plugin.components.map((c) => ({ name: c.name, active: c.active ?? true }));
+        return plugin.components.map((c) => ({
+          name: c.name,
+          active: c.active ?? true,
+        }));
       } catch {
         return [];
       }
@@ -180,9 +213,12 @@ export async function createAppContext(): Promise<AppContext> {
       try {
         const stateResult = await loadState(projectRoot);
         if (!stateResult.ok) return [];
-        if (type === "skill") return stateResult.value.skills.map((s) => s.name);
-        if (type === "plugin") return stateResult.value.plugins.map((p) => p.name);
-        if (type === "mcp") return stateResult.value.mcpServers.map((m) => m.name);
+        if (type === "skill")
+          return stateResult.value.skills.map((s) => s.name);
+        if (type === "plugin")
+          return stateResult.value.plugins.map((p) => p.name);
+        if (type === "mcp")
+          return stateResult.value.mcpServers.map((m) => m.name);
         return [];
       } catch {
         return [];

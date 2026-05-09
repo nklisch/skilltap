@@ -10,11 +10,18 @@ import { lstat, mkdir, readlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { adoptPlugin, adoptSkill, adoptSkillFromPath, discoverAllAdoptable } from "./adopt";
+import {
+  adoptPlugin,
+  adoptSkill,
+  adoptSkillFromPath,
+  discoverAllAdoptable,
+} from "./adopt";
+import type {
+  AgentPluginScanner,
+  DiscoveredAgentPlugin,
+} from "./agent-plugins/types";
 import { loadSkillState, saveSkillState } from "./config";
 import { discoverSkills } from "./discover";
-import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
-import type { AgentPluginScanner } from "./agent-plugins/types";
 import { loadPlugins } from "./plugin/state";
 
 setDefaultTimeout(45_000);
@@ -494,7 +501,9 @@ describe("adoptSkillFromPath", () => {
     const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
-    expect(loaded.value.skills.find((s) => s.name === "ext-skill")).toBeDefined();
+    expect(
+      loaded.value.skills.find((s) => s.name === "ext-skill"),
+    ).toBeDefined();
   });
 
   test("move mode: moves dir to .agents/skills/, creates back-symlink", async () => {
@@ -544,7 +553,9 @@ describe("adoptPlugin", () => {
     const pluginsResult = await loadPlugins();
     expect(pluginsResult.ok).toBe(true);
     if (!pluginsResult.ok) return;
-    const saved = pluginsResult.value.plugins.find((p) => p.name === "my-plugin");
+    const saved = pluginsResult.value.plugins.find(
+      (p) => p.name === "my-plugin",
+    );
     expect(saved).toBeDefined();
     // The sourceUrl is used as repo when available
     expect(saved!.repo).toBe("github:test/repo");
@@ -568,7 +579,9 @@ describe("adoptPlugin", () => {
     const pluginsResult = await loadPlugins();
     expect(pluginsResult.ok).toBe(true);
     if (!pluginsResult.ok) return;
-    const saved = pluginsResult.value.plugins.find((p) => p.name === "no-source");
+    const saved = pluginsResult.value.plugins.find(
+      (p) => p.name === "no-source",
+    );
     expect(saved?.repo).toMatch(/^claude-code:/);
   });
 
@@ -584,7 +597,9 @@ describe("adoptPlugin", () => {
     const pluginsResult = await loadPlugins();
     expect(pluginsResult.ok).toBe(true);
     if (!pluginsResult.ok) return;
-    const saved = pluginsResult.value.plugins.find((p) => p.name === "read-only-plugin");
+    const saved = pluginsResult.value.plugins.find(
+      (p) => p.name === "read-only-plugin",
+    );
     expect(saved?.path).toBe(pluginCacheDir);
   });
 });
@@ -602,10 +617,14 @@ describe("discoverAllAdoptable", () => {
     await createPluginDir(pluginCacheDir, "mock-plugin");
     const mockPlugin = makeMockPlugin("mock-plugin", pluginCacheDir);
 
-    const mockScanner: AgentPluginScanner = {
+    const _mockScanner: AgentPluginScanner = {
       name: "test-scanner",
-      async detect() { return true; },
-      async scan() { return { ok: true as const, value: [mockPlugin] }; },
+      async detect() {
+        return true;
+      },
+      async scan() {
+        return { ok: true as const, value: [mockPlugin] };
+      },
     };
 
     // discoverAllAdoptable uses default scanners so won't see our mock scanner.

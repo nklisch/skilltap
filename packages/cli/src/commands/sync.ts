@@ -11,8 +11,8 @@ import {
   type SyncApplyResult,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
+import { setupOutput } from "../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -48,8 +48,7 @@ export default defineCommand({
     // enclosing git repo so a fresh checkout (no manifest yet) still works
     // for `sync --apply`. If neither exists, sync has nothing meaningful
     // to reconcile.
-    const projectRoot =
-      (await findManifestRoot()) ?? (await isInGitRepo());
+    const projectRoot = (await findManifestRoot()) ?? (await isInGitRepo());
     if (!projectRoot) {
       out.error(
         "skilltap sync requires a project root (looks for .git or skilltap.toml).",
@@ -109,9 +108,7 @@ export default defineCommand({
               const label = `${item.kind} ${item.target} ${item.source}`;
               if (status === "ok") out.success(label);
               else if (status === "skipped")
-                out.raw(
-                  `${ansi.dim("·")} ${ansi.dim(`${label} (skipped)`)}\n`,
-                );
+                out.raw(`${ansi.dim("·")} ${ansi.dim(`${label} (skipped)`)}\n`);
               else out.error(`${label} — ${error ?? "unknown error"}`);
             },
       });

@@ -1,18 +1,14 @@
+import type { Key } from "ink";
 import { Box, useApp, useInput } from "ink";
-import React, { useEffect, useReducer, useState } from "react";
-import { initialAppState, appReducer } from "./state/app";
+import type React from "react";
+import { useEffect, useReducer, useState } from "react";
 import { GLOBAL_KEYS } from "./keys";
-import type {
-  Action,
-  AppContext,
-  AppState,
-  DashboardTab,
-} from "./state/types";
+import { Adopt } from "./screens/Adopt";
 import { Dashboard } from "./screens/Dashboard";
 import { Find } from "./screens/Find";
 import { Toggle } from "./screens/Toggle";
-import { Adopt } from "./screens/Adopt";
-import type { Key } from "ink";
+import { appReducer, initialAppState } from "./state/app";
+import type { Action, AppContext, AppState, DashboardTab } from "./state/types";
 
 interface AppProps {
   initialScreen?: AppState["screen"];
@@ -26,7 +22,11 @@ const DASHBOARD_TAB_KEYS: Record<string, DashboardTab> = {
   "4": "drift",
 };
 
-const TOGGLE_TYPES: Array<"skill" | "plugin" | "mcp"> = ["skill", "plugin", "mcp"];
+const TOGGLE_TYPES: Array<"skill" | "plugin" | "mcp"> = [
+  "skill",
+  "plugin",
+  "mcp",
+];
 
 function handleScreenKey(
   state: AppState,
@@ -110,9 +110,15 @@ function handleScreenKey(
   }
 }
 
-export const App: React.FC<AppProps> = ({ initialScreen = "dashboard", context }) => {
+export const App: React.FC<AppProps> = ({
+  initialScreen = "dashboard",
+  context,
+}) => {
   const { exit } = useApp();
-  const [state, dispatch] = useReducer(appReducer, initialAppState(initialScreen));
+  const [state, dispatch] = useReducer(
+    appReducer,
+    initialAppState(initialScreen),
+  );
   const [data, setData] = useState<unknown>(null);
 
   useInput((input, key) => {
@@ -171,14 +177,16 @@ export const App: React.FC<AppProps> = ({ initialScreen = "dashboard", context }
               state.state.type,
               state.state.selectedName,
             );
-            if (!cancelled) dispatch({ type: "toggle:components-loaded", components });
+            if (!cancelled)
+              dispatch({ type: "toggle:components-loaded", components });
           }
           break;
         }
         case "adopt": {
           if (state.state.candidates.length === 0 && !state.state.loading) {
             const candidates = await context.loadAdoptCandidates();
-            if (!cancelled) dispatch({ type: "adopt:candidates-loaded", candidates });
+            if (!cancelled)
+              dispatch({ type: "adopt:candidates-loaded", candidates });
           }
           break;
         }

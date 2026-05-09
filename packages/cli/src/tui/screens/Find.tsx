@@ -1,9 +1,9 @@
 import { Box, Text } from "ink";
-import React from "react";
+import type React from "react";
 import type { Action, FindState } from "../state/types";
-import { List } from "./shared/List";
 import { DetailPane } from "./shared/DetailPane";
 import { Footer } from "./shared/Footer";
+import { List } from "./shared/List";
 
 interface Props {
   state: FindState;
@@ -56,16 +56,16 @@ export const Find: React.FC<Props> = ({ state }) => {
             <List
               items={listItems}
               focusIndex={state.selectedIndex}
-              emptyMessage={state.query.length > 0 ? "(no results)" : "(start typing to search)"}
+              emptyMessage={
+                state.query.length > 0
+                  ? "(no results)"
+                  : "(start typing to search)"
+              }
             />
           )}
         </Box>
         {selected && (
-          <DetailPane
-            title={selected.name}
-            body={detailBody}
-            width={40}
-          />
+          <DetailPane title={selected.name} body={detailBody} width={40} />
         )}
       </Box>
       <Footer hints={FOOTER_HINTS} />

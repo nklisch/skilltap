@@ -19,21 +19,18 @@ async function runCompletions(
   configDir: string,
   extraEnv?: Record<string, string>,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "completions", ...args],
-    {
-      cwd: homeDir,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-        HOME: homeDir,
-        ...extraEnv,
-      },
+  const proc = Bun.spawn([...cliCmd(), "completions", ...args], {
+    cwd: homeDir,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      SKILLTAP_HOME: homeDir,
+      XDG_CONFIG_HOME: configDir,
+      HOME: homeDir,
+      ...extraEnv,
     },
-  );
+  });
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
@@ -45,19 +42,16 @@ async function runGetCompletions(
   homeDir: string,
   configDir: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "--get-completions", type],
-    {
-      cwd: homeDir,
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        SKILLTAP_HOME: homeDir,
-        XDG_CONFIG_HOME: configDir,
-      },
+  const proc = Bun.spawn([...cliCmd(), "--get-completions", type], {
+    cwd: homeDir,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      SKILLTAP_HOME: homeDir,
+      XDG_CONFIG_HOME: configDir,
     },
-  );
+  });
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
@@ -182,13 +176,7 @@ describe("completions — zsh script", () => {
       expect(stdout).toContain(cmd);
     }
     // config subcommands
-    for (const sub of [
-      "security",
-      "telemetry",
-      "get",
-      "set",
-      "edit",
-    ]) {
+    for (const sub of ["security", "telemetry", "get", "set", "edit"]) {
       expect(stdout).toContain(sub);
     }
     // typed install/remove subcommands

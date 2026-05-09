@@ -9,9 +9,9 @@ import {
   TEMPLATE_NAMES,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import { footerSelect as select, footerText as text } from "../ui/footer";
 import { ansi } from "../ui/format";
+import { setupOutput } from "../ui/setup";
 
 const NAME_REGEX = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
@@ -57,17 +57,13 @@ function printNextSteps(
   out.raw(`\n`);
   out.raw(`  ${ansi.bold("Next steps:")}\n`);
   out.raw(`    cd ${dir}\n`);
-  out.raw(
-    `    ${ansi.dim("# Edit SKILL.md with your skill instructions")}\n`,
-  );
+  out.raw(`    ${ansi.dim("# Edit SKILL.md with your skill instructions")}\n`);
   if (template === "npm") {
     out.raw(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: ${name} is shown literally as user guidance
       `    ${ansi.dim('# Edit package.json — set "name" to your npm scope (e.g. @yourname/${_name})')}\n`,
     );
-    out.raw(
-      `    ${ansi.dim("# Set repository.url in package.json")}\n`,
-    );
+    out.raw(`    ${ansi.dim("# Set repository.url in package.json")}\n`);
   }
   out.raw(
     `    skilltap adopt . --also claude-code   ${ansi.dim("# Test locally")}\n`,
@@ -75,9 +71,7 @@ function printNextSteps(
   out.raw(
     `    skilltap doctor skill .                ${ansi.dim("# Validate before sharing")}\n`,
   );
-  out.raw(
-    `    git init && git add -A && git commit -m "Initial skill"\n`,
-  );
+  out.raw(`    git init && git add -A && git commit -m "Initial skill"\n`);
   if (template === "npm") {
     out.raw(
       `    ${ansi.dim("# Push, then create a GitHub release to trigger publish")}\n`,

@@ -17,19 +17,16 @@ async function runGet(
   args: string[],
   configDir: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "config", "get", ...args],
-    {
-      cwd: CLI_DIR,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        XDG_CONFIG_HOME: configDir,
-      },
+  const proc = Bun.spawn([...cliCmd(), "config", "get", ...args], {
+    cwd: CLI_DIR,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      XDG_CONFIG_HOME: configDir,
     },
-  );
+  });
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
@@ -108,10 +105,7 @@ describe("skilltap config get", () => {
   });
 
   test("gets security.on_warn default", async () => {
-    const { exitCode, stdout } = await runGet(
-      ["security.on_warn"],
-      configDir,
-    );
+    const { exitCode, stdout } = await runGet(["security.on_warn"], configDir);
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("install");
   });
@@ -126,10 +120,7 @@ describe("skilltap config get", () => {
   });
 
   test("gets scanner.agent_cli default", async () => {
-    const { exitCode, stdout } = await runGet(
-      ["scanner.agent_cli"],
-      configDir,
-    );
+    const { exitCode, stdout } = await runGet(["scanner.agent_cli"], configDir);
     expect(exitCode).toBe(0);
     expect(stdout.trim()).toBe("");
   });

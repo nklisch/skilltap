@@ -53,7 +53,11 @@ describe("createJsonOutput", () => {
     const stdout = makeMockStream();
     const out = createJsonOutput({ stdout });
     out.error("bad thing", "fix it");
-    const [parsed] = parseLines(stdout) as Array<{ kind: string; message: string; hint: string }>;
+    const [parsed] = parseLines(stdout) as Array<{
+      kind: string;
+      message: string;
+      hint: string;
+    }>;
     expect(parsed.kind).toBe("error");
     expect(parsed.message).toBe("bad thing");
     expect(parsed.hint).toBe("fix it");
@@ -63,7 +67,10 @@ describe("createJsonOutput", () => {
     const stdout = makeMockStream();
     const out = createJsonOutput({ stdout });
     out.warn("heads up");
-    const [parsed] = parseLines(stdout) as Array<{ kind: string; message: string }>;
+    const [parsed] = parseLines(stdout) as Array<{
+      kind: string;
+      message: string;
+    }>;
     expect(parsed.kind).toBe("warn");
     expect(parsed.message).toBe("heads up");
   });
@@ -72,7 +79,10 @@ describe("createJsonOutput", () => {
     const stdout = makeMockStream();
     const out = createJsonOutput({ stdout });
     out.json({ kind: "install:done", records: ["foo"] });
-    const [parsed] = parseLines(stdout) as Array<{ kind: string; records: string[] }>;
+    const [parsed] = parseLines(stdout) as Array<{
+      kind: string;
+      records: string[];
+    }>;
     expect(parsed.kind).toBe("install:done");
     expect(parsed.records).toEqual(["foo"]);
   });
@@ -96,10 +106,25 @@ describe("createJsonOutput", () => {
     p.update("halfway");
     p.succeed("loaded");
 
-    const events = parseLines(stdout) as Array<{ kind: string; label: string; message?: string }>;
-    expect(events[0]).toMatchObject({ kind: "progress:start", label: "Loading" });
-    expect(events[1]).toMatchObject({ kind: "progress:update", label: "Loading", message: "halfway" });
-    expect(events[2]).toMatchObject({ kind: "progress:done", label: "Loading", message: "loaded" });
+    const events = parseLines(stdout) as Array<{
+      kind: string;
+      label: string;
+      message?: string;
+    }>;
+    expect(events[0]).toMatchObject({
+      kind: "progress:start",
+      label: "Loading",
+    });
+    expect(events[1]).toMatchObject({
+      kind: "progress:update",
+      label: "Loading",
+      message: "halfway",
+    });
+    expect(events[2]).toMatchObject({
+      kind: "progress:done",
+      label: "Loading",
+      message: "loaded",
+    });
   });
 
   test("progress fail emits progress:fail event", () => {
@@ -108,8 +133,14 @@ describe("createJsonOutput", () => {
     const p = out.progress("Cloning");
     p.fail("network error");
 
-    const events = parseLines(stdout) as Array<{ kind: string; message?: string }>;
-    expect(events[1]).toMatchObject({ kind: "progress:fail", message: "network error" });
+    const events = parseLines(stdout) as Array<{
+      kind: string;
+      message?: string;
+    }>;
+    expect(events[1]).toMatchObject({
+      kind: "progress:fail",
+      message: "network error",
+    });
   });
 
   test("all emitted lines are valid JSON", () => {

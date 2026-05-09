@@ -84,9 +84,16 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
   test("install skill <path> writes to state.json and succeeds", async () => {
     const skillRepo = await createStandaloneSkillRepo();
     try {
-      const { exitCode, stdout, stderr, projectRoot } = await setupProjectAndRun(
-        ["install", "skill", skillRepo.path, "--scope", "project", "--skip-scan", "--yes"],
-      );
+      const { exitCode, stdout, stderr, projectRoot } =
+        await setupProjectAndRun([
+          "install",
+          "skill",
+          skillRepo.path,
+          "--scope",
+          "project",
+          "--skip-scan",
+          "--yes",
+        ]);
       if (exitCode !== 0) {
         console.error("install stderr:", stderr);
         console.error("install stdout:", stdout);
@@ -112,16 +119,22 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
     const globalDir = await makeTmpDir(); // outside a git repo → would default global
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", skillRepo.path, "--scope", "global", "--skip-scan", "--yes"],
+        [
+          "install",
+          "skill",
+          skillRepo.path,
+          "--scope",
+          "global",
+          "--skip-scan",
+          "--yes",
+        ],
         homeDir,
         configDir,
         globalDir,
       );
       expect(exitCode).toBe(0);
 
-      const globalState = Bun.file(
-        join(configDir, "skilltap", "state.json"),
-      );
+      const globalState = Bun.file(join(configDir, "skilltap", "state.json"));
       expect(await globalState.exists()).toBe(true);
       const state = JSON.parse(await globalState.text()) as {
         skills: Array<{ name: string }>;
@@ -139,7 +152,15 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
       const projectRoot = await makeTmpDir();
       await initRepo(projectRoot);
       const { exitCode, stderr } = await runSkilltap(
-        ["install", "skill", pluginRepo.path, "--scope", "project", "--yes", "--skip-scan"],
+        [
+          "install",
+          "skill",
+          pluginRepo.path,
+          "--scope",
+          "project",
+          "--yes",
+          "--skip-scan",
+        ],
         homeDir,
         configDir,
         projectRoot,
@@ -164,18 +185,22 @@ describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
   test("install plugin writes to state.json plugins[]", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
-      const { exitCode, stderr, projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
-      );
+      const { exitCode, stderr } = await setupProjectAndRun([
+        "install",
+        "plugin",
+        pluginRepo.path,
+        "--scope",
+        "global",
+        "--yes",
+        "--skip-scan",
+      ]);
       if (exitCode !== 0) {
         console.error("install plugin stderr:", stderr);
       }
       expect(exitCode).toBe(0);
 
       // Global state.json must contain the plugin
-      const globalState = Bun.file(
-        join(configDir, "skilltap", "state.json"),
-      );
+      const globalState = Bun.file(join(configDir, "skilltap", "state.json"));
       expect(await globalState.exists()).toBe(true);
       const state = JSON.parse(await globalState.text()) as {
         version: number;
@@ -191,9 +216,15 @@ describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
   test("status exits 0 and includes expected JSON fields after plugin install", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
-      const { projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
-      );
+      const { projectRoot } = await setupProjectAndRun([
+        "install",
+        "plugin",
+        pluginRepo.path,
+        "--scope",
+        "global",
+        "--yes",
+        "--skip-scan",
+      ]);
 
       // status from same project root
       const statusResult = await runSkilltap(
@@ -205,7 +236,10 @@ describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
       expect(statusResult.exitCode).toBe(0);
 
       // status --json must produce valid JSON with expected top-level fields
-      const payload = JSON.parse(statusResult.stdout) as Record<string, unknown>;
+      const payload = JSON.parse(statusResult.stdout) as Record<
+        string,
+        unknown
+      >;
       expect(Array.isArray(payload.skills)).toBe(true);
       expect(Array.isArray(payload.taps)).toBe(true);
 
@@ -228,21 +262,32 @@ describe("v2.0 redesign E2E — toggle plugin component", () => {
   test("toggle plugin <name>:<component> disables and re-enables the component", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
-      const { projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
-      );
+      const { projectRoot } = await setupProjectAndRun([
+        "install",
+        "plugin",
+        pluginRepo.path,
+        "--scope",
+        "global",
+        "--yes",
+        "--skip-scan",
+      ]);
 
       // Find out the installed plugin name
       const stateText = await Bun.file(
         join(configDir, "skilltap", "state.json"),
       ).text();
       const state = JSON.parse(stateText) as {
-        plugins: Array<{ name: string; components: Array<{ name: string; type: string; active: boolean }> }>;
+        plugins: Array<{
+          name: string;
+          components: Array<{ name: string; type: string; active: boolean }>;
+        }>;
       };
       const plugin = state.plugins[0];
       if (!plugin) return; // No plugin installed — skip rest
 
-      const componentWithSkill = plugin.components.find((c) => c.type === "skill");
+      const componentWithSkill = plugin.components.find(
+        (c) => c.type === "skill",
+      );
       if (!componentWithSkill) return; // No skill component — skip rest
 
       const ref = `${plugin.name}:${componentWithSkill.name}`;
@@ -259,8 +304,15 @@ describe("v2.0 redesign E2E — toggle plugin component", () => {
       // Verify the component is now inactive
       const stateAfterDisable = JSON.parse(
         await Bun.file(join(configDir, "skilltap", "state.json")).text(),
-      ) as { plugins: Array<{ name: string; components: Array<{ name: string; active: boolean }> }> };
-      const updatedPlugin = stateAfterDisable.plugins.find((p) => p.name === plugin.name);
+      ) as {
+        plugins: Array<{
+          name: string;
+          components: Array<{ name: string; active: boolean }>;
+        }>;
+      };
+      const updatedPlugin = stateAfterDisable.plugins.find(
+        (p) => p.name === plugin.name,
+      );
       const updatedComponent = updatedPlugin?.components.find(
         (c) => c.name === componentWithSkill.name,
       );
@@ -278,8 +330,15 @@ describe("v2.0 redesign E2E — toggle plugin component", () => {
       // Verify active again
       const stateAfterEnable = JSON.parse(
         await Bun.file(join(configDir, "skilltap", "state.json")).text(),
-      ) as { plugins: Array<{ name: string; components: Array<{ name: string; active: boolean }> }> };
-      const reEnabledPlugin = stateAfterEnable.plugins.find((p) => p.name === plugin.name);
+      ) as {
+        plugins: Array<{
+          name: string;
+          components: Array<{ name: string; active: boolean }>;
+        }>;
+      };
+      const reEnabledPlugin = stateAfterEnable.plugins.find(
+        (p) => p.name === plugin.name,
+      );
       const reEnabledComponent = reEnabledPlugin?.components.find(
         (c) => c.name === componentWithSkill.name,
       );
@@ -335,14 +394,22 @@ describe("v2.0 redesign E2E — remove plugin", () => {
   test("remove plugin drops all components from state.json", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
-      const { projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
-      );
+      const { projectRoot } = await setupProjectAndRun([
+        "install",
+        "plugin",
+        pluginRepo.path,
+        "--scope",
+        "global",
+        "--yes",
+        "--skip-scan",
+      ]);
 
       const stateText = await Bun.file(
         join(configDir, "skilltap", "state.json"),
       ).text();
-      const state = JSON.parse(stateText) as { plugins: Array<{ name: string }> };
+      const state = JSON.parse(stateText) as {
+        plugins: Array<{ name: string }>;
+      };
       const pluginName = state.plugins[0]?.name;
       if (!pluginName) return;
 

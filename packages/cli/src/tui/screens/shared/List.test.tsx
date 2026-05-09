@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
 import { List } from "./List";
 
 const ITEMS = [
@@ -19,7 +18,9 @@ describe("List", () => {
   });
 
   test("renders empty message when no items", () => {
-    const { lastFrame } = render(<List items={[]} focusIndex={0} emptyMessage="nothing here" />);
+    const { lastFrame } = render(
+      <List items={[]} focusIndex={0} emptyMessage="nothing here" />,
+    );
     expect(lastFrame()).toContain("nothing here");
   });
 

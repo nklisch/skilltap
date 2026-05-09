@@ -14,7 +14,6 @@ import {
   writeSkillUpdateCache,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import { sendEvent, telemetryBase } from "../telemetry";
 import { footerConfirm as confirm } from "../ui/footer";
 import {
@@ -25,11 +24,9 @@ import {
   formatUnifiedDiff,
 } from "../ui/format";
 import { loadPolicyOrExit } from "../ui/policy";
-import {
-  resolveSemanticInteractive,
-  tryFindProjectRoot,
-} from "../ui/resolve";
+import { resolveSemanticInteractive, tryFindProjectRoot } from "../ui/resolve";
 import { printSemanticWarnings, printWarnings } from "../ui/scan";
+import { setupOutput } from "../ui/setup";
 
 const VALID_UPDATE_TYPES = ["skill", "plugin", "mcp"] as const;
 type UpdateType = (typeof VALID_UPDATE_TYPES)[number];
@@ -37,7 +34,8 @@ type UpdateType = (typeof VALID_UPDATE_TYPES)[number];
 export default defineCommand({
   meta: {
     name: "update",
-    description: "Update installed skills, plugins, and MCP servers. Bare = all.",
+    description:
+      "Update installed skills, plugins, and MCP servers. Bare = all.",
   },
   args: {
     type: {
@@ -145,7 +143,16 @@ export default defineCommand({
 
     await refreshTapIndexes(out);
 
-    return runUpdate(out, updateType, name, args, config, policy, projectRoot, args.force ?? false);
+    return runUpdate(
+      out,
+      updateType,
+      name,
+      args,
+      config,
+      policy,
+      projectRoot,
+      args.force ?? false,
+    );
   },
 });
 
@@ -200,7 +207,12 @@ async function runUpdate(
   out: Output,
   type: UpdateType | undefined,
   name: string | undefined,
-  args: { strict?: boolean; semantic: boolean; json?: boolean; "skip-scan"?: boolean },
+  args: {
+    strict?: boolean;
+    semantic: boolean;
+    json?: boolean;
+    "skip-scan"?: boolean;
+  },
   config: Config,
   policy: EffectivePolicy,
   projectRoot: string | undefined,
@@ -236,9 +248,7 @@ async function runUpdatePlugins(
   }
   const plugins = stateResult.value.plugins;
 
-  const targets = name
-    ? plugins.filter((p) => p.name === name)
-    : plugins;
+  const targets = name ? plugins.filter((p) => p.name === name) : plugins;
 
   if (name && targets.length === 0) {
     out.error(
@@ -272,9 +282,7 @@ async function runUpdateMcps(
   }
   const mcpServers = stateResult.value.mcpServers;
 
-  const targets = name
-    ? mcpServers.filter((m) => m.name === name)
-    : mcpServers;
+  const targets = name ? mcpServers.filter((m) => m.name === name) : mcpServers;
 
   if (name && targets.length === 0) {
     out.error(

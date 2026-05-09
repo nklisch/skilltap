@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import React from "react";
+import type React from "react";
 
 interface ListItem {
   key: string;
@@ -25,7 +25,11 @@ export const List: React.FC<Props> = ({ items, focusIndex, emptyMessage }) => {
         const checkbox =
           item.selected !== undefined ? (item.selected ? "[x] " : "[ ] ") : "";
         return (
-          <Text key={item.key} color={focused ? "cyan" : undefined} bold={focused}>
+          <Text
+            key={item.key}
+            color={focused ? "cyan" : undefined}
+            bold={focused}
+          >
             {focused ? "▶ " : "  "}
             {checkbox}
             {item.label}

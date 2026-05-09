@@ -9,7 +9,14 @@
  *
  * Design: docs/designs/completed/e2e-v2.md §"Journey: First-time global install"
  */
-import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -53,7 +60,6 @@ describe("global install — outside any git repo", () => {
       nonGitCwd,
     );
     if (exitCode !== 0) {
-      // biome-ignore lint/suspicious/noConsole: test diagnostics
       console.error("install stderr:", stderr);
     }
     expect(exitCode).toBe(0);
@@ -97,7 +103,6 @@ describe("global install — outside any git repo", () => {
       nonGitCwd,
     );
     if (exitCode !== 0) {
-      // biome-ignore lint/suspicious/noConsole: test diagnostics
       console.error("status stderr:", stderr);
     }
     expect(exitCode).toBe(0);

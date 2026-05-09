@@ -1,8 +1,8 @@
 import { Box, Text } from "ink";
-import React from "react";
+import type React from "react";
 import type { Action, AdoptState } from "../state/types";
-import { List } from "./shared/List";
 import { Footer } from "./shared/Footer";
+import { List } from "./shared/List";
 
 interface Props {
   state: AdoptState;

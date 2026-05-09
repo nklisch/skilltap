@@ -1,9 +1,9 @@
 import type { McpServerEntry, PluginManifest } from "../schemas/plugin";
-import {
-  type PluginRecord,
-  type PluginsJson,
-  type StoredComponent,
-  type StoredMcpComponent,
+import type {
+  PluginRecord,
+  PluginsJson,
+  StoredComponent,
+  StoredMcpComponent,
 } from "../schemas/plugins";
 import { loadState } from "../state/load";
 import { saveState } from "../state/save";

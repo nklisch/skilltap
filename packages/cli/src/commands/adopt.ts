@@ -1,31 +1,33 @@
-import { pickOne } from "../ui/picker";
+import { isAbsolute } from "node:path";
 import {
   adoptPlugin,
   adoptSkill,
   adoptSkillFromPath,
-  discoverAllAdoptable,
   type DiscoveredAgentPlugin,
+  discoverAllAdoptable,
   type Output,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { isAbsolute } from "node:path";
-import { setupOutput } from "../ui/setup";
+import { pickOne } from "../ui/picker";
 import {
   collectRepeatedFlag,
   parseAlsoFlag,
   resolveScope,
 } from "../ui/resolve";
+import { setupOutput } from "../ui/setup";
 
 export const adoptCommand = defineCommand({
   meta: {
     name: "adopt",
-    description: "Bring an external skill or agent-managed plugin into skilltap",
+    description:
+      "Bring an external skill or agent-managed plugin into skilltap",
   },
   args: {
     target: {
       type: "positional",
       required: false,
-      description: "External path, or name of an unmanaged skill or agent-managed plugin",
+      description:
+        "External path, or name of an unmanaged skill or agent-managed plugin",
     },
     source: {
       type: "string",
@@ -46,7 +48,8 @@ export const adoptCommand = defineCommand({
     move: {
       type: "boolean",
       default: false,
-      description: "When adopting a path: physically move dir (default: track-in-place symlink)",
+      description:
+        "When adopting a path: physically move dir (default: track-in-place symlink)",
     },
     "skip-scan": {
       type: "boolean",
@@ -128,16 +131,17 @@ type AdoptArgs = {
 
 // ─── Picker mode ──────────────────────────────────────────────────────────────
 
-async function runAdoptPicker(
-  out: Output,
-  args: AdoptArgs,
-): Promise<void> {
+async function runAdoptPicker(out: Output, args: AdoptArgs): Promise<void> {
   const progress = out.progress("Scanning for adoptable skills and plugins");
 
-  const { scope, projectRoot } = await resolveScope({ scope: args.scope as "project" | "global" | undefined });
+  const { scope, projectRoot } = await resolveScope({
+    scope: args.scope as "project" | "global" | undefined,
+  });
 
   const result = await discoverAllAdoptable({
-    ...(scope === "project" ? { project: true as const } : { global: true as const }),
+    ...(scope === "project"
+      ? { project: true as const }
+      : { global: true as const }),
     unmanagedOnly: true,
     projectRoot,
   });
@@ -214,7 +218,13 @@ async function runAdoptPicker(
     }
     out.success(`Adopted skill ${item.skill.name} (${mode})`);
     if (args.json) {
-      out.json({ kind: "adopt:done", type: "skill", name: item.skill.name, mode, scope });
+      out.json({
+        kind: "adopt:done",
+        type: "skill",
+        name: item.skill.name,
+        mode,
+        scope,
+      });
     }
     return;
   }
@@ -246,7 +256,9 @@ async function runAdoptPath(
   out: Output,
   args: AdoptArgs,
 ): Promise<void> {
-  const { scope, projectRoot } = await resolveScope({ scope: args.scope as "project" | "global" | undefined });
+  const { scope, projectRoot } = await resolveScope({
+    scope: args.scope as "project" | "global" | undefined,
+  });
   const also = parseAlsoFlag(args.also, []);
   const mode = args.move ? "move" : "track-in-place";
 
@@ -277,7 +289,14 @@ async function runAdoptPath(
     `Adopted skill from ${path} (${mode})${mode === "track-in-place" ? " — use --move to relocate" : ""}`,
   );
   if (args.json) {
-    out.json({ kind: "adopt:done", type: "skill", name: record.name, mode, scope, path });
+    out.json({
+      kind: "adopt:done",
+      type: "skill",
+      name: record.name,
+      mode,
+      scope,
+      path,
+    });
   }
 }
 
@@ -288,14 +307,18 @@ async function runAdoptName(
   out: Output,
   args: AdoptArgs,
 ): Promise<void> {
-  const { scope, projectRoot } = await resolveScope({ scope: args.scope as "project" | "global" | undefined });
+  const { scope, projectRoot } = await resolveScope({
+    scope: args.scope as "project" | "global" | undefined,
+  });
   const also = parseAlsoFlag(args.also, []);
   const mode = args.move ? "move" : "track-in-place";
 
   const progress = out.progress(`Looking up "${name}"`);
 
   const result = await discoverAllAdoptable({
-    ...(scope === "project" ? { project: true as const } : { global: true as const }),
+    ...(scope === "project"
+      ? { project: true as const }
+      : { global: true as const }),
     unmanagedOnly: true,
     projectRoot,
   });

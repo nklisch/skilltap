@@ -363,7 +363,10 @@ describe("applySync — MCP path", () => {
     const fn: any = async (source: string, options: any) => {
       calls.push({ source, options });
       if (behavior === "fail") {
-        return { ok: false, error: { message: `mcp install failed: ${source}` } };
+        return {
+          ok: false,
+          error: { message: `mcp install failed: ${source}` },
+        };
       }
       return {
         ok: true,
@@ -378,7 +381,10 @@ describe("applySync — MCP path", () => {
     const fn: any = async (source: string, options: any) => {
       calls.push({ source, options });
       if (behavior === "fail") {
-        return { ok: false, error: { message: `mcp remove failed: ${source}` } };
+        return {
+          ok: false,
+          error: { message: `mcp remove failed: ${source}` },
+        };
       }
       return { ok: true, value: { removed: 1, agents: [], names: [] } };
     };
@@ -387,7 +393,10 @@ describe("applySync — MCP path", () => {
 
   test("add MCP routes through installMcpFn", async () => {
     const plan = planFrom([
-      ITEM("add", "mcp", "mcp:upstash/context7-mcp", { ref: "main", range: "main" }),
+      ITEM("add", "mcp", "mcp:upstash/context7-mcp", {
+        ref: "main",
+        range: "main",
+      }),
     ]);
     const installMcp = mockInstallMcp();
     const result = await applySync(plan, {
@@ -425,9 +434,7 @@ describe("applySync — MCP path", () => {
   });
 
   test("remove MCP routes through removeMcpFn with source", async () => {
-    const plan = planFrom([
-      ITEM("remove", "mcp", "mcp:upstash/context7-mcp"),
-    ]);
+    const plan = planFrom([ITEM("remove", "mcp", "mcp:upstash/context7-mcp")]);
     const removeMcp = mockRemoveMcp();
     const result = await applySync(plan, {
       projectRoot: PROJECT_ROOT,

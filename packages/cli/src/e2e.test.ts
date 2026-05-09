@@ -108,7 +108,8 @@ describe("E2E lifecycle", () => {
       "skill",
       skillRepo.path,
       "--yes",
-      "--scope", "global",
+      "--scope",
+      "global",
       "--skip-scan",
     ]);
     expect(exitCode).toBe(0);

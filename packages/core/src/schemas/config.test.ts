@@ -140,9 +140,7 @@ describe("ConfigSchema", () => {
 
   test("config has no agent-mode key", () => {
     const result = ConfigSchema.parse({});
-    expect(
-      (result as Record<string, unknown>)["agent-mode"],
-    ).toBeUndefined();
+    expect((result as Record<string, unknown>)["agent-mode"]).toBeUndefined();
   });
 
   test("config has no agent block", () => {
@@ -264,9 +262,7 @@ describe("ConfigSchema", () => {
     expect(
       (result.data as Record<string, unknown>)["agent-mode"],
     ).toBeUndefined();
-    expect(
-      (result.data as Record<string, unknown>).agent,
-    ).toBeUndefined();
+    expect((result.data as Record<string, unknown>).agent).toBeUndefined();
   });
 });
 
@@ -315,10 +311,7 @@ describe("Config I/O round-trip", () => {
     expect(reloadResult.ok).toBe(true);
     if (!reloadResult.ok) return;
 
-    expect(reloadResult.value.defaults.also).toEqual([
-      "claude-code",
-      "cursor",
-    ]);
+    expect(reloadResult.value.defaults.also).toEqual(["claude-code", "cursor"]);
     expect(reloadResult.value.defaults.yes).toBe(true);
     expect(reloadResult.value.defaults.scope).toBe("global");
     expect(reloadResult.value.security.scan).toBe("semantic");

@@ -6,16 +6,44 @@ const ErrorEvent = z.object({
   hint: z.string().optional(),
 });
 
-const ProgressStartEvent = z.object({ kind: z.literal("progress:start"), label: z.string() });
-const ProgressUpdateEvent = z.object({ kind: z.literal("progress:update"), label: z.string(), message: z.string() });
-const ProgressDoneEvent = z.object({ kind: z.literal("progress:done"), label: z.string(), message: z.string().optional() });
-const ProgressFailEvent = z.object({ kind: z.literal("progress:fail"), label: z.string(), message: z.string().optional() });
+const ProgressStartEvent = z.object({
+  kind: z.literal("progress:start"),
+  label: z.string(),
+});
+const ProgressUpdateEvent = z.object({
+  kind: z.literal("progress:update"),
+  label: z.string(),
+  message: z.string(),
+});
+const ProgressDoneEvent = z.object({
+  kind: z.literal("progress:done"),
+  label: z.string(),
+  message: z.string().optional(),
+});
+const ProgressFailEvent = z.object({
+  kind: z.literal("progress:fail"),
+  label: z.string(),
+  message: z.string().optional(),
+});
 
 export const InstallEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("install:start"), source: z.string() }),
-  z.object({ kind: z.literal("install:placed"), name: z.string(), path: z.string() }),
-  z.object({ kind: z.literal("install:captured"), pluginName: z.string(), skills: z.array(z.string()), mcpServers: z.array(z.string()) }),
-  z.object({ kind: z.literal("install:done"), records: z.array(z.string()), pluginName: z.string().optional() }),
+  z.object({
+    kind: z.literal("install:placed"),
+    name: z.string(),
+    path: z.string(),
+  }),
+  z.object({
+    kind: z.literal("install:captured"),
+    pluginName: z.string(),
+    skills: z.array(z.string()),
+    mcpServers: z.array(z.string()),
+  }),
+  z.object({
+    kind: z.literal("install:done"),
+    records: z.array(z.string()),
+    pluginName: z.string().optional(),
+  }),
   ErrorEvent,
   ProgressStartEvent,
   ProgressUpdateEvent,
@@ -26,9 +54,23 @@ export const InstallEventSchema = z.discriminatedUnion("kind", [
 export const UpdateEventSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("update:start"), name: z.string() }),
   z.object({ kind: z.literal("update:up-to-date"), name: z.string() }),
-  z.object({ kind: z.literal("update:updated"), name: z.string(), fromRef: z.string().nullable(), toRef: z.string().nullable() }),
-  z.object({ kind: z.literal("update:skipped"), name: z.string(), reason: z.string() }),
-  z.object({ kind: z.literal("update:done"), updated: z.array(z.string()), skipped: z.array(z.string()), upToDate: z.array(z.string()) }),
+  z.object({
+    kind: z.literal("update:updated"),
+    name: z.string(),
+    fromRef: z.string().nullable(),
+    toRef: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("update:skipped"),
+    name: z.string(),
+    reason: z.string(),
+  }),
+  z.object({
+    kind: z.literal("update:done"),
+    updated: z.array(z.string()),
+    skipped: z.array(z.string()),
+    upToDate: z.array(z.string()),
+  }),
   ErrorEvent,
   ProgressStartEvent,
   ProgressUpdateEvent,
@@ -37,9 +79,24 @@ export const UpdateEventSchema = z.discriminatedUnion("kind", [
 ]);
 
 export const SyncEventSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("sync:plan"), inSync: z.boolean(), items: z.array(z.unknown()) }),
-  z.object({ kind: z.literal("sync:item"), source: z.string(), status: z.enum(["ok", "skipped", "fail"]), error: z.string().optional() }),
-  z.object({ kind: z.literal("sync:done"), inSync: z.boolean(), applied: z.number(), skipped: z.number(), failed: z.number() }),
+  z.object({
+    kind: z.literal("sync:plan"),
+    inSync: z.boolean(),
+    items: z.array(z.unknown()),
+  }),
+  z.object({
+    kind: z.literal("sync:item"),
+    source: z.string(),
+    status: z.enum(["ok", "skipped", "fail"]),
+    error: z.string().optional(),
+  }),
+  z.object({
+    kind: z.literal("sync:done"),
+    inSync: z.boolean(),
+    applied: z.number(),
+    skipped: z.number(),
+    failed: z.number(),
+  }),
   ErrorEvent,
 ]);
 

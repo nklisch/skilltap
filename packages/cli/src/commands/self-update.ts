@@ -7,8 +7,8 @@ import {
   VERSION,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
+import { setupOutput } from "../ui/setup";
 
 export default defineCommand({
   meta: {

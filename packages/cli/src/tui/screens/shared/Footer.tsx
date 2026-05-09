@@ -1,5 +1,5 @@
 import { Box, Text } from "ink";
-import React from "react";
+import type React from "react";
 
 interface KeyHint {
   key: string;
@@ -17,7 +17,7 @@ export const Footer: React.FC<Props> = ({ hints }) => {
         <Text key={i}>
           <Text color="cyan">{h.key}</Text>
           <Text dimColor> {h.description}</Text>
-          {i < hints.length - 1 ? <Text dimColor>  ·  </Text> : null}
+          {i < hints.length - 1 ? <Text dimColor> · </Text> : null}
         </Text>
       ))}
     </Box>

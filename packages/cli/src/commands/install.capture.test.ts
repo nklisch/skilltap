@@ -19,7 +19,7 @@ import {
 } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadSkillState, loadPlugins } from "@skilltap/core";
+import { loadPlugins, loadSkillState } from "@skilltap/core";
 import {
   commitAll,
   createClaudePluginRepo,
@@ -97,10 +97,7 @@ async function seedHelperFromCoreApi(
 ): Promise<boolean> {
   // Write a small inline script that calls installSkill with the desired
   // onPluginDetected callback, then run it in the test env.
-  const coreEntry = join(
-    import.meta.dir,
-    "../../../core/src/index.ts",
-  );
+  const coreEntry = join(import.meta.dir, "../../../core/src/index.ts");
   const script = `
 import { installSkill } from ${JSON.stringify(coreEntry)};
 const result = await installSkill(${JSON.stringify(repoPath)}, {
@@ -180,7 +177,12 @@ describe("install capture — cross-source conflict", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       // Seed: install helper standalone from helperRepo
-      const seeded = await seedHelperFromCoreApi(helperRepo.path, homeDir, configDir, "skills-only");
+      const seeded = await seedHelperFromCoreApi(
+        helperRepo.path,
+        homeDir,
+        configDir,
+        "skills-only",
+      );
       expect(seeded).toBe(true);
 
       // Verify standalone is recorded
@@ -215,7 +217,12 @@ describe("install capture — cross-source conflict", () => {
     const helperRepo = await createHelperSkillRepo();
     const pluginRepo = await createClaudePluginRepo();
     try {
-      const seeded = await seedHelperFromCoreApi(helperRepo.path, homeDir, configDir, "skills-only");
+      const seeded = await seedHelperFromCoreApi(
+        helperRepo.path,
+        homeDir,
+        configDir,
+        "skills-only",
+      );
       expect(seeded).toBe(true);
 
       await runSkilltap(
@@ -255,7 +262,12 @@ describe("install capture — same-source capture", () => {
     try {
       // Seed: install helper as skills-only from the same plugin repo path.
       // Same local path → same canonical source → sameSource match.
-      const seeded = await seedHelperFromCoreApi(pluginRepo.path, homeDir, configDir, "skills-only");
+      const seeded = await seedHelperFromCoreApi(
+        pluginRepo.path,
+        homeDir,
+        configDir,
+        "skills-only",
+      );
       expect(seeded).toBe(true);
 
       // Verify standalone seeded
@@ -286,9 +298,9 @@ describe("install capture — same-source capture", () => {
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(
-        plugins.value.plugins.some((p) => p.name === "test-plugin"),
-      ).toBe(true);
+      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+        true,
+      );
     } finally {
       await pluginRepo.cleanup();
     }
@@ -338,9 +350,9 @@ describe("install capture — --force-capture and --no-capture flags", () => {
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(
-        plugins.value.plugins.some((p) => p.name === "test-plugin"),
-      ).toBe(true);
+      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+        true,
+      );
     } finally {
       await helperRepo.cleanup();
       await pluginRepo.cleanup();
@@ -385,9 +397,9 @@ describe("install capture — --force-capture and --no-capture flags", () => {
       const plugins = await loadPlugins();
       expect(plugins.ok).toBe(true);
       if (!plugins.ok) return;
-      expect(
-        plugins.value.plugins.some((p) => p.name === "test-plugin"),
-      ).toBe(true);
+      expect(plugins.value.plugins.some((p) => p.name === "test-plugin")).toBe(
+        true,
+      );
     } finally {
       await helperRepo.cleanup();
       await pluginRepo.cleanup();

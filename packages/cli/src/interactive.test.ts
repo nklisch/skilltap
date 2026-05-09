@@ -70,7 +70,15 @@ describe("install — agents prompt", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const session = await runInteractive(
-        [...CMD, "install", "skill", repo.path, "--scope", "global", "--skip-scan"],
+        [
+          ...CMD,
+          "install",
+          "skill",
+          repo.path,
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         { cwd: CLI_DIR, env: env() },
       );
 
@@ -106,7 +114,15 @@ describe("install — agents prompt", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const session = await runInteractive(
-        [...CMD, "install", "skill", repo.path, "--scope", "global", "--skip-scan"],
+        [
+          ...CMD,
+          "install",
+          "skill",
+          repo.path,
+          "--scope",
+          "global",
+          "--skip-scan",
+        ],
         { cwd: CLI_DIR, env: env() },
       );
 
@@ -139,7 +155,8 @@ describe("install — confirm prompt", () => {
           "install",
           "skill",
           repo.path,
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -166,7 +183,8 @@ describe("install — confirm prompt", () => {
           "install",
           "skill",
           repo.path,
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -199,7 +217,8 @@ describe("install — skill selection (multi-skill repo)", () => {
           "install",
           "skill",
           repo.path,
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -234,7 +253,8 @@ describe("install — skill selection (multi-skill repo)", () => {
           "install",
           "skill",
           repo.path,
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -269,7 +289,8 @@ describe("install — skill selection (multi-skill repo)", () => {
           "install",
           "skill",
           repo.path,
-          "--scope", "global",
+          "--scope",
+          "global",
           "--skip-scan",
           "--also",
           "claude-code",
@@ -301,7 +322,8 @@ describe("remove — confirm prompt", () => {
         "install",
         "skill",
         repoPath,
-        "--scope", "global",
+        "--scope",
+        "global",
         "--skip-scan",
         "--yes",
         "--also",
@@ -385,7 +407,16 @@ describe("install — verbose step output", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       const session = await runInteractive(
-        [...CMD, "install", "skill", repo.path, "--yes", "--scope", "global", "--quiet"],
+        [
+          ...CMD,
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--quiet",
+        ],
         { cwd: CLI_DIR, env: env() },
       );
       const { exitCode, output } = await session.finish();

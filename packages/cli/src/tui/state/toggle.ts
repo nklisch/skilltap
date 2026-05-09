@@ -49,7 +49,10 @@ export function toggleReducer(state: ToggleState, action: Action): ToggleState {
     case "toggle:focus": {
       const len = focusListLength(state);
       if (len === 0) return state;
-      const next = Math.max(0, Math.min(len - 1, state.focusIndex + action.delta));
+      const next = Math.max(
+        0,
+        Math.min(len - 1, state.focusIndex + action.delta),
+      );
       return { ...state, focusIndex: next };
     }
     case "toggle:components-loaded":

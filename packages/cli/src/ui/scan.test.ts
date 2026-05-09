@@ -15,9 +15,17 @@ function makeCapturingOut(): { out: Output; captured: string[] } {
     warn: () => {},
     error: () => {},
     success: () => {},
-    block: (lines) => { captured.push(...lines); },
+    block: (lines) => {
+      captured.push(...lines);
+    },
     json: () => {},
-    progress: () => ({ update: () => {}, succeed: () => {}, fail: () => {}, pause: () => {}, resume: () => {} }),
+    progress: () => ({
+      update: () => {},
+      succeed: () => {},
+      fail: () => {},
+      pause: () => {},
+      resume: () => {},
+    }),
     raw: () => {},
   };
   return { out, captured };

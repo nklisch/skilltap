@@ -26,10 +26,7 @@ afterEach(async () => {
 });
 
 /** Creates a minimal skill dir with a valid SKILL.md. */
-async function createSkillDir(
-  baseDir: string,
-  name: string,
-): Promise<string> {
+async function createSkillDir(baseDir: string, name: string): Promise<string> {
   const skillDir = join(baseDir, name);
   await mkdir(skillDir, { recursive: true });
   await Bun.write(

@@ -1,5 +1,5 @@
 import type { Config } from "../schemas/config";
-import { ok, type Result, UserError } from "../types";
+import { ok, type Result, type UserError } from "../types";
 import { isTrusted } from "./trust-glob";
 import type { CliFlags, EffectivePolicy, SourceForPolicy } from "./types";
 

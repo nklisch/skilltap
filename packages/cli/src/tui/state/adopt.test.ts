@@ -4,7 +4,12 @@ import type { Action, AdoptCandidate, AdoptState } from "./types";
 
 const CANDIDATES: AdoptCandidate[] = [
   { kind: "skill", name: "alpha", source: "/home/user/.claude/skills/alpha" },
-  { kind: "plugin", name: "beta", source: "marketplace", description: "Beta plugin" },
+  {
+    kind: "plugin",
+    name: "beta",
+    source: "marketplace",
+    description: "Beta plugin",
+  },
   { kind: "skill", name: "gamma", source: "/home/user/.claude/skills/gamma" },
 ];
 
@@ -25,7 +30,10 @@ describe("adoptReducer", () => {
       perItemMode: new Map([["alpha", "move"]]),
       loading: true,
     };
-    const next = adoptReducer(state, { type: "adopt:candidates-loaded", candidates: CANDIDATES });
+    const next = adoptReducer(state, {
+      type: "adopt:candidates-loaded",
+      candidates: CANDIDATES,
+    });
     expect(next.candidates).toEqual(CANDIDATES);
     expect(next.focusIndex).toBe(0);
     expect(next.selectedIndices).toEqual([]);
@@ -34,19 +42,31 @@ describe("adoptReducer", () => {
   });
 
   test("adopt:cursor moves focus forward", () => {
-    const state: AdoptState = { ...initialAdoptState, candidates: CANDIDATES, focusIndex: 0 };
+    const state: AdoptState = {
+      ...initialAdoptState,
+      candidates: CANDIDATES,
+      focusIndex: 0,
+    };
     const next = adoptReducer(state, { type: "adopt:cursor", delta: 1 });
     expect(next.focusIndex).toBe(1);
   });
 
   test("adopt:cursor moves focus backward", () => {
-    const state: AdoptState = { ...initialAdoptState, candidates: CANDIDATES, focusIndex: 2 };
+    const state: AdoptState = {
+      ...initialAdoptState,
+      candidates: CANDIDATES,
+      focusIndex: 2,
+    };
     const next = adoptReducer(state, { type: "adopt:cursor", delta: -1 });
     expect(next.focusIndex).toBe(1);
   });
 
   test("adopt:cursor doesn't go below 0", () => {
-    const state: AdoptState = { ...initialAdoptState, candidates: CANDIDATES, focusIndex: 0 };
+    const state: AdoptState = {
+      ...initialAdoptState,
+      candidates: CANDIDATES,
+      focusIndex: 0,
+    };
     const next = adoptReducer(state, { type: "adopt:cursor", delta: -1 });
     expect(next.focusIndex).toBe(0);
   });
@@ -62,7 +82,11 @@ describe("adoptReducer", () => {
   });
 
   test("adopt:select-toggle selects focused candidate", () => {
-    const state: AdoptState = { ...initialAdoptState, candidates: CANDIDATES, focusIndex: 1 };
+    const state: AdoptState = {
+      ...initialAdoptState,
+      candidates: CANDIDATES,
+      focusIndex: 1,
+    };
     const next = adoptReducer(state, { type: "adopt:select-toggle" });
     expect(next.selectedIndices).toContain(1);
   });
@@ -81,7 +105,11 @@ describe("adoptReducer", () => {
   });
 
   test("adopt:mode-toggle switches track-in-place to move", () => {
-    const state: AdoptState = { ...initialAdoptState, candidates: CANDIDATES, focusIndex: 0 };
+    const state: AdoptState = {
+      ...initialAdoptState,
+      candidates: CANDIDATES,
+      focusIndex: 0,
+    };
     const next = adoptReducer(state, { type: "adopt:mode-toggle" });
     expect(next.perItemMode.get("alpha")).toBe("move");
   });
@@ -103,7 +131,11 @@ describe("adoptReducer", () => {
   });
 
   test("adopt:mode-toggle uses immutable Map update", () => {
-    const state: AdoptState = { ...initialAdoptState, candidates: CANDIDATES, focusIndex: 0 };
+    const state: AdoptState = {
+      ...initialAdoptState,
+      candidates: CANDIDATES,
+      focusIndex: 0,
+    };
     const next = adoptReducer(state, { type: "adopt:mode-toggle" });
     expect(next.perItemMode).not.toBe(state.perItemMode);
   });

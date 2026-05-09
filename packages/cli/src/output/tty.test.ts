@@ -19,7 +19,6 @@ function makeMockStream(): Writable & { written: string } {
 }
 
 // Matches any ANSI escape sequence
-// biome-ignore lint/suspicious/noControlCharactersInRegex: checking for ANSI codes
 const ANSI_RE = /\x1b\[[0-9;]*m/;
 
 describe("createTtyOutput", () => {

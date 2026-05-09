@@ -1,8 +1,8 @@
 import { Box, Text } from "ink";
-import React from "react";
+import type React from "react";
 import type { Action, ToggleState } from "../state/types";
-import { List } from "./shared/List";
 import { Footer } from "./shared/Footer";
+import { List } from "./shared/List";
 
 interface Props {
   state: ToggleState;
@@ -56,14 +56,16 @@ export const Toggle: React.FC<Props> = ({ state }) => {
     }));
     return (
       <Box flexDirection="column">
-        <Text bold>
-          Toggle — Select {state.type} to toggle
-        </Text>
+        <Text bold>Toggle — Select {state.type} to toggle</Text>
         <Box marginTop={1}>
           <List
             items={items}
             focusIndex={state.focusIndex}
-            emptyMessage={state.namesLoading ? "(loading…)" : `(no ${state.type}s installed)`}
+            emptyMessage={
+              state.namesLoading
+                ? "(loading…)"
+                : `(no ${state.type}s installed)`
+            }
           />
         </Box>
         <Footer hints={NAME_FOOTER} />
@@ -81,9 +83,7 @@ export const Toggle: React.FC<Props> = ({ state }) => {
 
   return (
     <Box flexDirection="column">
-      <Text bold>
-        Toggle — {state.selectedName} — select components
-      </Text>
+      <Text bold>Toggle — {state.selectedName} — select components</Text>
       <Box marginTop={1}>
         <List
           items={componentItems}

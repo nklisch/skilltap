@@ -62,7 +62,6 @@ export function table(rows: string[][], opts?: { header?: string[] }): string {
   return lines.join("\n");
 }
 
-
 /** Format install count as "1.2K" or "1.2M" */
 export function formatInstallCount(count: number): string {
   if (count >= 1_000_000)

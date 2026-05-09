@@ -146,7 +146,6 @@ describe("errorLine", () => {
   });
 });
 
-
 describe("formatInstallCount", () => {
   test("formats single install", () => {
     expect(formatInstallCount(1)).toBe("1 install");

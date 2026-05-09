@@ -105,8 +105,7 @@ describe("sync — read-only drift report (default mode)", () => {
     // auto-apply or prompt"; ends with "note: run skilltap sync --apply".
     const proj = await makeProjectRoot({
       // Manifest declares a skill that's not in state → 'add' drift.
-      manifestToml:
-        '[skills]\n"github:example/missing" = "*"\n',
+      manifestToml: '[skills]\n"github:example/missing" = "*"\n',
       lockfileToml: "version = 1\n",
       stateJson: EMPTY_STATE,
     });
@@ -268,7 +267,15 @@ async function bootstrapProjectWithSkill(
   await initRepo(projDir);
   await writeFile(join(projDir, "skilltap.toml"), "");
   const { exitCode, stderr } = await runSkilltap(
-    ["install", "skill", skillPath, "--scope", "project", "--yes", "--skip-scan"],
+    [
+      "install",
+      "skill",
+      skillPath,
+      "--scope",
+      "project",
+      "--yes",
+      "--skip-scan",
+    ],
     projHome,
     projConfig,
     projDir,
@@ -298,8 +305,9 @@ describe("sync — drift workflow: state.json deletion", () => {
   test("Test 3: delete state.json out-of-band → sync reports drift", async () => {
     // Setup: real install writes manifest + lockfile + state.json.
     // Then we delete state.json to simulate out-of-band mutation.
-    const { projDir, projHome, projConfig } =
-      await bootstrapProjectWithSkill(skillRepo.path);
+    const { projDir, projHome, projConfig } = await bootstrapProjectWithSkill(
+      skillRepo.path,
+    );
     try {
       await rm(join(projDir, ".agents", "state.json"), { force: true });
 
@@ -324,8 +332,9 @@ describe("sync — drift workflow: state.json deletion", () => {
   });
 
   test("Test 4: sync --apply restores state from lockfile after state.json deletion", async () => {
-    const { projDir, projHome, projConfig } =
-      await bootstrapProjectWithSkill(skillRepo.path);
+    const { projDir, projHome, projConfig } = await bootstrapProjectWithSkill(
+      skillRepo.path,
+    );
     try {
       await rm(join(projDir, ".agents", "state.json"), { force: true });
 
@@ -456,8 +465,9 @@ describe("sync — drift workflow: manifest remove (skill in state but not manif
 
   test("Test 6: sync --apply removes skill present in state but absent from manifest", async () => {
     // Bootstrap a real install so the skill is on disk + in state.json.
-    const { projDir, projHome, projConfig } =
-      await bootstrapProjectWithSkill(skillRepo.path);
+    const { projDir, projHome, projConfig } = await bootstrapProjectWithSkill(
+      skillRepo.path,
+    );
     try {
       // Overwrite the manifest to declare NO skills — creating a "remove" drift.
       await writeFile(join(projDir, "skilltap.toml"), "");
@@ -624,16 +634,17 @@ describe("sync — adversarial: lock-stale sha mismatch (A18)", () => {
   test("A18a: lock-stale appears in read-only drift report", async () => {
     // Bootstrap a real install so the lockfile has the real sha.
     // Then overwrite the lockfile sha with a known-bad value.
-    const { projDir, projHome, projConfig } =
-      await bootstrapProjectWithSkill(skillRepo.path);
+    const { projDir, projHome, projConfig } = await bootstrapProjectWithSkill(
+      skillRepo.path,
+    );
     try {
-      const lockText = await readFile(
-        join(projDir, "skilltap.lock"),
-        "utf8",
-      );
+      const lockText = await readFile(join(projDir, "skilltap.lock"), "utf8");
       // Replace the real sha with a fake one. The lockfile stores sha as a
       // string value in a TOML [[skill]] entry.
-      const patchedLock = lockText.replace(/sha = "[^"]*"/, 'sha = "deadbeefdeadbeef"');
+      const patchedLock = lockText.replace(
+        /sha = "[^"]*"/,
+        'sha = "deadbeefdeadbeef"',
+      );
       await writeFile(join(projDir, "skilltap.lock"), patchedLock);
 
       const { exitCode, stdout } = await runSkilltap(
@@ -657,14 +668,15 @@ describe("sync — adversarial: lock-stale sha mismatch (A18)", () => {
   test("A18b: sync --apply skips lock-stale items (apply.ts skips lock-* kinds)", async () => {
     // Per apply.test.ts: "lock-missing/lock-stale/lock-orphan all count as skipped".
     // Apply must exit 0 and report skipped:1.
-    const { projDir, projHome, projConfig } =
-      await bootstrapProjectWithSkill(skillRepo.path);
+    const { projDir, projHome, projConfig } = await bootstrapProjectWithSkill(
+      skillRepo.path,
+    );
     try {
-      const lockText = await readFile(
-        join(projDir, "skilltap.lock"),
-        "utf8",
+      const lockText = await readFile(join(projDir, "skilltap.lock"), "utf8");
+      const patchedLock = lockText.replace(
+        /sha = "[^"]*"/,
+        'sha = "deadbeefdeadbeef"',
       );
-      const patchedLock = lockText.replace(/sha = "[^"]*"/, 'sha = "deadbeefdeadbeef"');
       await writeFile(join(projDir, "skilltap.lock"), patchedLock);
 
       const { exitCode, stdout } = await runSkilltap(
@@ -680,10 +692,7 @@ describe("sync — adversarial: lock-stale sha mismatch (A18)", () => {
 
       // Lockfile sha must still be "deadbeefdeadbeef" — apply does not rewrite
       // lock-* entries.
-      const lockAfter = await readFile(
-        join(projDir, "skilltap.lock"),
-        "utf8",
-      );
+      const lockAfter = await readFile(join(projDir, "skilltap.lock"), "utf8");
       expect(lockAfter).toContain("deadbeefdeadbeef");
     } finally {
       await removeTmpDir(projDir);

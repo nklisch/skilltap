@@ -268,4 +268,3 @@ describe("skillsShRegistry", () => {
     expect(results[0]?.description).toBe("");
   });
 });
-

@@ -66,7 +66,12 @@ describe("checkCaptureCollisions", () => {
         ],
         plugins: [
           plugin("dev-toolkit", [
-            { type: "skill", name: "beta", path: "skills/beta", description: "" },
+            {
+              type: "skill",
+              name: "beta",
+              path: "skills/beta",
+              description: "",
+            },
           ]),
         ],
       }),

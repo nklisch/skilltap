@@ -37,9 +37,15 @@ const status = defineCommand({
       out.info(`Run 'skilltap config telemetry enable' to opt in.`);
     }
 
-    out.info(`\nWhat's collected: OS, arch, CLI version, command success/failure,`);
-    out.info(`error type, skill count, duration. No skill names, paths, or personal info.`);
-    out.info(`Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.`);
+    out.info(
+      `\nWhat's collected: OS, arch, CLI version, command success/failure,`,
+    );
+    out.info(
+      `error type, skill count, duration. No skill names, paths, or personal info.`,
+    );
+    out.info(
+      `Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.`,
+    );
   },
 });
 

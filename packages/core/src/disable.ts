@@ -2,10 +2,7 @@ import { mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
-import {
-  manifestExists,
-  setManifestComponentActive,
-} from "./manifest";
+import { manifestExists, setManifestComponentActive } from "./manifest";
 import { skillDisabledDir, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";

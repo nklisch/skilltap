@@ -11,43 +11,69 @@ describe("createCaptureOutput", () => {
   test("records warn event with optional hint", () => {
     const out = createCaptureOutput();
     out.warn("heads up", "fix it");
-    expect(out.events).toContainEqual({ kind: "warn", message: "heads up", hint: "fix it" });
+    expect(out.events).toContainEqual({
+      kind: "warn",
+      message: "heads up",
+      hint: "fix it",
+    });
   });
 
   test("records warn event without hint", () => {
     const out = createCaptureOutput();
     out.warn("heads up");
-    expect(out.events).toContainEqual({ kind: "warn", message: "heads up", hint: undefined });
+    expect(out.events).toContainEqual({
+      kind: "warn",
+      message: "heads up",
+      hint: undefined,
+    });
   });
 
   test("records error event", () => {
     const out = createCaptureOutput();
     out.error("something broke", "do this");
-    expect(out.events).toContainEqual({ kind: "error", message: "something broke", hint: "do this" });
+    expect(out.events).toContainEqual({
+      kind: "error",
+      message: "something broke",
+      hint: "do this",
+    });
   });
 
   test("records success event", () => {
     const out = createCaptureOutput();
     out.success("Installed X");
-    expect(out.events).toContainEqual({ kind: "success", message: "Installed X" });
+    expect(out.events).toContainEqual({
+      kind: "success",
+      message: "Installed X",
+    });
   });
 
   test("records block event with default stderr stream", () => {
     const out = createCaptureOutput();
     out.block(["line1", "line2"]);
-    expect(out.events).toContainEqual({ kind: "block", lines: ["line1", "line2"], stream: "stderr" });
+    expect(out.events).toContainEqual({
+      kind: "block",
+      lines: ["line1", "line2"],
+      stream: "stderr",
+    });
   });
 
   test("records block event with stdout stream", () => {
     const out = createCaptureOutput();
     out.block(["line1"], { stream: "stdout" });
-    expect(out.events).toContainEqual({ kind: "block", lines: ["line1"], stream: "stdout" });
+    expect(out.events).toContainEqual({
+      kind: "block",
+      lines: ["line1"],
+      stream: "stdout",
+    });
   });
 
   test("records json event", () => {
     const out = createCaptureOutput();
     out.json({ kind: "install:done", records: ["foo"] });
-    expect(out.events).toContainEqual({ kind: "json", event: { kind: "install:done", records: ["foo"] } });
+    expect(out.events).toContainEqual({
+      kind: "json",
+      event: { kind: "install:done", records: ["foo"] },
+    });
   });
 
   test("records progress lifecycle events", () => {
@@ -57,8 +83,16 @@ describe("createCaptureOutput", () => {
     p.succeed("done loading");
 
     expect(out.events[0]).toEqual({ kind: "progress:start", label: "Loading" });
-    expect(out.events[1]).toEqual({ kind: "progress:update", label: "Loading", message: "halfway" });
-    expect(out.events[2]).toEqual({ kind: "progress:done", label: "Loading", message: "done loading" });
+    expect(out.events[1]).toEqual({
+      kind: "progress:update",
+      label: "Loading",
+      message: "halfway",
+    });
+    expect(out.events[2]).toEqual({
+      kind: "progress:done",
+      label: "Loading",
+      message: "done loading",
+    });
   });
 
   test("records progress fail event", () => {
@@ -66,7 +100,11 @@ describe("createCaptureOutput", () => {
     const p = out.progress("Cloning");
     p.fail("network error");
 
-    expect(out.events[1]).toEqual({ kind: "progress:fail", label: "Cloning", message: "network error" });
+    expect(out.events[1]).toEqual({
+      kind: "progress:fail",
+      label: "Cloning",
+      message: "network error",
+    });
   });
 
   test("records raw event", () => {

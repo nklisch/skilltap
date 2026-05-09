@@ -13,7 +13,6 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
   commitAll,
-  createStandaloneSkillRepo,
   createTestEnv,
   initRepo,
   makeTmpDir,

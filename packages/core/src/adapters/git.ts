@@ -42,7 +42,9 @@ export const gitAdapter: SourceAdapter = {
     return ok({
       url: s,
       ...(ref ? { ref } : {}),
-      ...(stripped.pluginSelector ? { pluginSelector: stripped.pluginSelector } : {}),
+      ...(stripped.pluginSelector
+        ? { pluginSelector: stripped.pluginSelector }
+        : {}),
       adapter: "git",
     });
   },

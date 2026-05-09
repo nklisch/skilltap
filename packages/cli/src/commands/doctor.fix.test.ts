@@ -118,7 +118,9 @@ describe("doctor --fix — corrupt state.json (Test 23)", () => {
     expect(await pathExists(`${statePath}.bak`)).toBe(true);
 
     // The repaired file must parse as valid JSON with version: 2
-    const repaired = await Bun.file(statePath).json().catch(() => null);
+    const repaired = await Bun.file(statePath)
+      .json()
+      .catch(() => null);
     expect(repaired).not.toBeNull();
     expect(repaired.version).toBe(2);
     expect(Array.isArray(repaired.skills)).toBe(true);
@@ -238,9 +240,7 @@ describe("doctor --fix — orphan MCP entry (Test 24)", () => {
 
 describe("doctor --fix — v0.x installed.json renamed to .v1.bak (Test 25)", () => {
   test("exits 0, renames project installed.json to installed.json.v1.bak, leaves state.json intact", async () => {
-    const projectRoot = await mkdtemp(
-      join(tmpdir(), "skilltap-fix-v1-test-"),
-    );
+    const projectRoot = await mkdtemp(join(tmpdir(), "skilltap-fix-v1-test-"));
 
     try {
       await initRepo(projectRoot);

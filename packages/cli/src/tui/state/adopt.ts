@@ -20,7 +20,10 @@ export function adoptReducer(state: AdoptState, action: Action): AdoptState {
         loading: false,
       };
     case "adopt:cursor": {
-      const next = Math.max(0, Math.min(state.candidates.length - 1, state.focusIndex + action.delta));
+      const next = Math.max(
+        0,
+        Math.min(state.candidates.length - 1, state.focusIndex + action.delta),
+      );
       return { ...state, focusIndex: next };
     }
     case "adopt:select-toggle": {

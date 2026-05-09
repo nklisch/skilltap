@@ -3,7 +3,6 @@ import { appReducer, initialAppState } from "./app";
 import { initialDashboardState } from "./dashboard";
 import { initialFindState } from "./find";
 import { initialToggleState } from "./toggle";
-import { initialAdoptState } from "./adopt";
 import type { Action, AppState } from "./types";
 
 describe("initialAppState", () => {
@@ -104,7 +103,10 @@ describe("appReducer", () => {
     const candidates = [
       { kind: "skill" as const, name: "foo", source: "/path/foo" },
     ];
-    const next = appReducer(state, { type: "adopt:candidates-loaded", candidates });
+    const next = appReducer(state, {
+      type: "adopt:candidates-loaded",
+      candidates,
+    });
     expect(next.screen).toBe("adopt");
     if (next.screen === "adopt") {
       expect(next.state.candidates).toEqual(candidates);

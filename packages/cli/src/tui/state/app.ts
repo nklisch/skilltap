@@ -1,8 +1,8 @@
-import type { Action, AppState, Screen } from "./types";
+import { adoptReducer, initialAdoptState } from "./adopt";
 import { dashboardReducer, initialDashboardState } from "./dashboard";
 import { findReducer, initialFindState } from "./find";
-import { toggleReducer, initialToggleState } from "./toggle";
-import { adoptReducer, initialAdoptState } from "./adopt";
+import { initialToggleState, toggleReducer } from "./toggle";
+import type { Action, AppState, Screen } from "./types";
 
 export function initialAppState(initial: Screen = "dashboard"): AppState {
   switch (initial) {
@@ -25,7 +25,10 @@ export function appReducer(state: AppState, action: Action): AppState {
 
   switch (state.screen) {
     case "dashboard":
-      return { screen: "dashboard", state: dashboardReducer(state.state, action) };
+      return {
+        screen: "dashboard",
+        state: dashboardReducer(state.state, action),
+      };
     case "find":
       return { screen: "find", state: findReducer(state.state, action) };
     case "toggle":

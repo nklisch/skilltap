@@ -38,10 +38,7 @@ export async function setupRemoveContext(args: {
     scope: scopeFlag,
   });
   const projectRoot = await tryFindProjectRoot();
-  const { scope, inferred } = await resolveScope(
-    { scope: scopeFlag },
-    config,
-  );
+  const { scope, inferred } = await resolveScope({ scope: scopeFlag }, config);
   const scopeProvided = scopeFlag !== undefined || !inferred;
   return {
     out,

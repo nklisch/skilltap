@@ -1,5 +1,11 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
+import type {
+  Output,
+  PluginRecord,
+  SkillRecord,
+  StoredComponent,
+} from "@skilltap/core";
 import {
   AGENT_PATHS,
   ensureBuiltinTap,
@@ -9,11 +15,10 @@ import {
   loadState,
   loadTaps,
 } from "@skilltap/core";
-import type { Output, PluginRecord, SkillRecord, StoredComponent } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
 import { tryFindProjectRoot } from "../ui/resolve";
+import { setupOutput } from "../ui/setup";
 import { formatTrustLabel } from "../ui/trust";
 
 export const infoCommand = defineCommand({
@@ -54,8 +59,7 @@ export const infoCommand = defineCommand({
 
     // Also load global state when inside a project (loadState returns project
     // scope; global entries might also match).
-    const globalStateResult =
-      projectRoot ? await loadState(undefined) : null;
+    const globalStateResult = projectRoot ? await loadState(undefined) : null;
 
     const allSkills: SkillRecord[] = [
       ...(globalStateResult?.ok ? globalStateResult.value.skills : []),
@@ -183,9 +187,7 @@ async function renderSkillInfo(
   }
 
   const base =
-    skill.scope === "project"
-      ? (projectRoot ?? process.cwd())
-      : globalBase();
+    skill.scope === "project" ? (projectRoot ?? process.cwd()) : globalBase();
   const skillPath = join(base, ".agents", "skills", skill.name);
 
   const agentStatus = await Promise.all(
@@ -198,9 +200,7 @@ async function renderSkillInfo(
     }),
   );
 
-  const activeAgents = agentStatus
-    .filter((a) => a.exists)
-    .map((a) => a.agent);
+  const activeAgents = agentStatus.filter((a) => a.exists).map((a) => a.agent);
 
   const rows: [string, string][] = [
     ["name:", ansi.bold(skill.name)],
@@ -211,9 +211,7 @@ async function renderSkillInfo(
     ["sha:", skill.sha ? skill.sha.slice(0, 7) : "—"],
     [
       "trust:",
-      skill.trust
-        ? formatTrustLabel(skill.trust)
-        : ansi.dim("○ unverified"),
+      skill.trust ? formatTrustLabel(skill.trust) : ansi.dim("○ unverified"),
     ],
     ["path:", skillPath],
     ["agents:", activeAgents.length > 0 ? activeAgents.join(", ") : "none"],

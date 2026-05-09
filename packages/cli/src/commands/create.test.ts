@@ -18,18 +18,15 @@ async function runCreate(
   args: string[],
   _cwd: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "create", ...args],
-    {
-      cwd: CLI_DIR,
-      stdout: "pipe",
-      stderr: "pipe",
-      stdin: "pipe",
-      env: {
-        ...process.env,
-      },
+  const proc = Bun.spawn([...cliCmd(), "create", ...args], {
+    cwd: CLI_DIR,
+    stdout: "pipe",
+    stderr: "pipe",
+    stdin: "pipe",
+    env: {
+      ...process.env,
     },
-  );
+  });
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();

@@ -1,7 +1,7 @@
 import {
   loadConfig,
-  loadSkillState,
   loadPlugins,
+  loadSkillState,
   loadTaps,
 } from "@skilltap/core";
 import { tryFindProjectRoot } from "../ui/resolve";

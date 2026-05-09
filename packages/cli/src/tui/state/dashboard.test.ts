@@ -10,40 +10,75 @@ describe("dashboardReducer", () => {
   });
 
   test("dashboard:tab switches tab and resets cursor", () => {
-    const state: DashboardState = { ...initialDashboardState, tab: "installed", selectedIndex: 5 };
-    const next = dashboardReducer(state, { type: "dashboard:tab", tab: "taps" });
+    const state: DashboardState = {
+      ...initialDashboardState,
+      tab: "installed",
+      selectedIndex: 5,
+    };
+    const next = dashboardReducer(state, {
+      type: "dashboard:tab",
+      tab: "taps",
+    });
     expect(next.tab).toBe("taps");
     expect(next.selectedIndex).toBe(0);
   });
 
   test("dashboard:tab switches to each valid tab", () => {
     for (const tab of ["installed", "taps", "updates", "drift"] as const) {
-      const next = dashboardReducer(initialDashboardState, { type: "dashboard:tab", tab });
+      const next = dashboardReducer(initialDashboardState, {
+        type: "dashboard:tab",
+        tab,
+      });
       expect(next.tab).toBe(tab);
     }
   });
 
   test("dashboard:cursor moves forward", () => {
-    const state: DashboardState = { ...initialDashboardState, selectedIndex: 2 };
-    const next = dashboardReducer(state, { type: "dashboard:cursor", delta: 1 });
+    const state: DashboardState = {
+      ...initialDashboardState,
+      selectedIndex: 2,
+    };
+    const next = dashboardReducer(state, {
+      type: "dashboard:cursor",
+      delta: 1,
+    });
     expect(next.selectedIndex).toBe(3);
   });
 
   test("dashboard:cursor moves backward", () => {
-    const state: DashboardState = { ...initialDashboardState, selectedIndex: 3 };
-    const next = dashboardReducer(state, { type: "dashboard:cursor", delta: -1 });
+    const state: DashboardState = {
+      ...initialDashboardState,
+      selectedIndex: 3,
+    };
+    const next = dashboardReducer(state, {
+      type: "dashboard:cursor",
+      delta: -1,
+    });
     expect(next.selectedIndex).toBe(2);
   });
 
   test("dashboard:cursor doesn't go below 0", () => {
-    const state: DashboardState = { ...initialDashboardState, selectedIndex: 0 };
-    const next = dashboardReducer(state, { type: "dashboard:cursor", delta: -1 });
+    const state: DashboardState = {
+      ...initialDashboardState,
+      selectedIndex: 0,
+    };
+    const next = dashboardReducer(state, {
+      type: "dashboard:cursor",
+      delta: -1,
+    });
     expect(next.selectedIndex).toBe(0);
   });
 
   test("dashboard:tab change resets cursor regardless of current position", () => {
-    const state: DashboardState = { ...initialDashboardState, tab: "taps", selectedIndex: 99 };
-    const next = dashboardReducer(state, { type: "dashboard:tab", tab: "updates" });
+    const state: DashboardState = {
+      ...initialDashboardState,
+      tab: "taps",
+      selectedIndex: 99,
+    };
+    const next = dashboardReducer(state, {
+      type: "dashboard:tab",
+      tab: "updates",
+    });
     expect(next.selectedIndex).toBe(0);
     expect(next.tab).toBe("updates");
   });

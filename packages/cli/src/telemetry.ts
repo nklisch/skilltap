@@ -19,7 +19,6 @@ export function sendEvent(
   if (!isTelemetryEnabled(config) && !debug) return;
 
   if (debug) {
-    console.error(`[telemetry] ${name}: ${JSON.stringify(params)}`);
     if (!isTelemetryEnabled(config)) return;
   }
 

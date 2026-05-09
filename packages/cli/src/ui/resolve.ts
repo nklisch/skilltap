@@ -89,7 +89,7 @@ export function collectRepeatedFlag(
         values.push(next);
         i++;
       }
-    } else if (arg !== undefined && arg.startsWith(eqPrefix)) {
+    } else if (arg?.startsWith(eqPrefix)) {
       seen = true;
       values.push(arg.slice(eqPrefix.length));
     }
@@ -105,10 +105,7 @@ export function collectRepeatedFlag(
  * literally — e.g. the design-mandated `--no-capture` boolean — call this
  * helper on `rawArgs` instead of trusting the parsed `args` object.
  */
-export function hasRawFlag(
-  rawArgs: readonly string[],
-  flag: string,
-): boolean {
+export function hasRawFlag(rawArgs: readonly string[], flag: string): boolean {
   const long = `--${flag}`;
   for (const arg of rawArgs) {
     if (arg === long) return true;

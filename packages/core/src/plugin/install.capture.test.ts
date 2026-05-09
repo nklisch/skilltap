@@ -7,10 +7,10 @@
  * fields on PluginInstallResult, and post-install state.
  */
 
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import type { InstalledSkill } from "../schemas/installed";
 import type { PluginManifest } from "../schemas/plugin";
@@ -137,7 +137,11 @@ describe("installPlugin with capture — same-source", () => {
       "skills/helper/SKILL.md": "---\nname: helper\n---\n# Helper from plugin",
     });
     try {
-      const result = await installPlugin(contentDir, SKILL_MANIFEST, BASE_OPTIONS);
+      const result = await installPlugin(
+        contentDir,
+        SKILL_MANIFEST,
+        BASE_OPTIONS,
+      );
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
@@ -316,7 +320,9 @@ describe("installPlugin with capture — cross-source", () => {
       if (!result.ok) return;
 
       expect(result.value.captured.skills).toEqual(["helper"]);
-      expect(result.value.captured.forcedCrossSource.skills).toEqual(["helper"]);
+      expect(result.value.captured.forcedCrossSource.skills).toEqual([
+        "helper",
+      ]);
 
       const stateAfter = await readState(env.configDir);
       expect(stateAfter.skills).toEqual([]);

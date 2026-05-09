@@ -1,8 +1,12 @@
 import { findProjectRoot, installMcp } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../../ui/setup";
 import { loadPolicyOrExit } from "../../ui/policy";
-import { collectRepeatedFlag, parseAlsoFlag, resolveScope } from "../../ui/resolve";
+import {
+  collectRepeatedFlag,
+  parseAlsoFlag,
+  resolveScope,
+} from "../../ui/resolve";
+import { setupOutput } from "../../ui/setup";
 
 export const mcpCommand = defineCommand({
   meta: { name: "mcp", description: "Install a standalone MCP server" },
@@ -63,7 +67,7 @@ export const mcpCommand = defineCommand({
       scope: scopeFlag,
     });
 
-    const sources = (args as any)._ as string[];
+    const sources = (args as unknown as { _: string[] })._;
 
     for (const source of sources) {
       if (source.startsWith("mcp:")) {

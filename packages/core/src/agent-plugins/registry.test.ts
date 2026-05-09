@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { UserError } from "../types";
-import type { AgentPluginScanner, DiscoveredAgentPlugin } from "./types";
 import { scanAllAgentPlugins } from "./registry";
+import type { AgentPluginScanner, DiscoveredAgentPlugin } from "./types";
 
 function makeMockPlugin(name: string): DiscoveredAgentPlugin {
   return {
@@ -83,7 +83,10 @@ describe("scanAllAgentPlugins", () => {
   });
 
   test("aggregates plugins from multiple scanners", async () => {
-    const scannerA = makeScanner("a", true, [makeMockPlugin("pa1"), makeMockPlugin("pa2")]);
+    const scannerA = makeScanner("a", true, [
+      makeMockPlugin("pa1"),
+      makeMockPlugin("pa2"),
+    ]);
     const scannerB = makeScanner("b", true, [makeMockPlugin("pb1")]);
     const result = await scanAllAgentPlugins([scannerA, scannerB]);
     expect(result.ok).toBe(true);

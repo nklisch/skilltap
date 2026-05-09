@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
 import { Footer } from "./Footer";
 
 describe("Footer", () => {
@@ -27,7 +26,9 @@ describe("Footer", () => {
   });
 
   test("renders single hint without separator", () => {
-    const { lastFrame } = render(<Footer hints={[{ key: "q", description: "quit" }]} />);
+    const { lastFrame } = render(
+      <Footer hints={[{ key: "q", description: "quit" }]} />,
+    );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("q");
     expect(frame).not.toContain("·");

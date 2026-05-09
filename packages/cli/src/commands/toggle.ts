@@ -1,21 +1,21 @@
 import { multiselect } from "@clack/prompts";
-import { pickOne } from "../ui/picker";
 import {
   disableSkill,
   enableSkill,
   findComponentInPlugin,
   loadState,
   type Output,
-  parseComponentRef,
   type PluginRecord,
+  parseComponentRef,
   type StoredComponent,
   toggleInstalledComponent,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import { ansi } from "../ui/format";
+import { pickOne } from "../ui/picker";
 import { componentLabel, loadPluginByName } from "../ui/plugin-format";
 import { tryFindProjectRoot } from "../ui/resolve";
+import { setupOutput } from "../ui/setup";
 
 const VALID_TOGGLE_TYPES = ["skill", "plugin", "mcp"] as const;
 type ToggleType = (typeof VALID_TOGGLE_TYPES)[number];
@@ -259,9 +259,16 @@ async function runPluginComponentPicker(
       projectRoot,
     });
     if (!r.ok) {
-      results.push({ component: c, nowActive: c.active, error: r.error.message });
+      results.push({
+        component: c,
+        nowActive: c.active,
+        error: r.error.message,
+      });
     } else {
-      results.push({ component: r.value.component, nowActive: r.value.nowActive });
+      results.push({
+        component: r.value.component,
+        nowActive: r.value.nowActive,
+      });
     }
   }
 
@@ -282,7 +289,7 @@ async function runPluginComponentPicker(
 async function runToggleMcp(
   name: string,
   out: Output,
-  json: boolean,
+  _json: boolean,
   projectRoot: string | undefined,
 ): Promise<void> {
   // MCP standalone toggle is not yet implemented in core (no active/inactive
@@ -310,9 +317,7 @@ async function runToggleMcp(
 
 // ─── Picker ──────────────────────────────────────────────────────────────────
 
-async function runTogglePicker(
-  out: Output,
-): Promise<void> {
+async function runTogglePicker(out: Output): Promise<void> {
   const projectRoot = await tryFindProjectRoot();
 
   const type = await pickOne<ToggleType>({

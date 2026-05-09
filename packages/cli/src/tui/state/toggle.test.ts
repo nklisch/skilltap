@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { toggleReducer, initialToggleState } from "./toggle";
+import { initialToggleState, toggleReducer } from "./toggle";
 import type { Action, ToggleState } from "./types";
 
 const COMPONENTS: ToggleState["components"] = [
@@ -18,7 +18,10 @@ describe("toggleReducer", () => {
   });
 
   test("toggle:set-type advances step to name and stores type", () => {
-    const next = toggleReducer(initialToggleState, { type: "toggle:set-type", value: "plugin" });
+    const next = toggleReducer(initialToggleState, {
+      type: "toggle:set-type",
+      value: "plugin",
+    });
     expect(next.step).toBe("name");
     expect(next.type).toBe("plugin");
     expect(next.selectedName).toBeNull();
@@ -26,14 +29,24 @@ describe("toggleReducer", () => {
 
   test("toggle:set-type works for all valid types", () => {
     for (const value of ["skill", "plugin", "mcp", null] as const) {
-      const next = toggleReducer(initialToggleState, { type: "toggle:set-type", value });
+      const next = toggleReducer(initialToggleState, {
+        type: "toggle:set-type",
+        value,
+      });
       expect(next.type).toBe(value);
     }
   });
 
   test("toggle:set-name advances step to components and clears components", () => {
-    const state: ToggleState = { ...initialToggleState, step: "name", type: "plugin" };
-    const next = toggleReducer(state, { type: "toggle:set-name", value: "foo-plugin" });
+    const state: ToggleState = {
+      ...initialToggleState,
+      step: "name",
+      type: "plugin",
+    };
+    const next = toggleReducer(state, {
+      type: "toggle:set-name",
+      value: "foo-plugin",
+    });
     expect(next.step).toBe("components");
     expect(next.selectedName).toBe("foo-plugin");
     expect(next.components).toEqual([]);
@@ -45,7 +58,10 @@ describe("toggleReducer", () => {
       step: "components",
       selectedComponentIndices: [0, 2],
     };
-    const next = toggleReducer(state, { type: "toggle:components-loaded", components: COMPONENTS });
+    const next = toggleReducer(state, {
+      type: "toggle:components-loaded",
+      components: COMPONENTS,
+    });
     expect(next.components).toEqual(COMPONENTS);
     expect(next.selectedComponentIndices).toEqual([]);
   });
@@ -57,7 +73,10 @@ describe("toggleReducer", () => {
       components: COMPONENTS,
       selectedComponentIndices: [0],
     };
-    const next = toggleReducer(state, { type: "toggle:component-toggle", index: 2 });
+    const next = toggleReducer(state, {
+      type: "toggle:component-toggle",
+      index: 2,
+    });
     expect(next.selectedComponentIndices).toContain(0);
     expect(next.selectedComponentIndices).toContain(2);
   });
@@ -69,7 +88,10 @@ describe("toggleReducer", () => {
       components: COMPONENTS,
       selectedComponentIndices: [0, 1, 2],
     };
-    const next = toggleReducer(state, { type: "toggle:component-toggle", index: 1 });
+    const next = toggleReducer(state, {
+      type: "toggle:component-toggle",
+      index: 1,
+    });
     expect(next.selectedComponentIndices).not.toContain(1);
     expect(next.selectedComponentIndices).toContain(0);
     expect(next.selectedComponentIndices).toContain(2);
@@ -104,7 +126,9 @@ describe("toggleReducer", () => {
   });
 
   test("toggle:step-back from type step is a no-op", () => {
-    const next = toggleReducer(initialToggleState, { type: "toggle:step-back" });
+    const next = toggleReducer(initialToggleState, {
+      type: "toggle:step-back",
+    });
     expect(next).toBe(initialToggleState);
   });
 

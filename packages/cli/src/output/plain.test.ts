@@ -18,7 +18,6 @@ function makeMockStream(): Writable & { written: string } {
   return stream;
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: checking for ANSI codes
 const ANSI_RE = /\x1b\[[0-9;]*m/;
 
 function hasNoAnsi(text: string): boolean {

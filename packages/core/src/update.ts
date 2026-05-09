@@ -5,12 +5,9 @@ import type { AgentAdapter } from "./agents/types";
 import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
-import {
-  addSkillToManifest,
-  manifestExists,
-} from "./manifest";
 import type { DiffStat } from "./git";
 import { diff, diffStat, fetch, pull, resetHard, revParse } from "./git";
+import { addSkillToManifest, manifestExists } from "./manifest";
 import {
   downloadAndExtract,
   fetchPackageMetadata,

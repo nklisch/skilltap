@@ -84,21 +84,18 @@ describe("TUI smoke", () => {
   });
 
   test("bare skilltap (non-TTY) errors with hint", async () => {
-    const proc = Bun.spawn(
-      [...cliCmd()],
-      {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          SKILLTAP_HOME: env.homeDir,
-          XDG_CONFIG_HOME: env.configDir,
-          SKILLTAP_NO_STARTUP: "1",
-        },
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
+    const proc = Bun.spawn([...cliCmd()], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        SKILLTAP_HOME: env.homeDir,
+        XDG_CONFIG_HOME: env.configDir,
+        SKILLTAP_NO_STARTUP: "1",
       },
-    );
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+    });
     const stderr = await new Response(proc.stderr).text();
     await proc.exited;
     expect(proc.exitCode).toBe(1);

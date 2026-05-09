@@ -1,11 +1,11 @@
 import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../ui/setup";
 import {
   collectRepeatedFlag,
   parseAlsoFlag,
   tryFindProjectRoot,
 } from "../ui/resolve";
+import { setupOutput } from "../ui/setup";
 
 export const moveCommand = defineCommand({
   meta: { name: "move", description: "Move a skill between scopes" },

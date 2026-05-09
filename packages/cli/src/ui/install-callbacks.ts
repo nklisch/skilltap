@@ -22,7 +22,7 @@ import {
 } from "./prompts";
 import { printSemanticWarnings, printWarnings } from "./scan";
 
-function truncate(str: string, max: number): string {
+function _truncate(str: string, max: number): string {
   return str.length <= max ? str : `${str.slice(0, max - 1)}…`;
 }
 
@@ -51,7 +51,9 @@ export function printCaptureConflict(
       log.info(`    • ${c.standalone.name}`);
       log.info(`        standalone: ${standaloneLabel}`);
       log.info(`        plugin:     ${pluginLabel}`);
-      log.warn(`        Different sources. The plugin's version would replace the standalone's content.`);
+      log.warn(
+        `        Different sources. The plugin's version would replace the standalone's content.`,
+      );
     }
   }
 
@@ -60,9 +62,7 @@ export function printCaptureConflict(
     for (const c of matches.mcpServers) {
       const standaloneLabel = c.standalone.source ?? "(no recorded source)";
       const slug = c.standalone.name.split(":")[1] ?? "";
-      const keyDisplay = slug
-        ? ` (slug=${slug} → ${c.standalone.name})`
-        : "";
+      const keyDisplay = slug ? ` (slug=${slug} → ${c.standalone.name})` : "";
       log.info(`    • ${c.serverName}`);
       log.info(`        standalone: ${standaloneLabel}${keyDisplay}`);
       log.info(`        plugin:     ${pluginLabel}`);

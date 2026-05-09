@@ -1,11 +1,12 @@
 import { mkdir, rename, symlink } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { dirname, join } from "node:path";
 import { $ } from "bun";
-import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
+import type { ScanAllResult } from "./agent-plugins/registry";
 import { scanAllAgentPlugins } from "./agent-plugins/registry";
+import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
 import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
-import type { DiscoverOptions, DiscoveredSkill } from "./discover";
+import type { DiscoveredSkill, DiscoverOptions } from "./discover";
 import { discoverSkills } from "./discover";
 import { revParse } from "./git";
 import {
@@ -14,16 +15,20 @@ import {
   manifestExists,
 } from "./manifest";
 import { scopeBase, skillInstallDir } from "./paths";
-import { addPlugin, loadPlugins, manifestToRecord, savePlugins } from "./plugin/state";
-import type { PluginRecord } from "./schemas/plugins";
-import type { InstalledSkill } from "./schemas/installed";
+import {
+  addPlugin,
+  loadPlugins,
+  manifestToRecord,
+  savePlugins,
+} from "./plugin/state";
 import { scan } from "./scanner";
+import type { InstalledSkill } from "./schemas/installed";
+import type { PluginRecord } from "./schemas/plugins";
 import type { StaticWarning } from "./security/static";
 import { scanStatic } from "./security/static";
 import { AGENT_PATHS, createAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
-import type { ScanAllResult } from "./agent-plugins/registry";
 
 // Best-effort manifest+lockfile sync for adopted records. Mirrors the install
 // path: only writes when a project manifest already exists, and swallows
@@ -293,7 +298,10 @@ export type AdoptFromPathOptions = {
   /** "track-in-place" (default; symlink) or "move" (relocate dir + symlink back). */
   mode?: AdoptMode;
   skipScan?: boolean;
-  onWarnings?: (warnings: StaticWarning[], skillName: string) => Promise<boolean>;
+  onWarnings?: (
+    warnings: StaticWarning[],
+    skillName: string,
+  ) => Promise<boolean>;
 };
 
 export type DiscoverAdoptableResult = {
@@ -506,7 +514,10 @@ export async function adoptPlugin(
   // Override path to point at Claude Code's cache
   const recordWithPath: PluginRecord = { ...record, path: plugin.installPath };
 
-  const projectRoot = plugin.scope === "project" ? (options.projectRoot ?? plugin.projectRoot) : undefined;
+  const projectRoot =
+    plugin.scope === "project"
+      ? (options.projectRoot ?? plugin.projectRoot)
+      : undefined;
   const pluginsResult = await loadPlugins(projectRoot);
   if (!pluginsResult.ok) return pluginsResult;
   const updated = addPlugin(pluginsResult.value, recordWithPath);
@@ -525,7 +536,10 @@ export async function adoptPlugin(
 export async function discoverAllAdoptable(
   options: DiscoverOptions,
 ): Promise<Result<DiscoverAdoptableResult, UserError>> {
-  const skillsResult = await discoverSkills({ ...options, unmanagedOnly: true });
+  const skillsResult = await discoverSkills({
+    ...options,
+    unmanagedOnly: true,
+  });
   if (!skillsResult.ok) return skillsResult;
 
   const pluginScanResult = await scanAllAgentPlugins();

@@ -1,6 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { createTestEnv, makeTmpDir } from "@skilltap/test-utils";
 import type { InstalledSkill } from "../schemas/installed";
 import type { PluginManifest } from "../schemas/plugin";
@@ -136,16 +136,18 @@ describe("detectCaptureMatches — basic matching", () => {
       "github:x/y",
     );
     expect(result.sameSource.skills).toHaveLength(2);
-    expect(result.sameSource.skills.map((c) => c.standalone.name).sort()).toEqual(
-      ["a", "b"],
-    );
+    expect(
+      result.sameSource.skills.map((c) => c.standalone.name).sort(),
+    ).toEqual(["a", "b"]);
   });
 
   test("matches an MCP standalone whose parsed serverName equals plugin's server name", () => {
     const result = detectCaptureMatches(
       emptyState({
         mcpServers: [
-          mcpStandalone("repo", "postgres", { source: "mcp:github:alice/repo" }),
+          mcpStandalone("repo", "postgres", {
+            source: "mcp:github:alice/repo",
+          }),
         ],
       }),
       pluginManifest("dev-toolkit", [
@@ -226,7 +228,8 @@ describe("detectCaptureMatches — basic matching", () => {
     );
     // Only the parseable one is matched
     expect(
-      result.sameSource.mcpServers.length + result.crossSource.mcpServers.length,
+      result.sameSource.mcpServers.length +
+        result.crossSource.mcpServers.length,
     ).toBe(1);
   });
 
@@ -305,9 +308,7 @@ describe("detectCaptureMatches — source partitioning", () => {
   test("https vs ssh URLs canonicalize equal → sameSource", () => {
     const result = detectCaptureMatches(
       emptyState({
-        skills: [
-          skill("foo", { repo: "git@github.com:alice/foo" }),
-        ],
+        skills: [skill("foo", { repo: "git@github.com:alice/foo" })],
       }),
       pluginManifest("p", [{ type: "skill", name: "foo", path: "skills/foo" }]),
       "https://github.com/alice/foo.git",
@@ -343,7 +344,9 @@ describe("detectCaptureMatches — source partitioning", () => {
     const result = detectCaptureMatches(
       emptyState({
         mcpServers: [
-          mcpStandalone("repo", "postgres", { source: "mcp:github:alice/repo" }),
+          mcpStandalone("repo", "postgres", {
+            source: "mcp:github:alice/repo",
+          }),
         ],
       }),
       pluginManifest("p", [
@@ -368,7 +371,9 @@ describe("detectCaptureMatches — source partitioning", () => {
     const result = detectCaptureMatches(
       emptyState({
         mcpServers: [
-          mcpStandalone("repo-a", "postgres", { source: "mcp:github:alice/repo-a" }),
+          mcpStandalone("repo-a", "postgres", {
+            source: "mcp:github:alice/repo-a",
+          }),
         ],
       }),
       pluginManifest("p", [
@@ -467,7 +472,9 @@ describe("buildCrossSourceHint", () => {
               name: "commit-helper",
               path: "skills/commit-helper",
             },
-            standalone: skill("commit-helper", { repo: "github:alice/commit-helper" }),
+            standalone: skill("commit-helper", {
+              repo: "github:alice/commit-helper",
+            }),
           },
         ],
         mcpServers: [],
@@ -548,7 +555,11 @@ describe("applyCapture", () => {
       skills: [
         {
           kind: "skill",
-          component: { type: "skill", name: "captured", path: "skills/captured" },
+          component: {
+            type: "skill",
+            name: "captured",
+            path: "skills/captured",
+          },
           standalone: initialState.skills[0]!,
         },
       ],

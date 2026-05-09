@@ -1,4 +1,4 @@
-import type { Output, OutputMode, Progress } from "@skilltap/core";
+import type { Output, OutputMode } from "@skilltap/core";
 
 export type CapturedEvent =
   | { kind: "info"; message: string }
@@ -35,7 +35,11 @@ export function createCaptureOutput(mode: OutputMode = "plain"): CaptureOutput {
       events.push({ kind: "success", message });
     },
     block(lines, blockOpts) {
-      events.push({ kind: "block", lines, stream: blockOpts?.stream ?? "stderr" });
+      events.push({
+        kind: "block",
+        lines,
+        stream: blockOpts?.stream ?? "stderr",
+      });
     },
     json(event) {
       events.push({ kind: "json", event });

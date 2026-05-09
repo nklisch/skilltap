@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
-import { Toggle } from "./Toggle";
 import { initialToggleState } from "../state/toggle";
+import { Toggle } from "./Toggle";
 
 describe("Toggle", () => {
   test("renders type selection on step=type", () => {
@@ -16,7 +15,11 @@ describe("Toggle", () => {
   });
 
   test("renders name step heading", () => {
-    const state = { ...initialToggleState, step: "name" as const, type: "skill" as const };
+    const state = {
+      ...initialToggleState,
+      step: "name" as const,
+      type: "skill" as const,
+    };
     const { lastFrame } = render(<Toggle state={state} dispatch={() => {}} />);
     expect(lastFrame()).toContain("skill");
   });

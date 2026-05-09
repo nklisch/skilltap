@@ -1,4 +1,4 @@
-import type { Output, OutputOptions, Progress } from "@skilltap/core";
+import type { Output, OutputOptions } from "@skilltap/core";
 
 export function createJsonOutput(opts: OutputOptions): Output {
   const stdout = opts.stdout ?? process.stdout;
@@ -10,7 +10,9 @@ export function createJsonOutput(opts: OutputOptions): Output {
       stdout.write(`${JSON.stringify({ kind: "warn", message: msg, hint })}\n`);
     },
     error(msg, hint) {
-      stdout.write(`${JSON.stringify({ kind: "error", message: msg, hint })}\n`);
+      stdout.write(
+        `${JSON.stringify({ kind: "error", message: msg, hint })}\n`,
+      );
     },
     success() {},
     block() {},
@@ -21,13 +23,19 @@ export function createJsonOutput(opts: OutputOptions): Output {
       stdout.write(`${JSON.stringify({ kind: "progress:start", label })}\n`);
       return {
         update(msg) {
-          stdout.write(`${JSON.stringify({ kind: "progress:update", label, message: msg })}\n`);
+          stdout.write(
+            `${JSON.stringify({ kind: "progress:update", label, message: msg })}\n`,
+          );
         },
         succeed(msg) {
-          stdout.write(`${JSON.stringify({ kind: "progress:done", label, message: msg })}\n`);
+          stdout.write(
+            `${JSON.stringify({ kind: "progress:done", label, message: msg })}\n`,
+          );
         },
         fail(msg) {
-          stdout.write(`${JSON.stringify({ kind: "progress:fail", label, message: msg })}\n`);
+          stdout.write(
+            `${JSON.stringify({ kind: "progress:fail", label, message: msg })}\n`,
+          );
         },
         pause() {},
         resume() {},

@@ -25,7 +25,8 @@ export function createTtyOutput(opts: OutputOptions): Output {
       stdout.write(`${ansi.green("✓")} ${msg}\n`);
     },
     block(lines, blockOpts) {
-      const out = (blockOpts?.stream ?? "stderr") === "stdout" ? stdout : stderr;
+      const out =
+        (blockOpts?.stream ?? "stderr") === "stdout" ? stdout : stderr;
       out.write(`${lines.join("\n")}\n`);
     },
     json() {},

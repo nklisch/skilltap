@@ -55,11 +55,11 @@ function spawnSelfDetached(args: string[]): void {
   }
 }
 
+import { createOutput } from "./output";
 // ─── Footer bar ──────────────────────────────────────────────────────────────
 // Persistent hint bar at the bottom of the terminal. Invisible when idle,
 // auto-updates when any prompt is active. No-op on non-TTY.
 import { footer } from "./ui/footer";
-import { createOutput } from "./output";
 
 footer().open();
 
@@ -115,7 +115,10 @@ async function runV1DetectionNotice(): Promise<void> {
     if (await stateFile.exists()) return;
     const out = createOutput({ json: false, quiet: false });
     out.block(
-      ["↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.", ""],
+      [
+        "↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.",
+        "",
+      ],
       { stream: "stderr" },
     );
   } catch {
@@ -254,10 +257,15 @@ async function runStartupUpdateCheck(): Promise<void> {
   // Major releases are never auto-updated — always just notify
   if (autoUpdateCoversType && isCompiledBinary()) {
     const out = createOutput({ json: false, quiet: false });
-    out.block([`⟳  Auto-updating skilltap ${current} → ${latest} (${type})…`], { stream: "stderr" });
+    out.block([`⟳  Auto-updating skilltap ${current} → ${latest} (${type})…`], {
+      stream: "stderr",
+    });
     const installResult = await downloadAndInstall(latest);
     if (installResult.ok) {
-      out.block([`✓  Updated to v${latest}. Changes take effect next run.`, ""], { stream: "stderr" });
+      out.block(
+        [`✓  Updated to v${latest}. Changes take effect next run.`, ""],
+        { stream: "stderr" },
+      );
     } else {
       // Update failed — fall through to notify instead
       printUpdateNotice(current, latest, type);
@@ -298,7 +306,10 @@ function printSkillUpdateNotice(names: string[]): void {
     names.length === 1 ? "1 skill update" : `${names.length} skill updates`;
   const out = createOutput({ json: false, quiet: false });
   out.block(
-    [`${DIM}↑  ${count} available${nameList}. Run: skilltap update${RESET}`, ""],
+    [
+      `${DIM}↑  ${count} available${nameList}. Run: skilltap update${RESET}`,
+      "",
+    ],
     { stream: "stderr" },
   );
 }
@@ -405,8 +416,10 @@ const main = defineCommand({
   },
   subCommands: {
     status: () => import("./commands/status").then((m) => m.default),
-    install: () => import("./commands/install/index").then((m) => m.installCommand),
-    remove: () => import("./commands/remove/index").then((m) => m.removeCommand),
+    install: () =>
+      import("./commands/install/index").then((m) => m.installCommand),
+    remove: () =>
+      import("./commands/remove/index").then((m) => m.removeCommand),
     update: () => import("./commands/update").then((m) => m.default),
     find: () => import("./commands/find").then((m) => m.default),
     create: () => import("./commands/create").then((m) => m.default),

@@ -17,7 +17,10 @@
  */
 
 import { $ } from "bun";
-import { canonicalizeSourceKey, removeSkillFromManifest } from "../manifest/update";
+import {
+  canonicalizeSourceKey,
+  removeSkillFromManifest,
+} from "../manifest/update";
 import { skillDisabledDir } from "../paths";
 import type { InstalledSkill } from "../schemas/installed";
 import type {
@@ -25,9 +28,9 @@ import type {
   PluginMcpComponent,
   PluginSkillComponent,
 } from "../schemas/plugin";
-import type { State, StoredMcpStandalone } from "../state/schema";
 import { loadState } from "../state/load";
 import { saveState } from "../state/save";
+import type { State, StoredMcpStandalone } from "../state/schema";
 import { removeAgentSymlinks } from "../symlink";
 import { err, ok, type Result, UserError } from "../types";
 import { parseNamespacedKey, removeMcpServers } from "./mcp-inject";
@@ -207,7 +210,10 @@ export function detectCaptureMatches(
 }
 
 /** Concatenates two buckets. Used after a force-override decision. */
-export function mergeBuckets(a: CaptureBucket, b: CaptureBucket): CaptureBucket {
+export function mergeBuckets(
+  a: CaptureBucket,
+  b: CaptureBucket,
+): CaptureBucket {
   return {
     skills: [...a.skills, ...b.skills],
     mcpServers: [...a.mcpServers, ...b.mcpServers],
@@ -229,7 +235,9 @@ export function buildCrossSourceHint(
   pluginRepo: string | null,
 ): string {
   const lines: string[] = [];
-  const pluginLabel = pluginRepo ? canonicalizeSourceKey(pluginRepo) : "(no repo)";
+  const pluginLabel = pluginRepo
+    ? canonicalizeSourceKey(pluginRepo)
+    : "(no repo)";
 
   for (const c of crossSource.skills) {
     const standaloneLabel = c.standalone.repo

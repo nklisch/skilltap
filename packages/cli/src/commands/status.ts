@@ -2,8 +2,8 @@ import type { DiscoveredSkill, Output, StatusReport } from "@skilltap/core";
 import { discoverSkills, gatherStatus } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, table, termWidth, truncate } from "../ui/format";
-import { setupOutput } from "../ui/setup";
 import { tryFindProjectRoot } from "../ui/resolve";
+import { setupOutput } from "../ui/setup";
 
 export default defineCommand({
   meta: {
@@ -48,7 +48,11 @@ export default defineCommand({
 
     // Filter modes: --unmanaged, --disabled, --active
     if (args.unmanaged) {
-      return runUnmanagedMode(out, args as { global: boolean; project: boolean; json: boolean }, projectRoot);
+      return runUnmanagedMode(
+        out,
+        args as { global: boolean; project: boolean; json: boolean },
+        projectRoot,
+      );
     }
 
     const result = await gatherStatus();
@@ -116,7 +120,9 @@ function renderStatus(out: Output, report: StatusReport): void {
   const projectLabel = report.projectRoot
     ? `${ansi.bold(`project: ${shorten(report.projectRoot)}`)}${ansi.dim(report.hasManifest ? " (manifest)" : " (no manifest)")}`
     : ansi.bold("global (no project root)");
-  out.raw(`\n${ansi.bold("skilltap status")} ${ansi.dim("—")} ${projectLabel}\n\n`);
+  out.raw(
+    `\n${ansi.bold("skilltap status")} ${ansi.dim("—")} ${projectLabel}\n\n`,
+  );
 
   // ── Scope + targets ──────────────────────────────────────────────────────
   out.raw(`${ansi.dim("Scope:")} ${report.scope}\n`);
@@ -146,7 +152,9 @@ function renderStatus(out: Output, report: StatusReport): void {
         : ansi.dim("(local)");
       const alsoText =
         skill.also.length > 0 ? ansi.dim(` [${skill.also.join(", ")}]`) : "";
-      out.raw(`  ${flag} ${skill.name} ${ansi.dim(skill.scope)}${alsoText} ${sourceText}\n`);
+      out.raw(
+        `  ${flag} ${skill.name} ${ansi.dim(skill.scope)}${alsoText} ${sourceText}\n`,
+      );
     }
     out.raw("\n");
   }
@@ -155,7 +163,9 @@ function renderStatus(out: Output, report: StatusReport): void {
   if (report.plugins.length === 0) {
     out.raw(`${ansi.dim("Plugins:")} ${ansi.dim("(none)")}\n\n`);
   } else {
-    out.raw(`${ansi.bold(`Plugins`)} ${ansi.dim(`(${report.plugins.length})`)}\n`);
+    out.raw(
+      `${ansi.bold(`Plugins`)} ${ansi.dim(`(${report.plugins.length})`)}\n`,
+    );
     for (const plugin of report.plugins) {
       const flag = plugin.active ? ansi.green("✓") : ansi.dim("✗");
       const sourceText = plugin.source

@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
-import { Find } from "./Find";
 import { initialFindState } from "../state/find";
+import { Find } from "./Find";
 
 describe("Find", () => {
   test("renders search prompt when query is empty", () => {
@@ -24,7 +23,12 @@ describe("Find", () => {
       ...initialFindState,
       query: "foo",
       results: [
-        { name: "foo-skill", description: "a skill", source: "github.com", type: "skill" as const },
+        {
+          name: "foo-skill",
+          description: "a skill",
+          source: "github.com",
+          type: "skill" as const,
+        },
       ],
     };
     const { lastFrame } = render(<Find state={state} dispatch={() => {}} />);
@@ -48,7 +52,12 @@ describe("Find", () => {
       ...initialFindState,
       query: "foo",
       results: [
-        { name: "foo-skill", description: "my desc", source: "tap:core", type: "skill" as const },
+        {
+          name: "foo-skill",
+          description: "my desc",
+          source: "tap:core",
+          type: "skill" as const,
+        },
       ],
       selectedIndex: 0,
     };

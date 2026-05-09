@@ -268,7 +268,11 @@ async function runSecurityScan(
       p?.succeed();
       allWarnings.push(...scanResult.value);
       if (onWarnings) {
-        const proceed = await onWarnings(scanResult.value, "skill-static", skill.name);
+        const proceed = await onWarnings(
+          scanResult.value,
+          "skill-static",
+          skill.name,
+        );
         if (!proceed) return err(new UserError("Install cancelled."));
       }
     } else {
@@ -583,10 +587,11 @@ export async function installSkill(
                   also,
                   skipScan: options.skipScan,
                   onWarnings: options.onWarnings
-                    ? async (w, n) => options.onWarnings!(w, "plugin-static", n)
+                    ? async (w, n) =>
+                        options.onWarnings?.(w, "plugin-static", n)
                     : undefined,
                   onConfirm: options.onConfirmInstall
-                    ? async (m) => options.onConfirmInstall!("plugin", m)
+                    ? async (m) => options.onConfirmInstall?.("plugin", m)
                     : undefined,
                   onCaptureConfirm: options.onPluginCaptureConfirm,
                   onCaptureConflict: options.onPluginCaptureConflict,
@@ -746,10 +751,10 @@ export async function installSkill(
             also,
             skipScan: options.skipScan,
             onWarnings: options.onWarnings
-              ? async (w, n) => options.onWarnings!(w, "plugin-static", n)
+              ? async (w, n) => options.onWarnings?.(w, "plugin-static", n)
               : undefined,
             onConfirm: options.onConfirmInstall
-              ? async (m) => options.onConfirmInstall!("plugin", m)
+              ? async (m) => options.onConfirmInstall?.("plugin", m)
               : undefined,
             onCaptureConfirm: options.onPluginCaptureConfirm,
             onCaptureConflict: options.onPluginCaptureConflict,
@@ -934,8 +939,7 @@ export async function installSkill(
     // 8. Build and execute placements
     const isStandalone =
       scanned.length === 1 && scanned[0]?.path === contentDir;
-    const sourceKey =
-      resolved.adapter === "npm" ? effectiveSource : undefined;
+    const sourceKey = resolved.adapter === "npm" ? effectiveSource : undefined;
     const now = new Date().toISOString();
 
     // For placement strategy: local git repos use the git cache path (not the npm copy path)

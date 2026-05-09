@@ -1,10 +1,10 @@
 import { confirm } from "@clack/prompts";
 import { loadPlugins, removeInstalledPlugin } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { setupOutput } from "../../ui/setup";
 import { ansi } from "../../ui/format";
 import { componentSummary } from "../../ui/plugin-format";
 import { tryFindProjectRoot } from "../../ui/resolve";
+import { setupOutput } from "../../ui/setup";
 
 export const pluginRemoveCommand = defineCommand({
   meta: {

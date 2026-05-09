@@ -17,19 +17,16 @@ async function runSecurity(
   args: string[],
   configDir: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "config", "security", ...args],
-    {
-      cwd: CLI_DIR,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        XDG_CONFIG_HOME: configDir,
-      },
+  const proc = Bun.spawn([...cliCmd(), "config", "security", ...args], {
+    cwd: CLI_DIR,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      XDG_CONFIG_HOME: configDir,
     },
-  );
+  });
   const exitCode = await proc.exited;
   const stdout = await new Response(proc.stdout).text();
   const stderr = await new Response(proc.stderr).text();
@@ -37,37 +34,31 @@ async function runSecurity(
 }
 
 async function runGet(key: string, configDir: string): Promise<string> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "config", "get", key],
-    {
-      cwd: CLI_DIR,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        XDG_CONFIG_HOME: configDir,
-      },
+  const proc = Bun.spawn([...cliCmd(), "config", "get", key], {
+    cwd: CLI_DIR,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      XDG_CONFIG_HOME: configDir,
     },
-  );
+  });
   await proc.exited;
   return (await new Response(proc.stdout).text()).trim();
 }
 
 async function runGetJson(key: string, configDir: string): Promise<unknown> {
-  const proc = Bun.spawn(
-    [...cliCmd(), "config", "get", key, "--json"],
-    {
-      cwd: CLI_DIR,
-      stdin: "pipe",
-      stdout: "pipe",
-      stderr: "pipe",
-      env: {
-        ...process.env,
-        XDG_CONFIG_HOME: configDir,
-      },
+  const proc = Bun.spawn([...cliCmd(), "config", "get", key, "--json"], {
+    cwd: CLI_DIR,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env: {
+      ...process.env,
+      XDG_CONFIG_HOME: configDir,
     },
-  );
+  });
   await proc.exited;
   return JSON.parse(await new Response(proc.stdout).text());
 }

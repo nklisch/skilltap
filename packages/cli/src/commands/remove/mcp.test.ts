@@ -121,7 +121,9 @@ describe("remove mcp — happy path", () => {
       const after = await loadState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
-      expect(after.value.mcpServers.find((m) => m.name === namespacedKey)).toBeUndefined();
+      expect(
+        after.value.mcpServers.find((m) => m.name === namespacedKey),
+      ).toBeUndefined();
 
       // Namespaced key gone from agent settings.
       const settingsAfter = JSON.parse(

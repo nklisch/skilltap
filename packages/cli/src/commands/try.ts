@@ -9,7 +9,11 @@ import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
 import { setupOutput } from "../ui/setup";
 
-const VALID_TRY_TYPES = ["skill", "plugin", "mcp"] as const satisfies readonly TryType[];
+const VALID_TRY_TYPES = [
+  "skill",
+  "plugin",
+  "mcp",
+] as const satisfies readonly TryType[];
 
 export default defineCommand({
   meta: {
@@ -107,7 +111,9 @@ function reportToJson(report: TryReport): unknown {
 }
 
 function renderTry(out: Output, report: TryReport): void {
-  out.info(`\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n`);
+  out.info(
+    `\n${ansi.bold("skilltap try")} ${ansi.dim("—")} ${report.source}\n`,
+  );
   out.info(
     `${ansi.dim("Resolved:")} ${report.resolved.url}${report.resolved.ref ? ansi.dim(`@${report.resolved.ref}`) : ""}`,
   );
@@ -135,9 +141,7 @@ function renderTry(out: Output, report: TryReport): void {
   }
 
   if (report.skills.length > 0) {
-    out.info(
-      `${ansi.bold("Skills")} ${ansi.dim(`(${report.skills.length})`)}`,
-    );
+    out.info(`${ansi.bold("Skills")} ${ansi.dim(`(${report.skills.length})`)}`);
     for (const skill of report.skills) {
       const desc = skill.description ? ansi.dim(` — ${skill.description}`) : "";
       out.info(`  ${skill.name}${desc}`);
@@ -158,13 +162,13 @@ function renderTry(out: Output, report: TryReport): void {
     for (const w of report.warnings) {
       const lineLabel =
         typeof w.line === "number" && w.line > 0 ? `:${w.line}` : "";
-      out.info(
-        `  ${ansi.yellow(w.category)} ${w.file}${lineLabel}`,
-      );
+      out.info(`  ${ansi.yellow(w.category)} ${w.file}${lineLabel}`);
     }
     out.info("");
   }
 
   out.info(`${ansi.dim("This was a preview. Nothing was installed.")}`);
-  out.info(`${ansi.dim(`To install: skilltap install ${report.type} `)}${report.source}`);
+  out.info(
+    `${ansi.dim(`To install: skilltap install ${report.type} `)}${report.source}`,
+  );
 }

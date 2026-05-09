@@ -253,7 +253,11 @@ export function migrateV1Config(
   // ── [registry] — preserve enabled/sources, drop allow_npm silently. ─────
   const registry: Record<string, unknown> = {};
   const v1Registry = v1.registry;
-  if (v1Registry && typeof v1Registry === "object" && !Array.isArray(v1Registry)) {
+  if (
+    v1Registry &&
+    typeof v1Registry === "object" &&
+    !Array.isArray(v1Registry)
+  ) {
     const r = v1Registry as Record<string, unknown>;
     if (Array.isArray(r.enabled)) registry.enabled = r.enabled;
     if (Array.isArray(r.sources)) registry.sources = r.sources;

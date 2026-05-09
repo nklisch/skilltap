@@ -116,7 +116,14 @@ describe("createClaudeCodeScanner", () => {
 
     test("returns plugins with sourceUrl null when known_marketplaces.json is missing", async () => {
       const pluginsDir = join(tmpDir, "plugins");
-      const cacheDir = join(tmpDir, "plugins", "cache", "my-marketplace", "my-plugin", "1.0.0");
+      const cacheDir = join(
+        tmpDir,
+        "plugins",
+        "cache",
+        "my-marketplace",
+        "my-plugin",
+        "1.0.0",
+      );
       await mkdir(pluginsDir, { recursive: true });
       await mkdir(cacheDir, { recursive: true });
       await makeClaudePlugin(cacheDir, "my-plugin");
@@ -285,17 +292,43 @@ describe("createClaudeCodeScanner", () => {
     test("parses real-world fixture shape (3 plugins, mixed scopes)", async () => {
       // Mirror of actual installed_plugins.json from this machine
       const pluginsDir = join(tmpDir, "plugins");
-      const frontendDesignDir = join(tmpDir, "plugins", "cache", "claude-code-plugins", "frontend-design", "1.0.0");
-      const workflowDir = join(tmpDir, "plugins", "cache", "nklisch-skills", "workflow", "1.4.0");
-      const pluginDevDir = join(tmpDir, "plugins", "cache", "claude-code-plugins", "plugin-dev", "0.1.0");
+      const frontendDesignDir = join(
+        tmpDir,
+        "plugins",
+        "cache",
+        "claude-code-plugins",
+        "frontend-design",
+        "1.0.0",
+      );
+      const workflowDir = join(
+        tmpDir,
+        "plugins",
+        "cache",
+        "nklisch-skills",
+        "workflow",
+        "1.4.0",
+      );
+      const pluginDevDir = join(
+        tmpDir,
+        "plugins",
+        "cache",
+        "claude-code-plugins",
+        "plugin-dev",
+        "0.1.0",
+      );
       const projectPath = join(tmpDir, "agent-box");
       await mkdir(pluginsDir, { recursive: true });
       await mkdir(frontendDesignDir, { recursive: true });
       await mkdir(workflowDir, { recursive: true });
       await mkdir(pluginDevDir, { recursive: true });
       await mkdir(projectPath, { recursive: true });
-      await makeClaudePlugin(frontendDesignDir, "frontend-design", ["design-system"]);
-      await makeClaudePlugin(workflowDir, "workflow", ["principles", "implement-orchestrator"]);
+      await makeClaudePlugin(frontendDesignDir, "frontend-design", [
+        "design-system",
+      ]);
+      await makeClaudePlugin(workflowDir, "workflow", [
+        "principles",
+        "implement-orchestrator",
+      ]);
       await makeClaudePlugin(pluginDevDir, "plugin-dev");
 
       await Bun.write(
@@ -342,7 +375,11 @@ describe("createClaudeCodeScanner", () => {
         JSON.stringify({
           "claude-code-plugins": {
             source: { source: "github", repo: "anthropics/claude-code" },
-            installLocation: join(tmpDir, "marketplaces", "claude-code-plugins"),
+            installLocation: join(
+              tmpDir,
+              "marketplaces",
+              "claude-code-plugins",
+            ),
             lastUpdated: "2026-05-08T17:38:01.451Z",
           },
           "nklisch-skills": {
@@ -360,12 +397,16 @@ describe("createClaudeCodeScanner", () => {
       if (!result.ok) return;
       expect(result.value).toHaveLength(3);
 
-      const frontendDesign = result.value.find((p) => p.name === "frontend-design");
+      const frontendDesign = result.value.find(
+        (p) => p.name === "frontend-design",
+      );
       expect(frontendDesign).toBeDefined();
       expect(frontendDesign!.scope).toBe("global");
       expect(frontendDesign!.marketplaceName).toBe("claude-code-plugins");
       expect(frontendDesign!.sourceUrl).toBe("github:anthropics/claude-code");
-      expect(frontendDesign!.sha).toBe("6aadfbdca2c29f498f579509a56000e4e8daaf90");
+      expect(frontendDesign!.sha).toBe(
+        "6aadfbdca2c29f498f579509a56000e4e8daaf90",
+      );
 
       const pluginDev = result.value.find((p) => p.name === "plugin-dev");
       expect(pluginDev).toBeDefined();

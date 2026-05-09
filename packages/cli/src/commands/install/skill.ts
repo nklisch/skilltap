@@ -1,22 +1,17 @@
 import { outro } from "@clack/prompts";
-import {
-  installSkill,
-  skillInstallDir,
-  updateSkill,
-} from "@skilltap/core";
+import { installSkill, skillInstallDir, updateSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
-import { componentSummary } from "../../ui/plugin-format";
 import { inferAdapter, sendEvent, telemetryBase } from "../../telemetry";
-import { buildSourceCallbacks, setupInstallContext } from "./shared";
+import { componentSummary } from "../../ui/plugin-format";
 import type { SharedInstallArgs } from "./shared";
+import { buildSourceCallbacks, setupInstallContext } from "./shared";
 
 export const skillCommand = defineCommand({
   meta: { name: "skill", description: "Install a skill" },
   args: {
     source: {
       type: "positional",
-      description:
-        "Git URL, github:owner/repo, tap skill name, or local path",
+      description: "Git URL, github:owner/repo, tap skill name, or local path",
       required: true,
     },
     scope: {
@@ -78,10 +73,11 @@ async function runInstallSkill(
   args: SharedInstallArgs & { source: string },
   rawArgs: readonly string[],
 ): Promise<void> {
-  const sources = (args as any)._ as string[];
+  const sources = (args as unknown as { _: string[] })._;
 
   const ctx = await setupInstallContext(args, rawArgs);
-  const { out, config, policy, scope, projectRoot, also, runSemantic, agent } = ctx;
+  const { out, config, policy, scope, projectRoot, also, runSemantic, agent } =
+    ctx;
 
   const errors: { source: string; message: string; hint?: string }[] = [];
 
@@ -95,7 +91,11 @@ async function runInstallSkill(
       process.exit(1);
     }
 
-    const { progress: p, logScanResults, installOptions } = buildSourceCallbacks(ctx, source);
+    const {
+      progress: p,
+      logScanResults,
+      installOptions,
+    } = buildSourceCallbacks(ctx, source);
 
     const result = await installSkill(source, {
       scope,

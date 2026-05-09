@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { render } from "ink-testing-library";
-import React from "react";
-import { Dashboard } from "./Dashboard";
 import { initialDashboardState } from "../state/dashboard";
+import { Dashboard } from "./Dashboard";
 
 describe("Dashboard", () => {
   test("renders all tab labels", () => {
     const { lastFrame } = render(
-      <Dashboard state={initialDashboardState} dispatch={() => {}} data={null} />,
+      <Dashboard
+        state={initialDashboardState}
+        dispatch={() => {}}
+        data={null}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("Installed");
@@ -18,7 +21,11 @@ describe("Dashboard", () => {
 
   test("renders footer with key hints", () => {
     const { lastFrame } = render(
-      <Dashboard state={initialDashboardState} dispatch={() => {}} data={null} />,
+      <Dashboard
+        state={initialDashboardState}
+        dispatch={() => {}}
+        data={null}
+      />,
     );
     const frame = lastFrame() ?? "";
     expect(frame).toContain("quit");
@@ -36,7 +43,11 @@ describe("Dashboard", () => {
   test("renders data items when provided", () => {
     const data = [{ name: "my-skill", source: "github.com/user/repo" }];
     const { lastFrame } = render(
-      <Dashboard state={initialDashboardState} dispatch={() => {}} data={data} />,
+      <Dashboard
+        state={initialDashboardState}
+        dispatch={() => {}}
+        data={data}
+      />,
     );
     expect(lastFrame()).toContain("my-skill");
   });

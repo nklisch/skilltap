@@ -40,14 +40,21 @@ export const skillRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const { out, config, projectRoot, scope: ctxScope, scopeProvided } =
-      await setupRemoveContext(args);
+    const {
+      out,
+      config,
+      projectRoot,
+      scope: ctxScope,
+      scopeProvided,
+    } = await setupRemoveContext(args);
     const globalResult = await loadSkillState();
     if (!globalResult.ok) {
       out.error(globalResult.error.message);
       process.exit(1);
     }
-    const projectResult = projectRoot ? await loadSkillState(projectRoot) : null;
+    const projectResult = projectRoot
+      ? await loadSkillState(projectRoot)
+      : null;
     const allSkills: InstalledSkill[] = [
       ...globalResult.value.skills,
       ...(projectResult?.ok ? projectResult.value.skills : []),

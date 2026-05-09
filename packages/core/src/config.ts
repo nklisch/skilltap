@@ -78,7 +78,11 @@ export async function loadConfigIfExists(): Promise<Result<Config>> {
     );
   }
 
-  return parseWithResult(ConfigSchema, raw as Record<string, unknown>, "config.toml");
+  return parseWithResult(
+    ConfigSchema,
+    raw as Record<string, unknown>,
+    "config.toml",
+  );
 }
 
 export async function loadConfig(): Promise<Result<Config>> {
@@ -125,7 +129,11 @@ export async function loadConfig(): Promise<Result<Config>> {
     );
   }
 
-  return parseWithResult(ConfigSchema, raw as Record<string, unknown>, "config.toml");
+  return parseWithResult(
+    ConfigSchema,
+    raw as Record<string, unknown>,
+    "config.toml",
+  );
 }
 
 // Returns the name of the first legacy marker found, or null if none.
