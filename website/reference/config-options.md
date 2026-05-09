@@ -1,5 +1,5 @@
 ---
-description: Complete reference for ~/.config/skilltap/config.toml. All options, defaults, and policy composition rules for install, update, security, and agent mode.
+description: Complete reference for ~/.config/skilltap/config.toml. All options, defaults, and policy composition rules for install, update, and security.
 ---
 
 # Configuration Reference
@@ -53,34 +53,32 @@ CLI flags always override config: `--project` overrides `scope`, `--yes` overrid
 
 ## `[security]`
 
-Shared security scanning settings plus per-mode (human/agent) configuration. Configure via `skilltap config security` (interactive wizard or flags).
-
-### Shared Settings
+Single flat security block. Configure via `skilltap config security` (interactive wizard or flags).
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `scan` | `"static"` \| `"semantic"` \| `"off"` | `"static"` | Scan mode. `"static"` runs the built-in pattern detectors; `"semantic"` adds an LLM review pass; `"off"` disables scanning. |
+| `on_warn` | `"prompt"` \| `"fail"` \| `"allow"` | `"prompt"` | What to do when warnings are found. `"prompt"` asks; `"fail"` aborts the install; `"allow"` logs and proceeds. |
+| `require_scan` | boolean | `false` | When `true`, blocks `--skip-scan`. |
 | `agent_cli` | string | `""` | Agent CLI for semantic scanning. Values: `"claude"`, `"gemini"`, `"codex"`, `"opencode"`, `"ollama"`, or an absolute path. Empty = prompt on first use. |
 | `threshold` | integer 0-10 | `5` | Risk threshold for semantic scan. Chunks scoring at or above this value are flagged. |
 | `max_size` | integer (bytes) | `51200` | Max total skill directory size before warning. Default is 50 KB. |
 | `ollama_model` | string | `""` | Model name when using the Ollama adapter. Required when `agent_cli = "ollama"`. |
+| `overrides` | array of tables | `[]` | Per-source trust overrides (see below). |
 
-### Per-Mode Settings: `[security.human]` / `[security.agent]`
-
-| Option | Type | Human Default | Agent Default | Description |
-|--------|------|---------------|---------------|-------------|
-| `scan` | `"static"` \| `"semantic"` \| `"off"` | `"static"` | `"static"` | Scan mode. |
-| `on_warn` | `"prompt"` \| `"fail"` \| `"allow"` | `"prompt"` | `"fail"` | What to do when warnings are found. `"allow"` logs but proceeds. |
-| `require_scan` | boolean | `false` | `true` | When `true`, blocks `--skip-scan`. |
+::: info v2.0 redesign
+The pre-v2.0 `[security.human]` / `[security.agent]` per-mode split was removed. There is now one set of security settings; the same rules apply to interactive use, scripted use (`--yes`), and machine output (`--json`). Run `skilltap migrate` to translate any legacy per-mode config.
+:::
 
 ### Trust Tier Overrides: `[[security.overrides]]`
 
-Override security per source. Named tap overrides take priority over source-type overrides.
+Each entry overrides security for one source. Named tap overrides take priority over source-type overrides; first match wins.
 
 | Option | Type | Description |
 |--------|------|-------------|
 | `match` | string | Tap name or source type (`tap`, `git`, `npm`, `local`) |
 | `kind` | `"tap"` \| `"source"` | What `match` refers to |
-| `preset` | `"none"` \| `"relaxed"` \| `"standard"` \| `"strict"` | Security preset to apply |
+| `preset` | `"none"` \| `"relaxed"` \| `"standard"` \| `"strict"` | Security preset to apply for this tier |
 
 ### Presets
 
@@ -95,19 +93,12 @@ Override security per source. Named tap overrides take priority over source-type
 
 ```toml
 [security]
+scan = "static"
+on_warn = "prompt"
+require_scan = false
 agent_cli = "claude"
 threshold = 5
 max_size = 51200
-
-[security.human]
-scan = "semantic"
-on_warn = "fail"
-require_scan = true
-
-[security.agent]
-scan = "static"
-on_warn = "fail"
-require_scan = true
 
 [[security.overrides]]
 match = "my-company-tap"
@@ -130,71 +121,19 @@ All agents are invoked without tool access -- they can only produce text output,
 
 ---
 
-## `[agent-mode]`
+## Non-interactive use (replaces v0.x agent mode)
 
-Agent mode settings. When enabled, all skilltap commands become non-interactive. Three ways to enter agent mode (highest precedence first):
+The `--agent` flag, `SKILLTAP_AGENT=1` env var, `[agent-mode]` config block, and `skilltap config agent-mode` subcommand were all removed in the v2.0 redesign. There is no persistent "agent mode" config.
 
-1. **Per-invocation flag**: `skilltap install foo --agent`
-2. **Environment variable**: `SKILLTAP_AGENT=1 skilltap install foo`
-3. **Persistent config**: `skilltap config agent-mode` (interactive wizard, sets `enabled = true` below)
+For scripts, CI, and AI-agent invocations, use per-command flags:
 
-The flag and env var are recommended for CI / scripts because they don't leak persistent config state. The config block remains for users who always want agent mode in a given environment.
+| Mechanism | Effect |
+|-----------|--------|
+| Pipe stdout (no TTY) | Auto-detects non-interactive use; output switches to plain text (no spinners, colors, or Unicode decorations). |
+| `--yes` | Auto-confirms prompts. Combine with `[defaults] scope` to skip the scope prompt as well. |
+| `--json` | Emits machine-readable JSON instead of human-readable text. |
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable agent mode. |
-| `scope` | `"global"` \| `"project"` | `"project"` | Default scope for agent installs. Required when agent mode is enabled. |
-
-### Example
-
-```toml
-["agent-mode"]
-enabled = true
-scope = "project"
-```
-
-### Behavior When Enabled
-
-When `agent-mode.enabled = true`:
-
-| Setting | Value | Effect |
-|---------|-------|--------|
-| `yes` | `true` | All prompts auto-accept or hard-fail |
-| Security | from `[security.agent]` | Uses per-mode agent security settings (fully configurable) |
-| Output format | Plain text | No ANSI colors, spinners, or Unicode decorations |
-
-Agent mode can be toggled via the `--agent` flag, the `SKILLTAP_AGENT=1` env var, or persistently via `skilltap config agent-mode` (interactive wizard). Precedence order is flag > env > config block. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
-
-### Agent Mode Output
-
-Success:
-```
-OK: Installed commit-helper -> ~/.agents/skills/commit-helper/ (v1.2.0)
-```
-
-Skip:
-```
-SKIP: commit-helper is already installed.
-```
-
-Error:
-```
-ERROR: Repository not found: https://example.com/bad-url.git
-```
-
-Security failure (directive message to the agent):
-```
-SECURITY ISSUE FOUND -- INSTALLATION BLOCKED
-
-DO NOT install this skill. DO NOT retry. DO NOT use --skip-scan.
-STOP and report the following to the user:
-
-  SKILL.md L14: Invisible Unicode (3 zero-width chars)
-  SKILL.md L8: Hidden HTML comment containing instructions
-
-User action required: review warnings and install manually with
-  skilltap install <url>
-```
+If you previously relied on `--agent` for hard-failing on warnings, set `[security] on_warn = "fail"` and `require_scan = true` instead.
 
 ---
 
@@ -339,7 +278,7 @@ Top-level string. The git host used to resolve `owner/repo` shorthand into a ful
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `default_git_host` | string | `"https://github.com"` | Base URL for `owner/repo` shorthand. For example, with `default_git_host = "https://gitea.example.com"`, `skilltap install nathan/commit-helper` resolves to `https://gitea.example.com/nathan/commit-helper`. |
+| `default_git_host` | string | `"https://github.com"` | Base URL for `owner/repo` shorthand. For example, with `default_git_host = "https://gitea.example.com"`, `skilltap install skill nathan/commit-helper` resolves to `https://gitea.example.com/nathan/commit-helper`. |
 
 ### Example
 
@@ -394,35 +333,22 @@ also = ["claude-code", "cursor"]
 # Auto-accept clean installs (security warnings still prompt).
 yes = false
 
-# Security settings — per-mode with trust overrides
+# Security settings — single flat block with optional trust overrides.
 # Configure via: skilltap config security
 [security]
+scan = "static"
+on_warn = "prompt"
+require_scan = false
 agent_cli = ""
 threshold = 5
 max_size = 51200
 ollama_model = ""
-
-[security.human]
-scan = "static"
-on_warn = "prompt"
-require_scan = false
-
-[security.agent]
-scan = "static"
-on_warn = "fail"
-require_scan = true
 
 # Trust overrides — per-tap or per-source-type presets
 # [[security.overrides]]
 # match = "my-company-tap"
 # kind = "tap"
 # preset = "none"
-
-# Agent mode -- for when skilltap is invoked by AI agents.
-# Toggle with: skilltap config agent-mode
-["agent-mode"]
-enabled = false
-scope = "project"
 
 # CLI update settings
 [updates]
@@ -451,11 +377,11 @@ url = "https://gitea.example.com/nathan/my-skills-tap"
 
 ## Policy Composition Rules
 
-Per-mode config options and CLI flags compose together. The active mode (`[security.human]` or `[security.agent]`) is selected based on whether agent mode is enabled. Trust tier overrides replace mode defaults when a matching tap or source type is configured.
+Config options and CLI flags compose into an effective policy per invocation. Trust tier overrides replace the flat-block defaults when a matching tap or source type is configured.
 
 ### Flag Overrides
 
-| Config (active mode) | CLI Flag | Result |
+| Config | CLI Flag | Result |
 |--------|----------|--------|
 | `on_warn = "prompt"` | `--strict` | strict (flag wins) |
 | `on_warn = "fail"` | (none) | strict (config wins) |
@@ -467,23 +393,11 @@ Per-mode config options and CLI flags compose together. The active mode (`[secur
 | `yes = false` | `--yes` | yes (flag wins) |
 | `scope = "global"` | `--project` | project (flag overrides) |
 
-### Agent Mode Behavior
-
-When `agent-mode.enabled = true`:
-
-- `yes` = `true` (all prompts auto-accept or hard-fail)
-- Security uses `[security.agent]` settings (fully configurable)
-- Output is plain text (no ANSI, spinners, or Unicode)
-
-Agent mode can be toggled per-invocation with `--agent`, per-shell with `SKILLTAP_AGENT=1`, or persistently with `skilltap config agent-mode`. Security levels within agent mode are configurable via `skilltap config security --mode agent`.
-
 ### Trust Tier Override Resolution
 
-Override priority: named tap match > source type match > mode default. CLI flags still override on top of trust tier settings.
+Override priority: named tap match > source type match > flat-block default. CLI flags still override on top of trust tier settings.
 
-### Worked Example: Power User
-
-`scan` / `on_warn` / `require_scan` live in the per-mode blocks (`[security.human]` for interactive use, `[security.agent]` for `--agent` / CI). The shared `[security]` block holds keys common to both modes (`agent_cli`, `threshold`, `max_size`, `ollama_model`).
+### Worked Example
 
 ```toml
 [defaults]
@@ -491,17 +405,10 @@ also = ["claude-code", "cursor"]
 yes = true
 scope = "global"
 
-[security.human]
-scan = "semantic"
-on_warn = "fail"
-require_scan = true
-
-[security.agent]
-scan = "semantic"
-on_warn = "fail"
-require_scan = true
-
 [security]
+scan = "semantic"
+on_warn = "fail"
+require_scan = true
 agent_cli = "claude"
 threshold = 3
 max_size = 102400
@@ -510,57 +417,22 @@ max_size = 102400
 With this config:
 
 ```bash
-skilltap install <url>
+skilltap install skill <url>
 # -> auto-select all skills (yes = true)
 # -> scope = global (no prompt)
 # -> symlinks to claude-code + cursor
-# -> Layer 1 + Layer 2 scan (security.human.scan = semantic)
-# -> abort on any warning (security.human.on_warn = fail)
-# -> --skip-scan blocked (security.human.require_scan = true)
+# -> Layer 1 + Layer 2 scan (security.scan = semantic)
+# -> abort on any warning (security.on_warn = fail)
+# -> --skip-scan blocked (security.require_scan = true)
 # -> claude used for semantic scan (security.agent_cli)
 # -> flag chunks scoring >= 3 (security.threshold)
 
-skilltap install <url> --no-strict
+skilltap install skill <url> --no-strict
 # -> same as above but warnings prompt instead of abort
 
-skilltap install <url> --skip-scan
+skilltap install skill <url> --skip-scan
 # -> ERROR: Security scanning is required by config
 
-skilltap install <url> --project
+skilltap install skill <url> --project
 # -> --project overrides scope for this invocation
-```
-
-### Worked Example: Agent Mode
-
-```toml
-[defaults]
-also = ["claude-code"]
-
-[security.human]
-scan = "static"
-
-[security.agent]
-scan = "static"
-on_warn = "fail"           # default for agent mode anyway
-require_scan = true        # default for agent mode anyway
-
-[security]
-agent_cli = "claude"
-
-[agent-mode]
-enabled = true
-scope = "project"
-```
-
-With this config:
-
-```bash
-skilltap install <url>
-# -> auto-select all (forced)
-# -> scope = project (from agent-mode.scope)
-# -> symlinks to claude-code (from defaults.also)
-# -> Layer 1 scan
-# -> any warning = SECURITY ISSUE FOUND directive + exit 1
-# -> --skip-scan blocked (forced)
-# -> plain text output, no colors
 ```

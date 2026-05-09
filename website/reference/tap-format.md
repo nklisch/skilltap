@@ -11,7 +11,7 @@ skilltap also supports [Claude Code marketplace repos](#claude-code-marketplace-
 ## What a Tap Does
 
 - Provides a searchable index of skills across repositories
-- Enables `skilltap install <name>` without remembering full git URLs
+- Enables `skilltap install skill <name>` without remembering full git URLs
 - Powers `skilltap find` search across all configured taps
 - Can be public or private (any git host works)
 
@@ -58,7 +58,7 @@ Each entry in the `plugins` array describes a full plugin — a bundle of skills
 Install a tap plugin with:
 
 ```bash
-skilltap install tap-name/plugin-name
+skilltap install plugin tap-name/plugin-name
 ```
 
 Tap plugins appear in `skilltap find` results with a `[plugin]` badge.
