@@ -90,7 +90,7 @@ const shouldRunStartup =
   !process.argv.slice(2).some((a) => SKIP_STARTUP_ARGS.has(a));
 
 if (shouldRunStartup) {
-  await runV1DetectionNotice();
+  await runLegacyStateDetectionNotice();
   await runStartupUpdateCheck();
   await runStartupSkillUpdateCheck();
   const shouldRunTelemetryNotice = !process.argv
@@ -102,9 +102,9 @@ if (shouldRunStartup) {
   }
 }
 
-// v2.0 soft hint: if v1.0 markers exist (installed.json/plugins.json/v1 config keys)
-// and no state.json exists yet, suggest the user run `skilltap migrate`.
-async function runV1DetectionNotice(): Promise<void> {
+// Legacy-state soft hint: if pre-state.json markers exist and no state.json
+// is present yet, suggest `skilltap migrate`.
+async function runLegacyStateDetectionNotice(): Promise<void> {
   try {
     const { detectV1StateGlobal, hasAnyV1Markers, getStatePath } = await import(
       "@skilltap/core"
@@ -116,7 +116,7 @@ async function runV1DetectionNotice(): Promise<void> {
     const out = createOutput({ json: false, quiet: false });
     out.block(
       [
-        "↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.",
+        "↑  Legacy state detected. Run 'skilltap migrate' to upgrade.",
         "",
       ],
       { stream: "stderr" },

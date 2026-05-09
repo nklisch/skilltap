@@ -10,28 +10,24 @@ Read these before making architectural decisions:
 - docs/SPEC.md — exact behavior, CLI commands, file formats, algorithms, edge cases
 - docs/ARCH.md — module boundaries, tech decisions, data flow
 - docs/UX.md — CLI reference, flag combos, prompt flows
-- docs/ROADMAP.md — phase plan with dependency graph (v0.1–v2.2 done)
-- docs/VISION.md — motivation, design principles, V2 direction
+- docs/ROADMAP.md — current state and deferred work
+- docs/VISION.md — motivation and design principles
 - docs/SECURITY.md — security model
-- docs/PROGRESS.md — autopilot tracking: phase status, decision log, deviations
-- docs/designs/completed/phase-{N}.md — per-phase design docs produced before implementation
 
-## v2.2 conventions
+## Conventions
 
-skilltap shipped a full V2 cutover in v2.2.0. Key conventions:
-
-- **CLI surface**: `install <type> <source>` where type is `skill | plugin | mcp`. No auto-detect. `remove <type> <name>`, `update [type] [name]`, `toggle [type] [name[:component]]`. Removed entirely (no aliases): `link`, `unlink`, `verify`, `enable`, `disable`. Use `adopt`, `doctor`, `toggle`.
-- **Non-interactive**: TTY detection + `--yes` + `--json`. No `--agent` flag, no `SKILLTAP_AGENT` env var, no `[agent]` or `[agent-mode]` config.
+- **CLI surface**: `install <type> <source>` where type is `skill | plugin | mcp`. `remove <type> <name>`, `update [type] [name]`, `toggle [type] [name[:component]]`. `adopt`, `doctor`, `toggle` for adoption / verification / state changes.
+- **Non-interactive**: TTY detection + `--yes` + `--json`. No `--agent` flag, no `SKILLTAP_AGENT` env var.
 - **Flat `[security]` block**: `scan` (`semantic|static|none`), `on_warn` (`prompt|fail|install`), `trust` (glob array matched against tap name or source URL).
 - **`[scanner]` block** (operational, separate from policy): `agent_cli`, `ollama_model`, `threshold`, `max_size`.
-- **`composePolicy`** in `core/src/policy/` is the canonical resolver. No per-mode branching, no preset resolution, no override array.
-- **state.json** is the only state store. Pre-v2.2 configs/state files trigger a hard error pointing at `skilltap migrate`. No silent fallback anywhere.
-- **skilltap.toml + skilltap.lock** project manifest gained `[[mcps]]` + `[[mcps.lock]]` tables in v2.2. Sync reconciles skills, plugins, and mcps.
+- **`composePolicy`** in `core/src/policy/` is the canonical resolver.
+- **state.json** is the only state store. `loadConfig` hard-fails on legacy shapes pointing at `skilltap migrate`.
+- **skilltap.toml + skilltap.lock** carry `[[mcps]]` + `[[mcps.lock]]` tables. Sync reconciles skills, plugins, and mcps.
 - **Smart scope default**: inside a git repo, `install` defaults to `project`; outside, `global`. The inferred scope is reported in the install output.
 - **`Output` interface**: all output goes through `setupOutput(args)` in CLI commands.
-- **HTTP registry adapter removed** — taps are git-only.
+- **Taps are git-only.**
 
-When adding new code, write against `state.json` directly. Don't re-introduce `installed.json` writes or any per-mode agent branching.
+When adding new code, write against `state.json` directly. Do not introduce `installed.json` writes or any per-mode agent branching.
 
 ## Tech Stack
 

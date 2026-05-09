@@ -1,13 +1,11 @@
 /**
  * CLI subprocess tests for `skilltap migrate`.
  *
- * Spec: docs/SPEC.md §v2.0 Migrate Command (lines 3226-3244).
- *
  * Behaviors covered here that aren't in the core unit tests:
  *   - HTTP-tap abort surfaces the offending tap list at the CLI (exit 1).
- *   - Idempotency: re-running migrate after success returns "already on v2.0".
+ *   - Idempotency: re-running migrate after success returns "Already migrated".
  *   - --json output shape on success.
- *   - "Already on v2.0" message when no v1 markers exist.
+ *   - "Already migrated" message when no legacy markers exist.
  *
  * Core-level migration logic (config translation, state merge, .v1.bak
  * renames) is exercised in packages/core/src/migrate/run.test.ts.
@@ -50,10 +48,8 @@ async function freshEnv(): Promise<{
   };
 }
 
-describe("migrate — already on v2.0", () => {
-  test("prints '✓ Already on v2.0' and exits 0 when no v1 markers exist", async () => {
-    // Spec L3232: when no v1 state present, migrate is a no-op success.
-    // migrate.ts L53-58 emits this exact message.
+describe("migrate — already migrated", () => {
+  test("prints '✓ Already migrated' and exits 0 when no legacy markers exist", async () => {
     const env = await freshEnv();
     try {
       const { exitCode, stdout } = await runSkilltap(
@@ -62,18 +58,17 @@ describe("migrate — already on v2.0", () => {
         env.configDir,
       );
       expect(exitCode).toBe(0);
-      expect(stdout).toContain("Already on v2.0");
+      expect(stdout).toContain("Already migrated");
     } finally {
       await env.cleanup();
     }
   });
 });
 
-describe("migrate — HTTP tap abort (Phase 31b)", () => {
-  test("exits 1 with offending tap names listed when v1 config has HTTP taps", async () => {
-    // Spec L3243: "If a v1.0 tap.json references HTTP taps, aborts before
-    // any writes with `Migration aborted: HTTP taps are not supported in
-    // v2.0...`" — surfaces the offending tap list.
+describe("migrate — HTTP tap abort", () => {
+  test("exits 1 with offending tap names listed when legacy config has HTTP taps", async () => {
+    // If a legacy tap config references HTTP taps, migrate aborts before any
+    // writes and surfaces the offending tap list.
     const env = await freshEnv();
     try {
       // Plant a v1 config with HTTP tap entries, plus an installed.json
@@ -200,7 +195,7 @@ describe("migrate — idempotency", () => {
       // First run — should migrate successfully.
       const first = await runSkilltap(["migrate"], env.homeDir, env.configDir);
       expect(first.exitCode).toBe(0);
-      expect(first.stdout).not.toContain("Already on v2.0");
+      expect(first.stdout).not.toContain("Already migrated");
 
       // Verify .v1.bak rename happened.
       const bakExists = await Bun.file(
@@ -213,7 +208,7 @@ describe("migrate — idempotency", () => {
       // Second run — must be the alreadyMigrated path.
       const second = await runSkilltap(["migrate"], env.homeDir, env.configDir);
       expect(second.exitCode).toBe(0);
-      expect(second.stdout).toContain("Already on v2.0");
+      expect(second.stdout).toContain("Already migrated");
     } finally {
       await env.cleanup();
     }

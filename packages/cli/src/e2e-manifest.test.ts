@@ -1,13 +1,5 @@
 /**
- * v2.0 end-to-end test (Phase 38.5).
- *
- * Walks the canonical v2 journey as a real CLI subprocess:
- *   clean init  →  install (writes manifest + lockfile + state)
- *               →  status dashboard
- *               →  doctor (must run cleanly)
- *               →  fresh-clone sync (manifest+lockfile only → reinstalls)
- *               →  migrate (v1 installed.json → v2 state.json)
- *
+ * End-to-end test: manifest, sync, migrate, status, doctor journey.
  * Tests run sequentially and share homeDir/configDir/projectRoot.
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -63,7 +55,7 @@ afterAll(async () => {
   await removeTmpDir(projectRoot);
 });
 
-describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
+describe("E2E — manifest, sync, migrate, status, doctor", () => {
   // ── 1. Fresh project with empty skilltap.toml ────────────────────────────────
 
   test("1. seed a fresh skilltap.toml at project root", async () => {
@@ -109,10 +101,7 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     expect(typeof skillEntries[0]?.sha).toBe("string");
     expect((skillEntries[0]?.sha ?? "").length).toBeGreaterThan(0);
 
-    // Phase 31c-c-2d-1: install writes ONLY to state.json. installed.json
-    // is no longer maintained (it's read-fallback only for unmigrated
-    // v0.x users). CLAUDE.md "v2.1 conventions": "Don't re-introduce
-    // installed.json writes; the dual-write layer was deleted in Refactor 2."
+    // install writes only to state.json.
     const stateText = await readFile(
       join(projectRoot, ".agents", "state.json"),
       "utf8",
@@ -193,7 +182,7 @@ describe("E2E v2 — manifest, sync, migrate, status, doctor", () => {
     }
   });
 
-  // ── 6. migrate — v1 layout → state.json v2 ───────────────────────────────────
+  // ── 6. migrate — legacy layout → state.json ─────────────────────────────────
 
   test("6. migrate converts a v1 installed.json to state.json", async () => {
     const v1Dir = await makeTmpDir();

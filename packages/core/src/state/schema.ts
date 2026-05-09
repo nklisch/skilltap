@@ -26,8 +26,7 @@ export const StoredMcpStandaloneSchema = z.object({
   installedAt: z.iso.datetime(),
 });
 
-// Unified state file for v2.0 — replaces installed.json + plugins.json.
-// Lives at ~/.config/skilltap/state.json (global) and
+// Unified state file. Stored at ~/.config/skilltap/state.json (global) and
 // <projectRoot>/.agents/state.json (project).
 export const StateSchema = z.object({
   version: z.literal(2),

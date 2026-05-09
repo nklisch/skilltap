@@ -15,7 +15,7 @@ _skilltap() {
     'find:Search for skills'
     'create:Create a new skill'
     'doctor:Check environment and state'
-    'migrate:Migrate v0.x setup to v2.x'
+    'migrate:Migrate legacy setup to current state'
     'sync:Show drift between manifest, lockfile, and state'
     'try:Preview a skill, plugin, or MCP without installing'
     'toggle:Toggle a skill, plugin, or component active state'

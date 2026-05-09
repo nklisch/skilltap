@@ -7,7 +7,7 @@ import { setupOutput } from "../ui/setup";
 export default defineCommand({
   meta: {
     name: "migrate",
-    description: "Migrate v1.0 setup to v2.0 (one-shot).",
+    description: "Migrate legacy config and state to current format (one-shot).",
   },
   args: {
     json: {
@@ -51,11 +51,11 @@ export default defineCommand({
     }
 
     if (report.alreadyMigrated) {
-      out.raw(`${ansi.green("✓")} Already on v2.0. Nothing to do.\n`);
+      out.raw(`${ansi.green("✓")} Already migrated. Nothing to do.\n`);
       return;
     }
 
-    out.raw(`\n${ansi.bold("skilltap migrate")} — v1.0 → v2.0\n\n`);
+    out.raw(`\n${ansi.bold("skilltap migrate")} — legacy → state.json\n\n`);
 
     if (report.changes.written.length > 0) {
       out.raw(`${ansi.green("Wrote:")}\n`);

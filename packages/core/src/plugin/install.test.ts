@@ -219,7 +219,7 @@ describe("installPlugin", () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      // Phase 31c-c-2d-1: state.json is the canonical store.
+      // state.json is the canonical store.
       const { getConfigDir } = await import("../config");
       const stateFile = Bun.file(join(getConfigDir(), "state.json"));
       expect(await stateFile.exists()).toBe(true);

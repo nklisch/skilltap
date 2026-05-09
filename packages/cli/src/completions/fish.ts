@@ -17,7 +17,7 @@ complete -c skilltap -n '__fish_use_subcommand' -a update -d 'Update installed s
 complete -c skilltap -n '__fish_use_subcommand' -a find -d 'Search for skills'
 complete -c skilltap -n '__fish_use_subcommand' -a create -d 'Create a new skill'
 complete -c skilltap -n '__fish_use_subcommand' -a doctor -d 'Check environment and state'
-complete -c skilltap -n '__fish_use_subcommand' -a migrate -d 'Migrate v0.x setup to v2.x'
+complete -c skilltap -n '__fish_use_subcommand' -a migrate -d 'Migrate legacy setup to current state'
 complete -c skilltap -n '__fish_use_subcommand' -a sync -d 'Show drift between manifest, lockfile, and state'
 complete -c skilltap -n '__fish_use_subcommand' -a try -d 'Preview a skill, plugin, or MCP without installing'
 complete -c skilltap -n '__fish_use_subcommand' -a toggle -d 'Toggle a skill, plugin, or component active state'

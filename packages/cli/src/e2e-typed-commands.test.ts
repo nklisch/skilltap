@@ -1,15 +1,5 @@
 /**
- * v2.0 Redesign end-to-end test (Phase 46.8).
- *
- * Covers the new CLI surface introduced by the redesign:
- *   - install skill / plugin with typed subcommand
- *   - toggle plugin <name>:<component>
- *   - adopt <path> (replaces link/unlink)
- *   - remove plugin
- *   - status shows installed plugin
- *   - migrate from v0.x fixture
- *   - old removed commands return exit 1 with hints
- *
+ * End-to-end test: typed install/remove/toggle/adopt/migrate subcommands.
  * Uses runSkilltap (pipe mode) from @skilltap/test-utils.
  */
 import {
@@ -80,7 +70,7 @@ async function setupProjectAndRun(
 // Group 1: install skill
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
+describe("E2E — install skill (typed subcommand)", () => {
   test("install skill <path> writes to state.json and succeeds", async () => {
     const skillRepo = await createStandaloneSkillRepo();
     try {
@@ -181,7 +171,7 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
 // Group 2: install plugin
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
+describe("E2E — install plugin (typed subcommand)", () => {
   test("install plugin writes to state.json plugins[]", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
@@ -258,7 +248,7 @@ describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
 // Group 3: toggle plugin <name>:<component>
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — toggle plugin component", () => {
+describe("E2E — toggle plugin component", () => {
   test("toggle plugin <name>:<component> disables and re-enables the component", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
@@ -353,7 +343,7 @@ describe("v2.0 redesign E2E — toggle plugin component", () => {
 // Group 4: adopt <path> (replaces link/unlink)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — adopt external path", () => {
+describe("E2E — adopt external path", () => {
   test("adopt <path> track-in-place records the skill in state.json", async () => {
     const projectRoot = await makeTmpDir();
     await initRepo(projectRoot);
@@ -390,7 +380,7 @@ describe("v2.0 redesign E2E — adopt external path", () => {
 // Group 5: remove plugin
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — remove plugin", () => {
+describe("E2E — remove plugin", () => {
   test("remove plugin drops all components from state.json", async () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
@@ -439,7 +429,7 @@ describe("v2.0 redesign E2E — remove plugin", () => {
 // Group 6: migrate from v0.x fixture
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — migrate from v0.x config", () => {
+describe("E2E — migrate from legacy config", () => {
   test("migrate translates [security.human]/[security.agent] to flat [security]", async () => {
     const v0ConfigDir = await makeTmpDir();
     const v0HomeDir = await makeTmpDir();
@@ -534,7 +524,7 @@ url = "https://github.com/nklisch/skilltap-skills"
 // Group 7: removed commands return errors with hints
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("v2.0 redesign E2E — removed commands exit 1 with hints", () => {
+describe("E2E — removed commands exit 1 with hints", () => {
   test("bare install (no type) exits 1", async () => {
     const { exitCode } = await setupProjectAndRun(["install", "some-skill"]);
     // "some-skill" is neither skill/plugin/mcp — citty routes to unknown subcommand

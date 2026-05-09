@@ -386,11 +386,10 @@ describe("checkSkills", () => {
     ).toBe(false);
   });
 
-  test("--fix removes orphan records from canonical state (Phase 31c-c-2d-1: state.json)", async () => {
+  test("--fix removes orphan records from state.json", async () => {
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });
-    // Phase 31c-c-2d-1: state.json is canonical. Orphan record is now
-    // tracked here; saveSkillState (via --fix) writes here too.
+    // state.json is canonical; saveSkillState (via --fix) writes here.
     const stateFile = join(skilltapDir, "state.json");
     await writeFile(
       stateFile,
