@@ -94,6 +94,7 @@ skilltap install skill ./my-skill                        # local path
 
 skilltap install plugin owner/dev-toolkit
 skilltap install plugin owner/multi-plugin-repo:frontend  # specific plugin in multi-plugin repo
+skilltap install plugin owner/multi-plugin-repo:*         # every publishable plugin from the repo
 
 skilltap install mcp npm:@modelcontextprotocol/server-postgres
 skilltap install mcp ./my-mcp-server
@@ -116,8 +117,13 @@ hint: This source looks like a plugin. Try: skilltap install plugin owner/dev-to
 --ref <ref>    Branch or tag to install
 --yes / -y     Auto-select all skills, auto-accept clean installs
 --strict       Abort on any security warning (exit 1)
---skip-scan    Skip security scanning (blocked if require_scan=true in config)
+--skip-scan    Skip security scanning (use only for trusted sources)
 --semantic     Force Layer 2 semantic scan
+--force-capture
+               Auto-capture matching standalones into the plugin (non-interactive).
+               Plugin install only. Mutually exclusive with --no-capture.
+--no-capture   Disable plugin capture entirely; leave standalones in place.
+               Plugin install only. Mutually exclusive with --force-capture.
 --quiet        Suppress install step details
 --json         Output as JSON
 ```
@@ -164,7 +170,7 @@ skilltap install skill commit-helper@v1.2.0 --scope project --also claude-code
   → resolve from taps, pin to v1.2.0, scope=project, claude-code symlink
 ```
 
-Security scanning is a hard gate — `--yes` does **not** bypass it. `--strict` turns warnings into a hard failure with no prompt. The only way to skip scanning is `--skip-scan`, which is blocked when `require_scan = true` in config.
+Security scanning is a hard gate — `--yes` does **not** bypass it. `--strict` turns warnings into a hard failure with no prompt. The only way to skip scanning is `--skip-scan`, which is intended for sources you already trust (taps that match `security.trust` are auto-trusted without the flag). See [SPEC.md → Security Scanning](./SPEC.md#security-scanning) for the full policy resolution.
 
 ### Prompt Behavior Matrix
 
@@ -227,6 +233,8 @@ When a repo contains multiple skills:
 ```
 $ skilltap install skill https://gitea.example.com/user/termtube
 
+→ scope: project (inferred from cwd)
+
 Found 2 skills in user/termtube:
   [1] termtube-dev        Development workflow for termtube
   [2] termtube-review     Code review checklist for termtube
@@ -237,7 +245,6 @@ Scanning termtube-dev for security issues... ✓ No warnings
 
 Install? (Y/n): y
 ✓ Installed termtube-dev → .agents/skills/termtube-dev/
-  (scope: project, inferred from git repo)
 ```
 
 With `--scope global --yes` (fully non-interactive for clean skills):
@@ -316,6 +323,31 @@ Capture these into the plugin? (Y/n): y
 ```
 
 Cross-source matches (same name, different source) prompt with a warning in TTY mode; error in non-TTY mode.
+
+`--force-capture` and `--no-capture` cover the non-interactive cases:
+
+- `--force-capture` captures every same-source match without prompting (safe for `--yes` automation when you trust the source).
+- `--no-capture` disables capture entirely; standalones stay where they are and the plugin install records its own copies. Useful when you want to keep the standalones independent.
+- The two flags are mutually exclusive — passing both is a CLI error.
+
+### Multi-Plugin Sources
+
+A repo can publish more than one plugin via multiple `.skilltap/<name>.toml` manifests with `publish = true`. Two source forms address them:
+
+```
+skilltap install plugin owner/repo:plugin-name   # install one named plugin from the repo
+skilltap install plugin owner/repo:*             # install every publishable plugin from the repo
+```
+
+Both forms compose with `@ref` and URL sources:
+
+```
+skilltap install plugin owner/repo@v1.2.0:frontend
+skilltap install plugin https://gitea.example.com/owner/repo:*
+skilltap install plugin git@github.com:owner/repo.git:frontend
+```
+
+The plugin selector is parsed off the **last** `:` after stripping any `@ref` suffix, so HTTPS URLs (`https://...`) are unaffected. Without the `:plugin-name` selector, repos with exactly one publishable plugin install that plugin; repos with multiple require an explicit selector or `:*`.
 
 ---
 
@@ -675,25 +707,35 @@ $ skilltap doctor --fix
 skilltap migrate
 ```
 
-One-shot upgrade from any prior version. Detection markers:
+One-shot upgrade from any prior version. `loadConfig` hard-fails on legacy shapes with a hint pointing at this command, so `migrate` is the explicit upgrade path — there is no silent fallback.
 
-- `[agent-mode]` block in config → removed
-- `[security.human]` / `[security.agent]` blocks → collapsed to `[security]` (warn if mismatch; pick stricter)
-- `[[security.overrides]]` → translated to `trust = [...]` allowlist
-- Security presets → resolved to explicit `scan`/`on_warn` values
-- `installed.json` / `plugins.json` → consolidated into `state.json`
-- HTTP taps → error, list affected taps for manual handling
+Translation rules:
 
-Originals are renamed to `*.bak` (e.g., `config.toml.bak`, `installed.json.v1.bak`). After translation, runs `doctor` to verify.
+- `[security.human]` and `[security.agent]` per-mode blocks → collapsed to a single flat `[security]`. When per-mode keys disagree, the stricter value wins (`scan = "static"` over `none`; `on_warn = "fail"` over `prompt` over `install`). Both originals are recorded in the warning list.
+- `[[security.overrides]]` table array — `preset = "none"` entries translate to `security.trust = [...]` glob entries; `preset = "relaxed" | "standard" | "strict"` entries are dropped with a warning naming the affected match string.
+- Operational scanner keys (`agent_cli`, `ollama_model`, `threshold`, `max_size`) extracted from per-mode blocks into the new sibling `[scanner]` block.
+- `[agent-mode]` and `[agent]` config blocks → dropped with a warning. There is no replacement — non-interactive use is driven by TTY detection, `--yes`, and `--json`.
+- `[registry].allow_npm` → dropped with a warning.
+- Enum translations: `scan = "off"` → `"none"`. `on_warn = "allow"` → `"install"`.
+- `installed.json` + `plugins.json` → consolidated into `state.json`. Existing `state.mcpServers` is preserved (not overwritten with `[]`).
+- HTTP taps → error before any writes; lists affected taps for manual handling. `migrate` aborts cleanly so the user can convert or remove them and re-run.
+
+Originals are renamed to `*.v1.bak` (e.g., `config.toml.v1.bak`, `installed.json.v1.bak`). `migrate` is idempotent — safe to re-run; subsequent runs are a no-op when state is already current.
 
 ```
 $ skilltap migrate
 
 Checking global state...
-  ✓ Migrated installed.json → state.json (3 skills)
-  ✓ Migrated config: [security.human]/[security.agent] → [security]
+  ✓ Collapsed [security.human]/[security.agent] → [security]
+    (stricter values won: scan="static", on_warn="fail")
+  ✓ Extracted operational keys → [scanner] (agent_cli, threshold)
+  ✓ Translated [[security.overrides]] preset="none" → security.trust = [...]
+  ⚠ Dropped 1 preset override: { match = "github.com/foo/*", preset = "relaxed" }
   ✓ Removed [agent-mode] block
-  ✓ Backed up originals to *.bak
+  ✓ Removed [registry].allow_npm
+  ✓ Migrated installed.json + plugins.json → state.json (3 skills, 1 plugin)
+  ✓ Preserved state.mcpServers (2 entries)
+  ✓ Backed up originals to *.v1.bak
 
 Running doctor verification...
   ✓ All checks pass
@@ -936,13 +978,26 @@ skilltap config security          Interactive security wizard
 
 ```toml
 [security]
-scan = "static"           # "semantic" | "static" | "none". Default: "static".
-on_warn = "prompt"        # "prompt" | "fail" | "install". Default: "prompt".
-trust = []                # Glob patterns matching tap names or source URLs to skip scanning.
-                          # e.g. trust = ["my-corp-tap", "https://gitea.myco.com/**"]
+scan = "static"                                # "semantic" | "static" | "none". Default: "static".
+on_warn = "prompt"                             # "prompt" | "fail" | "install". Default: "prompt".
+trust = [
+  "github.com/my-corp/*",                      # GitHub shorthand: any repo under my-corp
+  "https://gitea.myco.com/eng/**",             # Internal Gitea host: any repo under eng/
+  "internal-tap",                              # Tap name: any source resolved through this tap
+]
 ```
 
-**No `[security.human]` / `[security.agent]` split.** There is one `[security]` block. `--strict` on the CLI is equivalent to `on_warn = "fail"` for that invocation.
+`security.trust` is a glob array matched against the canonical source string (tap name or source URL). Sources matching any glob skip scanning entirely — equivalent to `--skip-scan` for that one source — and never prompt on warnings. Use it for sources you've already vetted (e.g. your own org's repos).
+
+```toml
+[scanner]
+agent_cli = "claude"          # "claude" | "cursor" | "ollama" | "" (auto-detect)
+ollama_model = "llama3.2"     # Model used when agent_cli = "ollama"
+threshold = "low"             # "low" | "medium" | "high" — semantic-scan severity floor
+max_size = 65536              # Bytes; skills larger than this skip semantic scanning
+```
+
+`[security]` is policy ("what should happen"); `[scanner]` is the operational config that backs the semantic scan ("how to run it"). They live as sibling top-level blocks. There is no `[security.human]` / `[security.agent]` per-mode split, no `[[security.overrides]]` table-array, no `preset = ...` resolver, and no `require_scan` key — all four were removed in v2.2 (see [SPEC.md → Removed in v2.2](./SPEC.md#removed-in-v22)). `--strict` on the CLI is equivalent to `on_warn = "fail"` for that one invocation.
 
 ### Other Config Keys
 
@@ -1116,15 +1171,33 @@ skilltap doctor
 
 ---
 
+## Legacy Commands
+
+Five commands were retired in v2.2. There are no silent aliases — running an old path exits with an explicit hint pointing at its replacement. If a script or muscle-memory still uses these, switch to the canonical command:
+
+| Removed | Replaced by | Notes |
+|---------|-------------|-------|
+| `skilltap verify <path>` | `skilltap doctor skill <path>` (or `doctor plugin <path>`) | `doctor` now does both environment checks (no args) and per-artifact validation. |
+| `skilltap link <path>` | `skilltap adopt <path>` | `adopt` defaults to track-in-place; pass `--move` to relocate. |
+| `skilltap unlink <name>` | `skilltap remove skill <name>` | Removing the managed record removes the symlink. |
+| `skilltap enable <name>` | `skilltap toggle skill\|plugin\|mcp <name>` | One command toggles active state for any artifact type. |
+| `skilltap disable <name>` | `skilltap toggle skill\|plugin\|mcp <name>` | Same. `toggle plugin <name>:<component>` addresses one component without a picker. |
+
+The v0.x `skilltap skills` subgroup (`skills info`, `skills adopt`, `skills move`, `skills remove`, `skills link`, `skills unlink`) is also gone — every operation lifted to the top level (`info`, `adopt`, `move`, `remove`).
+
+---
+
 ## Error Reference
 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `No SKILL.md found` | Wrong type subcommand | Use `install plugin` or `install mcp` |
 | `skilltap.toml is corrupt` | Malformed project manifest | TTY: auto-recovered; non-TTY: run `skilltap doctor --fix` |
-| `require_scan = true — cannot skip scan` | Config blocks `--skip-scan` | Remove `require_scan` or remove the flag |
+| `Config schema is pre-v2.2 — run skilltap migrate` | Loaded a legacy config (per-mode `[security]`, `[agent-mode]`, presets, etc.) | Run `skilltap migrate` once on this machine |
 | `Cannot remove: skill is a plugin component` | Tried `remove skill` on a plugin part | Use `remove plugin <name>` or `toggle plugin <name>:<component>` |
 | `sync requires a project root` | Run outside any git repo or project | cd into a directory containing `skilltap.toml` or `.git` |
 | `adopt requires a target in non-interactive mode` | Bare `adopt` in a pipe | Pass a path: `adopt ./my-skill` or `adopt --source claude-code` |
 | `Error: HTTP tap not supported` | v0.x config has `type = "http"` tap | Remove HTTP tap or run `skilltap migrate` |
 | `skilltap requires a TTY for the dashboard` | Bare `skilltap` in a pipe | Run `skilltap status` or `skilltap status --json` |
+| `--force-capture and --no-capture are mutually exclusive` | Both flags passed in one invocation | Pick one |
+| `Multiple plugins published in repo — selector required` | Multi-plugin repo without `:plugin-name` or `:*` | Append `:plugin-name` to install one or `:*` to install all |

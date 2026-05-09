@@ -5,99 +5,102 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
-## v2.2.0 — v2.0 Redesign: simplified surface, TUI dashboard, plugin capture
+## v2.2.0 — V2 cutover: simplified security, deleted scaffolding
 
-The v2.2.0 release is the v2.0 redesign: a full reshaping of the CLI surface
-around a cleaner mental model. Five major concerns drove the redesign: (1)
-explicit type subcommands replace auto-detect; (2) agent mode is retired in
-favour of TTY detection; (3) security config collapses to a single flat block;
-(4) a TUI dashboard replaces the bare-`skilltap` status text; (5) plugin
-capture automatically takes ownership of standalone components when their
-parent plugin is installed.
+**BREAKING.** Config schema upgraded to V2. Run `skilltap migrate` once on
+each machine. `loadConfig` hard-fails on legacy shapes with a hint pointing
+at `migrate` — no silent fallback, no aliases. Migration is safe to re-run.
 
-If you are upgrading from v2.1.x or earlier, run `skilltap migrate` first.
-Migration is safe to run multiple times.
+This release finishes the v2.0 redesign: removes the per-mode security
+split, deletes the agent-mode plumbing for good, makes scope a typed flag,
+adds typed positionals everywhere, lands plugin Capture with explicit
+flags, and tracks standalone MCPs in the project manifest.
 
-### Breaking changes
+### Config changes
 
-**Commands that were removed** (old paths return errors with hints):
+- `[security]` is now flat with three keys: `scan` (`semantic | static | none`), `on_warn` (`prompt | fail | install`), `trust` (glob array matched against tap name or source URL).
+- `[scanner]` is a new sibling block holding operational config: `agent_cli`, `ollama_model`, `threshold`, `max_size`. Policy ("what should happen") and operation ("how to run the scan") are now cleanly separated.
+- Removed: `[security.human]`, `[security.agent]`, `[[security.overrides]]`, `preset = ...`, `require_scan`, `[agent-mode]`, `[agent]`, `[registry].allow_npm`.
+- Enum translations: `scan = "off"` → `"none"`; `on_warn = "allow"` → `"install"`.
 
-| Removed | Replacement |
-|---------|-------------|
-| `install <source>` (no type) | `install skill <source>` |
-| `remove <name>` (no type) | `remove skill <name>` |
-| `verify <path>` | `doctor skill <path>` |
-| `link <path>` | `adopt <path>` |
-| `unlink <name>` | (just remove the symlink, or `remove skill <name>`) |
-| `enable <name>` | `toggle skill\|plugin\|mcp <name>` |
-| `disable <name>` | `toggle skill\|plugin\|mcp <name>` |
-| `skills info\|adopt\|move\|remove\|link\|unlink` | Top-level equivalents |
-| `plugin info\|toggle\|remove` | Top-level `info`, `toggle`, `remove` |
-| `tap install` | `install skill <name>` (tap names resolve directly) |
-| `config agent-mode` | No replacement — agent mode is fully removed |
+### CLI changes
 
-**Flags that were removed:**
+- `--scope project|global` replaces the `--project` / `--global` boolean pair on every lifecycle command (`install`, `remove`, `update`, `adopt`, `move`). `info` and `status` keep the boolean pair as a deliberate carve-out.
+- `--also` is repeatable (`--also a --also b`); the comma-separated form is no longer supported.
+- `--no-strict` is removed. Set `on_warn = "install"` in config (or pass `--strict` for a one-shot hard-fail) to control warn handling.
+- `try <type> <source>` mirrors `install` and `remove` — every command takes a typed positional. `try <source>` (no type) is no longer accepted.
+- `install <type> <source>` — typed positional everywhere. `install <source>` (no type) returns an error with a hint.
+- Multi-plugin sources: `install plugin user/repo:plugin-name` selects one published plugin from a multi-plugin repo; `install plugin user/repo:*` installs every publishable plugin from that repo. Composes with `@ref` and URL forms.
+- Plugin capture flags: `--force-capture` (auto-capture every same-source match, safe with `--yes`) and `--no-capture` (disable capture entirely; standalones stay independent). Mutually exclusive.
+- `verify` removed — use `doctor skill <path>` (or `doctor plugin <path>`).
+- `config security` flag set: `--scan`, `--on-warn`, `--trust-add`, `--trust-remove`, `--trust-list`. Old `--preset`, `--mode`, `--trust tap:n=preset`, `--remove-trust` flags are gone.
+- `install mcp` honors smart-scope outside a git repo (defaults to `global`), matching `install skill` and `install plugin`.
+- Smart-scope reporting: install prints `→ scope: <project|global> (inferred from cwd)` after the inference resolves, so the resolved scope is always visible.
 
-- `--agent` flag — removed entirely. Piping stdout gives plain text; add `--yes` and `--json` for non-interactive automation.
-- `SKILLTAP_AGENT=1` env var — removed entirely, same reason.
-- `--project` / `--global` boolean flags on `install` and `remove` — **still present** in this release; `--scope project|global` is the new canonical form documented in SPEC.md but the boolean flags still work.
+### Manifest changes
 
-**Config format changes:**
+- `skilltap.toml` and `skilltap.lock` track standalone MCP installs in `[[mcps]]` and `[[mcps.lock]]` tables. `skilltap sync` reconciles all three state types (skills, plugins, mcps) and writes manifest+lockfile entries from `install mcp` / `remove mcp`.
 
-- `[security.human]` and `[security.agent]` per-mode blocks → collapsed to a single `[security]` block with `scan`, `on_warn`, and `trust` keys.
-- `[[security.overrides]]` array → replaced by `security.trust = [...]` glob array.
-- Security presets (`preset = "..."`) → resolved to explicit `scan`/`on_warn` values.
-- `[agent-mode]` block → removed entirely.
+### Removed legacy command hints
 
-Run `skilltap migrate` to translate all of the above automatically.
+`verify`, `link`, `unlink`, `enable`, `disable`, and `skills` each exit with
+an explicit replacement hint (no more falling through to citty's generic
+"unknown command"). Use `doctor`, `adopt`, `remove`, `toggle`, and the
+top-level `info`/`adopt`/`move`/`remove` respectively.
 
-**State file changes:**
+### Removed code (no fallback, no alias)
 
-- `loadInstalled()` and `loadPlugins()` no longer fall back to `installed.json` / `plugins.json`. These files are now ignored by all production code paths. `migrate` is the explicit upgrade path.
+- `policy-v2/` promoted to `policy/`, replacing the legacy `policy.ts`. `composeV2` → `composePolicy` (renamed; agent-mode plumbing stripped).
+- `schemas/config-v2.ts` merged into `schemas/config.ts` — the V2 schema **is** the schema.
+- `httpAdapter` — HTTP taps were already removed; the adapter was unreachable.
+- `linkSkill` core function — its CLI surface was already gone.
+- `searchSkillsRegistry`, `marketplaceSourceToRepo` deprecated wrappers.
+- `info.ts` legacy `installed.json` + `plugins.json` fallback — the canonical store is `state.json` only.
 
-### Added
+### Bug fixes shipped in the same wave
 
-- **TUI dashboard** — bare `skilltap` in a TTY opens an Ink-based dashboard with four tabs: Installed, Taps, Updates, Drift. Key bindings: `i` install, `r` remove, `t` toggle, `u` update, `f` find, `a` adopt, `q`/`Esc` exit.
-- **`skilltap status`** — headless dashboard equivalent (same content, safe to pipe, `--json` for scripting).
-- **`install skill | plugin | mcp <source>`** — type is now explicit via subcommand, eliminating auto-detect heuristics and the `mcp:` URL prefix. All source forms (git URL, GitHub shorthand, npm, tap name, local path) work for all three types.
-- **`remove skill | plugin | mcp <name>`** — symmetric with install.
-- **`update [type] [name]`** — bare `update` updates everything; `update skill`, `update plugin`, `update mcp` scope to one type; `update skill <name>` updates one item.
-- **`toggle [type] [name[:component]]`** — bare opens TUI; `toggle plugin <name>:<component>` toggles one component directly without a picker. Replaces `enable`/`disable`.
-- **`adopt [path]`** — replaces `link`/`unlink`. With a path: track-in-place (default) or `--move` to relocate. Without a path: TUI picker over all unmanaged skills and Claude Code plugins.
-- **`adopt --source claude-code`** — brings native Claude Code plugin-marketplace installs into skilltap state. Reads `~/.claude/plugins/installed_plugins.json`; creates `state.plugins[]` entries that point at Claude Code's cache.
-- **`doctor skill|plugin <path>`** — replaces `verify`. Checks SKILL.md, frontmatter, name/dir match, static security scan, size limit (for skills); manifest schema, references, name/dir match (for plugins).
-- **Plugin capture** — installing a plugin with `install plugin <source>` now automatically detects standalone skills and MCP servers from the same source that are already installed and offers to capture them (transfer ownership to the plugin record). Same-source matches auto-confirm with `--yes`; cross-source matches prompt in TTY and error in non-TTY.
+- Lifecycle drift closed: `update`, `move`, `adopt`, `disable`/`enable`, plugin `toggle` all write `skilltap.toml` + `skilltap.lock` when present. Previously these wrote state but left the manifest desynced.
+- `migrate` preserves existing `state.mcpServers` (no longer overwrites with `[]`).
+- `try` loads config and threads `default_git_host`, so the `owner/repo` shorthand resolves through your configured host instead of silently defaulting to GitHub.
+- `install mcp` honors smart-scope outside a git repo, no longer requiring an explicit `--scope` flag for the global case.
+- `sync` no longer reports a spurious `ref-mismatch` for inline-table manifest entries (`{ ref = "main" }`) when the lockfile range is `*`.
+- TUI fixes: Dashboard tab keys `1-4` switch tabs; Adopt screen handles Enter to confirm; Toggle screen renders the name step and the focus index correctly.
+- `doctor --fix` exits 0 when fixes succeed; `--json` includes `info`, `fixDescription`, and `detail` fields per check.
 
-### Migration steps
+### Migration
+
+Run `skilltap migrate`. It translates v0.x and pre-v2.2 configs:
+
+- Per-mode `[security.<mode>]` → flat `[security]` (stricter mode wins; both originals reported in warnings).
+- `[[security.overrides]]` `preset = "none"` → `security.trust` glob entry.
+- `[[security.overrides]]` `preset = "relaxed" | "standard" | "strict"` → dropped with a warning naming the match string.
+- Operational scanner keys (`agent_cli`, `ollama_model`, `threshold`, `max_size`) extracted from per-mode blocks → new sibling `[scanner]` block.
+- `[agent-mode]` and `[agent]` blocks → dropped with warnings; non-interactive use is driven by TTY detection + `--yes` + `--json`.
+- `[registry].allow_npm` → dropped with a warning.
+- `scan = "off"` → `"none"`. `on_warn = "allow"` → `"install"`.
+- `installed.json` + `plugins.json` → consolidated into `state.json`. Existing `state.mcpServers` is preserved.
+- HTTP taps → error before any writes; lists affected taps for manual handling.
 
 ```bash
-# 1. Run migrate (safe to re-run)
+# One shot — translates config + consolidates state files
 skilltap migrate
 
-# 2. Verify everything is clean
+# Verify migration was clean
 skilltap doctor
 
-# 3. If issues remain, auto-repair what's safe
+# If issues remain, auto-repair what's safe
 skilltap doctor --fix
 ```
 
-`migrate` handles:
-- Collapsing `[security.human]`/`[security.agent]` → `[security]`
-- Removing `[agent-mode]` block
-- Translating `[[security.overrides]]` → `trust = [...]`
-- Resolving security presets to explicit keys
-- Consolidating `installed.json` + `plugins.json` → `state.json`
-- HTTP taps → error listing affected taps for manual handling
+Originals are renamed to `*.v1.bak` (e.g., `config.toml.v1.bak`, `installed.json.v1.bak`). `migrate` is idempotent.
 
-Originals are renamed to `*.v1.bak` (e.g., `config.toml.v1.bak`, `installed.json.v1.bak`).
-
-If you used `--agent` or `SKILLTAP_AGENT=1` in scripts, replace with:
+If you used `--agent` or `SKILLTAP_AGENT=1` in scripts:
 
 ```bash
 # Before (v2.1)
 skilltap install <source> --agent
 
-# After (v2.2) — piped stdout is already plain text; add --yes for no prompts
+# After (v2.2) — typed positional, smart-scope, --yes for no prompts
 skilltap install skill <source> --yes | cat
 ```
 

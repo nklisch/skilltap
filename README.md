@@ -79,7 +79,7 @@ skilltap status
 skilltap update
 ```
 
-## Project manifests (v2.0)
+## Project manifests
 
 Declare your project's skill + plugin dependencies in `skilltap.toml`, commit it,
 and have teammates run `skilltap sync` to bring their machines to parity. Like
@@ -119,8 +119,9 @@ add `.skilltap/<plugin-name>.toml` with `publish = true`. See
 [the spec](docs/SPEC.md#project-manifest-and-lockfile) for the full
 manifest format.
 
-If you've been on v0.x, run `skilltap migrate` to upgrade your global state
-(`installed.json` + `plugins.json` → `state.json`) without losing anything.
+If you're upgrading from any pre-v2.2 release, run `skilltap migrate` once to
+translate the config schema and consolidate state files. `loadConfig` hard-fails
+on legacy shapes and points you here — there is no silent fallback.
 
 ## Taps
 
@@ -243,7 +244,7 @@ Config is stored at `~/.config/skilltap/config.toml`. Run the interactive wizard
 skilltap config
 ```
 
-Key settings: default scope (`global`/`project`), additional agent symlinks (`--also`), security scan mode (`static`/`semantic`/`off`), and `on_warn` behavior (`prompt`/`fail`).
+Key settings: default scope (`global`/`project`), additional agent symlinks (`--also`), security scan mode (`semantic`/`static`/`none`), and `on_warn` behavior (`prompt`/`fail`/`install`). Trusted sources (your own org's repos, internal taps) skip scanning via the `security.trust = [...]` glob array.
 
 ## Authoring Skills
 
@@ -270,7 +271,7 @@ To publish to npm (with provenance), use `--template npm`. The generated GitHub 
 Skills from npm show provenance status when installed:
 
 ```
-$ skilltap skills
+$ skilltap status
 
 Global (.agents/skills/) — 2 skills
   Name           Status   Agents       Source
@@ -299,7 +300,7 @@ skilltap doctor --json # machine-readable output for CI
 ## Gotchas
 
 - **`install` requires a type subcommand.** `skilltap install commit-helper` is an error. Use `skilltap install skill commit-helper`.
-- **`--yes` does not bypass security warnings.** Use `--strict` to turn warnings into hard failures, or `--skip-scan` to bypass entirely (blocked if `require_scan = true`).
+- **`--yes` does not bypass security warnings.** Use `--strict` to turn warnings into hard failures, or `--skip-scan` to bypass entirely. Add trusted sources to `security.trust = [...]` in config to skip scanning for them automatically.
 - **Agent symlinks are not automatic.** Pass `--also <agent>` or set defaults in config. The skill always lands in `.agents/skills/` — symlinks are opt-in.
 - **Multi-skill repos require selection.** If a repo contains multiple `SKILL.md` files, skilltap prompts you to choose. With `--yes`, all are auto-selected.
 - **npm installs use a source argument prefix.** `skilltap install skill vibe-rules` searches your taps. `skilltap install skill npm:vibe-rules` hits the npm registry.
