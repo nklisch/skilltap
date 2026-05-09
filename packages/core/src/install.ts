@@ -12,7 +12,7 @@ import { downloadAndExtract, parseNpmSource } from "./npm-registry";
 import type { OnOrphansFound } from "./orphan";
 import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
 import type { Output } from "./output/types";
-import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
+import { currentSkillDir, skillCacheDir, skillInstallDir } from "./paths";
 import { detectPlugin } from "./plugin/detect";
 import { installPlugin } from "./plugin/install";
 import type { ScannedSkill } from "./scanner";
@@ -826,11 +826,7 @@ export async function installSkill(
       );
       if (conflict) {
         // Verify the conflict is real — does the directory actually exist?
-        const conflictScope = conflict.scope as "global" | "project";
-        const conflictDir =
-          conflict.active === false
-            ? skillDisabledDir(conflict.name, conflictScope, projectRoot)
-            : skillInstallDir(conflict.name, conflictScope, projectRoot);
+        const conflictDir = currentSkillDir(conflict, projectRoot);
 
         if (!(await resolvedDirExists(conflictDir))) {
           // Phantom conflict: record exists but directory is gone. Clean up and install fresh.

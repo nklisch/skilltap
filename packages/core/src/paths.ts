@@ -2,6 +2,7 @@ import { lstat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getConfigDir } from "./config";
 import { globalBase } from "./fs";
+import type { InstalledSkill } from "./schemas/installed";
 import { AGENT_DEF_PATHS } from "./symlink";
 
 export function scopeBase(
@@ -95,6 +96,16 @@ export function agentDefDisabledPath(
   const relDir = AGENT_DEF_PATHS[platform];
   if (!relDir) return null;
   return join(scopeBase(scope, projectRoot), relDir, ".disabled", `${name}.md`);
+}
+
+export function currentSkillDir(
+  record: Pick<InstalledSkill, "name" | "scope" | "active">,
+  projectRoot?: string,
+): string {
+  const scope = record.scope as "global" | "project";
+  return record.active === false
+    ? skillDisabledDir(record.name, scope, projectRoot)
+    : skillInstallDir(record.name, scope, projectRoot);
 }
 
 export function skillCacheDir(repoUrl: string): string {

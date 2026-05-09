@@ -5,7 +5,7 @@ import { debug } from "./debug";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
 import { resolvedDirExists } from "./fs";
 import { removeSkillFromManifest } from "./manifest/update";
-import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
+import { currentSkillDir, skillCacheDir } from "./paths";
 import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
@@ -54,20 +54,11 @@ export async function removeSkill(
   );
 
   // Remove skill directory (for linked skills, record.path is the symlink location)
+  const effectiveScope = record.scope === "linked" ? "global" : record.scope;
   const installPath =
     record.scope === "linked" && record.path !== null
       ? record.path
-      : record.active === false
-        ? skillDisabledDir(
-            record.name,
-            record.scope === "linked" ? "global" : record.scope,
-            options.projectRoot,
-          )
-        : skillInstallDir(
-            record.name,
-            record.scope === "linked" ? "global" : record.scope,
-            options.projectRoot,
-          );
+      : currentSkillDir({ ...record, scope: effectiveScope }, options.projectRoot);
   if (!(await resolvedDirExists(installPath))) {
     options.onOrphanRemoved?.(name);
   }

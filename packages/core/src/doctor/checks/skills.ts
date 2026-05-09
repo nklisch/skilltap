@@ -2,7 +2,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { loadSkillState, saveSkillState } from "../../config";
 import { globalBase, resolvedDirExists } from "../../fs";
-import { skillDisabledDir, skillInstallDir } from "../../paths";
+import { currentSkillDir } from "../../paths";
 import type { InstalledSkill } from "../../schemas/installed";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
@@ -45,14 +45,11 @@ export async function checkSkills(
     }
 
     const isProject = skill.scope === "project" && !!projectRoot;
-    const installDir =
-      skill.active === false
-        ? isProject
-          ? skillDisabledDir(skill.name, "project", projectRoot)
-          : skillDisabledDir(skill.name, "global")
-        : isProject
-          ? skillInstallDir(skill.name, "project", projectRoot)
-          : skillInstallDir(skill.name, "global");
+    const effectiveScope = isProject ? "project" : "global";
+    const installDir = currentSkillDir(
+      { ...skill, scope: effectiveScope },
+      projectRoot,
+    );
 
     if (!(await resolvedDirExists(installDir))) {
       const skillName = skill.name;

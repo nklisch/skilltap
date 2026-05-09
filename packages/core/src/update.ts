@@ -16,7 +16,7 @@ import {
 } from "./npm-registry";
 import type { OnOrphansFound } from "./orphan";
 import { findOrphanRecords, purgeOrphanRecords } from "./orphan";
-import { skillCacheDir, skillDisabledDir, skillInstallDir } from "./paths";
+import { currentSkillDir, skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import type { StaticWarning } from "./security";
 import { scanDiff, scanStatic } from "./security";
@@ -268,11 +268,7 @@ async function updateNpmSkill(
     }
 
     // Replace the installed skill directory
-    const npmEffectiveScope = record.scope as "global" | "project";
-    const installDir =
-      record.active === false
-        ? skillDisabledDir(record.name, npmEffectiveScope, options.projectRoot)
-        : skillInstallDir(record.name, npmEffectiveScope, options.projectRoot);
+    const installDir = currentSkillDir(record, options.projectRoot);
     const rmResult = await wrapShell(
       () => $`rm -rf ${installDir}`.quiet().then(() => undefined),
       `Failed to remove old skill directory '${record.name}'`,
@@ -331,11 +327,7 @@ async function updateGitSkill(
   result: UpdateResult,
   _resolveTrust: ResolveTrustFn,
 ): Promise<Result<void, UserError | GitError | ScanError>> {
-  const effectiveScope = record.scope as "global" | "project";
-  const workDir =
-    record.active === false
-      ? skillDisabledDir(record.name, effectiveScope, options.projectRoot)
-      : skillInstallDir(record.name, effectiveScope, options.projectRoot);
+  const workDir = currentSkillDir(record, options.projectRoot);
 
   // Before fetch: verify the work directory exists (handles orphan installs)
   if (!(await resolvedDirExists(workDir))) {
