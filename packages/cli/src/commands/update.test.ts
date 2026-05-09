@@ -6,7 +6,15 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { linkSkill, loadInstalled } from "@skilltap/core";
+import { mkdir, rm, symlink } from "node:fs/promises";
+import { dirname } from "node:path";
+import {
+  createAgentSymlinks,
+  loadInstalled,
+  saveInstalled,
+  scan,
+  skillInstallDir,
+} from "@skilltap/core";
 import {
   addFileAndCommit,
   createStandaloneSkillRepo,
@@ -14,6 +22,45 @@ import {
   runSkilltap,
   type TestEnv,
 } from "@skilltap/test-utils";
+
+// Test fixture: install a skill in "linked" scope (the deleted linkSkill helper).
+async function linkSkillFixture(
+  localPath: string,
+  options: { scope: "global" | "project"; projectRoot?: string; also?: string[] },
+): Promise<void> {
+  const scanned = await scan(localPath);
+  if (scanned.length === 0) throw new Error(`no skill in ${localPath}`);
+  // biome-ignore lint/style/noNonNullAssertion: scanned.length > 0
+  const skill = scanned[0]!;
+  const installPath = skillInstallDir(skill.name, options.scope, options.projectRoot);
+  await mkdir(dirname(installPath), { recursive: true });
+  await rm(installPath, { recursive: true, force: true });
+  await symlink(localPath, installPath, "dir");
+  const also = options.also ?? [];
+  if (also.length > 0) {
+    await createAgentSymlinks(skill.name, installPath, also, options.scope, options.projectRoot);
+  }
+  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const installedResult = await loadInstalled(fileRoot);
+  if (!installedResult.ok) throw installedResult.error;
+  const now = new Date().toISOString();
+  installedResult.value.skills.push({
+    name: skill.name,
+    description: skill.description,
+    repo: null,
+    ref: null,
+    sha: null,
+    scope: "linked",
+    path: installPath,
+    tap: null,
+    also,
+    installedAt: now,
+    updatedAt: now,
+  });
+  const saveResult = await saveInstalled(installedResult.value, fileRoot);
+  if (!saveResult.ok) throw saveResult.error;
+}
+
 
 setDefaultTimeout(60_000);
 
@@ -123,8 +170,9 @@ describe("update — linked skill skipped", () => {
   test("linked skills are skipped", async () => {
     const repo = await createStandaloneSkillRepo();
     try {
-      // Link directly via core (the CLI link alias was removed in Phase 42)
-      await linkSkill(repo.path, { scope: "global" });
+      // Link via fixture helper (core/link.ts deleted in v2.2; this writes a
+      // "linked" scope record to state.json the same way linkSkill did).
+      await linkSkillFixture(repo.path, { scope: "global" });
 
       const { exitCode, stdout } = await runSkilltap(
         ["update", "--yes"],

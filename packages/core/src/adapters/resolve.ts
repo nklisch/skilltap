@@ -3,7 +3,6 @@ import type { Result } from "../types";
 import { err, UserError } from "../types";
 import { gitAdapter } from "./git";
 import { createGithubAdapter } from "./github";
-import { httpAdapter } from "./http";
 import { localAdapter } from "./local";
 import { npmAdapter } from "./npm";
 import type { SourceAdapter } from "./types";
@@ -18,7 +17,6 @@ export async function resolveSource(
   const adapters: SourceAdapter[] = [
     gitAdapter,
     npmAdapter,
-    httpAdapter,
     localAdapter,
     createGithubAdapter(host),
   ];

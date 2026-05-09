@@ -4,7 +4,6 @@ import {
   createCustomRegistry,
   resolveRegistries,
   searchRegistries,
-  searchSkillsRegistry,
   skillsShRegistry,
 } from "./skills-registry";
 
@@ -270,25 +269,3 @@ describe("skillsShRegistry", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// searchSkillsRegistry — deprecated wrapper
-// ---------------------------------------------------------------------------
-
-describe("searchSkillsRegistry", () => {
-  test("returns Result.ok wrapping search results", async () => {
-    globalThis.fetch = makeFetch(200, REGISTRY_RESPONSE);
-    const result = await searchSkillsRegistry("test");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value).toHaveLength(1);
-    expect(result.value[0]?.name).toBe("my-skill");
-  });
-
-  test("returns Result.ok with empty array on registry failure", async () => {
-    globalThis.fetch = makeFetchThrow();
-    const result = await searchSkillsRegistry("test");
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.value).toEqual([]);
-  });
-});

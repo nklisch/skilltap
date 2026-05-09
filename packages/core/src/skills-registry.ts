@@ -1,6 +1,4 @@
 import type { Config } from "./schemas/config";
-import type { Result } from "./types";
-import { type NetworkError, ok } from "./types";
 
 // ---------------------------------------------------------------------------
 // Registry protocol types
@@ -171,18 +169,3 @@ export async function searchRegistries(
   return all.flat();
 }
 
-// ---------------------------------------------------------------------------
-// Legacy export (backwards compat for any direct callers)
-// ---------------------------------------------------------------------------
-
-/** @deprecated Use searchRegistries with resolveRegistries instead */
-export type SkillsRegistryResult = RegistrySkill;
-
-/** @deprecated Use searchRegistries with resolveRegistries instead */
-export async function searchSkillsRegistry(
-  query: string,
-  limit = 20,
-): Promise<Result<RegistrySkill[], NetworkError>> {
-  const results = await searchSkillsSh(query, limit);
-  return ok(results);
-}

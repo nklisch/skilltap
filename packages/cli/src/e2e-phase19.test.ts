@@ -93,29 +93,29 @@ describe("E2E Phase 19 — create → verify → doctor → completions", () => 
     expect(pkgStat?.isFile()).toBe(true);
   });
 
-  // ── verify ───────────────────────────────────────────────────────────────────
+  // ── verify (removed in v2.2 — assert replacement-hint behavior) ─────────────
 
-  test("5. verify basic skill — exit 0", async () => {
-    const { exitCode } = await run(["verify", join(workDir, "my-e2e-skill")]);
-    expect(exitCode).toBe(0);
+  test("5. verify command — exits 1 with removed-command hint", async () => {
+    const { exitCode, stderr } = await run(["verify", join(workDir, "my-e2e-skill")]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("removed");
+    expect(stderr).toContain("doctor");
   });
 
-  test("6. verify basic skill — --json output is valid", async () => {
-    const { exitCode, stdout } = await run([
+  test("6. verify --json — also surfaces hint (not parsed as JSON)", async () => {
+    const { exitCode, stderr } = await run([
       "verify",
       join(workDir, "my-e2e-skill"),
       "--json",
     ]);
-    expect(exitCode).toBe(0);
-    const parsed = JSON.parse(stdout);
-    expect(parsed.valid).toBe(true);
-    expect(Array.isArray(parsed.issues)).toBe(true);
-    expect(parsed.name).toBe("my-e2e-skill");
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("doctor");
   });
 
-  test("7. verify npm skill — exit 0", async () => {
-    const { exitCode } = await run(["verify", join(workDir, "my-npm-skill")]);
-    expect(exitCode).toBe(0);
+  test("7. verify on npm skill — same removed-command hint", async () => {
+    const { exitCode, stderr } = await run(["verify", join(workDir, "my-npm-skill")]);
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("doctor");
   });
 
   // ── doctor ───────────────────────────────────────────────────────────────────

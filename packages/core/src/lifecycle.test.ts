@@ -6,8 +6,8 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { lstat, readlink } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, mkdir, readlink, symlink } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import {
   addFileAndCommit,
   createAdoptableSkill,
@@ -21,14 +21,54 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { adoptSkill } from "./adopt";
-import { loadInstalled } from "./config";
+import { loadInstalled, saveInstalled } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { discoverSkills } from "./discover";
 import { installSkill } from "./install";
-import { linkSkill } from "./link";
 import { moveSkill } from "./move";
+import { skillInstallDir } from "./paths";
 import { removeSkill } from "./remove";
+import { scan } from "./scanner";
+import { createAgentSymlinks } from "./symlink";
 import { updateSkill } from "./update";
+
+// Test fixture: emulate the deleted linkSkill helper. Symlinks a local skill
+// directory into the install location and writes a "linked" record to state.
+async function linkSkillFixture(
+  localPath: string,
+  options: { scope: "global" | "project"; projectRoot?: string; also?: string[] },
+): Promise<void> {
+  const scanned = await scan(localPath);
+  if (scanned.length === 0) throw new Error(`no skill in ${localPath}`);
+  // biome-ignore lint/style/noNonNullAssertion: scanned.length > 0
+  const skill = scanned[0]!;
+  const installPath = skillInstallDir(skill.name, options.scope, options.projectRoot);
+  await mkdir(dirname(installPath), { recursive: true });
+  await symlink(localPath, installPath, "dir");
+  const also = options.also ?? [];
+  if (also.length > 0) {
+    await createAgentSymlinks(skill.name, installPath, also, options.scope, options.projectRoot);
+  }
+  const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
+  const installedResult = await loadInstalled(fileRoot);
+  if (!installedResult.ok) throw installedResult.error;
+  const now = new Date().toISOString();
+  installedResult.value.skills.push({
+    name: skill.name,
+    description: skill.description,
+    repo: null,
+    ref: null,
+    sha: null,
+    scope: "linked",
+    path: installPath,
+    tap: null,
+    also,
+    installedAt: now,
+    updatedAt: now,
+  });
+  const saveResult = await saveInstalled(installedResult.value, fileRoot);
+  if (!saveResult.ok) throw saveResult.error;
+}
 
 setDefaultTimeout(60_000);
 
@@ -435,16 +475,11 @@ describe("linked skill lifecycle", () => {
     await createSkillDir(localDir, "dev-skill");
     const devSkillPath = join(localDir, "dev-skill");
 
-    // --- Link ---
-    const link = await linkSkill(devSkillPath, {
+    // --- Link (via fixture helper, since core/link.ts was deleted) ---
+    await linkSkillFixture(devSkillPath, {
       scope: "global",
       also: ["claude-code"],
     });
-    expect(link.ok).toBe(true);
-    if (!link.ok) return;
-
-    expect(link.value.scope).toBe("linked");
-    expect(link.value.path).toBeString();
 
     const installDir = join(homeDir, ".agents", "skills", "dev-skill");
     const linkStat = await lstat(installDir);

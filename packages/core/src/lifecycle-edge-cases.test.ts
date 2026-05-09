@@ -24,7 +24,6 @@ import { $ } from "bun";
 import { loadInstalled, saveInstalled } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { installSkill } from "./install";
-import { linkSkill } from "./link";
 import { moveSkill } from "./move";
 import { removeSkill } from "./remove";
 import { updateSkill } from "./update";
@@ -85,26 +84,6 @@ describe("conflicts", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.updates).toContain("standalone-skill");
-  });
-
-  test("link conflicting name errors with hint mentioning remove", async () => {
-    const repo = await createStandaloneSkillRepo();
-    cleanups.push(repo.cleanup);
-
-    await installSkill(repo.path, { scope: "global", skipScan: true });
-
-    // Create a local skill with the same name
-    const localDir = await makeTmpDir();
-    cleanups.push(() => removeTmpDir(localDir));
-    await createSkillDir(localDir, "standalone-skill");
-
-    const result = await linkSkill(join(localDir, "standalone-skill"), {
-      scope: "global",
-    });
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error.message).toContain("already installed");
-    expect(result.error.hint).toContain("remove");
   });
 });
 

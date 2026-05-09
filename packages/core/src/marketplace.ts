@@ -7,20 +7,14 @@ import type {
 import type { Tap, TapPlugin, TapSkill } from "./schemas/tap";
 
 /**
- * Convert a marketplace plugin source to a TapSkill.repo string
- * that the source adapter chain can resolve.
- *
- * @param source - The plugin source from marketplace.json
- * @param tapUrl - The git URL of the marketplace repo itself (for relative paths)
+ * Inline conversion: marketplace plugin source → TapSkill.repo string.
+ * Returns null when source is unrecognized.
  */
-export function marketplaceSourceToRepo(
+function sourceToRepo(
   source: MarketplacePluginSource,
   tapUrl: string,
 ): string | null {
-  if (typeof source === "string") {
-    // Relative path — the marketplace repo itself contains the skills
-    return tapUrl;
-  }
+  if (typeof source === "string") return tapUrl;
   switch (source.source) {
     case "github":
       return source.repo;
@@ -134,7 +128,7 @@ export async function adaptMarketplaceToTap(
   for (const plugin of marketplace.plugins) {
     if (seenNames.has(plugin.name)) continue;
 
-    const repo = marketplaceSourceToRepo(plugin.source, tapUrl);
+    const repo = sourceToRepo(plugin.source, tapUrl);
     if (repo === null) continue;
 
     seenNames.add(plugin.name);

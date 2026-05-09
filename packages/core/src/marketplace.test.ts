@@ -1,69 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { adaptMarketplaceToTap, marketplaceSourceToRepo } from "./marketplace";
+import { adaptMarketplaceToTap } from "./marketplace";
 import type {
   Marketplace,
   MarketplacePluginSource,
 } from "./schemas/marketplace";
 
 const TAP_URL = "https://github.com/owner/marketplace.git";
-
-describe("marketplaceSourceToRepo", () => {
-  test("relative path string returns tapUrl", () => {
-    const result = marketplaceSourceToRepo("./plugins/my-plugin", TAP_URL);
-    expect(result).toBe(TAP_URL);
-  });
-
-  test("plain string (no leading ./) also returns tapUrl", () => {
-    const result = marketplaceSourceToRepo("plugins/my-plugin", TAP_URL);
-    expect(result).toBe(TAP_URL);
-  });
-
-  test("github source returns owner/repo", () => {
-    const source: MarketplacePluginSource = {
-      source: "github",
-      repo: "owner/repo",
-    };
-    const result = marketplaceSourceToRepo(source, TAP_URL);
-    expect(result).toBe("owner/repo");
-  });
-
-  test("url source returns the URL", () => {
-    const source: MarketplacePluginSource = {
-      source: "url",
-      url: "https://example.com/plugin.git",
-    };
-    const result = marketplaceSourceToRepo(source, TAP_URL);
-    expect(result).toBe("https://example.com/plugin.git");
-  });
-
-  test("git-subdir source returns the URL (path not preserved)", () => {
-    const source: MarketplacePluginSource = {
-      source: "git-subdir",
-      url: "https://example.com/mono.git",
-      path: "packages/plugin",
-    };
-    const result = marketplaceSourceToRepo(source, TAP_URL);
-    expect(result).toBe("https://example.com/mono.git");
-  });
-
-  test("npm source returns npm:package", () => {
-    const source: MarketplacePluginSource = {
-      source: "npm",
-      package: "@org/my-plugin",
-    };
-    const result = marketplaceSourceToRepo(source, TAP_URL);
-    expect(result).toBe("npm:@org/my-plugin");
-  });
-
-  test("npm source without org scope", () => {
-    const source: MarketplacePluginSource = {
-      source: "npm",
-      package: "my-plugin",
-    };
-    const result = marketplaceSourceToRepo(source, TAP_URL);
-    expect(result).toBe("npm:my-plugin");
-  });
-});
 
 describe("adaptMarketplaceToTap", () => {
   const baseMarketplace: Marketplace = {

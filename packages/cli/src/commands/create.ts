@@ -70,10 +70,10 @@ function printNextSteps(
     );
   }
   out.raw(
-    `    skilltap link . --also claude-code   ${ansi.dim("# Test locally")}\n`,
+    `    skilltap adopt . --also claude-code   ${ansi.dim("# Test locally")}\n`,
   );
   out.raw(
-    `    skilltap verify                        ${ansi.dim("# Validate before sharing")}\n`,
+    `    skilltap doctor skill .                ${ansi.dim("# Validate before sharing")}\n`,
   );
   out.raw(
     `    git init && git add -A && git commit -m "Initial skill"\n`,

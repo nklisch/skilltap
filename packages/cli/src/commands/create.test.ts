@@ -130,13 +130,13 @@ describe("create — multi template", () => {
 });
 
 describe("create — next steps output", () => {
-  test("prints next steps including skilltap verify", async () => {
+  test("prints next steps including skilltap doctor skill", async () => {
     const outDir = join(tmpDir, "my-skill");
     const { stdout } = await runCreate(
       ["my-skill", "--template", "basic", "--dir", outDir],
       tmpDir,
     );
-    expect(stdout).toContain("skilltap verify");
-    expect(stdout).toContain("skilltap link");
+    expect(stdout).toContain("skilltap doctor skill");
+    expect(stdout).toContain("skilltap adopt");
   });
 });

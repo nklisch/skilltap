@@ -342,6 +342,43 @@ function printUpdateNotice(
   }
 }
 
+// ─── Removed-command hints ───────────────────────────────────────────────────
+// Top-level commands removed in the v2.0/v2.2 cleanup. Citty's default
+// "unknown command" path falls through to the help banner, which buries the
+// signal that the user typed a verb that no longer exists. Intercept these
+// names before citty runs so each prints a precise replacement hint.
+const REMOVED_COMMANDS: Record<string, { hint: string }> = {
+  verify: {
+    hint: "Use `skilltap doctor skill <path>` to validate a skill, or `skilltap doctor plugin <path>` for a plugin.",
+  },
+  link: {
+    hint: "Use `skilltap adopt <path>` to track an existing local skill or plugin in place.",
+  },
+  unlink: {
+    hint: "Use `skilltap remove <type> <name>` to detach an installed skill, plugin, or mcp.",
+  },
+  enable: {
+    hint: "Use `skilltap toggle <type> <name>` (or `toggle <type> <name>:<component>`) to re-enable a disabled item.",
+  },
+  disable: {
+    hint: "Use `skilltap toggle <type> <name>` to disable an installed item.",
+  },
+  skills: {
+    hint: "Use `skilltap list` (and the typed `install`/`remove`/`update`/`toggle` subcommands).",
+  },
+};
+
+const removedCmd = process.argv[2];
+if (removedCmd && Object.hasOwn(REMOVED_COMMANDS, removedCmd)) {
+  const entry = REMOVED_COMMANDS[removedCmd];
+  if (entry) {
+    process.stderr.write(
+      `Error: \`skilltap ${removedCmd}\` was removed.\n  hint: ${entry.hint}\n`,
+    );
+    process.exit(1);
+  }
+}
+
 // Bare `skilltap` invocation: open TUI in TTY, error with hint when piped.
 // Detected up front so citty doesn't double-run both main's `run` and a subcommand.
 if (process.argv.length === 2) {
@@ -373,7 +410,6 @@ const main = defineCommand({
     update: () => import("./commands/update").then((m) => m.default),
     find: () => import("./commands/find").then((m) => m.default),
     create: () => import("./commands/create").then((m) => m.default),
-    verify: () => import("./commands/verify").then((m) => m.default),
     doctor: () => import("./commands/doctor").then((m) => m.default),
     migrate: () => import("./commands/migrate").then((m) => m.default),
     sync: () => import("./commands/sync").then((m) => m.default),

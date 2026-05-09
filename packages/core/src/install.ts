@@ -302,8 +302,8 @@ async function buildPlacements(params: {
       destDir: skillInstallDir(skill.name, scope, projectRoot),
       useMove: true,
     });
-  } else if (adapter === "npm" || adapter === "http" || adapter === "local") {
-    // npm/http/local multi-skill: copy directly from content (no git cache)
+  } else if (adapter === "npm" || adapter === "local") {
+    // npm/local multi-skill: copy directly from content (no git cache)
     for (const skill of selected) {
       placements.push({
         skill,
@@ -634,12 +634,8 @@ export async function installSkill(
   const resolved = resolvedResult.value;
   const finalRef = effectiveRef ?? resolved.ref;
 
-  // 2.5. Check git is installed (skip for local paths, npm, and http tarball downloads)
-  if (
-    resolved.adapter !== "local" &&
-    resolved.adapter !== "npm" &&
-    resolved.adapter !== "http"
-  ) {
+  // 2.5. Check git is installed (skip for local paths and npm)
+  if (resolved.adapter !== "local" && resolved.adapter !== "npm") {
     const gitCheck = await checkGitInstalled();
     if (!gitCheck.ok) return gitCheck;
   }
@@ -655,7 +651,7 @@ export async function installSkill(
     let sha: string | null;
     let cloneUrl: string | undefined;
 
-    if (resolved.adapter === "npm" || resolved.adapter === "http") {
+    if (resolved.adapter === "npm") {
       const extractResult = await downloadAndExtract(
         resolved.url,
         tmpDir,
@@ -760,12 +756,7 @@ export async function installSkill(
     // 5. Scan for skills
     const scanned = await scan(contentDir, { onDeepScan: options.onDeepScan });
     if (scanned.length === 0) {
-      const sourceKind =
-        resolved.adapter === "npm"
-          ? "npm package"
-          : resolved.adapter === "http"
-            ? "HTTP registry skill"
-            : "repo";
+      const sourceKind = resolved.adapter === "npm" ? "npm package" : "repo";
       return err(
         new UserError(
           `No SKILL.md found in "${source}". This ${sourceKind} doesn't contain any skills.`,
@@ -924,12 +915,10 @@ export async function installSkill(
     const isStandalone =
       scanned.length === 1 && scanned[0]?.path === contentDir;
     const sourceKey =
-      resolved.adapter === "npm" || resolved.adapter === "http"
-        ? effectiveSource
-        : undefined;
+      resolved.adapter === "npm" ? effectiveSource : undefined;
     const now = new Date().toISOString();
 
-    // For placement strategy: local git repos use the git cache path (not the npm/http copy path)
+    // For placement strategy: local git repos use the git cache path (not the npm copy path)
     const placementAdapter =
       resolved.adapter === "local" && cloneUrl ? "git" : resolved.adapter;
     const placements = await buildPlacements({
