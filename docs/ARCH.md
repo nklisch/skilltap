@@ -93,19 +93,17 @@ skilltap/
 │   │   │   ├── state/                  # Unified state.json schema
 │   │   │   │   └── schema.ts           # StateSchema { version, skills, plugins, mcpServers }
 │   │   │   ├── status/                 # Status dashboard data assembly
-│   │   │   ├── migrate/                # Migration from v0.x and pre-V2 setups
+│   │   │   ├── migrate/                # Migration
 │   │   │   │   ├── run.ts              # Top-level migrate orchestrator
-│   │   │   │   ├── config.ts           # v0.x + pre-V2 [security.*]/[agent-mode] → V2 [security] + [scanner]
-│   │   │   │   ├── state.ts            # legacy installed.json + plugins.json → state.json (preserves mcpServers)
+│   │   │   │   ├── config.ts           # Translates legacy [security.*]/[agent-mode] keys
+│   │   │   │   ├── state.ts            # Translates legacy installed.json + plugins.json → state.json
 │   │   │   │   └── manifest.ts         # skilltap.toml shape verification
 │   │   │   ├── doctor/                 # Diagnostic checks (per-area files + index)
 │   │   │   │   ├── checks/             # Each check is a function returning DoctorCheck
 │   │   │   │   ├── fix/                # Auto-repair functions (--fix)
 │   │   │   │   └── index.ts            # runDoctor({ fix?, onCheck? }) → DoctorResult
 │   │   │   ├── schemas/
-│   │   │   │   ├── config.ts           # ConfigSchema (V2: flat [security], [scanner], etc.)
-│   │   │   │   ├── installed.ts        # legacy schemas, migrate-only (v0.x InstalledJsonSchema)
-│   │   │   │   ├── plugins.ts          # legacy schemas, migrate-only (v0.x PluginsJsonSchema)
+│   │   │   │   ├── config.ts           # ConfigSchema (flat [security], [scanner], etc.)
 │   │   │   │   ├── tap.ts              # TapSchema, TapSkillSchema, TapPluginSchema
 │   │   │   │   ├── marketplace.ts      # marketplace.json (Claude Code format)
 │   │   │   │   ├── plugin.ts           # PluginManifestSchema + PLUGIN_FORMATS
@@ -160,7 +158,7 @@ skilltap/
 │   │   │   ├── plugin-v2/              # Native skilltap plugin format reader
 │   │   │   │   ├── parse-toml.ts       # Parse .skilltap/<name>.toml
 │   │   │   │   ├── discover.ts         # Find all .skilltap/*.toml in a repo
-│   │   │   │   ├── normalize.ts        # PluginManifestV2 → existing PluginManifest
+│   │   │   │   ├── normalize.ts        # SkilltapPluginManifest → PluginManifest
 │   │   │   │   └── index.ts
 │   │   │   ├── templates/
 │   │   │   │   ├── basic.ts
@@ -287,7 +285,7 @@ core → test-utils (dev)
 
 **security/semantic.ts** — Layer 2 agent-based evaluation. Chunks content, invokes agent adapter, aggregates scores. See [SPEC.md — Layer 2](./SPEC.md#layer-2-semantic-scan) for the chunking algorithm and security prompt.
 
-**config.ts** — Reads/writes `~/.config/skilltap/config.toml` and the canonical `state.json` (per scope). Production code reads/writes `state.json`; pre-V2 `installed.json` and `plugins.json` are not read at runtime — `loadConfig` hard-fails on legacy shapes with a hint pointing at `skilltap migrate`. Exports `loadSkillState`/`saveSkillState` for the skills slice.
+**config.ts** — Reads/writes `~/.config/skilltap/config.toml` and the canonical `state.json` (per scope). Production code reads and writes `state.json`. `loadConfig` validates against the current schema and rejects unknown shapes. Exports `loadSkillState`/`saveSkillState` for the skills slice.
 
 **config-keys.ts** — Pure helpers for `config get`/`config set`: dot-path resolution, value coercion, settable key allowlist (`SETTABLE_KEYS`), immutable deep-set, plain-text formatting.
 
@@ -359,28 +357,28 @@ core → test-utils (dev)
 
 ### Migrate Module
 
-**migrate/run.ts** — Top-level `migrate` orchestrator. Detects markers (`installed.json`, `plugins.json`, `[security.human]`/`[security.agent]`, `[[security.overrides]]`, `[agent-mode]`, `[agent]`). If none, exits with "Already on V2." Otherwise translates and writes V2 files; renames originals to `*.v1.bak` / `*.v2.bak`. Runs doctor post-migrate.
+**migrate/run.ts** — Top-level `migrate` orchestrator. Detects legacy markers (`installed.json`, `plugins.json`, `[security.human]`/`[security.agent]`, `[[security.overrides]]`, `[agent-mode]`, `[agent]`). If none, exits clean. Otherwise translates and writes current-format files; renames originals to `*.v1.bak` / `*.v2.bak`. Runs doctor post-migrate.
 
-**migrate/config.ts** — Translates v0.x AND pre-V2 configs to V2:
+**migrate/config.ts** — Translates legacy configs:
 
-| Source | V2 destination |
+| Source | Destination |
 |---|---|
-| `[security].scan` (top-level v0.x) | `[security].scan` |
-| `[security].on_warn` (top-level v0.x) | `[security].on_warn` |
-| `[security.<mode>]` (per-mode pre-V2) | `[security]` (stricter mode wins; warn on mismatch) |
+| `[security].scan` (top-level legacy) | `[security].scan` |
+| `[security].on_warn` (top-level legacy) | `[security].on_warn` |
+| `[security.<mode>]` (per-mode) | `[security]` (stricter mode wins; warn on mismatch) |
 | `[security.<mode>].agent_cli` etc. | `[scanner].agent_cli` etc. |
-| `[security].threshold` / `max_size` (top-level pre-V2) | `[scanner].threshold` / `max_size` |
+| `[security].threshold` / `max_size` (top-level) | `[scanner].threshold` / `max_size` |
 | `[[security.overrides]] preset = "none"` | `security.trust` glob entry |
 | `[[security.overrides]] preset = relaxed/standard/strict` | dropped with warning |
 | `[agent-mode]` | dropped with warning |
 | `[agent]` | dropped with warning |
-| `[registry].allow_npm` | dropped (always allowed in V2) |
+| `[registry].allow_npm` | dropped |
 | `scan = "off"` | `scan = "none"` |
 | `on_warn = "allow"` | `on_warn = "install"` |
 
-**migrate/state.ts** — Reads v0.x `installed.json` + `plugins.json`, writes unified `state.json`. Preserves any existing `state.mcpServers` (does not overwrite with `[]`).
+**migrate/state.ts** — Reads legacy `installed.json` + `plugins.json`, writes unified `state.json`. Preserves any existing `state.mcpServers` (does not overwrite with `[]`).
 
-**migrate/manifest.ts** — Verifies `skilltap.toml` shape still parses against V2 schema.
+**migrate/manifest.ts** — Verifies `skilltap.toml` shape parses against current schema.
 
 ### Agent-Plugins Module
 
@@ -388,7 +386,7 @@ core → test-utils (dev)
 
 **agent-plugins/claude-code.ts** — Reads `~/.claude/plugins/installed_plugins.json` and `known_marketplaces.json`. Tolerant Zod parser with `passthrough()` for forward-compat. Doctor check warns when overlapping components exist between Claude Code's plugin store and skilltap state.
 
-**agent-plugins/codex.ts** — Stub. Codex doesn't have a published marketplace yet; the file holds the slot for future support.
+**agent-plugins/codex.ts** — Stub.
 
 ### Schemas (Zod 4)
 
@@ -432,14 +430,12 @@ Other canonical schemas:
 - **state.json** — `StateSchema { version, skills: InstalledSkillSchema[], plugins: PluginRecordSchema[], mcpServers: [] }`.
 - **skilltap.toml** — `ProjectManifestSchema` with `[[skills]]`, `[[plugins]]`, `[[mcps]]` arrays + `[targets]`.
 - **skilltap.lock** — `LockfileSchema` mirroring the manifest with resolved refs/SHAs.
-- **.skilltap/<name>.toml** — `PluginManifestV2Schema` (native plugin format).
+- **.skilltap/<name>.toml** — `SkilltapPluginManifestSchema` (native plugin format).
 - **tap.json** — `TapSchema`, `TapSkillSchema`, `TapPluginSchema`.
 - **marketplace.json** — `MarketplaceSchema` (Claude Code format, adapted to `Tap`).
 - **plugin.json** (Claude Code / Codex) — `PluginManifestSchema` (unified internal representation).
 - **SKILL.md frontmatter** — `SkillFrontmatterSchema`.
 - **Agent response** — `AgentResponseSchema`.
-
-The legacy `installed.json` and `plugins.json` schemas (`schemas/installed.ts`, `schemas/plugins.ts`) are kept for migrate-only use. Production code does not read or write them.
 
 Zod validates at every data boundary: parsing TOML config, reading `state.json`, parsing tap.json, parsing marketplace.json, parsing manifests, extracting SKILL.md frontmatter, and parsing agent CLI output. Adapter return values are validated before entering core logic.
 
@@ -575,12 +571,12 @@ These flows show how modules coordinate. See [SPEC.md](./SPEC.md#cli-commands) f
 ```
 1. Detect legacy markers: [agent-mode], [agent], [security.human]/[security.agent], [[security.overrides]],
    v0.x installed.json, v0.x plugins.json, scan = "off", on_warn = "allow"
-2. If no markers: exit 0 with "Already on V2."
-3. Read all legacy files (parse with v0.x and pre-V2 schemas in schemas/installed.ts, schemas/plugins.ts)
+2. If no markers: exit 0 (nothing to migrate).
+3. Read all legacy files (parse with legacy schemas in migrate/legacy-schemas.ts)
 4. Translate config (migrate/config.ts) per the table above
 5. Translate state (migrate/state.ts) — installed.json + plugins.json → state.json; preserve mcpServers
 6. Verify manifest (migrate/manifest.ts) — skilltap.toml shape unchanged
-7. Write V2 files; rename originals to *.v1.bak / *.v2.bak
+7. Write translated files; rename originals to *.v1.bak / *.v2.bak
 8. Run doctor to verify
 9. Print migration summary with diff
 ```
@@ -665,9 +661,9 @@ The CLI layer catches results and formats them via `Output`. Core never writes t
 
 See [SPEC.md — Error Handling](./SPEC.md#error-handling) for exit codes, error message format, and the full error condition table.
 
-## Removed-Command Hints
+## Removed-Command Errors
 
-`verify`, `link`, `unlink`, `enable`, `disable`, and `skills` each exit non-zero with an explicit replacement hint instead of falling through to citty's generic "unknown command":
+Six retired command names exit non-zero with an explicit replacement hint:
 
 | Removed | Replacement |
 |---|---|
@@ -678,7 +674,7 @@ See [SPEC.md — Error Handling](./SPEC.md#error-handling) for exit codes, error
 | `disable <name>` | `toggle skill <name>` |
 | `skills <subcommand>` | top-level `list` / `info` / `remove skill` / `move` |
 
-The `mcp:` URL prefix was removed; type is explicit via `install mcp <source>`.
+Type is explicit via `install mcp <source>`.
 
 ## Testing Strategy
 
@@ -722,7 +718,7 @@ All tests run with `bun test`. CI runs source-mode and compiled-binary suites on
 | Sync drift | Prompt by default | Strict-by-default, additive-only | Prompt avoids destructive surprises while preserving deterministic value with `--yes` |
 | Scope detection | Smart default (git → project) | Always prompt, always global | Most installs in a git repo are project-scoped; prompt fatigue is real |
 | Security model | One [security] block + [scanner] | Per-mode split, presets, overrides | One rule for everyone; output style is a separate concern from policy |
-| Single runtime | TTY/JSON drives output | Keep --agent flag, keep config block | Removing the parallel agent-mode runtime cuts duplicated orchestration; output mode is one decision |
+| Single runtime | TTY/JSON drives output | Keep --agent flag, keep config block | A single runtime cuts duplicated orchestration; output mode is one decision |
 | Install disambiguation | Required subcommand (skill/plugin/mcp) | Auto-detect, hybrid, --as flag | Explicit type means no auto-detect heuristics, no `mcp:` URL prefix, symmetric with remove/update/toggle |
 | `verify` retirement | Fold into `doctor` | Keep separate | Single verb (`doctor`) with arg-based scope: env (no args) vs per-artifact (`doctor skill <path>`) |
 | `link`/`unlink` retirement | Fold into `adopt` | Keep separate | `link <path>` and `adopt --track-in-place` did the same thing |

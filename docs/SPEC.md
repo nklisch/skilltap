@@ -1,6 +1,6 @@
 # SPEC
 
-> Canonical behavioral specification for skilltap v2.2. The CLI surface, file
+> Canonical behavioral specification for skilltap. The CLI surface, file
 > formats, validation rules, and edge cases below are the authoritative
 > reference for implementation. See [VISION.md](./VISION.md) for the why,
 > [ARCH.md](./ARCH.md) for module boundaries, [SECURITY.md](./SECURITY.md)
@@ -13,7 +13,7 @@
 3. [Configuration](#configuration)
 4. [Project Manifest and Lockfile](#project-manifest-and-lockfile)
 5. [State Files](#state-files)
-6. [Migration](#migration)
+
 7. [Source Adapters](#source-adapters)
 8. [Skill Discovery](#skill-discovery)
 9. [Plugin Format](#plugin-format)
@@ -29,7 +29,6 @@
 19. [Self-Update](#self-update)
 20. [Git URL Protocol Fallback](#git-url-protocol-fallback)
 21. [Error Handling](#error-handling)
-22. [Removed in v2.2](#removed-in-v22)
 
 ---
 
@@ -78,7 +77,6 @@ skilltap doctor                    [flags]
 
 skilltap find    [query]           [flags]   TUI when interactive
 skilltap info    <name>            [flags]
-skilltap list    [flags]
 skilltap create  [name]            [flags]
 skilltap completions <shell>       [flags]
 skilltap self-update               [flags]
@@ -314,8 +312,75 @@ MCPs.
 skilltap migrate [--yes] [--json]
 ```
 
-One-shot upgrade for v0.x and pre-v2.2 configs / state. See [Migration](#migration)
-for the translation rules.
+Translate legacy config and state to the current format. `loadConfig`
+hard-fails on legacy shapes; run `migrate` once on each machine.
+
+#### Translation rules
+
+Per-mode security blocks → flat `[security]` block (stricter mode wins on
+conflict):
+
+| Legacy | Current |
+|--------|---------|
+| `[security.human]` `scan = X` | `[security]` `scan = X` (took stricter) |
+| `[security.human]` `on_warn = X` | `[security]` `on_warn = X` (took stricter) |
+| `[security.human]` `require_scan = true` | dropped; use `on_warn = "fail"` |
+| `[security.agent]` (any) | merged into `[security]` (took stricter) |
+| Top-level `[security] scan` / `on_warn` | preserved |
+
+Trust overrides → trust glob list:
+
+| Legacy | Current |
+|--------|---------|
+| `[[security.overrides]] preset = "none"` | append `match` to `security.trust` |
+| `[[security.overrides]] preset = relaxed\|standard\|strict` | dropped with warning; reconfigure with explicit `scan`/`on_warn` |
+
+Operational config split:
+
+| Legacy | Current |
+|--------|---------|
+| `[security.<mode>] agent_cli` / `threshold` / `max_size` / `ollama_model` | moved to `[scanner]` |
+| Top-level `[security] agent_cli` (etc.) | moved to `[scanner]` |
+
+Removed blocks:
+
+| Legacy | Action |
+|--------|--------|
+| `[agent-mode]` (entire block) | dropped with warning |
+| `[agent]` (entire block) | dropped with warning |
+| `[registry] allow_npm` | dropped |
+
+Enum translations:
+
+| Legacy | Current |
+|--------|---------|
+| `scan = "off"` | `scan = "none"` |
+| `on_warn = "allow"` | `on_warn = "install"` |
+
+State files → unified `state.json`:
+
+| Legacy | Current |
+|--------|---------|
+| `installed.json` | `state.json` `skills[]` slice |
+| `plugins.json` | `state.json` `plugins[]` slice |
+
+`migrate` preserves `state.mcpServers` if a partially-migrated `state.json`
+already exists (does not overwrite with `[]`).
+
+HTTP taps:
+
+| Legacy | Action |
+|--------|--------|
+| `[[taps]] type = "http"` (with `auth_token`/`auth_env`) | listed; user must convert to git or remove manually |
+
+After translation, originals are renamed:
+
+- `config.toml` → `config.toml.v1.bak`
+- `installed.json` → `installed.json.v1.bak`
+- `plugins.json` → `plugins.json.v1.bak`
+
+A summary of all warnings (lossy translations) is printed at the end. Run
+`doctor` afterwards to verify.
 
 ### `doctor`
 
@@ -343,8 +408,7 @@ Headless dashboard. Filters:
 | `--project` | Only project scope |
 | `--json` | Machine-readable output |
 
-`status` uses the boolean `--global`/`--project` pair (it doesn't go through
-`composePolicy`, which is the path that switched to `--scope`).
+`status` uses the boolean `--global`/`--project` pair for per-scope filtering.
 
 ### `find [query]`
 
@@ -362,16 +426,8 @@ interactive picker; non-TTY prints results as a table (or JSON with
 skilltap info <name> [--global] [--project] [--json]
 ```
 
-Show details for an installed skill, plugin, or MCP server. Like `status`,
-`info` uses the boolean `--global`/`--project` pair.
-
-### `list`
-
-```bash
-skilltap list [--global] [--project] [--json]
-```
-
-Unified listing of installed skills, plugins, and standalone MCPs.
+Show details for an installed skill, plugin, or MCP server. `info` uses the
+boolean `--global`/`--project` pair for per-scope filtering.
 
 ### `tap`
 
@@ -384,7 +440,7 @@ skilltap tap init <directory>
 ```
 
 Manages tap configuration (tap = git repo containing a `tap.json` index).
-HTTP taps were removed in v2.0; `tap add` always treats the URL as git.
+`tap add` treats the URL as git. There is no HTTP tap support.
 
 ### `config`
 
@@ -464,7 +520,7 @@ On first run, if the file doesn't exist, skilltap creates a default config.
 ### Schema
 
 ```toml
-# ~/.config/skilltap/config.toml — V2
+# ~/.config/skilltap/config.toml
 
 [defaults]
 also  = []                # array of agent IDs to symlink to by default
@@ -518,7 +574,7 @@ default_git_host = "https://github.com"
 | `updates.auto_update` | `off`, `patch`, `minor` | `off` |
 | `updates.show_diff` | `full`, `stat`, `none` | `full` |
 
-### Hard-fail on legacy shapes
+### Schema enforcement
 
 `loadConfig()` rejects legacy keys with an explicit error pointing at
 `skilltap migrate`. The following keys are not silently translated:
@@ -529,12 +585,11 @@ default_git_host = "https://github.com"
 - `[agent-mode]`, `[agent]`
 - `[registry] allow_npm`
 
-Run `skilltap migrate` once on each machine. The translation is described in
-[Migration](#migration).
+Run `skilltap migrate` once on each machine.
 
 ### Settable keys
 
-`skilltap config set <key> <value>` accepts only V2 keys. The complete list
+`skilltap config set <key> <value>` accepts only the keys defined above. The complete list
 lives in `core/src/config-keys.ts` (`SETTABLE_KEYS`).
 
 ---
@@ -565,7 +620,7 @@ scope = "project"                   # "project" | "global"
 "github:corp/dev-toolkit"     = "*"
 "home/team-bundle"            = { ref = "v2.1", components = { "test-skipper" = false } }
 
-# Standalone MCP servers — first-class manifest entries (added in v2.2).
+# Standalone MCP servers — first-class manifest entries.
 [[mcps]]
 name   = "search"
 source = "github:corp/search-mcp"
@@ -643,9 +698,9 @@ manual edits, which `sync` reconciles.
 ### Publish manifest (`.skilltap/<plugin>.toml`)
 
 A repo opts into being a publishable plugin by adding one or more files
-under `.skilltap/<plugin-name>.toml`. The native v2.x publish format is
-**TOML**. Existing `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`
-remain readable inputs (skilltap normalizes them internally).
+under `.skilltap/<plugin-name>.toml`. The native publish format is
+**TOML**. `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` are
+readable inputs (skilltap normalizes them internally).
 
 ```toml
 # .skilltap/team-toolkit.toml
@@ -693,8 +748,8 @@ deps, but the plugin is not exposed to outside installers.
 
 ## State Files
 
-`state.json` is the only canonical state store. There is no fallback path —
-pre-v2.2 `installed.json` and `plugins.json` are read **only** by `migrate`.
+`state.json` is the only canonical state store. The `migrate` command reads
+legacy files; nothing else does.
 
 ### Paths
 
@@ -815,91 +870,6 @@ const TrustInfoSchema = z.object({
   tap:    z.object({ verified: z.boolean(),  verifiedBy: z.string().optional() }).optional(),
 }).optional()
 ```
-
----
-
-## Migration
-
-```bash
-skilltap migrate [--yes] [--json]
-```
-
-`migrate` is the **only** path from a v0.x or pre-v2.2 config to V2. `loadConfig`
-hard-fails on legacy shapes; the CLI also prints a soft startup notice when
-v0.x/pre-v2.2 markers are detected and no `state.json` exists yet:
-
-```
-↑  v1.0 state detected. Run 'skilltap migrate' to upgrade to v2.0.
-```
-
-### Translation rules
-
-Per-mode security blocks → flat `[security]` block (stricter mode wins on
-conflict):
-
-| Legacy (v0.x or pre-v2.2) | V2 |
-|---------------------------|-----|
-| `[security.human]` `scan = X` | `[security]` `scan = X` (took stricter) |
-| `[security.human]` `on_warn = X` | `[security]` `on_warn = X` (took stricter) |
-| `[security.human]` `require_scan = true` | dropped; use `on_warn = "fail"` |
-| `[security.agent]` (any) | merged into `[security]` (took stricter) |
-| Top-level `[security] scan` / `on_warn` (legacy-v2.x) | preserved |
-
-Trust overrides → trust glob list:
-
-| Legacy | V2 |
-|--------|-----|
-| `[[security.overrides]] preset = "none"` | append `match` to `security.trust` |
-| `[[security.overrides]] preset = relaxed\|standard\|strict` | dropped with warning; reconfigure with explicit `scan`/`on_warn` |
-
-Operational config split:
-
-| Legacy | V2 |
-|--------|-----|
-| `[security.<mode>] agent_cli` / `threshold` / `max_size` / `ollama_model` | moved to `[scanner]` |
-| Top-level `[security] agent_cli` (etc.) | moved to `[scanner]` |
-
-Removed blocks:
-
-| Legacy | V2 |
-|--------|-----|
-| `[agent-mode]` (entire block) | dropped with warning |
-| `[agent]` (entire block; never shipped widely) | dropped with warning |
-| `[registry] allow_npm` | dropped (no longer relevant) |
-
-Enum translations:
-
-| Legacy | V2 |
-|--------|-----|
-| `scan = "off"` | `scan = "none"` |
-| `on_warn = "allow"` | `on_warn = "install"` |
-
-State files → unified `state.json`:
-
-| Legacy | V2 |
-|--------|-----|
-| `installed.json` | `state.json` `skills[]` slice |
-| `plugins.json` | `state.json` `plugins[]` slice |
-
-`migrate` preserves `state.mcpServers` if a partially-migrated `state.json`
-already exists (does not overwrite with `[]`).
-
-HTTP taps:
-
-| Legacy | V2 |
-|--------|-----|
-| `[[taps]] type = "http"` (with `auth_token`/`auth_env`) | listed; user must convert to git or remove manually |
-
-### Outputs
-
-After translation, originals are renamed to `*.bak`:
-
-- `config.toml` → `config.toml.v1.bak`
-- `installed.json` → `installed.json.v1.bak`
-- `plugins.json` → `plugins.json.v1.bak`
-
-A summary of all warnings (lossy translations) is printed at the end. Run
-`doctor` afterwards to verify.
 
 ---
 
@@ -1248,8 +1218,7 @@ The CLI exposes two non-interactive flags:
 
 The two are mutually exclusive; passing both errors with hint.
 
-Detailed algorithm in
-[docs/designs/completed/plugin-capture.md](./designs/completed/plugin-capture.md).
+See [SPEC.md — Plugin Capture](#plugin-capture) for the full algorithm.
 
 ### Multi-plugin repos
 
@@ -2026,45 +1995,9 @@ All errors include:
 | Semantic scan parse failure | `warning: Could not parse agent response for chunk {n}. Raw output logged. Treating as safe.` |
 | `--strict` with warnings (install) | `error: Security warnings found (strict mode). Aborting install.` Exit 1. |
 | `--strict` with warnings (update) | `warning: Security warnings found in {name} (strict mode). Skipping update.` Continues. |
-| Legacy config detected | `error: config.toml uses pre-v2.2 keys (e.g. [security.human]). Run 'skilltap migrate' to upgrade.` |
+| Legacy config detected | `Legacy config detected ({marker}). Run 'skilltap migrate' to upgrade to the v2.2 config schema.` |
 | `mcp:` URL prefix passed to install | `error: The 'mcp:' prefix is no longer accepted here. Use 'skilltap install mcp <source>' to install a standalone MCP server.` |
 | Removed command (`verify`/`link`/`unlink`/`enable`/`disable`/`skills`) | `Error: 'skilltap <cmd>' was removed. hint: <replacement>` Exit 1. |
 | `--scope` invalid value | `error: Invalid --scope value '{x}'. Use 'project' or 'global'.` |
 | `--force-capture` and `--no-capture` together | `error: Cannot use --force-capture and --no-capture together.` |
 
----
-
-## Removed in v2.2
-
-One-line removal entries — no fallback, no alias, no silent translation.
-
-- `[security.human]` / `[security.agent]` per-mode blocks. Replaced by flat `[security]`.
-- `[[security.overrides]]` array and `preset = ` field. Replaced by `security.trust` glob list.
-- `require_scan` config key. Replaced by `on_warn = "fail"`.
-- `[agent-mode]` and `[agent]` config blocks. Removed entirely.
-- `--agent` CLI flag. Removed; use TTY detection + `--yes` + `--json`.
-- `SKILLTAP_AGENT` env var. Removed; same replacement.
-- `[registry] allow_npm`. Removed as no-op.
-- `--project` / `--global` boolean flag pair on lifecycle commands. Replaced by `--scope project|global`. (`status` and `info` still use the boolean pair — they don't go through `composePolicy`.)
-- `--no-strict` flag. Removed (mri intercepts `--no-*` as negation). Use `--strict` to opt in; otherwise config decides.
-- `verify` command. Replaced by `doctor skill <path>` and `doctor plugin <path>`.
-- `link` command. Replaced by `adopt <path>` (track-in-place by default).
-- `unlink` command. Replaced by `remove <type> <name>`.
-- `enable` / `disable` commands. Replaced by `toggle <type> <name>` (and `toggle plugin <name>:<component>` for component-level).
-- `skills` subcommand group. Replaced by `list` plus typed `install`/`remove`/`update`/`toggle` subcommands.
-- `plugin` subcommand group. Replaced by typed top-level commands (`install plugin`, `remove plugin`, `info <name>`, `toggle plugin`).
-- `tap install` subcommand. Replaced by `install skill <name>` / `install plugin <name>` (tap-resolved name resolves through configured taps).
-- `mcp:` URL prefix. Replaced by `install mcp <source>`.
-- HTTP registry adapter. Replaced by git-only taps.
-- HTTP registry tap type (`type = "http"`, `auth_token`, `auth_env`). Removed; `tap add` always treats URLs as git.
-- Auto-detected install type. Replaced by required type subcommand on `install`/`remove`/`update`/`toggle`/`try`.
-- Silent aliases (`skilltap remove` without type, etc.). Replaced by clear errors with replacement hints.
-- `installed.json` / `plugins.json` writes. Replaced by `state.json` (legacy files read only by `migrate`).
-- `loadInstalled()` / `loadPlugins()` v0.x file fallbacks. Removed; `loadConfig` hard-fails with hint.
-- `policy.ts` (legacy). Replaced by `policy/` (promoted from `policy-v2/`).
-- `schemas/config-v2.ts`. Merged into `schemas/config.ts`.
-- `httpAdapter`. Removed (unreachable after taps went git-only).
-- `linkSkill` core function. Removed (CLI surface was already gone).
-- `searchSkillsRegistry`, `marketplaceSourceToRepo` deprecated wrappers. Removed.
-- `config security --preset`, `--mode`, `--trust tap:n=preset`, `--remove-trust` flags. Replaced by `--scan`, `--on-warn`, `--trust-add`, `--trust-remove`, `--trust-list`.
-- `config agent-mode` wizard. Removed.

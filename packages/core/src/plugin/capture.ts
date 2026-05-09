@@ -13,7 +13,7 @@
  * (`applyCapture`) is the atomic ownership-transfer step that runs before the
  * plugin's content lands on disk.
  *
- * Spec: `docs/designs/completed/plugin-capture.md`.
+ * See SPEC.md §Plugin Capture for the algorithm.
  */
 
 import { $ } from "bun";

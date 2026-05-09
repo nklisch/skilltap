@@ -1,6 +1,6 @@
 # UX Reference
 
-Dense CLI reference for the v2.0 redesign — command tree, flag combinations, prompt flows, and common workflows. This is the canonical CLI reference; there is no legacy section.
+Dense CLI reference for skilltap — command tree, flag combinations, prompt flows, and common workflows.
 
 For motivation and design rationale, see [VISION.md](./VISION.md). For exact algorithmic behavior, see [SPEC.md](./SPEC.md). For internal architecture, see [ARCH.md](./ARCH.md).
 
@@ -997,7 +997,7 @@ threshold = "low"             # "low" | "medium" | "high" — semantic-scan seve
 max_size = 65536              # Bytes; skills larger than this skip semantic scanning
 ```
 
-`[security]` is policy ("what should happen"); `[scanner]` is the operational config that backs the semantic scan ("how to run it"). They live as sibling top-level blocks. There is no `[security.human]` / `[security.agent]` per-mode split, no `[[security.overrides]]` table-array, no `preset = ...` resolver, and no `require_scan` key — all four were removed in v2.2 (see [SPEC.md → Removed in v2.2](./SPEC.md#removed-in-v22)). `--strict` on the CLI is equivalent to `on_warn = "fail"` for that one invocation.
+`[security]` is policy ("what should happen"); `[scanner]` is the operational config that backs the semantic scan ("how to run it"). They live as sibling top-level blocks. There is no `[security.human]` / `[security.agent]` per-mode split, no `[[security.overrides]]` table-array, no `preset = ...` resolver, and no `require_scan` key. `--strict` on the CLI is equivalent to `on_warn = "fail"` for that one invocation.
 
 ### Other Config Keys
 
@@ -1073,13 +1073,13 @@ Update the running binary in-place from GitHub Releases.
 
 ```
 $ skilltap self-update
-Current: v2.1.1
-Latest:  v2.2.0
+Current: v<old>
+Latest:  v<new>
 Update? (Y/n): y
-✓ Updated skilltap to v2.2.0
+✓ Updated skilltap to v<new>
 
 $ skilltap self-update --force
-✓ Updated skilltap to v2.2.0 (forced)
+✓ Updated skilltap to v<new> (forced)
 ```
 
 ---
@@ -1159,10 +1159,10 @@ skilltap adopt --source claude-code
 skilltap adopt dev-toolkit    # matches by name in Claude Code's plugin registry
 ```
 
-### Migrating from v2.1 or earlier
+### Migration
 
 ```bash
-# One shot — translates config + consolidates state files
+# Translate config + consolidate state files
 skilltap migrate
 
 # Verify migration was clean
@@ -1171,9 +1171,9 @@ skilltap doctor
 
 ---
 
-## Legacy Commands
+## Removed-command errors
 
-Five commands were retired in v2.2. There are no silent aliases — running an old path exits with an explicit hint pointing at its replacement. If a script or muscle-memory still uses these, switch to the canonical command:
+These commands exit non-zero with explicit replacement hints:
 
 | Removed | Replaced by | Notes |
 |---------|-------------|-------|
@@ -1183,7 +1183,7 @@ Five commands were retired in v2.2. There are no silent aliases — running an o
 | `skilltap enable <name>` | `skilltap toggle skill\|plugin\|mcp <name>` | One command toggles active state for any artifact type. |
 | `skilltap disable <name>` | `skilltap toggle skill\|plugin\|mcp <name>` | Same. `toggle plugin <name>:<component>` addresses one component without a picker. |
 
-The v0.x `skilltap skills` subgroup (`skills info`, `skills adopt`, `skills move`, `skills remove`, `skills link`, `skills unlink`) is also gone — every operation lifted to the top level (`info`, `adopt`, `move`, `remove`).
+The `skilltap skills` subgroup is not present — operations live at the top level (`info`, `adopt`, `move`, `remove`).
 
 ---
 
@@ -1193,7 +1193,7 @@ The v0.x `skilltap skills` subgroup (`skills info`, `skills adopt`, `skills move
 |-------|-------|-----|
 | `No SKILL.md found` | Wrong type subcommand | Use `install plugin` or `install mcp` |
 | `skilltap.toml is corrupt` | Malformed project manifest | TTY: auto-recovered; non-TTY: run `skilltap doctor --fix` |
-| `Config schema is pre-v2.2 — run skilltap migrate` | Loaded a legacy config (per-mode `[security]`, `[agent-mode]`, presets, etc.) | Run `skilltap migrate` once on this machine |
+| `Legacy config detected — run 'skilltap migrate' to upgrade` | Loaded a config with legacy schema markers (per-mode `[security]`, `[agent-mode]`, presets, etc.) | Run `skilltap migrate` once on this machine |
 | `Cannot remove: skill is a plugin component` | Tried `remove skill` on a plugin part | Use `remove plugin <name>` or `toggle plugin <name>:<component>` |
 | `sync requires a project root` | Run outside any git repo or project | cd into a directory containing `skilltap.toml` or `.git` |
 | `adopt requires a target in non-interactive mode` | Bare `adopt` in a pipe | Pass a path: `adopt ./my-skill` or `adopt --source claude-code` |
