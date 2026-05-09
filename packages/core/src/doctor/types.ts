@@ -15,6 +15,14 @@ export interface DoctorCheck {
   issues?: DoctorIssue[];
   /** Informational per-item status lines shown after issues (e.g. per-tap health). */
   info?: string[];
+  /**
+   * True when every issue on this check has `fixed === true`.
+   * Set by the doctor runner after `--fix` has run all `issue.fix()` calls.
+   * When true, the check's effective status is `pass`.
+   */
+  fixed?: boolean;
+  /** Aggregate fix description for the check, derived from fixed issues. */
+  fixDescription?: string;
 }
 
 export interface DoctorResult {

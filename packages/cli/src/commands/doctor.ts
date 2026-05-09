@@ -107,7 +107,9 @@ async function runInteractive(out: Output, fix: boolean): Promise<void> {
   const totalIssues = allIssues.length;
   const fixedCount = allIssues.filter((i) => i.fixed).length;
   const unfixable = allIssues.filter((i) => !i.fixable && !i.fixed).length;
-  const hasFailures = result.checks.some((c) => c.status === "fail");
+  const hasFailures = result.checks.some(
+    (c) => c.status === "fail" && !c.fixed,
+  );
 
   if (totalIssues === 0) {
     out.raw(`${ansi.dim("└")} ${ansi.green("✓")} Everything looks good!\n\n`);
@@ -148,14 +150,18 @@ async function runJson(out: Output, fix: boolean): Promise<void> {
     ok: result.ok,
     checks: result.checks.map((c) => ({
       name: c.name,
-      status: c.status,
+      status: c.fixed ? ("pass" as const) : c.status,
       ...(c.detail ? { detail: c.detail } : {}),
+      ...(c.info && c.info.length > 0 ? { info: c.info } : {}),
+      ...(c.fixed ? { fixed: true } : {}),
+      ...(c.fixDescription ? { fixDescription: c.fixDescription } : {}),
       ...(c.issues
         ? {
             issues: c.issues.map((i) => ({
               message: i.message,
               fixable: i.fixable,
               ...(i.fixed !== undefined ? { fixed: i.fixed } : {}),
+              ...(i.fixDescription ? { fixDescription: i.fixDescription } : {}),
             })),
           }
         : {}),

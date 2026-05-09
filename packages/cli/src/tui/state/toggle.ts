@@ -4,18 +4,61 @@ export const initialToggleState: ToggleState = {
   step: "type",
   type: null,
   selectedName: null,
+  names: [],
+  namesLoading: false,
+  focusIndex: 0,
   components: [],
   selectedComponentIndices: [],
 };
 
+function focusListLength(state: ToggleState): number {
+  if (state.step === "type") return 3;
+  if (state.step === "name") return state.names.length;
+  return state.components.length;
+}
+
 export function toggleReducer(state: ToggleState, action: Action): ToggleState {
   switch (action.type) {
     case "toggle:set-type":
-      return { ...state, type: action.value, step: "name", selectedName: null };
+      return {
+        ...state,
+        type: action.value,
+        step: "name",
+        selectedName: null,
+        names: [],
+        namesLoading: false,
+        focusIndex: 0,
+      };
     case "toggle:set-name":
-      return { ...state, selectedName: action.value, step: "components", components: [] };
+      return {
+        ...state,
+        selectedName: action.value,
+        step: "components",
+        components: [],
+        focusIndex: 0,
+      };
+    case "toggle:names-loading":
+      return { ...state, namesLoading: true };
+    case "toggle:names-loaded":
+      return {
+        ...state,
+        names: action.names,
+        namesLoading: false,
+        focusIndex: 0,
+      };
+    case "toggle:focus": {
+      const len = focusListLength(state);
+      if (len === 0) return state;
+      const next = Math.max(0, Math.min(len - 1, state.focusIndex + action.delta));
+      return { ...state, focusIndex: next };
+    }
     case "toggle:components-loaded":
-      return { ...state, components: action.components, selectedComponentIndices: [] };
+      return {
+        ...state,
+        components: action.components,
+        selectedComponentIndices: [],
+        focusIndex: 0,
+      };
     case "toggle:component-toggle": {
       const idx = action.index;
       const already = state.selectedComponentIndices.includes(idx);
@@ -26,10 +69,24 @@ export function toggleReducer(state: ToggleState, action: Action): ToggleState {
     }
     case "toggle:step-back": {
       if (state.step === "components") {
-        return { ...state, step: "name", components: [], selectedComponentIndices: [] };
+        return {
+          ...state,
+          step: "name",
+          components: [],
+          selectedComponentIndices: [],
+          focusIndex: 0,
+        };
       }
       if (state.step === "name") {
-        return { ...state, step: "type", type: null, selectedName: null };
+        return {
+          ...state,
+          step: "type",
+          type: null,
+          selectedName: null,
+          names: [],
+          namesLoading: false,
+          focusIndex: 0,
+        };
       }
       return state;
     }

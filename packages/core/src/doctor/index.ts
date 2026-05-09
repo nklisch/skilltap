@@ -45,6 +45,16 @@ export async function runDoctor(
           }
         }
       }
+      // If every issue was fixed, the check is effectively passing.
+      if (check.issues.length > 0 && check.issues.every((i) => i.fixed)) {
+        check.fixed = true;
+        const descriptions = check.issues
+          .map((i) => i.fixDescription)
+          .filter((d): d is string => Boolean(d));
+        if (descriptions.length > 0) {
+          check.fixDescription = descriptions.join("; ");
+        }
+      }
     }
     onCheck?.(check);
     checks.push(check);
@@ -112,6 +122,6 @@ export async function runDoctor(
   // 17. Claude Code plugin overlaps canary.
   await emit(await checkClaudeCodeOverlap(state));
 
-  const hasFailure = checks.some((c) => c.status === "fail");
+  const hasFailure = checks.some((c) => c.status === "fail" && !c.fixed);
   return { ok: !hasFailure, checks };
 }

@@ -260,4 +260,57 @@ describe("doctor --json", () => {
       }
     }
   });
+
+  // Unit 3.18: --json shape includes detail / info / fixDescription when present.
+  test("JSON includes detail, info, and fixDescription fields when applicable", async () => {
+    const { stdout } = await runSkilltap(
+      ["doctor", "--json"],
+      homeDir,
+      configDir,
+    );
+    const result = JSON.parse(stdout) as {
+      checks: Array<{
+        name: string;
+        status: string;
+        detail?: string;
+        info?: string[];
+        fixDescription?: string;
+        issues?: Array<{
+          message: string;
+          fixable: boolean;
+          fixDescription?: string;
+        }>;
+      }>;
+    };
+
+    // At least one check should have a non-empty `detail` field —
+    // git/state.json/manifest checks all populate it.
+    const withDetail = result.checks.filter((c) => typeof c.detail === "string");
+    expect(withDetail.length).toBeGreaterThan(0);
+
+    // Whenever a check has fixable issues planted, those issues should expose
+    // fixDescription. Run --fix on a corrupt state.json to plant one.
+    const skilltapDir = join(configDir, "skilltap");
+    await mkdir(skilltapDir, { recursive: true });
+    await writeFile(join(skilltapDir, "state.json"), "{not valid}");
+
+    const { stdout: fixOut } = await runSkilltap(
+      ["doctor", "--json", "--fix"],
+      homeDir,
+      configDir,
+    );
+    const fixResult = JSON.parse(fixOut) as {
+      checks: Array<{
+        name: string;
+        fixed?: boolean;
+        fixDescription?: string;
+        issues?: Array<{ fixDescription?: string }>;
+      }>;
+    };
+    const stateCheck = fixResult.checks.find((c) => c.name === "state.json");
+    expect(stateCheck).toBeDefined();
+    expect(stateCheck!.fixed).toBe(true);
+    expect(typeof stateCheck!.fixDescription).toBe("string");
+    expect(stateCheck!.issues?.[0]?.fixDescription).toBeDefined();
+  });
 });

@@ -36,20 +36,13 @@ const COMPONENTS_FOOTER = [
   { key: "q", description: "quit" },
 ];
 
-function typeStepFocusIndex(state: ToggleState): number {
-  if (state.type === null) return 0;
-  const idx = TYPE_OPTIONS.findIndex((o) => o.key === state.type);
-  return idx >= 0 ? idx : 0;
-}
-
 export const Toggle: React.FC<Props> = ({ state }) => {
   if (state.step === "type") {
-    const focusIndex = typeStepFocusIndex(state);
     return (
       <Box flexDirection="column">
         <Text bold>Toggle — Select type</Text>
         <Box marginTop={1}>
-          <List items={TYPE_OPTIONS} focusIndex={focusIndex} />
+          <List items={TYPE_OPTIONS} focusIndex={state.focusIndex} />
         </Box>
         <Footer hints={TYPE_FOOTER} />
       </Box>
@@ -57,6 +50,10 @@ export const Toggle: React.FC<Props> = ({ state }) => {
   }
 
   if (state.step === "name") {
+    const items = state.names.map((name, i) => ({
+      key: `${name}-${i}`,
+      label: name,
+    }));
     return (
       <Box flexDirection="column">
         <Text bold>
@@ -64,9 +61,9 @@ export const Toggle: React.FC<Props> = ({ state }) => {
         </Text>
         <Box marginTop={1}>
           <List
-            items={[]}
-            focusIndex={0}
-            emptyMessage="(loading…)"
+            items={items}
+            focusIndex={state.focusIndex}
+            emptyMessage={state.namesLoading ? "(loading…)" : `(no ${state.type}s installed)`}
           />
         </Box>
         <Footer hints={NAME_FOOTER} />
@@ -82,8 +79,6 @@ export const Toggle: React.FC<Props> = ({ state }) => {
     selected: state.selectedComponentIndices.includes(i),
   }));
 
-  const focusIndex = 0;
-
   return (
     <Box flexDirection="column">
       <Text bold>
@@ -92,7 +87,7 @@ export const Toggle: React.FC<Props> = ({ state }) => {
       <Box marginTop={1}>
         <List
           items={componentItems}
-          focusIndex={focusIndex}
+          focusIndex={state.focusIndex}
           emptyMessage="(no components)"
         />
       </Box>

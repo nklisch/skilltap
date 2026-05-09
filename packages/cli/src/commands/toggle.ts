@@ -128,10 +128,14 @@ async function runToggleSkill(
   const isCurrentlyActive = skill.active !== false;
   let result: Awaited<ReturnType<typeof disableSkill>>;
 
+  // Pass the record's scope so disable/enable resolve the correct state file.
+  // Without this, scope=undefined causes them to read GLOBAL state and miss
+  // project-scoped records (and vice versa).
+  const recordScope: "global" | "project" | "linked" = skill.scope;
   if (isCurrentlyActive) {
-    result = await disableSkill(name, { projectRoot });
+    result = await disableSkill(name, { scope: recordScope, projectRoot });
   } else {
-    result = await enableSkill(name, { projectRoot });
+    result = await enableSkill(name, { scope: recordScope, projectRoot });
   }
 
   if (!result.ok) {

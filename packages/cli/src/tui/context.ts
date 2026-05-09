@@ -174,6 +174,21 @@ export async function createAppContext(): Promise<AppContext> {
       }
     },
 
+    loadToggleNames: async (
+      type: "skill" | "plugin" | "mcp",
+    ): Promise<string[]> => {
+      try {
+        const stateResult = await loadState(projectRoot);
+        if (!stateResult.ok) return [];
+        if (type === "skill") return stateResult.value.skills.map((s) => s.name);
+        if (type === "plugin") return stateResult.value.plugins.map((p) => p.name);
+        if (type === "mcp") return stateResult.value.mcpServers.map((m) => m.name);
+        return [];
+      } catch {
+        return [];
+      }
+    },
+
     loadAdoptCandidates: async (): Promise<AdoptCandidate[]> => {
       try {
         const result = await discoverAllAdoptable({

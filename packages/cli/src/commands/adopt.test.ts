@@ -169,4 +169,60 @@ describe("adopt — non-interactive", () => {
     expect(output).toContain("adopt requires a target");
     expect(output).toContain("Usage:");
   });
+
+  test("adopt --source claude-code (non-TTY) errors with usage hint, not a crash", async () => {
+    // The --source flag filters the picker to a single scanner. In non-TTY
+    // mode, no picker can run, so the command must fail with the usage hint
+    // rather than blowing up. This pins the surface even when the
+    // claude-code cache (installed_plugins.json + known_marketplaces.json)
+    // is present — it's still a no-target invocation.
+    //
+    // Plant a fake claude-code cache so the scanner detects something to
+    // adopt, then verify the non-TTY guard still fires.
+    const claudePluginsDir = join(homeDir, ".claude", "plugins");
+    await mkdir(claudePluginsDir, { recursive: true });
+    await Bun.write(
+      join(claudePluginsDir, "installed_plugins.json"),
+      JSON.stringify(
+        {
+          plugins: {
+            "fake-plugin@anthropic-marketplace": [
+              {
+                installPath: join(homeDir, "fake-plugin"),
+                version: "1.0.0",
+                installedAt: "2026-01-01T00:00:00.000Z",
+                lastUpdated: "2026-01-01T00:00:00.000Z",
+                scope: "user",
+                gitCommitSha: "abc123",
+              },
+            ],
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    await Bun.write(
+      join(claudePluginsDir, "known_marketplaces.json"),
+      JSON.stringify(
+        {
+          "anthropic-marketplace": {
+            name: "anthropic-marketplace",
+            source: { source: "github", repo: "anthropic/marketplace" },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+
+    const { exitCode, stdout, stderr } = await runSkilltap(
+      ["adopt", "--source", "claude-code", "--scope", "global"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(1);
+    const output = stdout + stderr;
+    expect(output).toContain("adopt requires a target");
+  });
 });

@@ -99,16 +99,9 @@ describe("doctor — corrupt state.json without --fix (Test A4)", () => {
 // Behavior verified from state-v2.test.ts:
 //   fix() copies the file to state.json.bak, then writes a fresh
 //   { version: 2, skills: [], plugins: [], mcpServers: [] } in its place.
-//
-// NOTE: The implementation exits 1 even when all issues are fixed, because the
-// check's status field remains "fail" after repair (it records what was found,
-// not the post-fix state). The doctor runner's hasFailure check uses the
-// original status. The design expected exit 0, but the shipped behavior is
-// exit 1 with all issues marked fixed. The fix is applied correctly; only the
-// exit code differs from the spec.
 
 describe("doctor --fix — corrupt state.json (Test 23)", () => {
-  test("repairs state.json (backup + fresh v2 file) and reports the fix applied; exits 1 because check status stays 'fail' post-repair", async () => {
+  test("repairs state.json (backup + fresh v2 file), reports the fix applied, and exits 0 when every fix succeeds", async () => {
     const statePath = join(skilltapDir, "state.json");
     await writeFile(statePath, "{not valid}");
 
@@ -118,9 +111,8 @@ describe("doctor --fix — corrupt state.json (Test 23)", () => {
       configDir,
     );
 
-    // Implementation detail: the check status stays "fail" even after
-    // the fix is applied, so doctor exits 1. The repair itself succeeds.
-    expect(exitCode).toBe(1);
+    // After Unit 3.18: when every fix succeeds, doctor exits 0.
+    expect(exitCode).toBe(0);
 
     // A backup must exist
     expect(await pathExists(`${statePath}.bak`)).toBe(true);
@@ -134,15 +126,30 @@ describe("doctor --fix — corrupt state.json (Test 23)", () => {
     // Doctor output must show the fix was applied (✓ marker on the issue)
     expect(stdout).toContain("✓");
 
-    // The JSON output confirms the issue is marked fixed
+    // After Unit 3.18: JSON output reports the fixed check as status: "pass".
+    // Reset the file so the second run also exercises the fix path cleanly.
+    await writeFile(statePath, "{not valid}");
+
     const { stdout: jsonOut } = await runSkilltap(
       ["doctor", "--json", "--fix"],
       homeDir,
       configDir,
     );
-    // After the first fix, state.json is now valid, so the check passes in a
-    // second run — just assert the fix run reported something (no crash)
-    expect(jsonOut.length).toBeGreaterThan(0);
+    const parsed = JSON.parse(jsonOut) as {
+      ok: boolean;
+      checks: Array<{
+        name: string;
+        status: string;
+        fixed?: boolean;
+        issues?: Array<{ fixed?: boolean; fixDescription?: string }>;
+      }>;
+    };
+    expect(parsed.ok).toBe(true);
+    const stateCheck = parsed.checks.find((c) => c.name === "state.json");
+    expect(stateCheck).toBeDefined();
+    expect(stateCheck!.status).toBe("pass");
+    expect(stateCheck!.fixed).toBe(true);
+    expect(stateCheck!.issues?.[0]?.fixed).toBe(true);
   });
 });
 
@@ -351,14 +358,62 @@ describe("doctor --fix — corrupt skilltap.toml (Test 26)", () => {
       // Doctor surfaces the fix (✓ marker on fixed issue).
       expect(stdout).toContain("✓");
 
-      // Note: doctor's exit code is 1 even after a successful fix because
-      // runDoctor computes hasFailure from the original check status (which
-      // remains "fail" after the fix runs). The fix IS performed — see the
-      // bak/manifest assertions above. This mirrors the existing state-v2
-      // behavior documented in Test 23.
-      expect([0, 1]).toContain(exitCode);
+      // After Unit 3.18: doctor exits 0 when every fix succeeds.
+      expect(exitCode).toBe(0);
     } finally {
       await rm(projectRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+// ─── Test 27: --fix exit-0-after-success regression lock (Unit 3.18) ──────────
+//
+// Before Unit 3.18, doctor would exit 1 even when every fixable issue had been
+// repaired, because hasFailure was computed from the unmodified check status.
+// This test pins the new contract: when every failing check has c.fixed = true,
+// doctor exits 0 and the JSON output reports status: "pass" + fixed: true on
+// each repaired check.
+
+describe("doctor --fix — exit code 0 when all fixes succeed (Unit 3.18)", () => {
+  test("planted corrupt state.json + missing dirs all repair → exit 0, JSON status flips to pass", async () => {
+    const statePath = join(skilltapDir, "state.json");
+    await writeFile(statePath, "{not valid}");
+
+    const { exitCode, stdout } = await runSkilltap(
+      ["doctor", "--json", "--fix"],
+      homeDir,
+      configDir,
+    );
+
+    expect(exitCode).toBe(0);
+
+    const parsed = JSON.parse(stdout) as {
+      ok: boolean;
+      checks: Array<{
+        name: string;
+        status: string;
+        fixed?: boolean;
+        fixDescription?: string;
+        issues?: Array<{ message: string; fixable: boolean; fixed?: boolean }>;
+      }>;
+    };
+    expect(parsed.ok).toBe(true);
+
+    const stateCheck = parsed.checks.find((c) => c.name === "state.json");
+    expect(stateCheck).toBeDefined();
+    expect(stateCheck!.status).toBe("pass");
+    expect(stateCheck!.fixed).toBe(true);
+    expect(stateCheck!.fixDescription).toBeDefined();
+
+    // Confirm all reported issues across checks were resolved.
+    for (const check of parsed.checks) {
+      if (check.issues) {
+        for (const issue of check.issues) {
+          if (issue.fixable) {
+            expect(issue.fixed).toBe(true);
+          }
+        }
+      }
     }
   });
 });

@@ -26,6 +26,9 @@ export interface ToggleState {
   step: "type" | "name" | "components";
   type: "skill" | "plugin" | "mcp" | null;
   selectedName: string | null;
+  names: string[];
+  namesLoading: boolean;
+  focusIndex: number;
   components: { name: string; active: boolean }[];
   selectedComponentIndices: number[];
 }
@@ -62,12 +65,16 @@ export type Action =
   | { type: "toggle:step-back" }
   | { type: "toggle:set-type"; value: ToggleState["type"] }
   | { type: "toggle:set-name"; value: string }
+  | { type: "toggle:names-loading" }
+  | { type: "toggle:names-loaded"; names: string[] }
+  | { type: "toggle:focus"; delta: -1 | 1 }
   | { type: "toggle:components-loaded"; components: ToggleState["components"] }
   | { type: "toggle:component-toggle"; index: number }
   | { type: "adopt:candidates-loaded"; candidates: AdoptCandidate[] }
   | { type: "adopt:cursor"; delta: -1 | 1 }
   | { type: "adopt:select-toggle" }
-  | { type: "adopt:mode-toggle" };
+  | { type: "adopt:mode-toggle" }
+  | { type: "adopt:execute"; index: number };
 
 export interface AppContext {
   dispatchInstall: (
@@ -91,5 +98,6 @@ export interface AppContext {
     type: "skill" | "plugin" | "mcp",
     name: string,
   ) => Promise<ToggleState["components"]>;
+  loadToggleNames: (type: "skill" | "plugin" | "mcp") => Promise<string[]>;
   loadAdoptCandidates: () => Promise<AdoptCandidate[]>;
 }

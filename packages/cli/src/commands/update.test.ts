@@ -338,3 +338,190 @@ describe("update — show_diff config", () => {
     }
   });
 });
+
+// ─── Update MCP — stubbed surface (Unit 3.20) ────────────────────────────────
+//
+// `update mcp` is wired in the CLI but core does not yet re-install MCP
+// servers; the command exits 0 with a "not yet implemented" info line. These
+// tests pin both the no-MCP path and the MCP-installed path so a future core
+// implementation has a regression baseline.
+
+describe("update mcp", () => {
+  async function disableBuiltinTap(): Promise<void> {
+    const { mkdir } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    await mkdir(join(configDir, "skilltap"), { recursive: true });
+    await Bun.write(
+      join(configDir, "skilltap", "config.toml"),
+      "builtin_tap = false\n",
+    );
+  }
+
+  async function createMcpRepo(): Promise<{
+    path: string;
+    cleanup: () => Promise<void>;
+  }> {
+    const { commitAll, initRepo, makeTmpDir, removeTmpDir } = await import(
+      "@skilltap/test-utils"
+    );
+    const { join } = await import("node:path");
+    const dir = await makeTmpDir();
+    await Bun.write(
+      join(dir, ".mcp.json"),
+      JSON.stringify(
+        { mcpServers: { db: { command: "node", args: ["server.js"] } } },
+        null,
+        2,
+      ),
+    );
+    await initRepo(dir);
+    await commitAll(dir);
+    return { path: dir, cleanup: () => removeTmpDir(dir) };
+  }
+
+  test("update mcp with no MCPs installed reports the empty state", async () => {
+    const { exitCode, stdout } = await runSkilltap(
+      ["update", "mcp", "--yes", "--scope", "global"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(0);
+    expect(stdout.toLowerCase()).toContain("no mcp servers");
+  });
+
+  test("update mcp emits the not-yet-implemented info line when an MCP is installed", async () => {
+    await disableBuiltinTap();
+    const repo = await createMcpRepo();
+    try {
+      await runSkilltap(
+        [
+          "install",
+          "mcp",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--also",
+          "claude-code",
+        ],
+        homeDir,
+        configDir,
+      );
+
+      const { exitCode, stdout } = await runSkilltap(
+        ["update", "mcp", "--yes", "--scope", "global"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+      expect(stdout.toLowerCase()).toContain("not yet implemented");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("update mcp <unknown-name> --scope global exits 1 with hint", async () => {
+    await disableBuiltinTap();
+    const repo = await createMcpRepo();
+    try {
+      await runSkilltap(
+        [
+          "install",
+          "mcp",
+          repo.path,
+          "--yes",
+          "--scope",
+          "global",
+          "--also",
+          "claude-code",
+        ],
+        homeDir,
+        configDir,
+      );
+
+      const { exitCode, stdout, stderr } = await runSkilltap(
+        ["update", "mcp", "no-such-server", "--yes", "--scope", "global"],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      const combined = stdout + stderr;
+      expect(combined.toLowerCase()).toContain("not installed");
+    } finally {
+      await repo.cleanup();
+    }
+  });
+
+  test("update skill refreshes lockfile sha after pulling new commit", async () => {
+    // Lockfile sha refresh assertion (Unit 3.20 acceptance) — verifies that
+    // a successful skill update writes the new sha into the project lockfile.
+    // Lockfile writes only happen when skilltap.toml exists, so we plant an
+    // empty manifest before install.
+    await disableBuiltinTap();
+    const {
+      addFileAndCommit,
+      createStandaloneSkillRepo,
+      initRepo,
+      makeTmpDir,
+      removeTmpDir,
+    } = await import("@skilltap/test-utils");
+    const { writeFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const { loadLockfile } = await import("@skilltap/core");
+    const projectRoot = await makeTmpDir();
+    const repo = await createStandaloneSkillRepo();
+    try {
+      await initRepo(projectRoot);
+      // Plant an empty skilltap.toml so install will write to it + lockfile.
+      await writeFile(join(projectRoot, "skilltap.toml"), "");
+
+      const install = await runSkilltap(
+        [
+          "install",
+          "skill",
+          repo.path,
+          "--yes",
+          "--scope",
+          "project",
+          "--skip-scan",
+        ],
+        homeDir,
+        configDir,
+        projectRoot,
+      );
+      expect(install.exitCode).toBe(0);
+
+      const lockBefore = await loadLockfile(projectRoot);
+      expect(lockBefore.ok).toBe(true);
+      if (!lockBefore.ok) return;
+      const skillBefore = lockBefore.value.skill.find(
+        (s) => s.source === repo.path,
+      );
+      expect(skillBefore).toBeDefined();
+      const shaBefore = skillBefore!.sha;
+
+      // New commit on the source repo.
+      await addFileAndCommit(repo.path, "fresh.md", "# Fresh\nnew content");
+
+      const update = await runSkilltap(
+        ["update", "--yes"],
+        homeDir,
+        configDir,
+        projectRoot,
+      );
+      expect(update.exitCode).toBe(0);
+
+      const lockAfter = await loadLockfile(projectRoot);
+      expect(lockAfter.ok).toBe(true);
+      if (!lockAfter.ok) return;
+      const skillAfter = lockAfter.value.skill.find(
+        (s) => s.source === repo.path,
+      );
+      expect(skillAfter).toBeDefined();
+      expect(skillAfter!.sha).not.toBe(shaBefore);
+    } finally {
+      await repo.cleanup();
+      await removeTmpDir(projectRoot);
+    }
+  });
+});

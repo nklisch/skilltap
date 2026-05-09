@@ -2,7 +2,12 @@ import { Box, useApp, useInput } from "ink";
 import React, { useEffect, useReducer, useState } from "react";
 import { initialAppState, appReducer } from "./state/app";
 import { GLOBAL_KEYS } from "./keys";
-import type { Action, AppContext, AppState } from "./state/types";
+import type {
+  Action,
+  AppContext,
+  AppState,
+  DashboardTab,
+} from "./state/types";
 import { Dashboard } from "./screens/Dashboard";
 import { Find } from "./screens/Find";
 import { Toggle } from "./screens/Toggle";
@@ -14,9 +19,19 @@ interface AppProps {
   context: AppContext;
 }
 
+const DASHBOARD_TAB_KEYS: Record<string, DashboardTab> = {
+  "1": "installed",
+  "2": "taps",
+  "3": "updates",
+  "4": "drift",
+};
+
+const TOGGLE_TYPES: Array<"skill" | "plugin" | "mcp"> = ["skill", "plugin", "mcp"];
+
 function handleScreenKey(
   state: AppState,
   dispatch: (action: Action) => void,
+  context: AppContext,
   input: string,
   key: Key,
 ): void {
@@ -51,16 +66,27 @@ function handleScreenKey(
       if (isEscape || (key.ctrl && input === "[")) {
         dispatch({ type: "toggle:step-back" });
       } else if (isUp) {
-        // cursor nav handled by parent holding focusIndex — no action yet
+        dispatch({ type: "toggle:focus", delta: -1 });
       } else if (isDown) {
-        // cursor nav handled by parent holding focusIndex — no action yet
+        dispatch({ type: "toggle:focus", delta: 1 });
       } else if (isEnter) {
         const s = state.state;
         if (s.step === "type") {
-          const types: Array<"skill" | "plugin" | "mcp"> = ["skill", "plugin", "mcp"];
-          const focusIndex = s.type === null ? 0 : types.indexOf(s.type as "skill" | "plugin" | "mcp");
-          const chosen = types[Math.max(0, focusIndex)] ?? "skill";
+          const chosen = TOGGLE_TYPES[s.focusIndex] ?? "skill";
           dispatch({ type: "toggle:set-type", value: chosen });
+        } else if (s.step === "name") {
+          const name = s.names[s.focusIndex];
+          if (name) dispatch({ type: "toggle:set-name", value: name });
+        } else if (s.step === "components") {
+          const component = s.components[s.focusIndex];
+          if (component && s.type && s.selectedName) {
+            void context.dispatchToggle(s.type, s.selectedName, component.name);
+          }
+        }
+      } else if (isSpace) {
+        const s = state.state;
+        if (s.step === "components") {
+          dispatch({ type: "toggle:component-toggle", index: s.focusIndex });
         }
       }
       break;
@@ -70,6 +96,15 @@ function handleScreenKey(
       else if (isDown) dispatch({ type: "adopt:cursor", delta: 1 });
       else if (isSpace) dispatch({ type: "adopt:select-toggle" });
       else if (input === "m") dispatch({ type: "adopt:mode-toggle" });
+      else if (isEnter) {
+        const s = state.state;
+        const candidate = s.candidates[s.focusIndex];
+        if (candidate) {
+          const mode = s.perItemMode.get(candidate.name) ?? "track-in-place";
+          void context.dispatchAdopt(candidate.kind, candidate.name, mode);
+          dispatch({ type: "adopt:execute", index: s.focusIndex });
+        }
+      }
       break;
     }
   }
@@ -81,6 +116,16 @@ export const App: React.FC<AppProps> = ({ initialScreen = "dashboard", context }
   const [data, setData] = useState<unknown>(null);
 
   useInput((input, key) => {
+    // On the Dashboard, 1-4 switch tabs instead of navigating to a new screen.
+    // The footer documents `1-4 switch tabs`; without this intercept the global
+    // navigate handler re-mounts the same screen.
+    if (state.screen === "dashboard" && DASHBOARD_TAB_KEYS[input]) {
+      const tab = DASHBOARD_TAB_KEYS[input];
+      if (tab) {
+        dispatch({ type: "dashboard:tab", tab });
+        return;
+      }
+    }
     for (const binding of GLOBAL_KEYS) {
       if (binding.key === input) {
         if (binding.action.type === "exit") {
@@ -91,7 +136,7 @@ export const App: React.FC<AppProps> = ({ initialScreen = "dashboard", context }
         return;
       }
     }
-    handleScreenKey(state, dispatch, input, key);
+    handleScreenKey(state, dispatch, context, input, key);
   });
 
   useEffect(() => {
@@ -113,7 +158,15 @@ export const App: React.FC<AppProps> = ({ initialScreen = "dashboard", context }
           break;
         }
         case "toggle": {
-          if (state.state.step === "components" && state.state.type && state.state.selectedName) {
+          if (state.state.step === "name" && state.state.type) {
+            if (!cancelled) dispatch({ type: "toggle:names-loading" });
+            const names = await context.loadToggleNames(state.state.type);
+            if (!cancelled) dispatch({ type: "toggle:names-loaded", names });
+          } else if (
+            state.state.step === "components" &&
+            state.state.type &&
+            state.state.selectedName
+          ) {
             const components = await context.loadToggleComponents(
               state.state.type,
               state.state.selectedName,

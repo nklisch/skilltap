@@ -1,13 +1,19 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createTestEnv, runInteractive, type TestEnv } from "@skilltap/test-utils";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
+import {
+  cliCmd,
+  createTestEnv,
+  runInteractive,
+  type TestEnv,
+} from "@skilltap/test-utils";
 
-const CLI_ENTRY = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "index.ts",
-);
+setDefaultTimeout(60_000);
 
 let env: TestEnv;
 
@@ -21,7 +27,7 @@ afterEach(async () => {
 
 describe("TUI smoke", () => {
   test("bare skilltap (TTY) opens dashboard and exits on q", async () => {
-    const session = await runInteractive(["bun", "run", CLI_ENTRY], {
+    const session = await runInteractive(cliCmd(), {
       cwd: process.cwd(),
       env: {
         SKILLTAP_HOME: env.homeDir,
@@ -29,14 +35,19 @@ describe("TUI smoke", () => {
         SKILLTAP_NO_STARTUP: "1",
       },
     });
-    await session.waitForText("Installed", 8000);
+    await session.waitForText("Installed", 20_000);
     session.send("q");
     const { exitCode } = await session.finish(5000);
     expect(exitCode).toBe(0);
   });
 
-  test("global key 2 navigates to Find screen", async () => {
-    const session = await runInteractive(["bun", "run", CLI_ENTRY], {
+  test("dashboard 'f' key navigates to Find screen, then 1-4 are dashboard tab keys", async () => {
+    // Combined coverage: verifies (1) the per-screen `f` binding navigates to
+    // Find, and (2) on Dashboard the `1-4` keys are intercepted as tab
+    // switches (Unit 3.17 fix) instead of being the global navigate keys.
+    // Combined into one PTY session to keep the smoke suite small — under
+    // cold-cache, every additional spawn adds compile cost.
+    const session = await runInteractive(cliCmd(), {
       cwd: process.cwd(),
       env: {
         SKILLTAP_HOME: env.homeDir,
@@ -44,9 +55,12 @@ describe("TUI smoke", () => {
         SKILLTAP_NO_STARTUP: "1",
       },
     });
-    await session.waitForText("Installed", 8000);
+    await session.waitForText("Installed", 20_000);
+    // 1-4 stay on Dashboard.
     session.send("2");
-    // Find screen renders "Search:" — no heading says "Find" explicitly
+    await session.waitForText("1-4 switch tabs", 3000);
+    // `f` navigates to Find.
+    session.send("f");
     await session.waitForText("Search:", 3000);
     session.send("q");
     const { exitCode } = await session.finish(5000);
@@ -54,7 +68,7 @@ describe("TUI smoke", () => {
   });
 
   test("Ctrl+C exits cleanly", async () => {
-    const session = await runInteractive(["bun", "run", CLI_ENTRY], {
+    const session = await runInteractive(cliCmd(), {
       cwd: process.cwd(),
       env: {
         SKILLTAP_HOME: env.homeDir,
@@ -62,7 +76,7 @@ describe("TUI smoke", () => {
         SKILLTAP_NO_STARTUP: "1",
       },
     });
-    await session.waitForText("Installed", 8000);
+    await session.waitForText("Installed", 20_000);
     session.sendKey("CTRL_C");
     const { exitCode } = await session.finish(5000);
     // Ink exits cleanly with 0 on SIGINT; some environments yield 130.
@@ -71,7 +85,7 @@ describe("TUI smoke", () => {
 
   test("bare skilltap (non-TTY) errors with hint", async () => {
     const proc = Bun.spawn(
-      ["bun", "run", CLI_ENTRY],
+      [...cliCmd()],
       {
         cwd: process.cwd(),
         env: {
