@@ -62,10 +62,11 @@ Dependencies: `cli → core`, `cli → test-utils (dev)`, `core → test-utils (
 ## Commands
 
 ```bash
-bun run dev             # Run CLI from source
-bun test                # Run all tests (recursive across packages)
-bun run build           # Compile to standalone binary (./skilltap)
-bun run verify:binary   # Boot-test ./skilltap (--version, --help, doctor --json)
+bun run dev                   # Run CLI from source
+bun test                      # Run all tests in source mode (recursive)
+bun run build                 # Compile to standalone binary (./skilltap)
+bun run verify:binary         # Smoke ./skilltap (--version, --help, doctor --json)
+bun run verify:binary:tests   # Build + re-run CLI test suite against compiled binary
 bun run bump <patch|minor|major|x.y.z>  # Bump version (see Versioning below)
 bun test packages/core/src/plugin/      # Run plugin tests only
 
@@ -91,17 +92,24 @@ bun run bump 1.2.3   # set exact version
 ### Pre-release checklist (run before tagging)
 
 ```bash
-bun test                       # full suite must be green
+bun test                       # full source-mode suite must be green
 bun run build                  # compile must succeed (the released artifact path)
-bun run verify:binary          # compiled binary must boot and run core commands
+bun run verify:binary          # compiled binary must boot (~3 sec smoke check)
+bun run verify:binary:tests    # full CLI test suite must pass against the binary
 ```
 
-`bun run verify:binary` runs `scripts/verify-binary.sh`, which:
-- Boots `./skilltap` against an isolated temp `SKILLTAP_HOME` / `XDG_CONFIG_HOME`
-- Asserts `--version`, `--help`, and `doctor --json` all exit 0 with expected output
-- Catches the class of bug where `bun build --compile` succeeds but the standalone binary fails at runtime — typically caused by `--external <pkg>` flags (no `node_modules` exists inside `/$bunfs/root/`) or by accidentally bundling code that resolves a non-installed package
+The verification ladder, fastest → most thorough:
 
-**Why this exists:** `bun test` and `bun run dev` cover source-mode behavior, but `--compile` is a separate code path. CI runs the verifier on every push (`.github/workflows/ci.yml`) and on the release host-arch binary before it gets uploaded (`.github/workflows/release.yml`). When you change the build script, Ink/TUI imports, or any dynamic-import boundary, run `bun run verify:binary` locally before pushing.
+1. **`bun run verify:binary`** — runs `scripts/verify-binary.sh`. Spawns `./skilltap` against an isolated temp `SKILLTAP_HOME` / `XDG_CONFIG_HOME`, asserts `--version`, `--help`, and `doctor --json` all exit 0. Catches the class of bug where `bun build --compile` succeeds but the standalone binary fails at runtime — typically caused by `--external <pkg>` flags (no `node_modules` exists inside `/$bunfs/root/`) or by accidentally bundling code that resolves a non-installed package.
+2. **`bun run verify:binary:tests`** — builds the binary and re-runs the entire `packages/cli/` test suite with `SKILLTAP_TEST_BIN=$PWD/skilltap`. The test infrastructure (`runSkilltap`, `runInteractive` callers via `cliCmd()`) routes every subprocess invocation through the compiled binary instead of `bun run --bun src/index.ts`. ~80 seconds; surfaces behavioral regressions specific to the `--compile` path (dynamic imports, externals, bunfs resolution) that source-mode tests cannot see.
+
+**Why this exists:** `bun test` and `bun run dev` cover source-mode behavior, but `--compile` is a separate code path. CI runs both layers on every push (`.github/workflows/ci.yml`) and re-runs the smoke on the release host-arch binary before upload (`.github/workflows/release.yml`). When you change the build script, Ink/TUI imports, or any dynamic-import boundary, run at minimum `bun run verify:binary` locally before pushing; for build-touching changes run `bun run verify:binary:tests` too.
+
+**Routing tests through the binary in new test files:** the test infrastructure is wired via `SKILLTAP_TEST_BIN`. To make a new test file participate, use either:
+- `runSkilltap(args, homeDir, configDir)` from `@skilltap/test-utils` — automatically honors the env var, and
+- `cliCmd()` from `@skilltap/test-utils` for `Bun.spawn`/`runInteractive` callers — returns `[binary]` if the env var is set, else `["bun", "run", "--bun", CLI_ENTRY]`.
+
+Do NOT hardcode `["bun", "run", "--bun", "src/index.ts"]` in new test files — that path stays bound to source forever and silently skips binary verification.
 
 **Adding new build-time dependencies:** if you need a package only in development mode (`process.env.DEV === 'true'`) or a similarly-gated path, *do not* mark it `--external` in the `--compile` build. The compiled binary cannot resolve externals at runtime. Either (a) install it as a regular dependency and let it bundle, or (b) lazy-load it via `await import()` and ensure its package is on the `dependencies` list so bun finds it during compile.
 

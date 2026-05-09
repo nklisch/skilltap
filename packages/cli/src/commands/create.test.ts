@@ -10,7 +10,7 @@ import {
 setDefaultTimeout(60_000);
 
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { cliCmd, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
@@ -19,7 +19,7 @@ async function runCreate(
   _cwd: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "create", ...args],
+    [...cliCmd(), "create", ...args],
     {
       cwd: CLI_DIR,
       stdout: "pipe",

@@ -11,7 +11,7 @@ setDefaultTimeout(60_000);
 
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { cliCmd, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
 
@@ -23,7 +23,7 @@ async function runVerify(
   const configDir = await makeTmpDir();
   try {
     const proc = Bun.spawn(
-      ["bun", "run", "--bun", `${CLI_DIR}/src/index.ts`, "verify", ...args],
+      [...cliCmd(), "verify", ...args],
       {
         cwd,
         stdout: "pipe",

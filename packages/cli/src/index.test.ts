@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { cliCmd } from "@skilltap/test-utils";
 
 describe("skilltap CLI", () => {
   test("--help exits with code 0", async () => {
-    const proc = Bun.spawn(["bun", "run", "--bun", "src/index.ts", "--help"], {
+    const proc = Bun.spawn([...cliCmd(), "--help"], {
       cwd: `${import.meta.dir}/..`,
       stdout: "pipe",
       stderr: "pipe",

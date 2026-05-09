@@ -5,7 +5,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
+import { cliCmd, makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/..`;
 
@@ -16,7 +16,7 @@ let workDir: string;
 async function run(
   args: string[],
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["bun", "run", "--bun", "src/index.ts", ...args], {
+  const proc = Bun.spawn([...cliCmd(), ...args], {
     cwd: CLI_DIR,
     stdout: "pipe",
     stderr: "pipe",

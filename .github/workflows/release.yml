@@ -42,6 +42,11 @@ jobs:
           bun build packages/cli/src/index.ts --compile --target=bun-linux-x64   --outfile=skilltap-linux-x64
           bun build packages/cli/src/index.ts --compile --target=bun-linux-arm64 --outfile=skilltap-linux-arm64
 
+      # Boot-test the host-arch binary. Cross-compiled arm64 can't run on x64,
+      # but if the build pattern is broken it'll fail x64 too.
+      - name: Verify binary smoke (linux-x64)
+        run: scripts/verify-binary.sh ./skilltap-linux-x64
+
       - name: Attest binary provenance
         uses: actions/attest-build-provenance@v2
         with:
@@ -72,6 +77,10 @@ jobs:
         run: |
           bun build packages/cli/src/index.ts --compile --target=bun-darwin-x64 --outfile=skilltap-darwin-x64
           bun build packages/cli/src/index.ts --compile --outfile=skilltap-darwin-arm64
+
+      # Boot-test the host-arch binary (macos-latest is arm64).
+      - name: Verify binary smoke (darwin-arm64)
+        run: scripts/verify-binary.sh ./skilltap-darwin-arm64
 
       - name: Strip Bun-embedded signatures and re-sign
         run: |

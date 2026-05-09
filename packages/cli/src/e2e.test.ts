@@ -5,14 +5,13 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import {
+  cliCmd,
   commitAll,
   createStandaloneSkillRepo,
   initRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-
-const CLI_ENTRY = `${import.meta.dir}/../src/index.ts`;
 
 let homeDir: string;
 let configDir: string;
@@ -22,7 +21,7 @@ let tapRepo: { path: string; cleanup: () => Promise<void> };
 async function run(
   args: string[],
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["bun", "run", "--bun", CLI_ENTRY, ...args], {
+  const proc = Bun.spawn([...cliCmd(), ...args], {
     cwd: homeDir,
     stdout: "pipe",
     stderr: "pipe",

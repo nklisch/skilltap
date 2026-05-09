@@ -28,6 +28,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat } from "node:fs/promises";
 import {
+  cliCmd,
   createMultiSkillRepo,
   createStandaloneSkillRepo,
   createTestEnv,
@@ -36,7 +37,7 @@ import {
 } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/..`;
-const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
+const CMD = cliCmd();
 
 let testEnv: TestEnv;
 let homeDir: string;

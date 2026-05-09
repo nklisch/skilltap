@@ -21,6 +21,7 @@ import { join } from "node:path";
 setDefaultTimeout(60_000);
 
 import {
+  cliCmd,
   commitAll,
   createTestEnv,
   initRepo,
@@ -31,7 +32,7 @@ import {
 } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../..`;
-const CMD = ["bun", "run", "--bun", "src/index.ts"] as const;
+const CMD = cliCmd();
 
 let testEnv: TestEnv;
 let homeDir: string;
@@ -81,7 +82,7 @@ async function createLocalTap(
 
 async function addTap(tapPath: string): Promise<void> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "tap", "add", "home", tapPath],
+    [...CMD, "tap", "add", "home", tapPath],
     {
       cwd: CLI_DIR,
       stdout: "pipe",

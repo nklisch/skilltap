@@ -11,9 +11,7 @@ setDefaultTimeout(60_000);
 
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
-
-const CLI_ENTRY = `${import.meta.dir}/../../src/index.ts`;
+import { cliCmd, createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 async function runCompletions(
   args: string[],
@@ -22,7 +20,7 @@ async function runCompletions(
   extraEnv?: Record<string, string>,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", CLI_ENTRY, "completions", ...args],
+    [...cliCmd(), "completions", ...args],
     {
       cwd: homeDir,
       stdout: "pipe",
@@ -48,7 +46,7 @@ async function runGetCompletions(
   configDir: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", CLI_ENTRY, "--get-completions", type],
+    [...cliCmd(), "--get-completions", type],
     {
       cwd: homeDir,
       stdout: "pipe",

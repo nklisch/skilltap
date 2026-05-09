@@ -15,13 +15,12 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { loadLockfile, loadManifest, saveManifest } from "@skilltap/core";
 import {
+  cliCmd,
   createStandaloneSkillRepo,
   initRepo,
   makeTmpDir,
   removeTmpDir,
 } from "@skilltap/test-utils";
-
-const CLI_ENTRY = `${import.meta.dir}/../src/index.ts`;
 
 let homeDir: string;
 let configDir: string;
@@ -32,7 +31,7 @@ async function run(
   args: string[],
   opts: { cwd?: string } = {},
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
-  const proc = Bun.spawn(["bun", "run", "--bun", CLI_ENTRY, ...args], {
+  const proc = Bun.spawn([...cliCmd(), ...args], {
     cwd: opts.cwd ?? projectRoot,
     stdout: "pipe",
     stderr: "pipe",

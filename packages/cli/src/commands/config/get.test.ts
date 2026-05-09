@@ -9,7 +9,7 @@ import {
 
 setDefaultTimeout(60_000);
 
-import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
+import { cliCmd, createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
 const CLI_DIR = `${import.meta.dir}/../../..`;
 
@@ -18,7 +18,7 @@ async function runGet(
   configDir: string,
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   const proc = Bun.spawn(
-    ["bun", "run", "--bun", "src/index.ts", "config", "get", ...args],
+    [...cliCmd(), "config", "get", ...args],
     {
       cwd: CLI_DIR,
       stdin: "pipe",
