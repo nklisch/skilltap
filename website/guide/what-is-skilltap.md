@@ -7,7 +7,7 @@ description: CLI tool for installing agent skills from any git host. Works with 
 skilltap is a CLI tool for installing agent skills and plugins from any git host. Think **Homebrew taps for agent skills** -- you point it at a repo, it clones the skill, scans it for security issues, and installs it where your agents can find it. When a repo contains a full plugin (skills + MCP servers + agent definitions), skilltap installs and tracks all components together.
 
 ```bash
-skilltap install https://gitea.example.com/nathan/commit-helper
+skilltap install skill https://gitea.example.com/nathan/commit-helper
 ```
 
 That's it. One command, any git host, any agent.
@@ -59,7 +59,7 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
-**Non-interactive agent mode.** Pass `--agent` (or set `SKILLTAP_AGENT=1`) to put skilltap in machine-readable mode: auto-yes, hard-fail on security warnings, plain-text output. Designed for AI agents, CI pipelines, and cron jobs.
+**Non-interactive automation.** TTY detection plus `--yes` (auto-confirm) and `--json` (machine-readable output) cover AI agents, CI pipelines, and cron jobs. Set `[security] on_warn = "fail"` to hard-fail on security warnings instead of prompting. No separate "agent mode" flag — every invocation is the same command surface.
 
 **Standalone binary.** One file, no runtime dependencies. Download and run.
 
@@ -78,13 +78,13 @@ Skills are never written to disk until they pass scanning. You always see what w
 Install a skill from any git URL:
 
 ```bash
-skilltap install https://gitea.example.com/nathan/commit-helper
+skilltap install skill https://gitea.example.com/nathan/commit-helper
 ```
 
 Install with GitHub shorthand and symlink to Claude Code:
 
 ```bash
-skilltap install user/commit-helper --global --also claude-code
+skilltap install skill user/commit-helper --global --also claude-code
 ```
 
 Search across your configured taps:
@@ -96,7 +96,7 @@ skilltap find review
 Install by name from a tap:
 
 ```bash
-skilltap install code-reviewer
+skilltap install skill code-reviewer
 ```
 
 View all skills on your system — managed and unmanaged:

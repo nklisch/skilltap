@@ -13,9 +13,9 @@ skilltap can install skills from git URLs, GitHub shorthand, SSH, tap names, and
 Install from any git-accessible URL:
 
 ```bash
-skilltap install https://gitea.example.com/user/commit-helper
-skilltap install https://gitlab.com/team/code-review
-skilltap install https://github.com/user/my-skill
+skilltap install skill https://gitea.example.com/user/commit-helper
+skilltap install skill https://gitlab.com/team/code-review
+skilltap install skill https://github.com/user/my-skill
 ```
 
 This works with any host that supports `git clone` -- GitHub, GitLab, Gitea, Bitbucket, your company's private server. The repo just needs a `SKILL.md` somewhere in the tree. No `tap.json` or special structure required -- skilltap clones the repo and scans for `SKILL.md` files automatically.
@@ -27,8 +27,8 @@ Any repo with a `SKILL.md` is installable by URL, but adding your skills to a [t
 ### SSH
 
 ```bash
-skilltap install git@github.com:user/commit-helper.git
-skilltap install ssh://git@gitlab.com/team/code-review.git
+skilltap install skill git@github.com:user/commit-helper.git
+skilltap install skill ssh://git@gitlab.com/team/code-review.git
 ```
 
 Uses your existing SSH keys. No extra configuration needed.
@@ -42,13 +42,13 @@ If an HTTPS URL fails due to authentication, skilltap automatically retries with
 If the source contains a `/` and no protocol, skilltap treats it as a GitHub repo:
 
 ```bash
-skilltap install user/commit-helper
+skilltap install skill user/commit-helper
 ```
 
 This is equivalent to `https://github.com/user/commit-helper`. You can also be explicit:
 
 ```bash
-skilltap install github:user/commit-helper
+skilltap install skill github:user/commit-helper
 ```
 
 ### Tap name
@@ -56,7 +56,7 @@ skilltap install github:user/commit-helper
 If you have taps configured, install by skill name:
 
 ```bash
-skilltap install commit-helper
+skilltap install skill commit-helper
 ```
 
 skilltap searches all your configured taps for a skill with that name, resolves the repo URL, and installs it.
@@ -66,8 +66,8 @@ skilltap searches all your configured taps for a skill with that name, resolves 
 Pin to a specific branch or tag:
 
 ```bash
-skilltap install commit-helper@v1.2.0
-skilltap install commit-helper@main
+skilltap install skill commit-helper@v1.2.0
+skilltap install skill commit-helper@main
 ```
 
 ### Local path
@@ -75,9 +75,9 @@ skilltap install commit-helper@main
 Install from a directory on your filesystem:
 
 ```bash
-skilltap install ./my-skill
-skilltap install /home/nathan/dev/my-skill
-skilltap install ~/skills/my-skill
+skilltap install skill ./my-skill
+skilltap install skill /home/nathan/dev/my-skill
+skilltap install skill ~/skills/my-skill
 ```
 
 The directory must contain a `SKILL.md` file.
@@ -87,9 +87,9 @@ The directory must contain a `SKILL.md` file.
 Install a skill published to the npm registry:
 
 ```bash
-skilltap install npm:vibe-rules
-skilltap install npm:@scope/my-skills
-skilltap install npm:vibe-rules@1.0.0
+skilltap install skill npm:vibe-rules
+skilltap install skill npm:@scope/my-skills
+skilltap install skill npm:vibe-rules@1.0.0
 ```
 
 The `npm:` prefix downloads the tarball from the npm registry and verifies its SHA-512 integrity before installing. This gives you access to any skill published as an npm package.
@@ -105,7 +105,7 @@ The `npm:` prefix downloads the tarball from the npm registry and verifies its S
 If a tap defines a `plugins` array, install a full plugin by name using `tap-name/plugin-name`:
 
 ```bash
-skilltap install my-tap/dev-assistant
+skilltap install plugin my-tap/dev-assistant
 ```
 
 This installs all plugin components in one step: SKILL.md files, MCP server entries, and agent definition files. The plugin is recorded in `state.json::plugins[]` and tracked as a single unit.
@@ -131,30 +131,30 @@ Choosing "Yes" installs all components and records the plugin. Choosing "No" ins
 
 ### MCP-only install
 
-Prefix any source with `mcp:` to install just its MCP servers, skipping skill machinery entirely. Useful when a repo only ships `.mcp.json` (or a plugin manifest with `[[servers]]`) and you want the servers wired into your agents without scanning skills.
+Use the `mcp` install type to install just MCP servers, skipping skill machinery entirely. Useful when a repo only ships `.mcp.json` (or a plugin manifest with `[[servers]]`) and you want the servers wired into your agents without scanning skills.
 
 ```bash
-skilltap install mcp:user/db-tools --project
-skilltap install mcp:/path/to/local/server
-skilltap install mcp:npm:@scope/search-mcp
+skilltap install mcp user/db-tools --project
+skilltap install mcp /path/to/local/server
+skilltap install mcp npm:@scope/search-mcp
 ```
 
 Servers land under `state.json::mcpServers[]` and get injected into each `--also` target's MCP config (default: `claude-code`) namespaced as `skilltap:<slug>:<server-name>`. Re-running with the same source replaces the existing entries (idempotent).
 
-To remove, pass the same source string back:
+To remove, use `remove mcp` with the server name:
 
 ```bash
-skilltap remove mcp:user/db-tools --project
+skilltap remove mcp db-tools --project
 ```
 
-You cannot mix `mcp:` and regular sources in one command — run them separately.
+Each install command takes one type — to install a skill and an MCP from the same repo, run `install skill` and `install mcp` separately (or use a plugin install if the repo defines one).
 
 ### Multiple sources
 
 Install several skills in a single command by listing them as positional arguments:
 
 ```bash
-skilltap install skill-a skill-b skill-c --global
+skilltap install skill skill-a skill-b skill-c --global
 ```
 
 Each source is installed in sequence using the same scope, flags, and security policy. Errors are collected and shown together at the end — a failure on one source does not prevent the others from being attempted.
@@ -166,7 +166,7 @@ Every skill is installed to either a **global** or **project** scope.
 ### Global scope
 
 ```bash
-skilltap install commit-helper --global
+skilltap install skill commit-helper --global
 ```
 
 Installs to `~/.agents/skills/commit-helper/`. Available everywhere on your machine.
@@ -174,7 +174,7 @@ Installs to `~/.agents/skills/commit-helper/`. Available everywhere on your mach
 ### Project scope
 
 ```bash
-skilltap install commit-helper --project
+skilltap install skill commit-helper --project
 ```
 
 Installs to `.agents/skills/commit-helper/` inside the current project (determined by the nearest `.git` directory). Only available when working in that project.
@@ -183,22 +183,22 @@ Installs to `.agents/skills/commit-helper/` inside the current project (determin
 When you install a project-scoped skill, skilltap records it in `.agents/state.json` (and `skilltap.lock` if you've run `skilltap.toml`-based dependency management). **Commit both files** — they're the project's skill lockfile. Teammates can then see which skills the project uses, and `skilltap doctor` can verify the project's skill state is intact. v0.x users with existing `.agents/installed.json` see a one-time soft startup notice suggesting `skilltap migrate`; install does NOT auto-migrate. After running `skilltap migrate`, the legacy `installed.json` is renamed to `installed.json.v1.bak` and `state.json` becomes the canonical store. If a project still has both files after migration, `skilltap doctor --fix` cleans up the orphan.
 :::
 
-### Smart scope default (v2.1)
+### Smart scope default
 
-If you don't pass `--global` or `--project`, skilltap **infers** the scope automatically — there is no prompt:
+If you don't pass `--global` or `--project` (or the canonical `--scope project|global`), skilltap **infers** the scope automatically — there is no prompt:
 
-- Inside a git repo → `--project`
-- Outside any git repo → `--global`
+- Inside a git repo → `project`
+- Outside any git repo → `global`
 
-The inferred scope is reported in the install output. To override, pass `--project` or `--global` explicitly, or set `defaults.scope = "global"`/`"project"` in your config (`~/.config/skilltap/config.toml`).
+The inferred scope is reported in the install output. To override, pass `--scope project` / `--scope global` (or the legacy boolean `--project` / `--global`), or set `defaults.scope = "global"`/`"project"` in your config (`~/.config/skilltap/config.toml`).
 
 ### Recovering from a broken `skilltap.toml`
 
 If your project's `skilltap.toml` has a TOML parse error or schema mismatch, install behavior depends on the mode:
 
-- **Interactive mode**: install auto-recovers before doing any work. The corrupt file is backed up to `skilltap.toml.bak` (your original content is preserved there), a fresh empty manifest is written in its place, and the install proceeds. You'll see a warning in the install output explaining what happened.
+- **Interactive mode** (TTY attached): install auto-recovers before doing any work. The corrupt file is backed up to `skilltap.toml.bak` (your original content is preserved there), a fresh empty manifest is written in its place, and the install proceeds. You'll see a warning in the install output explaining what happened.
 
-- **Agent mode** (`--agent` or `SKILLTAP_AGENT=1`): install refuses and exits 1 with a pointer to `skilltap doctor --fix`. The corrupt file is left untouched — scripts and CI shouldn't silently mutate your committed files. Run `skilltap doctor --fix` to perform the same backup-and-reset, then retry the install.
+- **Non-interactive automation** (`--yes`, piped stdout, or any non-TTY context): install refuses and exits 1 with a pointer to `skilltap doctor --fix`. The corrupt file is left untouched — scripts and CI shouldn't silently mutate your committed files. Run `skilltap doctor --fix` to perform the same backup-and-reset, then retry the install.
 
 You can also run `skilltap doctor --fix` directly any time to recover a corrupt `skilltap.toml` (or `skilltap.lock`) without performing an install.
 
@@ -232,7 +232,7 @@ The agent prompt is **skipped** when:
 You can also specify agents directly via `--also`:
 
 ```bash
-skilltap install commit-helper --global --also claude-code --also cursor
+skilltap install skill commit-helper --global --also claude-code --also cursor
 ```
 
 Supported agent identifiers:
@@ -264,7 +264,7 @@ Some repos contain multiple skills -- for example, a project with both a develop
 When skilltap finds multiple `SKILL.md` files, it prompts you to choose:
 
 ```
-$ skilltap install https://gitea.example.com/user/termtube
+$ skilltap install skill https://gitea.example.com/user/termtube
 
 Found 2 skills in user/termtube:
   [1] termtube-dev        Development workflow for termtube
@@ -276,7 +276,7 @@ Install which? (1,2,all): 1
 With `--yes`, all skills are auto-selected:
 
 ```
-$ skilltap install https://gitea.example.com/user/termtube --yes --global
+$ skilltap install skill https://gitea.example.com/user/termtube --yes --global
 
 Found 2 skills: termtube-dev, termtube-review
 Auto-selecting all (--yes)
@@ -327,11 +327,13 @@ For the full security model, see [Security](./security).
 
 | Flag | Description |
 |---|---|
-| `--global` | Install to `~/.agents/skills/` |
-| `--project` | Install to `.agents/skills/` in the current project |
+| `--scope project\|global` | Canonical scope flag |
+| `--global` | Shorthand for `--scope global` (install to `~/.agents/skills/`) |
+| `--project` | Shorthand for `--scope project` (install to `.agents/skills/`) |
 | `--ref <ref>` | Install a specific branch or tag (git sources only) |
 | `--also <agent>` | Also symlink to an agent's directory. Repeatable. Skips the agent selection prompt. |
 | `--yes` | Auto-select all skills, auto-accept clean installs, skip agent selection prompt |
+| `--json` | Emit machine-readable output |
 | `--strict` | Abort if any security warnings are found (exit 1) |
 | `--no-strict` | Override `on_warn = "fail"` in config for this invocation |
 | `--semantic` | Run Layer 2 semantic scan (auto-runs — no prompt shown) |
@@ -342,7 +344,7 @@ For the full security model, see [Security](./security).
 To install without any prompts (for scripts and CI):
 
 ```bash
-skilltap install user/commit-helper --global --yes --strict
+skilltap install skill user/commit-helper --global --yes --strict
 ```
 
 This auto-selects all skills, uses global scope, and aborts if any security issue is found.
@@ -356,18 +358,18 @@ If you try to install a skill that's already installed, skilltap detects the con
 │ Yes
 ```
 
-Choosing yes runs `skilltap update` for that skill. With `--yes` or in agent mode, the update happens automatically without prompting.
+Choosing yes runs `skilltap update` for that skill. With `--yes` (or any non-interactive context), the update happens automatically without prompting.
 
 To force a clean reinstall, remove the skill first:
 
 ```bash
-skilltap remove commit-helper && skilltap install user/commit-helper --global
+skilltap remove skill commit-helper && skilltap install skill user/commit-helper --global
 ```
 
 ## Removing skills
 
 ```bash
-skilltap remove commit-helper
+skilltap remove skill commit-helper
 ```
 
 This removes the skill directory and any agent symlinks. You'll be asked to confirm unless you pass `--yes`.
@@ -375,75 +377,82 @@ This removes the skill directory and any agent symlinks. You'll be asked to conf
 Remove multiple skills in one command:
 
 ```bash
-skilltap remove skill-a skill-b skill-c --yes
+skilltap remove skill skill-a skill-b skill-c --yes
 ```
 
 Or omit the name entirely to pick interactively from all installed skills:
 
 ```bash
-skilltap remove
+skilltap remove skill
 ```
 
 Use `--project` or `--global` to target a specific scope:
 
 ```bash
-skilltap remove termtube-dev --project
-skilltap remove commit-helper --global
+skilltap remove skill termtube-dev --project
+skilltap remove skill commit-helper --global
 ```
 
-## Linking local skills
+## Adopting local skills
 
-For development, you can symlink a local skill directory into the install path instead of cloning:
+For development — or to bring an existing skill directory under skilltap management — use `skilltap adopt` to track a local directory in place (no copy, no symlink dance required):
 
 ```bash
-skilltap link ./my-skill --also claude-code
+skilltap adopt ./my-skill --also claude-code
 ```
 
 ```
-✓ Linked my-skill → ~/.agents/skills/my-skill/
+✓ Adopted my-skill (tracking in place: ./my-skill)
 ✓ Symlinked → ~/.claude/skills/my-skill/
 ```
 
-This creates a symlink, not a copy. Changes to your local directory are immediately visible to the agent. Useful when developing and testing a skill.
+`adopt` records the skill in `state.json` pointing at its current location. Changes to your local directory are immediately visible to the agent. Useful when developing and testing a skill.
 
-Link to project scope:
-
-```bash
-skilltap link ./my-skill --project --also claude-code
-```
-
-Remove the link (does not delete your original directory):
+Adopt into project scope:
 
 ```bash
-skilltap unlink my-skill
+skilltap adopt ./my-skill --scope project --also claude-code
 ```
 
-Linked skills are skipped during `skilltap update` since they're managed directly by you.
+To physically move the directory under the canonical install path while adopting, pass `--move`:
+
+```bash
+skilltap adopt ./my-skill --move
+```
+
+Stop tracking an adopted skill:
+
+```bash
+skilltap remove skill my-skill
+```
+
+Adopted skills are skipped during `skilltap update` since they're managed directly by you.
 
 ## Managing plugins
 
-After installing a plugin, use `skilltap plugin` to see all installed plugins:
+After installing a plugin, use `skilltap list plugin` (or the unified `skilltap list`) to see all installed plugins:
 
 ```bash
-skilltap plugin
+skilltap list plugin
 ```
 
 To see the components of a specific plugin:
 
 ```bash
-skilltap plugin info dev-assistant
+skilltap info plugin dev-assistant
 ```
 
 To toggle specific components on or off:
 
 ```bash
-skilltap plugin toggle dev-assistant
+skilltap toggle plugin dev-assistant
+skilltap toggle plugin dev-assistant:some-mcp   # toggle a single component
 ```
 
 To remove a plugin and all its components:
 
 ```bash
-skilltap plugin remove dev-assistant
+skilltap remove plugin dev-assistant
 ```
 
 See the [CLI reference](/reference/cli#skilltap-plugin) for all plugin commands and flags.

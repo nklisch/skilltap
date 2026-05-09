@@ -1,5 +1,5 @@
 ---
-description: Configure skilltap via TOML file or interactive wizard. Set default scope, agent symlinks, scan policy, and agent mode for non-interactive CI use.
+description: Configure skilltap via TOML file or interactive wizard. Set default scope, agent symlinks, scan policy, and non-interactive automation flags.
 ---
 
 # Configuration
@@ -26,46 +26,45 @@ This walks you through each setting with prompts and sensible defaults. Existing
 
 ## Security setup
 
-Security settings are per-mode (human vs agent) with optional trust tier overrides. Use the dedicated security wizard:
+Security settings live in a single `[security]` block with `scan`, `on_warn`, and `trust` (a glob array of source patterns to skip scanning for). Use the dedicated security wizard:
 
 ```bash
-skilltap config security                                # interactive wizard
-skilltap config security --preset strict --mode agent   # non-interactive
-skilltap config security --trust tap:my-corp=none       # trust override
+skilltap config security                       # interactive wizard
+skilltap config set security.on_warn fail      # set a single key
+skilltap config set security.scan semantic     # require semantic scan
 ```
 
 See the [Security guide](/guide/security#configuring-security-behavior) for full details.
 
-## Agent mode setup
+## Non-interactive automation
 
-Agent mode runs skilltap non-interactively: auto-yes, hard-fail on security warnings, and plain-text output (no spinners or prompts). It's how AI agents, CI scripts, and cron jobs invoke skilltap. There are three ways to enable it, ordered by precedence:
+skilltap detects non-interactive contexts automatically — there is no separate "agent mode" to enable. Use these knobs when invoking skilltap from AI agents, CI scripts, cron jobs, or shell pipelines:
 
-### Per-invocation flag (preferred)
+### TTY detection (automatic)
 
-```bash
-skilltap install foo --agent
-skilltap update --agent
-```
+When stdout is not a TTY (e.g. piped, redirected, or invoked from a child process), skilltap drops spinners and clack prompts and emits plain text suitable for parsing. No flag required.
 
-The `--agent` flag forces agent mode for that one command, regardless of any persistent config. This is the recommended way for one-off automation runs because nothing leaks into your shell environment or config file.
-
-### Environment variable
+### `--yes` (auto-confirm)
 
 ```bash
-SKILLTAP_AGENT=1 skilltap install foo
+skilltap install skill foo --yes
+skilltap update --yes
 ```
 
-Set `SKILLTAP_AGENT=1` to make every skilltap invocation in that shell run in agent mode. Useful when wrapping skilltap in a script or harness.
+Auto-accepts every confirmation prompt. Combine with non-TTY contexts to get a fully unattended run. Note that security warnings still respect `[security] on_warn`: set `on_warn = "fail"` for hard-fail behavior in CI.
 
-### Persistent config
+### `--json` (machine-readable output)
 
 ```bash
-skilltap config agent-mode
+skilltap install skill foo --json
+skilltap list --json
 ```
 
-Interactive wizard that sets `[agent-mode] enabled = true` in your config. After running it, every skilltap invocation defaults to agent mode (you can still override with `--agent=false` per command). Requires a TTY — must be run by a human, not by an agent.
+Emits structured JSON instead of human-formatted text. Pair with `--yes` for scripted use.
 
-Precedence (highest to lowest): `--agent` flag > `SKILLTAP_AGENT` env var > `[agent-mode] enabled` in config.
+::: tip Persistent agent mode was retired in v2.0
+v1 had a `--agent` flag, a `SKILLTAP_AGENT` env var, and an `[agent-mode]` config block. All three were removed. TTY detection plus `--yes`/`--json` covers every non-interactive case without a separate runtime mode.
+:::
 
 ## Programmatic access
 
@@ -83,7 +82,7 @@ skilltap config set defaults.also claude-code cursor
 skilltap config set defaults.yes true
 ```
 
-Only preference keys are settable via `config set`. Security policy keys, agent mode, and telemetry are blocked -- use the interactive wizard or dedicated subcommands for those. See the [CLI reference](/reference/cli#skilltap-config-set) for the full list of settable keys.
+Only preference keys are settable via `config set`. Security policy keys and telemetry are blocked -- use the interactive wizard or dedicated subcommands for those. See the [CLI reference](/reference/cli#skilltap-config-set) for the full list of settable keys.
 
 ### Open the config in `$EDITOR`
 
@@ -132,45 +131,19 @@ General defaults for install and update commands.
 
 ### `[security]`
 
-Shared security settings.
+A single flat block controls scanning, warning behavior, and per-source trust.
 
-| Key             | Type    | Default    | Description                                          |
-| --------------- | ------- | ---------- | ---------------------------------------------------- |
-| `agent_cli`     | string  | `""`       | Agent CLI for semantic scan (e.g. `"claude"`)        |
-| `threshold`     | number  | `5`        | Semantic score threshold (0-10, chunks >= this flagged) |
-| `max_size`      | number  | `51200`    | Max total skill size in bytes before warning (default 50 KB) |
-| `ollama_model`  | string  | `""`       | Ollama model name for semantic scanning              |
+| Key             | Type     | Default    | Description                                                   |
+| --------------- | -------- | ---------- | ------------------------------------------------------------- |
+| `scan`          | string   | `"static"` | Scan mode: `"off"`, `"static"`, or `"semantic"`               |
+| `on_warn`       | string   | `"prompt"` | Warning behavior: `"prompt"`, `"fail"`, or `"allow"`          |
+| `trust`         | string[] | `[]`       | Glob patterns of sources to skip scanning for (see Security)  |
+| `agent_cli`     | string   | `""`       | Agent CLI for semantic scan (e.g. `"claude"`)                 |
+| `threshold`     | number   | `5`        | Semantic score threshold (0-10, chunks >= this flagged)       |
+| `max_size`      | number   | `51200`    | Max total skill size in bytes before warning (default 50 KB)  |
+| `ollama_model`  | string   | `""`       | Ollama model name for semantic scanning                       |
 
-### `[security.human]` / `[security.agent]`
-
-Per-mode security settings. Human mode applies when you run skilltap directly. Agent mode applies when agent mode is enabled.
-
-| Key             | Type    | Human Default | Agent Default | Description                                          |
-| --------------- | ------- | ------------- | ------------- | ---------------------------------------------------- |
-| `scan`          | string  | `"static"`    | `"static"`    | Scan mode: `"off"`, `"static"`, or `"semantic"`      |
-| `on_warn`       | string  | `"prompt"`    | `"fail"`      | Warning behavior: `"prompt"`, `"fail"`, or `"allow"` |
-| `require_scan`  | boolean | `false`       | `true`        | Block `--skip-scan` flag                             |
-
-### `[[security.overrides]]`
-
-Trust tier overrides — per-tap or per-source-type security presets. See the [Security guide](/guide/security#trust-tier-overrides) for usage.
-
-| Key      | Type   | Description                                               |
-| -------- | ------ | --------------------------------------------------------- |
-| `match`  | string | Tap name or source type to match                          |
-| `kind`   | string | `"tap"` or `"source"`                                     |
-| `preset` | string | Security preset: `"none"`, `"relaxed"`, `"standard"`, `"strict"` |
-
-### `[agent-mode]`
-
-Settings applied when an AI agent runs skilltap.
-
-| Key       | Type    | Default     | Description                                           |
-| --------- | ------- | ----------- | ----------------------------------------------------- |
-| `enabled` | boolean | `false`     | Enable agent mode                                     |
-| `scope`   | string  | `"project"` | Default scope for agent installs: `"global"` or `"project"` |
-
-Agent mode uses `[security.agent]` for its security settings. These are independently configurable via `skilltap config security --mode agent`.
+For non-interactive runs (CI, agents) set `on_warn = "fail"` so warnings hard-fail instead of prompting.
 
 ### `[registry]`
 
@@ -189,9 +162,8 @@ When a CLI flag and a config value conflict, the **most restrictive** option win
 
 - `--strict` overrides `on_warn` to `"fail"`
 - `--no-strict` overrides `on_warn` to `"prompt"`
-- `require_scan = true` in the active mode blocks `--skip-scan` (returns an error)
-- Agent mode uses `[security.agent]` settings (fully configurable, defaults to strict)
-- Trust tier overrides replace mode defaults for matching taps or source types
+- `--skip-scan` bypasses scanning unless the source matches a `[security] trust` glob — trust globs are the only persistent scan-skip mechanism
+- `[security] trust` globs match against the install source string (e.g. `"github:my-corp/*"`, `"npm:@my-corp/*"`)
 
 Flags always override config for non-security settings like `scope` and `yes`.
 
@@ -204,25 +176,14 @@ also = ["cursor"]
 yes = false
 
 [security]
+scan = "static"
+on_warn = "prompt"
+trust = ["github:my-corp/*"]
 agent_cli = "claude"
 threshold = 5
 
-[security.human]
-scan = "static"
-on_warn = "prompt"
-require_scan = false
-
-[security.agent]
-scan = "static"
-on_warn = "fail"
-require_scan = true
-
 [registry]
 enabled = ["skills.sh"]
-
-["agent-mode"]
-enabled = false
-scope = "project"
 ```
 
 For the full list of options and their allowed values, see the [Config Options Reference](/reference/config-options).

@@ -30,7 +30,7 @@ skilltap create my-skill --template basic
 | `npm` | npm package: `SKILL.md`, `.gitignore`, `package.json` (with `agent-skill` keyword), `.github/workflows/publish.yml` with provenance attestation |
 | `multi` | Multi-skill repo: `.agents/skills/` structure with multiple skills, `.gitignore` |
 
-After scaffolding, the command prints next steps — how to test locally, verify the skill, and publish it.
+After scaffolding, the command prints next steps — how to test locally, validate the skill, and publish it.
 
 ### The `npm` template
 
@@ -58,16 +58,16 @@ skilltap create my-project --template multi
 
 ## Verifying a skill
 
-Before publishing, run `skilltap verify` to validate your skill:
+Before publishing, run `skilltap doctor skill` to validate your skill:
 
 ```bash
-skilltap verify
+skilltap doctor skill .
 ```
 
 Or point it at a specific path:
 
 ```bash
-skilltap verify ./path/to/skill
+skilltap doctor skill ./path/to/skill
 ```
 
 This checks:
@@ -102,12 +102,12 @@ Output on success:
 
 Exit code `0` = valid, `1` = errors found.
 
-### Using verify in CI
+### Using doctor in CI
 
-`skilltap verify --json` outputs machine-readable results:
+`skilltap doctor skill --json` outputs machine-readable results:
 
 ```bash
-skilltap verify --json
+skilltap doctor skill . --json
 ```
 
 ```json
@@ -125,7 +125,7 @@ As a pre-push git hook (`.git/hooks/pre-push`):
 
 ```bash
 #!/bin/sh
-skilltap verify
+skilltap doctor skill .
 ```
 
 ## SKILL.md format
@@ -226,7 +226,7 @@ commit-helper/
     generate.sh
 ```
 
-When someone runs `skilltap install user/commit-helper`, the entire repo becomes the installed skill. Git history is preserved, and `skilltap update` runs `git pull` directly.
+When someone runs `skilltap install skill user/commit-helper`, the entire repo becomes the installed skill. Git history is preserved, and `skilltap update` runs `git pull` directly.
 
 ### Multi-skill repo
 
@@ -249,30 +249,30 @@ skilltap also discovers skills at agent-specific paths (`.claude/skills/*/SKILL.
 
 ## Testing locally
 
-Use `skilltap link` to symlink your skill into the install path during development:
+Use `skilltap adopt` to track your in-development skill directory in place — no copy, no clone:
 
 ```bash
 cd ~/dev/my-skill
-skilltap link . --also claude-code
+skilltap adopt . --also claude-code
 ```
 
 ```
-✓ Linked my-skill → ~/.agents/skills/my-skill/
+✓ Adopted my-skill (tracking in place: .)
 ✓ Symlinked → ~/.claude/skills/my-skill/
 ```
 
-This creates a symlink, not a copy. Any changes you make to your skill are immediately visible to the agent. Iterate on the `SKILL.md`, test with your agent, and repeat.
+`adopt` records the skill in `state.json` pointing at its source directory and (when `--also` is set) symlinks into your agent's discovery path. Any changes you make to your skill are immediately visible to the agent. Iterate on the `SKILL.md`, test with your agent, and repeat.
 
 For project-scoped testing:
 
 ```bash
-skilltap link .agents/skills/my-project-dev --project --also claude-code
+skilltap adopt .agents/skills/my-project-dev --scope project --also claude-code
 ```
 
-When you're done developing, remove the link:
+When you're done developing, stop tracking the skill:
 
 ```bash
-skilltap unlink my-skill
+skilltap remove skill my-skill
 ```
 
 ## Publishing
@@ -291,13 +291,13 @@ git push -u origin main
 Others can now install it:
 
 ```bash
-skilltap install https://gitea.example.com/user/my-skill
+skilltap install skill https://gitea.example.com/user/my-skill
 ```
 
 If it's on GitHub, they can use shorthand:
 
 ```bash
-skilltap install user/my-skill
+skilltap install skill user/my-skill
 ```
 
 That's all there is to it. No registration, no publishing step, no approval process. If it's in a git repo and has a `SKILL.md`, it's installable.
@@ -343,7 +343,7 @@ Anyone who adds your tap can now install by name:
 
 ```bash
 skilltap tap add friend https://gitea.example.com/user/my-tap
-skilltap install commit-helper
+skilltap install skill commit-helper
 ```
 
 For more on taps, see the [Taps](/guide/taps) guide.

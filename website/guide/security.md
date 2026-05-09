@@ -48,7 +48,7 @@ The semantic scan includes defenses against meta-attacks -- skills that try to t
 Enable semantic scanning with the `--semantic` flag. When passed, the scan runs automatically without a prompt:
 
 ```bash
-skilltap install some-skill --semantic
+skilltap install skill some-skill --semantic
 ```
 
 The "Run semantic scan?" prompt only appears when **static warnings are found** and `--semantic` was not passed — offering you the option to do a deeper check before deciding.
@@ -56,7 +56,7 @@ The "Run semantic scan?" prompt only appears when **static warnings are found** 
 Or set it permanently in your config:
 
 ```toml
-[security.human]
+[security]
 scan = "semantic"
 ```
 
@@ -67,7 +67,7 @@ The semantic scan works with any supported agent: Claude Code, Gemini CLI, Codex
 When you run `skilltap install`, the security flow is interactive. For a **clean skill** (no warnings), you see a final confirmation before anything is written to disk:
 
 ```
-$ skilltap install some-skill --global
+$ skilltap install skill some-skill --global
 
 Cloning some-skill...
 Scanning some-skill for security issues...  ✓ No warnings
@@ -83,7 +83,7 @@ Pass `--yes` to skip this confirmation for clean installs (warnings always promp
 For a skill with **warnings**, the flow continues:
 
 ```
-$ skilltap install some-skill --global
+$ skilltap install skill some-skill --global
 
 Cloning some-skill...
 Scanning some-skill for security issues...
@@ -132,89 +132,52 @@ With `--strict`, any warning skips the prompt and aborts immediately.
 
 ## Configuring security behavior
 
-Security settings are configured independently for **human mode** (when you run skilltap) and **agent mode** (when AI agents run skilltap). Use `skilltap config security` for an interactive wizard, or pass flags for scripting.
-
-### Presets
-
-The fastest way to configure security is with presets:
-
-```bash
-skilltap config security --preset standard              # both modes
-skilltap config security --preset strict --mode agent    # agent mode only
-skilltap config security --preset none --mode human      # human mode only
-```
-
-| Preset | Scan | On Warn | Require Scan |
-|--------|------|---------|--------------|
-| `none` | off | allow | no |
-| `relaxed` | static | allow | no |
-| `standard` | static | prompt | no |
-| `strict` | semantic | fail | yes |
+Security lives in a single flat `[security]` block in your `config.toml`. Use `skilltap config security` for an interactive wizard, or `skilltap config set security.<key> <value>` for scripted edits.
 
 ### Warning behavior
 
 Control what happens when a scan finds warnings:
 
 ```toml
-[security.human]
+[security]
 on_warn = "prompt"   # show warnings and ask (default)
 # on_warn = "fail"   # block installation immediately
 # on_warn = "allow"  # log warnings but install anyway
 ```
 
+For non-interactive runs (CI, AI agents), set `on_warn = "fail"` so warnings hard-fail rather than blocking on a prompt that nobody will answer.
+
 Override per-command with flags:
 
 ```bash
-skilltap install some-skill --strict      # treat warnings as errors
-skilltap install some-skill --no-strict   # override on_warn=fail for this run
+skilltap install skill some-skill --strict      # treat warnings as errors
+skilltap install skill some-skill --no-strict   # override on_warn=fail for this run
 ```
 
-### Requiring scans
+### Trusted sources
 
-Prevent anyone from bypassing the security scan:
+To skip scanning for sources you control, add glob patterns to `[security] trust`:
 
 ```toml
-[security.human]
-require_scan = true
+[security]
+trust = [
+  "github:my-corp/*",       # any repo under your org
+  "npm:@my-corp/*",         # any npm package under your scope
+  "tap:my-corp",            # any skill installed via your tap by name
+]
 ```
 
-With this set, `--skip-scan` is rejected.
+Sources matching any glob are installed without running the static or semantic scan. Globs match against the install source string skilltap records in `state.json`.
 
-### Trust tier overrides
+### Skipping scans per-command
 
-Configure different security levels per source. This is useful for trusting your own internal taps while keeping strict scanning for everything else:
-
-```toml
-# No scanning for skills from your company tap
-[[security.overrides]]
-match = "my-company-tap"
-kind = "tap"
-preset = "none"
-
-# Strict scanning for npm packages
-[[security.overrides]]
-match = "npm"
-kind = "source"
-preset = "strict"
-```
-
-Named tap overrides take priority over source-type overrides. Manage via CLI:
+For one-off trusted sources, bypass scanning at the CLI:
 
 ```bash
-skilltap config security --trust tap:my-corp=none
-skilltap config security --trust source:npm=strict
-skilltap config security --remove-trust my-corp
+skilltap install skill trusted-skill --skip-scan
 ```
 
-### Skipping scans
-
-For sources you trust completely, bypass scanning:
-
-```bash
-skilltap install trusted-skill --skip-scan
-```
-
-This skips both static and semantic scans. Blocked if `require_scan` is enabled in the active mode.
+This skips both static and semantic scans for that single invocation.
 
 ## Trust signals
 
@@ -271,20 +234,18 @@ installed:     2026-02-28T12:00:00.000Z
 updated:       2026-02-28T12:00:00.000Z
 ```
 
-## Agent mode
+## Non-interactive use (AI agents, CI)
 
-Agent mode can be activated three ways (precedence high → low):
+There is no separate "agent mode" runtime in v2.0. skilltap detects non-interactive contexts automatically (TTY check on stdout) and you opt into specific automation behaviors with flags:
 
-1. `--agent` CLI flag (per-invocation, every command).
-2. `SKILLTAP_AGENT=1` environment variable (per-invocation).
-3. `[agent-mode] enabled = true` config block (persistent — set by `skilltap config agent-mode`; see [Configuration](./configuration.md)).
+- **`--yes`** — auto-accept install confirmations.
+- **`--json`** — emit machine-readable output instead of formatted text.
+- **`on_warn = "fail"` in `[security]`** — turn security warnings into hard exits with a non-zero status, the right setting for CI and AI-agent invocations that should refuse to install anything suspicious.
 
-When any of those is true, skilltap uses the `[security.agent]` settings. The defaults are strict (scan=static, on_warn=fail, require_scan=true), but agent mode is fully configurable — you can set any security level including `none`.
-
-Configure agent security independently:
+A typical CI invocation:
 
 ```bash
-skilltap config security --preset strict --mode agent
+skilltap install skill user/commit-helper --yes --strict --json
 ```
 
-Output in agent mode is machine-readable. Security failures emit a stop directive telling the calling agent not to proceed.
+Use `[security] trust` globs to allow-list sources you control without disabling scanning globally. Security failures still emit non-zero exit codes and structured error output for the calling process to handle.

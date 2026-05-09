@@ -64,20 +64,23 @@ The directory is created if it doesn't exist. If a completion file already exist
 ```
 skilltap <TAB>
   install  remove  list  update  status  sync  try  migrate  find
-  toggle  enable  disable  link  unlink  info  create  verify
-  doctor  completions  self-update  skills  plugin  tap  config
+  toggle  info  adopt  move  create  doctor  completions
+  self-update  skills  tap  config
 
-skilltap skills <TAB>
-  remove  adopt  move  info  link  unlink
+skilltap install <TAB>
+  skill  plugin  mcp
 
-skilltap plugin <TAB>
-  info  toggle  remove
+skilltap remove <TAB>
+  skill  plugin  mcp
+
+skilltap doctor <TAB>
+  skill  plugin
 
 skilltap tap <TAB>
   add  remove  list  update  info  init  install
 
 skilltap config <TAB>
-  get  set  edit  security  agent-mode  telemetry
+  get  set  edit  security  telemetry
 ```
 
 ### Flags
@@ -85,9 +88,9 @@ skilltap config <TAB>
 Every command's flags complete. A few examples:
 
 ```
-skilltap install --<TAB>
-  --project  --global  --also  --ref  --yes  --strict  --no-strict
-  --semantic  --agent  --skip-scan
+skilltap install skill --<TAB>
+  --scope  --project  --global  --also  --ref  --yes  --json
+  --strict  --no-strict  --semantic  --skip-scan
 
 skilltap doctor --<TAB>
   --json  --fix
@@ -115,11 +118,11 @@ These are read from your local state at completion time, so they stay current:
 
 | Command | Completes |
 |---------|-----------|
-| `remove <TAB>` | Installed skill names |
-| `update <TAB>` | Installed skill names |
-| `unlink <TAB>` | Linked skill names only |
+| `remove skill <TAB>` | Installed skill names |
+| `remove plugin <TAB>` | Installed plugin names |
+| `update <TAB>` | Installed skill / plugin / mcp names |
 | `info <TAB>` | Installed skill names + tap skill names |
-| `install <TAB>` | Tap skill names |
+| `install skill <TAB>` | Tap skill names |
 | `tap remove <TAB>` | Configured tap names |
 
 Dynamic completions are fast — they read `state.json` and `config.toml` synchronously via a hidden `--get-completions` endpoint. No network calls, no git operations.
@@ -147,4 +150,4 @@ Fish auto-loads from `~/.config/fish/completions/`. Open a new terminal session 
 
 **Dynamic completions show nothing**
 
-If `remove <TAB>` shows nothing but you have skills installed, check that `skilltap` is on PATH in your shell — the completion script runs `skilltap --get-completions installed-skills` as a subprocess.
+If `remove skill <TAB>` shows nothing but you have skills installed, check that `skilltap` is on PATH in your shell — the completion script runs `skilltap --get-completions installed-skills` as a subprocess.

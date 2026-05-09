@@ -82,7 +82,7 @@ Commit and push whenever you add or update entries.
 Before adding a skill to your tap, verify it passes validation:
 
 ```bash
-skilltap verify ./skill-code-reviewer
+skilltap doctor skill ./skill-code-reviewer
 ```
 
 This checks the SKILL.md frontmatter, runs a static security scan, and prints a snippet ready to paste into `tap.json`.
@@ -102,7 +102,7 @@ After that, they install and update from your catalog by name — no URLs to cop
 skilltap find
 
 # Install a skill
-skilltap install code-reviewer --global --also claude-code
+skilltap install skill code-reviewer --global --also claude-code
 ```
 
 For a company or project, put this in your onboarding docs or runbook. For a friend group, just share the one-liner in a message.
@@ -291,14 +291,19 @@ Results from all enabled registries appear together in `skilltap find` output, e
 
 Scanning is on by default (static mode) and runs locally on each developer's machine at install time. It's a useful backstop, not the primary control mechanism for most teams.
 
-If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops. Note that `on_warn` lives in the per-mode blocks (`[security.human]` for interactive use, `[security.agent]` for `--agent` / CI):
+If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops. The setting lives in the single flat `[security]` block — it applies to every invocation, interactive or not (CI runs and AI-agent invocations naturally hit the fail path because no human is there to answer a prompt):
 
 ```toml
-[security.human]
+[security]
 on_warn = "fail"
+```
 
-[security.agent]
-on_warn = "fail"   # already the default for agent mode
+To allow-list sources you control (your own taps, your npm scope) without disabling scanning globally, add glob patterns to `[security] trust`:
+
+```toml
+[security]
+on_warn = "fail"
+trust = ["github:my-corp/*", "npm:@my-corp/*"]
 ```
 
 See the [Security guide](/guide/security) for what static scanning catches and how the optional semantic scan works.
@@ -311,13 +316,13 @@ During install, each developer optionally symlinks to their agent's directory:
 
 ```bash
 # Claude Code user
-skilltap install code-reviewer --also claude-code
+skilltap install skill code-reviewer --also claude-code
 
 # Cursor user
-skilltap install code-reviewer --also cursor
+skilltap install skill code-reviewer --also cursor
 
 # Both
-skilltap install code-reviewer --also claude-code,cursor
+skilltap install skill code-reviewer --also claude-code,cursor
 ```
 
 The skill is installed once to `~/.agents/skills/` (or project-scoped to `.agents/skills/`) and symlinked wherever needed.
@@ -337,9 +342,9 @@ curl -fsSL https://skilltap.dev/install.sh | sh
 skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 
 # Install standard team skills
-skilltap install code-reviewer --global --also claude-code
-skilltap install pr-helper --global --also claude-code
-skilltap install commit-helper --global --also claude-code
+skilltap install skill code-reviewer --global --also claude-code
+skilltap install skill pr-helper --global --also claude-code
+skilltap install skill commit-helper --global --also claude-code
 
 echo "Skills installed. Run 'skilltap find' to browse the full catalog."
 ```
