@@ -16,19 +16,21 @@ Read these before making architectural decisions:
 - docs/PROGRESS.md — autopilot tracking: phase status, decision log, deviations
 - docs/design/phase-{N}.md — per-phase design docs produced before implementation
 
-## v2.1 conventions (post-cutover)
+## v2.0 Redesign conventions
 
-skilltap completed the v2.0 → v2.1 cutover. Most v0.x scaffolding has been retired:
+The v2.0 redesign (Phases 39–46) is complete. Key conventions for new code:
 
-- **state.json** (canonical): `~/.config/skilltap/state.json` (or `<project>/.agents/state.json`) is the canonical store for installed skills + plugins + standalone MCP servers. Written by `install`/`update`/`remove`/`disable`/`enable`/`move`/`adopt`/`link` and the `migrate` command. Read by every consumer. The legacy `installed.json` + `plugins.json` files are read-fallback only (one-time, for unmigrated v0.x users) and never written.
-- **skilltap.toml + skilltap.lock** (project manifest): `install` and `remove` automatically update both when `skilltap.toml` is present at the project root. `skilltap sync` reconciles manifest ↔ lockfile ↔ state.
-- **Agent mode entry points** (precedence order): `--agent` flag > `SKILLTAP_AGENT=1` env var > `[agent-mode] enabled` config block. The flag and env var work for every command via `composePolicy`. The legacy config block remains readable for back-compat.
-- **Smart scope default**: inside a git repo, install defaults to `--project`; outside, `--global`. No prompt for the common case.
-- **HTTP registry adapter removed** — taps are git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning.
+- **CLI surface**: `install <type> <source>` where type is `skill | plugin | mcp`. No auto-detect. `remove <type> <name>`, `update [type] [name]`, `toggle [type] [name[:component]]`. No `link`, `unlink`, `verify`, `enable`, `disable` commands — use `adopt`, `doctor`, `toggle`.
+- **No `--agent` flag, no `SKILLTAP_AGENT` env var**: removed entirely. TTY detection + `--yes` + `--json` drives non-interactive behavior. There is no `[agent-mode]` config block. `composePolicy` no longer has an agent-mode branch.
+- **Flat `[security]` block**: `scan`, `on_warn`, `trust` — no `[security.human]`/`[security.agent]` split, no presets, no `[[security.overrides]]`.
+- **state.json** (canonical): `~/.config/skilltap/state.json` (or `<project>/.agents/state.json`) is the only state store. Written by `install`/`update`/`remove`/`move`/`adopt`/`toggle`/`migrate`. No legacy `installed.json`/`plugins.json` fallback — `migrate` is the explicit upgrade path.
+- **skilltap.toml + skilltap.lock** (project manifest): `install` and `remove` update both when `skilltap.toml` is present. `skilltap sync` reconciles manifest ↔ lockfile ↔ state.
+- **Smart scope default**: inside a git repo, install defaults to `project`; outside, `global`. Use `--scope project|global` to override.
+- **Output interface**: all output goes through `Output` (from `core/src/output/types.ts`). Core functions never write to stdout/stderr. `setupOutput(args)` in CLI commands wires the concrete implementation.
+- **HTTP registry adapter removed** — taps are git-only.
+- **No silent aliases**: old command paths return errors with hints. Don't add aliases.
 
-**Deferred to v2.2** (release-window concern, not a technical blocker): full deletion of v0.x read-fallback paths and `[agent-mode]` config block schema. Until then, `loadInstalled`/`loadPlugins` keep their fallback to legacy files for one-time transparent migration of unmigrated users.
-
-When adding new code, write directly against `state.json` (`saveInstalled`/`savePlugins`/`loadInstalled` are already wired). Don't re-introduce `installed.json` writes; the dual-write layer was deleted in Refactor 2.
+When adding new code, write against `state.json` directly. Don't re-introduce `installed.json` writes or any per-mode agent branching.
 
 ## Tech Stack
 
@@ -46,8 +48,12 @@ When adding new code, write directly against `state.json` (`saveInstalled`/`save
 ```
 packages/core/    → @skilltap/core  (library, all business logic, zero CLI deps)
   src/plugin/     → plugin detection, install, lifecycle, MCP injection, state
+  src/agent-plugins/ → AgentPluginScanner interface + Claude Code adapter
+  src/output/     → Output interface (tty/plain/json mode abstraction)
 packages/cli/     → skilltap        (CLI entry point, commands, UI)
-  src/commands/plugin/  → plugin subcommands (list, info, toggle, remove)
+  src/commands/install/  → skill.ts, plugin.ts, mcp.ts subcommands
+  src/commands/remove/   → skill.ts, plugin.ts, mcp.ts subcommands
+  src/tui/        → Ink-based TUI dashboard + screens
 packages/test-utils/ → @skilltap/test-utils (private, test fixtures/helpers)
 ```
 
@@ -113,10 +119,11 @@ bun test packages/core/src/doctor.test.ts   # or scoped to a file
 - Core never writes to stdout/stderr — CLI layer handles all output
 
 ### Patterns
-- All data boundaries validated with Zod (config, `state.json` (canonical) + `installed.json`/`plugins.json` (fallback), tap.json, plugin manifests (`.skilltap/<plugin>.toml`), `skilltap.toml` + `skilltap.lock`, frontmatter, agent responses, registry responses)
+- All data boundaries validated with Zod (config, `state.json`, tap.json, plugin manifests (`.skilltap/<plugin>.toml`), `skilltap.toml` + `skilltap.lock`, frontmatter, agent responses, registry responses)
 - Shell out to `git` CLI directly (no git library) — user's auth just works
 - Git operations go through `core/src/git.ts`
 - Agent symlinks map: claude-code→.claude/skills/, cursor→.cursor/skills/, etc.
+- Output goes through `Output` interface (`setupOutput(args)` in CLI commands) — never `process.stdout.write` directly from command handlers
 
 ### Testing
 - Use `bun:test` (`describe`, `test`, `expect`)

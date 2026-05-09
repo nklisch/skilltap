@@ -1,7 +1,7 @@
 # skilltap — Complete Documentation
 
 > Source: https://skilltap.dev/llms-full.txt
-> Generated: 2026-05-07
+> Generated: 2026-05-09
 >
 > This file contains the complete skilltap documentation as a single Markdown document
 > for AI coding assistant ingestion. For a navigable index see https://skilltap.dev/llms.txt.
@@ -160,27 +160,15 @@ skilltap --version
 
 ## Install your first skill
 
-Install a skill from a git URL:
+`install` requires a type subcommand — `skill`, `plugin`, or `mcp`. No auto-detect.
 
 ```bash
-skilltap install user/commit-helper
+skilltap install skill user/commit-helper
 ```
 
 skilltap walks you through the process interactively:
 
 ```
-◆ skilltap
-
-◆ Which agents should this skill be available to?
-│ ◼ Claude Code
-│ ◻ Cursor
-│ ◻ Codex
-│ ◻ Gemini
-│ ◻ Windsurf
-
-◆ Save agent selection as default?
-│ Yes
-
 ◇ Cloning user/commit-helper...
 ◇ Scanning commit-helper...
 │ ✓ No warnings
@@ -188,54 +176,56 @@ skilltap walks you through the process interactively:
 ◇ Install commit-helper?
 │ › Yes
 
-✓ Installed commit-helper → ~/.agents/skills/commit-helper/
+✓ Installed commit-helper → .agents/skills/commit-helper/
+  (scope: project, inferred from git repo)
 ```
 
 Here's what happened:
 
-1. **Scope was inferred automatically** (smart-scope-default in v2.1): inside a git repo → project scope (`.agents/skills/`); outside → global (`~/.agents/skills/`). No prompt. Pass `--project` or `--global` to override.
-2. You selected which agents should see the skill (symlinks are created automatically)
-3. skilltap cloned the repo
-4. A static security scan checked all files for suspicious content
-5. No warnings found — you confirmed the install
-6. The skill was placed at `~/.agents/skills/commit-helper/` with a symlink in `~/.claude/skills/commit-helper/`
+1. **Scope was inferred automatically** (smart-scope-default): inside a git repo → project scope (`.agents/skills/`); outside → global (`~/.agents/skills/`). No prompt. Pass `--scope global` or `--scope project` to override.
+2. skilltap cloned the repo to a temp directory
+3. A static security scan checked all files for suspicious content
+4. No warnings found — you confirmed the install
+5. The skill was placed at `.agents/skills/commit-helper/`
 
-If the scan had found warnings, skilltap would show them and offer to run a deeper [semantic scan](./security) using your local AI agent before asking you to confirm.
+If the scan found warnings, skilltap would show them and offer to run a deeper [semantic scan](./security) before asking you to confirm.
 
-Run non-interactively for CI / scripting via `--agent` (forces plain-text output, hard-fails on warnings, auto-yes for clean installs):
-
-```bash
-skilltap install user/commit-helper --agent
-```
-
-`--yes --global` also works but doesn't activate the agent-mode security policy or plain-text output:
+### Override the scope
 
 ```bash
-skilltap install user/commit-helper --global --yes
+# Always install globally
+skilltap install skill user/commit-helper --scope global
+
+# Always install to the current project
+skilltap install skill user/commit-helper --scope project
 ```
 
-To override the smart-scope inference, pass `--global` or `--project`:
+### Non-interactive use (CI, scripts, AI agents)
 
 ```bash
-skilltap install user/commit-helper --global
+# --yes auto-accepts clean installs; piped stdout automatically gives plain output
+skilltap install skill user/commit-helper --scope global --yes | cat
+
+# JSON output for scripting
+skilltap install skill user/commit-helper --scope global --yes --json
 ```
+
+There is no `--agent` flag. TTY detection + `--yes` + `--json` covers all automation use cases.
 
 ::: tip Preview before installing
-Use `skilltap try <source>` to clone, scan, and inspect a source repo without writing anything to your install paths. Useful for unfamiliar sources.
+Use `skilltap try skill <source>` to clone, scan, and inspect a source without writing anything. Safe to run on unfamiliar sources.
 :::
 
-::: info Coming from skilltap v0.x?
-Run `skilltap migrate` once to convert your `installed.json` / `plugins.json` into the canonical `state.json`. A soft startup notice will remind you if v1 markers are detected.
+::: info Coming from v2.1 or earlier?
+Run `skilltap migrate` once to translate your config and state files. Migrates `[security.human]`/`[security.agent]` blocks, removes `[agent-mode]`, and consolidates `installed.json` / `plugins.json` → `state.json`.
 :::
 
 ### Agent symlinks
 
-During install, skilltap asks which agents the skill should be visible to. Your selection creates symlinks into agent-specific directories (e.g. `~/.claude/skills/`). You can save your choice as the default for future installs.
-
-The prompt is skipped automatically once you've saved a default (via `skilltap config` or "Save as default?" during a previous install). You can also skip it explicitly:
+Pass `--also` to symlink into agent-specific directories:
 
 ```bash
-skilltap install user/commit-helper --global --also claude-code
+skilltap install skill user/commit-helper --scope global --also claude-code
 ```
 
 This creates:
@@ -244,9 +234,15 @@ This creates:
 
 Supported agents: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf`.
 
+Set a permanent default in config so you don't need to repeat it:
+
+```bash
+skilltap config set defaults.also claude-code
+```
+
 ## Add a tap
 
-A tap is a curated index of skills -- a git repo containing a `tap.json` that lists skill names, descriptions, and URLs. Adding a tap lets you install skills by name instead of URL.
+A tap is a curated index of skills — a git repo containing a `tap.json` that lists skill names, descriptions, and URLs. Adding a tap lets you install skills by name instead of URL.
 
 ```bash
 skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
@@ -257,7 +253,7 @@ Cloning tap...
 ✓ Added tap 'skilltap' (2 skills)
 ```
 
-You can add as many taps as you want -- your own, a friend's, a team's.
+You can add as many taps as you want — your own, a friend's, a team's.
 
 ## Search and install from a tap
 
@@ -267,129 +263,114 @@ Search for skills:
 skilltap find
 ```
 
-This opens an interactive search — type a query, browse results, and press Enter to install. You can also search directly:
+This opens an interactive TUI browser. Type a query, browse results, and press Enter to install. You can also search directly:
 
 ```bash
 skilltap find review
 ```
 
-Install by name:
+Install by name from a tap:
 
 ```bash
-skilltap install skilltap --global
+skilltap install skill commit-helper --scope global
 ```
 
 skilltap resolves the name from your configured taps, finds the repo URL, and runs the normal clone-scan-install flow.
 
-You can also pin a version:
+Pin a version:
 
 ```bash
-skilltap install skilltap@v1.0.0 --global
+skilltap install skill commit-helper@v1.0.0 --scope global
 ```
 
-## View installed skills
+## Install a plugin
+
+A plugin bundles skills + MCP servers + agent definitions as a single installable unit.
 
 ```bash
-skilltap skills
+skilltap install plugin corp/dev-toolkit --scope global --also claude-code
 ```
 
 ```
-Global (.agents/skills/) — 1 skill
-  Name       Status   Agents       Source
-  skilltap   managed  claude-code  https://github.com/nklisch/skilltap-skills
+Detected plugin: dev-toolkit
+  3 skills, 2 MCP servers, 1 agent definition
+
+✓ Installed plugin dev-toolkit
+  Skills: code-review, commit-helper, test-generator
+  MCPs: database, file-search → claude-code
+  Agent: code-review.md
 ```
 
-This shows all skills across all locations — managed, linked, and unmanaged. Filter by scope or status:
+Manage plugin components:
 
 ```bash
-skilltap skills --global       # only global skills
-skilltap skills --project      # only project-scoped skills
-skilltap skills --unmanaged    # only unmanaged skills (not tracked by skilltap)
+skilltap toggle plugin dev-toolkit:test-generator   # disable one component
+skilltap info dev-toolkit                            # view component details
 ```
 
-For a broader dashboard that includes plugins, MCP injection, taps, and (in a project) manifest drift, run:
+## View installed skills and plugins
+
+For a full dashboard (skills, plugins, MCPs, taps, drift):
 
 ```bash
-skilltap status               # full dashboard
-skilltap                       # alias for status
-skilltap status --json         # machine-readable output for scripting
+# Opens TUI dashboard in a terminal
+skilltap
+
+# Headless (safe to pipe, JSON-friendly)
+skilltap status
+skilltap status --json
 ```
 
 ## Adopt existing skills
 
-If you've placed skills manually — copied them from a colleague, cloned them yourself, or inherited them from a project — they show up as **unmanaged** in `skilltap skills`:
+If you've placed skills manually or want to track a local dev skill, use `adopt`:
 
 ```bash
-skilltap skills --unmanaged
+# Open TUI picker for all unmanaged skills
+skilltap adopt
+
+# Adopt a specific external path (replaces the old `link` command)
+skilltap adopt ~/dev/my-skill --also claude-code
+
+# Adopt all Claude Code plugins into skilltap management
+skilltap adopt --source claude-code
 ```
 
-```
-Global (.agents/skills/) — 1 unmanaged skill
-  Name           Status      Agents  Source
-  commit-helper  unmanaged   —       ~/.agents/skills/commit-helper/
-```
-
-Unmanaged skills aren't source-tracked: skilltap can't update them, re-scan them, or tell where they came from. Use `skills adopt` to bring them under management:
-
-```bash
-skilltap skills adopt
-```
-
-skilltap shows an interactive picker of all unmanaged skills. Select which ones to adopt, then choose how to handle them:
-
-- **Move to `~/.agents/skills/`** (default) — relocates files and records them with full source tracking
-- **Track in place** (`--track-in-place`) — records the skill at its current location without moving it
-
-```bash
-# Adopt all unmanaged skills non-interactively
-skilltap skills adopt --yes
-
-# Track a skill at its current path without moving it
-skilltap skills adopt my-skill --track-in-place
-```
-
-Once adopted, skills appear as managed in `skilltap skills` and are eligible for updates and security scans.
-
-### Move between scopes
+## Move between scopes
 
 Move a skill from project scope to global (or vice versa):
 
 ```bash
-skilltap skills move commit-helper --global
+skilltap move commit-helper --scope global
 ```
-
-This relocates the files, updates `state.json` in both scopes, and refreshes any agent symlinks.
 
 ## Update skills
 
-Update all installed skills:
+Update all installed skills, plugins, and MCP servers:
 
 ```bash
 skilltap update
 ```
 
 ```
-◆ Checking commit-helper...
-│ abc123 → def456 (2 files changed)
+Checking commit-helper... abc123 → def456 (2 files changed)
   M SKILL.md (+5 -2)
   A scripts/helper.sh (+18)
 
-◇ Apply update to commit-helper?
-│ › Yes
+Scanning changes... ✓ No warnings
+Apply update? (y/N): y
 ✓ Updated commit-helper
 
-◆ Checking code-review...
-│ Already up to date.
+Checking code-review... Already up to date.
 
 Updated: 1   Skipped: 0   Up to date: 1
 ```
 
-Updates fetch the latest changes, show you a diff summary, scan the changed files for security issues, and ask before applying.
-
-Update a specific skill:
+Update a specific item:
 
 ```bash
-skilltap update commit-helper
+skilltap update skill commit-helper
+skilltap update plugin dev-toolkit
 ```
 
 ## Configure defaults
@@ -400,43 +381,40 @@ Run the interactive setup wizard:
 skilltap config
 ```
 
-This walks you through:
+Or set values directly:
 
-- Default install scope (global, project, or ask each time)
-- Which agents to auto-symlink to on every install
+```bash
+skilltap config set defaults.scope project
+skilltap config set defaults.also claude-code
+```
 
 Your settings are saved to `~/.config/skilltap/config.toml`. See the [Configuration](/guide/configuration) guide for the full reference.
 
 ## Configure security
 
-skilltap scans every skill for suspicious content before installing. You can fine-tune security with the dedicated wizard:
+skilltap scans every skill for suspicious content before installing. Fine-tune security:
 
 ```bash
 skilltap config security
 ```
 
-This lets you choose a preset (none, relaxed, standard, strict) or configure scan mode, warning behavior, and required scans individually -- with independent settings for human and agent modes. You can also set up per-tap trust overrides for internal taps you trust completely.
+The `[security]` block in `config.toml` has three keys:
 
-For non-interactive use (CI, scripting):
+```toml
+[security]
+scan = "static"      # "semantic" | "static" | "none"
+on_warn = "prompt"   # "prompt" | "fail" | "install"
+trust = []           # tap names or source URL globs to skip scanning
+```
+
+For non-interactive use:
 
 ```bash
-skilltap config security --preset strict
-skilltap config security --mode agent --preset none
-skilltap config security --trust tap:my-company=none
+skilltap config set security.on_warn fail
+skilltap config set security.trust my-corp-tap
 ```
 
 See the [Security](/guide/security) guide for full details.
-
-## Next steps
-
-- [Installing Skills](./installing-skills) -- all source formats, flags, scopes, and multi-skill repos
-- [Creating Skills](./creating-skills) -- write and publish your own skills
-- [Taps](./taps) -- create and manage skill indexes
-- [Sharing with a team](./teams) -- the v2.0 project-manifest workflow (`skilltap.toml` + `skilltap sync`) for pinned, reproducible team setups
-- [Security](./security) -- how scanning works and how to configure it
-- [Configuration](./configuration) -- full config file reference, including `--agent` flag and `SKILLTAP_AGENT=1` env var for CI/non-interactive use
-- [Doctor](./doctor) -- 15 health checks for state, manifests, drift, MCP injection, and more
-- [CLI Reference](/reference/cli) -- every command, flag, and option
 
 ---
 
@@ -2477,32 +2455,40 @@ If `remove <TAB>` shows nothing but you have skills installed, check that `skill
 
 Complete reference for all skilltap commands, arguments, flags, and behavior.
 
+> For full flag combinations and prompt flows, see [docs/UX.md](https://github.com/nklisch/skilltap/blob/main/docs/UX.md) in the repository.
+
 ## Global Behavior
 
-- **Exit codes:** `0` success, `1` error, `2` user cancelled
+- **Exit codes:** `0` success, `1` error, `2` user cancelled, `130` Ctrl+C
 - **Errors** are written to stderr with an `error:` prefix and optional `hint:`
 - **Config** is stored at `~/.config/skilltap/config.toml`
-- **State** is tracked in `~/.config/skilltap/state.json` (v2.1+; legacy `installed.json` + `plugins.json` are read-fallback only)
-- **Agent mode** (via `--agent` flag, `SKILLTAP_AGENT=1` env var, or persistent config) changes all commands to non-interactive, strict-security, plain-text output
+- **State** is tracked in `~/.config/skilltap/state.json` (global) or `<project>/.agents/state.json` (project)
+- **Output mode** is decided by TTY detection: TTY → colors + spinners, non-TTY → plain text, `--json` → newline-delimited JSON events
+
+### Universal flags
+
+Most commands accept:
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Machine-readable output (also auto-selected when stdout is not a TTY) |
+| `--yes` / `-y` | Auto-accept "do it" prompts |
+| `--quiet` | Suppress non-essential output |
+| `--scope project\|global` | Explicit scope. Default: `project` inside a git repo, `global` otherwise |
 
 ---
 
 ## skilltap install
 
-Install one or more skills from URLs, tap names, or local paths.
+Install a skill, plugin, or MCP server. **Type is required.**
 
 ```
-skilltap install <source> [source...] [flags]
+skilltap install skill   <source> [flags]
+skilltap install plugin  <source> [flags]
+skilltap install mcp     <source> [flags]
 ```
 
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `source` | Yes | Git URL, `github:owner/repo`, `owner/repo`, tap skill name, `name@ref`, or local path |
-| `[source...]` | No | Additional sources to install in the same invocation |
-
-### Source Formats
+### Source formats
 
 | Format | Example |
 |--------|---------|
@@ -2514,2021 +2500,336 @@ skilltap install <source> [source...] [flags]
 | npm scoped + version | `npm:@scope/skill@1.2.0` |
 | Tap name | `commit-helper` |
 | Tap name + ref | `commit-helper@v1.2.0` |
-| Tap plugin | `tap-name/plugin-name` |
 | Local path | `./my-skill` |
-| MCP-only install | `mcp:user/repo` (Phase 35b — see [MCP-only install](#mcp-only-install) below) |
 
-Source resolution order:
-
-1. `https://`, `http://`, `git@`, `ssh://` — git adapter
-2. `npm:` prefix — npm registry adapter
-3. `url:` prefix — HTTP tarball (legacy; only reached via v0.x configs that pre-date the v2.0 HTTP-tap removal)
-4. `./`, `/`, `~/` — local adapter
-5. `github:` prefix, or contains `/` with no protocol — GitHub adapter (unless matches `tap-name/plugin-name` pattern)
-6. `tap-name/plugin-name` — tap plugin install (resolves plugin entry from named tap)
-7. Contains `@` — split into name + ref, resolve from taps
-8. Otherwise — search taps for matching skill name
-
-### Plugin Auto-Detection
-
-When cloning a git source, skilltap checks for plugin metadata in the repo:
-
-- `.claude-plugin/plugin.json` — Claude Code plugin format
-- `.codex-plugin/plugin.json` — Codex plugin format
-
-If plugin metadata is found, skilltap prompts:
-
-```
-This repo contains a plugin (my-plugin). Install as a plugin (skills + MCP + agents)?
-  ● Yes — install full plugin
-  ○ No — install skills only
-```
-
-Choosing "Yes" installs all plugin components — SKILL.md files, MCP server entries, and agent definitions — and records everything as a plugin in `state.json::plugins[]`. Use `skilltap plugin` to manage installed plugins.
-
-### Tap Plugin Syntax
-
-To install a plugin defined in a tap's `plugins` array, use `tap-name/plugin-name`:
-
-```bash
-skilltap install my-tap/my-plugin
-```
-
-This installs the full plugin (skills + MCP + agents) as defined in the tap entry. The components are installed to the same locations as a direct plugin install.
+The same source forms work for all three types. The type subcommand decides what skilltap looks for in the resolved source.
 
 ### Flags
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--project` | boolean | `false` | Install to `.agents/skills/` in current project |
-| `--global` | boolean | `false` | Install to `~/.agents/skills/` |
+| `--scope project\|global` | string | smart default | Installation scope. Default: project inside a git repo, global otherwise. |
 | `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. Values: `claude-code`, `cursor`, `codex`, `gemini`, `windsurf` |
 | `--ref <ref>` | string | default branch | Branch or tag to install |
-| `--yes` | boolean | `false` | Auto-select all skills, auto-accept clean installs, auto-update already-installed skills, skip agent symlink prompt. Security warnings still prompt. |
+| `--yes` / `-y` | boolean | `false` | Auto-select all skills, auto-accept clean installs. Security warnings still prompt. |
 | `--strict` | boolean | from config | Abort on any security warning (exit 1) |
-| `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
-| `--semantic` | boolean | from config | Force Layer 2 semantic scan (runs automatically, no prompt) |
+| `--semantic` | boolean | from config | Force Layer 2 semantic scan |
 | `--skip-scan` | boolean | `false` | Skip security scanning. Blocked if `require_scan = true` in config. |
-| `--quiet` | boolean | `false` | Suppress install step details (fetched, scan clean). Overrides `verbose = true` in config. |
-| `--agent` | boolean | `false` | Force non-interactive agent mode for this invocation. Equivalent to `SKILLTAP_AGENT=1`. Auto-yes; security warnings hard-fail; plain-text output (no spinners). |
-
-### Prompt Behavior
-
-Prompts appear in this order: scope → agents → (clone) → skill selection → conflict check → scan → install confirm.
-
-| Flags | Scope | Agents (--also) | Skill selection | Already-installed conflict | Static warnings | Install confirm |
-|-------|-------|-----------------|-----------------|---------------------------|-----------------|-----------------|
-| (none) | Prompt | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
-| `--project` | Project | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
-| `--global` | Global | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
-| `--also <agent>` | Prompt | Skipped | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
-| `--yes` | **Still prompts** | Config default | Auto-select all | **Auto-update** | **Still prompts** | Auto-accept if clean |
-| `--yes --global` | Global | Config default | Auto-select all | **Auto-update** | **Still prompts** | Auto-accept if clean |
-| `--semantic` | Prompt | Prompt | Prompt if multiple | Prompt to update | Prompt | **Prompt (Y/n)** |
-| `--strict` | Prompt | Prompt | Prompt if multiple | Prompt to update | **Abort (exit 1)** | -- |
-| `--strict --yes --global` | Global | Config default | Auto-select all | **Auto-update** | **Abort (exit 1)** | -- |
-| `--skip-scan --yes --global` | Global | Config default | Auto-select all | **Auto-update** | Skipped | Auto-accept |
-
-Notes:
-- **Already-installed conflict**: if a selected skill is already installed, skilltap prompts `"{name}" is already installed. Update it instead?` before running the security scan. With `--yes`, the update runs automatically. Non-conflicting skills install normally.
-- **Agent symlink prompt** (`--also`): skipped when `--also` is passed, `--yes` is set, **or** `config.defaults.also` is non-empty (saved default from `skilltap config`).
-- `--semantic` causes the semantic scan to run automatically without a "Run semantic scan?" prompt.
-- The semantic offer prompt only appears when static warnings are found and `--semantic` was not passed.
-- When the semantic scan runs for the first time and no agent is configured, skilltap prompts to pick an agent CLI. The choice is saved to `config.toml`.
-
-::: info v2.1 — smart-scope-default
-The "Scope: Prompt" entries in the table above are stale relative to v2.1. When neither `--project` nor `--global` is passed and `defaults.scope` is empty, scope is **inferred** from cwd: inside a git repo → `project`; outside → `global`. There is no scope prompt. Pass an explicit flag or set `defaults.scope` to override.
-:::
-
-::: warning Security is a hard gate
-`--yes` does **not** bypass security warnings. `--strict` goes further: any warning is a hard failure. The only way to skip scanning entirely is `--skip-scan`, which is blocked when `require_scan = true`.
-:::
-
-### Manifest preflight (corrupt skilltap.toml)
-
-When scope resolves to `project` and a `skilltap.toml` is present at the project root, install loads the manifest before any clone/scan/file work. If parsing fails:
-
-- **Agent mode** (`--agent` / `SKILLTAP_AGENT=1`): refuse with exit 1 and a pointer to `skilltap doctor --fix`. The corrupt file is not modified — scripts and CI must never silently mutate user files.
-- **Interactive mode**: back up the corrupt file to `skilltap.toml.bak`, write a fresh empty manifest, log the rename, then proceed with install. Your original content is preserved at `.bak` for recovery.
-
-The same recovery action is wired into `skilltap doctor --fix` for the `manifest drift` check (and into `lockfile drift` for `skilltap.lock`). See [Doctor — manifest drift](/guide/doctor#v2-0-checks-10-15) for details.
-
-### Examples
-
-```bash
-# Install from any git URL
-skilltap install https://gitea.example.com/user/commit-helper
-
-# GitHub shorthand
-skilltap install user/repo
-
-# Install from npm
-skilltap install npm:vibe-rules
-skilltap install npm:@scope/my-skills@2.0.0
-
-# Install a specific version from a tap
-skilltap install commit-helper@v1.2.0
-
-# Fully non-interactive (clean skills only)
-skilltap install commit-helper --yes --global
-
-# Install to project scope with agent symlinks
-skilltap install my-skill --project --also claude-code --also cursor
-
-# Strict security + semantic scan
-skilltap install some-skill --strict --semantic
-
-# Install multiple skills in one command
-skilltap install skill-a skill-b skill-c --global
-```
-
----
-
-## skilltap skills remove
-
-Remove one or more skills (managed or unmanaged).
-
-> Also available as `skilltap remove` (silent alias).
-
-```
-skilltap skills remove [name...] [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Name(s) of installed skills; omit to select interactively |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--project` | boolean | `false` | Remove from project scope instead of global |
-| `--global` | boolean | `false` | Remove from global scope (explicit for scripts) |
-| `--yes` | boolean | `false` | Skip confirmation prompt |
-| `--agent` | boolean | `false` | Force non-interactive agent mode. Equivalent to `SKILLTAP_AGENT=1`. |
-
-### Behavior
-
-When no name is given, shows an interactive multiselect of all installed skills (no separate confirmation step). If a skill is installed at both global and project scopes, the picker shows disambiguated entries with `(global)` / `(project)` labels. When names are supplied, first checks `state.json`; if not found, discovers on disk via `discoverSkills()` — unmanaged skills can be removed too. `--global`/`--project` overrides the stored scope when resolving where to remove from. For each skill, removes the skill directory, any agent-specific symlinks (from the `also` list), and the cache entry if this was the last skill from that repo. Updates `state.json` after each removal.
-
-### Examples
-
-```bash
-# Remove with confirmation prompt
-skilltap remove commit-helper
-
-# Skip confirmation
-skilltap remove commit-helper --yes
-
-# Remove from project scope
-skilltap remove termtube-dev --project
-
-# Remove from global scope (explicit)
-skilltap remove commit-helper --global
-
-# Remove multiple skills at once
-skilltap remove skill-a skill-b --yes
-
-# Interactive multiselect — pick from all installed skills
-skilltap remove
-```
-
----
-
-## skilltap skills
-
-Unified view of all skills across all locations — managed, linked, and unmanaged.
-
-> Also available as `skilltap list` (silent alias).
-
-```
-skilltap skills [flags]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--global` | boolean | `false` | Show only global skills |
-| `--project` | boolean | `false` | Show only project skills |
-| `--unmanaged` | boolean | `false` | Show only unmanaged skills |
+| `--quiet` | boolean | `false` | Suppress install step details |
 | `--json` | boolean | `false` | Output as JSON |
 
-### Output Format
+### Smart scope default
 
-```
-Global (.agents/skills/) — 23 skills
-  Name                  Status   Agents       Source
-  design                managed  claude-code  nklisch/skills
-  spectator             linked   —            ~/dev/spectator
+When `--scope` is not passed and `defaults.scope` is not set in config, scope is inferred from the cwd: inside a git repo → `project`; outside → `global`. No prompt — the inferred scope is reported in output.
 
-Global — unmanaged (13 skills)
-  Name                  Status     Source
-  seo                   unmanaged  (local)
-  seo-audit             unmanaged  (local)
+### Prompt behavior
 
-Project (.agents/skills/) — 5 skills
-  Name           Status   Agents       Source
-  bun            managed  claude-code  nklisch/skills
-```
-
-Scans `.agents/skills/` and every agent-specific directory (`.claude/skills/`, `.cursor/skills/`, etc.) at both global and project scope. Skills are classified as **managed** (tracked in `state.json`), **linked** (symlinked via `skilltap link`), or **unmanaged** (manually placed, not in state).
-
-Agent-specific sections only appear if they contain unmanaged skills — managed skills in agent dirs are just symlinks, shown via the "Agents" column.
-
-If no skills found: `No skills found. Run 'skilltap install <source>' to get started.`
+| Flags | Skill selection | Security warnings | Clean install |
+|-------|----------------|-------------------|---------------|
+| (none) | Prompt if multiple | Prompt | Prompt |
+| `--yes` | Auto-select all | **Still prompts** | Auto-accept |
+| `--strict` | Prompt if multiple | **Abort (exit 1)** | Prompt |
+| `--strict --yes` | Auto-select all | **Abort (exit 1)** | Auto-accept |
+| `--skip-scan --yes` | Auto-select all | Skipped | Auto-accept |
 
 ### Examples
 
 ```bash
-# Show all skills
-skilltap skills
+# Skill from tap name
+skilltap install skill commit-helper
 
-# Show only unmanaged skills
-skilltap skills --unmanaged
+# Skill from git URL, scoped to project
+skilltap install skill https://gitea.example.com/u/repo --scope project
 
-# Show only global skills
-skilltap skills --global
+# Skill from GitHub shorthand, global, with symlink
+skilltap install skill user/my-skill --scope global --also claude-code
 
-# Machine-readable output
-skilltap skills --json
+# Fully non-interactive (no TTY, --yes)
+skilltap install skill commit-helper --scope global --yes
+
+# Plugin
+skilltap install plugin corp/dev-toolkit --scope global --also claude-code
+
+# Specific plugin in a multi-plugin repo
+skilltap install plugin corp/dev-toolkit:frontend
+
+# MCP server from npm
+skilltap install mcp npm:@modelcontextprotocol/server-postgres
 ```
 
 ---
 
-## skilltap skills adopt
-
-Adopt unmanaged skills into skilltap management. Default: moves to `.agents/skills/` and creates symlinks from original locations.
+## skilltap remove
 
 ```
-skilltap skills adopt [name...] [flags]
+skilltap remove skill   <name> [flags]
+skilltap remove plugin  <name> [flags]
+skilltap remove mcp     <name> [flags]
 ```
 
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Name(s) of unmanaged skills; omit to select interactively |
+`remove plugin <name>` removes the plugin record **and all its components** (skills, MCP injections, agent definitions). Calling `remove skill <name>` on a plugin component errors with a hint.
 
 ### Flags
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--global` | boolean | `false` | Adopt into global scope |
-| `--project` | boolean | `false` | Adopt into project scope |
-| `--track-in-place` | boolean | `false` | Track at current location without moving |
-| `--also <agent>` | string | — | Also symlink to agent-specific directory |
-| `--skip-scan` | boolean | `false` | Skip security scan |
-| `--yes` | boolean | `false` | Auto-accept all prompts |
-
-### Behavior
-
-Discovers unmanaged skills via `discoverSkills()`. In **move mode** (default), moves the skill directory to `.agents/skills/<name>` and creates symlinks from original locations back. In **track-in-place mode**, creates a "linked" record without moving files. Runs static security scan unless `--skip-scan`. Records git remote/ref/sha if available.
-
-### Examples
-
-```bash
-# Adopt a specific unmanaged skill
-skilltap skills adopt seo --yes
-
-# Adopt multiple skills
-skilltap skills adopt seo seo-audit --yes
-
-# Track in-place without moving
-skilltap skills adopt --track-in-place seo
-
-# Interactive picker
-skilltap skills adopt
-```
-
----
-
-## skilltap skills move
-
-Move a managed skill between scopes (global ↔ project).
-
-```
-skilltap skills move <name> [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Name of skill to move |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--global` | boolean | `false` | Move to global scope |
-| `--project` | boolean | `false` | Move to project scope |
-| `--also <agent>` | string | — | Also symlink to agent-specific directory |
-
-### Behavior
-
-Requires exactly one of `--global` or `--project`. Looks up skill in `state.json`, moves the directory, removes old agent symlinks and creates new ones at the target scope. Updates `state.json` records across files when crossing scope boundaries.
-
-### Examples
-
-```bash
-# Move from project to global
-skilltap skills move patterns --global
-
-# Move from global to project
-skilltap skills move commit-helper --project
-```
+| Flag | Description |
+|------|-------------|
+| `--scope project\|global` | Remove from specific scope |
+| `--yes` | Skip confirmation |
 
 ---
 
 ## skilltap update
 
-Update installed skills.
-
 ```
-skilltap update [name] [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Specific skill to update. If omitted, updates all. |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--yes` | boolean | `false` | Auto-accept clean updates. Security warnings still prompt. |
-| `--strict` | boolean | from config | Skip skills with security warnings in the diff (does not abort; continues to next skill). |
-| `--semantic` | boolean | from config | Force Layer 2 semantic scan on diff content |
-| `--agent` | boolean | `false` | Force non-interactive agent mode (auto-yes, hard-fail on warnings, plain-text output). Equivalent to `SKILLTAP_AGENT=1`. |
-| `--check` / `-c` | boolean | `false` | Check for updates without applying them. Fetches all remotes, shows which skills have updates, then exits. Refreshes the background update cache. |
-| `--force` / `-f` | boolean | `false` | Force update even if skill appears up to date. Re-applies, re-scans, and refreshes `updatedAt`. |
-
-### Behavior
-
-Before checking skills, `skilltap update` pulls all git tap repos to refresh the tap index. Tap pull failures are non-fatal — a warning is shown and skill updates continue.
-
-For each skill:
-
-1. `git fetch` in installed dir (standalone) or cache dir (multi-skill)
-2. Compare local HEAD SHA to remote
-3. If identical: `Already up to date.`
-4. If different: show diff summary, run static scan on changed lines only
-5. If `--strict` and warnings found: skip this skill, continue to next
-6. If warnings found (not strict): prompt to apply
-7. Apply: `git pull` (standalone) or pull cache + re-copy (multi-skill)
-8. Update `state.json` with new SHA and `updatedAt`
-9. Re-create agent symlinks if target dirs are missing
-
-Linked skills (from `skilltap link`) are always skipped.
-
-### Examples
-
-```bash
-# Update all skills interactively
-skilltap update
-
-# Auto-accept clean updates
-skilltap update --yes
-
-# Update one skill
-skilltap update commit-helper
-
-# CI: fail on any new warnings
-skilltap update --strict
-
-# Check what's available without updating
-skilltap update --check
-
-# Force re-apply even if already up to date (re-runs security scan)
-skilltap update --force
-```
-
----
-
-## skilltap sync
-
-Reconcile `skilltap.toml` (manifest) ↔ `skilltap.lock` (lockfile) ↔ `state.json` (on-disk install state). Read-only by default; `--apply` executes the plan.
-
-```
-skilltap sync [--apply] [--strict] [--json]
-```
-
-### Project-root requirement
-
-`sync` must be run inside a project — either a directory containing `skilltap.toml` or any descendant of a `.git` ancestor. Outside both, it exits 1:
-
-```
-error: skilltap sync requires a project root (looks for .git or skilltap.toml).
+skilltap update                  # update everything
+skilltap update skill            # update all skills
+skilltap update plugin           # update all plugins
+skilltap update mcp              # update all standalone MCPs
+skilltap update skill <name>     # update one skill
+skilltap update plugin <name>
 ```
 
 ### Flags
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--apply` | boolean | false | Execute the drift plan via `install`/`remove`. Order: removes → ref-changes → adds → bookkeeping. |
-| `--strict` | boolean | false | Only meaningful with `--apply`; halt on first failure instead of continuing. |
-| `--json` | boolean | false | Emit the plan as JSON. Read-only mode: `{ inSync, items }`. With `--apply`: `{ inSync, applied, skipped, failed, results }`. |
-
-### Drift kinds
-
-| Kind | Meaning | Apply behavior |
-|------|---------|----------------|
-| `add` | declared in manifest, not installed | install at locked ref (or resolve range if no lockfile entry) |
-| `remove` | installed, not declared in manifest | uninstall |
-| `ref-mismatch` | declared range ≠ locked ref | install at the declared/resolved ref |
-| `lock-stale` | locked sha ≠ installed sha | reported, **skipped** by `--apply` (user fixes manually) |
-| `lock-missing` | installed but no lockfile entry | reported, **skipped** by `--apply` |
-| `lock-orphan` | lockfile entry, no manifest, no state | reported, **skipped** by `--apply` |
-
-Lock-only drift (the bottom three rows) is bookkeeping that `--apply` doesn't auto-resolve. Edit the lockfile or run `install`/`remove` to converge.
-
-### Behavior
-
-- **In-sync**: prints `✓ In sync. Manifest, lockfile, and state agree.` and exits 0.
-- **Drift in read-only mode**: prints a drift report grouped by kind (`+ add`, `- remove`, `~ ref mismatch`, `⚠ lock stale`, etc.) and ends with `note: run skilltap sync --apply to execute this plan.` Exits 0 — drift alone is not a failure in read-only mode.
-- **`--apply`**: runs each plan item. Without `--strict`, a per-item failure is reported but apply continues; final summary line is `Sync apply complete: <applied> applied, <skipped> skipped, <failed> failed`. Exit 1 if any failures.
-- **`--apply --strict`**: stop on first failure, exit 1.
-
-### Examples
-
-```bash
-# Read-only drift report (safe to run anywhere)
-skilltap sync
-
-# Cargo-style: clone a repo with a committed skilltap.lock, install exactly what it pins
-skilltap sync --apply
-
-# CI / scripting: machine-readable plan
-skilltap sync --json
-
-# Halt at first failure during apply
-skilltap sync --apply --strict
-```
-
-### Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | In sync, OR drift reported in read-only mode, OR apply succeeded |
-| `1` | No project root found, OR apply had failures (any in non-strict; first one in strict mode) |
+| Flag | Description |
+|------|-------------|
+| `--yes` | Auto-accept clean updates |
+| `--strict` | Skip items with security warnings in diff |
+| `--semantic` | Force Layer 2 semantic scan on diff |
+| `--check` / `-c` | Check for updates without applying |
+| `--force` / `-f` | Force update even if already at latest |
+| `--json` | Output as JSON |
 
 ---
 
-## skilltap try
-
-Read-only preview of a source. Clones (or copies, for local paths) to a temp directory, parses any plugin manifests, runs the static security scan, prints what would be installed — but **never writes** to install paths or `state.json`. Useful for inspecting an unfamiliar source before committing to install.
+## skilltap toggle
 
 ```
-skilltap try <source> [--json] [--skip-scan]
+skilltap toggle                              # TUI: pick type → name → component(s)
+skilltap toggle plugin <name>                # TUI scoped to plugin's components
+skilltap toggle plugin <name>:<component>    # toggle one component directly
+skilltap toggle skill <name>                 # toggle whole skill active/inactive
+skilltap toggle mcp <name>                   # toggle whole MCP active/inactive
 ```
 
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `source` | Yes | Source URL, `owner/repo` shorthand, `npm:` prefix, or local path |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | false | Emit the report as JSON instead of human-readable text |
-| `--skip-scan` | boolean | false | Skip the static security scan (use when previewing trusted internal sources at scale) |
-
-### Behavior
-
-`try` is the read-only twin of `install`. Step-by-step:
-
-1. Clone (or copy) the source into a temp directory
-2. Parse any `.skilltap/<name>.toml`, `.claude-plugin/plugin.json`, or `.codex-plugin/plugin.json`
-3. Discover SKILL.md files
-4. Run static security scan (unless `--skip-scan`)
-5. Print the discovered structure (skills, MCP servers, agents) plus any warnings
-6. Print a "Nothing was installed" disclaimer
-
-The temp directory is deleted before exit. No state mutation, no symlink creation, no agent-config injection.
-
-### Examples
-
-```bash
-# Preview an unfamiliar plugin
-skilltap try corp/dev-toolkit
-
-# Machine-readable preview for CI
-skilltap try corp/dev-toolkit --json
-
-# Skip scan for trusted internal previews
-skilltap try ./local-dir --skip-scan
-```
-
-### Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Preview succeeded |
-| `1` | Source could not be resolved or read |
-
----
-
-## skilltap migrate
-
-One-shot upgrade from skilltap v0.x state (`installed.json` + `plugins.json` + v1 config keys) to v2 (`state.json` + per-mode security blocks). Idempotent — re-running after a successful migration reports "Already on v2.0" and exits 0.
-
-```
-skilltap migrate [--json]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | false | Emit a machine-readable report instead of human-readable output |
-
-### Behavior
-
-1. Detect v1 markers (legacy `installed.json` / `plugins.json` files, v1 config keys)
-2. If v1 markers exist AND `state.json` is absent: proceed to migrate
-3. If `config.toml` references HTTP taps, **abort** before any writes with `Migration aborted: HTTP taps are not supported in v2.0...` and a list of offending tap names — the user must manually convert or remove HTTP taps and re-run
-4. Translate v1 `[security.human]` / `[security.agent]` / `[[security.overrides]]` / `[agent-mode]` config blocks into v2 form
-5. Merge `installed.json` + `plugins.json` into a unified `state.json`
-6. Rename the originals to `<file>.v1.bak`
-7. Verify the migrated state with the v2 schema; report any unmappable values as warnings
-8. If no v1 markers were found, exit 0 with `✓ Already on v2.0`
-
-`skilltap migrate` does not auto-run. The CLI prints a soft startup notice when v1 markers are detected — the user invokes migrate explicitly when ready.
-
-### Examples
-
-```bash
-# One-shot migrate (run once after upgrading from v0.x)
-skilltap migrate
-
-# CI / scripting variant
-skilltap migrate --json
-```
-
-### Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Migration succeeded, or already on v2.0 (no-op) |
-| `1` | HTTP taps detected (abort), or migration error |
-
----
-
-## skilltap toggle / enable / disable
-
-Activate or deactivate a plugin (or a single component within a plugin) without uninstalling it. Useful for temporarily turning off a noisy MCP server or skipping a skill.
-
-```
-skilltap toggle <target>     # flip current state
-skilltap enable <target>     # set to active
-skilltap disable <target>    # set to inactive
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `target` | Yes | A plugin name (`dev-toolkit`) or a component reference (`dev-toolkit:test-skipper`) |
-
-### Behavior
-
-- **`toggle`** flips the active flag of the target. If the plugin (or component) is currently active, it goes inactive. If inactive, it goes active.
-- **`enable`** sets active=true. No-op if already active (prints `already enabled`).
-- **`disable`** sets active=false. No-op if already disabled.
-
-When a plugin is disabled, all of its components (skills, MCP servers, agents) are deactivated atomically. Skill symlinks are moved to a `.disabled/` subdirectory; MCP entries are removed from the agent's MCP config; agent definitions are moved out of the platform's agents directory.
-
-When a single component is targeted (`dev-toolkit:server-name`), only that component is affected; the rest of the plugin stays active.
-
-### Examples
-
-```bash
-# Disable a whole plugin
-skilltap disable dev-toolkit
-
-# Disable just one MCP server within a plugin
-skilltap disable dev-toolkit:test-skipper
-
-# Re-enable
-skilltap enable dev-toolkit
-
-# Flip current state without checking what it is
-skilltap toggle dev-toolkit:test-skipper
-```
-
-### Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | State changed (or already in the requested state) |
-| `1` | Plugin or component not found |
-
----
-
-## skilltap (no args) and skilltap status
-
-Print the project's status dashboard. The bare form and `skilltap status` produce identical output.
-
-```
-skilltap                    # status dashboard
-skilltap status [--json]    # explicit, pipeable
-```
-
-### Flags (status only)
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | false | Emit a machine-readable status object |
-
-### Behavior
-
-Prints a dashboard combining:
-- Project context (path, scope, manifest presence, agent targets)
-- Skills (managed, linked, unmanaged counts + per-skill details)
-- Plugins (active/inactive components)
-- MCP servers injected into each agent's config
-- Configured taps
-- Pending updates from the startup-check cache
-- Drift indicators when manifest disagrees with state
-
-Drift indicators are informational — `skilltap status` does not modify any state. Run `skilltap sync` for a full drift report or `skilltap sync --apply` to reconcile.
-
-### Examples
-
-```bash
-# Bare form (most common — fastest "what's installed" check)
-skilltap
-
-# Same output, explicit form
-skilltap status
-
-# Machine-readable for CI / scripting
-skilltap status --json
-```
-
----
-
-## skilltap install (mcp-only install)
-
-The `mcp:` source prefix activates a separate install path that bypasses skill/plugin machinery and installs **only** the MCP server entries from the source.
-
-```
-skilltap install mcp:<source> [--also <agent>...] [--global | --project]
-```
-
-### Behavior
-
-1. Resolve `<source>` as if it were a plugin
-2. Extract its `[[servers]]` blocks (or `mcpServers` from `.mcp.json`)
-3. Inject the servers into each `--also` agent's MCP config (or the configured default agents)
-4. Track them in `state.json` under a separate `mcpServers` array (not `plugins`)
-
-Skill SCAFFOLDING is not run, no `SKILL.md` is required, no symlinks are created.
-
-### Removal
-
-```bash
-skilltap remove mcp:<source>
-```
-
-Removes the previously-injected entries from each agent's MCP config and drops the `state.json.mcpServers` record.
-
-### Examples
-
-```bash
-# Install just the MCP servers from a repo, no skills
-skilltap install mcp:corp/db-tools --also claude-code
-
-# Remove
-skilltap remove mcp:corp/db-tools
-```
+Only `plugin` accepts the `:<component>` suffix.
 
 ---
 
 ## skilltap find
 
-Search for skills across configured taps and the [skills.sh](https://skills.sh) public registry.
-
 ```
-skilltap find [query...] [flags]
+skilltap find [query] [--json]
 ```
 
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `query` | No | Search term. Multiple words can be given without quoting. |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `-i` | boolean | `false` | Force interactive search mode. Prompts for query if not given, then shows autocomplete picker. |
-| `-l, --local` | boolean | `false` | Search local taps only (skip registries) |
-| `--json` | boolean | `false` | Output as JSON |
-
-### Behavior
-
-- **No query, TTY**: enters interactive search — prompts for a search term, searches taps + registries, then shows an autocomplete picker. Enter on a result installs it.
-- **No query, non-TTY**: lists all skills from configured taps as a table.
-- **With query** (≥ 2 chars): searches taps locally, then appends results from the skills.sh registry (up to 20 results, sorted by install count descending).
-- **`-i` with query**: skips the search prompt, goes straight to the autocomplete picker with results.
-- **With `--local`**: skips all registry searches, only shows tap results.
-- Install counts are shown for skills.sh results (e.g., `184.5K installs`).
-- For skills.sh multi-skill repos, the specific skill is auto-selected during install — no extra prompt.
-- Picker hints adapt to terminal width — descriptions are truncated to fit.
-- Tap plugins (entries in a tap's `plugins` array) appear in results with a `[plugin]` badge and can be installed with `skilltap install tap-name/plugin-name`.
-
-### Examples
-
-```bash
-# Search taps + skills.sh registry
-skilltap find react
-
-# Multi-word query — no quoting needed
-skilltap find git hooks
-
-# Search taps only, skip registries
-skilltap find --local react
-
-# Interactive search — prompts for query, then autocomplete picker
-skilltap find
-
-# Force interactive with a pre-filled query
-skilltap find react -i
-
-# Machine-readable output
-skilltap find --json
-```
-
-If no taps are configured and no query is given (non-TTY): `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
+Opens a TUI browser when run interactively. Falls back to plain-text results when piped. `--json` outputs results as JSON regardless of TTY state.
 
 ---
 
-## skilltap skills link
-
-> Also available as `skilltap link` (silent alias).
-
-Symlink a local skill directory into the install path. For development workflows.
+## skilltap try
 
 ```
-skilltap link <path> [flags]
+skilltap try <type> <source> [flags]
 ```
 
-### Arguments
+Preview a source (clone, parse, scan) without installing. Nothing is written to disk.
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `path` | Yes | Path to local skill directory (must contain SKILL.md) |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--project` | boolean | `false` | Link to project scope instead of global |
-| `--global` | boolean | `false` | Link to global scope (explicit, for scripts) |
-| `--also <agent>` | string | from config | Also symlink to agent-specific directory. Repeatable. |
-
-### Behavior
-
-Resolves the path to absolute, validates SKILL.md exists, parses frontmatter for the skill name, and creates a symlink at the install path. Records in `state.json` with `scope: "linked"`.
-
-Does **not** clone or copy -- the symlink points to the original directory.
-
-### Examples
-
-```bash
-# Link current directory
-skilltap link .
-
-# Link to project scope with agent symlink
-skilltap link . --project --also claude-code
-
-# Link a specific path
-skilltap link ~/dev/my-new-skill
+```
+--skip-scan    Skip security scan
+--json         Output as JSON
 ```
 
 ---
 
-## skilltap skills unlink
-
-> Also available as `skilltap unlink` (silent alias).
-
-Remove a linked skill.
+## skilltap adopt
 
 ```
-skilltap skills unlink <name>
+skilltap adopt [path] [flags]
 ```
 
-### Arguments
+Bring an external skill or agent-managed plugin into skilltap state.
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Name of linked skill |
+| Flag | Description |
+|------|-------------|
+| `--source <name>` | Filter picker to one agent source (e.g., `claude-code`) |
+| `--scope project\|global` | Scope for adoption |
+| `--also <agent>` | Also symlink into agent dirs |
+| `--move` | Move dir into canonical location (default: track-in-place) |
+| `--skip-scan` | Skip security scan |
+| `--yes` | Auto-accept all prompts |
 
-### Behavior
-
-Verifies the skill was linked (not installed via clone), removes the symlink from the install path, removes any agent-specific symlinks, and updates `state.json`.
-
-Does **not** delete the original skill directory.
-
-### Examples
-
-```bash
-skilltap unlink my-new-skill
-```
+**Modes:**
+- No args → TUI picker: all unmanaged skills + Claude Code plugins
+- With path → adopt external dir (replaces `link`/`unlink`)
+- `--source claude-code` → picker filtered to Claude Code plugins
 
 ---
 
-## skilltap skills info
-
-> Also available as `skilltap info` (silent alias).
-
-Show details about an installed or available skill.
+## skilltap sync
 
 ```
-skilltap info <name>
+skilltap sync [--apply] [--strict] [--json]
 ```
 
-### Arguments
+Show drift between `skilltap.toml`, `skilltap.lock`, and installed state. Requires a project root (directory containing `skilltap.toml` or `.git`).
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Skill name |
+`--apply` executes the plan via install/remove. `--strict` stops at first failure.
 
-### Output
+---
 
-For an installed skill (key-value rows, keys left-padded to 13 chars):
+## skilltap doctor
 
 ```
-name:          commit-helper
-description:   Generates conventional commit messages
-scope:         global
-source:        https://gitea.example.com/nathan/commit-helper
-ref:           v1.2.0
-sha:           abc123d
-trust:         ✓ Provenance verified
-  source:      github.com/nathan/commit-helper
-  build:       .github/workflows/release.yml
-path:          /home/nathan/.agents/skills/commit-helper
-agents:        claude-code
-installed:     2026-02-28T12:00:00.000Z
-updated:       2026-02-28T12:00:00.000Z
+skilltap doctor [skill|plugin <path>] [flags]
 ```
 
-`agents:` shows which agent-specific symlinks currently exist on disk.
+**No args** — environment + state health check: config validity, state validity, symlink integrity, manifest/lockfile drift, doctor checks 1–17.
 
-For a skill available in a tap (not installed):
-
-```
-name:          commit-helper
-description:   Some useful skill
-status:        (available)
-tap:           community
-source:        https://github.com/someone/commit-helper
-tags:          productivity, workflow
-
-Run 'skilltap install commit-helper' to install.
-```
-
-If not found anywhere: exit 1 with `error: Skill 'name' is not installed` and hint `Run 'skilltap find name' to search`.
-
-### Examples
+**With artifact path** — per-artifact validation (replaces `verify`):
 
 ```bash
-skilltap info commit-helper
-skilltap info termtube-dev
+skilltap doctor skill ./my-skill     # validate a skill
+skilltap doctor plugin ./my-plugin   # validate a plugin
+```
+
+| Flag | Description |
+|------|-------------|
+| `--fix` | Auto-repair safe issues (broken symlinks, orphan records, corrupt manifests) |
+| `--json` | Machine-readable output |
+
+---
+
+## skilltap migrate
+
+```
+skilltap migrate
+```
+
+One-shot upgrade from any prior config/state version. Detection markers:
+
+- `[agent-mode]` block → removed
+- `[security.human]` / `[security.agent]` → collapsed to `[security]`
+- `[[security.overrides]]` → translated to `trust = [...]`
+- Security presets → resolved to explicit `scan`/`on_warn`
+- `installed.json` / `plugins.json` → consolidated to `state.json`
+- HTTP taps → error; list affected taps for manual handling
+
+Originals are renamed to `*.bak`. After translation, runs `doctor` to verify.
+
+---
+
+## skilltap status
+
+```
+skilltap status [--json]
+```
+
+Headless dashboard — skills, plugins, MCPs, taps, drift. Safe to pipe. Equivalent to bare `skilltap` but without the TUI.
+
+---
+
+## Bare `skilltap`
+
+Opens the Ink-based TUI dashboard (TTY only). Tabs: Installed, Taps, Updates, Drift.
+
+Key bindings: arrow keys navigate; `i` install; `r` remove; `t` toggle; `u` update; `f` find; `a` adopt; `q`/`Esc` exit.
+
+Without a TTY: error with hint to use `skilltap status`.
+
+---
+
+## skilltap info
+
+```
+skilltap info <name> [--json]
+```
+
+Show details about an installed skill, plugin, or MCP server.
+
+---
+
+## skilltap move
+
+```
+skilltap move <name> --scope project|global [--also <agent>]
+```
+
+Move a managed skill between global and project scope. Relocates files, updates `state.json`, recreates symlinks.
+
+---
+
+## skilltap create
+
+```
+skilltap create [name]
+```
+
+Scaffold a new skill from a template. Opens an interactive wizard.
+
+---
+
+## skilltap tap
+
+```
+skilltap tap add <name> <url>   # Add a git tap
+skilltap tap remove <name>      # Remove a tap
+skilltap tap list               # List taps
+skilltap tap info <name>        # Inspect a tap
+skilltap tap init <name>        # Initialize a new tap directory
 ```
 
 ---
 
 ## skilltap config
 
-Interactive setup wizard for generating `config.toml`.
-
 ```
-skilltap config [flags]
+skilltap config get [key]          # Get a config value
+skilltap config set <key> <value>  # Set a config value
+skilltap config edit               # Open config in $EDITOR
+skilltap config security           # Interactive security wizard
 ```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--reset` | boolean | `false` | Overwrite existing config (prompts for confirmation first) |
-
-**Always interactive.** This command requires a TTY. It cannot be run non-interactively or by an agent.
-
-### Wizard Flow
-
-The wizard prompts for:
-
-1. Default install scope (ask each time / always global / always project)
-2. Auto-symlink agent selection (Claude Code, Cursor, Codex, Gemini, Windsurf)
-3. Security scan level (static / static + semantic / off)
-4. Agent CLI for scanning (if semantic selected)
-5. Behavior when security warnings are found (ask / always block)
-6. Search public registries (skills.sh) when using `skilltap find` (yes / no)
-7. Anonymous usage telemetry (yes / no)
-
-Writes the result to `~/.config/skilltap/config.toml`.
-
-### Examples
-
-```bash
-# Run the setup wizard
-skilltap config
-
-# Reset and reconfigure
-skilltap config --reset
-```
-
----
-
-## skilltap config get
-
-Read config values. Non-interactive — safe for agents and scripts.
-
-```
-skilltap config get [key] [--json]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | `false` | Output as JSON |
-
-### Behavior
-
-- `skilltap config get <key>` — prints the value for a dot-notation key (e.g. `defaults.scope`)
-- `skilltap config get --json` — prints the full config as JSON
-- `skilltap config get <key> --json` — prints the single value as JSON
-- Arrays are printed space-separated in plain text mode
-- No key without `--json` prints all values as `section.field = value` lines
-- Unknown keys exit 1 with an error message
-
-### Examples
-
-```bash
-skilltap config get defaults.scope
-# → global
-
-skilltap config get defaults.also
-# → claude-code cursor
-
-skilltap config get --json
-# → { "defaults": { ... }, "security": { ... }, ... }
-
-skilltap config get security.human.scan --json
-# → "static"
-```
-
----
-
-## skilltap config set
-
-Set config values. Non-interactive — safe for agents and scripts.
-
-```
-skilltap config set <key> <value...>
-```
-
-Only preference keys are settable. Per-mode security policy keys (`security.human.*`, `security.agent.*`), trust overrides, agent mode, and telemetry keys are blocked with hints pointing to the appropriate command.
-
-### Settable Keys
-
-| Key | Type | Accepted values |
-|-----|------|-----------------|
-| `defaults.scope` | enum | `""`, `"global"`, `"project"` |
-| `defaults.also` | string[] | Agent names (variadic; omit values to clear) |
-| `defaults.yes` | boolean | `true`/`false`/`yes`/`no`/`1`/`0` |
-| `security.agent_cli` | string | Agent CLI name or absolute path |
-| `security.ollama_model` | string | Model name |
-| `security.threshold` | number | 0-10 |
-| `security.max_size` | number | Positive integer |
-| `updates.auto_update` | enum | `"off"`, `"patch"`, `"minor"` |
-| `updates.interval_hours` | number | Positive integer |
-| `updates.show_diff` | enum | `"full"`, `"stat"`, `"none"` |
-
-### Behavior
-
-- Silent on success (exit 0, no stdout). Agent-friendly.
-- Invalid key, blocked key, or invalid value: error on stderr, exit 1.
-- For `string[]` type with zero values, sets to empty array (clears the field).
-
-### Examples
-
-```bash
-skilltap config set defaults.scope global
-skilltap config set defaults.also claude-code cursor
-skilltap config set defaults.also          # clears to []
-skilltap config set defaults.yes true
-skilltap config set updates.auto_update patch
-
-# Blocked keys show hints:
-skilltap config set agent-mode.enabled true
-# error: 'agent-mode.enabled' cannot be set via 'config set'
-# hint: Use 'skilltap config agent-mode' (persistent), or pass --agent / SKILLTAP_AGENT=1 per invocation
-
-skilltap config set security.human.scan off
-# error: 'security.human.scan' cannot be set via 'config set'
-# hint: Use 'skilltap config security'
-```
-
----
-
-## skilltap config security
-
-Configure security settings per mode (human/agent) with optional trust tier overrides.
-
-```
-skilltap config security [flags]
-```
-
-**Interactive** (no flags, requires TTY): Walks through mode selection, preset or custom settings, trust overrides, and a summary before saving.
-
-**Non-interactive** (flags provided): Applies settings directly.
-
-### Flags
-
-| Flag | Type | Description |
-|------|------|-------------|
-| `--preset` | string | Apply a named preset: `none`, `relaxed`, `standard`, `strict` |
-| `--mode` | string | Which mode to configure: `human`, `agent`, `both` (default: `both`) |
-| `--scan` | string | Scan level: `static`, `semantic`, `off` |
-| `--on-warn` | string | Warning behavior: `prompt`, `fail`, `allow` |
-| `--require-scan` | boolean | Block `--skip-scan` |
-| `--trust` | string | Add trust override: `tap:<name>=<preset>` or `source:<type>=<preset>` |
-| `--remove-trust` | string | Remove a trust override by match name |
-
-### Examples
-
-```bash
-# Interactive wizard
-skilltap config security
-
-# Apply preset to both modes
-skilltap config security --preset standard
-
-# Apply preset to agent mode only
-skilltap config security --preset strict --mode agent
-
-# Set individual fields
-skilltap config security --mode human --scan off --on-warn allow
-
-# Trust overrides
-skilltap config security --trust tap:my-company=none
-skilltap config security --trust source:npm=strict
-skilltap config security --remove-trust my-company
-```
-
----
-
-## skilltap config agent-mode
-
-Interactive wizard for setting agent mode persistently in config. One of three ways to enter agent mode (precedence order):
-
-1. **`--agent` flag** — per-invocation, e.g. `skilltap install foo --agent`
-2. **`SKILLTAP_AGENT=1` env var** — per-shell wrap
-3. **`skilltap config agent-mode`** — persistent (this wizard)
-
-```
-skilltap config agent-mode
-```
-
-**Always interactive.** Requires a TTY — the wizard cannot be run by an agent on its own behalf. For one-off non-interactive runs, use the flag or env var instead.
-
-### Wizard Flow (enabling)
-
-The wizard prompts for:
-
-1. Enable or disable agent mode
-2. Default scope for agent installs (project recommended / global)
-3. Auto-symlink agent selection
-4. Security preset for agent mode (none / relaxed / standard / strict / custom)
-5. Agent CLI for scanning (if semantic selected)
-
-### What Agent Mode Does
-
-When enabled, all skilltap commands behave differently:
-
-- All prompts auto-accept or hard-fail (no interactive input)
-- Uses `[security.agent]` settings (fully configurable, defaults to strict)
-- Output is plain text (no colors, spinners, or Unicode)
-- Security failures emit a directive message telling the agent to stop
-
-Agent mode is overridable per-invocation via the `--agent` flag or `SKILLTAP_AGENT=1` env var (precedence: flag > env > config block). Security levels within agent mode are configurable via `skilltap config security --mode agent`.
-
-### Non-TTY Error
-
-```
-error: 'skilltap config agent-mode' must be run interactively.
-Use --agent or SKILLTAP_AGENT=1 for per-invocation agent mode.
-```
-
-### Examples
-
-```bash
-# Enable agent mode
-skilltap config agent-mode
-
-# Disable agent mode (select "No" in the wizard)
-skilltap config agent-mode
-```
-
----
-
-## skilltap tap add
-
-Add a tap. Supports git repos (with `tap.json` or Claude Code `marketplace.json`) and GitHub shorthand. (HTTP registry endpoints were supported pre-v2.0 and are no longer accepted; see [the removal note](/guide/taps#http-registry-taps-removed-in-v20).)
-
-```
-skilltap tap add <name> <url>
-skilltap tap add <owner/repo>
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Local name for this tap, or GitHub shorthand (`owner/repo`) |
-| `url` | No | Git URL (required unless GitHub shorthand is used) |
-
-### Behavior
-
-When two positional args are given, the first is the tap name and the second is the URL.
-
-When one positional arg is given and it matches `owner/repo` or `github:owner/repo`, the URL is expanded to `https://github.com/owner/repo.git` and the tap name is derived from the repo portion (e.g. `user/my-tap` → name `my-tap`).
-
-The repo is cloned to `~/.config/skilltap/taps/{name}/`, the tap index is validated (`tap.json` or `.claude-plugin/marketplace.json`), and the tap is recorded in `config.toml`. Claude Code marketplace repos are automatically adapted — plugin sources are mapped to skill entries.
-
-If the tap name already exists: exit 1 with `Tap 'name' already exists. Remove it first with 'skilltap tap remove name'.`
-
-### Examples
-
-```bash
-# GitHub shorthand — name derived from repo
-skilltap tap add someone/awesome-skills-tap
-
-# Explicit name + URL
-skilltap tap add home https://gitea.example.com/nathan/my-skills-tap
-
-# Claude Code marketplace repo (marketplace.json auto-detected)
-skilltap tap add anthropics/skills
-```
-
----
-
-## skilltap tap remove
-
-Remove a configured tap.
-
-```
-skilltap tap remove <name>
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Name of tap to remove |
-
-### Behavior
-
-Removes the tap directory from `~/.config/skilltap/taps/{name}/` and the tap entry from `config.toml`.
-
-Does **not** uninstall skills that were installed from this tap. Those skills remain independent.
-
-### Examples
-
-```bash
-skilltap tap remove community
-```
-
----
-
-## skilltap tap list
-
-List configured taps.
-
-```
-skilltap tap list
-```
-
-### Output
-
-```
-  home        git   https://gitea.example.com/nathan/my-skills-tap     3 skills
-  community   git   https://github.com/someone/awesome-skills-tap      12 skills
-```
-
-Columns: name, type (always `git` since v2.0; HTTP taps were removed in Phase 31b), URL, skill count.
-
-If no taps configured: `No taps configured. Run 'skilltap tap add <name> <url>' to add one.`
-
-### Examples
-
-```bash
-skilltap tap list
-```
-
----
-
-## skilltap tap update
-
-Pull the latest `tap.json` for all (or one) git tap.
-
-```
-skilltap tap update [name]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Tap to update. Omit to update all configured taps. |
-
-### Behavior
-
-For each git tap:
-
-1. If the local clone is missing → clone fresh from the URL stored in config (self-heal)
-2. If the local clone exists → sync the remote URL (`git remote set-url origin <config-url>`) then `git pull`
-
-This means fixing a tap URL in `config.toml` and running `skilltap tap update <name>` is sufficient to recover — no manual directory deletion required.
-
-The built-in `skilltap-skills` tap is included in an all-taps run.
-
-### Examples
-
-```bash
-# Update all taps
-skilltap tap update
-
-# Update one tap
-skilltap tap update home
-```
-
----
-
-## skilltap tap info
-
-Show details for a configured tap.
-
-```
-skilltap tap info <name> [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Tap name (use `skilltap-skills` for the built-in tap) |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | `false` | Output as JSON |
-
-### Output
-
-| Field | Description |
-|-------|-------------|
-| `name` | Tap name |
-| `type` | `git`, `http`, or `builtin` |
-| `url` | Configured URL |
-| `path` | Local clone path (git/builtin only) |
-| `last fetched` | ISO date of the most recent commit in the local clone (git/builtin only) |
-| `skills` | Number of skills in this tap |
-
-### Examples
-
-```bash
-skilltap tap info home
-skilltap tap info skilltap-skills
-skilltap tap info home --json
-```
-
----
-
-## skilltap tap install
-
-Browse and install skills from your configured taps using an interactive picker.
-
-```
-skilltap tap install [flags]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--tap <name>` | string | — | Show only skills from this tap |
-| `--project` | boolean | `false` | Install to `.agents/skills/` in current project |
-| `--global` | boolean | `false` | Install to `~/.agents/skills/` |
-| `--also <agent>` | string | from config | Also create symlink in agent-specific directory. Repeatable. |
-| `--yes` | boolean | `false` | Auto-select and install without prompts |
-| `--strict` | boolean | from config | Abort on any security warning |
-| `--no-strict` | boolean | `false` | Override `on_warn = "fail"` in config for this invocation |
-| `--semantic` | boolean | `false` | Force Layer 2 semantic scan |
-| `--skip-scan` | boolean | `false` | Skip security scanning |
-
-### Behavior
-
-Opens a searchable multiselect picker over all tap skills. Skills you've already installed are pre-selected and marked `installed`. Deselecting an installed skill removes it.
-
-After confirming the selection:
-- Skills newly selected → installed (same flow as `skilltap install`)
-- Skills deselected (were installed) → removed with `skilltap remove`
-- No changes → exits immediately
-
-Scope and agent symlink prompts only appear when there are skills to install.
-
-### Examples
-
-```bash
-# Browse all taps
-skilltap tap install
-
-# Browse only the "home" tap
-skilltap tap install --tap home
-
-# Non-interactive: install all tap skills, global scope
-skilltap tap install --yes --global
-```
-
----
-
-## skilltap tap init
-
-Initialize a new tap repository.
-
-```
-skilltap tap init <name>
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Directory name for the new tap |
-
-### Behavior
-
-Creates the directory, initializes a git repo, and generates a `tap.json` with an empty skills array.
-
-### Output
-
-```
-Created my-tap/
-  tap.json
-  .git/
-
-Edit tap.json to add skills, then push:
-  cd my-tap && git remote add origin <url> && git push
-```
-
-### Examples
-
-```bash
-skilltap tap init my-tap
-```
-
----
-
-## skilltap create
-
-Scaffold a new skill from a template.
-
-```
-skilltap create [name] [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | No | Skill name (kebab-case). If omitted, prompted interactively. |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--template`, `-t` | `basic` \| `npm` \| `multi` | prompted | Template to use |
-| `--dir` | string | `./<name>` | Directory to create the skill in |
-
-When both `name` and `--template` are provided, runs non-interactively (uses `"{name} skill"` as description, MIT as license). Otherwise prompts for name, description, template, and license.
-
-### Templates
-
-| Template | Generated files |
-|----------|-----------------|
-| `basic` | `SKILL.md`, `.gitignore` |
-| `npm` | `SKILL.md`, `.gitignore`, `package.json`, `.github/workflows/publish.yml` |
-| `multi` | `.agents/skills/<skill-a>/SKILL.md`, `.agents/skills/<skill-b>/SKILL.md`, `.gitignore` |
-
-### Behavior
-
-Creates the skill directory (errors if it already exists), writes template files, and prints next-step instructions for testing, verifying, and publishing.
-
-### Examples
-
-```bash
-# Interactive mode
-skilltap create
-
-# Non-interactive
-skilltap create my-skill --template basic
-
-# npm package skill
-skilltap create my-skill --template npm --description "My skill description"
-
-# Custom output directory
-skilltap create my-skill --template basic --dir ~/dev/my-skill
-```
-
----
-
-## skilltap verify
-
-Validate a skill before publishing.
-
-```
-skilltap verify [path] [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `path` | No | Path to the skill directory. Defaults to `.`. |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | `false` | Output result as JSON |
-
-### Behavior
-
-Runs the following checks:
-
-1. `SKILL.md` exists
-2. Frontmatter is valid (required fields present, values within constraints)
-3. `name` field matches the parent directory name
-4. No static security issues (same checks as `skilltap install`)
-5. Total directory size is within the limit
-
-On success, also prints a `tap.json` snippet ready to paste into a tap.
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | All checks passed |
-| `1` | One or more errors found |
-
-### Output
-
-```
-✓ commit-helper is valid
-
-  SKILL.md   ✓
-  name       ✓ matches directory
-  security   ✓ no issues
-  size       ✓ 4.2 KB (3 files)
-
-tap.json snippet:
-
-  {
-    "name": "commit-helper",
-    "description": "Generates conventional commit messages",
-    "repo": "https://github.com/user/commit-helper",
-    "tags": []
-  }
-```
-
-With `--json`:
-
-```json
-{
-  "name": "commit-helper",
-  "valid": true,
-  "issues": [],
-  "frontmatter": { "name": "commit-helper", "description": "Generates conventional commit messages" },
-  "fileCount": 3,
-  "totalBytes": 4301
-}
-```
-
-### Examples
-
-```bash
-# Verify current directory
-skilltap verify
-
-# Verify a specific skill
-skilltap verify ./path/to/my-skill
-
-# CI-friendly output
-skilltap verify --json
-
-# Pre-push git hook
-echo 'skilltap verify' > .git/hooks/pre-push && chmod +x .git/hooks/pre-push
-```
-
----
-
-## skilltap status
-
-Show agent mode status and current configuration summary. Agents should run this first to verify they are operating in agent mode.
-
-```
-skilltap status [--json]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | `false` | Output as JSON |
-
-### Output
-
-**Plain text** (one `key: value` line per field):
-
-```
-agent-mode: enabled
-scope: project
-scan: static
-agent: (none)
-also: claude-code
-taps: 2
-plugins: 3
-```
-
-**JSON:**
-
-```json
-{
-  "agentMode": true,
-  "scope": "project",
-  "scan": "static",
-  "agent": null,
-  "also": ["claude-code"],
-  "taps": 2,
-  "plugins": 3
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `agentMode` | Whether agent mode is enabled |
-| `scope` | Default install scope (`project`, `global`, or `null` if unconfigured) |
-| `scan` | Security scan level (`static`, `semantic`, `off`) |
-| `agent` | Configured LLM for semantic scan, or `null` |
-| `also` | Agent directories to symlink into on each install |
-| `taps` | Number of configured taps |
-| `plugins` | Number of installed plugins |
-
-Does not trigger the update check or telemetry notice.
-
----
-
-## skilltap plugin
-
-> Also available as `skilltap plugins` (silent alias).
-
-List installed plugins.
-
-```
-skilltap plugin [flags]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--global` | boolean | `false` | Show only global plugins |
-| `--project` | boolean | `false` | Show only project plugins |
-| `--json` | boolean | `false` | Output as JSON |
-
-### Output
-
-```
-  Name            Components                     Source
-  my-plugin       2 skills, 1 MCP, 0 agents      my-tap/my-plugin
-  dev-tools       1 skill, 2 MCPs, 1 agent        github:user/dev-tools
-```
-
-Columns: Name, Components summary (skill/MCP/agent counts), Source.
-
-If no plugins installed: `No plugins installed. Run 'skilltap install <source>' or 'skilltap install tap-name/plugin-name' to install one.`
-
-### Examples
-
-```bash
-# List all plugins
-skilltap plugin
-
-# List only global plugins
-skilltap plugin --global
-
-# Machine-readable output
-skilltap plugin --json
-```
-
----
-
-## skilltap plugin info
-
-Show details about an installed plugin.
-
-```
-skilltap plugin info <name> [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Plugin name |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--json` | boolean | `false` | Output as JSON |
-
-### Output
-
-```
-name:       my-plugin
-source:     my-tap/my-plugin
-format:     claude-plugin
-ref:        v1.2.0
-scope:      global
-installed:  2026-04-01T10:00:00.000Z
-updated:    2026-04-01T10:00:00.000Z
-
-Components:
-  Skills
-    ✓  commit-helper
-    ✓  code-review
-
-  MCP Servers
-    ✓  my-plugin:filesystem
-
-  Agents
-    ✗  my-plugin-agent  (not installed)
-```
-
-Components are shown by type with a ✓ (active) or ✗ (inactive/not installed) status.
-
-### Examples
-
-```bash
-skilltap plugin info my-plugin
-skilltap plugin info dev-tools --json
-```
-
----
-
-## skilltap plugin toggle
-
-Enable or disable individual plugin components.
-
-```
-skilltap plugin toggle <name> [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Plugin name |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--skills` | boolean | `false` | Toggle all skills in this plugin |
-| `--mcps` | boolean | `false` | Toggle all MCP server entries in this plugin |
-| `--agents` | boolean | `false` | Toggle all agent definitions in this plugin |
-| `--json` | boolean | `false` | Output as JSON |
-
-### Behavior
-
-When no component flags are passed, shows an interactive multiselect listing each component with its current status. Space to toggle, Enter to apply.
-
-When `--skills`, `--mcps`, or `--agents` are passed, those component groups are toggled (enabled if any are currently disabled, disabled if all are currently enabled).
-
-### Examples
-
-```bash
-# Interactive toggle picker
-skilltap plugin toggle my-plugin
-
-# Disable only MCP entries
-skilltap plugin toggle my-plugin --mcps
-
-# Re-enable skills
-skilltap plugin toggle my-plugin --skills
-```
-
----
-
-## skilltap plugin remove
-
-Remove an installed plugin.
-
-```
-skilltap plugin remove <name> [flags]
-```
-
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `name` | Yes | Plugin name |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--yes` | boolean | `false` | Skip confirmation prompt |
-| `--json` | boolean | `false` | Output as JSON |
-
-### Behavior
-
-Removes all components associated with the plugin:
-
-1. SKILL.md files for each skill in the plugin (and their agent symlinks)
-2. MCP server entries injected into agent config files
-3. Agent definition files placed by the plugin
-4. The plugin's record in `state.json::plugins[]`
-
-On success, prints a summary of what was removed. With `--yes`, skips the confirmation prompt.
-
-### Examples
-
-```bash
-# Remove with confirmation prompt
-skilltap plugin remove my-plugin
-
-# Skip confirmation
-skilltap plugin remove my-plugin --yes
-```
-
----
-
-## skilltap doctor
-
-Check your environment, configuration, and installed state for problems.
-
-```
-skilltap doctor [flags]
-```
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--fix` | boolean | `false` | Auto-repair issues where safe (recreate symlinks, remove orphan records, create missing dirs, re-clone missing taps) |
-| `--json` | boolean | `false` | Output as JSON (for CI/scripting) |
-
-### Checks
-
-Doctor runs 15 independent checks (9 legacy + 6 v2.0 additions) and streams each result as it completes:
-
-| # | Check | What it verifies |
-|---|-------|-----------------|
-| 1 | git | git is on PATH, version ≥ 2.25 |
-| 2 | config | `config.toml` exists, valid TOML, passes schema |
-| 3 | dirs | All required directories exist |
-| 4 | installed | Global `state.json` and project `.agents/state.json` (when in a project) parse and pass schema; detail: `"N skills (G global, P project)"`. Falls back to `installed.json` for unmigrated v0.x users. |
-| 5 | skills | Every entry has a directory in the correct scope location (`~/.agents/skills/` or `{project}/.agents/skills/`); orphan dirs in both locations reported |
-| 6 | symlinks | Agent symlinks for `also` entries point to the right scope-aware target |
-| 7 | taps | Each configured tap has a valid local clone |
-| 8 | agents | Detected agent CLIs; configured agent is available |
-| 9 | npm | npm is on PATH and registry reachable (only if npm skills are installed) |
-| 10 | state.json | Validates the v2 canonical store. Fail on corrupt JSON / schema-invalid; `--fix` backs the file up to `<file>.bak` and creates fresh empty state. |
-| 11 | manifest drift | Compares `skilltap.toml` declared deps against `state.json` records. Warns on drift items (declared-but-not-installed, etc.). When `skilltap.toml` itself fails to parse, the issue is fixable: `--fix` backs up to `skilltap.toml.bak` and writes a fresh empty manifest. |
-| 12 | lockfile drift | Compares `skilltap.lock` against `state.json` SHAs. Warns on stale or missing entries; `--fix` regenerates missing entries from state. When `skilltap.lock` itself fails to parse, the issue is fixable: `--fix` backs up to `skilltap.lock.bak` and writes a fresh empty lockfile. |
-| 13 | plugin manifests | Validates every `.skilltap/<name>.toml` publish manifest in the working tree. Warns on parse errors or missing required fields. |
-| 14 | mcp consistency | Compares `state.json::mcpServers[]` against each agent's MCP config. Warns on missing entries (state has it but agent config doesn't) or orphan entries (agent config has a `skilltap:` entry with no state record). `--fix` prunes orphans. |
-| 15 | v0.x file orphans | Detects when `state.json` is populated AND legacy `installed.json` / `plugins.json` are still on disk. `--fix` renames each orphan to `<file>.v1.bak`. |
-
-A failure in one check does not skip subsequent checks.
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | All checks pass, or only warnings |
-| `1` | One or more failures (corrupt files, missing git) |
-
-Warnings alone (missing optional features) produce exit code 0.
-
-### Examples
-
-```bash
-# Check everything
-skilltap doctor
-
-# Auto-repair where possible
-skilltap doctor --fix
-
-# CI health check (machine-readable)
-skilltap doctor --json
-```
-
-See the [Doctor guide](/guide/doctor) for detailed output examples and what each check covers.
 
 ---
 
 ## skilltap completions
 
-Generate a shell completion script for bash, zsh, or fish.
-
 ```
-skilltap completions <shell> [flags]
+skilltap completions <shell> [--install]
 ```
 
-### Arguments
-
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `shell` | Yes | `bash`, `zsh`, or `fish` |
-
-### Flags
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--install` | boolean | `false` | Write the completion script to the shell's standard location |
-
-### Without `--install`
-
-Prints the completion script to stdout. Useful for piping to a file or evaluating inline:
-
-```bash
-# Evaluate inline (add to ~/.bashrc)
-eval "$(skilltap completions bash)"
-
-# Write to a file manually
-skilltap completions zsh > ~/.zfunc/_skilltap
-```
-
-### With `--install`
-
-Writes to the standard location for each shell and prints activation instructions. If `$SHELL` doesn't match the specified shell, a hint is printed to stderr.
-
-| Shell | Writes to |
-|-------|-----------|
-| bash | `~/.local/share/bash-completion/completions/skilltap` |
-| zsh | `~/.zfunc/_skilltap` (also patches `~/.zshrc` with `fpath` setup if missing) |
-| fish | `~/.config/fish/completions/skilltap.fish` |
-
-### Dynamic Completions
-
-The completion scripts call `skilltap --get-completions <type>` to provide live values:
-
-- `installed-skills` — for `remove`, `update`, `info`
-- `linked-skills` — for `unlink`
-- `tap-skills` — for `install`
-- `tap-names` — for `tap remove`
-
-### Examples
-
-```bash
-# Install for your shell
-skilltap completions bash --install
-skilltap completions zsh --install
-skilltap completions fish --install
-
-# Print script (manual setup)
-skilltap completions bash
-```
-
-See the [Shell Completions guide](/guide/shell-completions) for setup details and troubleshooting.
-
----
-
-## skilltap config telemetry
-
-Manage anonymous usage telemetry. Subcommand of `skilltap config`.
-
-```
-skilltap config telemetry <subcommand>
-```
-
-### Subcommands
-
-| Subcommand | Description |
-|------------|-------------|
-| `status` | Show current telemetry state and what is collected |
-| `enable` | Opt in to anonymous telemetry |
-| `disable` | Opt out of telemetry |
-
-### Behavior
-
-Telemetry preference is stored in `config.toml` under `[telemetry]`. Two environment variables always override the config:
-
-| Variable | Effect |
-|----------|--------|
-| `DO_NOT_TRACK=1` | Disables telemetry regardless of config |
-| `SKILLTAP_TELEMETRY_DISABLED=1` | Disables telemetry regardless of config |
-
-**What is collected:** OS, architecture, CLI version, command name, success/failure, error type, installed skill count, command duration. No skill names, paths, repo URLs, or personal information are ever collected.
-
-**`config telemetry status` output (example):**
-```
-Telemetry: enabled
-Anonymous ID: a3f8c1d2-...
-
-What's collected: OS, arch, CLI version, command success/failure,
-error type, skill count, duration. No skill names, paths, or personal info.
-Set DO_NOT_TRACK=1 or SKILLTAP_TELEMETRY_DISABLED=1 to always opt out.
-```
-
-**First-run consent prompt:** On the first interactive run (before a preference is recorded), skilltap asks via a yes/no prompt whether you want to share anonymous usage data. Answering yes enables telemetry and fires a one-time `skilltap_installed` event recording that you installed the tool. In non-interactive environments (piped input, CI), a one-time informational banner is printed to stderr instead, and telemetry remains disabled.
-
-Running `skilltap config` also includes a telemetry opt-in/out question.
-
-Set `DO_NOT_TRACK=1` to skip the prompt entirely without opting in. The `config telemetry` and `status` commands never trigger the prompt.
-
-### Examples
-
-```bash
-# Check current state
-skilltap config telemetry status
-
-# Opt in
-skilltap config telemetry enable
-
-# Opt out
-skilltap config telemetry disable
-```
+Generate shell tab-completion script for `bash`, `zsh`, or `fish`. `--install` writes to the standard location.
 
 ---
 
 ## skilltap self-update
 
-Update the skilltap binary to the latest GitHub release.
-
 ```
-skilltap self-update [flags]
+skilltap self-update [--force]
 ```
 
-### Flags
+Update the running binary in-place from GitHub Releases.
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--force` | boolean | `false` | Bypass cache and re-install even if already on the latest version |
+---
 
-### Behavior
+## Removed commands
 
-Fetches the latest release from GitHub and replaces the running binary in-place. Only works when running as a compiled binary (installed via the install script or downloaded directly). If you installed via npm or are running from source, it prints the appropriate update command instead.
+The following commands were removed in the v2.0 redesign. Their replacements are shown:
 
-**Platform support:** Linux x64/arm64 and macOS x64/arm64.
+| Removed | Replacement |
+|---------|-------------|
+| `verify <path>` | `doctor skill <path>` |
+| `link <path>` | `adopt <path>` |
+| `unlink <name>` | `remove skill <name>` (if adopted) |
+| `enable <name>` | `toggle skill\|plugin\|mcp <name>` |
+| `disable <name>` | `toggle skill\|plugin\|mcp <name>` |
+| `skills info\|adopt\|move\|remove\|link\|unlink` | Top-level commands |
+| `plugin info\|toggle\|remove` | Top-level `info`, `toggle`, `remove` |
+| `tap install` | `install skill <name>` (tap-resolved names work directly) |
+| `config agent-mode` | No replacement — agent mode removed entirely |
+| `install <source>` (no type) | `install skill\|plugin\|mcp <source>` |
+| `remove <name>` (no type) | `remove skill\|plugin\|mcp <name>` |
 
-### Startup Notifications
-
-skilltap checks for updates in the background on every command (except `self-update`, `status`, `--version`, `--help`, and agent mode). It reads a local cache so the check never blocks startup. When an update is found, a notice is printed to stderr:
-
-| Type | Message |
-|------|---------|
-| patch | `↑  skilltap 0.3.1 → 0.3.2 available. Run: skilltap self-update` (dim) |
-| minor | `↑  Update available: v0.3.1 → v0.4.0 (minor) Run: skilltap self-update` (bold) |
-| major | `⚠  Major update available: v0.3.1 → v1.0.0  Breaking changes may apply.` (yellow) |
-
-skilltap also checks installed skills for updates in the background (configurable via `updates.skill_check_interval_hours`, default 24h). When installed skills have updates, a dim notice appears:
-
-```
-↑  2 skill updates available (commit-helper, code-review). Run: skilltap update
-```
-
-Run `skilltap update --check` at any time to force an immediate skill check and refresh the cache.
-
-Configure automatic updates via the `[updates]` config section — see [Configuration Options](/reference/config-options#updates).
-
-### Examples
-
-```bash
-# Check and update to the latest release
-skilltap self-update
-
-# Force a fresh fetch from GitHub and re-install (bypasses cache)
-skilltap self-update --force
-```
+Old paths return clear errors with hints pointing at the canonical command.
 
 ---
 

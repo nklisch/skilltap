@@ -5,6 +5,104 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
+## v3.0.0 — v2.0 Redesign: simplified surface, TUI dashboard, plugin capture
+
+The v3.0 release is the v2.0 redesign: a full reshaping of the CLI surface
+around a cleaner mental model. Five major concerns drove the redesign: (1)
+explicit type subcommands replace auto-detect; (2) agent mode is retired in
+favour of TTY detection; (3) security config collapses to a single flat block;
+(4) a TUI dashboard replaces the bare-`skilltap` status text; (5) plugin
+capture automatically takes ownership of standalone components when their
+parent plugin is installed.
+
+If you are upgrading from v2.1.x or earlier, run `skilltap migrate` first.
+Migration is safe to run multiple times.
+
+### Breaking changes
+
+**Commands that were removed** (old paths return errors with hints):
+
+| Removed | Replacement |
+|---------|-------------|
+| `install <source>` (no type) | `install skill <source>` |
+| `remove <name>` (no type) | `remove skill <name>` |
+| `verify <path>` | `doctor skill <path>` |
+| `link <path>` | `adopt <path>` |
+| `unlink <name>` | (just remove the symlink, or `remove skill <name>`) |
+| `enable <name>` | `toggle skill\|plugin\|mcp <name>` |
+| `disable <name>` | `toggle skill\|plugin\|mcp <name>` |
+| `skills info\|adopt\|move\|remove\|link\|unlink` | Top-level equivalents |
+| `plugin info\|toggle\|remove` | Top-level `info`, `toggle`, `remove` |
+| `tap install` | `install skill <name>` (tap names resolve directly) |
+| `config agent-mode` | No replacement — agent mode is fully removed |
+
+**Flags that were removed:**
+
+- `--agent` flag — removed entirely. Piping stdout gives plain text; add `--yes` and `--json` for non-interactive automation.
+- `SKILLTAP_AGENT=1` env var — removed entirely, same reason.
+- `--project` / `--global` boolean flags on `install` and `remove` — **still present** in this release; `--scope project|global` is the new canonical form documented in SPEC.md but the boolean flags still work.
+
+**Config format changes:**
+
+- `[security.human]` and `[security.agent]` per-mode blocks → collapsed to a single `[security]` block with `scan`, `on_warn`, and `trust` keys.
+- `[[security.overrides]]` array → replaced by `security.trust = [...]` glob array.
+- Security presets (`preset = "..."`) → resolved to explicit `scan`/`on_warn` values.
+- `[agent-mode]` block → removed entirely.
+
+Run `skilltap migrate` to translate all of the above automatically.
+
+**State file changes:**
+
+- `loadInstalled()` and `loadPlugins()` no longer fall back to `installed.json` / `plugins.json`. These files are now ignored by all production code paths. `migrate` is the explicit upgrade path.
+
+### Added
+
+- **TUI dashboard** — bare `skilltap` in a TTY opens an Ink-based dashboard with four tabs: Installed, Taps, Updates, Drift. Key bindings: `i` install, `r` remove, `t` toggle, `u` update, `f` find, `a` adopt, `q`/`Esc` exit.
+- **`skilltap status`** — headless dashboard equivalent (same content, safe to pipe, `--json` for scripting).
+- **`install skill | plugin | mcp <source>`** — type is now explicit via subcommand, eliminating auto-detect heuristics and the `mcp:` URL prefix. All source forms (git URL, GitHub shorthand, npm, tap name, local path) work for all three types.
+- **`remove skill | plugin | mcp <name>`** — symmetric with install.
+- **`update [type] [name]`** — bare `update` updates everything; `update skill`, `update plugin`, `update mcp` scope to one type; `update skill <name>` updates one item.
+- **`toggle [type] [name[:component]]`** — bare opens TUI; `toggle plugin <name>:<component>` toggles one component directly without a picker. Replaces `enable`/`disable`.
+- **`adopt [path]`** — replaces `link`/`unlink`. With a path: track-in-place (default) or `--move` to relocate. Without a path: TUI picker over all unmanaged skills and Claude Code plugins.
+- **`adopt --source claude-code`** — brings native Claude Code plugin-marketplace installs into skilltap state. Reads `~/.claude/plugins/installed_plugins.json`; creates `state.plugins[]` entries that point at Claude Code's cache.
+- **`doctor skill|plugin <path>`** — replaces `verify`. Checks SKILL.md, frontmatter, name/dir match, static security scan, size limit (for skills); manifest schema, references, name/dir match (for plugins).
+- **Plugin capture** — installing a plugin with `install plugin <source>` now automatically detects standalone skills and MCP servers from the same source that are already installed and offers to capture them (transfer ownership to the plugin record). Same-source matches auto-confirm with `--yes`; cross-source matches prompt in TTY and error in non-TTY.
+
+### Migration steps
+
+```bash
+# 1. Run migrate (safe to re-run)
+skilltap migrate
+
+# 2. Verify everything is clean
+skilltap doctor
+
+# 3. If issues remain, auto-repair what's safe
+skilltap doctor --fix
+```
+
+`migrate` handles:
+- Collapsing `[security.human]`/`[security.agent]` → `[security]`
+- Removing `[agent-mode]` block
+- Translating `[[security.overrides]]` → `trust = [...]`
+- Resolving security presets to explicit keys
+- Consolidating `installed.json` + `plugins.json` → `state.json`
+- HTTP taps → error listing affected taps for manual handling
+
+Originals are renamed to `*.v1.bak` (e.g., `config.toml.v1.bak`, `installed.json.v1.bak`).
+
+If you used `--agent` or `SKILLTAP_AGENT=1` in scripts, replace with:
+
+```bash
+# Before (v2.1)
+skilltap install <source> --agent
+
+# After (v3.0) — piped stdout is already plain text; add --yes for no prompts
+skilltap install skill <source> --yes | cat
+```
+
+---
+
 ## v2.1.0 — Canonical store, manifest safety, comprehensive test + doc coverage
 
 The v2.1 release makes `state.json` the one canonical store for installed

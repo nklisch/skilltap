@@ -6,7 +6,9 @@ skilltap is a CLI tool that installs agent skills and plugins from any git host.
 
 This document describes how skilltap is built internally — module boundaries, data flow, key abstractions, and technology decisions.
 
-> **State-store note (v2.1 cutover, Phase 31c-c-2d-1):** The references below to `installed.json` / `plugins.json` describe the v0.x file layout. As of v2.1, the canonical store is a single `state.json` per scope — `~/.config/skilltap/state.json` (global) or `<project>/.agents/state.json` (project). `loadInstalled()` and `loadPlugins()` keep the same internal API but now read from `state.json` first; legacy `installed.json` / `plugins.json` are only read once as a fallback for unmigrated v0.x users. `saveInstalled()` and `savePlugins()` write only to `state.json`. The v0.x Zod schemas remain in `core/src/schemas/{installed,plugins}.ts` because their inner record types (`InstalledSkill`, `PluginRecord`) are reused unchanged in `state.json`'s arrays. The legacy file layout described elsewhere in this doc still accurately describes the on-disk fallback shape and the migrate command's input.
+> **Canonical section:** The [v2.0 Redesign Architecture](#v20-redesign-architecture) section at the end of this file is the authoritative architecture reference for the current codebase. The sections below describe the v0.1–v2.1 foundation architecture; they remain accurate for the unchanged core and are preserved as design rationale. The Redesign section describes deletions, additions, and reshapes applied on top.
+
+> **State-store note:** The references below to `installed.json` / `plugins.json` describe the v0.x file layout. The canonical store is `state.json` per scope — `~/.config/skilltap/state.json` (global) or `<project>/.agents/state.json` (project). Legacy file reading was removed in the v2.0 redesign; `skilltap migrate` is the explicit upgrade path.
 
 ## Technology Stack
 
@@ -628,6 +630,8 @@ All tests run with `bun test`. CI runs on Linux and macOS.
 
 ## v2.0 Architecture Additions
 
+> **Superseded.** This section documents the v2.0/v2.1 draft architecture additions. The canonical architecture reference is in [v2.0 Redesign Architecture](#v20-redesign-architecture).
+
 This section documents the architecture changes introduced by the v2.0 redesign. The v0.1–v1.0 architecture above remains the foundation; the additions below describe new modules, modified data flow, and removed components. See [VISION.md — v2.0](./VISION.md#v20-direction-simplification-unification-project-manifest) and [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign) for behavior.
 
 ### New Core Modules
@@ -877,7 +881,7 @@ export const StateSchema = z.object({
 
 ## v2.0 Redesign Architecture
 
-> Second-pass redesign per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction). Supersedes the architecture deltas above where they conflict. The v0.1–v2.0 foundation remains; this section describes deletions, additions, and reshapes for the redesign.
+> **Canonical.** This is the authoritative architecture reference for the current codebase. Sections above ("v2.0 Architecture Additions" and earlier) describe the v0.1–v2.1 foundation and draft additions; they remain accurate for the unchanged core and are preserved as design rationale. Where they conflict with this section, this section wins.
 
 ### Deletions
 

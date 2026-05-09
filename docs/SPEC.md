@@ -2,7 +2,13 @@
 
 This document defines the exact behavior of skilltap — command interface, file formats, algorithms, and edge cases. For internal architecture, see [ARCH.md](./ARCH.md). For motivation and design goals, see [VISION.md](./VISION.md).
 
+> **Canonical section:** The [v2.0 Redesign](#v20-redesign) section at the end of this file is the authoritative behavioral spec for the current CLI surface. The sections immediately below (`## CLI Commands` through `## v2.0 — Tooling-Surface Redesign`) describe the v2.0/v2.1 draft surface; they are preserved as design rationale and implementation history. Where they conflict with the Redesign section, the Redesign section wins.
+
+---
+
 ## CLI Commands
+
+> **Superseded.** This section documents the v2.0/v2.1 draft surface. The canonical surface is in [v2.0 Redesign — Command Surface](#v20-redesign--command-surface).
 
 ### `skilltap install <source> [source...]`
 
@@ -2847,6 +2853,8 @@ Features:
 
 ## v2.0 — Tooling-Surface Redesign
 
+> **Superseded.** This section documents the shipped v2.0/v2.1 draft surface. The canonical surface is in [v2.0 Redesign](#v20-redesign).
+
 The v2.0 redesign collapses the surface of the v1.0 CLI around a project manifest, drops the HTTP registry adapter, retires "agent mode" as a concept, simplifies security config, and adds Cargo-style sync. See [VISION.md — v2.0 Direction](./VISION.md#v20-direction-simplification-unification-project-manifest) for the rationale; this section is the behavioral spec.
 
 ### v2.0 Command Surface
@@ -3303,7 +3311,7 @@ The original v2.0 design called for several additional removals that did not shi
 
 ## v2.0 Redesign
 
-> Second-pass redesign of the v2.x surface. Per [VISION.md — v2.0 Redesign](./VISION.md#v20-redesign-current-direction). Sections above titled "v2.0 …" describe the **shipped v2.0/v2.1 draft**. Where this redesign section conflicts with them, this section wins; the older sections are preserved as design rationale.
+> **Canonical.** This is the authoritative behavioral spec for the current CLI surface. Sections above titled "## CLI Commands" and "## v2.0 — Tooling-Surface Redesign" describe the shipped v2.0/v2.1 draft and are preserved as design rationale. Where they conflict with this section, this section wins.
 
 ### v2.0 Redesign — Command Surface
 

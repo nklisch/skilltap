@@ -53,25 +53,29 @@ Or download a binary directly from [GitHub Releases](https://github.com/nklisch/
 ## Quickstart
 
 ```bash
-# See what's installed (skills, plugins, taps, drift)
+# See what's installed (skills, plugins, taps, drift) — opens TUI dashboard in TTY
 skilltap
 
 # Browse skills from the built-in community tap
 skilltap find
 
-# Install a skill into the current project (auto-defaults to project scope inside a git repo)
-skilltap install commit-helper --also claude-code
+# Install a skill (type is required: skill | plugin | mcp)
+# Smart scope: project if inside a git repo, global otherwise
+skilltap install skill commit-helper --also claude-code
 
 # Install from any git URL
-skilltap install https://github.com/you/my-skill --global
+skilltap install skill https://github.com/you/my-skill --scope global
+
+# Install a plugin (skills + MCP servers + agent definitions in one)
+skilltap install plugin corp/dev-toolkit --also claude-code
 
 # Preview a source without installing
-skilltap try someone/their-skill
+skilltap try skill someone/their-skill
 
-# View all skills (managed + unmanaged)
-skilltap list
+# Headless status dashboard
+skilltap status
 
-# Update all skills
+# Update everything
 skilltap update
 ```
 
@@ -103,11 +107,11 @@ the manifest and `skilltap.lock` in sync automatically. Run `skilltap sync`
 to see drift and `skilltap sync --apply` to bring installed state in line.
 
 ```bash
-skilltap install nathan/commit-helper   # adds to skilltap.toml + skilltap.lock
-skilltap remove commit-helper            # drops from manifest + lockfile
-skilltap sync                            # show drift between manifest, lockfile, state
-skilltap sync --apply                    # execute the plan
-skilltap status                          # rich snapshot: skills, plugins, MCPs, drift
+skilltap install skill commit-helper   # adds to skilltap.toml + skilltap.lock
+skilltap remove skill commit-helper    # drops from manifest + lockfile
+skilltap sync                          # show drift between manifest, lockfile, state
+skilltap sync --apply                  # execute the plan
+skilltap status                        # rich snapshot: skills, plugins, MCPs, drift
 ```
 
 To publish a repo as a plugin (skills + MCP servers + agent definitions),
@@ -134,7 +138,7 @@ skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 skilltap find review
 
 # Install by name from a tap
-skilltap install code-reviewer
+skilltap install skill code-reviewer
 
 # Update all taps
 skilltap tap update
@@ -155,8 +159,8 @@ skilltap tap init acme-skills
 skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 
 # Install and update by name from then on — no URLs to copy-paste
-skilltap install code-reviewer --global --also claude-code
-skilltap update --all
+skilltap install skill code-reviewer --scope global --also claude-code
+skilltap update
 ```
 
 When you update a skill in the tap, every subscriber sees the diff and confirms before it applies. Your existing SSH keys and credential helpers handle authentication. See [Host Your Own Tap](https://skilltap.dev/guide/teams) for the full setup guide and config options.
@@ -165,39 +169,36 @@ When you update a skill in the tap, every subscriber sees the diff and confirms 
 
 | Command | Description |
 |---|---|
-| `(no args)` | Status dashboard — installed skills, plugins, MCPs, drift |
-| `status` | Same as bare invocation, with `--json` for scripting |
-| `install <source>` | Install a skill from a URL, GitHub shorthand, npm package, or tap name |
-| `remove <name>` | Remove an installed skill |
-| `update [name]` | Update one or all installed skills |
-| `list` | List installed skills |
-| `info <name>` | Show details about a skill (installed or available in taps) |
-| `find [query]` | Search skills across configured taps |
-| `try <source>` | Preview a source (clone, parse, scan) without installing |
+| `(no args)` | TUI dashboard — skills, plugins, MCPs, taps, drift (TTY only) |
+| `status [--json]` | Headless dashboard — same content, safe to pipe |
+| `install skill <source>` | Install a skill from a URL, GitHub shorthand, npm package, or tap name |
+| `install plugin <source>` | Install a plugin (skills + MCP servers + agent definitions) |
+| `install mcp <source>` | Install a standalone MCP server |
+| `remove skill <name>` | Remove an installed skill |
+| `remove plugin <name>` | Remove a plugin and all its components |
+| `remove mcp <name>` | Remove a standalone MCP server |
+| `update [type] [name]` | Update one, all of a type, or everything |
+| `toggle [type] [name[:component]]` | Toggle active state; bare opens TUI picker |
+| `info <name>` | Show details about an installed skill or plugin |
+| `find [query]` | Search skills across configured taps (TUI when interactive) |
+| `try <type> <source>` | Preview a source without installing |
+| `adopt [path]` | Bring an external skill or agent plugin into skilltap (replaces `link`) |
+| `move <name>` | Move a skill between global and project scope |
 | `sync` | Show drift between `skilltap.toml`, `skilltap.lock`, and installed state |
 | `sync --apply` | Execute the sync plan via install/remove |
-| `migrate` | One-shot upgrade from v0.x state to v2.0 |
-| `link <path>` | Link a local skill directory |
-| `unlink <name>` | Remove a linked skill |
-| `toggle <plugin>[:component]` | Toggle a plugin component (or open picker) |
-| `enable <plugin>[:component]` | Activate a plugin component (or all inactive) |
-| `disable <plugin>[:component]` | Deactivate a plugin component (or all active) |
+| `migrate` | One-shot upgrade from any prior config/state format |
+| `doctor [skill\|plugin <path>]` | Environment + state check; per-artifact validation (replaces `verify`) |
 | `create [name]` | Scaffold a new skill from a template |
-| `verify [path]` | Validate a skill before sharing (CI-friendly) |
-| `doctor` | Check environment, config, manifest/lockfile drift, MCP consistency |
 | `completions <shell>` | Generate shell tab-completion script |
 | `tap add <name> <url>` | Add a git tap |
 | `tap remove <name>` | Remove a tap |
 | `tap update [name]` | Update one or all taps |
 | `tap list` | List configured taps |
 | `tap init <name>` | Initialize a new tap directory |
-| `config` | Interactive configuration wizard |
-| `config agent-mode` | Enable/disable agent mode (legacy; see Agent flag below) |
+| `config get\|set\|edit\|security` | Read/write config values; interactive security wizard |
+| `self-update` | Update the skilltap binary in-place |
 
-Most commands accept `--global` / `--project` for scope, `--yes` to skip prompts,
-and `--agent` for non-interactive use. **Smart scope default**: inside a git repo,
-`install` defaults to `--project`; outside, `--global`. Override explicitly with
-`--global` / `--project` whenever you need to.
+Most commands accept `--scope project|global` for scope and `--yes` to skip prompts. **Smart scope default**: inside a git repo, `install` defaults to project scope; outside, global. There is no `--agent` flag — use `--yes` and piped stdin for non-interactive use.
 
 ## How it works
 
@@ -212,26 +213,27 @@ Every install and update runs a two-layer security scan before anything lands on
 **Semantic scan** (optional, `--semantic`): sends skill content to your local AI agent in bounded 2000-char chunks. The agent is invoked with tools disabled (`--no-tools`), so even a skill that tricks the reviewer can't cause it to take actions. Content is wrapped in a randomly-suffixed untrusted block so the agent can't be hijacked by the skill it's reviewing. Closing tags that could escape the wrapper are detected and escaped before the chunk is sent. Up to 4 chunks are evaluated in parallel; agent failures are fail-open (scan continues).
 
 ```bash
-skilltap install my-skill --semantic   # enable semantic scan
-skilltap install my-skill --strict     # block on any warning
-skilltap install my-skill --skip-scan  # bypass scanning (trusted sources)
+skilltap install skill my-skill --semantic   # enable semantic scan
+skilltap install skill my-skill --strict     # block on any warning
+skilltap install skill my-skill --skip-scan  # bypass scanning (trusted sources)
 ```
 
 See [docs/SECURITY.md](docs/SECURITY.md) for the full threat model, detector reference, and configuration options.
 
-## Agent mode
+## Non-interactive use (AI agents, CI, scripts)
 
-For non-interactive use (AI agents, CI, scripts), three options that compose:
+skilltap uses TTY detection for output mode — piped output is already plain text. Combine with `--yes` for fully non-interactive installs:
 
 ```bash
-skilltap install foo --agent             # one-off flag (v2.0)
-SKILLTAP_AGENT=1 skilltap install foo    # env var (v2.0)
-skilltap config agent-mode               # interactive wizard, sticky (v0.x; still works)
+# Fully non-interactive (piped stdout = plain output, --yes = no prompts)
+skilltap install skill commit-helper --scope global --yes --skip-scan | cat
+
+# JSON output for scripting
+skilltap status --json
+skilltap install skill commit-helper --yes --json
 ```
 
-`--agent` (or `SKILLTAP_AGENT=1`) suppresses all prompts, implies `--yes`,
-turns security warnings into hard failures, and emits plain text output. Agents
-should set the flag or env var on every invocation.
+There is no `--agent` flag. TTY detection + `--yes` + `--json` covers all automation use cases.
 
 ## Configuration
 
@@ -249,17 +251,17 @@ Key settings: default scope (`global`/`project`), additional agent symlinks (`--
 # Scaffold a new skill interactively
 skilltap create my-skill
 
-# Edit SKILL.md, then test locally
-skilltap link ./my-skill --also claude-code
+# Edit SKILL.md, then test locally (adopt replaces link/unlink)
+skilltap adopt ./my-skill --also claude-code
 
-# Validate before sharing
-skilltap verify my-skill/
+# Validate before sharing (doctor replaces verify)
+skilltap doctor skill my-skill/
 
 # Push to git and share
 git push -u origin main
 ```
 
-Others can install with: `skilltap install you/my-skill`
+Others can install with: `skilltap install skill you/my-skill`
 
 To publish to npm (with provenance), use `--template npm`. The generated GitHub Actions workflow handles publishing automatically on release.
 
@@ -296,12 +298,14 @@ skilltap doctor --json # machine-readable output for CI
 
 ## Gotchas
 
-- **`--yes` does not skip the scope prompt.** Pass `--global` or `--project` explicitly for a fully non-interactive install.
+- **`install` requires a type subcommand.** `skilltap install commit-helper` is an error. Use `skilltap install skill commit-helper`.
 - **`--yes` does not bypass security warnings.** Use `--strict` to turn warnings into hard failures, or `--skip-scan` to bypass entirely (blocked if `require_scan = true`).
-- **Agent mode must be enabled before invoking from an AI agent.** Run `skilltap config agent-mode` interactively once. Without it, skilltap will prompt and hang in non-TTY environments.
 - **Agent symlinks are not automatic.** Pass `--also <agent>` or set defaults in config. The skill always lands in `.agents/skills/` — symlinks are opt-in.
 - **Multi-skill repos require selection.** If a repo contains multiple `SKILL.md` files, skilltap prompts you to choose. With `--yes`, all are auto-selected.
-- **npm installs require the `npm:` prefix.** `skilltap install vibe-rules` searches your taps. `skilltap install npm:vibe-rules` hits the npm registry.
+- **npm installs use a source argument prefix.** `skilltap install skill vibe-rules` searches your taps. `skilltap install skill npm:vibe-rules` hits the npm registry.
+- **Bare `skilltap` requires a TTY.** In non-TTY environments, run `skilltap status` instead.
+- **`link`/`unlink`/`verify`/`enable`/`disable` are removed.** Use `adopt`, `doctor`, and `toggle` instead. Old paths print errors with hints.
+- **Coming from v2.1 or earlier?** Run `skilltap migrate` to translate config and state files.
 
 ## License
 
