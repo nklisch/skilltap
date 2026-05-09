@@ -108,7 +108,7 @@ async function runInstallSkill(
       gitHost: config.default_git_host,
       agent,
       semantic: runSemantic,
-      threshold: config.security.threshold,
+      threshold: config.scanner.threshold,
       ...installOptions,
       onPluginDetected: async (manifest) => {
         // In `install skill`, a detected plugin manifest is an error — user should
@@ -183,7 +183,7 @@ async function runInstallSkill(
         projectRoot,
         agent,
         semantic: runSemantic,
-        threshold: config.security.threshold,
+        threshold: config.scanner.threshold,
       });
       if (!updateResult.ok) {
         out.error(updateResult.error.message, updateResult.error.hint);

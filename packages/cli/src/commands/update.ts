@@ -301,7 +301,7 @@ async function runUpdateSkills(
     force,
     agent,
     semantic: runSemantic,
-    threshold: config.security.threshold,
+    threshold: config.scanner.threshold,
     projectRoot,
 
     onProgress(skillName, status) {
@@ -398,7 +398,7 @@ async function runUpdateSkills(
       reason: string,
     ) {
       const flag =
-        score >= (config.security.threshold ?? 5)
+        score >= (config.scanner.threshold ?? 5)
           ? ` — ⚠ ${reason.length > 60 ? `${reason.slice(0, 59)}…` : reason}`
           : "";
       semProgress?.update(`Semantic scan: chunk ${completed}/${total}${flag}`);

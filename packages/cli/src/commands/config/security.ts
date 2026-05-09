@@ -1,17 +1,12 @@
 import { cancel, intro, isCancel, note, outro } from "@clack/prompts";
 import {
-  type Config,
   describeSecurityMode,
   getConfigDir,
   loadConfig,
   ON_WARN_MODES,
   type Output,
-  PRESET_VALUES,
-  SCAN_MODES,
-  SECURITY_PRESETS,
-  SOURCE_TYPES,
   saveConfig,
-  type TrustOverride,
+  SCAN_MODES,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import {
@@ -20,65 +15,26 @@ import {
   footerText as text,
 } from "../../ui/footer";
 import { setupOutput } from "../../ui/setup";
-import { SCAN_MODE_OPTIONS, selectAgentForConfig } from "../../ui/prompts";
 
-// ─── Non-interactive helpers ───────────────────────────────────────────────
-
-function isNonInteractive(args: {
-  preset?: string;
+type Args = {
   scan?: string;
   "on-warn"?: string;
-  "require-scan"?: boolean;
-  trust?: string;
-  "remove-trust"?: string;
-}): boolean {
+  "trust-add"?: string;
+  "trust-remove"?: string;
+  "trust-list"?: boolean;
+};
+
+function isNonInteractive(args: Args): boolean {
   return (
-    args.preset !== undefined ||
     args.scan !== undefined ||
     args["on-warn"] !== undefined ||
-    args["require-scan"] !== undefined ||
-    args.trust !== undefined ||
-    args["remove-trust"] !== undefined
+    args["trust-add"] !== undefined ||
+    args["trust-remove"] !== undefined ||
+    args["trust-list"] === true
   );
 }
 
-function parseTrustFlag(trust: string): TrustOverride | null {
-  const tapMatch = trust.match(/^tap:([^=]+)=([^=]+)$/);
-  if (tapMatch) {
-    const preset = tapMatch[2] as string;
-    if (!(SECURITY_PRESETS as readonly string[]).includes(preset)) return null;
-    return {
-      match: tapMatch[1] as string,
-      kind: "tap",
-      preset: preset as (typeof SECURITY_PRESETS)[number],
-    };
-  }
-  const sourceMatch = trust.match(/^source:([^=]+)=([^=]+)$/);
-  if (sourceMatch) {
-    const sourceType = sourceMatch[1] as string;
-    const preset = sourceMatch[2] as string;
-    if (!(SOURCE_TYPES as readonly string[]).includes(sourceType)) return null;
-    if (!(SECURITY_PRESETS as readonly string[]).includes(preset)) return null;
-    return {
-      match: sourceType,
-      kind: "source",
-      preset: preset as (typeof SECURITY_PRESETS)[number],
-    };
-  }
-  return null;
-}
-
-async function runNonInteractive(
-  out: Output,
-  args: {
-    preset?: string;
-    scan?: string;
-    "on-warn"?: string;
-    "require-scan"?: boolean;
-    trust?: string;
-    "remove-trust"?: string;
-  },
-): Promise<void> {
+async function runNonInteractive(out: Output, args: Args): Promise<void> {
   const configResult = await loadConfig();
   if (!configResult.ok) {
     out.error(configResult.error.message, configResult.error.hint);
@@ -86,53 +42,46 @@ async function runNonInteractive(
   }
   const config = configResult.value;
 
-  if (args["remove-trust"]) {
-    const name = args["remove-trust"];
-    const idx = config.security.overrides.findIndex((o) => o.match === name);
+  if (args["trust-list"]) {
+    if (config.security.trust.length === 0) {
+      out.raw("(no trust patterns)\n");
+    } else {
+      for (const pattern of config.security.trust) {
+        out.raw(`${pattern}\n`);
+      }
+    }
+    return;
+  }
+
+  if (args["trust-remove"]) {
+    const pattern = args["trust-remove"];
+    const idx = config.security.trust.indexOf(pattern);
     if (idx === -1) {
-      out.error(`No trust override found with match '${name}'`);
+      out.error(`No trust pattern '${pattern}' found.`);
       process.exit(1);
     }
-    config.security.overrides.splice(idx, 1);
+    config.security.trust.splice(idx, 1);
     const saveResult = await saveConfig(config);
     if (!saveResult.ok) {
       out.error(saveResult.error.message);
       process.exit(1);
     }
-    out.raw(`OK: removed trust override '${name}'\n`);
+    out.raw(`OK: removed trust pattern '${pattern}'\n`);
     return;
   }
 
-  if (args.trust) {
-    const override = parseTrustFlag(args.trust);
-    if (!override) {
-      out.error(
-        `Invalid --trust format: '${args.trust}'\n  Expected: tap:<name>=<preset> or source:<type>=<preset>\n  Presets: ${SECURITY_PRESETS.join(", ")}\n  Source types: ${SOURCE_TYPES.join(", ")}`,
-      );
-      process.exit(1);
+  if (args["trust-add"]) {
+    const pattern = args["trust-add"];
+    if (!config.security.trust.includes(pattern)) {
+      config.security.trust.push(pattern);
     }
-    config.security.overrides.push(override);
     const saveResult = await saveConfig(config);
     if (!saveResult.ok) {
       out.error(saveResult.error.message);
       process.exit(1);
     }
-    out.raw(
-      `OK: added ${override.kind} trust override '${override.match}' → ${override.preset}\n`,
-    );
+    out.raw(`OK: added trust pattern '${pattern}'\n`);
     return;
-  }
-
-  if (args.preset) {
-    if (!(SECURITY_PRESETS as readonly string[]).includes(args.preset)) {
-      out.error(
-        `Invalid preset: '${args.preset}'. Valid presets: ${SECURITY_PRESETS.join(", ")}`,
-      );
-      process.exit(1);
-    }
-    const preset = args.preset as (typeof SECURITY_PRESETS)[number];
-    const values = PRESET_VALUES[preset];
-    config.security = { ...config.security, ...values };
   }
 
   if (args.scan) {
@@ -155,206 +104,26 @@ async function runNonInteractive(
     config.security.on_warn = args["on-warn"] as (typeof ON_WARN_MODES)[number];
   }
 
-  if (args["require-scan"] !== undefined) {
-    config.security.require_scan = args["require-scan"];
-  }
-
   const saveResult = await saveConfig(config);
   if (!saveResult.ok) {
     out.error(saveResult.error.message);
     process.exit(1);
   }
 
-  out.raw(
-    `OK: security = ${describeSecurityMode(config.security)}\n`,
-  );
+  out.raw(`OK: security = ${describeSecurityMode(config.security)}\n`);
 }
 
-// ─── Preset select options ─────────────────────────────────────────────────
-
-const PRESET_OPTIONS = [
-  { value: "none", label: "None", hint: "no scanning" },
-  { value: "relaxed", label: "Relaxed", hint: "static scan, ignore warnings" },
-  {
-    value: "standard",
-    label: "Standard",
-    hint: "static scan, ask on warnings (Recommended)",
-  },
-  {
-    value: "strict",
-    label: "Strict",
-    hint: "static + semantic scan, block on warnings",
-  },
-  { value: "custom", label: "Custom", hint: "set individual options" },
+const SCAN_OPTIONS = [
+  { value: "semantic", label: "Semantic (LLM-assisted scan)" },
+  { value: "static", label: "Static (pattern-based scan)" },
+  { value: "none", label: "None (skip scanning)" },
 ];
 
 const ON_WARN_OPTIONS = [
   { value: "prompt", label: "Ask me (prompt)" },
   { value: "fail", label: "Always block (fail)" },
-  { value: "allow", label: "Ignore warnings (allow)" },
+  { value: "install", label: "Install anyway (install)" },
 ];
-
-// ─── Interactive wizard helpers ────────────────────────────────────────────
-
-type SecurityModeFields = {
-  scan: (typeof SCAN_MODES)[number];
-  on_warn: (typeof ON_WARN_MODES)[number];
-  require_scan: boolean;
-};
-
-async function promptSecuritySettings(
-  current: SecurityModeFields,
-  agentCli: string,
-): Promise<{ mode: SecurityModeFields; agentCli: string }> {
-  const presetResult = await select({
-    message: "Security preset?",
-    options: PRESET_OPTIONS,
-    initialValue: "standard",
-  });
-  if (isCancel(presetResult)) {
-    cancel("Cancelled.");
-    process.exit(130);
-  }
-
-  const chosenPreset = presetResult as string;
-
-  if (chosenPreset !== "custom") {
-    const preset = chosenPreset as (typeof SECURITY_PRESETS)[number];
-    const values = PRESET_VALUES[preset];
-    let newAgentCli = agentCli;
-
-    if (values.scan === "semantic") {
-      newAgentCli = await selectAgentForConfig(agentCli);
-    }
-
-    return { mode: { ...values }, agentCli: newAgentCli };
-  }
-
-  // Custom path
-  const scanResult = await select({
-    message: "Scan level?",
-    options: SCAN_MODE_OPTIONS,
-    initialValue: current.scan,
-  });
-  if (isCancel(scanResult)) {
-    cancel("Cancelled.");
-    process.exit(130);
-  }
-
-  const onWarnResult = await select({
-    message: "When warnings are found?",
-    options: ON_WARN_OPTIONS,
-    initialValue: current.on_warn,
-  });
-  if (isCancel(onWarnResult)) {
-    cancel("Cancelled.");
-    process.exit(130);
-  }
-
-  const requireScanResult = await confirm({
-    message: "Require scanning? (block --skip-scan)",
-    initialValue: current.require_scan,
-  });
-  if (isCancel(requireScanResult)) {
-    cancel("Cancelled.");
-    process.exit(130);
-  }
-
-  let newAgentCli = agentCli;
-  if (scanResult === "semantic") {
-    newAgentCli = await selectAgentForConfig(agentCli);
-  }
-
-  return {
-    mode: {
-      scan: scanResult as (typeof SCAN_MODES)[number],
-      on_warn: onWarnResult as (typeof ON_WARN_MODES)[number],
-      require_scan: requireScanResult as boolean,
-    },
-    agentCli: newAgentCli,
-  };
-}
-
-// ─── Interactive override loop ─────────────────────────────────────────────
-
-const SOURCE_TYPE_OVERRIDE_OPTIONS = [
-  { value: "tap", label: "A specific tap" },
-  { value: "git", label: "All git URL sources" },
-  { value: "npm", label: "All npm sources" },
-  { value: "local", label: "All local path sources" },
-  { value: "done", label: "Done adding overrides" },
-];
-
-const PRESET_ONLY_OPTIONS = PRESET_OPTIONS.filter((o) => o.value !== "custom");
-
-async function promptTrustOverrides(
-  current: TrustOverride[],
-): Promise<TrustOverride[]> {
-  const configureOverrides = await confirm({
-    message: "Configure trust overrides?",
-    initialValue: false,
-  });
-  if (isCancel(configureOverrides)) {
-    cancel("Cancelled.");
-    process.exit(130);
-  }
-  if (!configureOverrides) return current;
-
-  const overrides = [...current];
-
-  while (true) {
-    const overrideFor = await select({
-      message: "Add override for:",
-      options: SOURCE_TYPE_OVERRIDE_OPTIONS,
-    });
-    if (isCancel(overrideFor)) {
-      cancel("Cancelled.");
-      process.exit(2);
-    }
-
-    if (overrideFor === "done") break;
-
-    let match: string;
-    let kind: "tap" | "source";
-
-    if (overrideFor === "tap") {
-      const tapName = await text({
-        message: "Tap name:",
-        validate(v) {
-          if (!v) return "Required";
-        },
-      });
-      if (isCancel(tapName)) {
-        cancel("Cancelled.");
-        process.exit(2);
-      }
-      match = tapName as string;
-      kind = "tap";
-    } else {
-      match = overrideFor as string;
-      kind = "source";
-    }
-
-    const presetResult = await select({
-      message: `Security preset for "${match}"?`,
-      options: PRESET_ONLY_OPTIONS,
-    });
-    if (isCancel(presetResult)) {
-      cancel("Cancelled.");
-      process.exit(2);
-    }
-
-    overrides.push({
-      match,
-      kind,
-      preset: presetResult as (typeof SECURITY_PRESETS)[number],
-    });
-  }
-
-  return overrides;
-}
-
-// ─── Interactive wizard ────────────────────────────────────────────────────
 
 async function runInteractive(out: Output): Promise<void> {
   const configResult = await loadConfig();
@@ -366,31 +135,77 @@ async function runInteractive(out: Output): Promise<void> {
 
   intro("Security Configuration");
 
-  const current: SecurityModeFields = {
-    scan: config.security.scan,
-    on_warn: config.security.on_warn,
-    require_scan: config.security.require_scan,
-  };
+  const scanResult = await select({
+    message: "Default scan mode?",
+    options: SCAN_OPTIONS,
+    initialValue: config.security.scan,
+  });
+  if (isCancel(scanResult)) {
+    cancel("Cancelled.");
+    process.exit(130);
+  }
 
-  const { mode, agentCli } = await promptSecuritySettings(
-    current,
-    config.security.agent_cli,
-  );
+  const onWarnResult = await select({
+    message: "When warnings are found?",
+    options: ON_WARN_OPTIONS,
+    initialValue: config.security.on_warn,
+  });
+  if (isCancel(onWarnResult)) {
+    cancel("Cancelled.");
+    process.exit(130);
+  }
 
-  // Trust overrides
-  const newOverrides = await promptTrustOverrides(config.security.overrides);
+  const trust = [...config.security.trust];
 
-  // Summary
-  let summaryLines = describeSecurityMode(mode);
-
-  if (newOverrides.length > 0) {
-    summaryLines += "\n\nTrust overrides:";
-    for (const o of newOverrides) {
-      summaryLines += `\n  ${o.kind === "tap" ? o.match : `${o.match} sources`} → ${o.preset}`;
+  while (true) {
+    const action = await select({
+      message: "Manage trust patterns?",
+      options: [
+        { value: "add", label: "Add a pattern" },
+        { value: "remove", label: "Remove a pattern" },
+        { value: "done", label: "Done" },
+      ],
+    });
+    if (isCancel(action)) {
+      cancel("Cancelled.");
+      process.exit(130);
+    }
+    if (action === "done") break;
+    if (action === "add") {
+      const p = await text({
+        message: "Pattern (glob; tap name or source URL):",
+        validate(v) {
+          if (!v) return "Required";
+        },
+      });
+      if (isCancel(p)) {
+        cancel("Cancelled.");
+        process.exit(130);
+      }
+      const pat = p as string;
+      if (!trust.includes(pat)) trust.push(pat);
+    }
+    if (action === "remove") {
+      if (trust.length === 0) continue;
+      const choice = await select({
+        message: "Remove which pattern?",
+        options: trust.map((p) => ({ value: p, label: p })),
+      });
+      if (isCancel(choice)) continue;
+      const idx = trust.indexOf(choice as string);
+      if (idx !== -1) trust.splice(idx, 1);
     }
   }
 
-  note(summaryLines, "Security Summary");
+  let summary = describeSecurityMode({
+    scan: scanResult as string,
+    on_warn: onWarnResult as string,
+  });
+  if (trust.length > 0) {
+    summary += `\n\nTrust patterns:\n  ${trust.join("\n  ")}`;
+  }
+
+  note(summary, "Security Summary");
 
   const saveConfirm = await confirm({
     message: "Save these settings?",
@@ -403,11 +218,9 @@ async function runInteractive(out: Output): Promise<void> {
 
   config.security = {
     ...config.security,
-    scan: mode.scan,
-    on_warn: mode.on_warn,
-    require_scan: mode.require_scan,
-    agent_cli: agentCli,
-    overrides: newOverrides,
+    scan: scanResult as (typeof SCAN_MODES)[number],
+    on_warn: onWarnResult as (typeof ON_WARN_MODES)[number],
+    trust,
   };
 
   const saveResult = await saveConfig(config);
@@ -419,31 +232,31 @@ async function runInteractive(out: Output): Promise<void> {
   outro(`Wrote ${getConfigDir()}/config.toml`);
 }
 
-// ─── Command definition ────────────────────────────────────────────────────
-
 export default defineCommand({
   meta: {
     name: "skilltap config security",
     description: "Configure security settings",
   },
   args: {
-    preset: {
+    scan: {
       type: "string",
-      description: "Apply a named preset: none, relaxed, standard, strict",
+      description: "Scan level: semantic, static, none",
     },
-    scan: { type: "string", description: "Scan level: static, semantic, off" },
     "on-warn": {
       type: "string",
-      description: "Warning behavior: prompt, fail, allow",
+      description: "Warning behavior: prompt, fail, install",
     },
-    "require-scan": { type: "boolean", description: "Block --skip-scan" },
-    trust: {
+    "trust-add": {
       type: "string",
-      description: "Add trust override: tap:name=preset or source:type=preset",
+      description: "Append a glob pattern to security.trust",
     },
-    "remove-trust": {
+    "trust-remove": {
       type: "string",
-      description: "Remove a trust override by match name",
+      description: "Remove a glob pattern from security.trust",
+    },
+    "trust-list": {
+      type: "boolean",
+      description: "Print current trust patterns",
     },
   },
   async run({ args }) {

@@ -116,7 +116,7 @@ export async function resolveAgentInteractive(
 ): Promise<AgentAdapter | undefined> {
   const agentResult = await resolveAgent(config, async (detected) => {
     const chosen = await selectAgent(detected);
-    config.security.agent_cli = chosen.cliName;
+    config.scanner.agent_cli = chosen.cliName;
     await saveConfig(config);
     return chosen;
   });

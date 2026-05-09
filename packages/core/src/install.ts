@@ -89,8 +89,6 @@ export type InstallOptions = {
   onAlreadyInstalled?: (name: string) => Promise<"update" | "abort">;
   /** Called when deep scan is triggered (no SKILL.md at standard paths). Return false to cancel. */
   onDeepScan?: (count: number) => Promise<boolean>;
-  /** Source metadata for trust-tier override resolution via composePolicyForSource. */
-  source?: { tapName?: string; sourceType: "tap" | "git" | "npm" | "local" };
   /** Called when orphan records are detected before the install. Return names to purge. */
   onOrphansFound?: OnOrphansFound;
   /** Called when a plugin manifest is detected after cloning. Return "plugin" to install as plugin,

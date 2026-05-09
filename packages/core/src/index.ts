@@ -39,25 +39,9 @@ export * from "./paths";
 export * from "./plugin";
 export * from "./plugin-v2";
 export * from "./policy";
-export * from "./policy-v2";
 export * from "./remove";
 export * from "./scanner";
 export * from "./schemas";
-export {
-  type AgentConfig,
-  AgentConfigSchema,
-  type ConfigV2,
-  type ConfigV2Defaults,
-  ConfigV2DefaultsSchema,
-  ConfigV2Schema,
-  type ConfigV2TapEntry,
-  ConfigV2TapEntrySchema,
-  SCOPE_V2,
-  SECURITY_ON_WARN_V2,
-  SECURITY_SCAN_V2,
-  type SecurityConfigV2,
-  SecurityConfigV2Schema,
-} from "./schemas/config-v2";
 export * from "./security";
 export * from "./self-update";
 export * from "./shell";

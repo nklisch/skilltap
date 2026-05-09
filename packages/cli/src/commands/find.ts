@@ -402,7 +402,7 @@ async function installChosen(
     skipScan: false,
     agent,
     semantic: policy.scanMode === "semantic",
-    threshold: config.security.threshold,
+    threshold: config.scanner.threshold,
     ...callbacks,
   });
 

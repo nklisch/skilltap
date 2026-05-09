@@ -5,165 +5,120 @@ import { parse, stringify } from "smol-toml";
 import {
   ConfigSchema,
   ON_WARN_MODES,
-  PRESET_VALUES,
-  SECURITY_PRESETS,
+  SCAN_MODES,
+  ScannerConfigSchema,
   SecurityConfigSchema,
-  TrustOverrideSchema,
 } from "./config";
 
+describe("SCAN_MODES", () => {
+  test("includes semantic, static, none", () => {
+    expect(SCAN_MODES).toContain("semantic");
+    expect(SCAN_MODES).toContain("static");
+    expect(SCAN_MODES).toContain("none");
+  });
+});
+
 describe("ON_WARN_MODES", () => {
-  test("includes allow", () => {
-    expect(ON_WARN_MODES).toContain("allow");
+  test("includes prompt, fail, install", () => {
     expect(ON_WARN_MODES).toContain("prompt");
     expect(ON_WARN_MODES).toContain("fail");
-  });
-});
-
-describe("PRESET_VALUES", () => {
-  test("covers all 4 presets", () => {
-    for (const preset of SECURITY_PRESETS) {
-      expect(PRESET_VALUES[preset]).toBeDefined();
-    }
-  });
-
-  test("none preset has correct values", () => {
-    expect(PRESET_VALUES.none).toEqual({
-      scan: "off",
-      on_warn: "allow",
-      require_scan: false,
-    });
-  });
-
-  test("relaxed preset has correct values", () => {
-    expect(PRESET_VALUES.relaxed).toEqual({
-      scan: "static",
-      on_warn: "allow",
-      require_scan: false,
-    });
-  });
-
-  test("standard preset has correct values", () => {
-    expect(PRESET_VALUES.standard).toEqual({
-      scan: "static",
-      on_warn: "prompt",
-      require_scan: false,
-    });
-  });
-
-  test("strict preset has correct values", () => {
-    expect(PRESET_VALUES.strict).toEqual({
-      scan: "semantic",
-      on_warn: "fail",
-      require_scan: true,
-    });
-  });
-});
-
-describe("TrustOverrideSchema", () => {
-  test("validates valid override", () => {
-    const result = TrustOverrideSchema.safeParse({
-      match: "my-tap",
-      kind: "tap",
-      preset: "none",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  test("validates source type override", () => {
-    const result = TrustOverrideSchema.safeParse({
-      match: "npm",
-      kind: "source",
-      preset: "standard",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  test("rejects invalid kind", () => {
-    const result = TrustOverrideSchema.safeParse({
-      match: "my-tap",
-      kind: "invalid",
-      preset: "none",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  test("rejects invalid preset", () => {
-    const result = TrustOverrideSchema.safeParse({
-      match: "my-tap",
-      kind: "tap",
-      preset: "ultra-strict",
-    });
-    expect(result.success).toBe(false);
+    expect(ON_WARN_MODES).toContain("install");
   });
 });
 
 describe("SecurityConfigSchema", () => {
-  test("applies flat defaults", () => {
+  test("applies V2 defaults", () => {
     const result = SecurityConfigSchema.parse({});
     expect(result.scan).toBe("static");
-    expect(result.on_warn).toBe("prompt");
-    expect(result.require_scan).toBe(false);
-    expect(result.agent_cli).toBe("");
-    expect(result.threshold).toBe(5);
-    expect(result.max_size).toBe(51200);
-    expect(result.ollama_model).toBe("");
-    expect(result.overrides).toEqual([]);
+    expect(result.on_warn).toBe("install");
+    expect(result.trust).toEqual([]);
   });
 
   test("accepts all valid scan values", () => {
+    expect(SecurityConfigSchema.parse({ scan: "semantic" }).scan).toBe(
+      "semantic",
+    );
     expect(SecurityConfigSchema.parse({ scan: "static" }).scan).toBe("static");
-    expect(SecurityConfigSchema.parse({ scan: "semantic" }).scan).toBe("semantic");
-    expect(SecurityConfigSchema.parse({ scan: "off" }).scan).toBe("off");
+    expect(SecurityConfigSchema.parse({ scan: "none" }).scan).toBe("none");
   });
 
-  test("rejects invalid scan value", () => {
-    expect(SecurityConfigSchema.safeParse({ scan: "none" }).success).toBe(false);
-    expect(SecurityConfigSchema.safeParse({ scan: "both" }).success).toBe(false);
+  test("rejects legacy scan value 'off'", () => {
+    expect(SecurityConfigSchema.safeParse({ scan: "off" }).success).toBe(false);
   });
 
   test("accepts all valid on_warn values", () => {
-    expect(SecurityConfigSchema.parse({ on_warn: "prompt" }).on_warn).toBe("prompt");
-    expect(SecurityConfigSchema.parse({ on_warn: "fail" }).on_warn).toBe("fail");
-    expect(SecurityConfigSchema.parse({ on_warn: "allow" }).on_warn).toBe("allow");
+    expect(SecurityConfigSchema.parse({ on_warn: "prompt" }).on_warn).toBe(
+      "prompt",
+    );
+    expect(SecurityConfigSchema.parse({ on_warn: "fail" }).on_warn).toBe(
+      "fail",
+    );
+    expect(SecurityConfigSchema.parse({ on_warn: "install" }).on_warn).toBe(
+      "install",
+    );
   });
 
-  test("rejects invalid on_warn value", () => {
-    expect(SecurityConfigSchema.safeParse({ on_warn: "ignore" }).success).toBe(false);
+  test("rejects legacy on_warn value 'allow'", () => {
+    expect(SecurityConfigSchema.safeParse({ on_warn: "allow" }).success).toBe(
+      false,
+    );
   });
 
-  test("threshold min and max bounds", () => {
-    expect(SecurityConfigSchema.parse({ threshold: 0 }).threshold).toBe(0);
-    expect(SecurityConfigSchema.parse({ threshold: 10 }).threshold).toBe(10);
-    expect(SecurityConfigSchema.safeParse({ threshold: -1 }).success).toBe(false);
-    expect(SecurityConfigSchema.safeParse({ threshold: 11 }).success).toBe(false);
-  });
-
-  test("threshold must be integer", () => {
-    expect(SecurityConfigSchema.safeParse({ threshold: 5.5 }).success).toBe(false);
-  });
-
-  test("accepts trust overrides array", () => {
+  test("accepts trust glob patterns", () => {
     const result = SecurityConfigSchema.parse({
-      overrides: [
-        { match: "my-tap", kind: "tap", preset: "none" },
-        { match: "npm", kind: "source", preset: "strict" },
-      ],
+      trust: ["github.com/me/*", "internal-tap"],
     });
-    expect(result.overrides).toHaveLength(2);
-    expect(result.overrides[0].match).toBe("my-tap");
-    expect(result.overrides[1].preset).toBe("strict");
+    expect(result.trust).toEqual(["github.com/me/*", "internal-tap"]);
   });
 
-  test("legacy per-mode keys silently stripped (v1 back-compat)", () => {
+  test("legacy per-mode and override keys silently stripped", () => {
     const result = SecurityConfigSchema.safeParse({
       human: { scan: "semantic" },
       agent: { scan: "off" },
+      overrides: [{ match: "x", kind: "tap", preset: "none" }],
+      require_scan: true,
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
     // Zod strips unknown keys — flat fields use defaults
     expect(result.data.scan).toBe("static");
-    expect(result.data.on_warn).toBe("prompt");
+    expect(result.data.on_warn).toBe("install");
+  });
+});
+
+describe("ScannerConfigSchema", () => {
+  test("applies defaults", () => {
+    const result = ScannerConfigSchema.parse({});
+    expect(result.agent_cli).toBe("");
+    expect(result.ollama_model).toBe("");
+    expect(result.threshold).toBe(5);
+    expect(result.max_size).toBe(51200);
+  });
+
+  test("threshold min and max bounds", () => {
+    expect(ScannerConfigSchema.parse({ threshold: 0 }).threshold).toBe(0);
+    expect(ScannerConfigSchema.parse({ threshold: 10 }).threshold).toBe(10);
+    expect(ScannerConfigSchema.safeParse({ threshold: -1 }).success).toBe(
+      false,
+    );
+    expect(ScannerConfigSchema.safeParse({ threshold: 11 }).success).toBe(
+      false,
+    );
+  });
+
+  test("threshold must be integer", () => {
+    expect(ScannerConfigSchema.safeParse({ threshold: 5.5 }).success).toBe(
+      false,
+    );
+  });
+
+  test("accepts agent_cli and ollama_model strings", () => {
+    const result = ScannerConfigSchema.parse({
+      agent_cli: "claude",
+      ollama_model: "llama3",
+    });
+    expect(result.agent_cli).toBe("claude");
+    expect(result.ollama_model).toBe("llama3");
   });
 });
 
@@ -174,15 +129,25 @@ describe("ConfigSchema", () => {
     expect(result.defaults.yes).toBe(false);
     expect(result.defaults.scope).toBe("");
     expect(result.security.scan).toBe("static");
-    expect(result.security.on_warn).toBe("prompt");
-    expect(result.security.require_scan).toBe(false);
+    expect(result.security.on_warn).toBe("install");
+    expect(result.security.trust).toEqual([]);
+    expect(result.scanner.agent_cli).toBe("");
+    expect(result.scanner.threshold).toBe(5);
+    expect(result.scanner.max_size).toBe(51200);
     expect(result.taps).toEqual([]);
     expect(result.default_git_host).toBe("https://github.com");
   });
 
   test("config has no agent-mode key", () => {
     const result = ConfigSchema.parse({});
-    expect((result as Record<string, unknown>)["agent-mode"]).toBeUndefined();
+    expect(
+      (result as Record<string, unknown>)["agent-mode"],
+    ).toBeUndefined();
+  });
+
+  test("config has no agent block", () => {
+    const result = ConfigSchema.parse({});
+    expect((result as Record<string, unknown>).agent).toBeUndefined();
   });
 
   test("default_git_host defaults to https://github.com", () => {
@@ -201,13 +166,16 @@ describe("ConfigSchema", () => {
     expect(result.data.default_git_host).toBe("https://gitea.example.com");
   });
 
-  test("accepts full valid config with flat security", () => {
+  test("accepts full valid V2 config", () => {
     const result = ConfigSchema.parse({
       defaults: { also: ["claude-code", "cursor"], yes: true, scope: "global" },
       security: {
         scan: "semantic",
         on_warn: "fail",
-        require_scan: true,
+        trust: ["github.com/corp/*"],
+      },
+      scanner: {
+        agent_cli: "claude",
         threshold: 8,
       },
       taps: [{ name: "home", url: "https://example.com/tap.git" }],
@@ -217,6 +185,9 @@ describe("ConfigSchema", () => {
     expect(result.defaults.scope).toBe("global");
     expect(result.security.scan).toBe("semantic");
     expect(result.security.on_warn).toBe("fail");
+    expect(result.security.trust).toEqual(["github.com/corp/*"]);
+    expect(result.scanner.agent_cli).toBe("claude");
+    expect(result.scanner.threshold).toBe(8);
     expect(result.taps[0].name).toBe("home");
   });
 
@@ -234,7 +205,8 @@ describe("ConfigSchema", () => {
   test("TOML round-trip preserves values", () => {
     const config = ConfigSchema.parse({
       defaults: { also: ["claude-code"], yes: false, scope: "global" },
-      security: { threshold: 7 },
+      security: { trust: ["home"] },
+      scanner: { threshold: 7 },
       taps: [{ name: "home", url: "https://example.com/tap.git" }],
     });
     const toml = stringify(config as any);
@@ -242,7 +214,8 @@ describe("ConfigSchema", () => {
     const result = ConfigSchema.parse(parsed);
     expect(result.defaults.also).toEqual(["claude-code"]);
     expect(result.defaults.scope).toBe("global");
-    expect(result.security.threshold).toBe(7);
+    expect(result.security.trust).toEqual(["home"]);
+    expect(result.scanner.threshold).toBe(7);
     expect(result.taps[0].name).toBe("home");
     expect(result.taps[0].url).toBe("https://example.com/tap.git");
   });
@@ -273,19 +246,27 @@ describe("ConfigSchema", () => {
     expect(result.taps).toEqual([]);
   });
 
-  test("v1 config with agent-mode and per-mode security keys parses without error (extras stripped)", () => {
+  test("legacy v0.x and v2 keys silently stripped (extras ignored)", () => {
     const result = ConfigSchema.safeParse({
       "agent-mode": { enabled: true, scope: "project" },
+      agent: { default: true },
       security: {
         human: { scan: "semantic" },
         agent: { scan: "off", on_warn: "allow" },
+        overrides: [{ match: "x", kind: "tap", preset: "none" }],
+        require_scan: true,
+        agent_cli: "claude",
       },
     });
     expect(result.success).toBe(true);
     if (!result.success) return;
-    // Flat fields use defaults; per-mode and agent-mode keys stripped
     expect(result.data.security.scan).toBe("static");
-    expect((result.data as Record<string, unknown>)["agent-mode"]).toBeUndefined();
+    expect(
+      (result.data as Record<string, unknown>)["agent-mode"],
+    ).toBeUndefined();
+    expect(
+      (result.data as Record<string, unknown>).agent,
+    ).toBeUndefined();
   });
 });
 
@@ -318,7 +299,10 @@ describe("Config I/O round-trip", () => {
         ...firstLoad.value.security,
         scan: "semantic" as const,
         on_warn: "fail" as const,
-        require_scan: true,
+        trust: ["github.com/corp/*"],
+      },
+      scanner: {
+        ...firstLoad.value.scanner,
         threshold: 8,
         agent_cli: "claude",
       },
@@ -331,11 +315,16 @@ describe("Config I/O round-trip", () => {
     expect(reloadResult.ok).toBe(true);
     if (!reloadResult.ok) return;
 
-    expect(reloadResult.value.defaults.also).toEqual(["claude-code", "cursor"]);
+    expect(reloadResult.value.defaults.also).toEqual([
+      "claude-code",
+      "cursor",
+    ]);
     expect(reloadResult.value.defaults.yes).toBe(true);
     expect(reloadResult.value.defaults.scope).toBe("global");
     expect(reloadResult.value.security.scan).toBe("semantic");
     expect(reloadResult.value.security.on_warn).toBe("fail");
-    expect(reloadResult.value.security.threshold).toBe(8);
+    expect(reloadResult.value.security.trust).toEqual(["github.com/corp/*"]);
+    expect(reloadResult.value.scanner.threshold).toBe(8);
+    expect(reloadResult.value.scanner.agent_cli).toBe("claude");
   });
 });

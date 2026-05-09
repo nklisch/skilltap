@@ -112,7 +112,7 @@ async function runInstallPlugin(
       gitHost: config.default_git_host,
       agent,
       semantic: runSemantic,
-      threshold: config.security.threshold,
+      threshold: config.scanner.threshold,
       ...installOptions,
       onPluginDetected: async (_manifest) => {
         pluginDetected = true;
@@ -191,7 +191,7 @@ async function runInstallPlugin(
         projectRoot,
         agent,
         semantic: runSemantic,
-        threshold: config.security.threshold,
+        threshold: config.scanner.threshold,
       });
       if (!updateResult.ok) {
         out.error(updateResult.error.message, updateResult.error.hint);

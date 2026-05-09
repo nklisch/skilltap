@@ -1,4 +1,4 @@
-import { type ConfigV2, ConfigV2Schema } from "../schemas/config-v2";
+import { type Config, ConfigSchema } from "../schemas/config";
 import { err, ok, type Result, UserError } from "../types";
 
 export interface RejectedHttpTap {
@@ -7,13 +7,13 @@ export interface RejectedHttpTap {
 }
 
 export interface ConfigMigrationResult {
-  v2: ConfigV2;
+  v2: Config;
   warnings: string[];
   httpTapsRejected: RejectedHttpTap[];
 }
 
 // Translate a v1.0 raw config (already parsed from TOML, before Zod) into a
-// v2.0 ConfigV2. Logs lossy translations as warnings and lists HTTP taps
+// v2 Config. Logs lossy translations as warnings and lists HTTP taps
 // separately so the orchestrator can decide to refuse migration.
 //
 // rawV1 may have any shape — we never trust the v1.0 schema strictly here
@@ -213,7 +213,7 @@ export function migrateV1Config(
   };
 
   // Validate via Zod — applies defaults for any fields we left off
-  const parsed = ConfigV2Schema.safeParse(v2Candidate);
+  const parsed = ConfigSchema.safeParse(v2Candidate);
   if (!parsed.success) {
     return err(
       new UserError(

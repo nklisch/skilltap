@@ -5,7 +5,7 @@ import type { DoctorCheck } from "../types";
 
 export async function checkAgents(config: Config): Promise<DoctorCheck> {
   const available = await detectAgents();
-  const configuredAgent = config.security.agent_cli;
+  const configuredAgent = config.scanner.agent_cli;
 
   if (configuredAgent) {
     const isAbsPath = configuredAgent.startsWith("/");

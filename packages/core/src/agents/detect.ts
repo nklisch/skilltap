@@ -28,7 +28,7 @@ const ADAPTER_MAP: Record<string, AgentAdapter> = {
   opencode: opencodeAdapter,
 };
 
-/** All valid values for security.agent_cli in config. */
+/** All valid values for scanner.agent_cli in config. */
 export const KNOWN_AGENT_NAMES: readonly string[] = [
   ...Object.keys(ADAPTER_MAP),
   "ollama",
@@ -44,7 +44,7 @@ async function verifyAdapterAvailable(
     return err(
       new ScanError(
         `Configured agent '${configuredName}' not found on PATH.`,
-        `Install ${adapter.name} or change security.agent_cli in config.toml`,
+        `Install ${adapter.name} or change scanner.agent_cli in config.toml`,
       ),
     );
   }
@@ -66,21 +66,21 @@ export async function detectAgents(): Promise<AgentAdapter[]> {
  * Resolve which agent to use for semantic scanning.
  *
  * Priority:
- * 1. config.security.agent_cli set to known name → find matching adapter, verify detect()
- * 2. config.security.agent_cli is absolute path → createCustomAdapter(path)
+ * 1. config.scanner.agent_cli set to known name → find matching adapter, verify detect()
+ * 2. config.scanner.agent_cli is absolute path → createCustomAdapter(path)
  * 3. Empty → detectAgents() → if none found, return ok(null) → if found and onSelectAgent provided, call it
  */
 export async function resolveAgent(
   config: Config,
   onSelectAgent?: (detected: AgentAdapter[]) => Promise<AgentAdapter | null>,
 ): Promise<Result<AgentAdapter | null, ScanError>> {
-  const agentSetting = config.security.agent_cli;
+  const agentSetting = config.scanner.agent_cli;
 
   // 1. Known adapter name
   if (agentSetting && !agentSetting.startsWith("/")) {
     if (agentSetting === "ollama") {
       return verifyAdapterAvailable(
-        createOllamaAdapter(config.security.ollama_model),
+        createOllamaAdapter(config.scanner.ollama_model),
         "ollama",
       );
     }
