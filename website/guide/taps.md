@@ -109,26 +109,22 @@ skilltap find -i <query>
 
 ## Browsing and installing from taps
 
-Run `skilltap tap install` to open an interactive picker over all your configured tap skills:
+Use `skilltap find` to browse what's available across your registered taps, then install with `skilltap install skill`:
 
 ```bash
-skilltap tap install
+skilltap find <query>             # text search across taps
+skilltap find -i                  # interactive picker — search, then install
+skilltap find -i <query>          # interactive picker pre-seeded with a query
 ```
 
-Use the search box to filter, Space to toggle selection, Enter to confirm. Skills you've already installed are pre-selected and shown with an `installed` tag — deselecting them will remove them.
-
-To limit the picker to a single tap:
-
-```bash
-skilltap tap install --tap home
-```
+The interactive picker (`-i`) lets you filter by typing, pick a result, and install it directly without copying URLs around.
 
 ## Installing by name
 
 Once you have taps registered, install a skill by name:
 
 ```bash
-skilltap install research
+skilltap install skill research
 ```
 
 If the name exists in multiple taps, skilltap prompts you to choose which one.
@@ -136,7 +132,7 @@ If the name exists in multiple taps, skilltap prompts you to choose which one.
 To install a specific git ref (branch, tag, or commit):
 
 ```bash
-skilltap install research@v1.0.0
+skilltap install skill research@v1.0.0
 ```
 
 ## Creating your own tap
