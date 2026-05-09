@@ -198,7 +198,7 @@ cleans up the orphan legacy files afterward.
   correctness: `skilltap config set agent-mode.enabled true` now emits a
   hint mentioning the `--agent` flag and `SKILLTAP_AGENT=1` env var
   alongside the persistent wizard.
-- **End-to-end test design document.** New `docs/E2E-TEST-DESIGN-V2.md`
+- **End-to-end test design document.** New `docs/designs/completed/e2e-v2.md`
   enumerates 27 golden-path tests across 13 user journeys plus 20
   adversarial tests across 5 failure-mode categories, with spec
   citations, fixture requirements, and prioritized implementation order.

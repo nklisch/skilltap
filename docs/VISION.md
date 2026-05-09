@@ -382,7 +382,7 @@ The v2.0 draft kept too much surface and conceptual baggage from v0.x and v1.0: 
 
 ### What's new
 
-- **Plugin capture** — installing a plugin owns components that pre-exist as standalones. Designed in [docs/design/plugin-capture.md](./design/plugin-capture.md); ships in v2.2 (Phase 39) ahead of the redesign and is a prerequisite to it.
+- **Plugin capture** — installing a plugin owns components that pre-exist as standalones. Designed in [docs/designs/completed/plugin-capture.md](./designs/completed/plugin-capture.md); ships in v2.2 (Phase 39) ahead of the redesign and is a prerequisite to it.
 - **Claude Code plugin adoption** — skilltap reads `~/.claude/plugins/installed_plugins.json` and offers to adopt plugins that Claude Code's own `/plugin install` already manages. Real artifact-tracking unification.
 - **Generic agent-plugin scanner** — adoption is built on a pluggable framework (`packages/core/src/agent-plugins/`). Today: claude-code. Future: any agent that ships a plugin system. Codex stub (no marketplace exists today; placeholder for future).
 - **TUI dashboard** (Ink) — bare `skilltap` opens a multi-screen dashboard with tabs for installed skills, plugins, taps, drift, available updates. Each TUI screen has a flat-command equivalent.

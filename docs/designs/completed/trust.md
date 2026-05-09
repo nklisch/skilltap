@@ -36,7 +36,7 @@ npm's [Trusted Publishing](https://docs.npmjs.com/trusted-publishers/) (GA July 
 
 **How skilltap verifies:**
 
-After downloading an npm tarball (see [DESIGN-NPM-ADAPTER.md](./DESIGN-NPM-ADAPTER.md)):
+After downloading an npm tarball (see [npm-adapter.md](./npm-adapter.md)):
 
 1. Check if the package version has attestations:
    ```

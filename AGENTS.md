@@ -14,7 +14,7 @@ Read these before making architectural decisions:
 - docs/VISION.md — motivation, design principles, v2.0 direction
 - docs/SECURITY.md — security model + v2.0 simplification
 - docs/PROGRESS.md — autopilot tracking: phase status, decision log, deviations
-- docs/design/phase-{N}.md — per-phase design docs produced before implementation
+- docs/designs/completed/phase-{N}.md — per-phase design docs produced before implementation
 
 ## v2.0 Redesign conventions
 
@@ -62,14 +62,20 @@ Dependencies: `cli → core`, `cli → test-utils (dev)`, `core → test-utils (
 ## Commands
 
 ```bash
-bun run dev          # Run CLI from source
-bun test             # Run all tests (recursive across packages)
-bun run build        # Compile to standalone binary
+bun run dev             # Run CLI from source
+bun test                # Run all tests (recursive across packages)
+bun run build           # Compile to standalone binary (./skilltap)
+bun run verify:binary   # Boot-test ./skilltap (--version, --help, doctor --json)
 bun run bump <patch|minor|major|x.y.z>  # Bump version (see Versioning below)
 bun test packages/core/src/plugin/      # Run plugin tests only
+
+scripts/install-local.sh           # Build + install ./skilltap to ~/.local/bin
+scripts/install-local.sh --link    # Symlink instead of copy (live rebuild updates)
+scripts/verify-binary.sh --build   # Build then smoke-test in one step
+scripts/verify-binary.sh skilltap-linux-x64  # Smoke a specific binary path
 ```
 
-## Versioning
+## Versioning & Release Verification
 
 **Always use the bump script for version changes. Never edit version numbers by hand.**
 
@@ -81,6 +87,23 @@ bun run bump minor   # 0.3.1 → 0.4.0
 bun run bump major   # 0.3.1 → 1.0.0
 bun run bump 1.2.3   # set exact version
 ```
+
+### Pre-release checklist (run before tagging)
+
+```bash
+bun test                       # full suite must be green
+bun run build                  # compile must succeed (the released artifact path)
+bun run verify:binary          # compiled binary must boot and run core commands
+```
+
+`bun run verify:binary` runs `scripts/verify-binary.sh`, which:
+- Boots `./skilltap` against an isolated temp `SKILLTAP_HOME` / `XDG_CONFIG_HOME`
+- Asserts `--version`, `--help`, and `doctor --json` all exit 0 with expected output
+- Catches the class of bug where `bun build --compile` succeeds but the standalone binary fails at runtime — typically caused by `--external <pkg>` flags (no `node_modules` exists inside `/$bunfs/root/`) or by accidentally bundling code that resolves a non-installed package
+
+**Why this exists:** `bun test` and `bun run dev` cover source-mode behavior, but `--compile` is a separate code path. CI runs the verifier on every push (`.github/workflows/ci.yml`) and on the release host-arch binary before it gets uploaded (`.github/workflows/release.yml`). When you change the build script, Ink/TUI imports, or any dynamic-import boundary, run `bun run verify:binary` locally before pushing.
+
+**Adding new build-time dependencies:** if you need a package only in development mode (`process.env.DEV === 'true'`) or a similarly-gated path, *do not* mark it `--external` in the `--compile` build. The compiled binary cannot resolve externals at runtime. Either (a) install it as a regular dependency and let it bundle, or (b) lazy-load it via `await import()` and ensure its package is on the `dependencies` list so bun finds it during compile.
 
 After bumping, commit and tag:
 ```bash

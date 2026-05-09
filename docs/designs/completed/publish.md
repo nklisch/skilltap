@@ -127,7 +127,7 @@ jobs:
           subject-path: SKILL.md
 ```
 
-This workflow publishes to npm with provenance (for npm trust verification) and attests the SKILL.md (for GitHub attestation verification). See [DESIGN-TRUST.md](./DESIGN-TRUST.md).
+This workflow publishes to npm with provenance (for npm trust verification) and attests the SKILL.md (for GitHub attestation verification). See [trust.md](./trust.md).
 
 #### `multi` — Multi-skill repo
 

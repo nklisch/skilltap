@@ -171,7 +171,7 @@ Finalize for v0.1 release.
 
 ### Phase 12 — npm Source Adapter
 
-> Design doc: [DESIGN-NPM-ADAPTER.md](./DESIGN-NPM-ADAPTER.md)
+> Design doc: [designs/completed/npm-adapter.md](./designs/completed/npm-adapter.md)
 
 Install skills published as npm packages. Opens access to the 69K+ skills already on npm via skills.sh, vibe-rules, skills-npm, and others.
 
@@ -193,7 +193,7 @@ Install skills published as npm packages. Opens access to the 69K+ skills alread
 
 ### Phase 13 — Community Trust Signals
 
-> Design doc: [DESIGN-TRUST.md](./DESIGN-TRUST.md)
+> Design doc: [designs/completed/trust.md](./designs/completed/trust.md)
 
 Provenance verification and trust metadata — without managing users. Piggybacks on npm provenance (Sigstore/SLSA) and GitHub attestations.
 
@@ -217,7 +217,7 @@ Provenance verification and trust metadata — without managing users. Piggyback
 
 ### Phase 14 — HTTP Registry Adapter (shipped v0.2, removed in Phase 31b)
 
-> Design doc: [DESIGN-HTTP-REGISTRY.md](./DESIGN-HTTP-REGISTRY.md)
+> Design doc: [designs/completed/http-registry.md](./designs/completed/http-registry.md)
 >
 > **Status:** This phase shipped in v0.2 and ran in production through v1.0. **Phase 31b (v2.0) explicitly removed the HTTP registry tap adapter** — registry-style taps were never exercised in real workloads, the auth/error paths were a maintenance burden, and the v2.0 manifest+lockfile model assumed git-based reproducibility. v0.x configs with `type = "http"` are now silently filtered with a one-time stderr warning; `skilltap tap add <name> <https-url>` still works but only as a clone target. Items below are kept for historical reference.
 
@@ -242,7 +242,7 @@ Support HTTP registries as a tap type — for enterprise, large indexes, and dyn
 
 ### Phase 15 — Distribution
 
-> Design doc: [DESIGN-DISTRIBUTION.md](./DESIGN-DISTRIBUTION.md)
+> Design doc: [designs/completed/distribution.md](./designs/completed/distribution.md)
 
 Homebrew formula, install script, GitHub Releases CI.
 
@@ -263,7 +263,7 @@ Homebrew formula, install script, GitHub Releases CI.
 
 ### Phase 16 — Create and Verify ✓
 
-> Design doc: [DESIGN-PUBLISH.md](./DESIGN-PUBLISH.md)
+> Design doc: [designs/completed/publish.md](./designs/completed/publish.md)
 
 Skill authoring tools — scaffold new skills and validate them before sharing.
 
@@ -283,7 +283,7 @@ Skill authoring tools — scaffold new skills and validate them before sharing.
 
 ### Phase 17 — Doctor ✓
 
-> Design doc: [DESIGN-DOCTOR.md](./DESIGN-DOCTOR.md)
+> Design doc: [designs/completed/doctor.md](./designs/completed/doctor.md)
 
 Diagnostic command that checks environment, config, and state integrity.
 
@@ -301,7 +301,7 @@ Diagnostic command that checks environment, config, and state integrity.
 
 ### Phase 18 — Shell Completions ✓
 
-> Design doc: [DESIGN-COMPLETIONS.md](./DESIGN-COMPLETIONS.md)
+> Design doc: [designs/completed/completions.md](./designs/completed/completions.md)
 
 Tab-completion for bash, zsh, and fish.
 
@@ -372,7 +372,7 @@ Phases 12, 14, 15, 16, 17, and 18 can all be developed in parallel. Phase 13 dep
 
 ### Phase 20 — Plugin Detection and Parsing ✓
 
-> Design doc: [DESIGN-PLUGIN-DETECTION.md](./DESIGN-PLUGIN-DETECTION.md)
+> Design doc: [designs/completed/plugin-detection.md](./designs/completed/plugin-detection.md)
 
 Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin.json`) plugin formats. Extract the portable subset: skills, MCP server configs, and agent definitions.
 
@@ -390,7 +390,7 @@ Read Claude Code (`.claude-plugin/plugin.json`) and Codex (`.codex-plugin/plugin
 
 ### Phase 21 — Plugin Storage and Data Model ✓
 
-> Design doc: [DESIGN-PLUGIN-STORAGE.md](./DESIGN-PLUGIN-STORAGE.md)
+> Design doc: [designs/completed/plugin-storage.md](./designs/completed/plugin-storage.md)
 
 Plugin as a first-class record in `plugins.json`, with per-component state tracking.
 
@@ -406,7 +406,7 @@ Plugin as a first-class record in `plugins.json`, with per-component state track
 
 ### Phase 22 — MCP Config Injection ✓
 
-> Design doc: [DESIGN-MCP-INJECTION.md](./DESIGN-MCP-INJECTION.md)
+> Design doc: [designs/completed/mcp-injection.md](./designs/completed/mcp-injection.md)
 
 Write MCP server entries directly into each target agent's config file.
 
@@ -427,7 +427,7 @@ Write MCP server entries directly into each target agent's config file.
 
 ### Phase 23 — Plugin Install Flow ✓
 
-> Design doc: [DESIGN-PLUGIN-INSTALL.md](./DESIGN-PLUGIN-INSTALL.md)
+> Design doc: [designs/completed/plugin-install.md](./designs/completed/plugin-install.md)
 
 Wire plugin detection into the existing `skilltap install` command. Auto-detect plugins and install all components.
 
@@ -450,7 +450,7 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
 
 ### Phase 24 — Plugin Management Commands ✓
 
-> Design doc: [DESIGN-PLUGIN-COMMANDS.md](./DESIGN-PLUGIN-COMMANDS.md)
+> Design doc: [designs/completed/plugin-commands.md](./designs/completed/plugin-commands.md)
 
 `skilltap plugin` subcommand group for listing, inspecting, toggling, and removing plugins.
 
@@ -475,7 +475,7 @@ Wire plugin detection into the existing `skilltap install` command. Auto-detect 
 
 ### Phase 25 — Plugin Polish ✓
 
-> Design doc: [DESIGN-PLUGIN-POLISH.md](./DESIGN-PLUGIN-POLISH.md)
+> Design doc: [designs/completed/plugin-polish.md](./designs/completed/plugin-polish.md)
 
 - [x] **25.1** Marketplace tap adapter update: `adaptMarketplaceToTap()` now includes a `plugin: true` flag on entries that have MCP/agent components (not just skills), so `skilltap find` can show "plugin" vs "skill" in results
 - [x] **25.2** `skilltap find` shows plugin badge for tap entries that are plugins
@@ -770,7 +770,7 @@ Phases 28, 30, 31, 32 can run mostly in parallel after 27. Phases 33–36 can ru
 
 ## v2.2 — Plugin Capture (current; in flight)
 
-> In-flight work, not part of the v2.0 redesign. Ships as the next minor on the v2.x line. Designed in [docs/design/plugin-capture.md](./design/plugin-capture.md). Two design commits already landed (b070824, 46417b4); Phase 39 is the implementation. The redesign (Phases 40+) builds on this and assumes capture is shipped.
+> In-flight work, not part of the v2.0 redesign. Ships as the next minor on the v2.x line. Designed in [docs/designs/completed/plugin-capture.md](./designs/completed/plugin-capture.md). Two design commits already landed (b070824, 46417b4); Phase 39 is the implementation. The redesign (Phases 40+) builds on this and assumes capture is shipped.
 
 ### Phase 39 — Plugin Capture implementation
 

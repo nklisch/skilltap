@@ -289,7 +289,7 @@ When adapting marketplace.json:
 
 Claude Code marketplace uses `{ "source": "npm", "package": "@org/plugin", "version": "..." }`. The npm
 adapter in skilltap should resolve this to the package's `skills/` directory after `npm install`. Reference
-`DESIGN-NPM-ADAPTER.md` for the current design.
+`npm-adapter.md` for the current design.
 
 ### Skill namespace consideration
 

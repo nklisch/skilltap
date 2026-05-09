@@ -7,7 +7,7 @@
  *   - Test 2: status --json from the same non-git cwd lists the installed skill
  *             and reports scope="global".
  *
- * Design: docs/E2E-TEST-DESIGN-V2.md §"Journey: First-time global install"
+ * Design: docs/designs/completed/e2e-v2.md §"Journey: First-time global install"
  */
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { readFile } from "node:fs/promises";

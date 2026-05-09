@@ -310,7 +310,7 @@ if (toBase64(hash) !== expected) {
 }
 ```
 
-This catches corrupted downloads and basic MITM attacks. For stronger guarantees, see [DESIGN-TRUST.md](./DESIGN-TRUST.md) (provenance verification).
+This catches corrupted downloads and basic MITM attacks. For stronger guarantees, see [trust.md](./trust.md) (provenance verification).
 
 ## CLI Changes
 

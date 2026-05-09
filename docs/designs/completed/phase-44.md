@@ -127,7 +127,7 @@ bun run build
 - [ ] `bun run build` produces a working binary that includes the spike (binary size delta < 5MB).
 
 **If the Spike fails:**
-- Document the specific failure in `docs/design/phase-44-spike-result.md`.
+- Document the specific failure in `docs/designs/completed/phase-44-spike-result.md`.
 - Pivot to a fallback design (clack-based multi-screen orchestrator) — written as a
   separate addendum, not in this doc.
 - Do not proceed with Units 1+ until either the spike works or the fallback is approved.

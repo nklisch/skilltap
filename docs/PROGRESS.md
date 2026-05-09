@@ -75,7 +75,7 @@ These are intentional Phase-44 cuts; the dashboard scaffolding is sound and the 
 
 ## Refactor 3 (after Phase 43, 2026-05-08)
 
-Triggered by 5 phases since Refactor 2. Plan in `docs/design/refactor-after-phase-43.md` (10 steps); 9 executed, 3 skipped with rationale (one orchestrator agent committed all 9). Net ~250 lines consolidated across the codebase.
+Triggered by 5 phases since Refactor 2. Plan in `docs/designs/completed/refactor-after-phase-43.md` (10 steps); 9 executed, 3 skipped with rationale (one orchestrator agent committed all 9). Net ~250 lines consolidated across the codebase.
 
 **What landed (9 commits, hashes f92bf4a → b71579e):**
 - `setupOutput(args)` helper extracted to `cli/src/ui/setup.ts`. ~46 `createOutput()` boilerplate sites collapsed to one helper call (`f92bf4a`).
@@ -137,7 +137,7 @@ User explicitly enabled watchdog loops mid-session (CronCreate jobs `fceab167` f
 
 **Decision log for this session:**
 - Stashed pre-existing user WIP rather than incorporating: WIP was partial (kept `human`/`agent` as deprecated rather than deleting) and would conflict with Phase 40 cleanup. User can `git stash pop` later to resume.
-- Used existing `docs/design/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
+- Used existing `docs/designs/completed/plugin-capture.md` as the design source for Phase 39 instead of generating a fresh design — the document already covered all 12 ROADMAP units in detail.
 - Phase 39 Units 1–3 + 5–7 implemented directly by Opus (small, self-contained units). Unit 4 (CLI rendering) orchestrated to a Sonnet agent. **User feedback mid-phase: prefer orchestration via `/implement-orchestrator` for all future implementation work.** Phases 40–46 will run the full autopilot workflow: research gate → `/design` → `/implement-orchestrator` → test checkpoint → progress + commit → refactor gate.
 
 ## Phase 43 completion summary (2026-05-08)
@@ -528,7 +528,7 @@ Used `/workflow:design` + `/workflow:implement-orchestrator` end-to-end (first t
 
 Direct edits handled the registry/ deletion + index.ts export strip + grep verification.
 
-Autonomous decisions D1–D5 (full text in `docs/design/phase-31b.md`):
+Autonomous decisions D1–D5 (full text in `docs/designs/completed/phase-31b.md`):
 - **D1**: Schema kept `type: z.enum(["git", "http"])` to parse legacy configs; v2 code filters at the call site.
 - **D2**: HTTP entries silently filtered with one stderr warning per tap name (not hard error).
 - **D3**: `UpdateTapResult.http` dropped — zero production consumers.
@@ -867,7 +867,7 @@ CLI: `skilltap sync --apply` shows per-item progress, prints final summary, exit
 
 Source-key canonicalization: `https://github.com/n/r[.git]` and `git@github.com:n/r[.git]` both become `github:n/r`. npm: and unknown URLs pass through. Range defaults to `"*"`; users tighten by hand. Lockfile gets the precise ref + sha.
 
-Decisions D1–D5 logged in `docs/design/phase-31c-a.md`.
+Decisions D1–D5 logged in `docs/designs/completed/phase-31c-a.md`.
 
 Tests: 16 new in `manifest/update.test.ts` (canonicalize + addSkill/addPlugin). Existing 30 install tests + 15 plugin install tests still pass — wire-up was non-disruptive.
 
@@ -895,7 +895,7 @@ Used `/workflow:design` + `/workflow:implement-orchestrator`. Two parallel Sonne
 
 Direct edits handled `doctor/index.ts` orchestrator wire-up — appended 5 new checks after the existing 9. Existing checks unchanged.
 
-Autonomous decisions D1–D7 (full text in `docs/design/phase-36.md`):
+Autonomous decisions D1–D7 (full text in `docs/designs/completed/phase-36.md`):
 - **D1** Coexist with v1 (no removal until 31c cutover).
 - **D2** State load chain pattern matches checkInstalled.
 - **D3** Manifest drift uses cwd / projectRoot, returns "n/a (no manifest)" gracefully.
@@ -918,7 +918,7 @@ Three new top-level commands accepting `<plugin>[:<component>]`:
 
 Existing `skilltap plugin toggle` (with `--skills` / `--mcps` / `--agents`) keeps working unchanged.
 
-Decisions D1–D4 logged in `docs/design/phase-34.md`. Used inline design + direct implementation.
+Decisions D1–D4 logged in `docs/designs/completed/phase-34.md`. Used inline design + direct implementation.
 
 Tests: 10 component-ref parser tests + lookup. CLI smoke-tested via `--help` and error-path renders. Full v2 baseline 224/224 pass in <250ms.
 
@@ -931,7 +931,7 @@ Claude Desktop added to `MCP_AGENT_CONFIGS` at module load via `process.platform
 - Linux: `.config/Claude/claude_desktop_config.json`
 - Windows: deferred (needs `%APPDATA%` resolution that doesn't fit the relative-path shape)
 
-Decisions D1–D4 logged in `docs/design/phase-35a.md`. Used inline design + direct implementation (small scope: 6 files, mostly additive).
+Decisions D1–D4 logged in `docs/designs/completed/phase-35a.md`. Used inline design + direct implementation (small scope: 6 files, mostly additive).
 
 The `mcp:` install prefix sub-piece from the original Phase 35 was split off as 35b and deferred — it touches `install.ts` and naturally lands with the cutover (31c).
 
@@ -1065,7 +1065,7 @@ opening steps.
 
 ### Workflow practices used
 
-- `/workflow:design` produced explicit design docs at `docs/design/phase-{N}.md` before any phase that touched multiple modules. 17 design docs total.
+- `/workflow:design` produced explicit design docs at `docs/designs/completed/phase-{N}.md` before any phase that touched multiple modules. 17 design docs total.
 - `/workflow:implement-orchestrator` spawned Sonnet sub-agents for the larger phases (31b, 36) — clean splits, parallel execution, agents flagged real bugs in design (e.g., the `i.kind === "add" || "remove" || "ref-mismatch"` always-truthy expression).
 - Smaller phases used inline design + direct implementation (8–10 phases). Tradeoff: faster context use, slightly less rigor.
 - One refactor pass at the natural moment after Phase 34 (concrete duplication had appeared in toggle/enable/disable + plugin/info).

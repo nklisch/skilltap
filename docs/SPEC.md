@@ -3524,7 +3524,7 @@ When `install plugin <source>` resolves a plugin manifest, skilltap detects comp
    - **Cross-source** — same name, different source. Default: error in non-interactive mode, prompt in TTY.
 4. **Apply atomically**: remove standalone records, prune agent MCP keys with the standalone's namespace, remove old symlinks, clean manifest entries. If any step fails, roll back to pre-capture state.
 
-Detailed algorithm in [docs/design/plugin-capture.md](./design/plugin-capture.md).
+Detailed algorithm in [docs/designs/completed/plugin-capture.md](./designs/completed/plugin-capture.md).
 
 ### v2.0 Redesign — Claude Code Plugin Adoption
 
