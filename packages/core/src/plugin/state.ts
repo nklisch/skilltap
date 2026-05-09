@@ -6,6 +6,7 @@ import type {
 } from "../schemas/plugins";
 import { loadState } from "../state/load";
 import { saveState } from "../state/save";
+import { DEFAULT_AGENT_ID } from "../symlink";
 import { err, ok, type Result, UserError } from "../types";
 
 // state.json is the only canonical store. Plugin-slice accessor: read/write just plugins[].
@@ -132,7 +133,7 @@ export function manifestToRecord(
         type: "agent",
         name: component.name,
         active: true,
-        platform: "claude-code",
+        platform: DEFAULT_AGENT_ID,
       });
     }
   }

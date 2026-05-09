@@ -7,6 +7,7 @@
  * (plugin install, lifecycle, status, doctor checks) references these types.
  */
 import { z } from "zod/v4";
+import { DEFAULT_AGENT_ID } from "../symlink";
 import { PLUGIN_FORMATS } from "./plugin";
 
 export const StoredSkillComponentSchema = z.object({
@@ -43,7 +44,7 @@ export const StoredAgentComponentSchema = z.object({
   type: z.literal("agent"),
   name: z.string(),
   active: z.boolean().default(true),
-  platform: z.string().default("claude-code"),
+  platform: z.string().default(DEFAULT_AGENT_ID),
 });
 
 export const StoredComponentSchema = z.union([

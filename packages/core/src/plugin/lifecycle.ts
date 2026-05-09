@@ -18,7 +18,7 @@ import type {
   StoredComponent,
   StoredMcpComponent,
 } from "../schemas/plugins";
-import { createAgentSymlinks, removeAgentSymlinks } from "../symlink";
+import { createAgentSymlinks, DEFAULT_AGENT_ID, removeAgentSymlinks } from "../symlink";
 import { err, ok, type Result, UserError } from "../types";
 import { injectMcpServers, removeMcpServers } from "./mcp-inject";
 import {
@@ -124,13 +124,13 @@ export async function removeInstalledPlugin(
     } else if (component.type === "agent") {
       const activePath = agentDefPath(
         component.name,
-        "claude-code",
+        DEFAULT_AGENT_ID,
         scope,
         projectRoot,
       );
       const disabledPath = agentDefDisabledPath(
         component.name,
-        "claude-code",
+        DEFAULT_AGENT_ID,
         scope,
         projectRoot,
       );
@@ -260,13 +260,13 @@ export async function toggleInstalledComponent(
   } else if (component.type === "agent") {
     const activePath = agentDefPath(
       component.name,
-      "claude-code",
+      DEFAULT_AGENT_ID,
       scope,
       projectRoot,
     );
     const disabledPath = agentDefDisabledPath(
       component.name,
-      "claude-code",
+      DEFAULT_AGENT_ID,
       scope,
       projectRoot,
     );

@@ -34,6 +34,8 @@ async function clearForSymlink(
   return true;
 }
 
+export const DEFAULT_AGENT_ID = "claude-code" as const;
+
 export const AGENT_PATHS: Record<string, string> = {
   "claude-code": ".claude/skills",
   cursor: ".cursor/skills",

@@ -22,6 +22,7 @@ import type { McpServerEntry, PluginManifest } from "./schemas/plugin";
 import { loadState } from "./state/load";
 import { saveState } from "./state/save";
 import type { State, StoredMcpStandalone } from "./state/schema";
+import { DEFAULT_AGENT_ID } from "./symlink";
 import { err, ok, type Result, UserError } from "./types";
 
 export interface McpInstallOptions {
@@ -143,7 +144,7 @@ export async function installMcp(
     const agents =
       options.agents && options.agents.length > 0
         ? options.agents
-        : ["claude-code"];
+        : [DEFAULT_AGENT_ID];
 
     const injectResult = await injectMcpServers({
       pluginName: ref.slug,

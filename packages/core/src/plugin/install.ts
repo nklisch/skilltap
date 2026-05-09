@@ -15,6 +15,7 @@ import { scanStatic } from "../security/static";
 import { wrapShell } from "../shell";
 import { loadState } from "../state/load";
 import { createAgentSymlinks } from "../symlink";
+import { DEFAULT_AGENT_ID } from "../symlink";
 import { err, ok, type Result, type ScanError, UserError } from "../types";
 import {
   applyCapture,
@@ -286,7 +287,7 @@ export async function installPlugin(
     const src = join(contentDir, component.path);
     const dest = agentDefPath(
       component.name,
-      "claude-code",
+      DEFAULT_AGENT_ID,
       scope,
       projectRoot,
     );
