@@ -396,7 +396,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 43  | Claude Code plugin adoption                    | done     | 2026-05-08 |
 | 44  | TUI dashboard (Ink)                            | done     | 2026-05-08 |
 | 45  | Migrate command rewrite                        | done     | 2026-05-08 |
-| 46  | Polish + docs + release                        | pending  | — |
+| 46  | Polish + docs + release                        | code complete; 46.10/46.11 user-gated | 2026-05-08 |
 
 ---
 
