@@ -1,5 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
+import { z } from "zod/v4";
 import { getConfigDir, loadSkillState } from "./config";
 import { fetch as gitFetch, revParse } from "./git";
 import {
@@ -14,11 +15,13 @@ type GitFetchFn = typeof gitFetch;
 type RevParseFn = typeof revParse;
 type FetchPackageMetadataFn = typeof fetchPackageMetadata;
 
-interface SkillUpdateCache {
-  checkedAt: string;
-  updatesAvailable: string[];
-  projectRoot: string | null;
-}
+const SkillUpdateCacheSchema = z.object({
+  checkedAt: z.string(),
+  updatesAvailable: z.array(z.string()),
+  projectRoot: z.string().nullable(),
+});
+
+type SkillUpdateCache = z.infer<typeof SkillUpdateCacheSchema>;
 
 const SKILL_CHECK_CACHE_FILE = "skills-update-check.json";
 
@@ -28,7 +31,9 @@ async function readSkillCheckCache(
   const f = Bun.file(join(configDir, SKILL_CHECK_CACHE_FILE));
   if (!(await f.exists())) return null;
   try {
-    return (await f.json()) as SkillUpdateCache;
+    const raw: unknown = await f.json();
+    const result = SkillUpdateCacheSchema.safeParse(raw);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

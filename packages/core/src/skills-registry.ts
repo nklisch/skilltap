@@ -1,4 +1,5 @@
 import type { Config } from "./schemas/config";
+import { RegistryApiResponseSchema } from "./schemas/external/skills-registry";
 
 // ---------------------------------------------------------------------------
 // Registry protocol types
@@ -19,17 +20,6 @@ export type RegistrySkill = {
   source: string;
   /** Total install count (0 if unknown) */
   installs: number;
-};
-
-/** Raw API response shape that all registries must return. */
-type RegistryApiResponse = {
-  skills: Array<{
-    id: string;
-    name: string;
-    description?: string;
-    source: string;
-    installs: number;
-  }>;
 };
 
 /** A named registry that can search for skills. */
@@ -64,9 +54,9 @@ async function searchSkillsSh(
     const url = `${SKILLS_SH_BASE}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
     const res = await fetchWithTimeout(url);
     if (!res.ok) return [];
-    const data = (await res.json()) as RegistryApiResponse;
-    if (!data.skills || !Array.isArray(data.skills)) return [];
-    return data.skills.map((s) => ({
+    const parseResult = RegistryApiResponseSchema.safeParse(await res.json());
+    if (!parseResult.success || !parseResult.data.skills) return [];
+    return parseResult.data.skills.map((s) => ({
       id: s.id,
       name: s.name,
       description: s.description ?? "",
@@ -104,9 +94,9 @@ export function createCustomRegistry(
         const url = `${base}/api/search?q=${encodeURIComponent(query)}&limit=${limit}`;
         const res = await fetchWithTimeout(url);
         if (!res.ok) return [];
-        const data = (await res.json()) as RegistryApiResponse;
-        if (!data.skills || !Array.isArray(data.skills)) return [];
-        return data.skills.map((s) => ({
+        const parseResult = RegistryApiResponseSchema.safeParse(await res.json());
+        if (!parseResult.success || !parseResult.data.skills) return [];
+        return parseResult.data.skills.map((s) => ({
           id: s.id,
           name: s.name,
           description: s.description ?? "",

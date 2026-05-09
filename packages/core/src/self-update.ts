@@ -1,6 +1,7 @@
 import { basename, dirname, join } from "node:path";
 import { getConfigDir } from "./config";
 import { lsRemoteTags } from "./git";
+import { UpdateCacheSchema } from "./schemas/external/self-update";
 import { extractStderr } from "./shell";
 import { err, NetworkError, ok, type Result, UserError } from "./types";
 
@@ -10,11 +11,6 @@ export interface UpdateCheckResult {
   current: string;
   latest: string;
   type: UpdateType;
-}
-
-interface UpdateCache {
-  checkedAt: string;
-  latest: string;
 }
 
 const RELEASE_REPO_URL = "https://github.com/nklisch/skilltap.git";
@@ -38,12 +34,16 @@ function getUpdateType(current: string, latest: string): UpdateType | null {
   return null;
 }
 
+type UpdateCache = { checkedAt: string; latest: string };
+
 async function readCache(configDir: string): Promise<UpdateCache | null> {
   const file = join(configDir, CACHE_FILE);
   const f = Bun.file(file);
   if (!(await f.exists())) return null;
   try {
-    return (await f.json()) as UpdateCache;
+    const raw: unknown = await f.json();
+    const result = UpdateCacheSchema.safeParse(raw);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

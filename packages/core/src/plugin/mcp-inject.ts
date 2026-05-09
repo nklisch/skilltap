@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { debug } from "../debug";
 import { scopeBase } from "../paths";
+import { McpClientConfigSchema } from "../schemas/external/mcp-client-config";
 import type { StoredMcpComponent } from "../schemas/plugins";
 import { err, ok, type Result, UserError } from "../types";
 
@@ -133,18 +134,19 @@ async function readConfigJson(
     return err(new UserError(`Failed to read ${path}: ${e}`));
   }
 
-  let parsed: unknown;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(text);
+    raw = JSON.parse(text);
   } catch (e) {
     return err(new UserError(`Invalid JSON in ${path}: ${e}`));
   }
 
-  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+  const parseResult = McpClientConfigSchema.safeParse(raw);
+  if (!parseResult.success) {
     return err(new UserError(`Expected a JSON object in ${path}`));
   }
 
-  return ok(parsed as Record<string, unknown>);
+  return ok(parseResult.data as Record<string, unknown>);
 }
 
 async function writeConfigJson(

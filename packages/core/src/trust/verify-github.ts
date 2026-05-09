@@ -1,25 +1,12 @@
 import { join } from "node:path";
 import { $ } from "bun";
+import { GhAttestationSchema } from "../schemas/external/gh-attestation";
 
 export interface GitHubTrustData {
   owner: string;
   repo: string;
   workflow?: string;
   verifiedAt: string;
-}
-
-interface GhAttestationResult {
-  verificationResult?: {
-    statement?: {
-      predicate?: {
-        buildDefinition?: {
-          externalParameters?: {
-            workflow?: { path?: string };
-          };
-        };
-      };
-    };
-  };
 }
 
 /**
@@ -59,14 +46,16 @@ export async function verifyGitHubAttestation(
       return null;
     }
 
-    let results: GhAttestationResult[];
+    let rawParsed: unknown;
     try {
-      results = JSON.parse(raw) as GhAttestationResult[];
+      rawParsed = JSON.parse(raw);
     } catch {
       return null;
     }
 
-    if (!Array.isArray(results) || results.length === 0) return null;
+    const parseResult = GhAttestationSchema.safeParse(rawParsed);
+    if (!parseResult.success || parseResult.data.length === 0) return null;
+    const results = parseResult.data;
 
     const first = results[0];
     const workflow =

@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
+import { z } from "zod/v4";
 import type { Bundle } from "sigstore";
 import { VerificationError, verify } from "sigstore";
+import { InTotoStatementSchema } from "../schemas/external/in-toto";
 
 export interface NpmTrustData {
   publisher: string;
@@ -11,38 +13,17 @@ export interface NpmTrustData {
   verifiedAt: string;
 }
 
-interface NpmAttestationsResponse {
-  attestations?: Array<{
-    predicateType: string;
-    bundle: Bundle;
-  }>;
-}
-
-interface InTotoStatement {
-  subject?: Array<{
-    name?: string;
-    // npm SLSA attestations use sha512; older formats may use sha256
-    digest?: { sha256?: string; sha512?: string };
-  }>;
-  predicateType?: string;
-  predicate?: SlsaPredicateV1;
-}
-
-interface SlsaPredicateV1 {
-  buildDefinition?: {
-    externalParameters?: {
-      workflow?: {
-        repository?: string;
-        path?: string;
-        ref?: string;
-      };
-    };
-  };
-  runDetails?: {
-    builder?: { id?: string };
-    metadata?: { invocationId?: string };
-  };
-}
+const NpmAttestationsResponseSchema = z
+  .object({
+    attestations: z
+      .array(
+        z
+          .object({ predicateType: z.string(), bundle: z.unknown() })
+          .passthrough(),
+      )
+      .optional(),
+  })
+  .passthrough();
 
 const SLSA_PREDICATE_V1 = "https://slsa.dev/provenance/v1";
 const NPM_ATTESTATIONS_BASE =
@@ -73,20 +54,22 @@ export async function verifyNpmProvenance(
     if (response.status === 404) return null;
     if (!response.ok) return null;
 
-    let data: NpmAttestationsResponse;
+    let rawData: unknown;
     try {
-      data = (await response.json()) as NpmAttestationsResponse;
+      rawData = await response.json();
     } catch {
       return null;
     }
+    const attestationsResult = NpmAttestationsResponseSchema.safeParse(rawData);
+    if (!attestationsResult.success) return null;
 
-    const attestations = data.attestations ?? [];
+    const attestations = attestationsResult.data.attestations ?? [];
     const slsaAttestation = attestations.find(
       (a) => a.predicateType === SLSA_PREDICATE_V1,
     );
     if (!slsaAttestation) return null;
 
-    const bundle = slsaAttestation.bundle;
+    const bundle = slsaAttestation.bundle as Bundle;
 
     // Verify the Sigstore bundle (certificate chain + transparency log + DSSE signature)
     let signer: Awaited<ReturnType<typeof verify>>;
@@ -163,11 +146,13 @@ export async function verifyNpmProvenance(
   }
 }
 
-function decodeInTotoStatement(payload?: string): InTotoStatement | null {
+function decodeInTotoStatement(payload?: string): ReturnType<typeof InTotoStatementSchema.parse> | null {
   if (!payload) return null;
   try {
     const decoded = Buffer.from(payload, "base64").toString("utf-8");
-    return JSON.parse(decoded) as InTotoStatement;
+    const raw: unknown = JSON.parse(decoded);
+    const result = InTotoStatementSchema.safeParse(raw);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }

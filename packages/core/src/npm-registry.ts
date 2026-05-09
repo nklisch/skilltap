@@ -1,7 +1,9 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod/v4";
 import { $ } from "bun";
 import { debug } from "./debug";
+import { NpmPackageMetadataSchema } from "./schemas/external/npm-registry";
 import { extractStderr } from "./shell";
 import type { Result } from "./types";
 import { err, NetworkError, ok, UserError } from "./types";
@@ -107,31 +109,36 @@ export async function fetchPackageMetadata(
     return err(new NetworkError("Invalid response from npm registry."));
   }
 
-  const raw = data as Record<string, unknown>;
-  const distTags = (raw["dist-tags"] as Record<string, string>) ?? {};
-  const rawVersions = (raw.versions as Record<string, unknown>) ?? {};
+  const parseResult = NpmPackageMetadataSchema.safeParse(data);
+  if (!parseResult.success) {
+    return err(
+      new NetworkError(
+        `Malformed npm registry response: ${z.prettifyError(parseResult.error)}`,
+      ),
+    );
+  }
+  const raw = parseResult.data;
+  const distTags = raw["dist-tags"] ?? {};
+  const rawVersions = raw.versions ?? {};
 
   const versions: Record<string, NpmVersionInfo> = {};
-  for (const [ver, info] of Object.entries(rawVersions)) {
-    const v = info as Record<string, unknown>;
-    const dist = v.dist as Record<string, unknown> | undefined;
+  for (const [ver, entry] of Object.entries(rawVersions)) {
+    const dist = entry.dist;
     if (!dist?.tarball) continue;
-    const npmUser = v._npmUser as { name?: string } | undefined;
     versions[ver] = {
       version: ver,
       dist: {
-        tarball: dist.tarball as string,
-        integrity: (dist.integrity as string) ?? "",
-        attestations:
-          dist.attestations as NpmVersionInfo["dist"]["attestations"],
+        tarball: dist.tarball,
+        integrity: dist.integrity ?? "",
+        attestations: dist.attestations as NpmVersionInfo["dist"]["attestations"],
       },
-      npmUser: npmUser?.name,
+      npmUser: entry._npmUser?.name,
     };
   }
 
   return ok({
-    name: (raw.name as string) ?? name,
-    description: (raw.description as string) ?? "",
+    name: raw.name ?? name,
+    description: raw.description ?? "",
     distTags,
     versions,
   });

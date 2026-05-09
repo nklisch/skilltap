@@ -7,6 +7,7 @@ import {
   parseNamespacedKey,
   removeMcpServers,
 } from "../../plugin/mcp-inject";
+import { McpClientConfigSchema } from "../../schemas/external/mcp-client-config";
 import type { State } from "../../state/schema";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
@@ -31,17 +32,15 @@ async function readMcpServersFromConfig(
   } catch {
     return new Set();
   }
-  let parsed: unknown;
+  let raw: unknown;
   try {
-    parsed = JSON.parse(text);
+    raw = JSON.parse(text);
   } catch {
     return new Set();
   }
-  if (typeof parsed !== "object" || parsed === null) return new Set();
-  const obj = parsed as Record<string, unknown>;
-  const servers = obj.mcpServers;
-  if (typeof servers !== "object" || servers === null) return new Set();
-  return new Set(Object.keys(servers as Record<string, unknown>));
+  const parseResult = McpClientConfigSchema.safeParse(raw);
+  if (!parseResult.success || !parseResult.data.mcpServers) return new Set();
+  return new Set(Object.keys(parseResult.data.mcpServers));
 }
 
 export async function checkMcpConsistency(
