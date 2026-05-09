@@ -173,20 +173,6 @@ export async function resolveAgentInteractive(
   return undefined;
 }
 
-/** Resolve agent for semantic scanning: exit if semantic scan requires agent but none configured. */
-export async function resolveAgentForAgentMode(
-  config: Config,
-): Promise<AgentAdapter> {
-  const agentResult = await resolveAgent(config);
-  if (!agentResult.ok || !agentResult.value) {
-    errorLine(
-      "Semantic scanning requires security.agent_cli to be set. Run 'skilltap config' to configure.",
-    );
-    process.exit(1);
-  }
-  return agentResult.value;
-}
-
 /** Load installed skills and find by name, or exit with a contextual error. */
 export async function getInstalledSkillOrExit(
   name: string,

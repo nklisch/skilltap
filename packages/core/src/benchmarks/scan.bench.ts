@@ -97,9 +97,7 @@ const linesNeeded = Math.ceil(
 );
 const LARGE_DIFF = DIFF_HEADER + DIFF_LINE.repeat(linesNeeded);
 
-// 4. installed.json with 100 skills as a baseline fixture for loadSkillState.
-//    No state.json is written, so loadSkillState reads from the empty default —
-//    this measures the cold-load happy path, not the v0.x fallback.
+// 4. state.json with 100 skills as a baseline fixture for loadSkillState.
 const CONFIG_DIR = join(TMP, "config");
 await mkdir(join(CONFIG_DIR, "skilltap"), { recursive: true });
 
@@ -115,16 +113,18 @@ const baseSkill = {
   installedAt: "2025-01-01T00:00:00.000Z",
   updatedAt: "2025-01-01T00:00:00.000Z",
 };
-const installedJson = {
-  version: 1,
+const stateJson = {
+  version: 2,
   skills: Array.from({ length: 100 }, (_, i) => ({
     ...baseSkill,
     name: `skill-${String(i).padStart(3, "0")}`,
   })),
+  plugins: [],
+  mcpServers: [],
 };
 await writeFile(
-  join(CONFIG_DIR, "skilltap", "installed.json"),
-  JSON.stringify(installedJson, null, 2),
+  join(CONFIG_DIR, "skilltap", "state.json"),
+  JSON.stringify(stateJson, null, 2),
 );
 
 // loadSkillState reads from XDG_CONFIG_HOME

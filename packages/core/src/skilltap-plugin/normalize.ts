@@ -8,30 +8,30 @@ import type {
   PluginSkillComponent,
 } from "../schemas/plugin";
 import { ok, type Result, type UserError } from "../types";
-import type { PluginManifestV2, PluginV2Server } from "./schema";
+import type { SkilltapPluginManifest, SkilltapServer } from "./schema";
 
-// Convert a PluginManifestV2 (native v2.0 format) into the internal
+// Convert a SkilltapPluginManifest (native skilltap format) into the internal
 // PluginManifest used by the existing install pipeline. Agents are read
 // from disk to populate frontmatter (mirrors parse-claude's behavior).
 //
 // repoRoot is the directory containing `.skilltap/<name>.toml`. Plugin paths
-// in the v2 manifest are relative to repoRoot.
-export async function pluginV2ToManifest(
-  v2: PluginManifestV2,
+// in the manifest are relative to repoRoot.
+export async function skilltapPluginToManifest(
+  manifest: SkilltapPluginManifest,
   repoRoot: string,
 ): Promise<Result<PluginManifest, UserError>> {
-  const skillComponents = await collectSkills(v2, repoRoot);
+  const skillComponents = await collectSkills(manifest, repoRoot);
   if (!skillComponents.ok) return skillComponents;
 
-  const mcpComponents = v2.servers.map(serverToComponent);
+  const mcpComponents = manifest.servers.map(serverToComponent);
 
-  const agentResult = await collectAgents(v2, repoRoot);
+  const agentResult = await collectAgents(manifest, repoRoot);
   if (!agentResult.ok) return agentResult;
 
   return ok({
-    name: v2.name,
-    version: v2.version,
-    description: v2.description,
+    name: manifest.name,
+    version: manifest.version,
+    description: manifest.description,
     format: "skilltap",
     pluginRoot: repoRoot,
     components: [
@@ -43,11 +43,11 @@ export async function pluginV2ToManifest(
 }
 
 async function collectSkills(
-  v2: PluginManifestV2,
+  manifest: SkilltapPluginManifest,
   repoRoot: string,
 ): Promise<Result<PluginSkillComponent[], UserError>> {
   const components: PluginSkillComponent[] = [];
-  for (const declared of v2.skills) {
+  for (const declared of manifest.skills) {
     const absDir = resolve(repoRoot, declared.path);
     let scanned: Awaited<ReturnType<typeof scan>> = [];
     try {
@@ -78,7 +78,7 @@ async function collectSkills(
   return ok(components);
 }
 
-function serverToComponent(server: PluginV2Server): PluginMcpComponent {
+function serverToComponent(server: SkilltapServer): PluginMcpComponent {
   if (server.type === "http") {
     return {
       type: "mcp",
@@ -103,14 +103,14 @@ function serverToComponent(server: PluginV2Server): PluginMcpComponent {
 }
 
 async function collectAgents(
-  v2: PluginManifestV2,
+  manifest: SkilltapPluginManifest,
   repoRoot: string,
 ): Promise<Result<PluginAgentComponent[], UserError>> {
-  if (v2.agents.length === 0) return ok([]);
+  if (manifest.agents.length === 0) return ok([]);
   const components: PluginAgentComponent[] = [];
   // Group declared agents by parent dir; reuse parseAgentDefinitions per dir.
   const dirs = new Set<string>();
-  for (const a of v2.agents) {
+  for (const a of manifest.agents) {
     dirs.add(resolve(repoRoot, a.path).replace(/\/[^/]+$/, ""));
   }
   for (const dir of dirs) {
@@ -119,7 +119,7 @@ async function collectAgents(
     components.push(...result.value);
   }
   // Filter to only declared agents, by name.
-  const declaredNames = new Set(v2.agents.map((a) => a.name));
+  const declaredNames = new Set(manifest.agents.map((a) => a.name));
   return ok(components.filter((c) => declaredNames.has(c.name)));
 }
 

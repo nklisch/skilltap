@@ -33,15 +33,9 @@ export const infoCommand = defineCommand({
       description: "Name of the skill, plugin, or MCP server",
     },
     json: { type: "boolean", default: false, description: "Output as JSON" },
-    project: {
-      type: "boolean",
-      default: false,
-      description: "Restrict lookup to project scope",
-    },
-    global: {
-      type: "boolean",
-      default: false,
-      description: "Restrict lookup to global scope",
+    scope: {
+      type: "string",
+      description: "Restrict lookup to a scope: 'global' or 'project'",
     },
   },
   async run({ args }) {
@@ -80,10 +74,9 @@ export const infoCommand = defineCommand({
     ];
 
     // ── Scope filters ────────────────────────────────────────────────────────
-    const scopeFilter = args.global
-      ? "global"
-      : args.project
-        ? "project"
+    const scopeFilter =
+      args.scope === "global" || args.scope === "project"
+        ? (args.scope as "global" | "project")
         : null;
 
     const filteredSkills = scopeFilter

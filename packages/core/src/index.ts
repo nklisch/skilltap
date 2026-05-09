@@ -35,7 +35,7 @@ export type { Output, OutputMode, OutputOptions, Progress } from "./output";
 export { pickMode } from "./output";
 export * from "./paths";
 export * from "./plugin";
-export * from "./plugin-v2";
+export * from "./skilltap-plugin";
 export * from "./policy";
 export * from "./remove";
 export * from "./scanner";

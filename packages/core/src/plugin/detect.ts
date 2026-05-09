@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { resolveSource } from "../adapters";
 import { makeTmpDir, removeTmpDir } from "../fs";
 import { clone, type GitError } from "../git";
-import { discoverSkilltapPlugins } from "../plugin-v2/discover";
+import { discoverSkilltapPlugins } from "../skilltap-plugin/discover";
 import type { PluginManifest } from "../schemas/plugin";
 import { err, ok, type Result, UserError } from "../types";
 import { parseClaudePlugin } from "./parse-claude";

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { pluginV2ToManifest } from "./normalize";
-import type { PluginManifestV2 } from "./schema";
+import { skilltapPluginToManifest } from "./normalize";
+import type { SkilltapPluginManifest } from "./schema";
 
 let repoRoot: string;
 beforeEach(async () => {
@@ -13,9 +13,9 @@ afterEach(async () => {
   await rm(repoRoot, { recursive: true, force: true });
 });
 
-describe("pluginV2ToManifest", () => {
-  test("converts a minimal v2 manifest", async () => {
-    const v2: PluginManifestV2 = {
+describe("skilltapPluginToManifest", () => {
+  test("converts a minimal manifest", async () => {
+    const manifest: SkilltapPluginManifest = {
       name: "minimal",
       version: "1.0.0",
       description: "",
@@ -24,7 +24,7 @@ describe("pluginV2ToManifest", () => {
       servers: [],
       agents: [],
     };
-    const result = await pluginV2ToManifest(v2, repoRoot);
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value).toMatchObject({
@@ -37,7 +37,7 @@ describe("pluginV2ToManifest", () => {
   });
 
   test("preserves declared skills when SKILL.md is missing", async () => {
-    const v2: PluginManifestV2 = {
+    const manifest: SkilltapPluginManifest = {
       name: "test",
       version: "1.0.0",
       description: "",
@@ -48,7 +48,7 @@ describe("pluginV2ToManifest", () => {
       servers: [],
       agents: [],
     };
-    const result = await pluginV2ToManifest(v2, repoRoot);
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
@@ -73,7 +73,7 @@ description: A real skill
 Body here.
 `,
     );
-    const v2: PluginManifestV2 = {
+    const manifest: SkilltapPluginManifest = {
       name: "test",
       version: "1.0.0",
       description: "",
@@ -84,7 +84,7 @@ Body here.
       servers: [],
       agents: [],
     };
-    const result = await pluginV2ToManifest(v2, repoRoot);
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
@@ -99,7 +99,7 @@ Body here.
   });
 
   test("converts stdio servers", async () => {
-    const v2: PluginManifestV2 = {
+    const manifest: SkilltapPluginManifest = {
       name: "test",
       version: "1.0.0",
       description: "",
@@ -116,7 +116,7 @@ Body here.
       ],
       agents: [],
     };
-    const result = await pluginV2ToManifest(v2, repoRoot);
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
@@ -130,7 +130,7 @@ Body here.
   });
 
   test("converts http servers", async () => {
-    const v2: PluginManifestV2 = {
+    const manifest: SkilltapPluginManifest = {
       name: "test",
       version: "1.0.0",
       description: "",
@@ -146,7 +146,7 @@ Body here.
       ],
       agents: [],
     };
-    const result = await pluginV2ToManifest(v2, repoRoot);
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);
@@ -173,7 +173,7 @@ Body of agent prompt.
 `,
     );
 
-    const v2: PluginManifestV2 = {
+    const manifest: SkilltapPluginManifest = {
       name: "test",
       version: "1.0.0",
       description: "",
@@ -182,7 +182,7 @@ Body of agent prompt.
       servers: [],
       agents: [{ name: "reviewer", path: "./agents/reviewer.md" }],
     };
-    const result = await pluginV2ToManifest(v2, repoRoot);
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.components).toHaveLength(1);

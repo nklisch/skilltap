@@ -1,9 +1,9 @@
 import { discoverPublishablePlugins } from "../manifest/publish";
 import type { PluginManifest } from "../schemas/plugin";
 import { ok, type Result, type UserError } from "../types";
-import { pluginV2ToManifest } from "./normalize";
+import { skilltapPluginToManifest } from "./normalize";
 
-// Discover all publishable v2.0 plugins in a repo and normalize them to
+// Discover all publishable plugins in a repo and normalize them to
 // the internal PluginManifest type. Rejected files (publish=false, invalid)
 // are surfaced separately so callers can warn or ignore.
 export interface SkilltapDiscovery {
@@ -17,8 +17,8 @@ export async function discoverSkilltapPlugins(
   const found = await discoverPublishablePlugins(repoRoot);
 
   const manifests: PluginManifest[] = [];
-  for (const v2 of found.publishable) {
-    const result = await pluginV2ToManifest(v2, repoRoot);
+  for (const manifest of found.publishable) {
+    const result = await skilltapPluginToManifest(manifest, repoRoot);
     if (!result.ok) return result;
     manifests.push(result.value);
   }

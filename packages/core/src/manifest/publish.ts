@@ -2,13 +2,13 @@ import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import { parse } from "smol-toml";
 import {
-  type PluginManifestV2,
-  PluginManifestV2Schema,
-} from "../plugin-v2/schema";
+  type SkilltapPluginManifest,
+  SkilltapPluginManifestSchema,
+} from "../skilltap-plugin/schema";
 import { publishDir } from "./paths";
 
 export interface PublishDiscovery {
-  publishable: PluginManifestV2[];
+  publishable: SkilltapPluginManifest[];
   rejected: { path: string; reason: string }[];
 }
 
@@ -20,7 +20,7 @@ export async function discoverPublishablePlugins(
   repoRoot: string,
 ): Promise<PublishDiscovery> {
   const dir = publishDir(repoRoot);
-  const publishable: PluginManifestV2[] = [];
+  const publishable: SkilltapPluginManifest[] = [];
   const rejected: { path: string; reason: string }[] = [];
 
   // Bun.Glob.scan errors on non-existent cwd. Bail early if the dir is absent.
@@ -46,7 +46,7 @@ export async function discoverPublishablePlugins(
       rejected.push({ path, reason: `Invalid TOML: ${e}` });
       continue;
     }
-    const parsed = PluginManifestV2Schema.safeParse(raw);
+    const parsed = SkilltapPluginManifestSchema.safeParse(raw);
     if (!parsed.success) {
       rejected.push({
         path,

@@ -1,12 +1,12 @@
 /**
- * Subprocess tests for the `status` command (Unit 3.20 of v2.2-cleanup).
+ * Subprocess tests for the `status` command.
  *
  * Coverage:
  *   - default render shows skills + plugins + taps sections.
  *   - --json output is valid JSON with the expected shape.
  *   - --disabled filter limits to inactive items.
  *   - --active filter limits to active items.
- *   - --global / --project scope filters apply to skills and plugins.
+ *   - --scope global/project filters apply to skills and plugins.
  *   - --unmanaged switches to discovery view.
  *   - smart-scope inference: outside a git repo → global view; inside → project.
  *   - drift summary line surfaces when manifest disagrees with state.
@@ -135,7 +135,7 @@ describe("status --json", () => {
       );
 
       const { stdout } = await runSkilltap(
-        ["status", "--json", "--global"],
+        ["status", "--json", "--scope", "global"],
         homeDir,
         configDir,
         projectRoot,

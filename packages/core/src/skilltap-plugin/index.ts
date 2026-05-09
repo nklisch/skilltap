@@ -2,5 +2,5 @@ export {
   discoverSkilltapPlugins,
   type SkilltapDiscovery,
 } from "./discover";
-export { pluginV2ToManifest } from "./normalize";
+export { skilltapPluginToManifest } from "./normalize";
 export * from "./schema";

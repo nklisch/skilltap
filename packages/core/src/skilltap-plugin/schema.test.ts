@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
-  PluginManifestV2Schema,
-  PluginV2HttpServerSchema,
-  PluginV2ServerSchema,
-  PluginV2StdioServerSchema,
+  SkilltapHttpServerSchema,
+  SkilltapPluginManifestSchema,
+  SkilltapServerSchema,
+  SkilltapStdioServerSchema,
 } from "./schema";
 
 const VALID_PLUGIN = {
@@ -23,9 +23,9 @@ const VALID_PLUGIN = {
   agents: [{ name: "reviewer", path: "./agents/reviewer.md" }],
 };
 
-describe("PluginV2StdioServerSchema", () => {
+describe("SkilltapStdioServerSchema", () => {
   test("accepts a minimal stdio server", () => {
-    const result = PluginV2StdioServerSchema.safeParse({
+    const result = SkilltapStdioServerSchema.safeParse({
       name: "db",
       command: "node",
     });
@@ -38,7 +38,7 @@ describe("PluginV2StdioServerSchema", () => {
   });
 
   test("accepts a fully-populated stdio server", () => {
-    const result = PluginV2StdioServerSchema.safeParse({
+    const result = SkilltapStdioServerSchema.safeParse({
       type: "stdio",
       name: "db",
       command: "node",
@@ -49,14 +49,14 @@ describe("PluginV2StdioServerSchema", () => {
   });
 
   test("rejects without command", () => {
-    const result = PluginV2StdioServerSchema.safeParse({ name: "db" });
+    const result = SkilltapStdioServerSchema.safeParse({ name: "db" });
     expect(result.success).toBe(false);
   });
 });
 
-describe("PluginV2HttpServerSchema", () => {
+describe("SkilltapHttpServerSchema", () => {
   test("accepts a minimal http server", () => {
-    const result = PluginV2HttpServerSchema.safeParse({
+    const result = SkilltapHttpServerSchema.safeParse({
       type: "http",
       name: "search",
       url: "https://search.example.com/mcp",
@@ -66,7 +66,7 @@ describe("PluginV2HttpServerSchema", () => {
   });
 
   test("accepts an http server with headers", () => {
-    const result = PluginV2HttpServerSchema.safeParse({
+    const result = SkilltapHttpServerSchema.safeParse({
       type: "http",
       name: "search",
       url: "https://search.example.com/mcp",
@@ -76,7 +76,7 @@ describe("PluginV2HttpServerSchema", () => {
   });
 
   test("rejects without type", () => {
-    const result = PluginV2HttpServerSchema.safeParse({
+    const result = SkilltapHttpServerSchema.safeParse({
       name: "search",
       url: "https://...",
     });
@@ -84,9 +84,9 @@ describe("PluginV2HttpServerSchema", () => {
   });
 });
 
-describe("PluginV2ServerSchema (union)", () => {
+describe("SkilltapServerSchema (union)", () => {
   test("accepts stdio entries", () => {
-    const result = PluginV2ServerSchema.safeParse({
+    const result = SkilltapServerSchema.safeParse({
       type: "stdio",
       name: "db",
       command: "node",
@@ -95,7 +95,7 @@ describe("PluginV2ServerSchema (union)", () => {
   });
 
   test("accepts http entries", () => {
-    const result = PluginV2ServerSchema.safeParse({
+    const result = SkilltapServerSchema.safeParse({
       type: "http",
       name: "search",
       url: "https://...",
@@ -104,9 +104,9 @@ describe("PluginV2ServerSchema (union)", () => {
   });
 });
 
-describe("PluginManifestV2Schema", () => {
+describe("SkilltapPluginManifestSchema", () => {
   test("accepts a fully populated plugin manifest", () => {
-    const result = PluginManifestV2Schema.safeParse(VALID_PLUGIN);
+    const result = SkilltapPluginManifestSchema.safeParse(VALID_PLUGIN);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.name).toBe("team-toolkit");
@@ -119,13 +119,13 @@ describe("PluginManifestV2Schema", () => {
 
   test("publish defaults to false", () => {
     const { publish: _, ...rest } = VALID_PLUGIN;
-    const result = PluginManifestV2Schema.safeParse(rest);
+    const result = SkilltapPluginManifestSchema.safeParse(rest);
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.publish).toBe(false);
   });
 
   test("accepts a minimal plugin manifest", () => {
-    const result = PluginManifestV2Schema.safeParse({
+    const result = SkilltapPluginManifestSchema.safeParse({
       name: "minimal",
       version: "0.1.0",
     });
@@ -140,26 +140,26 @@ describe("PluginManifestV2Schema", () => {
 
   test("rejects invalid plugin name", () => {
     expect(
-      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "MyPlugin" })
+      SkilltapPluginManifestSchema.safeParse({ ...VALID_PLUGIN, name: "MyPlugin" })
         .success,
     ).toBe(false);
     expect(
-      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "my_plugin" })
+      SkilltapPluginManifestSchema.safeParse({ ...VALID_PLUGIN, name: "my_plugin" })
         .success,
     ).toBe(false);
     expect(
-      PluginManifestV2Schema.safeParse({ ...VALID_PLUGIN, name: "-leading" })
+      SkilltapPluginManifestSchema.safeParse({ ...VALID_PLUGIN, name: "-leading" })
         .success,
     ).toBe(false);
   });
 
   test("rejects without version", () => {
     const { version: _, ...rest } = VALID_PLUGIN;
-    expect(PluginManifestV2Schema.safeParse(rest).success).toBe(false);
+    expect(SkilltapPluginManifestSchema.safeParse(rest).success).toBe(false);
   });
 
   test("rejects invalid skill name pattern", () => {
-    const result = PluginManifestV2Schema.safeParse({
+    const result = SkilltapPluginManifestSchema.safeParse({
       ...VALID_PLUGIN,
       skills: [{ name: "Bad_Skill", path: "./x" }],
     });
@@ -167,7 +167,7 @@ describe("PluginManifestV2Schema", () => {
   });
 
   test("accepts mixed stdio + http servers", () => {
-    const result = PluginManifestV2Schema.safeParse({
+    const result = SkilltapPluginManifestSchema.safeParse({
       ...VALID_PLUGIN,
       servers: [
         { name: "db", type: "stdio", command: "node" },

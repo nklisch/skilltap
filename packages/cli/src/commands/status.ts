@@ -31,15 +31,9 @@ export default defineCommand({
       description: "Show only active items",
       default: false,
     },
-    global: {
-      type: "boolean",
-      description: "Show only global scope",
-      default: false,
-    },
-    project: {
-      type: "boolean",
-      description: "Show only project scope",
-      default: false,
+    scope: {
+      type: "string",
+      description: "Filter by scope: 'global' or 'project'",
     },
   },
   async run({ args }) {
@@ -50,7 +44,7 @@ export default defineCommand({
     if (args.unmanaged) {
       return runUnmanagedMode(
         out,
-        args as { global: boolean; project: boolean; json: boolean },
+        args as { scope?: string; json: boolean },
         projectRoot,
       );
     }
@@ -77,18 +71,13 @@ export default defineCommand({
       };
     }
 
-    // Apply scope filters
-    if (args.global) {
+    // Apply scope filter
+    if (args.scope === "global" || args.scope === "project") {
+      const scopeVal = args.scope;
       report = {
         ...report,
-        skills: report.skills.filter((s) => s.scope === "global"),
-        plugins: report.plugins.filter((p) => p.scope === "global"),
-      };
-    } else if (args.project) {
-      report = {
-        ...report,
-        skills: report.skills.filter((s) => s.scope === "project"),
-        plugins: report.plugins.filter((p) => p.scope === "project"),
+        skills: report.skills.filter((s) => s.scope === scopeVal),
+        plugins: report.plugins.filter((p) => p.scope === scopeVal),
       };
     }
 
@@ -228,14 +217,15 @@ function shorten(path: string): string {
 
 async function runUnmanagedMode(
   out: Output,
-  args: { global: boolean; project: boolean; json: boolean },
+  args: { scope?: string; json: boolean },
   projectRoot: string | undefined,
 ): Promise<void> {
-  const discoverOpts = args.global
-    ? { global: true as const, unmanagedOnly: true, projectRoot }
-    : args.project
-      ? { project: true as const, unmanagedOnly: true, projectRoot }
-      : { unmanagedOnly: true, projectRoot };
+  const discoverOpts =
+    args.scope === "global"
+      ? { global: true as const, unmanagedOnly: true, projectRoot }
+      : args.scope === "project"
+        ? { project: true as const, unmanagedOnly: true, projectRoot }
+        : { unmanagedOnly: true, projectRoot };
 
   const discoverResult = await discoverSkills(discoverOpts);
   if (!discoverResult.ok) {
