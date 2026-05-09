@@ -317,8 +317,9 @@ keep working — run `skilltap migrate` when ready.
 > (`[security.human]` and `[security.agent]`) with `--agent` activating
 > the agent-mode block. The preset table, `[[security.overrides]]`,
 > and `require_scan` are all still active. See
-> [SPEC.md → v2.0 Security](https://github.com/nklisch/skilltap/blob/main/docs/SPEC.md#v20-security)
-> for the actual shipped schema.
+> [SPEC.md → Security Scanning](https://github.com/nklisch/skilltap/blob/main/docs/SPEC.md#security-scanning)
+> for the canonical v2.2 schema (per-mode blocks, presets, `require_scan`,
+> and `--agent` were all removed in v2.2).
 
 ### Removed
 

@@ -113,7 +113,7 @@ See [SPEC.md — Skill Discovery](./SPEC.md#skill-discovery) for the full scanni
 
 A tap is a curated index — a git repo containing a `tap.json` (or Claude Code `marketplace.json`) that lists skill names, descriptions, repo URLs, and tags. Taps are how you share a curated collection. Your friends add your tap, they see your skills.
 
-See [SPEC.md — tap.json](./SPEC.md#tapjson) for the format specification.
+See [SPEC.md — Source Adapters](./SPEC.md#source-adapters) for the tap and `tap.json` format specification.
 
 ### Project manifest
 

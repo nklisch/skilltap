@@ -6,7 +6,7 @@ All v2.0 Zod schemas exist, parse, validate, and have unit tests. v1.0 schemas r
 
 ## Approach
 
-The schemas are already specified in [SPEC.md — v2.0](../SPEC.md#v20--tooling-surface-redesign) and [ARCH.md — v2.0 Schemas](../ARCH.md#v20-schemas-zod-4). This phase translates those specs into Zod 4 code with tests.
+The schemas are already specified in [SPEC.md — Project Manifest and Lockfile](../../SPEC.md#project-manifest-and-lockfile) and [ARCH.md — v2.0 Schemas](../../ARCH.md#v20-schemas-zod-4). This phase translates those specs into Zod 4 code with tests.
 
 **Deviation from ROADMAP.md 26.3:** The roadmap says "Keep v1.0 schemas in `core/src/schemas/v1/`." I am NOT moving v1.0 schemas in this phase. Reason: v1.0 schemas are heavily depended on across `install.ts`, `update.ts`, `policy.ts`, `lifecycle.ts`, etc. Moving them would require renaming imports across dozens of files, ballooning Phase 26 well beyond its stated scope. Instead, Phase 27 (migration) will add explicit v1.0 schema *copies* under `schemas/v1/` ONLY for the keys the migration command needs to read (config keys, installed.json shape, plugins.json shape). Existing in-place schemas continue to evolve through Phases 31+.
 

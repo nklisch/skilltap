@@ -116,7 +116,7 @@ skilltap status                        # rich snapshot: skills, plugins, MCPs, d
 
 To publish a repo as a plugin (skills + MCP servers + agent definitions),
 add `.skilltap/<plugin-name>.toml` with `publish = true`. See
-[the v2.0 spec](docs/SPEC.md#v20--tooling-surface-redesign) for the full
+[the spec](docs/SPEC.md#project-manifest-and-lockfile) for the full
 manifest format.
 
 If you've been on v0.x, run `skilltap migrate` to upgrade your global state

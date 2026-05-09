@@ -521,7 +521,7 @@ Phases 20–22 can be developed somewhat in parallel (parsing, storage, and MCP 
 
 ## v2.0 — Tooling-Surface Redesign (complete pending release)
 
-This is the major refactor that introduces the project manifest, drops the HTTP registry, retires "agent mode" as a concept, simplifies security config, and adds Cargo-style sync. See [VISION.md — v2.0](./VISION.md#v20-direction-simplification-unification-project-manifest), [SPEC.md — v2.0](./SPEC.md#v20--tooling-surface-redesign), and [ARCH.md — v2.0](./ARCH.md#v20-architecture-additions) for the design.
+This is the major refactor that introduces the project manifest, drops the HTTP registry, retires "agent mode" as a concept, simplifies security config, and adds Cargo-style sync. See [VISION.md — v2.0](./VISION.md#v20-direction-simplification-unification-project-manifest), [SPEC.md — CLI Commands](./SPEC.md#cli-commands), and [ARCH.md — v2.0](./ARCH.md#v20-architecture-additions) for the design.
 
 The phases are ordered for dependency. 26–28 are the data-layer foundation; 29 is the headline behavior (sync); 30–35 are user-facing additions; 36–38 are polish and release. Several phases can run in parallel — see the dependency graph below.
 
