@@ -1,6 +1,7 @@
 import { getTapInfo } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, table } from "../../ui/format";
+import { exitOnError } from "../../ui/exit";
 import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
@@ -24,11 +25,7 @@ export default defineCommand({
     const out = setupOutput(args);
 
     const result = await getTapInfo(args.name);
-    if (!result.ok) {
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     const info = result.value;
 
     if (args.json) {

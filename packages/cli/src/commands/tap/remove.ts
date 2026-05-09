@@ -2,6 +2,7 @@ import { cancel, isCancel } from "@clack/prompts";
 import { removeTap } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { footerConfirm as confirm } from "../../ui/footer";
+import { exitOnError } from "../../ui/exit";
 import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
@@ -40,11 +41,7 @@ export default defineCommand({
     }
 
     const result = await removeTap(args.name);
-    if (!result.ok) {
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     out.success(`Removed tap '${args.name}'`);
   },
 });

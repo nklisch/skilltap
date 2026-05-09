@@ -1,5 +1,6 @@
 import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { exitOnError } from "../ui/exit";
 import {
   collectRepeatedFlag,
   parseAlsoFlag,
@@ -60,11 +61,7 @@ export const moveCommand = defineCommand({
     }
 
     const result = await moveSkill(args.name, { to, fromProjectRoot, also });
-    if (!result.ok) {
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     const { from, to: destPath } = result.value;
     out.success(`Moved ${args.name}: ${from} → ${destPath}`);
   },

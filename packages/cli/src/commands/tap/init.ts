@@ -1,5 +1,6 @@
 import { initTap } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { exitOnError } from "../../ui/exit";
 import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
@@ -18,11 +19,7 @@ export default defineCommand({
     const out = setupOutput({ json: false, quiet: false });
 
     const result = await initTap(args.name);
-    if (!result.ok) {
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     out.success(`Created ${args.name}/`);
     out.info(`Edit ${args.name}/tap.json to add skills, then push:`);
     out.info(`  cd ${args.name} && git remote add origin <url> && git push`);

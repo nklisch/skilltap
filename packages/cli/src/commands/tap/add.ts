@@ -1,6 +1,7 @@
 import { intro, outro } from "@clack/prompts";
 import { addTap, loadConfig, parseGitHubTapShorthand } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { exitOnError } from "../../ui/exit";
 import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
@@ -52,13 +53,7 @@ export default defineCommand({
     const p = out.progress("Adding tap...");
 
     const result = await addTap(tapName, tapUrl);
-
-    if (!result.ok) {
-      p.fail("Failed.");
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out, { onError: () => p.fail("Failed.") });
     p.succeed("Done.");
     const typeLabel = "git";
     out.success(

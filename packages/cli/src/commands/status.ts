@@ -2,6 +2,7 @@ import type { DiscoveredSkill, Output, StatusReport } from "@skilltap/core";
 import { discoverSkills, gatherStatus } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi, table, termWidth, truncate } from "../ui/format";
+import { exitOnError } from "../ui/exit";
 import { tryFindProjectRoot } from "../ui/resolve";
 import { setupOutput } from "../ui/setup";
 
@@ -50,10 +51,7 @@ export default defineCommand({
     }
 
     const result = await gatherStatus();
-    if (!result.ok) {
-      out.error(result.error.message);
-      process.exit(1);
-    }
+    exitOnError(result, out);
     let report = result.value;
 
     // Apply --disabled / --active filters
