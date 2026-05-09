@@ -1,10 +1,39 @@
 import { mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { loadSkillState, saveSkillState } from "./config";
+import { debug } from "./debug";
+import {
+  manifestExists,
+  setManifestComponentActive,
+} from "./manifest";
 import { skillDisabledDir, skillInstallDir } from "./paths";
+import type { InstalledSkill } from "./schemas/installed";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
+
+async function syncDisableToManifest(
+  record: InstalledSkill,
+  active: boolean,
+  projectRoot: string | undefined,
+): Promise<void> {
+  if (record.scope !== "project") return;
+  if (!projectRoot) return;
+  if (!record.repo) return;
+  if (!(await manifestExists(projectRoot))) return;
+  await setManifestComponentActive(
+    projectRoot,
+    record.repo,
+    record.name,
+    active,
+    "skills",
+  ).catch((e) =>
+    debug("disable: setManifestComponentActive failed", {
+      name: record.name,
+      error: String(e),
+    }),
+  );
+}
 
 export type DisableOptions = {
   scope?: "global" | "project" | "linked";
@@ -68,6 +97,7 @@ export async function disableSkill(
 
   const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
+  await syncDisableToManifest(record, false, options.projectRoot);
 
   return ok(undefined);
 }
@@ -142,6 +172,7 @@ export async function enableSkill(
 
   const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
+  await syncDisableToManifest(record, true, options.projectRoot);
 
   return ok(undefined);
 }

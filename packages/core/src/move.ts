@@ -2,6 +2,12 @@ import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { $ } from "bun";
 import { loadSkillState, saveSkillState } from "./config";
+import { debug } from "./debug";
+import {
+  addSkillToManifest,
+  manifestExists,
+  removeSkillFromManifest,
+} from "./manifest";
 import { skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
@@ -185,5 +191,54 @@ export async function moveSkill(
   const saveTargetResult = await saveSkillState(targetInstalled, targetFileRoot);
   if (!saveTargetResult.ok) return saveTargetResult;
 
+  // Lifecycle drift fix (Unit 3.15): keep project manifest+lockfile in sync
+  // with the move. Globals are unmanaged, so a project→global move drops the
+  // entry from the source project; a global→project move adds it; a
+  // project→project move rewrites both. Best-effort.
+  await syncManifestForMove(record, newRecord, sourceProjectRoot, targetProjectRoot);
+
   return ok({ record: newRecord, from: sourcePath, to: destPath });
+}
+
+async function syncManifestForMove(
+  oldRecord: InstalledSkill,
+  newRecord: InstalledSkill,
+  sourceProjectRoot: string | undefined,
+  targetProjectRoot: string | undefined,
+): Promise<void> {
+  if (!oldRecord.repo) return;
+
+  // Drop from source project's manifest if applicable.
+  if (
+    oldRecord.scope === "project" &&
+    sourceProjectRoot &&
+    (await manifestExists(sourceProjectRoot))
+  ) {
+    await removeSkillFromManifest(sourceProjectRoot, oldRecord.repo).catch(
+      (e) =>
+        debug("move: removeSkillFromManifest failed", {
+          name: oldRecord.name,
+          error: String(e),
+        }),
+    );
+  }
+
+  // Add to target project's manifest if applicable. Globals are unmanaged.
+  if (
+    newRecord.scope === "project" &&
+    targetProjectRoot &&
+    newRecord.repo &&
+    (await manifestExists(targetProjectRoot))
+  ) {
+    await addSkillToManifest(targetProjectRoot, {
+      source: newRecord.repo,
+      ref: newRecord.ref,
+      sha: newRecord.sha,
+    }).catch((e) =>
+      debug("move: addSkillToManifest failed", {
+        name: newRecord.name,
+        error: String(e),
+      }),
+    );
+  }
 }

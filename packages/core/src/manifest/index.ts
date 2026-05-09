@@ -26,4 +26,5 @@ export {
   removeMcpFromManifest,
   removePluginFromManifest,
   removeSkillFromManifest,
+  setManifestComponentActive,
 } from "./update";

@@ -109,6 +109,20 @@ export type InstallOptions = {
    * override. Omitted with non-empty cross-source matches → install fails.
    */
   onPluginCaptureConflict?: PluginCaptureConflict;
+  /**
+   * Bypass capture entirely — install the plugin side-by-side with any
+   * existing standalones (same-source or cross-source). Threaded through to
+   * `installPlugin`'s `skipCapture`. Used by the CLI's `--no-capture` flag.
+   */
+  pluginSkipCapture?: boolean;
+  /**
+   * Override which plugin to select from a multi-plugin `.skilltap/` repo.
+   * When set, takes precedence over any selector parsed from the source string
+   * (e.g. `owner/repo:auth`). The CLI uses this to drive `:*` expansion: it
+   * detects all available plugins, then loops calling `installSkill` once per
+   * name with `selectName` set to the chosen plugin.
+   */
+  selectName?: string;
 };
 
 // Re-export the capture callback signatures so callers don't have to import
@@ -118,7 +132,7 @@ type PluginCaptureConfirm = (
 ) => Promise<boolean>;
 type PluginCaptureConflict = (
   bucket: import("./plugin/capture").CaptureBucket,
-) => Promise<"abort" | "force">;
+) => Promise<"abort" | "force" | "skip">;
 
 export type InstallResult = {
   records: InstalledSkill[];
@@ -576,6 +590,7 @@ export async function installSkill(
                     : undefined,
                   onCaptureConfirm: options.onPluginCaptureConfirm,
                   onCaptureConflict: options.onPluginCaptureConflict,
+                  skipCapture: options.pluginSkipCapture,
                   repo: match.skill.repo ?? null,
                   ref: null,
                   sha: null,
@@ -605,6 +620,7 @@ export async function installSkill(
                 skipScan: options.skipScan,
                 onCaptureConfirm: options.onPluginCaptureConfirm,
                 onCaptureConflict: options.onPluginCaptureConflict,
+                skipCapture: options.pluginSkipCapture,
                 repo: match.skill.repo ?? null,
                 ref: null,
                 sha: null,
@@ -710,7 +726,10 @@ export async function installSkill(
     debug("content fetched", { contentDir, sha, adapter: resolved.adapter });
 
     // 4. Plugin detection — before skill scanning
-    const pluginResult = await detectPlugin(contentDir);
+    const selector = options.selectName ?? resolved.pluginSelector;
+    const pluginResult = await detectPlugin(contentDir, {
+      selectName: selector === "*" ? undefined : selector,
+    });
     if (!pluginResult.ok) return pluginResult;
 
     if (pluginResult.value && options.onPluginDetected) {
@@ -734,6 +753,7 @@ export async function installSkill(
               : undefined,
             onCaptureConfirm: options.onPluginCaptureConfirm,
             onCaptureConflict: options.onPluginCaptureConflict,
+            skipCapture: options.pluginSkipCapture,
             repo: cloneUrl ?? resolved.url,
             ref: finalRef ?? null,
             sha,

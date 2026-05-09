@@ -122,7 +122,10 @@ export async function installMcp(
   }
 
   try {
-    const servers = await collectServers(contentDir);
+    const servers = await collectServers(
+      contentDir,
+      resolved.value.pluginSelector,
+    );
     if (!servers.ok) {
       if (cleanup) await cleanup();
       return servers;
@@ -327,9 +330,12 @@ export async function removeMcp(
 
 async function collectServers(
   contentDir: string,
+  pluginSelector?: string,
 ): Promise<Result<McpServerEntry[], UserError>> {
   // Prefer plugin manifest's [[servers]] (covers both Claude Code / Codex / .skilltap formats)
-  const pluginResult = await detectPlugin(contentDir);
+  const pluginResult = await detectPlugin(contentDir, {
+    selectName: pluginSelector === "*" ? undefined : pluginSelector,
+  });
   if (pluginResult.ok && pluginResult.value !== null) {
     const servers = (pluginResult.value as PluginManifest).components
       .filter(

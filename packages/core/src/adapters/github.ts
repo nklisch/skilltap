@@ -21,6 +21,18 @@ export function createGithubAdapter(gitHost: string): SourceAdapter {
         ? source.slice("github:".length)
         : source;
 
+      // Strip a trailing :<plugin-name> or :* (multi-plugin selector).
+      // The split is: take the last `:`, but only if what follows it
+      // does not contain `/` — that guards against `https://` / `git@`
+      // URL forms (which the github adapter doesn't accept anyway, but
+      // belt-and-suspenders for `github:owner/repo` stripping).
+      let pluginSelector: string | undefined;
+      const colonIdx = s.lastIndexOf(":");
+      if (colonIdx > 0 && !s.slice(colonIdx).includes("/")) {
+        pluginSelector = s.slice(colonIdx + 1);
+        s = s.slice(0, colonIdx);
+      }
+
       // Extract @ref suffix
       let ref: string | undefined;
       const atIdx = s.lastIndexOf("@");
@@ -41,7 +53,12 @@ export function createGithubAdapter(gitHost: string): SourceAdapter {
 
       const [owner, repo] = parts;
       const url = `${host}/${owner}/${repo}.git`;
-      return ok({ url, ...(ref ? { ref } : {}), adapter: "github" });
+      return ok({
+        url,
+        ...(ref ? { ref } : {}),
+        ...(pluginSelector ? { pluginSelector } : {}),
+        adapter: "github",
+      });
     },
   };
 }

@@ -243,6 +243,53 @@ export async function removeMcpFromLockfile(
   return ok(undefined);
 }
 
+// Promote (or update) the `components` field on an inline-table manifest
+// entry. Used by lifecycle commands (toggle, disable, enable) to track
+// per-component active state in the manifest. No-op without skilltap.toml or
+// when no entry for `source` exists. Lockfile is never touched (toggle
+// doesn't change the resolved sha).
+export async function setManifestComponentActive(
+  projectRoot: string,
+  source: string,
+  componentName: string,
+  active: boolean,
+  kind: "skills" | "plugins",
+): Promise<Result<void, UserError>> {
+  if (!(await manifestExists(projectRoot))) return ok(undefined);
+
+  const sourceKey = canonicalizeSourceKey(source);
+
+  const manifestResult = await loadManifest(projectRoot);
+  if (!manifestResult.ok) return ok(undefined);
+  const manifest = manifestResult.value;
+
+  const existing = manifest[kind][sourceKey];
+  if (existing === undefined) return ok(undefined);
+
+  // Promote string range → inline table that preserves the range as the ref
+  // hint. Or extend an existing inline table.
+  const detail =
+    typeof existing === "string"
+      ? { ref: undefined as string | undefined, components: {} }
+      : { ref: existing.ref, components: { ...(existing.components ?? {}) } };
+  detail.components[componentName] = active;
+
+  const newEntry: ManifestEntry = {
+    ...(detail.ref !== undefined ? { ref: detail.ref } : {}),
+    components: detail.components,
+  };
+
+  const updated: ProjectManifest = {
+    ...manifest,
+    [kind]: {
+      ...manifest[kind],
+      [sourceKey]: newEntry,
+    },
+  };
+  await saveManifest(projectRoot, updated);
+  return ok(undefined);
+}
+
 // ---------------------------------------------------------------------------
 
 async function updateManifestEntry(

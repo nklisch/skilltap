@@ -15,7 +15,13 @@ export {
   type ParsedComponentRef,
   parseComponentRef,
 } from "./component-ref";
-export { type DetectOptions, detectPlugin, listPluginOptions } from "./detect";
+export {
+  type DetectOptions,
+  detectAllPlugins,
+  detectPlugin,
+  discoverPluginsAt,
+  listPluginOptions,
+} from "./detect";
 export {
   installPlugin,
   type PluginInstallOptions,

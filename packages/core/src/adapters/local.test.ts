@@ -82,4 +82,20 @@ describe("localAdapter.resolve", () => {
       expect(result.error.message).toContain("Path is not a directory");
     }
   });
+
+  test("strips :plugin-name suffix from local path", async () => {
+    const result = await localAdapter.resolve(`${tmpDir}:auth`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe(tmpDir);
+    expect(result.value.pluginSelector).toBe("auth");
+  });
+
+  test("strips :* selector from local path", async () => {
+    const result = await localAdapter.resolve(`${tmpDir}:*`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe(tmpDir);
+    expect(result.value.pluginSelector).toBe("*");
+  });
 });

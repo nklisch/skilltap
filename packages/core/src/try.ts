@@ -101,7 +101,10 @@ async function finalize(
   sha: string | null,
   options: TryOptions,
 ): Promise<Result<TryReport, UserError | ScanError>> {
-  const pluginResult = await detectPlugin(contentDir);
+  const selector = resolved.pluginSelector;
+  const pluginResult = await detectPlugin(contentDir, {
+    selectName: selector === "*" ? undefined : selector,
+  });
   if (!pluginResult.ok) return pluginResult;
 
   const skills = await scan(contentDir);

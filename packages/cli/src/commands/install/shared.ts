@@ -169,14 +169,22 @@ async function preflightManifestValidity(
   await recoverManifest(projectRoot);
 }
 
+export type CaptureMode = "force" | "skip" | "prompt";
+
 /**
  * Build all install callbacks for a single source install.
  * Returns the callback bag to spread into installSkill() options,
  * plus the progress handle and a logScanResults function.
+ *
+ * `captureMode` (default `"prompt"`):
+ *   - `"force"` — auto-resolve cross-source capture by capturing.
+ *   - `"skip"`  — auto-abort cross-source capture; install side-by-side.
+ *   - `"prompt"` — TTY: ask the user. Non-TTY: abort (existing behavior).
  */
 export function buildSourceCallbacks(
   ctx: InstallContext,
   source: string,
+  captureMode: CaptureMode = "prompt",
 ): {
   progress: Progress;
   logScanResults: () => void;
@@ -211,53 +219,74 @@ export function buildSourceCallbacks(
 
   const forcedCaptureNames = new Set<string>();
 
+  const recordForced = (crossSource: CaptureBucket) => {
+    for (const c of crossSource.skills) {
+      forcedCaptureNames.add(c.standalone.name);
+    }
+    for (const c of crossSource.mcpServers) {
+      forcedCaptureNames.add(c.serverName);
+    }
+  };
+
+  let conflictCallback:
+    | ((
+        crossSource: CaptureBucket,
+      ) => Promise<"abort" | "force" | "skip">)
+    | undefined;
+
+  if (captureMode === "force") {
+    // Non-interactive --force-capture: always force.
+    conflictCallback = async (crossSource) => {
+      recordForced(crossSource);
+      return "force";
+    };
+  } else if (captureMode === "skip") {
+    // Non-interactive --no-capture: leave cross-source standalones alone,
+    // install plugin side-by-side.
+    conflictCallback = async () => "skip";
+  } else if (process.stdout.isTTY) {
+    // Default prompt path (TTY only).
+    conflictCallback = async (crossSource: CaptureBucket) => {
+      p.pause();
+      printCaptureConflict(crossSource, source);
+      const { isCancel: isCancelPrompt } = await import("@clack/prompts");
+      const { footerSelect: footerSel } = await import("../../ui/footer");
+      const decision = await footerSel<"abort" | "force" | "skip">({
+        message: "Cross-source capture conflict — what do you want to do?",
+        initialValue: "abort",
+        options: [
+          {
+            value: "abort" as const,
+            label: "Abort the install (recommended)",
+          },
+          {
+            value: "skip" as const,
+            label:
+              "Skip capture (install side-by-side, leave standalones intact)",
+          },
+          {
+            value: "force" as const,
+            label:
+              "Force capture (override and replace standalones from a different source)",
+          },
+        ],
+      });
+      if (isCancelPrompt(decision)) {
+        p.resume();
+        return "abort";
+      }
+      const resolved = decision as "abort" | "force" | "skip";
+      if (resolved === "force") recordForced(crossSource);
+      p.resume();
+      return resolved;
+    };
+  }
+
   const captureCallbacks: Pick<
     InstallOptions,
     "onPluginCaptureConflict" | "onPluginCaptureConfirm"
   > = {
-    ...(process.stdout.isTTY
-      ? {
-          async onPluginCaptureConflict(
-            crossSource: CaptureBucket,
-          ): Promise<"abort" | "force"> {
-            p.pause();
-            printCaptureConflict(crossSource, source);
-            const { isCancel: isCancelPrompt } = await import("@clack/prompts");
-            const { footerSelect: footerSel } = await import("../../ui/footer");
-            const decision = await footerSel<"abort" | "force">({
-              message:
-                "Cross-source capture conflict — what do you want to do?",
-              initialValue: "abort",
-              options: [
-                {
-                  value: "abort" as const,
-                  label: "Abort the install (recommended)",
-                },
-                {
-                  value: "force" as const,
-                  label:
-                    "Force capture (override and replace standalones from a different source)",
-                },
-              ],
-            });
-            if (isCancelPrompt(decision)) {
-              p.resume();
-              return "abort";
-            }
-            const resolved = decision as "abort" | "force";
-            if (resolved === "force") {
-              for (const c of crossSource.skills) {
-                forcedCaptureNames.add(c.standalone.name);
-              }
-              for (const c of crossSource.mcpServers) {
-                forcedCaptureNames.add(c.serverName);
-              }
-            }
-            p.resume();
-            return resolved;
-          },
-        }
-      : {}),
+    ...(conflictCallback ? { onPluginCaptureConflict: conflictCallback } : {}),
     async onPluginCaptureConfirm(bucket: CaptureBucket): Promise<boolean> {
       if (policy.yes) return true;
       p.pause();

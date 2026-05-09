@@ -294,3 +294,129 @@ describe("install capture — same-source capture", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// --force-capture / --no-capture (Unit 3.14)
+// ---------------------------------------------------------------------------
+
+describe("install capture — --force-capture and --no-capture flags", () => {
+  test("--force-capture --yes resolves cross-source conflict by capturing", async () => {
+    await disableBuiltinTap(configDir);
+    const helperRepo = await createHelperSkillRepo();
+    const pluginRepo = await createClaudePluginRepo();
+    try {
+      const seeded = await seedHelperFromCoreApi(
+        helperRepo.path,
+        homeDir,
+        configDir,
+        "skills-only",
+      );
+      expect(seeded).toBe(true);
+
+      const { exitCode } = await runSkilltap(
+        [
+          "install",
+          "plugin",
+          pluginRepo.path,
+          "--yes",
+          "--force-capture",
+          "--scope",
+          "global",
+        ],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      // Standalone gone (captured)
+      const after = await loadSkillState();
+      expect(after.ok).toBe(true);
+      if (!after.ok) return;
+      expect(after.value.skills.some((s) => s.name === "helper")).toBe(false);
+
+      // Plugin recorded
+      const plugins = await loadPlugins();
+      expect(plugins.ok).toBe(true);
+      if (!plugins.ok) return;
+      expect(
+        plugins.value.plugins.some((p) => p.name === "test-plugin"),
+      ).toBe(true);
+    } finally {
+      await helperRepo.cleanup();
+      await pluginRepo.cleanup();
+    }
+  });
+
+  test("--no-capture --yes installs side-by-side (standalone preserved)", async () => {
+    await disableBuiltinTap(configDir);
+    const helperRepo = await createHelperSkillRepo();
+    const pluginRepo = await createClaudePluginRepo();
+    try {
+      const seeded = await seedHelperFromCoreApi(
+        helperRepo.path,
+        homeDir,
+        configDir,
+        "skills-only",
+      );
+      expect(seeded).toBe(true);
+
+      const { exitCode } = await runSkilltap(
+        [
+          "install",
+          "plugin",
+          pluginRepo.path,
+          "--yes",
+          "--no-capture",
+          "--scope",
+          "global",
+        ],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(0);
+
+      // Standalone preserved
+      const after = await loadSkillState();
+      expect(after.ok).toBe(true);
+      if (!after.ok) return;
+      expect(after.value.skills.some((s) => s.name === "helper")).toBe(true);
+
+      // Plugin recorded
+      const plugins = await loadPlugins();
+      expect(plugins.ok).toBe(true);
+      if (!plugins.ok) return;
+      expect(
+        plugins.value.plugins.some((p) => p.name === "test-plugin"),
+      ).toBe(true);
+    } finally {
+      await helperRepo.cleanup();
+      await pluginRepo.cleanup();
+    }
+  });
+
+  test("--force-capture and --no-capture together exit 1 with clear error", async () => {
+    await disableBuiltinTap(configDir);
+    const pluginRepo = await createClaudePluginRepo();
+    try {
+      const { exitCode, stdout, stderr } = await runSkilltap(
+        [
+          "install",
+          "plugin",
+          pluginRepo.path,
+          "--yes",
+          "--force-capture",
+          "--no-capture",
+          "--scope",
+          "global",
+        ],
+        homeDir,
+        configDir,
+      );
+      expect(exitCode).toBe(1);
+      const combined = stdout + stderr;
+      expect(combined).toMatch(/--force-capture.*--no-capture|together|both/);
+    } finally {
+      await pluginRepo.cleanup();
+    }
+  });
+});

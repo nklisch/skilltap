@@ -90,6 +90,56 @@ describe("githubAdapter.resolve", () => {
       expect(result.error.message).toContain("Invalid GitHub source");
     }
   });
+
+  test("extracts :plugin-name suffix", async () => {
+    const result = await githubAdapter.resolve("owner/repo:auth");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://github.com/owner/repo.git");
+    expect(result.value.pluginSelector).toBe("auth");
+    expect(result.value.ref).toBeUndefined();
+  });
+
+  test("extracts :* selector for all plugins", async () => {
+    const result = await githubAdapter.resolve("owner/repo:*");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://github.com/owner/repo.git");
+    expect(result.value.pluginSelector).toBe("*");
+  });
+
+  test("combines @ref and :plugin-name", async () => {
+    const result = await githubAdapter.resolve("owner/repo@v1.0:auth");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://github.com/owner/repo.git");
+    expect(result.value.ref).toBe("v1.0");
+    expect(result.value.pluginSelector).toBe("auth");
+  });
+
+  test("combines @ref and :* selector", async () => {
+    const result = await githubAdapter.resolve("owner/repo@main:*");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.ref).toBe("main");
+    expect(result.value.pluginSelector).toBe("*");
+  });
+
+  test("github: prefix combined with ref and selector", async () => {
+    const result = await githubAdapter.resolve("github:owner/repo@v2:auth");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.url).toBe("https://github.com/owner/repo.git");
+    expect(result.value.ref).toBe("v2");
+    expect(result.value.pluginSelector).toBe("auth");
+  });
+
+  test("plain owner/repo has no pluginSelector", async () => {
+    const result = await githubAdapter.resolve("owner/repo");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.pluginSelector).toBeUndefined();
+  });
 });
 
 describe("createGithubAdapter", () => {

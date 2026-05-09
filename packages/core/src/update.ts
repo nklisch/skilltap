@@ -5,6 +5,10 @@ import type { AgentAdapter } from "./agents/types";
 import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
+import {
+  addSkillToManifest,
+  manifestExists,
+} from "./manifest";
 import type { DiffStat } from "./git";
 import { diff, diffStat, fetch, pull, resetHard, revParse } from "./git";
 import {
@@ -799,6 +803,30 @@ export async function updateSkill(
       options.projectRoot,
     );
     if (!projectSave.ok) return projectSave;
+  }
+
+  // Lifecycle drift fix (Unit 3.15): refresh project manifest+lockfile entries
+  // for every project-scope skill that was updated. Best-effort — failures are
+  // logged and swallowed; the on-disk state has already been updated, so we
+  // never roll back over a manifest hiccup.
+  if (projectInstalled && options.projectRoot && result.updated.length > 0) {
+    const projectRoot = options.projectRoot;
+    if (await manifestExists(projectRoot)) {
+      for (const name of result.updated) {
+        const record = projectInstalled.skills.find((s) => s.name === name);
+        if (!record || !record.repo) continue;
+        await addSkillToManifest(projectRoot, {
+          source: record.repo,
+          ref: record.ref,
+          sha: record.sha,
+        }).catch((e) =>
+          debug("update: addSkillToManifest failed", {
+            name,
+            error: String(e),
+          }),
+        );
+      }
+    }
   }
 
   return ok(result);

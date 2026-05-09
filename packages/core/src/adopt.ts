@@ -4,9 +4,15 @@ import { $ } from "bun";
 import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
 import { scanAllAgentPlugins } from "./agent-plugins/registry";
 import { loadSkillState, saveSkillState } from "./config";
+import { debug } from "./debug";
 import type { DiscoverOptions, DiscoveredSkill } from "./discover";
 import { discoverSkills } from "./discover";
 import { revParse } from "./git";
+import {
+  addPluginToManifest,
+  addSkillToManifest,
+  manifestExists,
+} from "./manifest";
 import { scopeBase, skillInstallDir } from "./paths";
 import { addPlugin, loadPlugins, manifestToRecord, savePlugins } from "./plugin/state";
 import type { PluginRecord } from "./schemas/plugins";
@@ -18,6 +24,49 @@ import { AGENT_PATHS, createAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
 import type { ScanAllResult } from "./agent-plugins/registry";
+
+// Best-effort manifest+lockfile sync for adopted records. Mirrors the install
+// path: only writes when a project manifest already exists, and swallows
+// errors via `debug()` so a manifest hiccup never breaks the adopt flow.
+async function syncAdoptToManifest(
+  record: InstalledSkill,
+  projectRoot: string | undefined,
+): Promise<void> {
+  if (record.scope !== "project") return;
+  if (!projectRoot) return;
+  if (!record.repo) return;
+  if (!(await manifestExists(projectRoot))) return;
+  await addSkillToManifest(projectRoot, {
+    source: record.repo,
+    ref: record.ref,
+    sha: record.sha,
+  }).catch((e) =>
+    debug("adopt: addSkillToManifest failed", {
+      name: record.name,
+      error: String(e),
+    }),
+  );
+}
+
+async function syncAdoptPluginToManifest(
+  record: PluginRecord,
+  projectRoot: string | undefined,
+): Promise<void> {
+  if (record.scope !== "project") return;
+  if (!projectRoot) return;
+  if (!record.repo) return;
+  if (!(await manifestExists(projectRoot))) return;
+  await addPluginToManifest(projectRoot, {
+    source: record.repo,
+    ref: record.ref ?? null,
+    sha: record.sha ?? null,
+  }).catch((e) =>
+    debug("adopt: addPluginToManifest failed", {
+      name: record.name,
+      error: String(e),
+    }),
+  );
+}
 
 export type AdoptMode = "move" | "track-in-place";
 
@@ -194,6 +243,7 @@ export async function adoptSkill(
     installed.skills.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
+    await syncAdoptToManifest(record, projectRoot);
 
     return ok({ record, symlinksCreated });
   } else {
@@ -230,6 +280,7 @@ export async function adoptSkill(
     installed.skills.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
+    await syncAdoptToManifest(record, projectRoot);
 
     return ok({ record, symlinksCreated });
   }
@@ -363,6 +414,7 @@ export async function adoptSkillFromPath(
     installed.skills.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
+    await syncAdoptToManifest(record, projectRoot);
 
     return ok({ record, symlinksCreated });
   } else {
@@ -414,6 +466,7 @@ export async function adoptSkillFromPath(
     installed.skills.push(record);
     const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
+    await syncAdoptToManifest(record, projectRoot);
 
     return ok({ record, symlinksCreated });
   }
@@ -459,6 +512,7 @@ export async function adoptPlugin(
   const updated = addPlugin(pluginsResult.value, recordWithPath);
   const saveResult = await savePlugins(updated, projectRoot);
   if (!saveResult.ok) return saveResult;
+  await syncAdoptPluginToManifest(recordWithPath, projectRoot);
 
   return ok({ record: recordWithPath });
 }

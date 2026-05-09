@@ -2,7 +2,15 @@ import { rename } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "../config";
+import { debug } from "../debug";
 import { runDoctor, type DoctorResult } from "../doctor";
+import {
+  addMcpToLockfile,
+  addMcpToManifest,
+  addPluginToManifest,
+  addSkillToManifest,
+  manifestExists,
+} from "../manifest";
 import { parseWithResult } from "../schemas/index";
 import { type InstalledJson, InstalledJsonSchema } from "../schemas/installed";
 import { type PluginsJson, PluginsJsonSchema } from "../schemas/plugins";
@@ -219,6 +227,69 @@ async function migrateScopeState(
       ? join(projectRoot, ".agents", "state.json")
       : join(getConfigDir(), "state.json"),
   );
+
+  // Lifecycle drift fix (Unit 3.15): seed the project manifest+lockfile from
+  // the migrated state so subsequent `sync` runs see the same view. No-op
+  // without skilltap.toml or for global migrations. Best-effort.
+  if (projectRoot && (await manifestExists(projectRoot))) {
+    for (const skill of newState.skills) {
+      if (skill.scope !== "project") continue;
+      if (!skill.repo) continue;
+      await addSkillToManifest(projectRoot, {
+        source: skill.repo,
+        ref: skill.ref,
+        sha: skill.sha,
+      }).catch((e) =>
+        debug("migrate: addSkillToManifest failed", {
+          name: skill.name,
+          error: String(e),
+        }),
+      );
+    }
+    for (const plugin of newState.plugins) {
+      if (plugin.scope !== "project") continue;
+      if (!plugin.repo) continue;
+      await addPluginToManifest(projectRoot, {
+        source: plugin.repo,
+        ref: plugin.ref ?? null,
+        sha: plugin.sha ?? null,
+      }).catch((e) =>
+        debug("migrate: addPluginToManifest failed", {
+          name: plugin.name,
+          error: String(e),
+        }),
+      );
+    }
+    for (const mcp of preservedMcps) {
+      // Only entries with a `source` carry meaningful manifest semantics.
+      if (!mcp.source) continue;
+      await addMcpToManifest(projectRoot, {
+        name: mcp.name,
+        source: mcp.source,
+      }).catch((e) =>
+        debug("migrate: addMcpToManifest failed", {
+          name: mcp.name,
+          error: String(e),
+        }),
+      );
+      // Lockfile sha may be unknown for legacy MCP records — seed only when
+      // present to avoid producing an invalid lockfile entry.
+      const sha = (mcp as { sha?: string }).sha;
+      if (sha) {
+        await addMcpToLockfile(projectRoot, {
+          name: mcp.name,
+          source: mcp.source,
+          ref: "main",
+          sha,
+        }).catch((e) =>
+          debug("migrate: addMcpToLockfile failed", {
+            name: mcp.name,
+            error: String(e),
+          }),
+        );
+      }
+    }
+  }
 
   // Rename v1 files to .v1.bak (after state.json is safely written)
   if (markers.installedJson) {

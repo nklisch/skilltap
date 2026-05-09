@@ -233,7 +233,7 @@ describe("detectDrift — multi-item scenarios", () => {
     expect(kinds).toEqual(["add", "lock-orphan", "remove"]);
   });
 
-  test("inline-table manifest entry uses ref as range when range absent", () => {
+  test("inline-table manifest entry has range '*' (ref is the requested ref, not a range)", () => {
     const manifest: ProjectManifest = {
       ...EMPTY_MANIFEST,
       skills: { "github:n/foo": { ref: "main" } },
@@ -242,8 +242,58 @@ describe("detectDrift — multi-item scenarios", () => {
     expect(r.items).toHaveLength(1);
     expect(r.items[0]).toMatchObject({
       kind: "add",
-      declared: { ref: "main", range: "main" },
+      declared: { ref: "main", range: "*" },
     });
+  });
+
+  test("inline-table { ref = 'main' } + lockfile range '*' → no ref-mismatch", () => {
+    const manifest: ProjectManifest = {
+      ...EMPTY_MANIFEST,
+      skills: { "github:n/foo": { ref: "main" } },
+    };
+    const lockfile: Lockfile = {
+      ...EMPTY_LOCKFILE,
+      skill: [
+        {
+          source: "github:n/foo",
+          ref: "main",
+          sha: "abc123",
+          range: "*",
+        },
+      ],
+    };
+    const state: State = {
+      ...EMPTY_STATE,
+      skills: [SKILL({ repo: "github:n/foo", ref: "main", sha: "abc123" })],
+    };
+    const r = detectDrift(manifest, lockfile, state);
+    expect(r.inSync).toBe(true);
+    expect(r.items).toEqual([]);
+  });
+
+  test("genuine ref-mismatch: manifest pins ref='v1', lockfile resolves a different sha on v1 → lock-stale", () => {
+    const manifest: ProjectManifest = {
+      ...EMPTY_MANIFEST,
+      skills: { "github:n/foo": { ref: "v1" } },
+    };
+    const lockfile: Lockfile = {
+      ...EMPTY_LOCKFILE,
+      skill: [
+        {
+          source: "github:n/foo",
+          ref: "v1",
+          sha: "OLD_SHA",
+          range: "*",
+        },
+      ],
+    };
+    const state: State = {
+      ...EMPTY_STATE,
+      skills: [SKILL({ repo: "github:n/foo", ref: "v1", sha: "NEW_SHA" })],
+    };
+    const r = detectDrift(manifest, lockfile, state);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0].kind).toBe("lock-stale");
   });
 
   test("linked skills (repo=null) are excluded from drift", () => {

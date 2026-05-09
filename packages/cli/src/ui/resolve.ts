@@ -98,6 +98,25 @@ export function collectRepeatedFlag(
 }
 
 /**
+ * Returns true if `rawArgs` contains the literal flag `--<flag>`. Citty/mri
+ * intercepts `--no-*` patterns as negations of the base flag (so `--no-capture`
+ * sets `args.capture = false` rather than `args["no-capture"] = true`). When
+ * the flag NAME contains a hyphenated `no-` segment that is meant to be read
+ * literally — e.g. the design-mandated `--no-capture` boolean — call this
+ * helper on `rawArgs` instead of trusting the parsed `args` object.
+ */
+export function hasRawFlag(
+  rawArgs: readonly string[],
+  flag: string,
+): boolean {
+  const long = `--${flag}`;
+  for (const arg of rawArgs) {
+    if (arg === long) return true;
+  }
+  return false;
+}
+
+/**
  * Parse repeatable --also flag with agent validation. Falls back to config
  * defaults when the flag is absent.
  */

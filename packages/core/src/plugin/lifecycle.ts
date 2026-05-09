@@ -1,6 +1,11 @@
 import { mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { removePluginFromManifest } from "../manifest/update";
+import { debug } from "../debug";
+import { manifestExists } from "../manifest/load";
+import {
+  removePluginFromManifest,
+  setManifestComponentActive,
+} from "../manifest/update";
 import {
   agentDefDisabledPath,
   agentDefPath,
@@ -292,6 +297,30 @@ export async function toggleInstalledComponent(
     scope === "project" ? projectRoot : undefined,
   );
   if (!saveResult.ok) return saveResult;
+
+  // Lifecycle drift fix (Unit 3.15): track per-component active state in the
+  // project manifest so subsequent `sync` runs see the same view of which
+  // components are off. Lockfile is unaffected (toggle doesn't change sha).
+  if (
+    scope === "project" &&
+    projectRoot &&
+    record.repo &&
+    (await manifestExists(projectRoot))
+  ) {
+    await setManifestComponentActive(
+      projectRoot,
+      record.repo,
+      componentName,
+      nowActive,
+      "plugins",
+    ).catch((e) =>
+      debug("toggle: setManifestComponentActive failed", {
+        plugin: pluginName,
+        component: componentName,
+        error: String(e),
+      }),
+    );
+  }
 
   return ok({ component, nowActive, mcpAgents });
 }

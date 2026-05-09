@@ -23,7 +23,7 @@ function normalizeManifestEntry(
   if (typeof value === "string") {
     return { source, range: value };
   }
-  return { source, ref: value.ref, range: value.ref ?? "*" };
+  return { source, ref: value.ref, range: "*" };
 }
 
 function normalizeManifestTable(

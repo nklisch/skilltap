@@ -61,6 +61,10 @@ export type PluginInstallOptions = {
    *             into the same-source bucket and flow through the normal
    *             apply path; if `onCaptureConfirm` is provided it sees the
    *             merged set.
+   *   "skip"  — leave the cross-source standalones alone and continue
+   *             installing the plugin side-by-side. Same-source captures
+   *             still proceed via `onCaptureConfirm`. Used by the CLI's
+   *             `--no-capture` flag.
    * Omitted with non-empty cross-source conflicts → install fails with
    * a UserError. (Auto-confirm modes opt in by passing `() => "abort"`
    * explicitly; interactive modes that want force-override pass a real
@@ -68,7 +72,14 @@ export type PluginInstallOptions = {
    */
   onCaptureConflict?: (
     crossSource: CaptureBucket,
-  ) => Promise<"abort" | "force">;
+  ) => Promise<"abort" | "force" | "skip">;
+  /**
+   * Skip the entire capture phase. Same-source and cross-source standalones
+   * are left in place and the plugin installs side-by-side. Used by the CLI's
+   * `--no-capture` flag. When true, neither `onCaptureConfirm` nor
+   * `onCaptureConflict` is invoked.
+   */
+  skipCapture?: boolean;
   /** Repo URL for recording */
   repo: string | null;
   /** Git ref */
@@ -148,7 +159,7 @@ export async function installPlugin(
   let capturedMcpServers: string[] = [];
   let forcedBucket: CaptureBucket = { skills: [], mcpServers: [] };
 
-  {
+  if (!options.skipCapture) {
     const stateForCapture = await loadState(
       scope === "project" ? projectRoot : undefined,
     );
@@ -180,9 +191,12 @@ export async function installPlugin(
           ),
         );
       }
-      // decision === "force"
-      forcedBucket = matches.crossSource;
-      toCapture = mergeBuckets(matches.sameSource, forcedBucket);
+      if (decision === "force") {
+        forcedBucket = matches.crossSource;
+        toCapture = mergeBuckets(matches.sameSource, forcedBucket);
+      }
+      // decision === "skip" → leave cross-source standalones alone, proceed
+      // installing the plugin. toCapture stays as same-source only.
     }
 
     if (toCapture.skills.length + toCapture.mcpServers.length > 0) {

@@ -11,6 +11,7 @@ export const ResolvedSourceSchema = z.object({
   adapter: z.string(),
   integrity: z.string().optional(),
   npmPublisher: z.string().optional(),
+  pluginSelector: z.string().optional(),
 });
 
 export type AgentResponse = z.infer<typeof AgentResponseSchema>;
