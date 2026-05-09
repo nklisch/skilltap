@@ -12,6 +12,7 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
+import { exitOnError } from "../ui/exit";
 import { setupOutput } from "../ui/setup";
 
 export default defineCommand({
@@ -62,18 +63,9 @@ export default defineCommand({
       loadState(projectRoot),
     ]);
 
-    if (!manifestResult.ok) {
-      out.error(manifestResult.error.message);
-      process.exit(1);
-    }
-    if (!lockfileResult.ok) {
-      out.error(lockfileResult.error.message);
-      process.exit(1);
-    }
-    if (!stateResult.ok) {
-      out.error(stateResult.error.message);
-      process.exit(1);
-    }
+    exitOnError(manifestResult, out);
+    exitOnError(lockfileResult, out);
+    exitOnError(stateResult, out);
 
     const report = detectDrift(
       manifestResult.value,
@@ -113,10 +105,7 @@ export default defineCommand({
             },
       });
 
-      if (!applyResult.ok) {
-        out.error(applyResult.error.message);
-        process.exit(1);
-      }
+      exitOnError(applyResult, out);
       const summary: SyncApplyResult = applyResult.value;
       if (useJson) {
         out.json({
