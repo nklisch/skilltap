@@ -151,11 +151,9 @@ describe("semantic scan wiring — source-level regression guard", () => {
       const content = await Bun.file(path).text();
       if (!content.includes("updateSkill(")) continue;
 
-      // If the file resolves an agent (has resolveAgent or resolveSemanticInteractive),
+      // If the file resolves an agent (has resolveSemanticInteractive),
       // then every updateSkill call should pass semantic:
-      const hasAgentResolution =
-        content.includes("resolveSemanticInteractive") ||
-        content.includes("resolveAgentForAgentMode");
+      const hasAgentResolution = content.includes("resolveSemanticInteractive");
       if (!hasAgentResolution) continue;
 
       const blocks = content.split(/updateSkill\(/);

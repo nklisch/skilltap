@@ -140,8 +140,7 @@ _skilltap() {
           skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
             '--json[JSON output]' \\
-            '--project[Restrict to project scope]' \\
-            '--global[Restrict to global scope]' \\
+            '--scope[Filter to scope]:scope:(project global)' \\
             "1:name:($skills)"
           ;;
         create)

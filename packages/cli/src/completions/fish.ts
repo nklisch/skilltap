@@ -92,8 +92,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from find' -s l -l local -d 'Sea
 
 # info flags and dynamic installed skill names
 complete -c skilltap -n '__fish_seen_subcommand_from info' -l json -d 'JSON output'
-complete -c skilltap -n '__fish_seen_subcommand_from info' -l project -d 'Restrict lookup to project scope'
-complete -c skilltap -n '__fish_seen_subcommand_from info' -l global -d 'Restrict lookup to global scope'
+complete -c skilltap -n '__fish_seen_subcommand_from info' -l scope -xa 'project global' -d 'Filter to scope'
 complete -c skilltap -n '__fish_seen_subcommand_from info' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'
 
 # create flags
@@ -170,8 +169,7 @@ complete -c skilltap -n '__fish_seen_subcommand_from adopt' -l yes -d 'Auto-acce
 complete -c skilltap -n '__fish_seen_subcommand_from adopt' -l json -d 'Output as JSON'
 
 # move flags
-complete -c skilltap -n '__fish_seen_subcommand_from move' -l global -d 'Move to global scope'
-complete -c skilltap -n '__fish_seen_subcommand_from move' -l project -d 'Move to project scope'
+complete -c skilltap -n '__fish_seen_subcommand_from move' -l scope -xa 'project global' -d 'Target scope'
 complete -c skilltap -n '__fish_seen_subcommand_from move' -l also -xa '${agentList}' -d 'Symlink to agent dir'
 complete -c skilltap -n '__fish_seen_subcommand_from move' -xa '(skilltap --get-completions installed-skills 2>/dev/null)'`;
 }
