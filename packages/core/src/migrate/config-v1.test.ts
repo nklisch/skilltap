@@ -180,7 +180,7 @@ describe("migrateV1Config", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.migrated.taps).toEqual([
-      { name: "git-tap", url: "https://github.com/u/r" },
+      { name: "git-tap", url: "https://github.com/u/r", type: "git" },
     ]);
     expect(result.value.httpTapsRejected).toEqual([
       { name: "http-tap", url: "https://api.example.com/v1" },
@@ -299,7 +299,7 @@ describe("migrateV1Config", () => {
     expect(result.value.migrated.scanner.agent_cli).toBe("claude");
     expect(result.value.migrated.scanner.threshold).toBe(5);
     expect(result.value.migrated.taps).toEqual([
-      { name: "home", url: "https://gitea.example.com/n/t" },
+      { name: "home", url: "https://gitea.example.com/n/t", type: "git" },
     ]);
     expect(result.value.httpTapsRejected).toEqual([]);
   });

@@ -36,19 +36,22 @@ export type UpdateTapResult = {
 
 type ConfigTap = Config["taps"][number];
 
+export type LoadTapsOptions = {
+  onHttpTapIgnored?: (tapName: string) => void;
+};
+
 const httpWarningEmittedFor = new Set<string>();
 
-function filterAndWarnHttpTaps(taps: readonly ConfigTap[]): ConfigTap[] {
+function filterAndWarnHttpTaps(
+  taps: readonly ConfigTap[],
+  onWarn?: (name: string) => void,
+): ConfigTap[] {
   const result: ConfigTap[] = [];
   for (const tap of taps) {
     if (tap.type === "http") {
-      if (!httpWarningEmittedFor.has(tap.name)) {
+      if (!httpWarningEmittedFor.has(tap.name) && onWarn) {
         httpWarningEmittedFor.add(tap.name);
-        const DIM = "\x1b[2m";
-        const RESET = "\x1b[0m";
-        process.stderr.write(
-          `${DIM}↑  HTTP tap '${tap.name}' ignored — HTTP support removed in v2.0. Use a git tap or run 'skilltap migrate'.${RESET}\n`,
-        );
+        onWarn(tap.name);
       }
       continue;
     }
@@ -417,7 +420,9 @@ export async function tapPluginToManifest(
   });
 }
 
-export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
+export async function loadTaps(
+  options: LoadTapsOptions = {},
+): Promise<Result<TapEntry[], UserError>> {
   const configResult = await loadConfig();
   if (!configResult.ok) return configResult;
   const config = configResult.value;
@@ -448,7 +453,7 @@ export async function loadTaps(): Promise<Result<TapEntry[], UserError>> {
     }
   }
 
-  for (const tap of filterAndWarnHttpTaps(config.taps)) {
+  for (const tap of filterAndWarnHttpTaps(config.taps, options.onHttpTapIgnored)) {
     const dir = tapDir(tap.name);
     const tapResult = await loadTapJson(dir, tap.name, tap.url);
     if (!tapResult.ok) continue;

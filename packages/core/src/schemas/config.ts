@@ -77,6 +77,7 @@ export const ConfigDefaultsSchema = z
 export const TapEntrySchema = z.object({
   name: z.string(),
   url: z.string(),
+  type: z.enum(["git", "http"]).default("git"),
 });
 
 export const ConfigSchema = z.object({

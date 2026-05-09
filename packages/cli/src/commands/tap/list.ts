@@ -52,7 +52,12 @@ export default defineCommand({
       process.exit(0);
     }
 
-    const tapsResult = await loadTaps();
+    const tapsResult = await loadTaps({
+      onHttpTapIgnored: (name) =>
+        out.warn(
+          `HTTP tap '${name}' ignored — HTTP support removed in v2.0. Use a git tap or run 'skilltap migrate'.`,
+        ),
+    });
     if (!tapsResult.ok) {
       out.error(tapsResult.error.message, tapsResult.error.hint);
       process.exit(1);

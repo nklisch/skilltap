@@ -174,7 +174,12 @@ async function search(
   const registries = local ? [] : resolveRegistries(config);
 
   const [tapsResult, registrySkills] = await Promise.all([
-    loadTaps(),
+    loadTaps({
+      onHttpTapIgnored: (name) =>
+        out.warn(
+          `HTTP tap '${name}' ignored — HTTP support removed in v2.0. Use a git tap or run 'skilltap migrate'.`,
+        ),
+    }),
     query.length >= 2 && registries.length > 0
       ? searchRegistries(query, registries, 20)
       : Promise.resolve([] as RegistrySearchResult[]),
