@@ -45,6 +45,7 @@ export default defineCommand({
         scopes: report.scopes,
         changes: report.changes,
         warnings: report.warnings,
+        doctorReport: report.doctorReport,
       });
       return;
     }
@@ -81,8 +82,30 @@ export default defineCommand({
     }
 
     out.raw(
-      `${ansi.green("✓")} Migrated ${report.scopes.join(" and ") || "configuration"}. ` +
-        `Run ${ansi.bold("skilltap doctor")} to verify.\n`,
+      `${ansi.green("✓")} Migrated ${report.scopes.join(" and ") || "configuration"}.\n`,
     );
+
+    if (report.doctorReport) {
+      const failed = report.doctorReport.checks.filter(
+        (c) => c.status === "fail",
+      );
+      const warned = report.doctorReport.checks.filter(
+        (c) => c.status === "warn",
+      );
+      if (failed.length === 0 && warned.length === 0) {
+        out.raw(`${ansi.green("✓")} Doctor: all checks passed.\n`);
+      } else {
+        if (failed.length > 0) {
+          out.raw(
+            `${ansi.red("✗")} Doctor: ${failed.length} check(s) failed — your environment may have other issues unrelated to migration. Run ${ansi.bold("skilltap doctor")} for details.\n`,
+          );
+        }
+        if (warned.length > 0) {
+          out.raw(
+            `${ansi.yellow("!")} Doctor: ${warned.length} check(s) warning — run ${ansi.bold("skilltap doctor")} for details.\n`,
+          );
+        }
+      }
+    }
   },
 });

@@ -2,6 +2,7 @@ import { rename } from "node:fs/promises";
 import { join } from "node:path";
 import { parse, stringify } from "smol-toml";
 import { ensureDirs, getConfigDir } from "../config";
+import { runDoctor, type DoctorResult } from "../doctor";
 import { parseWithResult } from "../schemas/index";
 import { type InstalledJson, InstalledJsonSchema } from "../schemas/installed";
 import { type PluginsJson, PluginsJsonSchema } from "../schemas/plugins";
@@ -26,6 +27,8 @@ export interface MigrationReport {
   scopes: ("global" | "project")[];
   changes: MigrationFileChange;
   warnings: string[];
+  /** Doctor result from post-migrate verification. Only present on non-no-op migrations. */
+  doctorReport?: DoctorResult;
 }
 
 export interface MigrateOptions {
@@ -128,11 +131,31 @@ export async function runMigrate(
     written.push(globalMarkers.configToml);
   }
 
+  // ── Manifest verification (skilltap.toml parse check) ───────────────────
+  if (options.projectRoot) {
+    const manifestPath = join(options.projectRoot, "skilltap.toml");
+    const manifestFile = Bun.file(manifestPath);
+    if (await manifestFile.exists()) {
+      try {
+        const text = await manifestFile.text();
+        parse(text);
+      } catch (e) {
+        warnings.push(
+          `skilltap.toml at ${manifestPath} did not parse cleanly: ${e}`,
+        );
+      }
+    }
+  }
+
+  // ── Doctor post-migrate verification ─────────────────────────────────────
+  const doctorReport = await runDoctor({ projectRoot: options.projectRoot });
+
   return ok({
     alreadyMigrated: false,
     scopes,
     changes: { written, renamed },
     warnings,
+    doctorReport,
   });
 }
 
