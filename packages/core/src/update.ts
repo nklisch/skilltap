@@ -757,7 +757,7 @@ export async function updateSkill(
       return err(
         new UserError(
           `Skill '${options.name}' is not installed.`,
-          "Run 'skilltap list' to see installed skills.",
+          "Run 'skilltap status' to see installed skills.",
         ),
       );
     }

@@ -377,7 +377,7 @@ async function runUpdateSkills(
     async onSkillRemovedUpstream(skillName: string) {
       log.warn(`"${skillName}" was removed from the upstream repo.`);
       const action = await confirm({
-        message: `Remove "${skillName}" from installed.json?`,
+        message: `Remove "${skillName}" from skilltap?`,
         initialValue: true,
       });
       if (isCancel(action)) process.exit(130);

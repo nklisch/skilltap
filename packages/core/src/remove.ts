@@ -37,7 +37,7 @@ export async function removeSkill(
     return err(
       new UserError(
         `Skill '${name}' is not installed.`,
-        `Run 'skilltap list' to see installed skills.`,
+        `Run 'skilltap status' to see installed skills.`,
       ),
     );
   }

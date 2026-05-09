@@ -258,8 +258,7 @@ _skilltap() {
           local -a skills
           skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
-            '--global[Move to global scope]' \\
-            '--project[Move to project scope]' \\
+            '--scope[Target scope]:scope:(project global)' \\
             '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
             "1:skill:($skills)"
           ;;

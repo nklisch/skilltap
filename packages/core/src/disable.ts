@@ -57,7 +57,7 @@ export async function disableSkill(
     return err(
       new UserError(
         `Skill '${name}' is not installed.`,
-        `Run 'skilltap skills' to see installed skills.`,
+        `Run 'skilltap status' to see installed skills.`,
       ),
     );
   }
@@ -117,7 +117,7 @@ export async function enableSkill(
     return err(
       new UserError(
         `Skill '${name}' is not installed.`,
-        `Run 'skilltap skills' to see installed skills.`,
+        `Run 'skilltap status' to see installed skills.`,
       ),
     );
   }

@@ -375,7 +375,7 @@ const REMOVED_COMMANDS: Record<string, { hint: string }> = {
     hint: "Use `skilltap toggle <type> <name>` to disable an installed item.",
   },
   skills: {
-    hint: "Use `skilltap list` (and the typed `install`/`remove`/`update`/`toggle` subcommands).",
+    hint: "Use `skilltap status` (and the typed `install`/`remove`/`update`/`toggle` subcommands).",
   },
 };
 

@@ -100,7 +100,7 @@ export async function adoptSkill(
     return err(
       new UserError(
         `Skill '${skill.name}' is already managed by skilltap.`,
-        `Run 'skilltap list' to see managed skills.`,
+        `Run 'skilltap status' to see managed skills.`,
       ),
     );
   }

@@ -248,10 +248,11 @@ _skilltap() {
       ;;
     move)
       case "$prev" in
+        --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
         --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
       esac
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
+        COMPREPLY=($(compgen -W "--scope --also" -- "$cur"))
       else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)
