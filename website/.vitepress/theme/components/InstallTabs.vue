@@ -4,14 +4,14 @@ import { ref } from "vue";
 const active = ref("curl");
 const tabs = [
   { id: "curl", label: "curl" },
+  { id: "brew", label: "Homebrew" },
   { id: "bunx", label: "bunx" },
-  { id: "npx", label: "npx" },
   { id: "binary", label: "Binary" },
 ];
 const commands: Record<string, string> = {
   curl: "curl -fsSL https://skilltap.dev/install.sh | sh",
+  brew: "brew install nklisch/skilltap/skilltap",
   bunx: "bunx skilltap --help",
-  npx: "npx skilltap --help",
   binary: "# Download from GitHub Releases\nhttps://github.com/nklisch/skilltap/releases",
 };
 

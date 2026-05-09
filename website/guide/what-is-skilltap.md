@@ -43,23 +43,23 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Agent-agnostic.** Installs to the universal `.agents/skills/` directory. Opt in to symlinking to agent-specific directories (Claude Code, Cursor, Codex, Gemini, Windsurf) with a single flag.
 
-**Unified skill management.** `skilltap skills` shows every skill on your system — managed and unmanaged — across global and project scopes. Bring orphaned skills under management with `skilltap skills adopt`. Move a skill between global and project scope with `skilltap skills move`. Once adopted, skills get full source tracking, security scanning, and safe updates.
+**Unified skill management.** `skilltap status` shows every skill, plugin, and MCP on your system — managed and unmanaged — across global and project scopes. Bring orphaned skills under management with `skilltap adopt`. Move a skill between global and project scope with `skilltap move <name> --scope ...`. Once adopted, skills get full source tracking, security scanning, and safe updates.
 
 **Source-tracked updates.** skilltap remembers where every skill came from. `skilltap update` fetches upstream changes, diffs what changed, re-scans the diff, and asks before applying — you see exactly what's landing on your system.
 
 **Multi-source taps.** Configure multiple skill indexes (taps) — your own, a friend's, a community collection. Search across all of them with `skilltap find`.
 
-**Plugin support.** When a repo contains a plugin manifest, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. The native v2.0 publish format is `.skilltap/<plugin-name>.toml` (TOML, with explicit `publish = true` opt-in). The legacy `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` formats continue to be readable inputs. `skilltap plugin` lists, inspects, toggles, and removes installed plugins.
+**Plugin support.** When a repo contains a plugin manifest, skilltap detects it and can install the full plugin — SKILL.md files, MCP server entries, and agent definitions — as a tracked unit. The native publish format is `.skilltap/<plugin-name>.toml` (TOML, with explicit `publish = true` opt-in). The `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` formats are also readable inputs. `skilltap status`, `skilltap info <name>`, `skilltap toggle plugin <name>[:<component>]`, and `skilltap remove plugin <name>` cover the management surface. Multi-plugin repos work via the `:plugin-name` selector (or `:*` for "install all plugins from this repo").
 
-**Project manifest + lockfile (v2.0).** Pin a project's skill dependencies in `skilltap.toml` and `skilltap.lock`. Teammates check out the repo and run `skilltap sync --apply` to install the exact pinned versions. Cargo-style determinism for AI-agent skill setup.
+**Project manifest + lockfile.** Pin a project's skills, plugins, and MCP servers in `skilltap.toml` and `skilltap.lock` — `[skills]`, `[plugins]`, and `[[mcps]]` tables. Teammates check out the repo and run `skilltap sync --apply` to install the exact pinned versions. Cargo-style determinism for AI-agent skill setup.
 
-**Read-only preview.** `skilltap try <source>` clones, scans, and inspects a source — without writing anything to install paths or state. Useful for vetting unfamiliar sources before committing to install.
+**Read-only preview.** `skilltap try <type> <source>` (where type is `skill`, `plugin`, or `mcp`) clones, scans, and inspects a source — without writing anything to install paths or state. Useful for vetting unfamiliar sources before committing to install.
 
-**One-shot v0.x → v2 migration.** Already running v0.x with `installed.json`? Run `skilltap migrate` once to convert your state to the canonical `state.json` and translate v1 config keys.
+**One-shot legacy migration.** Coming from a pre-v2.2 install? Run `skilltap migrate` once to convert your state to the canonical `state.json`, translate legacy config keys (e.g. `[security.human]`, `[[security.overrides]]`, `[agent-mode]`) into the flat `[security]` + `[scanner]` blocks, and rename leftover `installed.json` / `plugins.json` to `*.v1.bak`. After migration, `loadConfig` hard-fails on any remaining legacy markers — no silent translation at runtime.
 
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
-**Non-interactive automation.** TTY detection plus `--yes` (auto-confirm) and `--json` (machine-readable output) cover AI agents, CI pipelines, and cron jobs. Set `[security] on_warn = "fail"` to hard-fail on security warnings instead of prompting. No separate "agent mode" flag — every invocation is the same command surface.
+**Non-interactive automation.** TTY detection plus `--yes` (auto-confirm) and `--json` (machine-readable output) cover AI agents, CI pipelines, and cron jobs. Set `[security] on_warn = "fail"` to hard-fail on security warnings instead of prompting. No separate "agent mode" flag, env var, or config block — every invocation is the same command surface.
 
 **Standalone binary.** One file, no runtime dependencies. Download and run.
 
@@ -84,7 +84,7 @@ skilltap install skill https://gitea.example.com/nathan/commit-helper
 Install with GitHub shorthand and symlink to Claude Code:
 
 ```bash
-skilltap install skill user/commit-helper --global --also claude-code
+skilltap install skill user/commit-helper --scope global --also claude-code
 ```
 
 Search across your configured taps:
@@ -99,16 +99,16 @@ Install by name from a tap:
 skilltap install skill code-reviewer
 ```
 
-View all skills on your system — managed and unmanaged:
+View all skills, plugins, and MCPs on your system — managed and unmanaged:
 
 ```bash
-skilltap skills
+skilltap status
 ```
 
 Adopt skills you've placed manually into skilltap management:
 
 ```bash
-skilltap skills adopt
+skilltap adopt
 ```
 
 ## Next steps

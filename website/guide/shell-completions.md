@@ -63,9 +63,9 @@ The directory is created if it doesn't exist. If a completion file already exist
 
 ```
 skilltap <TAB>
-  install  remove  list  update  status  sync  try  migrate  find
+  install  remove  update  status  sync  try  migrate  find
   toggle  info  adopt  move  create  doctor  completions
-  self-update  skills  tap  config
+  self-update  tap  config
 
 skilltap install <TAB>
   skill  plugin  mcp
@@ -73,11 +73,20 @@ skilltap install <TAB>
 skilltap remove <TAB>
   skill  plugin  mcp
 
+skilltap update <TAB>
+  skill  plugin  mcp
+
+skilltap toggle <TAB>
+  skill  plugin  mcp
+
+skilltap try <TAB>
+  skill  plugin  mcp
+
 skilltap doctor <TAB>
   skill  plugin
 
 skilltap tap <TAB>
-  add  remove  list  update  info  init  install
+  add  remove  list  info  init
 
 skilltap config <TAB>
   get  set  edit  security  telemetry
@@ -89,14 +98,19 @@ Every command's flags complete. A few examples:
 
 ```
 skilltap install skill --<TAB>
-  --scope  --project  --global  --also  --ref  --yes  --json
-  --strict  --no-strict  --semantic  --skip-scan
+  --scope  --also  --ref  --yes  --json
+  --strict  --semantic  --skip-scan  --quiet
+
+skilltap install plugin --<TAB>
+  --scope  --also  --ref  --yes  --json
+  --strict  --semantic  --skip-scan  --quiet
+  --force-capture  --no-capture
 
 skilltap doctor --<TAB>
   --json  --fix
 
-skilltap list --<TAB>
-  --global  --project  --json
+skilltap status --<TAB>
+  --global  --project  --json  --unmanaged  --disabled  --active
 ```
 
 ### Flag Values
@@ -120,8 +134,11 @@ These are read from your local state at completion time, so they stay current:
 |---------|-----------|
 | `remove skill <TAB>` | Installed skill names |
 | `remove plugin <TAB>` | Installed plugin names |
-| `update <TAB>` | Installed skill / plugin / mcp names |
-| `info <TAB>` | Installed skill names + tap skill names |
+| `remove mcp <TAB>` | Installed MCP names |
+| `update <TAB>` | `skill` / `plugin` / `mcp` |
+| `update skill <TAB>` | Installed skill names |
+| `toggle <TAB>` | `skill` / `plugin` / `mcp` |
+| `info <TAB>` | Installed skill / plugin / MCP names + tap skill names |
 | `install skill <TAB>` | Tap skill names |
 | `tap remove <TAB>` | Configured tap names |
 

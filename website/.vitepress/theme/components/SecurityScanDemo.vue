@@ -2,7 +2,7 @@
 import { ref, onMounted } from "vue";
 
 const lines = [
-  { type: "cmd",     text: "$ skilltap install user/sketchy-skill --global --also claude-code" },
+  { type: "cmd",     text: "$ skilltap install skill user/sketchy-skill --scope global --also claude-code" },
   { type: "out",     text: "◆  Cloning user/sketchy-skill..." },
   { type: "out",     text: "◆  Scanning for skills..." },
   { type: "out",     text: "│" },

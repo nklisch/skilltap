@@ -2,7 +2,7 @@
 import { ref, onMounted } from "vue";
 
 const lines = [
-  { type: "cmd",     text: "$ skilltap install user/code-reviewer" },
+  { type: "cmd",     text: "$ skilltap install skill user/code-reviewer" },
   { type: "prompt",  text: "◆  Install to:" },
   { type: "optsel",  text: "│  ● Global (~/.agents/skills/)" },
   { type: "opt",     text: "│  ○ Project (.agents/skills/)" },

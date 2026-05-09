@@ -102,7 +102,7 @@ After that, they install and update from your catalog by name — no URLs to cop
 skilltap find
 
 # Install a skill
-skilltap install skill code-reviewer --global --also claude-code
+skilltap install skill code-reviewer --scope global --also claude-code
 ```
 
 For a company or project, put this in your onboarding docs or runbook. For a friend group, just share the one-liner in a message.
@@ -139,11 +139,11 @@ For CI/CD or automated environments:
 skilltap update --yes
 ```
 
-## Project manifest (v2.0 — pinned dependencies)
+## Project manifest (pinned dependencies)
 
-For teams that want the project to *declare* its skill dependencies (not just rely on the tap catalog), v2.0 added a Cargo-style manifest + lockfile workflow:
+For teams that want the project to *declare* its skill, plugin, and MCP dependencies (not just rely on the tap catalog), skilltap supports a Cargo-style manifest + lockfile workflow:
 
-- **`skilltap.toml`** at the project root lists which skills + plugins the project uses
+- **`skilltap.toml`** at the project root lists which skills, plugins, and MCP servers the project uses
 - **`skilltap.lock`** captures exact ref + sha for each entry (auto-managed)
 - Teammates check out the project and run `skilltap sync --apply` to install the exact pinned versions
 
@@ -155,6 +155,14 @@ For teams that want the project to *declare* its skill dependencies (not just re
 
 [plugins]
 "github:acme/dev-toolkit" = "^2.1"
+
+# Standalone MCP servers the project depends on. Each entry is keyed by the
+# install name so teammates know what to expect after sync.
+[[mcps]]
+name = "db-tools"
+source = "github:acme/db-tools"
+ref = "main"
+also = ["claude-code"]
 ```
 
 ```bash
@@ -163,7 +171,7 @@ skilltap sync --apply       # install exactly what skilltap.lock pins
 skilltap status             # show drift between manifest, lockfile, and installed state
 ```
 
-`install` and `remove` automatically update both `skilltap.toml` (the user-managed declared range) and `skilltap.lock` (the auto-managed exact resolution). Commit both files. Use the tap pattern above for catalog-style sharing; use the manifest pattern when the project needs deterministic, lockfile-pinned dependencies.
+`install` and `remove` automatically update both `skilltap.toml` (the user-managed declared range or MCP entry) and `skilltap.lock` (the auto-managed exact resolution). Commit both files. Use the tap pattern above for catalog-style sharing; use the manifest pattern when the project needs deterministic, lockfile-pinned dependencies.
 
 ## Controlling what gets installed
 
@@ -291,33 +299,27 @@ Results from all enabled registries appear together in `skilltap find` output, e
 
 Scanning is on by default (static mode) and runs locally on each developer's machine at install time. It's a useful backstop, not the primary control mechanism for most teams.
 
-If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops. The setting lives in the single flat `[security]` block — it applies to every invocation, interactive or not (CI runs and AI-agent invocations naturally hit the fail path because no human is there to answer a prompt):
+If you want to tighten it, `on_warn = "fail"` turns warnings into hard stops. The setting lives in the flat `[security]` block — it applies to every invocation, interactive or not (CI runs and AI-agent invocations naturally hit the fail path because no human is there to answer a prompt):
 
 ```toml
 [security]
 on_warn = "fail"
 ```
 
-To allow-list a tap you maintain or an entire source type without disabling scanning globally, add `[[security.overrides]]` entries. The `none` preset skips scanning; `relaxed` keeps the static scan but auto-allows warnings.
+To bypass scanning for source URLs you control without disabling scanning globally, add glob patterns to `security.trust`. A trust match short-circuits both the static and semantic scans for that install.
 
 ```toml
 [security]
 on_warn = "fail"
-
-# Skip scanning entirely for the team tap.
-[[security.overrides]]
-match = "my-corp"
-kind = "tap"
-preset = "none"
-
-# Trust everything published under your npm scope (still static-scanned, no prompts).
-[[security.overrides]]
-match = "npm"
-kind = "source"
-preset = "relaxed"
+trust = [
+  # Anything in the team's GitHub org
+  "github.com/my-corp/*",
+  # Self-hosted Gitea instance
+  "https://gitea.acme.com/eng/*",
+  # Specific npm scope
+  "npm:@my-corp/*",
+]
 ```
-
-Named tap overrides take priority over source-type overrides; first match wins.
 
 See the [Security guide](/guide/security) for what static scanning catches and how the optional semantic scan works.
 
@@ -334,8 +336,8 @@ skilltap install skill code-reviewer --also claude-code
 # Cursor user
 skilltap install skill code-reviewer --also cursor
 
-# Both
-skilltap install skill code-reviewer --also claude-code,cursor
+# Both — --also is repeatable
+skilltap install skill code-reviewer --also claude-code --also cursor
 ```
 
 The skill is installed once to `~/.agents/skills/` (or project-scoped to `.agents/skills/`) and symlinked wherever needed.
@@ -355,9 +357,9 @@ curl -fsSL https://skilltap.dev/install.sh | sh
 skilltap tap add acme https://gitea.acme.com/eng/acme-skills
 
 # Install standard team skills
-skilltap install skill code-reviewer --global --also claude-code
-skilltap install skill pr-helper --global --also claude-code
-skilltap install skill commit-helper --global --also claude-code
+skilltap install skill code-reviewer --scope global --also claude-code
+skilltap install skill pr-helper --scope global --also claude-code
+skilltap install skill commit-helper --scope global --also claude-code
 
 echo "Skills installed. Run 'skilltap find' to browse the full catalog."
 ```

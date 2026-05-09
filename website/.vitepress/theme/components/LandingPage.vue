@@ -46,19 +46,19 @@ const features = [
     icon: "📋",
     title: "Manage everything",
     description:
-      "View all skills — managed and unmanaged — with `skilltap skills`. Adopt orphaned skills into management with `skills adopt`. Move between global and project scopes with `skills move`. Update, health-check with `doctor`, and remove with one command.",
+      "View all skills, plugins, and MCPs — managed and unmanaged — with `skilltap status`. Adopt orphaned skills into management with `skilltap adopt`. Move between global and project scopes with `skilltap move`. Update, health-check with `doctor`, and remove with one command.",
   },
   {
     icon: "🤖",
-    title: "Agent mode",
+    title: "Built for automation",
     description:
-      "Safe headless operation from inside AI agents. All prompts suppressed, security issues block with machine-readable stop directives, output is plain text.",
+      "TTY detection plus `--yes` and `--json` cover AI agents, CI pipelines, and cron jobs. Set `[security] on_warn = \"fail\"` to hard-fail on warnings. No separate runtime mode — every invocation is the same surface.",
   },
   {
     icon: "✏️",
     title: "Create & share",
     description:
-      "Scaffold a new skill with `skilltap create`, link it locally for testing, validate with `skilltap verify`, then push to git. Others install with one command.",
+      "Scaffold a new skill with `skilltap create`, adopt it locally for testing, validate with `skilltap doctor skill .`, then push to git. Others install with one command.",
   },
 ];
 
@@ -149,7 +149,7 @@ const teamFeatures = [
               GitHub, GitLab, Gitea, Forgejo, your own server. Your existing SSH keys and credential
               helpers just work — no new accounts, no tokens to manage.
             </p>
-            <code class="pillar-cmd">skilltap install user/skill-name</code>
+            <code class="pillar-cmd">skilltap install skill user/skill-name</code>
           </div>
           <div class="pillar">
             <div class="pillar-num">03</div>
@@ -158,7 +158,7 @@ const teamFeatures = [
               skilltap tracks every skill back to its source. Fetch, diff, re-scan changed lines, then
               apply — you see exactly what changed before it touches your system.
             </p>
-            <code class="pillar-cmd">skilltap update --all</code>
+            <code class="pillar-cmd">skilltap update</code>
           </div>
         </div>
       </div>
@@ -257,25 +257,25 @@ const teamFeatures = [
 <span class="c-dim">  community/code-reviewer  Review code for bugs and style issues</span>
 <span class="c-dim">  community/pr-review      Generate PR review comments</span>
 
-<span class="c-comment"># Install with agent symlink</span>
-<span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
+<span class="c-comment"># Install with agent symlink (smart-scope picks project or global)</span>
+<span class="c-prompt">$</span> skilltap install skill code-reviewer --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
-<span class="c-comment"># See everything installed — managed and unmanaged</span>
-<span class="c-prompt">$</span> skilltap skills
+<span class="c-comment"># See everything installed — skills, plugins, MCPs, managed and unmanaged</span>
+<span class="c-prompt">$</span> skilltap status
 <span class="c-dim">  code-reviewer  managed  claude-code  https://github.com/example/skills-tap</span>
 <span class="c-dim">  commit-helper  managed  claude-code  https://github.com/user/commit-helper</span>
 
 <span class="c-comment"># Pull updates from the source and review what changed</span>
-<span class="c-prompt">$</span> skilltap update --all
+<span class="c-prompt">$</span> skilltap update
 <span class="c-success">◆  Updated code-reviewer  (2 files changed)</span></code></pre>
             <pre v-else-if="demoTab === 'adopt'" class="code-body"><code><span class="c-comment"># Skills you've placed manually are visible but unmanaged</span>
-<span class="c-prompt">$</span> skilltap skills --unmanaged
+<span class="c-prompt">$</span> skilltap status --unmanaged
 <span class="c-dim">  commit-helper   unmanaged  —  ~/.agents/skills/commit-helper/</span>
 <span class="c-dim">  code-standards  unmanaged  —  .agents/skills/code-standards/</span>
 
-<span class="c-comment"># Adopt them into skilltap management (interactive)</span>
-<span class="c-prompt">$</span> skilltap skills adopt
+<span class="c-comment"># Adopt them into skilltap management (interactive picker)</span>
+<span class="c-prompt">$</span> skilltap adopt
 <span class="c-dim">  ◆ Which skills would you like to adopt?</span>
 <span class="c-dim">  ◼ commit-helper</span>
 <span class="c-dim">  ◼ code-standards</span>
@@ -283,7 +283,7 @@ const teamFeatures = [
 <span class="c-success">◆  Adopted code-standards → tracked in project</span>
 
 <span class="c-comment"># Now they get updates, security scans, and full tracking</span>
-<span class="c-prompt">$</span> skilltap skills
+<span class="c-prompt">$</span> skilltap status
 <span class="c-dim">  commit-helper   managed  claude-code  https://github.com/user/commit-helper</span>
 <span class="c-dim">  code-standards  managed  claude-code  (local)</span></code></pre>
             <pre v-else class="code-body"><code><span class="c-comment"># Anyone can create a tap — friend group, team, org</span>
@@ -298,11 +298,11 @@ const teamFeatures = [
 <span class="c-dim">  acme/code-reviewer    Review code for bugs and style</span>
 <span class="c-dim">  acme/pr-helper        Draft PR descriptions</span>
 <span class="c-dim">  acme/commit-helper    Write conventional commits</span>
-<span class="c-prompt">$</span> skilltap install code-reviewer --global --also claude-code
+<span class="c-prompt">$</span> skilltap install skill code-reviewer --scope global --also claude-code
 <span class="c-success">◆  Installed code-reviewer</span>
 
 <span class="c-comment"># When skills update at the source, everyone pulls + reviews the diff</span>
-<span class="c-prompt">$</span> skilltap update --all
+<span class="c-prompt">$</span> skilltap update
 <span class="c-success">◆  Updated code-reviewer  (2 files changed)</span></code></pre>
           </div>
         </div>
@@ -320,7 +320,7 @@ const teamFeatures = [
           <SecurityScanDemo />
         </div>
         <p class="security-note">
-          With <code>--strict</code>, any warning aborts immediately. In agent mode, security issues emit a machine-readable stop directive.
+          With <code>--strict</code>, any warning aborts immediately. Set <code>on_warn = "fail"</code> in <code>[security]</code> to make every install hard-fail on warnings — the right setting for CI and AI-agent invocations.
           <a href="/guide/security">Learn more →</a>
         </p>
       </div>

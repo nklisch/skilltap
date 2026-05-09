@@ -19,7 +19,7 @@ skilltap doctor
 
 ## What It Checks
 
-Doctor runs 15 independent checks sequentially (9 legacy + 6 v2.0 additions). A failure in one doesn't skip the rest. Each check produces a **pass** (◇), **warning** (⚠), or **failure** (✗).
+Doctor runs a series of independent checks sequentially. A failure in one doesn't skip the rest. Each check produces a **pass** (◇), **warning** (⚠), or **failure** (✗).
 
 ### 1. Git
 
@@ -36,6 +36,8 @@ Checks that `~/.config/skilltap/config.toml` exists, is valid TOML, and passes s
 - **Warn**: file doesn't exist → run `skilltap config` to create one
 - **Fix** (`--fix`): missing config → creates a default config file
 
+If the loader rejects the file because of a legacy schema marker (`[security.human]`, `[[security.overrides]]`, `[agent-mode]`, etc.), the failure message points at `skilltap migrate` — `loadConfig` hard-fails on legacy keys instead of silently translating.
+
 ### 3. Directories
 
 Checks that all expected directories exist: `~/.config/skilltap/`, `cache/`, `taps/`, and `~/.agents/skills/`.
@@ -43,11 +45,11 @@ Checks that all expected directories exist: `~/.config/skilltap/`, `cache/`, `ta
 - **Warn**: missing directory
 - **Fix** (`--fix`): creates missing directories
 
-### 4. installed (skill records)
+### 4. State (skill records)
 
-Validates the state files that track installed skills. As of v2.1 the canonical store is `state.json` (`~/.config/skilltap/state.json` global, `.agents/state.json` project). For unmigrated v0.x users, falls back to `installed.json` once until the next save populates `state.json`.
+Validates the canonical state file that tracks installed skills, plugins, and MCP servers: `~/.config/skilltap/state.json` (global) and `<project>/.agents/state.json` (project).
 
-- **Fail**: a file is corrupt (bad JSON or failed schema validation)
+- **Fail**: file is corrupt (bad JSON or failed schema validation)
 - **Pass** with detail `N skills (G global, P project)` when records are present
 - **Fix** (`--fix`): backs up the corrupt file to `<file>.bak` and creates a fresh empty state
 
@@ -87,22 +89,19 @@ Only checked if any installed skills use an `npm:` source.
 
 - **Warn**: npm not found on PATH
 
-### v2.0 checks (10–15)
+### Project-level checks (10–15)
 
-Phase 36 added five v2-specific checks. They appear in `skilltap doctor` output after the v1 checks above:
+These run when there's a project root (a `.git` directory or `skilltap.toml`) below the cwd:
 
-**10. state.json** — Validates the v2 canonical store (one per scope). Fail on corrupt JSON / schema-invalid; `--fix` backs up to `<file>.bak` and recreates fresh.
+**10. manifest drift** — Compares `skilltap.toml` declared dependencies against `state.json` records. Warns about declared-but-not-installed and installed-but-not-declared entries (drift items themselves aren't fixable — manifest edits are user responsibility; run `skilltap sync` or edit the file). **If `skilltap.toml` itself fails to parse**, the issue is fixable: `--fix` backs the corrupt file up to `skilltap.toml.bak` and writes a fresh empty manifest. The same recovery is invoked automatically when you run `skilltap install` in interactive mode against a corrupt manifest (see [Installing skills — Recovering from a broken skilltap.toml](/guide/installing-skills#recovering-from-a-broken-skilltap-toml)).
 
-**11. manifest drift** — Compares `skilltap.toml` declared dependencies against `state.json` records. Warns about declared-but-not-installed and installed-but-not-declared entries (drift items themselves aren't fixable — manifest edits are user responsibility; run `skilltap sync` or edit the file). **If `skilltap.toml` itself fails to parse**, the issue is fixable: `--fix` backs the corrupt file up to `skilltap.toml.bak` and writes a fresh empty manifest. The same recovery is invoked automatically when you run `skilltap install` in interactive mode against a corrupt manifest (see [Installing skills — Recovering from a broken skilltap.toml](/guide/installing-skills#recovering-from-a-broken-skilltap-toml)).
+**11. lockfile drift** — Compares `skilltap.lock` against `state.json` SHAs. Warns on stale (lockfile entry has no state record) or orphan (state record has no lockfile entry); `--fix` regenerates missing lockfile entries from state. **If `skilltap.lock` itself fails to parse**, the issue is fixable: `--fix` backs the corrupt file up to `skilltap.lock.bak` and writes a fresh empty lockfile.
 
-**12. lockfile drift** — Compares `skilltap.lock` against `state.json` SHAs. Warns on stale (lockfile entry has no state record) or orphan (state record has no lockfile entry); `--fix` regenerates missing lockfile entries from state. **If `skilltap.lock` itself fails to parse**, the issue is fixable: `--fix` backs the corrupt file up to `skilltap.lock.bak` and writes a fresh empty lockfile.
+**12. plugin manifests** — Validates every `.skilltap/<name>.toml` publish manifest in the working tree. Warns on parse errors or missing required fields.
 
-**13. plugin manifests** — Validates every `.skilltap/<name>.toml` publish manifest in the working tree. Warns on parse errors or missing required fields.
+**13. mcp consistency** — Compares `state.json::mcpServers[]` against each agent's MCP config (Claude Code's `.claude/settings.json`, etc.). Warns on entries in state that aren't in the agent config (missing — needs fresh inject) or orphan agent-config entries with `skilltap:` prefix that have no state record. `--fix` prunes the orphans.
 
-**14. mcp consistency** — Compares `state.json::mcpServers[]` against each agent's MCP config (Claude Code's `.claude/settings.json`, etc.). Warns on entries in state that aren't in the agent config (missing — needs fresh inject) or orphan agent-config entries with `skilltap:` prefix that have no state record. `--fix` prunes the orphans.
-
-**15. v0.x file orphans** — After the v2.1 cutover, detects when `state.json` is populated AND legacy `installed.json` / `plugins.json` are still on disk (a common state after a transparent first-write migration). `--fix` renames each orphan to `<file>.v1.bak`. Pre-migration users (empty state, populated legacy file) are intentionally not flagged — their fallback is still active.
-- Checks registry reachability and login status
+**14. legacy file orphans** — Detects leftover `installed.json` / `plugins.json` / pre-v2.2 config blocks. `--fix` renames each orphan file to `<file>.v1.bak` and points you at `skilltap migrate` if a config translation is needed.
 
 ## Output
 
@@ -156,7 +155,7 @@ When issues are found:
 │  code-review: recreated symlink ✓
 ◇ taps: 2 configured, 2 valid ✓
 ⚠ agents: configured agent 'codex' not found on PATH
-│  (cannot auto-fix — install codex or change security.agent_cli in config)
+│  (cannot auto-fix — install codex or change scanner.agent_cli in config)
 │
 └ ✓ Fixed 3 of 4 issues. 1 requires manual action.
 ```
@@ -202,10 +201,22 @@ When issues are found:
 
 | Code | Meaning |
 |------|---------|
-| `0` | All checks pass, or only warnings |
-| `1` | One or more failures (corrupt files, missing git) |
+| `0` | All checks pass, or only warnings (also exits 0 after `--fix` resolves all blocking failures) |
+| `1` | One or more unfixed failures remain (corrupt files, missing git, etc.) |
 
-Warnings alone produce exit code 0. Only hard failures trigger exit 1, so you can use `skilltap doctor` as a health check in CI without false positives from missing optional features.
+Warnings alone produce exit code 0. After `--fix` runs, doctor re-classifies fixed checks as passes and exits 0 if no failures remain. Only hard, unfixed failures trigger exit 1, so you can chain `skilltap doctor --fix && …` in CI scripts.
+
+### `--json` payload
+
+Each check entry includes:
+
+| Field | Description |
+|---|---|
+| `name` | Stable check identifier (`git`, `config`, `state`, `manifest-drift`, …) |
+| `status` | `"pass"` \| `"warn"` \| `"fail"` |
+| `detail` | Human-readable summary (e.g. path, version, count) |
+| `info` | Extra structured context (paths inspected, scope-by-scope breakdown) |
+| `issues[]` | Per-issue array; each entry has `message`, `fixable`, and optional `fixDescription` describing exactly what `--fix` would do |
 
 ## When to Run
 

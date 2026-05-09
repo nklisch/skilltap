@@ -36,7 +36,7 @@ How it works:
 1. Skill content is split into chunks of roughly 2000 characters (splitting at paragraph and sentence boundaries)
 2. Each chunk is sent to your local agent in sandboxed mode (no tools enabled)
 3. The agent scores each chunk from 0 (benign) to 10 (clearly malicious) with a reason
-4. Chunks scoring above the threshold (default: 6) are flagged as warnings
+4. Chunks scoring above the threshold (default: 5) are flagged as warnings
 
 The semantic scan includes defenses against meta-attacks -- skills that try to trick the scanning agent itself:
 
@@ -64,10 +64,10 @@ The semantic scan works with any supported agent: Claude Code, Gemini CLI, Codex
 
 ## What happens during install
 
-When you run `skilltap install`, the security flow is interactive. For a **clean skill** (no warnings), you see a final confirmation before anything is written to disk:
+When you run `skilltap install skill <source>`, the security flow is interactive. For a **clean skill** (no warnings), you see a final confirmation before anything is written to disk:
 
 ```
-$ skilltap install skill some-skill --global
+$ skilltap install skill some-skill --scope global
 
 Cloning some-skill...
 Scanning some-skill for security issues...  ✓ No warnings
@@ -83,7 +83,7 @@ Pass `--yes` to skip this confirmation for clean installs (warnings always promp
 For a skill with **warnings**, the flow continues:
 
 ```
-$ skilltap install skill some-skill --global
+$ skilltap install skill some-skill --scope global
 
 Cloning some-skill...
 Scanning some-skill for security issues...
@@ -109,7 +109,7 @@ If you choose **Yes** and haven't configured an agent yet, skilltap detects avai
   ○ Other — enter path
 ```
 
-Your choice is saved to `config.toml` so you're only asked once. Then the semantic scan runs:
+Your choice is saved to `config.toml` (in the `[scanner]` block) so you're only asked once. Then the semantic scan runs:
 
 ```
 Starting semantic scan of some-skill...
@@ -132,7 +132,12 @@ With `--strict`, any warning skips the prompt and aborts immediately.
 
 ## Configuring security behavior
 
-Security lives in a single flat `[security]` block in your `config.toml`. Use `skilltap config security` for an interactive wizard, or `skilltap config set security.<key> <value>` for scripted edits.
+Security splits across two adjacent blocks in `config.toml`:
+
+- **`[security]`** — *policy*: 3 keys (`scan`, `on_warn`, `trust`).
+- **`[scanner]`** — *operational config*: 4 keys (`agent_cli`, `ollama_model`, `threshold`, `max_size`).
+
+Use `skilltap config security` for an interactive wizard, or `skilltap config set security.<key> <value>` (and `scanner.<key>`) for scripted edits.
 
 ### Warning behavior
 
@@ -140,56 +145,50 @@ Control what happens when a scan finds warnings:
 
 ```toml
 [security]
-on_warn = "prompt"   # show warnings and ask (default)
-# on_warn = "fail"   # block installation immediately
-# on_warn = "allow"  # log warnings but install anyway
+on_warn = "prompt"    # show warnings and ask
+# on_warn = "fail"    # block installation immediately
+# on_warn = "install" # log warnings but install anyway (default)
 ```
 
 For non-interactive runs (CI, AI agents), set `on_warn = "fail"` so warnings hard-fail rather than blocking on a prompt that nobody will answer.
 
-Override per-command with flags:
+Override per-command with `--strict` to treat warnings as errors for one invocation:
 
 ```bash
-skilltap install skill some-skill --strict      # treat warnings as errors
-skilltap install skill some-skill --no-strict   # override on_warn=fail for this run
+skilltap install skill some-skill --strict
 ```
 
 ### Trusted sources
 
-To relax scanning for sources you control, add `[[security.overrides]]` entries that map a tap name or source type to a preset. The `none` preset disables scanning entirely; `relaxed` keeps the static scan but auto-allows warnings.
+To bypass scanning entirely for sources you control, list glob patterns in `security.trust`. Patterns are matched against the resolved source URL.
 
 ```toml
-# Skip scanning for any skill installed via your team tap.
-[[security.overrides]]
-match = "my-corp"
-kind = "tap"
-preset = "none"
-
-# Or trust an entire source type (e.g. all npm-published skills).
-[[security.overrides]]
-match = "npm"
-kind = "source"
-preset = "relaxed"
+[security]
+scan = "static"
+on_warn = "prompt"
+trust = [
+  # Anything in your team's GitHub org
+  "github.com/my-org/*",
+  # Your self-hosted Gitea
+  "https://gitea.acme.com/eng/*",
+  # Specific npm scope
+  "npm:@my-corp/*",
+]
 ```
 
-Each override has three fields:
+A trust match short-circuits the scan — the static and semantic checks are skipped for that install. Use trust sparingly; it disables an integrity check entirely for matching sources.
 
-| Field    | Values                                            | Description                                          |
-| -------- | ------------------------------------------------- | ---------------------------------------------------- |
-| `match`  | string                                            | Tap name (when `kind = "tap"`) or source type        |
-| `kind`   | `"tap"` \| `"source"`                             | Whether `match` is a tap name or one of `tap`/`git`/`npm`/`local` |
-| `preset` | `"none"` \| `"relaxed"` \| `"standard"` \| `"strict"` | Preset applied to matching installs               |
+### Scanner configuration
 
-Presets resolve to concrete values:
+The `[scanner]` block tells the semantic scanner which agent CLI to invoke and how aggressive to be:
 
-| Preset     | `scan`     | `on_warn` | `require_scan` |
-| ---------- | ---------- | --------- | -------------- |
-| `none`     | `off`      | `allow`   | `false`        |
-| `relaxed`  | `static`   | `allow`   | `false`        |
-| `standard` | `static`   | `prompt`  | `false`        |
-| `strict`   | `semantic` | `fail`    | `true`         |
-
-Named tap overrides take priority over source-type overrides; first match wins.
+```toml
+[scanner]
+agent_cli = "claude"      # CLI to invoke for semantic scan
+ollama_model = ""         # Model name when agent_cli = "ollama"
+threshold = 5             # 0–10; chunks scoring >= this are flagged
+max_size = 51200          # Bytes; warn when total skill size exceeds this
+```
 
 ### Skipping scans per-command
 
@@ -228,18 +227,18 @@ Trust verification runs automatically at install time and is re-verified on ever
 
 ### Where trust is shown
 
-Trust tier appears in `skilltap skills` (unified view), `skilltap skills info`, and `skilltap find`:
+Trust tier appears in `skilltap status` (the unified dashboard), `skilltap info <name>`, and `skilltap find`:
 
 ```
-$ skilltap skills
-Global (.agents/skills/) — 2 skills
+$ skilltap status
+Global (~/.agents/skills/) — 2 skills
   Name             Status   Agents       Source
   commit-helper    managed  claude-code  npm:@user/commit-helper
   my-local-skill   managed  —            local
 ```
 
 ```
-$ skilltap skills info commit-helper
+$ skilltap info commit-helper
 name:          commit-helper
 description:   Generates conventional commit messages
 scope:         global
@@ -258,7 +257,7 @@ updated:       2026-02-28T12:00:00.000Z
 
 ## Non-interactive use (AI agents, CI)
 
-There is no separate "agent mode" runtime in v2.0. skilltap detects non-interactive contexts automatically (TTY check on stdout) and you opt into specific automation behaviors with flags:
+skilltap detects non-interactive contexts automatically (TTY check on stdout). You opt into specific automation behaviors with flags:
 
 - **`--yes`** — auto-accept install confirmations.
 - **`--json`** — emit machine-readable output instead of formatted text.
@@ -270,4 +269,4 @@ A typical CI invocation:
 skilltap install skill user/commit-helper --yes --strict --json
 ```
 
-Use `[[security.overrides]]` entries with `preset = "none"` to allow-list a tap or source type you control without disabling scanning globally. Security failures still emit non-zero exit codes and structured error output for the calling process to handle.
+Use `security.trust` glob patterns to allow-list a source URL pattern you control without disabling scanning globally. Security failures still emit non-zero exit codes and structured error output for the calling process to handle.

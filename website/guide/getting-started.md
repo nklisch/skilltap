@@ -86,8 +86,8 @@ There is no `--agent` flag. TTY detection + `--yes` + `--json` covers all automa
 Use `skilltap try skill <source>` to clone, scan, and inspect a source without writing anything. Safe to run on unfamiliar sources.
 :::
 
-::: info Coming from v2.1 or earlier?
-Run `skilltap migrate` once to translate your config and state files. Migrates `[security.human]`/`[security.agent]` blocks, removes `[agent-mode]`, and consolidates `installed.json` / `plugins.json` → `state.json`.
+::: info Coming from v0.x or v2.1?
+Run `skilltap migrate` once to translate your config and state files. Migrates `[security.human]`/`[security.agent]` blocks, removes `[agent-mode]` and `[[security.overrides]]`, collapses operational keys into `[scanner]`, and consolidates `installed.json` / `plugins.json` → `state.json`. After migration, `loadConfig` hard-fails if any legacy schema marker is still on disk — that's how skilltap tells you the migration didn't run.
 :::
 
 ### Agent symlinks
@@ -272,8 +272,9 @@ The `[security]` block in `config.toml` controls scan mode and warning behavior:
 
 ```toml
 [security]
-scan = "static"      # "semantic" | "static" | "off"
-on_warn = "prompt"   # "prompt" | "fail" | "allow"
+scan = "static"      # "semantic" | "static" | "none"
+on_warn = "prompt"   # "prompt" | "fail" | "install"
+trust = []           # globs that bypass scanning entirely
 ```
 
 For non-interactive use, hard-fail on any warning:
@@ -282,13 +283,14 @@ For non-interactive use, hard-fail on any warning:
 skilltap config set security.on_warn fail
 ```
 
-To skip scanning for a tap you control, add an override entry to `config.toml`:
+To skip scanning for a source URL pattern you control, add it to `security.trust`:
 
 ```toml
-[[security.overrides]]
-match = "my-corp"
-kind = "tap"
-preset = "none"
+[security]
+trust = [
+  "github.com/my-corp/*",
+  "https://gitea.acme.com/eng/*",
+]
 ```
 
 See the [Security](/guide/security) guide for full details.
