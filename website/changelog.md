@@ -5,9 +5,9 @@ description: Release notes for every notable version of skilltap.
 
 # Changelog
 
-## v3.0.0 — v2.0 Redesign: simplified surface, TUI dashboard, plugin capture
+## v2.2.0 — v2.0 Redesign: simplified surface, TUI dashboard, plugin capture
 
-The v3.0 release is the v2.0 redesign: a full reshaping of the CLI surface
+The v2.2.0 release is the v2.0 redesign: a full reshaping of the CLI surface
 around a cleaner mental model. Five major concerns drove the redesign: (1)
 explicit type subcommands replace auto-detect; (2) agent mode is retired in
 favour of TTY detection; (3) security config collapses to a single flat block;
@@ -97,7 +97,7 @@ If you used `--agent` or `SKILLTAP_AGENT=1` in scripts, replace with:
 # Before (v2.1)
 skilltap install <source> --agent
 
-# After (v3.0) — piped stdout is already plain text; add --yes for no prompts
+# After (v2.2) — piped stdout is already plain text; add --yes for no prompts
 skilltap install skill <source> --yes | cat
 ```
 

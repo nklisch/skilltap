@@ -1019,12 +1019,12 @@ Update the running binary in-place from GitHub Releases.
 ```
 $ skilltap self-update
 Current: v2.1.1
-Latest:  v3.0.0
+Latest:  v2.2.0
 Update? (Y/n): y
-✓ Updated skilltap to v3.0.0
+✓ Updated skilltap to v2.2.0
 
 $ skilltap self-update --force
-✓ Updated skilltap to v3.0.0 (forced)
+✓ Updated skilltap to v2.2.0 (forced)
 ```
 
 ---
