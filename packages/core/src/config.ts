@@ -16,76 +16,29 @@ export { ensureDirs, getConfigDir };
 // NOTE: valid-values comments below are documentation only. Keep in sync with:
 //   - AGENT_PATHS / AGENT_LABELS in core/src/symlink.ts (for agent IDs)
 //   - SCAN_MODES / ON_WARN_MODES / etc. in core/src/schemas/config.ts (for enum values)
-const DEFAULT_CONFIG_TEMPLATE = `# Default settings for install commands
+const DEFAULT_CONFIG_TEMPLATE = `# skilltap configuration
+# Run \`skilltap config edit\` to open this file in $EDITOR.
+
 [defaults]
-# Agent-specific directories to also symlink to on every install
-# Valid values: "claude-code", "cursor", "codex", "gemini", "windsurf"
-also = []
+# also = ["claude-code"]    # extra agents to symlink installs into
+# scope = "project"          # default install scope (smart-default if unset)
 
-# Auto-accept prompts (same as --yes). Auto-selects all skills and
-# auto-accepts clean installs. Security warnings still require confirmation.
-# Scope still prompts unless a default scope is also set.
-yes = false
-
-# Default install scope. If set, skips the scope prompt.
-# Values: "global", "project", or "" (prompt)
-scope = ""
-
-# Security policy (use 'skilltap config security' to configure)
 [security]
-# Scan mode for static analysis
-# Values: "static", "semantic", "none"
-scan = "static"
+scan = "static"              # semantic | static | none
+on_warn = "install"          # prompt | fail | install
+trust = []                   # glob patterns (tap name or source URL)
 
-# What to do when security warnings are found
-# Values: "prompt" (ask), "fail" (abort), "install" (ignore)
-on_warn = "install"
-
-# Trust list — patterns that bypass the scan entirely.
-trust = []
-
-# Scanner operational settings
 [scanner]
-# Agent CLI to use for semantic scanning.
-# Values: see KNOWN_AGENT_NAMES in core/src/agents/detect.ts (claude, gemini, codex, opencode, ollama)
-# or an absolute path to a custom binary (e.g. "/usr/local/bin/my-llm").
-# Empty string = prompt on first use, then save selection.
-agent_cli = ""
+# agent_cli = ""             # path/name of semantic-scan CLI (claude, codex, ollama, …)
+# ollama_model = ""          # ollama model name when agent_cli = "ollama"
+# threshold = 5              # 0-10, semantic risk score threshold
+# max_size = 51200           # bytes, skill size limit
 
-# Risk threshold for semantic scan (0-10, chunks scoring >= this are flagged)
-threshold = 5
+[updates]
+auto_update = "off"          # off | patch | minor
 
-# Max total skill directory size in bytes before warning (default 50KB)
-max_size = 51200
-
-# Ollama model for semantic scanning (if using ollama adapter)
-ollama_model = ""
-
-# Registry search settings
-[registry]
-# Which skill registries to search when running 'skilltap find <query>'.
-# Built-in registry: "skills.sh" (https://skills.sh). Set to [] to disable all.
-enabled = ["skills.sh"]
-
-# Custom registries implementing the skills.sh search API:
-#   GET {url}/api/search?q={query}&limit={n}
-#   Response: { "skills": [{ "id", "name", "description", "source", "installs" }] }
-# Add to enabled[] above to activate.
-# [[registry.sources]]
-# name = "my-org"
-# url = "https://skills.example.com"
-
-# Built-in tap: the official skilltap-skills collection.
-# Set to false to opt out of the built-in tap entirely.
-builtin_tap = true
-
-# Show step details during install (fetched, scan clean). Set false to silence.
-# verbose = true
-
-# Additional tap definitions (repeatable section)
-# [[taps]]
-# name = "home"
-# url = "https://gitea.example.com/nathan/my-skills-tap"
+[telemetry]
+enabled = false
 `;
 
 export async function loadConfig(): Promise<Result<Config>> {

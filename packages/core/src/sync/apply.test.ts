@@ -357,6 +357,127 @@ describe("applySync — onProgress callback", () => {
   });
 });
 
+describe("applySync — MCP path", () => {
+  function mockInstallMcp(behavior: "ok" | "fail" = "ok") {
+    const calls: { source: string; options: unknown }[] = [];
+    const fn: any = async (source: string, options: any) => {
+      calls.push({ source, options });
+      if (behavior === "fail") {
+        return { ok: false, error: { message: `mcp install failed: ${source}` } };
+      }
+      return {
+        ok: true,
+        value: { records: [], agents: [] },
+      };
+    };
+    return { fn, calls };
+  }
+
+  function mockRemoveMcp(behavior: "ok" | "fail" = "ok") {
+    const calls: { source: string; options: unknown }[] = [];
+    const fn: any = async (source: string, options: any) => {
+      calls.push({ source, options });
+      if (behavior === "fail") {
+        return { ok: false, error: { message: `mcp remove failed: ${source}` } };
+      }
+      return { ok: true, value: { removed: 1, agents: [], names: [] } };
+    };
+    return { fn, calls };
+  }
+
+  test("add MCP routes through installMcpFn", async () => {
+    const plan = planFrom([
+      ITEM("add", "mcp", "mcp:upstash/context7-mcp", { ref: "main", range: "main" }),
+    ]);
+    const installMcp = mockInstallMcp();
+    const result = await applySync(plan, {
+      projectRoot: PROJECT_ROOT,
+      state: EMPTY_STATE,
+      installMcpFn: installMcp.fn,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.applied).toBe(1);
+    expect(installMcp.calls).toHaveLength(1);
+    expect(installMcp.calls[0]).toMatchObject({
+      source: "mcp:upstash/context7-mcp",
+      options: { scope: "project", projectRoot: PROJECT_ROOT },
+    });
+  });
+
+  test("ref-mismatch MCP routes through installMcpFn", async () => {
+    const plan = planFrom([
+      ITEM("ref-mismatch", "mcp", "mcp:upstash/context7-mcp", {
+        ref: "v2.0",
+        range: "v2.0",
+      }),
+    ]);
+    const installMcp = mockInstallMcp();
+    const result = await applySync(plan, {
+      projectRoot: PROJECT_ROOT,
+      state: EMPTY_STATE,
+      installMcpFn: installMcp.fn,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.applied).toBe(1);
+    expect(installMcp.calls).toHaveLength(1);
+  });
+
+  test("remove MCP routes through removeMcpFn with source", async () => {
+    const plan = planFrom([
+      ITEM("remove", "mcp", "mcp:upstash/context7-mcp"),
+    ]);
+    const removeMcp = mockRemoveMcp();
+    const result = await applySync(plan, {
+      projectRoot: PROJECT_ROOT,
+      state: EMPTY_STATE,
+      removeMcpFn: removeMcp.fn,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.applied).toBe(1);
+    expect(removeMcp.calls).toHaveLength(1);
+    expect(removeMcp.calls[0].source).toBe("mcp:upstash/context7-mcp");
+  });
+
+  test("MCP install failure surfaces error", async () => {
+    const plan = planFrom([
+      ITEM("add", "mcp", "mcp:bad/repo", { ref: "main", range: "main" }),
+    ]);
+    const installMcp = mockInstallMcp("fail");
+    const result = await applySync(plan, {
+      projectRoot: PROJECT_ROOT,
+      state: EMPTY_STATE,
+      installMcpFn: installMcp.fn,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.failed).toBe(1);
+    expect(result.value.results[0].error).toContain("mcp install failed");
+  });
+
+  test("lock-* MCP items are skipped", async () => {
+    const plan = planFrom([
+      ITEM("lock-missing", "mcp", "mcp:foo/bar"),
+      ITEM("lock-orphan", "mcp", "mcp:foo/baz"),
+    ]);
+    const installMcp = mockInstallMcp();
+    const removeMcp = mockRemoveMcp();
+    const result = await applySync(plan, {
+      projectRoot: PROJECT_ROOT,
+      state: EMPTY_STATE,
+      installMcpFn: installMcp.fn,
+      removeMcpFn: removeMcp.fn,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.skipped).toBe(2);
+    expect(installMcp.calls).toHaveLength(0);
+    expect(removeMcp.calls).toHaveLength(0);
+  });
+});
+
 describe("applySync — capture callback wiring", () => {
   test("plugin add passes auto-confirm + abort capture callbacks", async () => {
     const plan = planFrom([

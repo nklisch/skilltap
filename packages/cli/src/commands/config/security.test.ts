@@ -54,6 +54,24 @@ async function runGet(key: string, configDir: string): Promise<string> {
   return (await new Response(proc.stdout).text()).trim();
 }
 
+async function runGetJson(key: string, configDir: string): Promise<unknown> {
+  const proc = Bun.spawn(
+    [...cliCmd(), "config", "get", key, "--json"],
+    {
+      cwd: CLI_DIR,
+      stdin: "pipe",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ...process.env,
+        XDG_CONFIG_HOME: configDir,
+      },
+    },
+  );
+  await proc.exited;
+  return JSON.parse(await new Response(proc.stdout).text());
+}
+
 let env: TestEnv;
 let configDir: string;
 
@@ -67,160 +85,104 @@ afterEach(async () => {
 });
 
 describe("skilltap config security (non-interactive)", () => {
-  test("--preset strict applies security settings", async () => {
-    const result = await runSecurity(["--preset", "strict"], configDir);
+  test("--scan semantic updates security.scan", async () => {
+    const result = await runSecurity(["--scan", "semantic"], configDir);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("strict");
-
     expect(await runGet("security.scan", configDir)).toBe("semantic");
+  });
+
+  test("--on-warn fail updates security.on_warn", async () => {
+    const result = await runSecurity(["--on-warn", "fail"], configDir);
+    expect(result.exitCode).toBe(0);
     expect(await runGet("security.on_warn", configDir)).toBe("fail");
-    expect(await runGet("security.require_scan", configDir)).toBe("true");
   });
 
-  test("--preset relaxed applies relaxed settings", async () => {
-    const result = await runSecurity(["--preset", "relaxed"], configDir);
-    expect(result.exitCode).toBe(0);
-
-    expect(await runGet("security.scan", configDir)).toBe("static");
-    expect(await runGet("security.on_warn", configDir)).toBe("allow");
-  });
-
-  test("--trust tap:foo=none adds override to config", async () => {
-    const result = await runSecurity(["--trust", "tap:foo=none"], configDir);
-    expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("added tap trust override 'foo' → none");
-  });
-
-  test("--trust source:npm=standard adds source override", async () => {
+  test("--scan and --on-warn together apply both updates", async () => {
     const result = await runSecurity(
-      ["--trust", "source:npm=standard"],
+      ["--scan", "none", "--on-warn", "prompt"],
       configDir,
     );
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain(
-      "added source trust override 'npm' → standard",
+    expect(await runGet("security.scan", configDir)).toBe("none");
+    expect(await runGet("security.on_warn", configDir)).toBe("prompt");
+  });
+
+  test("--trust-add appends a glob pattern to security.trust", async () => {
+    const result = await runSecurity(
+      ["--trust-add", "github.com/me/*"],
+      configDir,
     );
-  });
-
-  test("--remove-trust removes matching override", async () => {
-    // First add an override
-    await runSecurity(["--trust", "tap:foo=none"], configDir);
-
-    const result = await runSecurity(["--remove-trust", "foo"], configDir);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toContain("removed trust override 'foo'");
+    expect(result.stdout).toContain("github.com/me/*");
+    expect(await runGetJson("security.trust", configDir)).toEqual([
+      "github.com/me/*",
+    ]);
   });
 
-  test("invalid preset name exits 1", async () => {
-    const result = await runSecurity(["--preset", "bogus"], configDir);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid preset");
-    expect(result.stderr).toContain("bogus");
+  test("--trust-add does not duplicate existing patterns", async () => {
+    await runSecurity(["--trust-add", "foo"], configDir);
+    await runSecurity(["--trust-add", "foo"], configDir);
+    expect(await runGetJson("security.trust", configDir)).toEqual(["foo"]);
   });
 
-  test("invalid trust format exits 1", async () => {
-    const result = await runSecurity(["--trust", "badformat"], configDir);
+  test("multiple --trust-add invocations append patterns", async () => {
+    await runSecurity(["--trust-add", "alpha"], configDir);
+    await runSecurity(["--trust-add", "beta"], configDir);
+    expect(await runGetJson("security.trust", configDir)).toEqual([
+      "alpha",
+      "beta",
+    ]);
+  });
+
+  test("--trust-remove removes the matching pattern", async () => {
+    await runSecurity(["--trust-add", "alpha"], configDir);
+    await runSecurity(["--trust-add", "beta"], configDir);
+
+    const result = await runSecurity(["--trust-remove", "alpha"], configDir);
+    expect(result.exitCode).toBe(0);
+    expect(await runGetJson("security.trust", configDir)).toEqual(["beta"]);
+  });
+
+  test("--trust-remove on missing pattern exits 1", async () => {
+    const result = await runSecurity(
+      ["--trust-remove", "nonexistent"],
+      configDir,
+    );
     expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid --trust format");
+    expect(result.stderr).toContain("nonexistent");
+  });
+
+  test("--trust-list prints empty marker when no patterns", async () => {
+    const result = await runSecurity(["--trust-list"], configDir);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("(no trust patterns)");
+  });
+
+  test("--trust-list prints each pattern on its own line", async () => {
+    await runSecurity(["--trust-add", "alpha"], configDir);
+    await runSecurity(["--trust-add", "beta"], configDir);
+
+    const result = await runSecurity(["--trust-list"], configDir);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("alpha");
+    expect(result.stdout).toContain("beta");
+  });
+
+  test("invalid --scan value exits 1", async () => {
+    const result = await runSecurity(["--scan", "turbo"], configDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toLowerCase()).toContain("scan");
+  });
+
+  test("invalid --on-warn value exits 1", async () => {
+    const result = await runSecurity(["--on-warn", "yolo"], configDir);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toLowerCase()).toContain("on-warn");
   });
 
   test("no flags in non-TTY exits 1 (TTY required for interactive)", async () => {
     const result = await runSecurity([], configDir);
     expect(result.exitCode).toBe(1);
     expect(result.stderr).toContain("requires a TTY");
-  });
-
-  test("--scan and --on-warn apply individual field overrides", async () => {
-    const result = await runSecurity(
-      ["--scan", "off", "--on-warn", "allow"],
-      configDir,
-    );
-    expect(result.exitCode).toBe(0);
-
-    expect(await runGet("security.scan", configDir)).toBe("off");
-    expect(await runGet("security.on_warn", configDir)).toBe("allow");
-  });
-
-  test("--remove-trust nonexistent exits 1", async () => {
-    const result = await runSecurity(
-      ["--remove-trust", "nonexistent"],
-      configDir,
-    );
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("No trust override found");
-  });
-
-  test("--require-scan flag sets require_scan", async () => {
-    const result = await runSecurity(["--require-scan"], configDir);
-    expect(result.exitCode).toBe(0);
-    expect(await runGet("security.require_scan", configDir)).toBe("true");
-  });
-
-  test("invalid --scan value exits 1", async () => {
-    const result = await runSecurity(["--scan", "turbo"], configDir);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid scan");
-  });
-
-  test("invalid --on-warn value exits 1", async () => {
-    const result = await runSecurity(["--on-warn", "yolo"], configDir);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid on-warn");
-  });
-
-  test("--trust with invalid preset in trust string exits 1", async () => {
-    const result = await runSecurity(["--trust", "tap:foo=bogus"], configDir);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid --trust format");
-  });
-
-  test("--trust with invalid source type exits 1", async () => {
-    const result = await runSecurity(
-      ["--trust", "source:invalid=none"],
-      configDir,
-    );
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr).toContain("Invalid --trust format");
-  });
-
-  test("--preset with --scan applies preset then overrides scan", async () => {
-    const result = await runSecurity(
-      ["--preset", "relaxed", "--scan", "semantic"],
-      configDir,
-    );
-    expect(result.exitCode).toBe(0);
-    // scan should be semantic (flag overrides preset), on_warn should be allow (from relaxed)
-    expect(await runGet("security.scan", configDir)).toBe("semantic");
-    expect(await runGet("security.on_warn", configDir)).toBe("allow");
-  });
-
-  test("multiple trust overrides can be added sequentially", async () => {
-    await runSecurity(["--trust", "tap:corp=none"], configDir);
-    await runSecurity(["--trust", "source:npm=strict"], configDir);
-
-    const proc = Bun.spawn(
-      [
-        "bun",
-        "run",
-        "--bun",
-        "src/index.ts",
-        "config",
-        "get",
-        "security",
-        "--json",
-      ],
-      {
-        cwd: CLI_DIR,
-        stdin: "pipe",
-        stdout: "pipe",
-        stderr: "pipe",
-        env: { ...process.env, XDG_CONFIG_HOME: configDir },
-      },
-    );
-    await proc.exited;
-    const secJson = JSON.parse(await new Response(proc.stdout).text());
-    expect(secJson.overrides).toHaveLength(2);
-    expect(secJson.overrides[0].match).toBe("corp");
-    expect(secJson.overrides[1].match).toBe("npm");
   });
 });

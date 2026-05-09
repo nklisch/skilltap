@@ -7,6 +7,7 @@ const EMPTY_MANIFEST: ProjectManifest = {
   targets: { also: [], scope: "" },
   skills: {},
   plugins: {},
+  mcps: [],
   taps: {},
 };
 
@@ -14,6 +15,7 @@ const EMPTY_LOCKFILE: Lockfile = {
   version: 1,
   skill: [],
   plugin: [],
+  mcps: [],
 };
 
 const EMPTY_STATE: State = {
@@ -251,5 +253,173 @@ describe("detectDrift — multi-item scenarios", () => {
     };
     const r = detectDrift(EMPTY_MANIFEST, EMPTY_LOCKFILE, state);
     expect(r.items).toEqual([]);
+  });
+});
+
+describe("detectDrift — MCPs", () => {
+  const MCP_RECORD = (
+    overrides: Partial<{
+      name: string;
+      source: string;
+    }> = {},
+  ) => ({
+    name: overrides.name ?? "skilltap:context7:server",
+    source: overrides.source ?? "mcp:upstash/context7-mcp",
+    config: {
+      type: "stdio" as const,
+      command: "node",
+      args: [],
+      env: {},
+    },
+    targets: ["claude-code"],
+    installedAt: "2026-05-08T00:00:00.000Z",
+  });
+
+  test("manifest MCP not in state → add", () => {
+    const manifest: ProjectManifest = {
+      ...EMPTY_MANIFEST,
+      mcps: [
+        {
+          name: "skilltap:context7:server",
+          source: "mcp:upstash/context7-mcp",
+          ref: "main",
+          also: [],
+        },
+      ],
+    };
+    const r = detectDrift(manifest, EMPTY_LOCKFILE, EMPTY_STATE);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({
+      kind: "add",
+      target: "mcp",
+      source: "mcp:upstash/context7-mcp",
+    });
+  });
+
+  test("state MCP not in manifest → remove", () => {
+    const state: State = {
+      ...EMPTY_STATE,
+      mcpServers: [MCP_RECORD()],
+    };
+    const r = detectDrift(EMPTY_MANIFEST, EMPTY_LOCKFILE, state);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({
+      kind: "remove",
+      target: "mcp",
+      source: "mcp:upstash/context7-mcp",
+    });
+  });
+
+  test("manifest+state but no lockfile → lock-missing", () => {
+    const manifest: ProjectManifest = {
+      ...EMPTY_MANIFEST,
+      mcps: [
+        {
+          name: "skilltap:context7:server",
+          source: "mcp:upstash/context7-mcp",
+          ref: "main",
+          also: [],
+        },
+      ],
+    };
+    const state: State = {
+      ...EMPTY_STATE,
+      mcpServers: [MCP_RECORD()],
+    };
+    const r = detectDrift(manifest, EMPTY_LOCKFILE, state);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({
+      kind: "lock-missing",
+      target: "mcp",
+    });
+  });
+
+  test("manifest ref differs from lockfile ref → ref-mismatch", () => {
+    const manifest: ProjectManifest = {
+      ...EMPTY_MANIFEST,
+      mcps: [
+        {
+          name: "skilltap:context7:server",
+          source: "mcp:upstash/context7-mcp",
+          ref: "v2.0",
+          also: [],
+        },
+      ],
+    };
+    const lockfile: Lockfile = {
+      ...EMPTY_LOCKFILE,
+      mcps: [
+        {
+          name: "skilltap:context7:server",
+          source: "mcp:upstash/context7-mcp",
+          ref: "v1.0",
+          sha: "abc123",
+          also: [],
+        },
+      ],
+    };
+    const state: State = {
+      ...EMPTY_STATE,
+      mcpServers: [MCP_RECORD()],
+    };
+    const r = detectDrift(manifest, lockfile, state);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({
+      kind: "ref-mismatch",
+      target: "mcp",
+    });
+  });
+
+  test("lockfile MCP entry with no manifest or state → lock-orphan", () => {
+    const lockfile: Lockfile = {
+      ...EMPTY_LOCKFILE,
+      mcps: [
+        {
+          name: "skilltap:abandoned:server",
+          source: "mcp:abandoned/repo",
+          ref: "main",
+          sha: "abc",
+          also: [],
+        },
+      ],
+    };
+    const r = detectDrift(EMPTY_MANIFEST, lockfile, EMPTY_STATE);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0]).toMatchObject({
+      kind: "lock-orphan",
+      target: "mcp",
+    });
+  });
+
+  test("clean MCP setup → in sync", () => {
+    const manifest: ProjectManifest = {
+      ...EMPTY_MANIFEST,
+      mcps: [
+        {
+          name: "skilltap:context7:server",
+          source: "mcp:upstash/context7-mcp",
+          ref: "main",
+          also: [],
+        },
+      ],
+    };
+    const lockfile: Lockfile = {
+      ...EMPTY_LOCKFILE,
+      mcps: [
+        {
+          name: "skilltap:context7:server",
+          source: "mcp:upstash/context7-mcp",
+          ref: "main",
+          sha: "abc123",
+          also: [],
+        },
+      ],
+    };
+    const state: State = {
+      ...EMPTY_STATE,
+      mcpServers: [MCP_RECORD()],
+    };
+    const r = detectDrift(manifest, lockfile, state);
+    expect(r.inSync).toBe(true);
   });
 });

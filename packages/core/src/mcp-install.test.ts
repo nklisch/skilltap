@@ -3,6 +3,8 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
+import { loadLockfile } from "./manifest/lockfile";
+import { loadManifest } from "./manifest/load";
 import { installMcp, parseMcpRef, removeMcp } from "./mcp-install";
 import { loadState } from "./state/load";
 
@@ -185,6 +187,105 @@ describe("installMcp — local source", () => {
     if (stateResult.value.mcpServers[0].config.type === "stdio") {
       expect(stateResult.value.mcpServers[0].config.args).toEqual(["v2.js"]);
     }
+  });
+});
+
+describe("installMcp — manifest + lockfile sync (Unit 1.14)", () => {
+  test("appends [[mcps]] entry to skilltap.toml when manifest exists", async () => {
+    // Seed a project manifest
+    await writeFile(join(projectRoot, "skilltap.toml"), "");
+
+    await writeFile(
+      join(mcpSourceDir, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: { db: { command: "node", args: ["server.js"] } },
+      }),
+    );
+    const source = `mcp:${mcpSourceDir}`;
+
+    const result = await installMcp(source, {
+      scope: "project",
+      projectRoot,
+    });
+    expect(result.ok).toBe(true);
+
+    const manifest = await loadManifest(projectRoot);
+    expect(manifest.ok).toBe(true);
+    if (!manifest.ok) return;
+    expect(manifest.value.mcps).toHaveLength(1);
+    expect(manifest.value.mcps[0]).toMatchObject({
+      source,
+      ref: expect.any(String),
+    });
+  });
+
+  test("appends [[mcps]] entry to skilltap.lock", async () => {
+    await writeFile(
+      join(mcpSourceDir, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: { db: { command: "node", args: ["s.js"] } },
+      }),
+    );
+    const source = `mcp:${mcpSourceDir}`;
+
+    const result = await installMcp(source, {
+      scope: "project",
+      projectRoot,
+    });
+    expect(result.ok).toBe(true);
+
+    const lockfile = await loadLockfile(projectRoot);
+    expect(lockfile.ok).toBe(true);
+    if (!lockfile.ok) return;
+    expect(lockfile.value.mcps).toHaveLength(1);
+    expect(lockfile.value.mcps[0].source).toBe(source);
+  });
+
+  test("removeMcp drops entry from manifest + lockfile", async () => {
+    await writeFile(join(projectRoot, "skilltap.toml"), "");
+    await writeFile(
+      join(mcpSourceDir, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: { db: { command: "node", args: ["s.js"] } },
+      }),
+    );
+    const source = `mcp:${mcpSourceDir}`;
+
+    expect(
+      (await installMcp(source, { scope: "project", projectRoot })).ok,
+    ).toBe(true);
+
+    const removeResult = await removeMcp(source, {
+      scope: "project",
+      projectRoot,
+    });
+    expect(removeResult.ok).toBe(true);
+
+    const manifest = await loadManifest(projectRoot);
+    expect(manifest.ok).toBe(true);
+    if (manifest.ok) expect(manifest.value.mcps).toHaveLength(0);
+
+    const lockfile = await loadLockfile(projectRoot);
+    expect(lockfile.ok).toBe(true);
+    if (lockfile.ok) expect(lockfile.value.mcps).toHaveLength(0);
+  });
+
+  test("global scope does not write manifest or lockfile", async () => {
+    await writeFile(
+      join(mcpSourceDir, ".mcp.json"),
+      JSON.stringify({
+        mcpServers: { db: { command: "node", args: ["s.js"] } },
+      }),
+    );
+    const source = `mcp:${mcpSourceDir}`;
+
+    const result = await installMcp(source, { scope: "global" });
+    expect(result.ok).toBe(true);
+
+    // Lockfile should not have been touched at projectRoot.
+    const lockfile = await loadLockfile(projectRoot);
+    expect(lockfile.ok).toBe(true);
+    if (lockfile.ok) expect(lockfile.value.mcps).toHaveLength(0);
   });
 });
 

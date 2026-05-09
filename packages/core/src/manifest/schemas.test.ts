@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
   LockEntrySchema,
+  LockfileMcpEntrySchema,
   LockfileSchema,
   ManifestEntryDetailSchema,
   ManifestEntrySchema,
+  ManifestMcpEntrySchema,
   ProjectManifestSchema,
   TargetsSchema,
 } from "./schemas";
@@ -181,5 +183,133 @@ describe("LockEntrySchema / LockfileSchema", () => {
   test("rejects wrong lockfile version", () => {
     expect(LockfileSchema.safeParse({ version: 2 }).success).toBe(false);
     expect(LockfileSchema.safeParse({ version: 0 }).success).toBe(false);
+  });
+});
+
+describe("ManifestMcpEntrySchema", () => {
+  test("accepts a minimal entry with defaults applied", () => {
+    const result = ManifestMcpEntrySchema.safeParse({
+      name: "x",
+      source: "owner/repo",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ref).toBe("main");
+      expect(result.data.also).toEqual([]);
+    }
+  });
+
+  test("accepts a fully-populated entry", () => {
+    const result = ManifestMcpEntrySchema.safeParse({
+      name: "context7",
+      source: "upstash/context7-mcp",
+      ref: "v1.2.0",
+      also: ["claude-code", "claude-desktop"],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.ref).toBe("v1.2.0");
+      expect(result.data.also).toEqual(["claude-code", "claude-desktop"]);
+    }
+  });
+
+  test("rejects empty name", () => {
+    expect(
+      ManifestMcpEntrySchema.safeParse({ name: "", source: "x/y" }).success,
+    ).toBe(false);
+  });
+
+  test("rejects empty source", () => {
+    expect(
+      ManifestMcpEntrySchema.safeParse({ name: "x", source: "" }).success,
+    ).toBe(false);
+  });
+});
+
+describe("LockfileMcpEntrySchema", () => {
+  test("accepts a fully-populated entry", () => {
+    const result = LockfileMcpEntrySchema.safeParse({
+      name: "context7",
+      source: "upstash/context7-mcp",
+      ref: "main",
+      sha: "abc123",
+      also: ["claude-code"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  test("rejects entry missing sha", () => {
+    expect(
+      LockfileMcpEntrySchema.safeParse({
+        name: "x",
+        source: "y/z",
+        ref: "main",
+      }).success,
+    ).toBe(false);
+  });
+
+  test("defaults also to []", () => {
+    const result = LockfileMcpEntrySchema.safeParse({
+      name: "x",
+      source: "y/z",
+      ref: "main",
+      sha: "abc",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.also).toEqual([]);
+  });
+});
+
+describe("ProjectManifestSchema with mcps", () => {
+  test("accepts a manifest with populated mcps", () => {
+    const result = ProjectManifestSchema.safeParse({
+      mcps: [
+        { name: "context7", source: "upstash/context7-mcp" },
+        {
+          name: "browser",
+          source: "anthropics/mcp-browser",
+          ref: "v1.2.0",
+          also: ["claude-desktop"],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mcps).toHaveLength(2);
+      expect(result.data.mcps[0].ref).toBe("main");
+      expect(result.data.mcps[1].ref).toBe("v1.2.0");
+    }
+  });
+
+  test("defaults mcps to []", () => {
+    const result = ProjectManifestSchema.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.mcps).toEqual([]);
+  });
+});
+
+describe("LockfileSchema with mcps", () => {
+  test("accepts a lockfile with mcps", () => {
+    const result = LockfileSchema.safeParse({
+      version: 1,
+      mcps: [
+        {
+          name: "context7",
+          source: "upstash/context7-mcp",
+          ref: "main",
+          sha: "abc",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.mcps).toHaveLength(1);
+    }
+  });
+
+  test("defaults mcps to []", () => {
+    const result = LockfileSchema.safeParse({ version: 1 });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.mcps).toEqual([]);
   });
 });

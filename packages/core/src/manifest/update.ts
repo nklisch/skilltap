@@ -5,8 +5,10 @@ import { saveManifest } from "./save";
 import {
   type LockEntry,
   type Lockfile,
+  type LockfileMcpEntry,
   LockfileSchema,
   type ManifestEntry,
+  type ManifestMcpEntry,
   type ProjectManifest,
 } from "./schemas";
 
@@ -122,6 +124,126 @@ async function removeManifestEntry(
   await saveLockfile(projectRoot, nextLockfile);
   return ok(undefined);
 }
+
+// ---------------------------------------------------------------------------
+// MCP manifest + lockfile writers (Unit 1.14)
+// ---------------------------------------------------------------------------
+
+export interface ManifestMcpUpdateInput {
+  name: string;
+  source: string;
+  ref?: string;
+  also?: string[];
+}
+
+export interface LockfileMcpUpdateInput {
+  name: string;
+  source: string;
+  ref: string;
+  sha: string;
+  also?: string[];
+}
+
+export async function addMcpToManifest(
+  projectRoot: string,
+  input: ManifestMcpUpdateInput,
+): Promise<Result<void, UserError>> {
+  if (!(await manifestExists(projectRoot))) return ok(undefined);
+
+  const manifestResult = await loadManifest(projectRoot);
+  if (!manifestResult.ok) return ok(undefined);
+  const manifest = manifestResult.value;
+
+  const newEntry: ManifestMcpEntry = {
+    name: input.name,
+    source: input.source,
+    ref: input.ref ?? "main",
+    also: input.also ?? [],
+  };
+
+  const existingIdx = manifest.mcps.findIndex((m) => m.name === input.name);
+  const nextMcps =
+    existingIdx === -1
+      ? [...manifest.mcps, newEntry]
+      : manifest.mcps.map((m, i) => (i === existingIdx ? newEntry : m));
+
+  const updated: ProjectManifest = { ...manifest, mcps: nextMcps };
+  await saveManifest(projectRoot, updated);
+  return ok(undefined);
+}
+
+export async function removeMcpFromManifest(
+  projectRoot: string,
+  name: string,
+): Promise<Result<void, UserError>> {
+  if (!(await manifestExists(projectRoot))) return ok(undefined);
+
+  const manifestResult = await loadManifest(projectRoot);
+  if (!manifestResult.ok) return ok(undefined);
+  const manifest = manifestResult.value;
+
+  const filtered = manifest.mcps.filter((m) => m.name !== name);
+  if (filtered.length === manifest.mcps.length) return ok(undefined);
+
+  const updated: ProjectManifest = { ...manifest, mcps: filtered };
+  await saveManifest(projectRoot, updated);
+  return ok(undefined);
+}
+
+export async function addMcpToLockfile(
+  projectRoot: string,
+  input: LockfileMcpUpdateInput,
+): Promise<Result<void, UserError>> {
+  const lockfileResult = await loadLockfile(projectRoot);
+  if (!lockfileResult.ok) return ok(undefined);
+  const lockfile = lockfileResult.value;
+
+  const newEntry: LockfileMcpEntry = {
+    name: input.name,
+    source: input.source,
+    ref: input.ref,
+    sha: input.sha,
+    also: input.also ?? [],
+  };
+
+  const existingIdx = lockfile.mcps.findIndex((m) => m.name === input.name);
+  const nextMcps =
+    existingIdx === -1
+      ? [...lockfile.mcps, newEntry]
+      : lockfile.mcps.map((m, i) => (i === existingIdx ? newEntry : m));
+
+  const next: Lockfile = LockfileSchema.parse({
+    version: 1,
+    skill: lockfile.skill,
+    plugin: lockfile.plugin,
+    mcps: nextMcps,
+  });
+  await saveLockfile(projectRoot, next);
+  return ok(undefined);
+}
+
+export async function removeMcpFromLockfile(
+  projectRoot: string,
+  name: string,
+): Promise<Result<void, UserError>> {
+  const lockfileResult = await loadLockfile(projectRoot);
+  if (!lockfileResult.ok) return ok(undefined);
+  const lockfile = lockfileResult.value;
+
+  const filtered = lockfile.mcps.filter((m) => m.name !== name);
+  if (filtered.length === lockfile.mcps.length) return ok(undefined);
+
+  const next: Lockfile = LockfileSchema.parse({
+    version: 1,
+    skill: lockfile.skill,
+    plugin: lockfile.plugin,
+    mcps: filtered,
+  });
+  await saveLockfile(projectRoot, next);
+  return ok(undefined);
+}
+
+// ---------------------------------------------------------------------------
 
 async function updateManifestEntry(
   projectRoot: string,

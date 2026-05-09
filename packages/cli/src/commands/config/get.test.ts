@@ -104,7 +104,7 @@ describe("skilltap config get", () => {
     const { exitCode, stdout } = await runGet([], configDir);
     expect(exitCode).toBe(0);
     expect(stdout).toContain("defaults.scope =");
-    expect(stdout).toContain("security.threshold = 5");
+    expect(stdout).toContain("scanner.threshold = 5");
   });
 
   test("gets security.on_warn default", async () => {
@@ -113,21 +113,21 @@ describe("skilltap config get", () => {
       configDir,
     );
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe("prompt");
+    expect(stdout.trim()).toBe("install");
   });
 
-  test("gets security.require_scan default", async () => {
+  test("gets security.trust default (empty array)", async () => {
     const { exitCode, stdout } = await runGet(
-      ["security.require_scan"],
+      ["security.trust", "--json"],
       configDir,
     );
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe("false");
+    expect(JSON.parse(stdout)).toEqual([]);
   });
 
-  test("gets security.agent_cli default", async () => {
+  test("gets scanner.agent_cli default", async () => {
     const { exitCode, stdout } = await runGet(
-      ["security.agent_cli"],
+      ["scanner.agent_cli"],
       configDir,
     );
     expect(exitCode).toBe(0);
@@ -144,7 +144,7 @@ describe("skilltap config get", () => {
     expect(sec.scan).toBeDefined();
     expect(sec.on_warn).toBeDefined();
     expect(sec.scan).toBe("static");
-    expect(sec.on_warn).toBe("prompt");
-    expect(sec.overrides).toEqual([]);
+    expect(sec.on_warn).toBe("install");
+    expect(sec.trust).toEqual([]);
   });
 });

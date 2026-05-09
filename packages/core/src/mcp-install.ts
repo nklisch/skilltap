@@ -3,7 +3,13 @@ import { join } from "node:path";
 import { resolveSource } from "./adapters";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir } from "./fs";
-import { clone, type GitError } from "./git";
+import { clone, type GitError, revParse } from "./git";
+import {
+  addMcpToLockfile,
+  addMcpToManifest,
+  removeMcpFromLockfile,
+  removeMcpFromManifest,
+} from "./manifest";
 import { detectPlugin } from "./plugin/detect";
 import { parseMcpJson } from "./plugin/mcp";
 import {
@@ -89,6 +95,7 @@ export async function installMcp(
   if (!resolved.ok) return resolved;
 
   let contentDir: string;
+  let cloneTmpDir: string | null = null;
   let cleanup: (() => Promise<void>) | null = null;
 
   if (resolved.value.adapter === "local") {
@@ -112,6 +119,7 @@ export async function installMcp(
       await cleanup();
       return cloneResult;
     }
+    cloneTmpDir = tmp;
     contentDir = await realpath(tmp).catch(() => tmp);
   }
 
@@ -180,6 +188,39 @@ export async function installMcp(
     if (!saveResult.ok) {
       if (cleanup) await cleanup();
       return saveResult;
+    }
+
+    // Best-effort manifest+lockfile sync — only when project-scoped. Failures
+    // are logged but never fatal. The manifest writers no-op without a
+    // skilltap.toml; the lockfile writer creates skilltap.lock when missing.
+    if (options.scope === "project" && options.projectRoot) {
+      const projectRoot = options.projectRoot;
+      const lockRef = resolved.value.ref ?? "main";
+      let lockSha = lockRef;
+      if (cloneTmpDir) {
+        const shaResult = await revParse(cloneTmpDir);
+        if (shaResult.ok) lockSha = shaResult.value;
+      }
+      const alsoAgents = injectResult.value;
+      for (const record of records) {
+        await addMcpToManifest(projectRoot, {
+          name: record.name,
+          source,
+          ref: lockRef,
+          also: alsoAgents,
+        }).catch((e) =>
+          debug("mcp-install: addMcpToManifest failed", { error: String(e) }),
+        );
+        await addMcpToLockfile(projectRoot, {
+          name: record.name,
+          source,
+          ref: lockRef,
+          sha: lockSha,
+          also: alsoAgents,
+        }).catch((e) =>
+          debug("mcp-install: addMcpToLockfile failed", { error: String(e) }),
+        );
+      }
     }
 
     if (cleanup) await cleanup();
@@ -260,6 +301,24 @@ export async function removeMcp(
     options.scope === "project" ? options.projectRoot : undefined,
   );
   if (!saveResult.ok) return saveResult;
+
+  // Best-effort manifest+lockfile cleanup. Mirrors install — no-op without a
+  // manifest, never fails the operation.
+  if (options.scope === "project" && options.projectRoot) {
+    const projectRoot = options.projectRoot;
+    for (const record of matching) {
+      await removeMcpFromManifest(projectRoot, record.name).catch((e) =>
+        debug("mcp-install: removeMcpFromManifest failed", {
+          error: String(e),
+        }),
+      );
+      await removeMcpFromLockfile(projectRoot, record.name).catch((e) =>
+        debug("mcp-install: removeMcpFromLockfile failed", {
+          error: String(e),
+        }),
+      );
+    }
+  }
 
   return ok({
     removed: matching.length,

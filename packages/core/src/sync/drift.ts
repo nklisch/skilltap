@@ -5,7 +5,7 @@ import type {
 } from "../manifest/schemas";
 import type { InstalledSkill } from "../schemas/installed";
 import type { PluginRecord } from "../schemas/plugins";
-import type { State } from "../state/schema";
+import type { State, StoredMcpStandalone } from "../state/schema";
 import type { DriftItem, DriftReport, DriftTarget } from "./types";
 
 interface NormalizedEntry {
@@ -203,10 +203,109 @@ export function detectDrift(
     items,
   );
 
+  // ── MCPs ─────────────────────────────────────────────────────────────────
+  // MCPs are name-keyed, not source-keyed. Their manifest entries carry an
+  // exact `ref` pin (no version range). Drift kinds match skills/plugins.
+  detectMcpDrift(manifest, lockfile, state, items);
+
   return {
     items,
     inSync: items.length === 0,
   };
+}
+
+function detectMcpDrift(
+  manifest: ProjectManifest,
+  lockfile: Lockfile,
+  state: State,
+  items: DriftItem[],
+): void {
+  const manifestMcps = new Map<string, { source: string; ref: string }>();
+  for (const m of manifest.mcps ?? []) {
+    manifestMcps.set(m.name, { source: m.source, ref: m.ref });
+  }
+
+  const lockedMcps = new Map<
+    string,
+    { source: string; ref: string; sha: string }
+  >();
+  for (const m of lockfile.mcps ?? []) {
+    lockedMcps.set(m.name, { source: m.source, ref: m.ref, sha: m.sha });
+  }
+
+  const stateMcps = new Map<string, StoredMcpStandalone>();
+  for (const s of state.mcpServers) {
+    stateMcps.set(s.name, s);
+  }
+
+  for (const [name, declared] of manifestMcps) {
+    const installed = stateMcps.get(name);
+    const locked = lockedMcps.get(name);
+    const sourceKey = declared.source;
+
+    if (!installed) {
+      items.push({
+        kind: "add",
+        target: "mcp",
+        source: sourceKey,
+        declared: { ref: declared.ref, range: declared.ref },
+        locked: locked
+          ? { ref: locked.ref, sha: locked.sha, range: locked.ref }
+          : undefined,
+        reason: "declared in manifest, not installed",
+      });
+      continue;
+    }
+
+    if (!locked) {
+      items.push({
+        kind: "lock-missing",
+        target: "mcp",
+        source: sourceKey,
+        declared: { ref: declared.ref, range: declared.ref },
+        installed: { ref: declared.ref },
+        reason:
+          "no lockfile entry — run `skilltap update` to record the resolved ref",
+      });
+      continue;
+    }
+
+    if (declared.ref !== locked.ref) {
+      items.push({
+        kind: "ref-mismatch",
+        target: "mcp",
+        source: sourceKey,
+        declared: { ref: declared.ref, range: declared.ref },
+        installed: { ref: declared.ref },
+        locked: { ref: locked.ref, sha: locked.sha, range: locked.ref },
+        reason: "manifest ref differs from lockfile ref",
+      });
+    }
+  }
+
+  for (const [name, installed] of stateMcps) {
+    if (!manifestMcps.has(name)) {
+      items.push({
+        kind: "remove",
+        target: "mcp",
+        source: installed.source,
+        installed: { ref: undefined },
+        reason: "installed but not declared in manifest",
+      });
+    }
+  }
+
+  for (const [name, locked] of lockedMcps) {
+    if (!manifestMcps.has(name) && !stateMcps.has(name)) {
+      items.push({
+        kind: "lock-orphan",
+        target: "mcp",
+        source: locked.source,
+        locked: { ref: locked.ref, sha: locked.sha, range: locked.ref },
+        reason: "lockfile entry has no manifest or state reference",
+      });
+    }
+  }
 }
 
 function applyDriftForTable(

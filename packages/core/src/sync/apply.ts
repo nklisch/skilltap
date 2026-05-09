@@ -1,5 +1,6 @@
 import { installSkill } from "../install";
 import { canonicalizeSourceKey } from "../manifest/update";
+import { installMcp, removeMcp } from "../mcp-install";
 import { installPlugin } from "../plugin/install";
 import { removeInstalledPlugin } from "../plugin/lifecycle";
 import { removeSkill } from "../remove";
@@ -37,6 +38,8 @@ export interface SyncApplyOptions {
   removeSkillFn?: typeof removeSkill;
   installPluginFn?: typeof installPlugin;
   removeInstalledPluginFn?: typeof removeInstalledPlugin;
+  installMcpFn?: typeof installMcp;
+  removeMcpFn?: typeof removeMcp;
 }
 
 interface ApplyFns {
@@ -44,6 +47,8 @@ interface ApplyFns {
   removeSkillFn: typeof removeSkill;
   installPluginFn: typeof installPlugin;
   removeInstalledPluginFn: typeof removeInstalledPlugin;
+  installMcpFn: typeof installMcp;
+  removeMcpFn: typeof removeMcp;
 }
 
 export async function applySync(
@@ -56,6 +61,8 @@ export async function applySync(
     installPluginFn: options.installPluginFn ?? installPlugin,
     removeInstalledPluginFn:
       options.removeInstalledPluginFn ?? removeInstalledPlugin,
+    installMcpFn: options.installMcpFn ?? installMcp,
+    removeMcpFn: options.removeMcpFn ?? removeMcp,
   };
 
   const results: ApplyItemResult[] = [];
@@ -108,7 +115,40 @@ async function applyItem(
     }
   }
 
+  if (item.target === "mcp") {
+    if (item.kind === "remove") return applyRemoveMcp(item, options, fns);
+    if (item.kind === "add" || item.kind === "ref-mismatch") {
+      return applyAddMcp(item, options, fns);
+    }
+  }
+
   return { status: "skipped" };
+}
+
+async function applyAddMcp(
+  item: DriftItem,
+  options: SyncApplyOptions,
+  fns: ApplyFns,
+): Promise<{ status: ApplyStatus; error?: string }> {
+  const result = await fns.installMcpFn(item.source, {
+    scope: "project",
+    projectRoot: options.projectRoot,
+  });
+  if (!result.ok) return { status: "fail", error: result.error.message };
+  return { status: "ok" };
+}
+
+async function applyRemoveMcp(
+  item: DriftItem,
+  options: SyncApplyOptions,
+  fns: ApplyFns,
+): Promise<{ status: ApplyStatus; error?: string }> {
+  const result = await fns.removeMcpFn(item.source, {
+    scope: "project",
+    projectRoot: options.projectRoot,
+  });
+  if (!result.ok) return { status: "fail", error: result.error.message };
+  return { status: "ok" };
 }
 
 async function applyAddSkill(

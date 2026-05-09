@@ -14,10 +14,16 @@ export { recoverLockfile, recoverManifest } from "./recover";
 export { saveManifest } from "./save";
 export * from "./schemas";
 export {
+  addMcpToLockfile,
+  addMcpToManifest,
   addPluginToManifest,
   addSkillToManifest,
   canonicalizeSourceKey,
+  type LockfileMcpUpdateInput,
+  type ManifestMcpUpdateInput,
   type ManifestUpdateInput,
+  removeMcpFromLockfile,
+  removeMcpFromManifest,
   removePluginFromManifest,
   removeSkillFromManifest,
 } from "./update";

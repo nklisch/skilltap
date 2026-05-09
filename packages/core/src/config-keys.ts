@@ -1,6 +1,8 @@
 import type { Config } from "./schemas/config";
 import {
   AUTO_UPDATE_MODES,
+  ON_WARN_MODES,
+  SCAN_MODES,
   SCOPE_VALUES,
   SHOW_DIFF_MODES,
 } from "./schemas/config";
@@ -25,37 +27,63 @@ export const SETTABLE_KEYS: Record<string, SettableKeyDef> = {
   "defaults.scope": { type: "enum", enum: SCOPE_VALUES },
   "defaults.also": { type: "string[]" },
   "defaults.yes": { type: "boolean" },
-  "security.scan": { type: "enum", enum: ["static", "semantic", "off"] },
-  "security.on_warn": { type: "enum", enum: ["prompt", "fail", "allow"] },
-  "security.require_scan": { type: "boolean" },
-  "security.agent_cli": { type: "string" },
-  "security.ollama_model": { type: "string" },
-  "security.threshold": { type: "number" },
-  "security.max_size": { type: "number" },
+
+  "security.scan": { type: "enum", enum: SCAN_MODES },
+  "security.on_warn": { type: "enum", enum: ON_WARN_MODES },
+  "security.trust": { type: "string[]" },
+
+  "scanner.agent_cli": { type: "string" },
+  "scanner.ollama_model": { type: "string" },
+  "scanner.threshold": { type: "number" },
+  "scanner.max_size": { type: "number" },
+
+  "registry.enabled": { type: "string[]" },
+  "telemetry.enabled": { type: "boolean" },
   "updates.auto_update": { type: "enum", enum: AUTO_UPDATE_MODES },
   "updates.interval_hours": { type: "number" },
   "updates.show_diff": { type: "enum", enum: SHOW_DIFF_MODES },
+  builtin_tap: { type: "boolean" },
+  verbose: { type: "boolean" },
   default_git_host: { type: "string" },
 };
 
 const BLOCKED_SET_KEYS: Record<string, string> = {
+  "security.human.scan":
+    "Use 'security.scan' (per-mode split removed in v2.2). Run `skilltap migrate`.",
+  "security.human.on_warn":
+    "Use 'security.on_warn' (per-mode split removed in v2.2). Run `skilltap migrate`.",
+  "security.human.require_scan":
+    "'require_scan' was removed in v2.2; set on_warn = 'fail' instead.",
+  "security.agent.scan":
+    "Use 'security.scan' (per-mode split removed in v2.2). Run `skilltap migrate`.",
+  "security.agent.on_warn":
+    "Use 'security.on_warn' (per-mode split removed in v2.2). Run `skilltap migrate`.",
+  "security.agent.require_scan":
+    "'require_scan' was removed in v2.2; set on_warn = 'fail' instead.",
+  "security.require_scan":
+    "'require_scan' was removed in v2.2; set on_warn = 'fail' instead.",
+  "security.preset":
+    "Presets were removed in v2.2; set scan/on_warn/trust explicitly.",
+  "security.overrides":
+    "[[security.overrides]] was replaced by 'security.trust' (glob list) in v2.2. Run `skilltap migrate`.",
+  "security.agent_cli":
+    "Use 'scanner.agent_cli' (operational config moved to [scanner] block in v2.2).",
+  "security.ollama_model":
+    "Use 'scanner.ollama_model' (moved to [scanner] block in v2.2).",
+  "security.threshold":
+    "Use 'scanner.threshold' (moved to [scanner] block in v2.2).",
+  "security.max_size":
+    "Use 'scanner.max_size' (moved to [scanner] block in v2.2).",
   "agent-mode.enabled":
-    "agent-mode has been removed. Use --yes or set security.on_warn = 'allow' for unattended use.",
+    "[agent-mode] was removed in v2.0; non-interactive use is --yes/--json + TTY detection.",
   "agent-mode.scope":
-    "agent-mode has been removed. Use --project / --global per invocation.",
-  "telemetry.enabled": "Use 'skilltap config telemetry enable/disable'",
+    "[agent-mode] was removed in v2.0; non-interactive use is --yes/--json + TTY detection.",
+  "agent.default":
+    "[agent] was removed in v2.2; non-interactive use is --yes/--json + TTY detection.",
+  "agent.block":
+    "[agent] was removed in v2.2; non-interactive use is --yes/--json + TTY detection.",
   "telemetry.notice_shown": "Internal field",
   "telemetry.anonymous_id": "Internal field",
-  "security.overrides": "Use 'skilltap config security --trust'",
-  // Old per-mode keys from v1 — block with migration hint
-  "security.human.scan": "Use 'security.scan' (per-mode split removed in v2.2)",
-  "security.human.on_warn": "Use 'security.on_warn' (per-mode split removed in v2.2)",
-  "security.human.require_scan":
-    "Use 'security.require_scan' (per-mode split removed in v2.2)",
-  "security.agent.scan": "Use 'security.scan' (per-mode split removed in v2.2)",
-  "security.agent.on_warn": "Use 'security.on_warn' (per-mode split removed in v2.2)",
-  "security.agent.require_scan":
-    "Use 'security.require_scan' (per-mode split removed in v2.2)",
   taps: "Use 'skilltap tap add/remove'",
 };
 

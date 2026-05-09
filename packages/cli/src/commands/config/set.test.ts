@@ -131,15 +131,15 @@ describe("skilltap config set", () => {
     const set = await runCmd("set", ["agent-mode.enabled", "true"], configDir);
     expect(set.exitCode).toBe(1);
     expect(set.stderr).toContain("cannot be set");
-    expect(set.stderr).toContain("agent-mode has been removed");
+    expect(set.stderr).toContain("agent-mode");
   });
 
   test("sets security.scan field", async () => {
-    const set = await runCmd("set", ["security.scan", "off"], configDir);
+    const set = await runCmd("set", ["security.scan", "none"], configDir);
     expect(set.exitCode).toBe(0);
 
     const get = await runCmd("get", ["security.scan"], configDir);
-    expect(get.stdout.trim()).toBe("off");
+    expect(get.stdout.trim()).toBe("none");
   });
 
   test("sets default_git_host and reads it back", async () => {

@@ -6,7 +6,7 @@ export type DriftKind =
   | "lock-missing"
   | "lock-orphan";
 
-export type DriftTarget = "skill" | "plugin";
+export type DriftTarget = "skill" | "plugin" | "mcp";
 
 export interface DriftItem {
   kind: DriftKind;

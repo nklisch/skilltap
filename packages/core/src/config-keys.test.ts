@@ -87,18 +87,25 @@ describe("getConfigValue", () => {
     expect(r.value).toBe("static");
   });
 
-  test("gets security.overrides (empty array)", () => {
-    const r = getConfigValue(DEFAULT_CONFIG, "security.overrides");
+  test("gets security.trust (empty array)", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "security.trust");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value).toEqual([]);
   });
 
-  test("gets security.agent_cli", () => {
-    const r = getConfigValue(DEFAULT_CONFIG, "security.agent_cli");
+  test("gets scanner.agent_cli", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "scanner.agent_cli");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.value).toBe("");
+  });
+
+  test("gets scanner.threshold", () => {
+    const r = getConfigValue(DEFAULT_CONFIG, "scanner.threshold");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value).toBe(5);
   });
 });
 
@@ -107,17 +114,26 @@ describe("getConfigValue", () => {
 // ---------------------------------------------------------------------------
 
 describe("validateSetKey", () => {
-  test("accepts all settable keys", () => {
+  test("accepts all V2 settable keys", () => {
     const settable = [
       "defaults.scope",
       "defaults.also",
       "defaults.yes",
-      "security.agent_cli",
-      "security.ollama_model",
-      "security.threshold",
-      "security.max_size",
+      "security.scan",
+      "security.on_warn",
+      "security.trust",
+      "scanner.agent_cli",
+      "scanner.ollama_model",
+      "scanner.threshold",
+      "scanner.max_size",
+      "registry.enabled",
+      "telemetry.enabled",
       "updates.auto_update",
       "updates.interval_hours",
+      "updates.show_diff",
+      "builtin_tap",
+      "verbose",
+      "default_git_host",
     ];
     for (const key of settable) {
       const r = validateSetKey(key);
@@ -129,17 +145,10 @@ describe("validateSetKey", () => {
     const r = validateSetKey("agent-mode.enabled");
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.error.hint).toContain("agent-mode has been removed");
+    expect(r.error.hint).toContain("agent-mode");
   });
 
-  test("rejects telemetry keys with hint", () => {
-    const r = validateSetKey("telemetry.enabled");
-    expect(r.ok).toBe(false);
-    if (r.ok) return;
-    expect(r.error.hint).toContain("telemetry");
-  });
-
-  test("rejects per-mode security keys with config security hint", () => {
+  test("rejects per-mode security keys with migrate hint", () => {
     for (const key of [
       "security.human.scan",
       "security.human.on_warn",
@@ -157,25 +166,49 @@ describe("validateSetKey", () => {
     const r = validateSetKey("security.overrides");
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.error.hint).toContain("--trust");
+    expect(r.error.hint).toContain("security.trust");
   });
 
-  test("accepts flat security keys (scan, on_warn, require_scan)", () => {
-    for (const key of [
-      "security.scan",
-      "security.on_warn",
-      "security.require_scan",
-    ]) {
-      const r = validateSetKey(key);
-      expect(r.ok).toBe(true);
-    }
-  });
-
-  test("rejects security.agent with agent_cli hint", () => {
-    const r = validateSetKey("security.agent");
+  test("rejects security.require_scan with on_warn hint", () => {
+    const r = validateSetKey("security.require_scan");
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.error.hint).toContain("agent_cli");
+    expect(r.error.hint).toContain("on_warn");
+  });
+
+  test("rejects security.preset", () => {
+    const r = validateSetKey("security.preset");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("Presets");
+  });
+
+  test("rejects security.agent_cli pointing at scanner.agent_cli", () => {
+    const r = validateSetKey("security.agent_cli");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("scanner.agent_cli");
+  });
+
+  test("rejects security.ollama_model pointing at scanner.ollama_model", () => {
+    const r = validateSetKey("security.ollama_model");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("scanner.ollama_model");
+  });
+
+  test("rejects security.threshold pointing at scanner.threshold", () => {
+    const r = validateSetKey("security.threshold");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("scanner.threshold");
+  });
+
+  test("rejects security.max_size pointing at scanner.max_size", () => {
+    const r = validateSetKey("security.max_size");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error.hint).toContain("scanner.max_size");
   });
 
   test("rejects taps with hint", () => {
