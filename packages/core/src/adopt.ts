@@ -4,7 +4,6 @@ import { $ } from "bun";
 import type { ScanAllResult } from "./agent-plugins/registry";
 import { scanAllAgentPlugins } from "./agent-plugins/registry";
 import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
-import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
 import type { DiscoveredSkill, DiscoverOptions } from "./discover";
 import { discoverSkills } from "./discover";
@@ -26,6 +25,7 @@ import type { InstalledSkill } from "./schemas/installed";
 import type { PluginRecord } from "./schemas/plugins";
 import type { StaticWarning } from "./security/static";
 import { scanStatic } from "./security/static";
+import { applySkillStateChange } from "./state/apply";
 import { AGENT_PATHS, createAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
 import { err, ok, UserError } from "./types";
@@ -241,14 +241,17 @@ export async function adoptSkill(
       updatedAt: now,
     };
 
-    const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadSkillState(fileRoot);
-    if (!installedResult.ok) return installedResult;
-    const installed = installedResult.value;
-    installed.push(record);
-    const saveResult = await saveSkillState(installed, fileRoot);
-    if (!saveResult.ok) return saveResult;
-    await syncAdoptToManifest(record, projectRoot);
+    const applyResult = await applySkillStateChange({
+      scope,
+      projectRoot,
+      mutate: (current) => [...current, record],
+      manifestSync: {
+        onAdded: async (r, projectRoot) => {
+          await syncAdoptToManifest(r, projectRoot);
+        },
+      },
+    });
+    if (!applyResult.ok) return applyResult;
 
     return ok({ record, symlinksCreated });
   } else {
@@ -278,14 +281,17 @@ export async function adoptSkill(
     if (!symlinkResult.ok) return symlinkResult;
 
     // Save record to appropriate state
-    const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadSkillState(fileRoot);
-    if (!installedResult.ok) return installedResult;
-    const installed = installedResult.value;
-    installed.push(record);
-    const saveResult = await saveSkillState(installed, fileRoot);
-    if (!saveResult.ok) return saveResult;
-    await syncAdoptToManifest(record, projectRoot);
+    const applyResult = await applySkillStateChange({
+      scope,
+      projectRoot,
+      mutate: (current) => [...current, record],
+      manifestSync: {
+        onAdded: async (r, projectRoot) => {
+          await syncAdoptToManifest(r, projectRoot);
+        },
+      },
+    });
+    if (!applyResult.ok) return applyResult;
 
     return ok({ record, symlinksCreated });
   }
@@ -415,14 +421,17 @@ export async function adoptSkillFromPath(
       updatedAt: now,
     };
 
-    const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadSkillState(fileRoot);
-    if (!installedResult.ok) return installedResult;
-    const installed = installedResult.value;
-    installed.push(record);
-    const saveResult = await saveSkillState(installed, fileRoot);
-    if (!saveResult.ok) return saveResult;
-    await syncAdoptToManifest(record, projectRoot);
+    const applyResult = await applySkillStateChange({
+      scope,
+      projectRoot,
+      mutate: (current) => [...current, record],
+      manifestSync: {
+        onAdded: async (r, projectRoot) => {
+          await syncAdoptToManifest(r, projectRoot);
+        },
+      },
+    });
+    if (!applyResult.ok) return applyResult;
 
     return ok({ record, symlinksCreated });
   } else {
@@ -467,14 +476,17 @@ export async function adoptSkillFromPath(
       updatedAt: now,
     };
 
-    const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadSkillState(fileRoot);
-    if (!installedResult.ok) return installedResult;
-    const installed = installedResult.value;
-    installed.push(record);
-    const saveResult = await saveSkillState(installed, fileRoot);
-    if (!saveResult.ok) return saveResult;
-    await syncAdoptToManifest(record, projectRoot);
+    const applyResult = await applySkillStateChange({
+      scope,
+      projectRoot,
+      mutate: (current) => [...current, record],
+      manifestSync: {
+        onAdded: async (r, projectRoot) => {
+          await syncAdoptToManifest(r, projectRoot);
+        },
+      },
+    });
+    if (!applyResult.ok) return applyResult;
 
     return ok({ record, symlinksCreated });
   }
