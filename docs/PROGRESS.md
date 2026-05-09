@@ -3,8 +3,27 @@
 **Status:** Resumed 2026-05-08 for v2.2 (capture) + v2.0 Redesign (Phases 39–46). v2.0/v2.1 cutover work below remains complete.
 **Started:** 2026-05-05
 **Last updated:** 2026-05-08
-**Phases since last refactor:** 1 (44 TUI)
+**Phases since last refactor:** 2 (44 TUI, 45 migrate)
 **Total refactor passes:** 3
+
+## Phase 45 completion summary (2026-05-08)
+
+Migrate command verification + polish shipped in one commit (`0024038`). Most translation logic was already in place from Phases 27 (state migration) and 40 (config translation); Phase 45 adds the missing post-migration verification.
+
+**What shipped:**
+- `runMigrate()` now runs `runDoctor()` after non-no-op migrations. Result included in `MigrationReport.doctorReport` (optional field).
+- `runMigrate()` parses `skilltap.toml` (if present at projectRoot) and adds a warning to `MigrationReport.warnings` if it doesn't parse cleanly. Migration still succeeds — manifest issue is informational.
+- `commands/migrate.ts` surfaces doctor findings: green checkmark on all-pass; red `✗` on failures with hint to run `skilltap doctor`; yellow `!` on warnings. JSON output mode includes `doctorReport` in payload.
+- 3 new tests:
+  - No-op path doesn't include `doctorReport` (early-return cleanliness).
+  - End-to-end fixture: full v0.x setup with installed.json + plugins.json + v1 config (all 4 legacy block types: `[security.human]`, `[security.agent]`, `[agent-mode]`, `[[security.overrides]]`). Asserts state.json version/skills/plugins, config flatness, `.v1.bak` files, doctorReport defined.
+  - Malformed skilltap.toml produces warning but migration succeeds.
+
+**Verification:** Full suite 2190 pass / 51 skip / 0 fail (up from 2187; +3 tests).
+
+**Workflow:** Single Sonnet agent — Phase 45 was small enough to handle in one focused run.
+
+---
 
 ## Phase 44 completion summary (2026-05-08)
 
@@ -351,7 +370,7 @@ Tracking the v2.0 redesign (phases 26–38). Phases 1–25 (v0.1 through v1.0) a
 | 42  | Typed install/remove/update/toggle             | done     | 2026-05-08 |
 | 43  | Claude Code plugin adoption                    | done     | 2026-05-08 |
 | 44  | TUI dashboard (Ink)                            | done     | 2026-05-08 |
-| 45  | Migrate command rewrite                        | pending  | — |
+| 45  | Migrate command rewrite                        | done     | 2026-05-08 |
 | 46  | Polish + docs + release                        | pending  | — |
 
 ---
