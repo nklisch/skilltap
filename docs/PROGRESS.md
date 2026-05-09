@@ -6,6 +6,31 @@
 **Phases since last refactor:** 2 (44 TUI, 45 migrate)
 **Total refactor passes:** 3
 
+## Phase 46 completion summary (2026-05-08)
+
+Polish + docs + release prep shipped in one session. Phase 46.10 (version bump) and 46.11 (release verification) are user-gated and pending.
+
+**What shipped:**
+
+- **docs/UX.md rewritten** — old v2.0/v2.1 surface dropped; new file is a clean canonical CLI reference for the redesign surface only (~550 lines). Covers command tree, flag inventory, prompt matrices, common workflows, and error reference.
+- **docs/SPEC.md canonical markers** — added top-level note pointing at `## v2.0 Redesign` as canonical; added `> **Superseded.**` notes on `## CLI Commands` and `## v2.0 — Tooling-Surface Redesign`; changed the redesign section header note from "where this conflicts, this wins" to a clear **Canonical** label.
+- **docs/ARCH.md canonical markers** — same pattern: top-level note, `> **Superseded.**` on `## v2.0 Architecture Additions`, **Canonical** label on `## v2.0 Redesign Architecture`.
+- **README.md quickstart updated** — `install <source>` → `install skill|plugin|mcp <source>`; `--agent` section replaced with non-interactive-use section using `--yes`/`--json`; Commands table updated to v3 surface; Authoring section updated (`link` → `adopt`, `verify` → `doctor`); Gotchas updated with redesign breaking changes.
+- **AGENTS.md / .claude/CLAUDE.md** (symlinked) — v2.1 conventions section replaced with v2.0 Redesign conventions covering: typed install surface, no `--agent` flag, flat `[security]` block, no legacy fallback, `Output` interface convention, no silent aliases.
+- **website/guide/getting-started.md rewritten** — reflects typed `install skill`, `--scope` / `--yes` / `--json` patterns, `adopt` for local dev, `migrate` instructions.
+- **website/reference/cli.md rewritten** — clean canonical reference for the redesign surface; removed commands table at end.
+- **website/public/llms-full.txt regenerated** — 131.7 KB, 14 pages (was from 2026-05-07 with old content).
+- **packages/cli/src/e2e-v3.test.ts** — 13 new e2e tests covering: `install skill` (project + global), `install plugin`, `toggle plugin <name>:<component>`, `adopt <path>`, `remove plugin`, `migrate` from v0.x config, `status`/`doctor`/`update --check` exit codes. All pass.
+- **website/changelog.md** — v3.0.0 entry with full breaking-changes list, migration steps, and what was added.
+
+**Verification:** Full suite 2203 pass / 51 skip / 0 fail (up from 2190; +13 new e2e tests).
+
+**Pending (user-gated):**
+- 46.10: `bun run bump 3.0.0` (or appropriate version per user decision) + `git tag v3.0.0` + `git push --follow-tags`
+- 46.11: Binary builds, npm publish, Homebrew formula update (triggered by the tag push in 46.10 via GitHub Actions)
+
+---
+
 ## Phase 45 completion summary (2026-05-08)
 
 Migrate command verification + polish shipped in one commit (`0024038`). Most translation logic was already in place from Phases 27 (state migration) and 40 (config translation); Phase 45 adds the missing post-migration verification.
