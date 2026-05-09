@@ -15,7 +15,7 @@ import {
   removeTmpDir,
   type TestEnv,
 } from "@skilltap/test-utils";
-import { loadInstalled } from "./config";
+import { loadSkillState } from "./config";
 import { discoverSkills } from "./discover";
 import { installSkill } from "./install";
 import { removeAnySkill } from "./remove";
@@ -76,7 +76,7 @@ describe("removeAnySkill", () => {
       expect(afterStat).toBeNull();
 
       // installed.json should no longer have the record
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       expect(

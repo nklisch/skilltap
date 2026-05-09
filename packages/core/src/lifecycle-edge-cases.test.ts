@@ -21,7 +21,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { installSkill } from "./install";
 import { moveSkill } from "./move";
@@ -167,7 +167,7 @@ describe("error recovery", () => {
       "NOT VALID JSON {{{{",
     );
 
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(false);
   });
 
@@ -181,7 +181,7 @@ describe("error recovery", () => {
       "---\nname: old-local-skill\ndescription: test\n---\n# Skill\n",
     );
 
-    await saveInstalled({
+    await saveSkillState({
       version: 1,
       skills: [
         {
@@ -227,7 +227,7 @@ describe("error recovery", () => {
     await commitAll(skillDir);
     await $`git -C ${skillDir} remote add origin /tmp/skilltap-definitely-deleted-12345`.quiet();
 
-    await saveInstalled({
+    await saveSkillState({
       version: 1,
       skills: [
         {
@@ -441,7 +441,7 @@ describe("disable + update interaction", () => {
     expect(up.value.updated).toContain("standalone-skill");
 
     // Verify it's still disabled
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(

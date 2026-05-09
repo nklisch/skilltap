@@ -8,7 +8,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled } from "./config";
+import { loadSkillState } from "./config";
 import { installSkill } from "./install";
 import { updateSkill } from "./update";
 
@@ -212,7 +212,7 @@ describe("installSkill — npm standalone", () => {
           skipScan: true,
         });
 
-        const installedResult = await loadInstalled();
+        const installedResult = await loadSkillState();
         expect(installedResult.ok).toBe(true);
         if (!installedResult.ok) return;
 
@@ -467,7 +467,7 @@ describe("updateSkill — npm", () => {
         expect(content).toContain("Version two");
 
         // Installed record should reflect the new version
-        const installedResult = await loadInstalled();
+        const installedResult = await loadSkillState();
         expect(installedResult.ok).toBe(true);
         if (!installedResult.ok) return;
         expect(installedResult.value.skills[0]!.ref).toBe("2.0.0");

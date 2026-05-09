@@ -21,7 +21,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { adoptSkill } from "./adopt";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { discoverSkills } from "./discover";
 import { installSkill } from "./install";
@@ -50,7 +50,7 @@ async function linkSkillFixture(
     await createAgentSymlinks(skill.name, installPath, also, options.scope, options.projectRoot);
   }
   const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) throw installedResult.error;
   const now = new Date().toISOString();
   installedResult.value.skills.push({
@@ -66,7 +66,7 @@ async function linkSkillFixture(
     installedAt: now,
     updatedAt: now,
   });
-  const saveResult = await saveInstalled(installedResult.value, fileRoot);
+  const saveResult = await saveSkillState(installedResult.value, fileRoot);
   if (!saveResult.ok) throw saveResult.error;
 }
 
@@ -130,7 +130,7 @@ describe("git standalone lifecycle", () => {
     if (!up2.ok) return;
     expect(up2.value.updated).toContain("standalone-skill");
 
-    const loaded1 = await loadInstalled();
+    const loaded1 = await loadSkillState();
     expect(loaded1.ok).toBe(true);
     if (!loaded1.ok) return;
     const afterUpdateSha = loaded1.value.skills.find(
@@ -152,7 +152,7 @@ describe("git standalone lifecycle", () => {
     expect((await lstat(disabledDir)).isDirectory()).toBe(true);
     expect(await lstat(claudeLink).catch(() => null)).toBeNull();
 
-    const loaded2 = await loadInstalled();
+    const loaded2 = await loadSkillState();
     expect(loaded2.ok).toBe(true);
     if (!loaded2.ok) return;
     expect(
@@ -177,7 +177,7 @@ describe("git standalone lifecycle", () => {
     expect((await lstat(skillDir)).isDirectory()).toBe(true);
     expect((await lstat(claudeLink)).isSymbolicLink()).toBe(true);
 
-    const loaded3 = await loadInstalled();
+    const loaded3 = await loadSkillState();
     expect(loaded3.ok).toBe(true);
     if (!loaded3.ok) return;
     expect(
@@ -203,14 +203,14 @@ describe("git standalone lifecycle", () => {
     );
     expect((await lstat(projectSkillDir)).isDirectory()).toBe(true);
 
-    const globalLoaded = await loadInstalled();
+    const globalLoaded = await loadSkillState();
     expect(globalLoaded.ok).toBe(true);
     if (!globalLoaded.ok) return;
     expect(
       globalLoaded.value.skills.find((s) => s.name === "standalone-skill"),
     ).toBeUndefined();
 
-    const projectLoaded = await loadInstalled(projectDir);
+    const projectLoaded = await loadSkillState(projectDir);
     expect(projectLoaded.ok).toBe(true);
     if (!projectLoaded.ok) return;
     expect(
@@ -225,7 +225,7 @@ describe("git standalone lifecycle", () => {
     expect(rm.ok).toBe(true);
 
     expect(await lstat(projectSkillDir).catch(() => null)).toBeNull();
-    const finalLoaded = await loadInstalled(projectDir);
+    const finalLoaded = await loadSkillState(projectDir);
     expect(finalLoaded.ok).toBe(true);
     if (!finalLoaded.ok) return;
     expect(finalLoaded.value.skills).toHaveLength(0);
@@ -279,7 +279,7 @@ describe("git multi-skill lifecycle", () => {
     expect(rm1.ok).toBe(true);
 
     // Cache should still exist (skill-b uses it)
-    const loaded1 = await loadInstalled();
+    const loaded1 = await loadSkillState();
     expect(loaded1.ok).toBe(true);
     if (!loaded1.ok) return;
     expect(
@@ -293,7 +293,7 @@ describe("git multi-skill lifecycle", () => {
     const rm2 = await removeSkill("skill-b");
     expect(rm2.ok).toBe(true);
 
-    const loaded2 = await loadInstalled();
+    const loaded2 = await loadSkillState();
     expect(loaded2.ok).toBe(true);
     if (!loaded2.ok) return;
     expect(loaded2.value.skills).toHaveLength(0);
@@ -352,7 +352,7 @@ describe("adopted skill with remote lifecycle", () => {
     const rm = await removeSkill("standalone-skill");
     expect(rm.ok).toBe(true);
 
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(loaded.value.skills).toHaveLength(0);
@@ -402,7 +402,7 @@ describe("adopted local skill (no remote) lifecycle", () => {
     const rm = await removeSkill("local-skill");
     expect(rm.ok).toBe(true);
 
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(loaded.value.skills).toHaveLength(0);
@@ -457,7 +457,7 @@ describe("track-in-place adoption lifecycle", () => {
     const rm = await removeSkill("tracked-skill", { scope: "linked" });
     expect(rm.ok).toBe(true);
 
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(loaded.value.skills).toHaveLength(0);
@@ -496,7 +496,7 @@ describe("linked skill lifecycle", () => {
     // Linked skills: no file move, just symlink removal + active=false
     expect(await lstat(claudeLink).catch(() => null)).toBeNull();
 
-    const loaded1 = await loadInstalled();
+    const loaded1 = await loadSkillState();
     expect(loaded1.ok).toBe(true);
     if (!loaded1.ok) return;
     expect(
@@ -509,7 +509,7 @@ describe("linked skill lifecycle", () => {
 
     expect((await lstat(claudeLink)).isSymbolicLink()).toBe(true);
 
-    const loaded2 = await loadInstalled();
+    const loaded2 = await loadSkillState();
     expect(loaded2.ok).toBe(true);
     if (!loaded2.ok) return;
     expect(
@@ -520,7 +520,7 @@ describe("linked skill lifecycle", () => {
     const rm = await removeSkill("dev-skill", { scope: "linked" });
     expect(rm.ok).toBe(true);
 
-    const loaded3 = await loadInstalled();
+    const loaded3 = await loadSkillState();
     expect(loaded3.ok).toBe(true);
     if (!loaded3.ok) return;
     expect(loaded3.value.skills).toHaveLength(0);

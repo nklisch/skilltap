@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 setDefaultTimeout(60_000);
 
-import { loadInstalled } from "@skilltap/core";
+import { loadSkillState } from "@skilltap/core";
 import {
   createMaliciousSkillRepo,
   createMultiSkillRepo,
@@ -47,7 +47,7 @@ describe("install — standalone skill", () => {
       expect(exitCode).toBe(0);
       expect(stdout).toContain("standalone-skill");
 
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills).toHaveLength(1);
@@ -88,7 +88,7 @@ describe("install — multi-skill repo", () => {
       );
       expect(exitCode).toBe(0);
 
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills).toHaveLength(2);

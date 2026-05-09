@@ -103,29 +103,29 @@ describe("completions — bash script", () => {
       "status",
       "install",
       "remove",
-      "list",
       "update",
       "find",
-      "skills",
-      "link",
-      "unlink",
       "info",
-      "plugin",
       "create",
-      "verify",
       "config",
       "tap",
       "doctor",
       "completions",
       "self-update",
+      "migrate",
+      "sync",
+      "try",
+      "toggle",
+      "adopt",
+      "move",
     ];
     for (const cmd of commands) {
       expect(stdout).toContain(cmd);
     }
     // config subcommands
     expect(stdout).toContain("security telemetry get set edit");
-    // skills subcommands
-    expect(stdout).toContain("info remove link unlink adopt move");
+    // typed install/remove subcommands
+    expect(stdout).toContain("skill plugin mcp");
   });
 
   test("script includes --get-completions dynamic calls", async () => {
@@ -165,15 +165,19 @@ describe("completions — zsh script", () => {
       "status",
       "install",
       "remove",
-      "list",
       "update",
       "find",
-      "skills",
-      "plugin",
       "tap",
       "doctor",
       "completions",
       "self-update",
+      "migrate",
+      "sync",
+      "try",
+      "toggle",
+      "adopt",
+      "move",
+      "info",
     ]) {
       expect(stdout).toContain(cmd);
     }
@@ -187,8 +191,8 @@ describe("completions — zsh script", () => {
     ]) {
       expect(stdout).toContain(sub);
     }
-    // skills subcommands
-    for (const sub of ["info", "remove", "link", "unlink", "adopt", "move"]) {
+    // typed install/remove subcommands
+    for (const sub of ["skill", "plugin", "mcp"]) {
       expect(stdout).toContain(sub);
     }
   });
@@ -225,15 +229,19 @@ describe("completions — fish script", () => {
       "status",
       "install",
       "remove",
-      "list",
       "update",
       "find",
-      "skills",
-      "plugin",
       "tap",
       "doctor",
       "completions",
       "self-update",
+      "migrate",
+      "sync",
+      "try",
+      "toggle",
+      "adopt",
+      "move",
+      "info",
     ]) {
       expect(stdout).toContain(`-a ${cmd}`);
     }
@@ -243,13 +251,9 @@ describe("completions — fish script", () => {
     expect(stdout).toContain("-a 'get'");
     expect(stdout).toContain("-a 'set'");
     expect(stdout).toContain("-a 'edit'");
-    // skills subcommands
-    for (const sub of ["info", "remove", "link", "unlink", "adopt", "move"]) {
-      expect(stdout).toContain(sub);
-    }
-    // plugin subcommands
-    for (const sub of ["info", "toggle", "remove"]) {
-      expect(stdout).toContain(sub);
+    // typed install/remove subcommands
+    for (const sub of ["skill", "plugin", "mcp"]) {
+      expect(stdout).toContain(`-a '${sub}'`);
     }
   });
 

@@ -85,7 +85,7 @@ export async function runDoctor(
   const npmCheck = await checkNpm(safeInstalled);
   if (npmCheck) await emit(npmCheck);
 
-  // ── v2.0 checks (Phase 36) ────────────────────────────────────────────────
+  // ── v2.x checks ────────────────────────────────────────────────────────────
   // 10. state.json — load + corruption recovery
   const { check: stateCheck, state } = await checkStateV2(projectRoot);
   await emit(stateCheck);
@@ -102,14 +102,14 @@ export async function runDoctor(
   // 14. MCP injection consistency (state ↔ agent configs)
   await emit(await checkMcpConsistency(state, projectRoot));
 
-  // 15. v0.x file orphans (after canonical-store cutover in 31c-c-2d-1)
+  // 15. v0.x file orphans
   await emit(await checkV1Orphans(state, projectRoot));
 
-  // 16. Capture collisions canary (Phase 39) — skill in both state.skills[]
+  // 16. Capture collisions canary — skill in both state.skills[]
   // and a plugin's components[]. Should never fire after capture is wired.
   await emit(await checkCaptureCollisions(state));
 
-  // 17. Claude Code plugin overlaps (Phase 43 canary).
+  // 17. Claude Code plugin overlaps canary.
   await emit(await checkClaudeCodeOverlap(state));
 
   const hasFailure = checks.some((c) => c.status === "fail");

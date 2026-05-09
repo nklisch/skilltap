@@ -232,8 +232,8 @@ async function runUpdatePlugins(
     return;
   }
 
-  // Plugin update (re-install from source) is not yet implemented.
-  // Phase 42 wires the CLI surface; the core updatePlugin helper is a follow-up.
+  // Plugin update (re-install from source) is not yet implemented in core.
+  // The CLI surface is wired so users get a clear message instead of a stub.
   out.info(
     `Plugin update is not yet implemented. Re-install with: skilltap install plugin <source>`,
   );
@@ -268,8 +268,8 @@ async function runUpdateMcps(
     return;
   }
 
-  // MCP update (re-install from source) is not yet implemented.
-  // Phase 42 wires the CLI surface; the core updateMcpServer helper is a follow-up.
+  // MCP update (re-install from source) is not yet implemented in core.
+  // The CLI surface is wired so users get a clear message instead of a stub.
   out.info(
     `MCP server update is not yet implemented. Re-install with: skilltap install mcp <source>`,
   );

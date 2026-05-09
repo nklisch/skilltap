@@ -127,9 +127,9 @@ export async function saveConfig(config: Config): Promise<Result<void>> {
   }
 }
 
-// state.json is the only canonical store. v0.x installed.json fallback removed.
-// Users on v0.x must run `skilltap migrate` to populate state.json.
-export async function loadInstalled(
+// state.json is the only canonical store. The skill-slice accessor: read/write
+// just the `skills[]` array, leaving plugins and mcpServers untouched.
+export async function loadSkillState(
   projectRoot?: string,
 ): Promise<Result<InstalledJson>> {
   const stateResult = await loadState(projectRoot);
@@ -137,7 +137,7 @@ export async function loadInstalled(
   return ok({ version: 1 as const, skills: [...stateResult.value.skills] });
 }
 
-export async function saveInstalled(
+export async function saveSkillState(
   installed: InstalledJson,
   projectRoot?: string,
 ): Promise<Result<void>> {

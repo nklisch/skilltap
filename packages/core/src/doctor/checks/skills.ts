@@ -1,6 +1,6 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadInstalled, saveInstalled } from "../../config";
+import { loadSkillState, saveSkillState } from "../../config";
 import { globalBase, resolvedDirExists } from "../../fs";
 import { skillDisabledDir, skillInstallDir } from "../../paths";
 import type { InstalledJson } from "../../schemas/installed";
@@ -35,9 +35,9 @@ export async function checkSkills(
           fixable: true,
           fixDescription: `removed from state.json`,
           fix: async () => {
-            const r = await loadInstalled();
+            const r = await loadSkillState();
             if (!r.ok) return;
-            await saveInstalled({
+            await saveSkillState({
               ...r.value,
               skills: r.value.skills.filter((s) => s.name !== skillName),
             });
@@ -68,9 +68,9 @@ export async function checkSkills(
         fix: async () => {
           const effectiveRoot =
             skillScope === "project" ? capturedRoot : undefined;
-          const r = await loadInstalled(effectiveRoot);
+          const r = await loadSkillState(effectiveRoot);
           if (!r.ok) return;
-          await saveInstalled(
+          await saveSkillState(
             {
               ...r.value,
               skills: r.value.skills.filter((s) => s.name !== skillName),

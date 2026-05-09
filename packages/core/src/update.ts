@@ -2,7 +2,7 @@ import { lstat, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { $ } from "bun";
 import type { AgentAdapter } from "./agents/types";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import type { DiffStat } from "./git";
@@ -700,14 +700,14 @@ export async function updateSkill(
 > {
   debug("updateSkill", { name: options.name ?? "all" });
 
-  const globalInstalledResult = await loadInstalled();
+  const globalInstalledResult = await loadSkillState();
   if (!globalInstalledResult.ok) return globalInstalledResult;
   const globalInstalled = globalInstalledResult.value;
 
   // Optionally load project installed
   let projectInstalled: InstalledJson | null = null;
   if (options.projectRoot) {
-    const r = await loadInstalled(options.projectRoot);
+    const r = await loadSkillState(options.projectRoot);
     if (!r.ok) return r;
     projectInstalled = r.value;
   }
@@ -789,12 +789,12 @@ export async function updateSkill(
     if (!projectPass.ok) return projectPass;
   }
 
-  // Save both files (saveInstalled also shadows into state.json)
-  const globalSave = await saveInstalled(globalInstalled);
+  // Save both files (saveSkillState also shadows into state.json)
+  const globalSave = await saveSkillState(globalInstalled);
   if (!globalSave.ok) return globalSave;
 
   if (projectInstalled && options.projectRoot) {
-    const projectSave = await saveInstalled(
+    const projectSave = await saveSkillState(
       projectInstalled,
       options.projectRoot,
     );

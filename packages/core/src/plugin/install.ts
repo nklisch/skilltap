@@ -309,7 +309,7 @@ export async function installPlugin(
   const saveResult = await savePlugins(newState, projectRoot);
   if (!saveResult.ok) return saveResult;
 
-  // v2 manifest update (Phase 31c-a) — no-op without skilltap.toml.
+  // v2 manifest update — no-op without skilltap.toml.
   // Only fires for project-scope installs in a project root that has a
   // manifest. Failures are non-fatal — the plugin is already installed.
   if (options.scope === "project" && projectRoot && record.repo) {

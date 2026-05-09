@@ -6,7 +6,7 @@ import {
   findProjectRoot,
   type InstalledSkill,
   isInGitRepo,
-  loadInstalled,
+  loadSkillState,
   resolveAgent,
   saveConfig,
   VALID_AGENT_IDS,
@@ -27,12 +27,11 @@ export type ScopeArgs = {
 /**
  * Resolve scope from CLI flags, config default, or smart inference.
  *
- * Smart default (Phase 31c-c-1): when no flag and no config default is set,
- * infer the scope from the cwd's git context. Inside a git repo → project;
- * outside → global. No interactive prompt — the inferred scope is reported
- * via the returned object (caller decides whether to surface it). If you
- * genuinely want the old prompt behavior, run with `--prompt-scope` (not
- * implemented; pass --project or --global to override the inference).
+ * Smart default: when no flag and no config default is set, infer the scope
+ * from the cwd's git context. Inside a git repo → project; outside → global.
+ * No interactive prompt — the inferred scope is reported via the returned
+ * object (caller decides whether to surface it). Pass --project or --global
+ * to override the inference.
  */
 export async function resolveScope(
   args: ScopeArgs,
@@ -151,14 +150,14 @@ export async function getInstalledSkillOrExit(
     notFoundHint?: string;
   },
 ): Promise<InstalledSkill> {
-  const globalResult = await loadInstalled();
+  const globalResult = await loadSkillState();
   if (!globalResult.ok) {
     errorLine(globalResult.error.message);
     process.exit(1);
   }
 
   const projectRoot = await tryFindProjectRoot();
-  const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
+  const projectResult = projectRoot ? await loadSkillState(projectRoot) : null;
 
   const allSkills = [
     ...globalResult.value.skills,

@@ -4,9 +4,9 @@ import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
 import {
   ensureDirs,
   loadConfig,
-  loadInstalled,
+  loadSkillState,
   saveConfig,
-  saveInstalled,
+  saveSkillState,
 } from "./config";
 import { ConfigSchema } from "./schemas/config";
 import type { InstalledJson } from "./schemas/installed";
@@ -229,9 +229,9 @@ describe("saveConfig", () => {
   });
 });
 
-describe("loadInstalled", () => {
+describe("loadSkillState", () => {
   test("returns empty state when state.json is missing", async () => {
-    const result = await loadInstalled();
+    const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.version).toBe(1);
@@ -262,8 +262,8 @@ describe("loadInstalled", () => {
         ],
       }),
     );
-    // state.json is absent — loadInstalled returns empty, not installed.json contents
-    const result = await loadInstalled();
+    // state.json is absent — loadSkillState returns empty, not installed.json contents
+    const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.skills).toHaveLength(0);
@@ -290,10 +290,10 @@ describe("loadConfig — V2 split security/scanner blocks", () => {
   });
 });
 
-describe("saveInstalled", () => {
+describe("saveSkillState", () => {
   test("writes state.json to disk (Phase 31c-c-2d-1: state.json is canonical)", async () => {
     const installed: InstalledJson = { version: 1, skills: [] };
-    const result = await saveInstalled(installed);
+    const result = await saveSkillState(installed);
     expect(result.ok).toBe(true);
     expect(await fileExists(join(tmpDir, "skilltap", "state.json"))).toBe(true);
   });
@@ -317,8 +317,8 @@ describe("saveInstalled", () => {
         },
       ],
     };
-    await saveInstalled(installed);
-    const loaded = await loadInstalled();
+    await saveSkillState(installed);
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (loaded.ok) {
       expect(loaded.value.skills).toHaveLength(1);

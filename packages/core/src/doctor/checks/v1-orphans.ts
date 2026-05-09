@@ -6,20 +6,19 @@ import type { State } from "../../state/schema";
 import type { DoctorCheck, DoctorIssue } from "../types";
 
 /**
- * Phase 31c-c-2d-2 (UX piece): detect orphaned v0.x state files.
+ * Detect orphaned v0.x state files.
  *
- * After Phase 31c-c-2d-1, install/update/remove write only `state.json`.
- * Existing v0.x users who upgrade still have `installed.json`/`plugins.json`
- * on disk; their first install transparently transfers the data into
- * `state.json` (via the read-fallback) but leaves the legacy files orphaned.
+ * `install`/`update`/`remove` write only `state.json` now. Existing v0.x
+ * users who upgrade still have `installed.json`/`plugins.json` on disk;
+ * once their data has been migrated into `state.json` the legacy files
+ * are orphaned.
  *
  * This check detects that case: state.json populated AND installed.json
  * or plugins.json still on disk = orphan. `--fix` renames each orphan to
- * `<file>.v1.bak` so it's no longer read by the fallback path.
+ * `<file>.v1.bak` so it stops shadowing the canonical store.
  *
  * Pre-migration users (state.json empty, installed.json populated) are NOT
- * flagged — they need the fallback to keep reading until they install
- * something or run migrate.
+ * flagged — they still need to run `skilltap migrate`.
  */
 export async function checkV1Orphans(
   state: State | null,

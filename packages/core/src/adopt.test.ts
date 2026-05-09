@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 import { $ } from "bun";
 import { adoptPlugin, adoptSkill, adoptSkillFromPath, discoverAllAdoptable } from "./adopt";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { discoverSkills } from "./discover";
 import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
 import type { AgentPluginScanner } from "./agent-plugins/types";
@@ -91,7 +91,7 @@ describe("adoptSkill", () => {
     expect(stat?.isDirectory()).toBe(true);
 
     // Record should be in installed.json
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
@@ -166,7 +166,7 @@ describe("adoptSkill", () => {
     expect(stat?.isDirectory()).toBe(true);
 
     // Record created
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
@@ -306,7 +306,7 @@ describe("adoptSkill", () => {
     const stat = await lstat(targetPath).catch(() => null);
     expect(stat).toBeNull();
 
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
@@ -351,7 +351,7 @@ describe("adoptSkill", () => {
     if (!result.ok) return;
 
     // Skill should now be in installed.json
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(
@@ -365,7 +365,7 @@ describe("adoptSkill", () => {
     await createUnmanagedSkillInDir(agentsSkillsDir, "my-skill");
 
     // Write a managed record
-    await saveInstalled({
+    await saveSkillState({
       version: 1,
       skills: [
         {
@@ -491,7 +491,7 @@ describe("adoptSkillFromPath", () => {
     expect(result.value.record.path).toBe(skillPath);
 
     // Saved to state
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     expect(loaded.value.skills.find((s) => s.name === "ext-skill")).toBeDefined();

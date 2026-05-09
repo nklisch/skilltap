@@ -16,7 +16,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled } from "./config";
+import { loadSkillState } from "./config";
 import { installSkill } from "./install";
 import { moveSkill } from "./move";
 
@@ -87,7 +87,7 @@ describe("moveSkill", () => {
       expect(await lstat(globalSkillDir).catch(() => null)).toBeNull();
 
       // Project installed.json should have record
-      const projectInstalled = await loadInstalled(projectRoot);
+      const projectInstalled = await loadSkillState(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
       const projectRecord = projectInstalled.value.skills.find(
@@ -97,7 +97,7 @@ describe("moveSkill", () => {
       expect(projectRecord?.scope).toBe("project");
 
       // Global installed.json should NOT have record
-      const globalInstalled = await loadInstalled();
+      const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
       expect(
@@ -161,7 +161,7 @@ describe("moveSkill", () => {
       expect(await lstat(projectSkillDir).catch(() => null)).toBeNull();
 
       // Global installed.json should have record
-      const globalInstalled = await loadInstalled();
+      const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
       const globalRecord = globalInstalled.value.skills.find(

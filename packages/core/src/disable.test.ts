@@ -7,7 +7,7 @@ import {
   removeTmpDir,
   type TestEnv,
 } from "@skilltap/test-utils";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { disableSkill, enableSkill } from "./disable";
 import { skillDisabledDir } from "./paths";
 import { createAgentSymlinks } from "./symlink";
@@ -32,7 +32,7 @@ async function seedGlobalSkill(name: string, also: string[] = []) {
   const skillDir = join(homeDir, ".agents", "skills", name);
   await mkdir(skillDir, { recursive: true });
   await Bun.write(join(skillDir, "SKILL.md"), `---\nname: ${name}\n---\n`);
-  await saveInstalled({
+  await saveSkillState({
     version: 1,
     skills: [
       {
@@ -62,7 +62,7 @@ async function seedLinkedSkill(
   targetPath: string,
   also: string[] = [],
 ) {
-  await saveInstalled({
+  await saveSkillState({
     version: 1,
     skills: [
       {
@@ -113,7 +113,7 @@ describe("disableSkill", () => {
     expect(await lstat(symlinkPath).catch(() => null)).toBeNull();
 
     // Record updated
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     const record = loaded.value.skills.find((s) => s.name === "my-skill");
@@ -137,7 +137,7 @@ describe("disableSkill", () => {
       // Target still exists (we don't own it)
       expect(await lstat(targetDir).then((s) => s.isDirectory())).toBe(true);
 
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       const record = loaded.value.skills.find((s) => s.name === "linked-skill");
@@ -193,7 +193,7 @@ describe("enableSkill", () => {
     expect(await lstat(symlinkPath).catch(() => null)).not.toBeNull();
 
     // Record updated
-    const loaded = await loadInstalled();
+    const loaded = await loadSkillState();
     expect(loaded.ok).toBe(true);
     if (!loaded.ok) return;
     const record = loaded.value.skills.find((s) => s.name === "my-skill");
@@ -216,7 +216,7 @@ describe("enableSkill", () => {
       // Symlink recreated pointing to target
       expect(await lstat(symlinkPath).catch(() => null)).not.toBeNull();
 
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       const record = loaded.value.skills.find((s) => s.name === "linked-skill");
@@ -253,7 +253,7 @@ describe("disableSkill — project scope", () => {
         join(skillDir, "SKILL.md"),
         "---\nname: proj-skill\n---\n",
       );
-      await saveInstalled(
+      await saveSkillState(
         {
           version: 1,
           skills: [
@@ -293,7 +293,7 @@ describe("disableSkill — project scope", () => {
       expect(await lstat(disabledDir).then((s) => s.isDirectory())).toBe(true);
 
       // Record updated
-      const loaded = await loadInstalled(projectRoot);
+      const loaded = await loadSkillState(projectRoot);
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       const record = loaded.value.skills.find((s) => s.name === "proj-skill");
@@ -314,7 +314,7 @@ describe("enableSkill — project scope", () => {
         join(skillDir, "SKILL.md"),
         "---\nname: proj-skill\n---\n",
       );
-      await saveInstalled(
+      await saveSkillState(
         {
           version: 1,
           skills: [
@@ -365,7 +365,7 @@ describe("enableSkill — project scope", () => {
       expect(await lstat(disabledDir).catch(() => null)).toBeNull();
 
       // Record updated
-      const loaded = await loadInstalled(projectRoot);
+      const loaded = await loadSkillState(projectRoot);
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       const record = loaded.value.skills.find((s) => s.name === "proj-skill");

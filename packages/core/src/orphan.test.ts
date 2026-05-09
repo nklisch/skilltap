@@ -7,7 +7,7 @@ import {
   removeTmpDir,
   type TestEnv,
 } from "@skilltap/test-utils";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import {
   findOrphanRecords,
   formatOrphanReason,
@@ -223,7 +223,7 @@ describe("purgeOrphanRecords", () => {
   test("removes specified orphan records from installed.json", async () => {
     const skill = makeSkill({ name: "orphan-skill" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const orphans = [{ record: skill, reason: "directory-missing" as const }];
     const result = await purgeOrphanRecords(orphans, installed);
@@ -237,13 +237,13 @@ describe("purgeOrphanRecords", () => {
   test("saves installed.json after purging", async () => {
     const skill = makeSkill({ name: "to-purge" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const orphans = [{ record: skill, reason: "directory-missing" as const }];
     await purgeOrphanRecords(orphans, installed);
 
     // Reload from disk and verify
-    const reloaded = await loadInstalled();
+    const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
     expect(reloaded.value.skills).toHaveLength(0);
@@ -253,7 +253,7 @@ describe("purgeOrphanRecords", () => {
     const skill1 = makeSkill({ name: "skill-a" });
     const skill2 = makeSkill({ name: "skill-b" });
     const installed = makeInstalled([skill1, skill2]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const orphans = [
       { record: skill1, reason: "directory-missing" as const },
@@ -270,7 +270,7 @@ describe("purgeOrphanRecords", () => {
   test("handles empty orphan list (no-op)", async () => {
     const skill = makeSkill({ name: "healthy" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const result = await purgeOrphanRecords([], installed);
 
@@ -284,14 +284,14 @@ describe("purgeOrphanRecords", () => {
     const healthySkill = makeSkill({ name: "healthy" });
     const orphanSkill = makeSkill({ name: "orphan" });
     const installed = makeInstalled([healthySkill, orphanSkill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const orphans = [
       { record: orphanSkill, reason: "directory-missing" as const },
     ];
     await purgeOrphanRecords(orphans, installed);
 
-    const reloaded = await loadInstalled();
+    const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
     expect(reloaded.value.skills).toHaveLength(1);
@@ -303,7 +303,7 @@ describe("purgeOrphanRecords", () => {
     const skillName = "linked-agent-skill";
     const skill = makeSkill({ name: skillName, also: ["claude-code"] });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     // Create a real target dir and a symlink at the agent path, mimicking what installSkill does.
     // For claude-code at global scope: ${SKILLTAP_HOME}/.claude/skills/<name>
@@ -449,7 +449,7 @@ describe("removeSkill — orphan callback", () => {
   test("calls onOrphanRemoved when directory is already missing", async () => {
     const skill = makeSkill({ name: "ghost-skill" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
     // Do NOT create the install directory
 
     const orphanRemovedNames: string[] = [];
@@ -466,7 +466,7 @@ describe("removeSkill — orphan callback", () => {
   test("does not call onOrphanRemoved when directory exists", async () => {
     const skill = makeSkill({ name: "real-skill" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     // Create the install directory
     const installDir = skillInstallDir("real-skill", "global");

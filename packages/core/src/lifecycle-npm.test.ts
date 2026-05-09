@@ -15,7 +15,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled } from "./config";
+import { loadSkillState } from "./config";
 import { disableSkill } from "./disable";
 import { installSkill } from "./install";
 import { removeSkill } from "./remove";
@@ -194,7 +194,7 @@ describe("npm standalone lifecycle", () => {
         expect(content).toContain("Version two");
 
         // Verify ref updated in record
-        const loaded1 = await loadInstalled();
+        const loaded1 = await loadSkillState();
         expect(loaded1.ok).toBe(true);
         if (!loaded1.ok) return;
         expect(loaded1.value.skills[0]!.ref).toBe("2.0.0");
@@ -216,7 +216,7 @@ describe("npm standalone lifecycle", () => {
         const rm = await removeSkill("npm-skill");
         expect(rm.ok).toBe(true);
 
-        const loaded2 = await loadInstalled();
+        const loaded2 = await loadSkillState();
         expect(loaded2.ok).toBe(true);
         if (!loaded2.ok) return;
         expect(loaded2.value.skills).toHaveLength(0);
@@ -306,7 +306,7 @@ describe("npm multi-skill lifecycle", () => {
         const rm1 = await removeSkill("alpha");
         expect(rm1.ok).toBe(true);
 
-        const loaded1 = await loadInstalled();
+        const loaded1 = await loadSkillState();
         expect(loaded1.ok).toBe(true);
         if (!loaded1.ok) return;
         expect(loaded1.value.skills).toHaveLength(1);
@@ -316,7 +316,7 @@ describe("npm multi-skill lifecycle", () => {
         const rm2 = await removeSkill("beta");
         expect(rm2.ok).toBe(true);
 
-        const loaded2 = await loadInstalled();
+        const loaded2 = await loadSkillState();
         expect(loaded2.ok).toBe(true);
         if (!loaded2.ok) return;
         expect(loaded2.value.skills).toHaveLength(0);

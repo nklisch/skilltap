@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadInstalled } from "@skilltap/core";
+import { loadSkillState } from "@skilltap/core";
 import { makeTmpDir, removeTmpDir } from "@skilltap/test-utils";
 import { InstalledJsonSchema } from "./installed";
 
@@ -22,7 +22,7 @@ afterEach(async () => {
   await removeTmpDir(configDir);
 });
 
-// Write fixture skills into state.json (v2 format) so loadInstalled can read them.
+// Write fixture skills into state.json (v2 format) so loadSkillState can read them.
 // The fixtures test that old-format skills (missing optional fields) are still parseable.
 async function writeStateFromFixture(fixture: string): Promise<void> {
   const dir = join(configDir, "skilltap");
@@ -44,7 +44,7 @@ async function writeStateFromFixture(fixture: string): Promise<void> {
 describe("installed.json backward compatibility", () => {
   test("skill missing description loads with empty string default", async () => {
     await writeStateFromFixture("installed-no-description.json");
-    const result = await loadInstalled();
+    const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.skills).toHaveLength(1);
@@ -53,7 +53,7 @@ describe("installed.json backward compatibility", () => {
 
   test("skill missing sha and updatedAt loads with null/sentinel defaults", async () => {
     await writeStateFromFixture("installed-no-sha.json");
-    const result = await loadInstalled();
+    const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.skills[0]?.sha).toBeNull();
@@ -62,7 +62,7 @@ describe("installed.json backward compatibility", () => {
 
   test("skill missing also and tap loads with empty array and null defaults", async () => {
     await writeStateFromFixture("installed-no-also.json");
-    const result = await loadInstalled();
+    const result = await loadSkillState();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.skills[0]?.also).toEqual([]);

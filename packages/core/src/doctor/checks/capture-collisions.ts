@@ -1,7 +1,7 @@
 /**
  * Defensive canary: a skill name appearing both as a `state.skills[].name` and
  * as a `state.plugins[].components[]` (skill type) entry should be impossible
- * after Phase 39 (plugin capture) — capture transfers ownership atomically.
+ * — plugin capture transfers ownership atomically.
  *
  * If this check fires, something has bypassed capture: a manual state.json
  * edit, a bug in the install path, or pre-capture historical data. The fix
@@ -27,7 +27,7 @@ export async function checkCaptureCollisions(
       if (!standaloneNames.has(component.name)) continue;
 
       issues.push({
-        message: `Skill "${component.name}" appears as both a standalone (state.skills[]) and a component of plugin "${plugin.name}" (state.plugins[].components[]). This is a capture bypass — Phase 39 should prevent it.`,
+        message: `Skill "${component.name}" appears as both a standalone (state.skills[]) and a component of plugin "${plugin.name}" (state.plugins[].components[]). This is a capture bypass — plugin capture should prevent it.`,
         fixable: false,
         fixDescription: `run \`skilltap remove ${component.name}\` to release the standalone, or \`skilltap remove ${plugin.name}\` to remove the plugin and its component`,
       });

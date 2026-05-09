@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { getConfigDir, loadInstalled } from "./config";
+import { getConfigDir, loadSkillState } from "./config";
 import { fetch as gitFetch, revParse } from "./git";
 import {
   fetchPackageMetadata,
@@ -65,12 +65,12 @@ export async function fetchSkillUpdateStatus(
   _revParse: RevParseFn = revParse,
   _fetchPackageMetadata: FetchPackageMetadataFn = fetchPackageMetadata,
 ): Promise<string[]> {
-  const globalResult = await loadInstalled();
+  const globalResult = await loadSkillState();
   const globalSkills = globalResult.ok ? globalResult.value.skills : [];
 
   const projectSkills: InstalledSkill[] = [];
   if (projectRoot) {
-    const projectResult = await loadInstalled(projectRoot);
+    const projectResult = await loadSkillState(projectRoot);
     if (projectResult.ok) projectSkills.push(...projectResult.value.skills);
   }
 

@@ -11,7 +11,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { installSkill } from "./install";
 import { findProjectRoot } from "./paths";
 import { removeSkill } from "./remove";
@@ -66,7 +66,7 @@ describe("installSkill — standalone", () => {
     const repo = await createStandaloneSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global" });
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
 
@@ -170,7 +170,7 @@ describe("installSkill — multi-skill", () => {
       expect(await lstat(skillBDir).catch(() => null)).toBeNull();
 
       // Cache dir exists
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       const record = installedResult.value.skills[0]!;
@@ -254,7 +254,7 @@ describe("installSkill — multi-skill", () => {
       expect(result.value.updates).toContain("skill-a");
 
       // Only one entry for skill-a in installed.json (no duplicate)
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       const aEntries = installed.value.skills.filter(
@@ -304,7 +304,7 @@ describe("installSkill — project scope", () => {
       });
 
       // Project file should have the record
-      const projectInstalled = await loadInstalled(projectRoot);
+      const projectInstalled = await loadSkillState(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
       expect(projectInstalled.value.skills.map((s) => s.name)).toContain(
@@ -312,7 +312,7 @@ describe("installSkill — project scope", () => {
       );
 
       // Global file should be empty
-      const globalInstalled = await loadInstalled();
+      const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
       expect(globalInstalled.value.skills).toHaveLength(0);
@@ -342,13 +342,13 @@ describe("installSkill — project scope", () => {
       });
 
       // Both project files have the record
-      const aInstalled = await loadInstalled(projectA);
-      const bInstalled = await loadInstalled(projectB);
+      const aInstalled = await loadSkillState(projectA);
+      const bInstalled = await loadSkillState(projectB);
       expect(aInstalled.ok && aInstalled.value.skills).toHaveLength(1);
       expect(bInstalled.ok && bInstalled.value.skills).toHaveLength(1);
 
       // Global file is empty
-      const globalInstalled = await loadInstalled();
+      const globalInstalled = await loadSkillState();
       expect(globalInstalled.ok).toBe(true);
       if (!globalInstalled.ok) return;
       expect(globalInstalled.value.skills).toHaveLength(0);
@@ -372,7 +372,7 @@ describe("removeSkill", () => {
 
       expect(await lstat(skillDir).catch(() => null)).toBeNull();
 
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       expect(installedResult.value.skills).toHaveLength(0);
@@ -402,7 +402,7 @@ describe("removeSkill", () => {
         scope: "global",
         skillNames: ["skill-a"],
       });
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       if (!installedResult.ok) return;
       const record = installedResult.value.skills[0]!;
 
@@ -421,7 +421,7 @@ describe("removeSkill", () => {
     const repo = await createMultiSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global" });
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       if (!installedResult.ok) return;
       const record = installedResult.value.skills[0]!;
 
@@ -472,7 +472,7 @@ describe("installSkill — security scanning", () => {
       expect(result.error.message).toContain("cancelled");
 
       // Skill should not be installed
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       expect(installedResult.value.skills).toHaveLength(0);
@@ -517,7 +517,7 @@ describe("idempotency", () => {
       await installSkill(repo.path, { scope: "global", skipScan: true });
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       expect(installedResult.value.skills).toHaveLength(1);
@@ -537,7 +537,7 @@ describe("idempotency", () => {
       });
       expect(result.ok).toBe(true);
 
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       expect(installedResult.value.skills).toHaveLength(1);
@@ -558,13 +558,13 @@ describe("installed.json state integrity", () => {
       '{"version": 2, "skills": [{"name"',
     );
 
-    const result = await loadInstalled();
+    const result = await loadSkillState();
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.message).toBeTruthy();
   });
 
-  test("saveInstalled with 100-skill array succeeds and reloads correctly", async () => {
+  test("saveSkillState with 100-skill array succeeds and reloads correctly", async () => {
     const baseSkill = {
       name: "",
       description: "A test skill",
@@ -584,10 +584,10 @@ describe("installed.json state integrity", () => {
       name: `skill-${i.toString().padStart(3, "0")}`,
     }));
 
-    const saveResult = await saveInstalled({ version: 1, skills });
+    const saveResult = await saveSkillState({ version: 1, skills });
     expect(saveResult.ok).toBe(true);
 
-    const reloadResult = await loadInstalled();
+    const reloadResult = await loadSkillState();
     expect(reloadResult.ok).toBe(true);
     if (!reloadResult.ok) return;
     expect(reloadResult.value.skills).toHaveLength(100);
@@ -647,7 +647,7 @@ describe("installSkill — tap name resolution", () => {
       expect(await lstat(skillBDir).catch(() => null)).toBeNull();
 
       // installed.json should only have skill-a
-      const installedResult = await loadInstalled();
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       expect(installedResult.value.skills).toHaveLength(1);

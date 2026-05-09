@@ -16,7 +16,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { installSkill } from "./install";
 import type { OrphanRecord } from "./orphan";
 import { skillInstallDir } from "./paths";
@@ -68,7 +68,7 @@ describe("updateSkill — orphan pre-flight", () => {
     // Create a stale record with no directory on disk
     const skill = makeSkill({ name: "ghost-skill" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const orphansReceived: OrphanRecord[] = [];
     const result = await updateSkill({
@@ -85,7 +85,7 @@ describe("updateSkill — orphan pre-flight", () => {
     expect(orphansReceived[0]!.reason).toBe("directory-missing");
 
     // The record should have been purged — installed.json should now be empty
-    const reloaded = await loadInstalled();
+    const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
     expect(reloaded.value.skills).toHaveLength(0);
@@ -96,7 +96,7 @@ describe("updateSkill — orphan pre-flight", () => {
 
   test("skips onOrphansFound when no orphans exist", async () => {
     // Save nothing — empty installed.json
-    await saveInstalled(makeInstalled([]));
+    await saveSkillState(makeInstalled([]));
 
     let callbackInvoked = false;
     const result = await updateSkill({
@@ -115,7 +115,7 @@ describe("updateSkill — orphan pre-flight", () => {
     // Create a stale record
     const skill = makeSkill({ name: "keep-me" });
     const installed = makeInstalled([skill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
 
     const _result = await updateSkill({
       yes: true,
@@ -125,7 +125,7 @@ describe("updateSkill — orphan pre-flight", () => {
     });
 
     // Record should still be there (not purged)
-    const reloaded = await loadInstalled();
+    const reloaded = await loadSkillState();
     expect(reloaded.ok).toBe(true);
     if (!reloaded.ok) return;
     expect(reloaded.value.skills).toHaveLength(1);
@@ -218,7 +218,7 @@ describe("installSkill — phantom conflict", () => {
       expect(secondResult.value.records[0]!.name).toBe(record.name);
 
       // Directory should now exist
-      const reloaded = await loadInstalled();
+      const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
       expect(reloaded.value.skills).toHaveLength(1);
@@ -230,7 +230,7 @@ describe("installSkill — phantom conflict", () => {
   test("calls onOrphansFound for unrelated stale records during install", async () => {
     const staleSkill = makeSkill({ name: "stale-skill" });
     const installed = makeInstalled([staleSkill]);
-    await saveInstalled(installed);
+    await saveSkillState(installed);
     // Do NOT create stale-skill's directory
 
     const repo = await createStandaloneSkillRepo();
@@ -253,7 +253,7 @@ describe("installSkill — phantom conflict", () => {
       );
 
       // After purge, only the newly installed skill should remain
-      const reloaded = await loadInstalled();
+      const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
       expect(reloaded.value.skills.every((s) => s.name !== "stale-skill")).toBe(
@@ -344,7 +344,7 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
       expect(["upToDate", "updated"]).toContain(finalStatus);
 
       // installed.json should only have skill-a (skill-b was removed)
-      const reloaded = await loadInstalled();
+      const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
       const names = reloaded.value.skills.map((s) => s.name);
@@ -404,7 +404,7 @@ describe("updateSkill — multi-skill subdirectory removed upstream", () => {
       if (!updateResult.ok) return;
 
       // Record should still exist (not removed)
-      const reloaded = await loadInstalled();
+      const reloaded = await loadSkillState();
       expect(reloaded.ok).toBe(true);
       if (!reloaded.ok) return;
       const names = reloaded.value.skills.map((s) => s.name);

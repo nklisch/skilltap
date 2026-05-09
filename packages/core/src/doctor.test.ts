@@ -61,7 +61,7 @@ describe("checkConfig", () => {
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(
       join(skilltapDir, "config.toml"),
-      '[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "prompt"\nrequire_scan = false\nagent = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n["agent-mode"]\nenabled = false\nscope = "project"\n',
+      '[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "install"\ntrust = []\n[scanner]\nagent_cli = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n',
     );
 
     const result = await runDoctor();
@@ -390,7 +390,7 @@ describe("checkSkills", () => {
     const skilltapDir = join(configDir, "skilltap");
     await mkdir(skilltapDir, { recursive: true });
     // Phase 31c-c-2d-1: state.json is canonical. Orphan record is now
-    // tracked here; saveInstalled (via --fix) writes here too.
+    // tracked here; saveSkillState (via --fix) writes here too.
     const stateFile = join(skilltapDir, "state.json");
     await writeFile(
       stateFile,

@@ -8,31 +8,28 @@ export function generateZshCompletions(): string {
 _skilltap() {
   local -a commands
   commands=(
-    'status:Show agent mode status and configuration'
-    'install:Install a skill'
-    'remove:Remove an installed skill'
-    'list:List installed skills'
-    'update:Update installed skills'
+    'status:Show installed components and configuration'
+    'install:Install a skill, plugin, or MCP server (typed: install skill|plugin|mcp)'
+    'remove:Remove an installed skill, plugin, or MCP server'
+    'update:Update installed skills, plugins, and MCP servers'
     'find:Search for skills'
-    'link:Symlink a local skill'
-    'unlink:Remove a linked skill'
-    'info:Show skill details'
-    'skills:Manage installed skills'
-    'plugin:Manage installed plugins'
     'create:Create a new skill'
-    'verify:Validate a skill'
+    'doctor:Check environment and state'
+    'migrate:Migrate v0.x setup to v2.x'
+    'sync:Show drift between manifest, lockfile, and state'
+    'try:Preview a skill, plugin, or MCP without installing'
+    'toggle:Toggle a skill, plugin, or component active state'
+    'adopt:Bring an external skill or agent-managed plugin into skilltap'
+    'move:Move a skill between scopes'
+    'info:Show details for a skill, plugin, or MCP server'
     'config:Interactive setup wizard'
     'tap:Manage taps'
-    'doctor:Check environment and state'
     'completions:Generate shell completions'
     'self-update:Update the skilltap binary'
-    'migrate:Migrate v1.0 setup to v2.0'
-    'sync:Show drift between manifest, lockfile, and state'
-    'try:Preview a skill or plugin without installing'
-    'toggle:Toggle a plugin component (name:component) or open a picker'
-    'enable:Enable a plugin component or all inactive components'
-    'disable:Disable a plugin component or all active components'
   )
+
+  local -a typed_subcommands
+  typed_subcommands=('skill:Skill' 'plugin:Plugin' 'mcp:MCP server')
 
   _arguments -C \\
     '1:command:->command' \\
@@ -43,35 +40,82 @@ _skilltap() {
     args)
       case $words[1] in
         install)
-          local -a skills
-          skills=(\${(f)"$(skilltap --get-completions tap-skills 2>/dev/null)"})
-          _arguments \\
-            '--project[Install to project scope]' \\
-            '--global[Install to global scope]' \\
-            '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
-            '--ref[Branch or tag]:ref:' \\
-            '--yes[Auto-accept]' \\
-            '--strict[Abort on warnings]' \\
-            '--no-strict[Override strict config]' \\
-            '--semantic[Force semantic scan]' \\
-            '--skip-scan[Skip security scan]' \\
-            '--quiet[Suppress install step details]' \\
-            "1:source:($skills)"
+          _arguments -C '1:type:->type' '*::flags:->flags'
+          case $state in
+            type) _describe 'type' typed_subcommands ;;
+            flags)
+              case $words[1] in
+                skill)
+                  local -a skills
+                  skills=(\${(f)"$(skilltap --get-completions tap-skills 2>/dev/null)"})
+                  _arguments \\
+                    '--scope[Install scope]:scope:(project global)' \\
+                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
+                    '--ref[Branch or tag]:ref:' \\
+                    '--yes[Auto-accept]' \\
+                    '--strict[Abort on warnings]' \\
+                    '--no-strict[Override strict config]' \\
+                    '--semantic[Force semantic scan]' \\
+                    '--skip-scan[Skip security scan]' \\
+                    '--quiet[Suppress install step details]' \\
+                    '--json[Output as JSON]' \\
+                    "1:source:($skills)"
+                  ;;
+                plugin)
+                  _arguments \\
+                    '--scope[Install scope]:scope:(project global)' \\
+                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
+                    '--ref[Branch or tag]:ref:' \\
+                    '--yes[Auto-accept]' \\
+                    '--strict[Abort on warnings]' \\
+                    '--no-strict[Override strict config]' \\
+                    '--semantic[Force semantic scan]' \\
+                    '--skip-scan[Skip security scan]' \\
+                    '--json[Output as JSON]'
+                  ;;
+                mcp)
+                  _arguments \\
+                    '--scope[Install scope]:scope:(project global)' \\
+                    '--yes[Auto-accept]' \\
+                    '--json[Output as JSON]'
+                  ;;
+              esac
+              ;;
+          esac
           ;;
         remove)
-          local -a skills
-          skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
-          _arguments \\
-            '--project[Remove from project scope]' \\
-            '--global[Remove from global scope]' \\
-            '--yes[Skip confirmation]' \\
-            "*:skill:($skills)"
-          ;;
-        list)
-          _arguments \\
-            '--global[Global scope]' \\
-            '--project[Project scope]' \\
-            '--json[JSON output]'
+          _arguments -C '1:type:->type' '*::flags:->flags'
+          case $state in
+            type) _describe 'type' typed_subcommands ;;
+            flags)
+              case $words[1] in
+                skill)
+                  local -a skills
+                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
+                  _arguments \\
+                    '--scope[Remove from scope]:scope:(project global)' \\
+                    '--yes[Skip confirmation]' \\
+                    '--json[Output as JSON]' \\
+                    "*:skill:($skills)"
+                  ;;
+                plugin)
+                  local -a plugins
+                  plugins=(\${(f)"$(skilltap --get-completions installed-plugins 2>/dev/null)"})
+                  _arguments \\
+                    '--scope[Remove from scope]:scope:(project global)' \\
+                    '--yes[Skip confirmation]' \\
+                    '--json[Output as JSON]' \\
+                    "*:plugin:($plugins)"
+                  ;;
+                mcp)
+                  _arguments \\
+                    '--scope[Remove from scope]:scope:(project global)' \\
+                    '--yes[Skip confirmation]' \\
+                    '--json[Output as JSON]'
+                  ;;
+              esac
+              ;;
+          esac
           ;;
         update)
           local -a skills
@@ -81,9 +125,11 @@ _skilltap() {
             '--strict[Abort on warnings]' \\
             '--semantic[Force semantic scan]' \\
             '--json[Output result as JSON]' \\
+            '--skip-scan[Skip security scan]' \\
+            '--quiet[Suppress output details]' \\
             '(-c --check)'{-c,--check}'[Check for updates without applying]' \\
             '(-f --force)'{-f,--force}'[Force update even if already up to date]' \\
-            "1:skill:($skills)"
+            '1:type-or-name:'
           ;;
         find)
           _arguments \\
@@ -91,152 +137,19 @@ _skilltap() {
             '-i[Interactive mode]' \\
             '(-l --local)'{-l,--local}'[Search local taps only]'
           ;;
-        link)
-          _arguments \\
-            '--global[Global scope]' \\
-            '--project[Project scope]' \\
-            '--also[Agent symlink]:agent:(${agentSpec})'
-          ;;
-        unlink)
-          local -a skills
-          skills=(\${(f)"$(skilltap --get-completions linked-skills 2>/dev/null)"})
-          _arguments \\
-            '--yes[Skip confirmation]' \\
-            "1:skill:($skills)"
-          ;;
         info)
           local -a skills
           skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
           _arguments \\
             '--json[JSON output]' \\
-            "1:skill:($skills)"
-          ;;
-        skills)
-          local -a skills_commands
-          skills_commands=('info:Show skill details' 'remove:Remove a skill' 'link:Symlink a local skill' 'unlink:Remove a linked skill' 'adopt:Adopt unmanaged skills' 'move:Move a skill between scopes' 'disable:Disable a skill' 'enable:Enable a skill')
-          _arguments -C '1:subcommand:->skills_cmd' '*::arg:->skills_args'
-          case $state in
-            skills_cmd) _describe 'subcommand' skills_commands ;;
-            skills_args)
-              case $words[1] in
-                info)
-                  local -a skills
-                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
-                  _arguments \\
-                    '--json[JSON output]' \\
-                    "1:skill:($skills)"
-                  ;;
-                remove)
-                  local -a skills
-                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
-                  _arguments \\
-                    '--project[Remove from project scope]' \\
-                    '--global[Remove from global scope]' \\
-                    '--yes[Skip confirmation]' \\
-                    "*:skill:($skills)"
-                  ;;
-                link)
-                  _arguments \\
-                    '--global[Global scope]' \\
-                    '--project[Project scope]' \\
-                    '--also[Agent symlink]:agent:(${agentSpec})'
-                  ;;
-                unlink)
-                  local -a skills
-                  skills=(\${(f)"$(skilltap --get-completions linked-skills 2>/dev/null)"})
-                  _arguments "1:skill:($skills)"
-                  ;;
-                adopt)
-                  _arguments \\
-                    '--global[Adopt into global scope]' \\
-                    '--project[Adopt into project scope]' \\
-                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
-                    '--track-in-place[Track at current location]' \\
-                    '--skip-scan[Skip security scan]' \\
-                    '--yes[Auto-accept]'
-                  ;;
-                move)
-                  local -a skills
-                  skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
-                  _arguments \\
-                    '--global[Move to global scope]' \\
-                    '--project[Move to project scope]' \\
-                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
-                    "1:skill:($skills)"
-                  ;;
-                disable)
-                  local -a skills
-                  skills=(\${(f)"$(skilltap --get-completions active-skills 2>/dev/null)"})
-                  _arguments \\
-                    '--global[Disable global skill]' \\
-                    '--project[Disable project skill]' \\
-                    "1:skill:($skills)"
-                  ;;
-                enable)
-                  local -a skills
-                  skills=(\${(f)"$(skilltap --get-completions disabled-skills 2>/dev/null)"})
-                  _arguments \\
-                    '--global[Enable global skill]' \\
-                    '--project[Enable project skill]' \\
-                    "1:skill:($skills)"
-                  ;;
-                *)
-                  _arguments \\
-                    '--global[Global skills only]' \\
-                    '--project[Project skills only]' \\
-                    '--unmanaged[Unmanaged skills only]' \\
-                    '--json[JSON output]' \\
-                    '--disabled[Show only disabled skills]' \\
-                    '--active[Show only active skills]'
-                  ;;
-              esac
-              ;;
-          esac
-          ;;
-        plugin)
-          local -a plugin_commands
-          plugin_commands=('list:List installed plugins' 'info:Show plugin details' 'toggle:Toggle plugin components' 'remove:Remove a plugin')
-          _arguments -C '1:subcommand:->plugin_cmd' '*::arg:->plugin_args'
-          case $state in
-            plugin_cmd) _describe 'subcommand' plugin_commands ;;
-            plugin_args)
-              case $words[1] in
-                info)
-                  _arguments '--json[JSON output]' '1:plugin:'
-                  ;;
-                toggle)
-                  _arguments \\
-                    '--skills[Toggle all skills]' \\
-                    '--mcps[Toggle all MCP servers]' \\
-                    '--agents[Toggle all agent definitions]' \\
-                    '--json[JSON output]' \\
-                    '1:plugin:'
-                  ;;
-                remove)
-                  _arguments \\
-                    '--yes[Skip confirmation]' \\
-                    '--json[JSON output]' \\
-                    '1:plugin:'
-                  ;;
-                *)
-                  _arguments \\
-                    '--global[Show only global plugins]' \\
-                    '--project[Show only project plugins]' \\
-                    '--json[JSON output]'
-                  ;;
-              esac
-              ;;
-          esac
+            '--project[Restrict to project scope]' \\
+            '--global[Restrict to global scope]' \\
+            "1:name:($skills)"
           ;;
         create)
           _arguments \\
             '--template[Template type]:template:(${templateSpec})' \\
             '--dir[Target directory]:dir:_files -/'
-          ;;
-        verify)
-          _arguments \\
-            '--all[Verify all skills in current project]' \\
-            '--json[JSON output]'
           ;;
         config)
           local -a config_commands
@@ -254,13 +167,11 @@ _skilltap() {
                   ;;
                 security)
                   _arguments \\
-                    '--preset[Apply a named preset]:preset:(none relaxed standard strict)' \\
-                    '--mode[Which mode to configure]:mode:(human agent both)' \\
-                    '--scan[Scan level]:scan:(static semantic off)' \\
-                    '--on-warn[Warning behavior]:on_warn:(prompt fail allow)' \\
-                    '--require-scan[Block --skip-scan]' \\
-                    '--trust[Add trust override]' \\
-                    '--remove-trust[Remove a trust override]'
+                    '--scan[Scan level]:scan:(semantic static none)' \\
+                    '--on-warn[Warning behavior]:on_warn:(prompt fail install)' \\
+                    '--trust-add[Append a glob pattern to security.trust]' \\
+                    '--trust-remove[Remove a glob pattern from security.trust]' \\
+                    '--trust-list[Print current trust patterns]'
                   ;;
               esac
               ;;
@@ -268,7 +179,7 @@ _skilltap() {
           ;;
         tap)
           local -a tap_commands
-          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'info:Show tap details' 'init:Scaffold a tap repo' 'install:Install skills from taps')
+          tap_commands=('add:Add a tap' 'remove:Remove a tap' 'list:List taps' 'info:Show tap details' 'init:Scaffold a tap repo')
           _arguments -C '1:subcommand:->tap_cmd' '*::arg:->tap_args'
           case $state in
             tap_cmd) _describe 'subcommand' tap_commands ;;
@@ -276,7 +187,7 @@ _skilltap() {
               case $words[1] in
                 add)
                   _arguments \\
-                    '--type[Tap type]:type:(git http)'
+                    '--type[Tap type]:type:(git)'
                   ;;
                 remove)
                   local -a taps
@@ -294,20 +205,6 @@ _skilltap() {
                   _arguments \\
                     '--json[JSON output]' \\
                     "1:tap:($taps)"
-                  ;;
-                install)
-                  local -a taps
-                  taps=(\${(f)"$(skilltap --get-completions tap-names 2>/dev/null)"})
-                  _arguments \\
-                    '--tap[Scope to one tap]:tap:($taps)' \\
-                    '--project[Install to project scope]' \\
-                    '--global[Install to global scope]' \\
-                    '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
-                    '--yes[Auto-select all and install]' \\
-                    '--strict[Abort on warnings]' \\
-                    '--no-strict[Override strict config]' \\
-                    '--semantic[Force semantic scan]' \\
-                    '--skip-scan[Skip security scan]'
                   ;;
               esac
               ;;
@@ -333,7 +230,7 @@ _skilltap() {
         sync)
           _arguments \\
             '--json[Output the plan as JSON]' \\
-            '--apply[Apply the plan (lands in Phase 31c)]'
+            '--apply[Apply the plan]'
           ;;
         try)
           _arguments \\
@@ -341,12 +238,32 @@ _skilltap() {
             '--skip-scan[Skip the static security scan]' \\
             '1:source:'
           ;;
-        toggle|enable|disable)
+        toggle)
           local -a plugins
           plugins=(\${(f)"$(skilltap --get-completions installed-plugins 2>/dev/null)"})
           _arguments \\
             '--json[Output as JSON]' \\
-            "1:plugin\\::($plugins)"
+            '1:type:(skill plugin mcp)' \\
+            "2:target:($plugins)"
+          ;;
+        adopt)
+          _arguments \\
+            '--scope[Adopt into scope]:scope:(project global)' \\
+            '--source[Filter picker to one source]:source:(${agentSpec})' \\
+            '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
+            '--move[Physically move dir on adopt]' \\
+            '--skip-scan[Skip security scan]' \\
+            '--yes[Auto-accept]' \\
+            '--json[Output as JSON]'
+          ;;
+        move)
+          local -a skills
+          skills=(\${(f)"$(skilltap --get-completions installed-skills 2>/dev/null)"})
+          _arguments \\
+            '--global[Move to global scope]' \\
+            '--project[Move to project scope]' \\
+            '--also[Symlink to agent dir]:agent:(${agentSpec})' \\
+            "1:skill:($skills)"
           ;;
       esac
       ;;

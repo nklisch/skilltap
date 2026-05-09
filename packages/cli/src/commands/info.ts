@@ -6,8 +6,6 @@ import {
   globalBase,
   isBuiltinTapCloned,
   loadConfig,
-  loadInstalled,
-  loadPlugins,
   loadState,
   loadTaps,
 } from "@skilltap/core";
@@ -121,45 +119,6 @@ export const infoCommand = defineCommand({
     if (configResult.ok && configResult.value.builtin_tap !== false) {
       const alreadyCloned = await isBuiltinTapCloned();
       if (!alreadyCloned) await ensureBuiltinTap();
-    }
-
-    // Also check legacy installed.json for unmigrated users
-    const globalInstalledResult = await loadInstalled();
-    const projectInstalledResult = projectRoot
-      ? await loadInstalled(projectRoot)
-      : null;
-    const legacySkills = [
-      ...(globalInstalledResult.ok ? globalInstalledResult.value.skills : []),
-      ...(projectInstalledResult?.ok
-        ? projectInstalledResult.value.skills
-        : []),
-    ];
-    const legacySkill = legacySkills.find((s) => s.name === name);
-    if (legacySkill) {
-      return renderSkillInfo(
-        legacySkill,
-        out,
-        args.json as boolean,
-        projectRoot,
-      );
-    }
-
-    // Also check legacy plugins.json
-    const globalPluginsResult = await loadPlugins();
-    const projectPluginsResult = projectRoot
-      ? await loadPlugins(projectRoot)
-      : null;
-    const legacyPlugins = [
-      ...(globalPluginsResult.ok ? globalPluginsResult.value.plugins : []),
-      ...(projectPluginsResult?.ok ? projectPluginsResult.value.plugins : []),
-    ];
-    const legacyPlugin = legacyPlugins.find((p) => p.name === name);
-    if (legacyPlugin) {
-      return renderPluginInfo(
-        legacyPlugin,
-        out,
-        args.json as boolean,
-      );
     }
 
     // Check taps

@@ -12,178 +12,117 @@ _skilltap() {
   cur="\${COMP_WORDS[COMP_CWORD]}"
   prev="\${COMP_WORDS[COMP_CWORD-1]}"
 
-  local commands="status install remove list update find skills link unlink info plugin create verify config tap doctor completions self-update migrate sync try toggle enable disable"
-  local tap_commands="add remove list info init install"
-  local skills_commands="info remove link unlink adopt move disable enable"
+  local commands="status install remove update find create doctor migrate sync try toggle adopt move info config tap completions self-update"
+  local typed_subcommands="skill plugin mcp"
+  local tap_commands="add remove list info init"
   local agents="${agents}"
   local templates="${templates}"
 
   case "\${COMP_WORDS[1]}" in
     install)
-      case "$prev" in
-        --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
-        --ref) return ;;
+      case "\${COMP_WORDS[2]}" in
+        skill)
+          case "$prev" in
+            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+            --ref) return ;;
+          esac
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--scope --also --ref --yes --strict --no-strict --semantic --skip-scan --quiet --json" -- "$cur"))
+          elif [[ "$prev" == "--scope" ]]; then
+            COMPREPLY=($(compgen -W "project global" -- "$cur"))
+          else
+            local tap_skills
+            tap_skills=$(skilltap --get-completions tap-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$tap_skills" -- "$cur"))
+          fi
+          ;;
+        plugin)
+          case "$prev" in
+            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+            --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
+            --ref) return ;;
+          esac
+          COMPREPLY=($(compgen -W "--scope --also --ref --yes --strict --no-strict --semantic --skip-scan --json" -- "$cur"))
+          ;;
+        mcp)
+          case "$prev" in
+            --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
+          esac
+          COMPREPLY=($(compgen -W "--scope --yes --json" -- "$cur"))
+          ;;
+        *)
+          COMPREPLY=($(compgen -W "$typed_subcommands" -- "$cur"))
+          ;;
       esac
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--project --global --also --ref --yes --strict --no-strict --semantic --skip-scan --quiet" -- "$cur"))
-      else
-        local tap_skills
-        tap_skills=$(skilltap --get-completions tap-skills 2>/dev/null)
-        COMPREPLY=($(compgen -W "$tap_skills" -- "$cur"))
-      fi
       ;;
     remove)
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--project --global --yes" -- "$cur"))
-      else
-        local skills
-        skills=$(skilltap --get-completions installed-skills 2>/dev/null)
-        COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-      fi
-      ;;
-    list)
-      COMPREPLY=($(compgen -W "--global --project --json" -- "$cur"))
-      ;;
-    skills)
       case "\${COMP_WORDS[2]}" in
-        info)
+        skill)
+          case "$prev" in
+            --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
+          esac
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--json" -- "$cur"))
+            COMPREPLY=($(compgen -W "--scope --yes --json" -- "$cur"))
           else
             local skills
             skills=$(skilltap --get-completions installed-skills 2>/dev/null)
             COMPREPLY=($(compgen -W "$skills" -- "$cur"))
           fi
           ;;
-        remove)
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--project --global --yes" -- "$cur"))
-          else
-            local skills
-            skills=$(skilltap --get-completions installed-skills 2>/dev/null)
-            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-          fi
-          ;;
-        link)
+        plugin)
           case "$prev" in
-            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
-          esac
-          COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
-          ;;
-        unlink)
-          if [[ "$cur" != -* ]]; then
-            local skills
-            skills=$(skilltap --get-completions linked-skills 2>/dev/null)
-            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-          fi
-          ;;
-        adopt)
-          case "$prev" in
-            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+            --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
           esac
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--global --project --also --track-in-place --skip-scan --yes" -- "$cur"))
+            COMPREPLY=($(compgen -W "--scope --yes --json" -- "$cur"))
+          else
+            local plugins
+            plugins=$(skilltap --get-completions installed-plugins 2>/dev/null)
+            COMPREPLY=($(compgen -W "$plugins" -- "$cur"))
           fi
           ;;
-        move)
+        mcp)
           case "$prev" in
-            --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+            --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
           esac
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
-          else
-            local skills
-            skills=$(skilltap --get-completions installed-skills 2>/dev/null)
-            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-          fi
+          COMPREPLY=($(compgen -W "--scope --yes --json" -- "$cur"))
           ;;
-        disable)
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--project --global" -- "$cur"))
-          else
-            local skills
-            skills=$(skilltap --get-completions active-skills 2>/dev/null)
-            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-          fi
-          ;;
-        enable)
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--project --global" -- "$cur"))
-          else
-            local skills
-            skills=$(skilltap --get-completions disabled-skills 2>/dev/null)
-            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-          fi
-          ;;
-        ""|*)
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--global --project --unmanaged --json --disabled --active" -- "$cur"))
-          else
-            COMPREPLY=($(compgen -W "$skills_commands" -- "$cur"))
-          fi
+        *)
+          COMPREPLY=($(compgen -W "$typed_subcommands" -- "$cur"))
           ;;
       esac
       ;;
     update)
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--yes --strict --semantic --json --check --force" -- "$cur"))
-      else
-        local skills
-        skills=$(skilltap --get-completions installed-skills 2>/dev/null)
-        COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-      fi
+      case "\${COMP_WORDS[2]}" in
+        skill|plugin|mcp)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--yes --strict --semantic --json --check --force --skip-scan --quiet" -- "$cur"))
+          else
+            local skills
+            skills=$(skilltap --get-completions installed-skills 2>/dev/null)
+            COMPREPLY=($(compgen -W "$skills" -- "$cur"))
+          fi
+          ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--yes --strict --semantic --json --check --force --skip-scan --quiet" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$typed_subcommands" -- "$cur"))
+          fi
+          ;;
+      esac
       ;;
     find)
       COMPREPLY=($(compgen -W "--json -i -l --local" -- "$cur"))
       ;;
-    link)
-      case "$prev" in
-        --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
-      esac
-      COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
-      ;;
-    unlink)
-      if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--yes" -- "$cur"))
-      else
-        local skills
-        skills=$(skilltap --get-completions linked-skills 2>/dev/null)
-        COMPREPLY=($(compgen -W "$skills" -- "$cur"))
-      fi
-      ;;
     info)
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--json" -- "$cur"))
+        COMPREPLY=($(compgen -W "--json --project --global" -- "$cur"))
       else
         local skills
         skills=$(skilltap --get-completions installed-skills 2>/dev/null)
         COMPREPLY=($(compgen -W "$skills" -- "$cur"))
       fi
-      ;;
-    plugin)
-      local plugin_commands="list info toggle remove"
-      case "\${COMP_WORDS[2]}" in
-        info)
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--json" -- "$cur"))
-          else
-            COMPREPLY=()
-          fi
-          ;;
-        toggle)
-          COMPREPLY=($(compgen -W "--skills --mcps --agents --json" -- "$cur"))
-          ;;
-        remove)
-          COMPREPLY=($(compgen -W "--yes --json" -- "$cur"))
-          ;;
-        list|"")
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--global --project --json" -- "$cur"))
-          else
-            COMPREPLY=($(compgen -W "$plugin_commands" -- "$cur"))
-          fi
-          ;;
-      esac
       ;;
     create)
       case "$prev" in
@@ -191,16 +130,17 @@ _skilltap() {
       esac
       COMPREPLY=($(compgen -W "--template --dir" -- "$cur"))
       ;;
-    verify)
-      COMPREPLY=($(compgen -W "--all --json" -- "$cur"))
-      ;;
     config)
       case "\${COMP_WORDS[2]}" in
         get)
           COMPREPLY=($(compgen -W "--json" -- "$cur"))
           ;;
         security)
-          COMPREPLY=($(compgen -W "--preset --mode --scan --on-warn --require-scan --trust --remove-trust" -- "$cur"))
+          case "$prev" in
+            --scan) COMPREPLY=($(compgen -W "semantic static none" -- "$cur")); return ;;
+            --on-warn) COMPREPLY=($(compgen -W "prompt fail install" -- "$cur")); return ;;
+          esac
+          COMPREPLY=($(compgen -W "--scan --on-warn --trust-add --trust-remove --trust-list" -- "$cur"))
           ;;
         set|telemetry|edit)
           ;;
@@ -239,12 +179,7 @@ _skilltap() {
             COMPREPLY=($(compgen -W "$taps" -- "$cur"))
           fi
           ;;
-        install)
-          if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--tap --project --global --also --yes --strict --no-strict --semantic --skip-scan" -- "$cur"))
-          fi
-          ;;
-        info|init|"")
+        init|"")
           COMPREPLY=($(compgen -W "$tap_commands" -- "$cur"))
           ;;
       esac
@@ -268,17 +203,59 @@ _skilltap() {
       COMPREPLY=($(compgen -W "--json --apply" -- "$cur"))
       ;;
     try)
+      case "\${COMP_WORDS[2]}" in
+        skill|plugin|mcp)
+          COMPREPLY=($(compgen -W "--json --skip-scan" -- "$cur"))
+          ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--json --skip-scan" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$typed_subcommands" -- "$cur"))
+          fi
+          ;;
+      esac
+      ;;
+    toggle)
+      case "\${COMP_WORDS[2]}" in
+        skill|plugin|mcp)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--json" -- "$cur"))
+          else
+            local plugins
+            plugins=$(skilltap --get-completions installed-plugins 2>/dev/null)
+            COMPREPLY=($(compgen -W "$plugins" -- "$cur"))
+          fi
+          ;;
+        *)
+          if [[ "$cur" == -* ]]; then
+            COMPREPLY=($(compgen -W "--json" -- "$cur"))
+          else
+            COMPREPLY=($(compgen -W "$typed_subcommands" -- "$cur"))
+          fi
+          ;;
+      esac
+      ;;
+    adopt)
+      case "$prev" in
+        --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+        --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
+        --source) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+      esac
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--json --skip-scan" -- "$cur"))
+        COMPREPLY=($(compgen -W "--scope --also --source --move --skip-scan --yes --json" -- "$cur"))
       fi
       ;;
-    toggle|enable|disable)
+    move)
+      case "$prev" in
+        --also) COMPREPLY=($(compgen -W "$agents" -- "$cur")); return ;;
+      esac
       if [[ "$cur" == -* ]]; then
-        COMPREPLY=($(compgen -W "--json" -- "$cur"))
+        COMPREPLY=($(compgen -W "--global --project --also" -- "$cur"))
       else
-        local plugins
-        plugins=$(skilltap --get-completions installed-plugins 2>/dev/null)
-        COMPREPLY=($(compgen -W "$plugins" -- "$cur"))
+        local skills
+        skills=$(skilltap --get-completions installed-skills 2>/dev/null)
+        COMPREPLY=($(compgen -W "$skills" -- "$cur"))
       fi
       ;;
     "")

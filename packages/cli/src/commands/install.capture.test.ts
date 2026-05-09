@@ -19,7 +19,7 @@ import {
 } from "bun:test";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { loadInstalled, loadPlugins } from "@skilltap/core";
+import { loadSkillState, loadPlugins } from "@skilltap/core";
 import {
   commitAll,
   createClaudePluginRepo,
@@ -184,7 +184,7 @@ describe("install capture — cross-source conflict", () => {
       expect(seeded).toBe(true);
 
       // Verify standalone is recorded
-      const before = await loadInstalled();
+      const before = await loadSkillState();
       expect(before.ok).toBe(true);
       if (!before.ok) return;
       expect(before.value.skills.some((s) => s.name === "helper")).toBe(true);
@@ -225,7 +225,7 @@ describe("install capture — cross-source conflict", () => {
       );
 
       // Standalone still present
-      const after = await loadInstalled();
+      const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
       expect(after.value.skills.some((s) => s.name === "helper")).toBe(true);
@@ -259,7 +259,7 @@ describe("install capture — same-source capture", () => {
       expect(seeded).toBe(true);
 
       // Verify standalone seeded
-      const before = await loadInstalled();
+      const before = await loadSkillState();
       expect(before.ok).toBe(true);
       if (!before.ok) return;
       expect(before.value.skills.some((s) => s.name === "helper")).toBe(true);
@@ -277,7 +277,7 @@ describe("install capture — same-source capture", () => {
       expect(stdout).toContain("test-plugin");
 
       // Standalone no longer in state
-      const after = await loadInstalled();
+      const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
       expect(after.value.skills.some((s) => s.name === "helper")).toBe(false);

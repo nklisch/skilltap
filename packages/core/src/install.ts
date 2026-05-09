@@ -3,7 +3,7 @@ import { dirname, join, relative } from "node:path";
 import { $ } from "bun";
 import { resolveSource } from "./adapters";
 import type { AgentAdapter } from "./agents/types";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
 import { makeTmpDir, removeTmpDir, resolvedDirExists } from "./fs";
 import { checkGitInstalled, clone, revParse } from "./git";
@@ -504,7 +504,7 @@ export async function installSkill(
   // 1. Check already-installed (reads state.json)
   const fileRoot =
     options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -946,12 +946,12 @@ export async function installSkill(
 
     debug("placements complete", { installed: newRecords.map((r) => r.name) });
 
-    // 10. Save state (saveInstalled writes to state.json post Phase 31c-c-2d-1)
+    // 10. Save state — writes to state.json.
     installed.skills.push(...newRecords);
-    const saveResult = await saveInstalled(installed, fileRoot);
+    const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 
-    // 11. v2 manifest update (Phase 31c-a) — no-op without skilltap.toml.
+    // 11. v2 manifest update — no-op without skilltap.toml.
     // Only fires for project-scope installs in a project root that has a
     // manifest. Failures are non-fatal — the skill is already installed.
     if (options.scope === "project" && options.projectRoot) {

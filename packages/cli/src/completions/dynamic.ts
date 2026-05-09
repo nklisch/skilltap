@@ -1,15 +1,15 @@
 import {
   loadConfig,
-  loadInstalled,
+  loadSkillState,
   loadPlugins,
   loadTaps,
 } from "@skilltap/core";
 import { tryFindProjectRoot } from "../ui/resolve";
 
 async function loadAllSkills() {
-  const globalResult = await loadInstalled();
+  const globalResult = await loadSkillState();
   const projectRoot = await tryFindProjectRoot();
-  const projectResult = projectRoot ? await loadInstalled(projectRoot) : null;
+  const projectResult = projectRoot ? await loadSkillState(projectRoot) : null;
   return [
     ...(globalResult.ok ? globalResult.value.skills : []),
     ...(projectResult?.ok ? projectResult.value.skills : []),

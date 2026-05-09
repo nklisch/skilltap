@@ -1,7 +1,7 @@
 import { lstat, readdir, readlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { $ } from "bun";
-import { loadInstalled } from "./config";
+import { loadSkillState } from "./config";
 import { parseSkillFrontmatter } from "./frontmatter";
 import { globalBase } from "./fs";
 import { findProjectRoot } from "./paths";
@@ -114,14 +114,14 @@ export async function discoverSkills(
   }
 
   // Load installed records for cross-referencing
-  const globalInstalledResult = scanGlobal ? await loadInstalled() : null;
+  const globalInstalledResult = scanGlobal ? await loadSkillState() : null;
   if (globalInstalledResult && !globalInstalledResult.ok) {
     return globalInstalledResult;
   }
   const globalInstalled = globalInstalledResult?.value.skills ?? [];
 
   const projectInstalledResult =
-    scanProject && projectRoot ? await loadInstalled(projectRoot) : null;
+    scanProject && projectRoot ? await loadSkillState(projectRoot) : null;
   if (projectInstalledResult && !projectInstalledResult.ok) {
     return projectInstalledResult;
   }

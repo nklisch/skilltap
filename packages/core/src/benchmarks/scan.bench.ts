@@ -7,20 +7,20 @@
  *   scanStatic  — 500 markdown files     < 5000 ms
  *   chunkSkillDir — 10,000 line file     <  500 ms
  *   scanDiff    — 1 MB diff output       < 5000 ms  (regex over large text; ~970ms actual)
- *   loadInstalled — 100 skill records    <   50 ms
+ *   loadSkillState — 100 skill records    <   50 ms
  *
  * Baseline (Linux x86_64, Bun 1.3.10, 2026-03-01):
  *   scanStatic  — 500 markdown files:    ~173 ms/iter
  *   chunkSkillDir — 10,000 line file:    ~9   ms/iter
  *   scanDiff    — 1 MB diff output:      ~967 ms/iter  (7 regex detectors × 18k lines)
- *   loadInstalled — 100 skill records:   ~0.2 ms/iter
+ *   loadSkillState — 100 skill records:   ~0.2 ms/iter
  */
 
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   chunkSkillDir,
-  loadInstalled,
+  loadSkillState,
   scanDiff,
   scanStatic,
 } from "@skilltap/core";
@@ -97,9 +97,9 @@ const linesNeeded = Math.ceil(
 );
 const LARGE_DIFF = DIFF_HEADER + DIFF_LINE.repeat(linesNeeded);
 
-// 4. installed.json with 100 skills for the loadInstalled v0.x-fallback path
-//    (post-Phase-31c-c-2d-1, loadInstalled reads state.json first; this
-//    fixture has no state.json so the fallback fires and is what's measured).
+// 4. installed.json with 100 skills as a baseline fixture for loadSkillState.
+//    No state.json is written, so loadSkillState reads from the empty default —
+//    this measures the cold-load happy path, not the v0.x fallback.
 const CONFIG_DIR = join(TMP, "config");
 await mkdir(join(CONFIG_DIR, "skilltap"), { recursive: true });
 
@@ -127,7 +127,7 @@ await writeFile(
   JSON.stringify(installedJson, null, 2),
 );
 
-// loadInstalled reads from XDG_CONFIG_HOME
+// loadSkillState reads from XDG_CONFIG_HOME
 const savedXdg = process.env.XDG_CONFIG_HOME;
 process.env.XDG_CONFIG_HOME = CONFIG_DIR;
 
@@ -153,7 +153,7 @@ await bench("scanDiff    — 1 MB diff output  ", () => scanDiff(LARGE_DIFF), {
   thresholdMs: 5000,
 });
 
-await bench("loadInstalled — 100 skill records", () => loadInstalled(), {
+await bench("loadSkillState — 100 skill records", () => loadSkillState(), {
   iterations: 50,
   warmup: 5,
   thresholdMs: 50,

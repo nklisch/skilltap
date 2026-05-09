@@ -10,7 +10,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { disableSkill } from "./disable";
 import { installSkill } from "./install";
 import { skillDisabledDir } from "./paths";
@@ -43,7 +43,7 @@ describe("removeSkill — global skill", () => {
 
       expect(await lstat(skillDir).catch(() => null)).toBeNull();
 
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       expect(loaded.value.skills).toHaveLength(0);
@@ -98,7 +98,7 @@ describe("removeSkill — project skill", () => {
 
       expect(await lstat(skillDir).catch(() => null)).toBeNull();
 
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       if (!loaded.ok) return;
       expect(loaded.value.skills).toHaveLength(0);
     } finally {
@@ -118,7 +118,7 @@ describe("removeSkill — linked skill", () => {
       await $`ln -s ${targetDir} ${symlinkPath}`.quiet();
 
       // Write linked skill record directly
-      await saveInstalled({
+      await saveSkillState({
         version: 1,
         skills: [
           {
@@ -175,7 +175,7 @@ describe("removeSkill — error cases", () => {
       expect(result.error.message).toContain("not installed");
 
       // Skill still installed
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       if (!loaded.ok) return;
       expect(loaded.value.skills).toHaveLength(1);
     } finally {
@@ -205,7 +205,7 @@ describe("removeSkill — disabled skill", () => {
       expect(await lstat(disabledDir).catch(() => null)).toBeNull();
 
       // Record removed from installed.json
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       expect(loaded.ok).toBe(true);
       if (!loaded.ok) return;
       expect(loaded.value.skills).toHaveLength(0);
@@ -224,7 +224,7 @@ describe("removeSkill — cache cleanup", () => {
         skillNames: ["skill-a"],
         skipScan: true,
       });
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       if (!loaded.ok) return;
       const record = loaded.value.skills[0]!;
       const hash = Bun.hash(record.repo!).toString(16);
@@ -242,7 +242,7 @@ describe("removeSkill — cache cleanup", () => {
     const repo = await createMultiSkillRepo();
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
-      const loaded = await loadInstalled();
+      const loaded = await loadSkillState();
       if (!loaded.ok) return;
       const record = loaded.value.skills[0]!;
       const hash = Bun.hash(record.repo!).toString(16);

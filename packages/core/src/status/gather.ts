@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { loadConfig, loadInstalled } from "../config";
+import { loadConfig, loadSkillState } from "../config";
 import { loadLockfile, loadManifest, manifestExists } from "../manifest";
 import { findProjectRoot } from "../paths";
 import { loadPlugins } from "../plugin/state";
@@ -78,7 +78,7 @@ export async function gatherStatus(
     skills = stateResult.value.skills.map(skillToStatus);
     plugins = stateResult.value.plugins.map(pluginToStatus);
   } else {
-    const installedResult = await loadInstalled(
+    const installedResult = await loadSkillState(
       scope === "project" ? (projectRoot ?? undefined) : undefined,
     );
     const pluginsResult = await loadPlugins(

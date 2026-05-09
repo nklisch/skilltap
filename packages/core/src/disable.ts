@@ -1,6 +1,6 @@
 import { mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { skillDisabledDir, skillInstallDir } from "./paths";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
@@ -19,7 +19,7 @@ export async function disableSkill(
 ): Promise<Result<void, UserError>> {
   const fileRoot =
     options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -66,7 +66,7 @@ export async function disableSkill(
   record.active = false;
   record.updatedAt = new Date().toISOString();
 
-  const saveResult = await saveInstalled(installed, fileRoot);
+  const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   return ok(undefined);
@@ -78,7 +78,7 @@ export async function enableSkill(
 ): Promise<Result<void, UserError>> {
   const fileRoot =
     options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -140,7 +140,7 @@ export async function enableSkill(
   record.active = true;
   record.updatedAt = new Date().toISOString();
 
-  const saveResult = await saveInstalled(installed, fileRoot);
+  const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   return ok(undefined);

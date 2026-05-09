@@ -3,7 +3,7 @@ import { basename, dirname, join } from "node:path";
 import { $ } from "bun";
 import type { DiscoveredAgentPlugin } from "./agent-plugins/types";
 import { scanAllAgentPlugins } from "./agent-plugins/registry";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import type { DiscoverOptions, DiscoveredSkill } from "./discover";
 import { discoverSkills } from "./discover";
 import { revParse } from "./git";
@@ -188,11 +188,11 @@ export async function adoptSkill(
     };
 
     const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadInstalled(fileRoot);
+    const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
     installed.skills.push(record);
-    const saveResult = await saveInstalled(installed, fileRoot);
+    const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 
     return ok({ record, symlinksCreated });
@@ -224,18 +224,16 @@ export async function adoptSkill(
 
     // Save record to appropriate state
     const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadInstalled(fileRoot);
+    const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
     installed.skills.push(record);
-    const saveResult = await saveInstalled(installed, fileRoot);
+    const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 
     return ok({ record, symlinksCreated });
   }
 }
-
-// --- New Phase 43 exports ---
 
 export type AdoptFromPathOptions = {
   scope?: "global" | "project";
@@ -359,11 +357,11 @@ export async function adoptSkillFromPath(
     };
 
     const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadInstalled(fileRoot);
+    const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
     installed.skills.push(record);
-    const saveResult = await saveInstalled(installed, fileRoot);
+    const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 
     return ok({ record, symlinksCreated });
@@ -410,11 +408,11 @@ export async function adoptSkillFromPath(
     };
 
     const fileRoot = scope === "project" ? projectRoot : undefined;
-    const installedResult = await loadInstalled(fileRoot);
+    const installedResult = await loadSkillState(fileRoot);
     if (!installedResult.ok) return installedResult;
     const installed = installedResult.value;
     installed.skills.push(record);
-    const saveResult = await saveInstalled(installed, fileRoot);
+    const saveResult = await saveSkillState(installed, fileRoot);
     if (!saveResult.ok) return saveResult;
 
     return ok({ record, symlinksCreated });

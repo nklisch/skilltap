@@ -130,7 +130,7 @@ describe("checkForSkillUpdates", () => {
 
 describe("fetchSkillUpdateStatus", () => {
   test("returns empty array when no skills installed", async () => {
-    // No installed.json → loadInstalled returns empty
+    // No installed.json → loadSkillState returns empty
     const result = await fetchSkillUpdateStatus(null);
     expect(result).toEqual([]);
   });

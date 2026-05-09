@@ -15,7 +15,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import { $ } from "bun";
-import { saveInstalled } from "./config";
+import { saveSkillState } from "./config";
 import { discoverSkills } from "./discover";
 
 setDefaultTimeout(45_000);
@@ -116,7 +116,7 @@ describe("discoverSkills", () => {
     );
 
     // Write a record into installed.json
-    await saveInstalled({
+    await saveSkillState({
       version: 1,
       skills: [
         {
@@ -172,7 +172,7 @@ describe("discoverSkills", () => {
       join(managedDir, "SKILL.md"),
       `---\nname: managed\ndescription: Managed skill\n---\n`,
     );
-    await saveInstalled({
+    await saveSkillState({
       version: 1,
       skills: [
         {

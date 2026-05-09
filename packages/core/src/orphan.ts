@@ -1,6 +1,6 @@
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
-import { saveInstalled } from "./config";
+import { saveSkillState } from "./config";
 import { resolvedDirExists } from "./fs";
 import { skillCacheDir, skillInstallDir } from "./paths";
 import type { InstalledJson, InstalledSkill } from "./schemas/installed";
@@ -136,7 +136,7 @@ export async function purgeOrphanRecords(
 
   installed.skills = installed.skills.filter((s) => !namesToPurge.has(s.name));
 
-  const saveResult = await saveInstalled(installed, fileRoot);
+  const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   return ok([...namesToPurge]);

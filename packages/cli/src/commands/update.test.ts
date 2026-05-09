@@ -10,8 +10,8 @@ import { mkdir, rm, symlink } from "node:fs/promises";
 import { dirname } from "node:path";
 import {
   createAgentSymlinks,
-  loadInstalled,
-  saveInstalled,
+  loadSkillState,
+  saveSkillState,
   scan,
   skillInstallDir,
 } from "@skilltap/core";
@@ -41,7 +41,7 @@ async function linkSkillFixture(
     await createAgentSymlinks(skill.name, installPath, also, options.scope, options.projectRoot);
   }
   const fileRoot = options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) throw installedResult.error;
   const now = new Date().toISOString();
   installedResult.value.skills.push({
@@ -57,7 +57,7 @@ async function linkSkillFixture(
     installedAt: now,
     updatedAt: now,
   });
-  const saveResult = await saveInstalled(installedResult.value, fileRoot);
+  const saveResult = await saveSkillState(installedResult.value, fileRoot);
   if (!saveResult.ok) throw saveResult.error;
 }
 
@@ -112,7 +112,7 @@ describe("update — clean update", () => {
       );
 
       // Get initial SHA
-      const beforeInstalled = await loadInstalled();
+      const beforeInstalled = await loadSkillState();
       expect(beforeInstalled.ok).toBe(true);
       if (!beforeInstalled.ok) return;
       const initialSha = beforeInstalled.value.skills[0]?.sha;
@@ -133,7 +133,7 @@ describe("update — clean update", () => {
       expect(stdout).toContain("Updated: 1");
 
       // Verify SHA was updated in installed.json
-      const afterInstalled = await loadInstalled();
+      const afterInstalled = await loadSkillState();
       expect(afterInstalled.ok).toBe(true);
       if (!afterInstalled.ok) return;
       const newSha = afterInstalled.value.skills[0]?.sha;
@@ -210,7 +210,7 @@ describe("update — strict mode with warnings in diff", () => {
       );
 
       // Get initial SHA
-      const beforeInstalled = await loadInstalled();
+      const beforeInstalled = await loadSkillState();
       expect(beforeInstalled.ok).toBe(true);
       if (!beforeInstalled.ok) return;
       const initialSha = beforeInstalled.value.skills[0]?.sha;
@@ -231,7 +231,7 @@ describe("update — strict mode with warnings in diff", () => {
       expect(stdout).toContain("Skipped: 1");
 
       // SHA should NOT have changed (update was skipped)
-      const afterInstalled = await loadInstalled();
+      const afterInstalled = await loadSkillState();
       expect(afterInstalled.ok).toBe(true);
       if (!afterInstalled.ok) return;
       expect(afterInstalled.value.skills[0]?.sha).toBe(initialSha);

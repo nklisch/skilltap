@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { loadInstalled } from "@skilltap/core";
+import { loadSkillState } from "@skilltap/core";
 import {
   commitAll,
   createStandaloneSkillRepo,
@@ -73,7 +73,7 @@ describe("install orphan — installs through phantom conflict", () => {
       expect(second.stdout).toContain("standalone-skill");
 
       // Exactly one record in installed.json
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills).toHaveLength(1);
@@ -116,7 +116,7 @@ describe("install orphan — plugins layout (plugins/*/skills/*/SKILL.md)", () =
       expect(stdout).toContain("my-skill");
 
       // Verify it appears in installed.json
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills.some((s) => s.name === "my-skill")).toBe(
@@ -157,7 +157,7 @@ describe("install orphan — re-install after manual directory deletion", () => 
       expect(second.exitCode).toBe(0);
 
       // Exactly one record in installed.json (no duplicates)
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills).toHaveLength(1);

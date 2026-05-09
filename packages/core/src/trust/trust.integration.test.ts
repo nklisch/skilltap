@@ -332,8 +332,8 @@ describe("trust integration — install from verified tap", () => {
       });
 
       // Read back from installed.json
-      const { loadInstalled } = await import("../config");
-      const installedResult = await loadInstalled();
+      const { loadSkillState } = await import("../config");
+      const installedResult = await loadSkillState();
       expect(installedResult.ok).toBe(true);
       if (!installedResult.ok) return;
       const skill = installedResult.value.skills.find(

@@ -281,9 +281,9 @@ async function runToggleMcp(
   json: boolean,
   projectRoot: string | undefined,
 ): Promise<void> {
-  // MCP standalone toggle is not yet implemented in core (no active/inactive concept
-  // for standalone MCP servers in the current schema). Phase 44 will add this.
-  // For now, inform the user.
+  // MCP standalone toggle is not yet implemented in core (no active/inactive
+  // concept for standalone MCP servers in the current schema). For now,
+  // inform the user.
   const stateResult = await loadState(projectRoot);
   if (!stateResult.ok) {
     out.error(stateResult.error.message);
@@ -304,7 +304,7 @@ async function runToggleMcp(
   );
 }
 
-// ─── Picker (Phase 42 placeholder — Phase 44 swaps in Ink TUI) ───────────────
+// ─── Picker ──────────────────────────────────────────────────────────────────
 
 async function runTogglePicker(
   out: Output,

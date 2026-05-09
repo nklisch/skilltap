@@ -16,7 +16,6 @@ export * from "./fs";
 export * from "./git";
 export * from "./install";
 export * from "./json-state";
-// v2.0 additions (Phase 26+) — additive, no v1.0 paths use these yet.
 export * from "./manifest";
 export {
   installMcp,

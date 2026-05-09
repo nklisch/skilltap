@@ -256,7 +256,7 @@ export function buildCrossSourceHint(
     "Run `skilltap remove <name>` on each conflicting standalone, or run the install",
   );
   lines.push(
-    "interactively (without --agent) to choose force-override per conflict.",
+    "interactively (drop --yes/--json or use a TTY) to choose force-override per conflict.",
   );
 
   return lines.join("\n");

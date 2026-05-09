@@ -1,6 +1,6 @@
 import { unlink } from "node:fs/promises";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { debug } from "./debug";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
 import { resolvedDirExists } from "./fs";
@@ -25,7 +25,7 @@ export async function removeSkill(
   debug("removeSkill", { name, scope: options.scope });
   const fileRoot =
     options.scope === "project" ? options.projectRoot : undefined;
-  const installedResult = await loadInstalled(fileRoot);
+  const installedResult = await loadSkillState(fileRoot);
   if (!installedResult.ok) return installedResult;
   const installed = installedResult.value;
 
@@ -101,7 +101,7 @@ export async function removeSkill(
   }
 
   installed.skills.splice(idx, 1);
-  const saveResult = await saveInstalled(installed, fileRoot);
+  const saveResult = await saveSkillState(installed, fileRoot);
   if (!saveResult.ok) return saveResult;
 
   if (options.scope === "project" && options.projectRoot && record.repo) {

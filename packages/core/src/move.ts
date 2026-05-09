@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { $ } from "bun";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { skillInstallDir } from "./paths";
 import type { InstalledSkill } from "./schemas/installed";
 import { createAgentSymlinks, removeAgentSymlinks } from "./symlink";
@@ -34,7 +34,7 @@ export async function moveSkill(
     options.to.scope === "project" ? options.to.projectRoot : undefined;
 
   // Look up the skill in global and project state
-  const globalInstalledResult = await loadInstalled();
+  const globalInstalledResult = await loadSkillState();
   if (!globalInstalledResult.ok) return globalInstalledResult;
   const globalInstalled = globalInstalledResult.value;
 
@@ -63,7 +63,7 @@ export async function moveSkill(
     }
 
     for (const root of candidateRoots) {
-      const projectInstalledResult = await loadInstalled(root);
+      const projectInstalledResult = await loadSkillState(root);
       if (!projectInstalledResult.ok) continue;
       const projectRecord = projectInstalledResult.value.skills.find(
         (s) => s.name === name && s.scope === "project",
@@ -162,7 +162,7 @@ export async function moveSkill(
   // Remove from source state
   const sourceFileRoot =
     record.scope === "project" ? sourceProjectRoot : undefined;
-  const sourceInstalledResult = await loadInstalled(sourceFileRoot);
+  const sourceInstalledResult = await loadSkillState(sourceFileRoot);
   if (!sourceInstalledResult.ok) return sourceInstalledResult;
   const sourceInstalled = sourceInstalledResult.value;
   const sourceIdx = sourceInstalled.skills.findIndex(
@@ -172,17 +172,17 @@ export async function moveSkill(
   if (sourceIdx !== -1) {
     sourceInstalled.skills.splice(sourceIdx, 1);
   }
-  const saveSourceResult = await saveInstalled(sourceInstalled, sourceFileRoot);
+  const saveSourceResult = await saveSkillState(sourceInstalled, sourceFileRoot);
   if (!saveSourceResult.ok) return saveSourceResult;
 
   // Add to target state
   const targetFileRoot =
     effectiveTargetScope === "project" ? targetProjectRoot : undefined;
-  const targetInstalledResult = await loadInstalled(targetFileRoot);
+  const targetInstalledResult = await loadSkillState(targetFileRoot);
   if (!targetInstalledResult.ok) return targetInstalledResult;
   const targetInstalled = targetInstalledResult.value;
   targetInstalled.skills.push(newRecord);
-  const saveTargetResult = await saveInstalled(targetInstalled, targetFileRoot);
+  const saveTargetResult = await saveSkillState(targetInstalled, targetFileRoot);
   if (!saveTargetResult.ok) return saveTargetResult;
 
   return ok({ record: newRecord, from: sourcePath, to: destPath });

@@ -10,7 +10,7 @@ import {
   type TestEnv,
 } from "@skilltap/test-utils";
 import type { AgentAdapter } from "./agents/types";
-import { loadInstalled, saveInstalled } from "./config";
+import { loadSkillState, saveSkillState } from "./config";
 import { disableSkill } from "./disable";
 import { installSkill } from "./install";
 import { updateSkill } from "./update";
@@ -177,7 +177,7 @@ describe("updateSkill — updated", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
-      const beforeLoaded = await loadInstalled();
+      const beforeLoaded = await loadSkillState();
       const oldSha = beforeLoaded.ok ? beforeLoaded.value.skills[0]!.sha : null;
 
       const newSha = await addFileAndCommit(repo.path, "extra.md", "# Extra");
@@ -204,13 +204,13 @@ describe("updateSkill — updated", () => {
     try {
       await installSkill(repo.path, { scope: "global", skipScan: true });
 
-      const before = await loadInstalled();
+      const before = await loadSkillState();
       const oldUpdatedAt = before.ok ? before.value.skills[0]!.updatedAt : null;
 
       const newSha = await addFileAndCommit(repo.path, "patch.md", "# Patch");
       await updateSkill({ yes: true });
 
-      const after = await loadInstalled();
+      const after = await loadSkillState();
       expect(after.ok).toBe(true);
       if (!after.ok) return;
       const record = after.value.skills[0]!;
@@ -226,7 +226,7 @@ describe("updateSkill — updated", () => {
 
 describe("updateSkill — linked skills", () => {
   test("skips linked skills and fires onProgress with 'linked'", async () => {
-    await saveInstalled({
+    await saveSkillState({
       version: 1,
       skills: [
         {
@@ -542,7 +542,7 @@ describe("updateSkill — project scope", () => {
       expect(result.value.updated).toContain("standalone-skill");
 
       // Project installed.json should have updated SHA
-      const projectInstalled = await loadInstalled(projectRoot);
+      const projectInstalled = await loadSkillState(projectRoot);
       expect(projectInstalled.ok).toBe(true);
       if (!projectInstalled.ok) return;
       expect(projectInstalled.value.skills[0]?.sha).toBeTruthy();

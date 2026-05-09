@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
-import { loadInstalled } from "@skilltap/core";
+import { loadSkillState } from "@skilltap/core";
 import {
   createStandaloneSkillRepo,
   createTestEnv,
@@ -71,7 +71,7 @@ describe("remove orphan — remove succeeds when directory already missing", () 
       expect(stdout).toContain("standalone-skill");
 
       // Record should be removed from installed.json
-      const installed = await loadInstalled();
+      const installed = await loadSkillState();
       expect(installed.ok).toBe(true);
       if (!installed.ok) return;
       expect(installed.value.skills).toHaveLength(0);

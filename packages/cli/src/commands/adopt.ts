@@ -67,7 +67,7 @@ export const adoptCommand = defineCommand({
     const out = setupOutput(args);
 
     if (!args.target) {
-      // Picker mode (Phase 44 will replace with Ink TUI).
+      // Picker mode.
       if (process.stdout.isTTY !== true) {
         out.error(
           "adopt requires a target in non-interactive mode.",

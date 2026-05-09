@@ -88,7 +88,7 @@ async function tryClone(
   const flags: string[] = ["--depth", String(opts?.depth ?? 1)];
   if (opts?.branch) flags.push("--branch", opts.branch);
   const linkHint =
-    "The URL shown is what was passed to git; url.insteadOf rewrites are applied by git before connecting. For repos with complex auth, use 'skilltap link <local-path>' to symlink a local clone instead.";
+    "The URL shown is what was passed to git; url.insteadOf rewrites are applied by git before connecting. For repos with complex auth, clone manually and run 'skilltap adopt <local-path>' to track the clone.";
   try {
     await $`git clone ${flags} -- ${url} ${dest}`.quiet();
     return ok(undefined);

@@ -75,8 +75,6 @@ export function parseMcpRef(source: string): ParsedMcpRef | null {
 // entirely. Servers are namespaced under `skilltap:<slug>:<server-name>`,
 // injected into the configured agent configs, and recorded in
 // state.json's mcpServers array.
-//
-// Phase 35b — additive. Doesn't touch v0.x reads/writes.
 export async function installMcp(
   source: string,
   options: McpInstallOptions,

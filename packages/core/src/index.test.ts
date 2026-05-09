@@ -14,7 +14,7 @@ import {
   InstalledJsonSchema,
   InstalledSkillSchema,
   loadConfig,
-  loadInstalled,
+  loadSkillState,
   NetworkError,
   // types
   ok,
@@ -24,7 +24,7 @@ import {
   SkillFrontmatterSchema,
   SkilltapError,
   saveConfig,
-  saveInstalled,
+  saveSkillState,
   TapSchema,
   TapSkillSchema,
   UserError,
@@ -71,7 +71,7 @@ describe("@skilltap/core", () => {
     expect(typeof ensureDirs).toBe("function");
     expect(typeof loadConfig).toBe("function");
     expect(typeof saveConfig).toBe("function");
-    expect(typeof loadInstalled).toBe("function");
-    expect(typeof saveInstalled).toBe("function");
+    expect(typeof loadSkillState).toBe("function");
+    expect(typeof saveSkillState).toBe("function");
   });
 });
