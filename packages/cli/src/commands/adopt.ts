@@ -13,6 +13,7 @@ import {
   collectRepeatedFlag,
   parseAlsoFlag,
   resolveScope,
+  validateScopeArg,
 } from "../ui/resolve";
 import { setupOutput } from "../ui/setup";
 
@@ -71,17 +72,7 @@ export const adoptCommand = defineCommand({
   async run({ args, rawArgs }) {
     const out = setupOutput(args);
 
-    const scopeArg = args.scope as string | undefined;
-    if (
-      scopeArg !== undefined &&
-      scopeArg !== "project" &&
-      scopeArg !== "global"
-    ) {
-      out.error(
-        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
-      );
-      process.exit(1);
-    }
+    validateScopeArg(args.scope as string | undefined, out);
     // mri only keeps the last `--also`; reach into rawArgs to honor repeats.
     const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
     const adoptArgs: AdoptArgs = {

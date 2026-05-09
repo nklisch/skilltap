@@ -7,6 +7,7 @@ import {
   type InstalledSkill,
   isInGitRepo,
   loadSkillState,
+  type Output,
   resolveAgent,
   saveConfig,
   VALID_AGENT_IDS,
@@ -171,6 +172,27 @@ export async function resolveAgentInteractive(
   }
   log.warn(agentResult.error.message);
   return undefined;
+}
+
+export function validateScopeArg(
+  scopeArg: string | undefined,
+  out: Output,
+  options: { required?: boolean } = {},
+): "project" | "global" | undefined {
+  if (scopeArg === undefined) {
+    if (options.required) {
+      out.error("Specify target scope: --scope project|global");
+      process.exit(1);
+    }
+    return undefined;
+  }
+  if (scopeArg !== "project" && scopeArg !== "global") {
+    out.error(
+      `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+    );
+    process.exit(1);
+  }
+  return scopeArg;
 }
 
 /** Load installed skills and find by name, or exit with a contextual error. */

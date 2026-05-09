@@ -4,6 +4,7 @@ import {
   collectRepeatedFlag,
   parseAlsoFlag,
   tryFindProjectRoot,
+  validateScopeArg,
 } from "../ui/resolve";
 import { setupOutput } from "../ui/setup";
 
@@ -31,17 +32,9 @@ export const moveCommand = defineCommand({
     const out = setupOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
-    const scopeArg = args.scope as string | undefined;
-    if (scopeArg === undefined) {
-      out.error("Specify target scope: --scope project|global");
-      process.exit(1);
-    }
-    if (scopeArg !== "project" && scopeArg !== "global") {
-      out.error(
-        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
-      );
-      process.exit(1);
-    }
+    const scope = validateScopeArg(args.scope as string | undefined, out, {
+      required: true,
+    });
 
     const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
     const also = parseAlsoFlag(
@@ -52,7 +45,7 @@ export const moveCommand = defineCommand({
     let to: Parameters<typeof moveSkill>[1]["to"];
     let fromProjectRoot: string | undefined;
 
-    if (scopeArg === "global") {
+    if (scope === "global") {
       to = { scope: "global" };
       fromProjectRoot = await tryFindProjectRoot();
     } else {
