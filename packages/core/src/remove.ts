@@ -1,11 +1,12 @@
 import { unlink } from "node:fs/promises";
 import { $ } from "bun";
-import { loadSkillState, saveSkillState } from "./config";
+import { loadSkillState } from "./config";
 import { debug } from "./debug";
 import type { DiscoveredSkill, SkillLocation } from "./discover";
 import { resolvedDirExists } from "./fs";
 import { removeSkillFromManifest } from "./manifest/update";
 import { currentSkillDir, skillCacheDir } from "./paths";
+import { applySkillStateChange } from "./state/apply";
 import { wrapShell } from "./shell";
 import { removeAgentSymlinks } from "./symlink";
 import type { Result } from "./types";
@@ -91,17 +92,19 @@ export async function removeSkill(
     }
   }
 
-  installed.splice(idx, 1);
-  const saveResult = await saveSkillState(installed, fileRoot);
-  if (!saveResult.ok) return saveResult;
-
-  if (options.scope === "project" && options.projectRoot && record.repo) {
-    await removeSkillFromManifest(options.projectRoot, record.repo).catch(
-      () => {
-        // non-fatal
-      },
-    );
-  }
+  const applyResult = await applySkillStateChange({
+    scope: options.scope === "project" ? "project" : "global",
+    projectRoot: options.scope === "project" ? options.projectRoot : undefined,
+    mutate: (current) => current.filter((s) => !(s.name === name && s.scope === record.scope)),
+    manifestSync: record.repo
+      ? {
+          onRemoved: async (r, projectRoot) => {
+            if (r.repo) await removeSkillFromManifest(projectRoot, r.repo);
+          },
+        }
+      : undefined,
+  });
+  if (!applyResult.ok) return applyResult;
 
   return ok(undefined);
 }
