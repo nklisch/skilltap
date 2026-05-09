@@ -17,7 +17,7 @@ unit cluster, followed by a verification gate (`bun test` + optional `bun run bu
 | Wave | Phase | Units | Status | Notes |
 |---|---|---|---|---|
 | 1A | 1 | 1.1, 1.2, 1.3, 1.11, 1.12, 1.13 + (1.10 + partial 1.7) | done | Schema + policy promotion + sweep exports. Pulled 1.10 + minimal 1.7 forward to keep build green; agent `a2cfe3baf6c0fa8f4`, commit `44fd2b1` |
-| 1B | 1 | 1.4, 1.5, 1.6 | pending | loadConfig hard-fail + migrate + round-trip test |
+| 1B | 1 | 1.4, 1.5, 1.6 + inline fixture rewrites | done | loadConfig hard-fail + migrate + round-trip test. Inline-rewrote `agents/__tests__/detect.test.ts` + `cli/commands/completions.test.ts` legacy fixtures (Unit 3.6 work pulled forward). Agent `a850fe61e7e5c9518`, commit `bc06ab9` |
 | 1C | 1 | 1.7 (refine), 1.8, 1.9, 1.14, 1.15 | pending | CLI security refine + SETTABLE_KEYS + template + manifest [[mcps]] + sync. Unit 1.10 already done in 1A. |
 | 2  | 2 | 2.1–2.5 | pending | Dead code deletions (parallel) |
 | 3a | 3 | 3.1–3.8 | pending | Code cleanups (parallel-safe) |
@@ -69,3 +69,4 @@ substitutions that diverged from the design.
 Wave-by-wave completion entries with date, agent IDs, and summary.
 
 - **2026-05-08 Wave 1A** — Units 1.1, 1.2, 1.3, 1.10, 1.11, 1.12, 1.13 + minimal 1.7 done. 27 files changed (modified/renamed/deleted). 60 schema+policy tests pass. Build clean, binary verifies. Agent `a2cfe3baf6c0fa8f4`. Commit `44fd2b1`.
+- **2026-05-08 Wave 1B** — Units 1.4, 1.5, 1.6 done + inline rewrite of two of four Unit 3.6 fixture files. 9 files modified. 67 in-scope tests pass; full suite 45→34 fails (11-fail improvement). Build clean. Default-config template rewritten to V2 shape so first-run doesn't trip its own hard-fail gate. `[registry].allow_npm` dropped silently while preserving `enabled`/`sources` (defensible deviation; user's tap-search settings preserved). Agent `a850fe61e7e5c9518`. Commit `bc06ab9`.
