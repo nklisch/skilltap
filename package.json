@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "bun run --bun packages/cli/src/index.ts",
     "test": "bun test --recursive packages/",
-    "build": "bun build packages/cli/src/index.ts --compile --outfile skilltap",
+    "build": "bun build packages/cli/src/index.ts --compile --outfile skilltap --external react-devtools-core",
     "lint": "biome lint packages/",
     "format": "biome format --write packages/",
     "check": "biome check --write packages/",

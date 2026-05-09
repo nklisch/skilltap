@@ -342,19 +342,20 @@ function printUpdateNotice(
   }
 }
 
-// Bare `skilltap` invocation: route to status BEFORE citty parses, since
-// citty would otherwise call BOTH main's `run` and the matched subcommand
-// when both are defined. Detecting "no args" up front avoids the double-run.
+// Bare `skilltap` invocation: open TUI in TTY, error with hint when piped.
+// Detected up front so citty doesn't double-run both main's `run` and a subcommand.
 if (process.argv.length === 2) {
-  const statusCmd = await import("./commands/status").then((m) => m.default);
-  await statusCmd.run({
-    // biome-ignore lint/suspicious/noExplicitAny: citty's RunContext is internal.
-    args: { json: false } as any,
-    // biome-ignore lint/suspicious/noExplicitAny: same.
-    rawArgs: [] as any,
-    cmd: statusCmd,
-  });
-  process.exit(0);
+  if (process.stdout.isTTY) {
+    const { mountTui } = await import("./tui");
+    await mountTui("dashboard");
+    process.exit(0);
+  } else {
+    process.stderr.write(
+      "skilltap requires a TTY for the dashboard.\n" +
+        "  hint: Run `skilltap status` for headless output.\n",
+    );
+    process.exit(1);
+  }
 }
 
 // ─── CLI definition ───────────────────────────────────────────────────────────
