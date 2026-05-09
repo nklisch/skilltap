@@ -47,6 +47,14 @@ jobs:
       - name: Verify binary smoke (linux-x64)
         run: scripts/verify-binary.sh ./skilltap-linux-x64
 
+      # Re-run the full CLI test suite against the actual release artifact.
+      # Catches behavioral regressions in the --compile + --target path that
+      # source-mode `bun test` and the 3-command smoke can't see.
+      - name: Run CLI tests against linux-x64 release binary
+        env:
+          SKILLTAP_TEST_BIN: ${{ github.workspace }}/skilltap-linux-x64
+        run: bun test packages/cli/
+
       - name: Attest binary provenance
         uses: actions/attest-build-provenance@v2
         with:
@@ -81,6 +89,13 @@ jobs:
       # Boot-test the host-arch binary (macos-latest is arm64).
       - name: Verify binary smoke (darwin-arm64)
         run: scripts/verify-binary.sh ./skilltap-darwin-arm64
+
+      # Re-run the full CLI test suite against the actual release artifact
+      # before signing. Mirrors the linux job's binary-test gate.
+      - name: Run CLI tests against darwin-arm64 release binary
+        env:
+          SKILLTAP_TEST_BIN: ${{ github.workspace }}/skilltap-darwin-arm64
+        run: bun test packages/cli/
 
       - name: Strip Bun-embedded signatures and re-sign
         run: |
