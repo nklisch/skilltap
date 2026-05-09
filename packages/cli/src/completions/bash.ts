@@ -27,7 +27,7 @@ _skilltap() {
             --ref) return ;;
           esac
           if [[ "$cur" == -* ]]; then
-            COMPREPLY=($(compgen -W "--scope --also --ref --yes --strict --no-strict --semantic --skip-scan --quiet --json" -- "$cur"))
+            COMPREPLY=($(compgen -W "--scope --also --ref --yes --strict --semantic --skip-scan --quiet --json" -- "$cur"))
           elif [[ "$prev" == "--scope" ]]; then
             COMPREPLY=($(compgen -W "project global" -- "$cur"))
           else
@@ -42,7 +42,7 @@ _skilltap() {
             --scope) COMPREPLY=($(compgen -W "project global" -- "$cur")); return ;;
             --ref) return ;;
           esac
-          COMPREPLY=($(compgen -W "--scope --also --ref --yes --strict --no-strict --semantic --skip-scan --json" -- "$cur"))
+          COMPREPLY=($(compgen -W "--scope --also --ref --yes --strict --semantic --skip-scan --json" -- "$cur"))
           ;;
         mcp)
           case "$prev" in

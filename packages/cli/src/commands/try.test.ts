@@ -41,7 +41,7 @@ describe("try — happy path", () => {
     // "preview, nothing installed" disclaimer. This is the user-facing
     // signal that try is safe.
     const { exitCode, stdout } = await runSkilltap(
-      ["try", skillRepo.path, "--skip-scan"],
+      ["try", "skill", skillRepo.path, "--skip-scan"],
       homeDir,
       configDir,
     );
@@ -52,7 +52,7 @@ describe("try — happy path", () => {
 
   test("exits 1 with a hint when source does not exist", async () => {
     const { exitCode, stderr } = await runSkilltap(
-      ["try", "/this/path/does/not/exist", "--skip-scan"],
+      ["try", "skill", "/this/path/does/not/exist", "--skip-scan"],
       homeDir,
       configDir,
     );
@@ -61,6 +61,26 @@ describe("try — happy path", () => {
     // wording (that's an impl detail) but assert there's an error.
     expect(stderr.length).toBeGreaterThan(0);
   });
+
+  test("exits 1 when type positional is missing", async () => {
+    const { exitCode, stderr } = await runSkilltap(
+      ["try", skillRepo.path, "--skip-scan"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr.length).toBeGreaterThan(0);
+  });
+
+  test("exits 1 when type is not skill/plugin/mcp", async () => {
+    const { exitCode, stderr } = await runSkilltap(
+      ["try", "bogus", skillRepo.path, "--skip-scan"],
+      homeDir,
+      configDir,
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toContain("Invalid try type");
+  });
 });
 
 describe("try --json", () => {
@@ -68,19 +88,21 @@ describe("try --json", () => {
     // Spec L3223: "--json — emit the report as JSON instead of human-
     // readable text." try.ts L51-74 shapes the JSON payload.
     const { exitCode, stdout } = await runSkilltap(
-      ["try", skillRepo.path, "--json", "--skip-scan"],
+      ["try", "skill", skillRepo.path, "--json", "--skip-scan"],
       homeDir,
       configDir,
     );
     expect(exitCode).toBe(0);
     const payload = JSON.parse(stdout) as {
       source: string;
+      type: string;
       resolved: { url: string };
       skills: Array<{ name: string; description: string }>;
       warnings: unknown[];
       scanned: boolean;
     };
     expect(payload.source).toBe(skillRepo.path);
+    expect(payload.type).toBe("skill");
     expect(payload.resolved.url).toBeDefined();
     expect(Array.isArray(payload.skills)).toBe(true);
     expect(payload.skills.some((s) => s.name === "standalone-skill")).toBe(
@@ -105,7 +127,7 @@ describe("try — never writes to state or install paths (Spec L3220 invariant)"
       expect(beforeConfig).toEqual([]);
 
       const { exitCode } = await runSkilltap(
-        ["try", skillRepo.path, "--skip-scan"],
+        ["try", "skill", skillRepo.path, "--skip-scan"],
         cleanHome,
         cleanConfig,
       );
@@ -137,7 +159,7 @@ describe("try — never writes to state or install paths (Spec L3220 invariant)"
     const cleanConfig = await makeTmpDir();
     try {
       const { exitCode } = await runSkilltap(
-        ["try", skillRepo.path, "--json", "--skip-scan"],
+        ["try", "skill", skillRepo.path, "--json", "--skip-scan"],
         cleanHome,
         cleanConfig,
       );

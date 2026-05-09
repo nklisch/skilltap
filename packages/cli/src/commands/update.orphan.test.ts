@@ -53,7 +53,7 @@ describe("update orphan — --yes auto-cleans orphan during update", () => {
     try {
       await disableBuiltinTap(configDir);
       const install = await runSkilltap(
-        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -85,7 +85,7 @@ describe("update orphan — --yes cleans orphan, healthy skill still updates", (
     try {
       await disableBuiltinTap(configDir);
       const install = await runSkilltap(
-        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -132,12 +132,12 @@ describe("update orphan — one orphan + one healthy skill", () => {
 
       // Install both skills
       await runSkilltap(
-        ["install", "skill", repoA.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repoA.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
       await runSkilltap(
-        ["install", "skill", repoB, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repoB, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -181,7 +181,7 @@ describe("update orphan — multi-skill cache subdir removed upstream (crash fix
 
       // Install both skills from multi-skill repo
       const install = await runSkilltap(
-        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -232,12 +232,12 @@ describe("update orphan — all installed skills are orphaned", () => {
 
       // Install both skills
       await runSkilltap(
-        ["install", "skill", repoA.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repoA.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
       await runSkilltap(
-        ["install", "skill", repoB, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repoB, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -279,7 +279,7 @@ describe("update orphan — idempotent cleanup (run twice)", () => {
       // Install first
       await disableBuiltinTap(configDir);
       await runSkilltap(
-        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
@@ -327,13 +327,13 @@ describe("update orphan — mixed orphan types cleaned together", () => {
 
       // Install first skill (will become directory-missing orphan)
       await runSkilltap(
-        ["install", "skill", repoA.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repoA.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );
 
       // Link second skill directory (will become link-target-missing orphan)
-      await runSkilltap(["link", repoB, "--global"], homeDir, configDir);
+      await runSkilltap(["link", repoB, "--scope", "global"], homeDir, configDir);
 
       // Create directory-missing orphan: delete install dir
       const installDir = join(homeDir, ".agents", "skills", "standalone-skill");
@@ -366,7 +366,7 @@ describe("update orphan — multi-skill cache completely deleted", () => {
     try {
       await disableBuiltinTap(configDir);
       const install = await runSkilltap(
-        ["install", "skill", repo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "skill", repo.path, "--scope", "global", "--yes", "--skip-scan"],
         homeDir,
         configDir,
       );

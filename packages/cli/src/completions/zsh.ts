@@ -54,7 +54,6 @@ _skilltap() {
                     '--ref[Branch or tag]:ref:' \\
                     '--yes[Auto-accept]' \\
                     '--strict[Abort on warnings]' \\
-                    '--no-strict[Override strict config]' \\
                     '--semantic[Force semantic scan]' \\
                     '--skip-scan[Skip security scan]' \\
                     '--quiet[Suppress install step details]' \\
@@ -68,7 +67,6 @@ _skilltap() {
                     '--ref[Branch or tag]:ref:' \\
                     '--yes[Auto-accept]' \\
                     '--strict[Abort on warnings]' \\
-                    '--no-strict[Override strict config]' \\
                     '--semantic[Force semantic scan]' \\
                     '--skip-scan[Skip security scan]' \\
                     '--json[Output as JSON]'

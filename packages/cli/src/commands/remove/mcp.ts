@@ -14,15 +14,11 @@ export const mcpRemoveCommand = defineCommand({
         "Source of the MCP server to remove (the source passed to install)",
       required: true,
     },
-    project: {
-      type: "boolean",
-      description: "Remove from project scope",
-      default: false,
-    },
-    global: {
-      type: "boolean",
-      description: "Remove from global scope",
-      default: false,
+    scope: {
+      type: "string",
+      description:
+        "Install scope to remove from (project | global). Defaults to smart-scope (project inside a git repo, global otherwise).",
+      valueHint: "project|global",
     },
     yes: {
       type: "boolean",

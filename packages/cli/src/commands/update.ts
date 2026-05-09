@@ -50,6 +50,12 @@ export default defineCommand({
       required: false,
       description: "Specific name. Omit to update all of the chosen type.",
     },
+    scope: {
+      type: "string",
+      description:
+        "Install scope to update (project | global). Defaults to smart-scope (project inside a git repo, global otherwise).",
+      valueHint: "project|global",
+    },
     yes: {
       type: "boolean",
       alias: "y",
@@ -110,7 +116,22 @@ export default defineCommand({
 
     const updateType = typeArg as UpdateType | undefined;
     const name = args.name as string | undefined;
-    const projectRoot = await tryFindProjectRoot();
+
+    const scopeArg = args.scope as string | undefined;
+    if (
+      scopeArg !== undefined &&
+      scopeArg !== "project" &&
+      scopeArg !== "global"
+    ) {
+      out.error(
+        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+      );
+      process.exit(1);
+    }
+    const scopeFlag = scopeArg as "project" | "global" | undefined;
+
+    const projectRoot =
+      scopeFlag === "global" ? undefined : await tryFindProjectRoot();
 
     if (args.check) {
       return runCheckMode(out, projectRoot, args.json ?? false);
@@ -119,7 +140,7 @@ export default defineCommand({
     const { config, policy } = await loadPolicyOrExit({
       strict: args.strict,
       yes: args.yes,
-      semantic: args.semantic,
+      scope: scopeFlag,
     });
 
     await refreshTapIndexes(out);

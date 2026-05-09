@@ -2,7 +2,7 @@ import { findProjectRoot, installMcp } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { setupOutput } from "../../ui/setup";
 import { loadPolicyOrExit } from "../../ui/policy";
-import { parseAlsoFlag } from "../../ui/resolve";
+import { collectRepeatedFlag, parseAlsoFlag, resolveScope } from "../../ui/resolve";
 
 export const mcpCommand = defineCommand({
   meta: { name: "mcp", description: "Install a standalone MCP server" },
@@ -13,19 +13,17 @@ export const mcpCommand = defineCommand({
         "Source: git URL, github:owner/repo, npm:@scope/pkg, or local path",
       required: true,
     },
-    project: {
-      type: "boolean",
-      description: "Install to project scope",
-      default: false,
-    },
-    global: {
-      type: "boolean",
-      description: "Install to global scope",
-      default: false,
+    scope: {
+      type: "string",
+      description:
+        "Install scope (project | global). Defaults to smart-scope (project inside a git repo, global otherwise).",
+      valueHint: "project|global",
     },
     also: {
-      description: "Comma-separated agent dirs to inject into",
-      valueHint: "agents",
+      type: "string",
+      required: false,
+      description: "Agent dirs to inject into (repeatable)",
+      valueHint: "agent",
     },
     yes: {
       type: "boolean",
@@ -44,18 +42,30 @@ export const mcpCommand = defineCommand({
       default: false,
     },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     const out = setupOutput(args);
+
+    const scopeArg = args.scope as string | undefined;
+    if (
+      scopeArg !== undefined &&
+      scopeArg !== "project" &&
+      scopeArg !== "global"
+    ) {
+      out.error(
+        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+      );
+      process.exit(1);
+    }
+    const scopeFlag = scopeArg as "project" | "global" | undefined;
+
     const { config, policy } = await loadPolicyOrExit({
       yes: args.yes,
-      project: args.project,
-      global: args.global,
+      scope: scopeFlag,
     });
 
     const sources = (args as any)._ as string[];
 
     for (const source of sources) {
-      // Reject the mcp: prefix — it's an internal state convention, not a user input form
       if (source.startsWith("mcp:")) {
         out.error(
           `The 'mcp:' prefix is no longer accepted as user input.`,
@@ -65,15 +75,28 @@ export const mcpCommand = defineCommand({
       }
     }
 
-    const scope = (policy.scope || "project") as "global" | "project";
-    const projectRoot =
-      scope === "project" ? await findProjectRoot() : undefined;
-    const agents = parseAlsoFlag(args.also, config);
+    let scope: "global" | "project";
+    let projectRoot: string | undefined;
+    let inferredScope = false;
+    if (policy.scope) {
+      scope = policy.scope as "global" | "project";
+      if (scope === "project") projectRoot = await findProjectRoot();
+    } else {
+      const resolved = await resolveScope({}, undefined);
+      scope = resolved.scope;
+      projectRoot = resolved.projectRoot;
+      inferredScope = resolved.inferred ?? false;
+    }
+
+    if (inferredScope) {
+      out.info(`scope: ${scope} (inferred from cwd)`);
+    }
+
+    const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
+    const agents = parseAlsoFlag(repeatedAlso, config.defaults.also);
     const effectiveAgents = agents.length > 0 ? agents : ["claude-code"];
 
     for (const source of sources) {
-      // installMcp uses the mcp: prefix internally to parse the slug
-      // and store state. Prepend it here so the internal convention is preserved.
       const internalSource = `mcp:${source}`;
       const result = await installMcp(internalSource, {
         scope,

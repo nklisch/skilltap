@@ -30,11 +30,12 @@ describe("tryPreview — local sources", () => {
   test("previews a single-skill local repo without writing anywhere", async () => {
     await writeSkill(workDir, "demo-skill", "A demo skill for testing");
 
-    const result = await tryPreview(`/${workDir.slice(1)}`); // ensure absolute path
+    const result = await tryPreview(`/${workDir.slice(1)}`, { type: "skill" }); // ensure absolute path
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
     expect(result.value.source).toBeTruthy();
+    expect(result.value.type).toBe("skill");
     expect(result.value.resolved.adapter).toBe("local");
     expect(result.value.plugin).toBeNull();
     expect(result.value.skills.length).toBeGreaterThanOrEqual(1);

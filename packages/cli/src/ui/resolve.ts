@@ -20,17 +20,16 @@ import { errorLine } from "../output/write-helpers";
 import { selectAgent } from "./prompts";
 
 export type ScopeArgs = {
-  project?: boolean;
-  global?: boolean;
+  scope?: "project" | "global";
 };
 
 /**
- * Resolve scope from CLI flags, config default, or smart inference.
+ * Resolve scope from CLI flag, config default, or smart inference.
  *
  * Smart default: when no flag and no config default is set, infer the scope
  * from the cwd's git context. Inside a git repo → project; outside → global.
  * No interactive prompt — the inferred scope is reported via the returned
- * object (caller decides whether to surface it). Pass --project or --global
+ * object (caller decides whether to surface it). Pass --scope project|global
  * to override the inference.
  */
 export async function resolveScope(
@@ -45,10 +44,10 @@ export async function resolveScope(
   let projectRoot: string | undefined;
   let inferred = false;
 
-  if (args.project) {
+  if (args.scope === "project") {
     scope = "project";
     projectRoot = await findProjectRoot();
-  } else if (args.global) {
+  } else if (args.scope === "global") {
     scope = "global";
   } else if (config?.defaults.scope) {
     scope = config.defaults.scope as "global" | "project";
@@ -67,18 +66,49 @@ export async function resolveScope(
   return { scope, projectRoot, inferred };
 }
 
-/** Parse --also flag with agent validation, falling back to config defaults. */
-export function parseAlsoFlag(
-  alsoArg: string | undefined,
-  config?: Config,
-): string[] {
-  if (!alsoArg) return config?.defaults.also ?? [];
+/**
+ * Collect all values of a repeatable string flag (e.g. `--also a --also b`)
+ * from a raw argv array. citty's mri parser only keeps the LAST occurrence of
+ * a string flag in `args`, so for repeatable string flags we walk rawArgs
+ * directly. Supports both `--flag value` and `--flag=value`.
+ */
+export function collectRepeatedFlag(
+  rawArgs: readonly string[],
+  flag: string,
+): string[] | undefined {
+  const long = `--${flag}`;
+  const eqPrefix = `${long}=`;
+  const values: string[] = [];
+  let seen = false;
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+    if (arg === long) {
+      seen = true;
+      const next = rawArgs[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        values.push(next);
+        i++;
+      }
+    } else if (arg !== undefined && arg.startsWith(eqPrefix)) {
+      seen = true;
+      values.push(arg.slice(eqPrefix.length));
+    }
+  }
+  return seen ? values : undefined;
+}
 
+/**
+ * Parse repeatable --also flag with agent validation. Falls back to config
+ * defaults when the flag is absent.
+ */
+export function parseAlsoFlag(
+  alsoArg: string | string[] | undefined,
+  configDefaultAlso: readonly string[],
+): string[] {
+  if (alsoArg === undefined) return [...configDefaultAlso];
+
+  const agents = Array.isArray(alsoArg) ? alsoArg : [alsoArg];
   const also: string[] = [];
-  const agents = alsoArg
-    .split(",")
-    .map((a) => a.trim())
-    .filter(Boolean);
   for (const agent of agents) {
     if (!VALID_AGENT_IDS.includes(agent)) {
       errorLine(

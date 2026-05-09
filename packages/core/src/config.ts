@@ -41,6 +41,46 @@ auto_update = "off"          # off | patch | minor
 enabled = false
 `;
 
+/**
+ * Read config without writing anything. Returns ok(parsed) if config.toml
+ * exists and parses cleanly, ok(defaults) if it's missing, err on parse
+ * failure or legacy-shape detection. No directories created, no file
+ * written. Used by read-only previews (e.g. `try`) that must not touch
+ * the filesystem.
+ */
+export async function loadConfigIfExists(): Promise<Result<Config>> {
+  const file = join(getConfigDir(), "config.toml");
+  const f = Bun.file(file);
+  const exists = await f.exists();
+  if (!exists) return ok(ConfigSchema.parse({}));
+
+  let text: string;
+  try {
+    text = await f.text();
+  } catch (e) {
+    return err(new UserError(`Failed to read config.toml: ${e}`));
+  }
+
+  let raw: unknown;
+  try {
+    raw = parse(text);
+  } catch (e) {
+    return err(new UserError(`Invalid TOML in config.toml: ${e}`));
+  }
+
+  const legacyDetection = detectLegacyConfig(raw);
+  if (legacyDetection !== null) {
+    return err(
+      new UserError(
+        `Legacy config detected (${legacyDetection}). Run \`skilltap migrate\` to upgrade to the v2.2 config schema.`,
+        "skilltap migrate",
+      ),
+    );
+  }
+
+  return parseWithResult(ConfigSchema, raw as Record<string, unknown>, "config.toml");
+}
+
 export async function loadConfig(): Promise<Result<Config>> {
   const dir = getConfigDir();
   const file = join(dir, "config.toml");

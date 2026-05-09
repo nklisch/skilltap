@@ -10,7 +10,11 @@ import {
 import { defineCommand } from "citty";
 import { isAbsolute } from "node:path";
 import { setupOutput } from "../ui/setup";
-import { parseAlsoFlag, resolveScope } from "../ui/resolve";
+import {
+  collectRepeatedFlag,
+  parseAlsoFlag,
+  resolveScope,
+} from "../ui/resolve";
 
 export const adoptCommand = defineCommand({
   meta: {
@@ -27,19 +31,17 @@ export const adoptCommand = defineCommand({
       type: "string",
       description: "Filter picker to one source (e.g., claude-code)",
     },
-    project: {
-      type: "boolean",
-      default: false,
-      description: "Adopt into project scope",
-    },
-    global: {
-      type: "boolean",
-      default: false,
-      description: "Adopt into global scope",
+    scope: {
+      type: "string",
+      description:
+        "Install scope (project | global). Defaults to smart-scope (project inside a git repo, global otherwise).",
+      valueHint: "project|global",
     },
     also: {
       type: "string",
-      description: "Comma-separated agent dirs to symlink into",
+      required: false,
+      description: "Agent dirs to symlink into (repeatable)",
+      valueHint: "agent",
     },
     move: {
       type: "boolean",
@@ -63,8 +65,26 @@ export const adoptCommand = defineCommand({
       description: "Output as JSON",
     },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     const out = setupOutput(args);
+
+    const scopeArg = args.scope as string | undefined;
+    if (
+      scopeArg !== undefined &&
+      scopeArg !== "project" &&
+      scopeArg !== "global"
+    ) {
+      out.error(
+        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+      );
+      process.exit(1);
+    }
+    // mri only keeps the last `--also`; reach into rawArgs to honor repeats.
+    const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
+    const adoptArgs: AdoptArgs = {
+      ...(args as unknown as AdoptArgs),
+      also: repeatedAlso,
+    };
 
     if (!args.target) {
       // Picker mode.
@@ -75,13 +95,13 @@ export const adoptCommand = defineCommand({
         );
         process.exit(1);
       }
-      return runAdoptPicker(out, args);
+      return runAdoptPicker(out, adoptArgs);
     }
 
     if (looksLikePath(args.target)) {
-      return runAdoptPath(args.target, out, args);
+      return runAdoptPath(args.target, out, adoptArgs);
     }
-    return runAdoptName(args.target, out, args);
+    return runAdoptName(args.target, out, adoptArgs);
   },
 });
 
@@ -96,9 +116,8 @@ function looksLikePath(s: string): boolean {
 }
 
 type AdoptArgs = {
-  project: boolean;
-  global: boolean;
-  also: string | undefined;
+  scope: string | undefined;
+  also: string | string[] | undefined;
   move: boolean;
   "skip-scan": boolean;
   yes: boolean;
@@ -115,7 +134,7 @@ async function runAdoptPicker(
 ): Promise<void> {
   const progress = out.progress("Scanning for adoptable skills and plugins");
 
-  const { scope, projectRoot } = await resolveScope(args);
+  const { scope, projectRoot } = await resolveScope({ scope: args.scope as "project" | "global" | undefined });
 
   const result = await discoverAllAdoptable({
     ...(scope === "project" ? { project: true as const } : { global: true as const }),
@@ -169,7 +188,7 @@ async function runAdoptPicker(
     out,
   });
   if (!item) return;
-  const also = parseAlsoFlag(args.also, undefined);
+  const also = parseAlsoFlag(args.also, []);
   const mode = args.move ? "move" : "track-in-place";
 
   if (item.kind === "skill") {
@@ -227,8 +246,8 @@ async function runAdoptPath(
   out: Output,
   args: AdoptArgs,
 ): Promise<void> {
-  const { scope, projectRoot } = await resolveScope(args);
-  const also = parseAlsoFlag(args.also, undefined);
+  const { scope, projectRoot } = await resolveScope({ scope: args.scope as "project" | "global" | undefined });
+  const also = parseAlsoFlag(args.also, []);
   const mode = args.move ? "move" : "track-in-place";
 
   const result = await adoptSkillFromPath(path, {
@@ -269,8 +288,8 @@ async function runAdoptName(
   out: Output,
   args: AdoptArgs,
 ): Promise<void> {
-  const { scope, projectRoot } = await resolveScope(args);
-  const also = parseAlsoFlag(args.also, undefined);
+  const { scope, projectRoot } = await resolveScope({ scope: args.scope as "project" | "global" | undefined });
+  const also = parseAlsoFlag(args.also, []);
   const mode = args.move ? "move" : "track-in-place";
 
   const progress = out.progress(`Looking up "${name}"`);

@@ -28,6 +28,7 @@ import { createStepLogger } from "../../ui/install-steps";
 import { loadPolicyOrExit } from "../../ui/policy";
 import { confirmSaveDefault, selectAgents } from "../../ui/prompts";
 import {
+  collectRepeatedFlag,
   parseAlsoFlag,
   resolveScope,
   resolveSemanticInteractive,
@@ -35,14 +36,12 @@ import {
 
 export type SharedInstallArgs = {
   source: string;
-  project: boolean;
-  global: boolean;
-  also?: string;
+  scope?: string;
+  also?: string | string[];
   ref?: string;
   "skip-scan": boolean;
   yes: boolean;
   strict?: boolean;
-  "no-strict"?: boolean;
   quiet?: boolean;
   semantic: boolean;
   json?: boolean;
@@ -62,16 +61,28 @@ export type InstallContext = {
 
 export async function setupInstallContext(
   args: SharedInstallArgs,
+  rawArgs: readonly string[] = [],
 ): Promise<InstallContext> {
   const out = setupOutput(args);
+
+  const scopeArg = args.scope;
+  if (
+    scopeArg !== undefined &&
+    scopeArg !== "project" &&
+    scopeArg !== "global"
+  ) {
+    out.error(
+      `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+    );
+    process.exit(1);
+  }
+  const scopeFlag = scopeArg as "project" | "global" | undefined;
+
   const { config, policy } = await loadPolicyOrExit({
     strict: args.strict,
-    noStrict: args["no-strict"],
     skipScan: args["skip-scan"],
     yes: args.yes,
-    semantic: args.semantic,
-    project: args.project,
-    global: args.global,
+    scope: scopeFlag,
   });
 
   if (config.builtin_tap !== false) {
@@ -93,6 +104,7 @@ export async function setupInstallContext(
 
   let scope: "global" | "project";
   let projectRoot: string | undefined;
+  let inferredScope = false;
   if (policy.scope) {
     scope = policy.scope as "global" | "project";
     if (scope === "project") projectRoot = await findProjectRoot();
@@ -100,12 +112,18 @@ export async function setupInstallContext(
     const resolved = await resolveScope({}, undefined);
     scope = resolved.scope;
     projectRoot = resolved.projectRoot;
+    inferredScope = resolved.inferred ?? false;
+  }
+
+  if (inferredScope) {
+    log.info(`scope: ${scope} (inferred from cwd)`);
   }
 
   await preflightManifestValidity(projectRoot);
 
-  let also = parseAlsoFlag(args.also, config);
-  if (!args.also && !policy.yes && !config.defaults.also.length) {
+  const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
+  let also = parseAlsoFlag(repeatedAlso, config.defaults.also);
+  if (repeatedAlso === undefined && !policy.yes && !config.defaults.also.length) {
     const selected = await selectAgents(also);
     also = selected;
 

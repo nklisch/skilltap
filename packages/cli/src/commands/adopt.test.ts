@@ -47,7 +47,7 @@ describe("adopt — path mode", () => {
     const skillPath = await createSkillDir(externalDir, "my-ext-skill");
 
     const { exitCode, stdout, stderr } = await runSkilltap(
-      ["adopt", skillPath, "--global", "--skip-scan"],
+      ["adopt", skillPath, "--scope", "global", "--skip-scan"],
       homeDir,
       configDir,
     );
@@ -75,7 +75,7 @@ describe("adopt — path mode", () => {
     const skillPath = await createSkillDir(externalDir, "move-skill");
 
     const { exitCode, stdout, stderr } = await runSkilltap(
-      ["adopt", skillPath, "--global", "--skip-scan", "--move"],
+      ["adopt", skillPath, "--scope", "global", "--skip-scan", "--move"],
       homeDir,
       configDir,
     );
@@ -98,7 +98,7 @@ describe("adopt — path mode", () => {
     await mkdir(emptyDir, { recursive: true });
 
     const { exitCode, stdout, stderr } = await runSkilltap(
-      ["adopt", emptyDir, "--global", "--skip-scan"],
+      ["adopt", emptyDir, "--scope", "global", "--skip-scan"],
       homeDir,
       configDir,
     );
@@ -112,7 +112,7 @@ describe("adopt — path mode", () => {
     const skillPath = await createSkillDir(externalDir, "scan-skip-skill");
 
     const { exitCode } = await runSkilltap(
-      ["adopt", skillPath, "--global", "--skip-scan"],
+      ["adopt", skillPath, "--scope", "global", "--skip-scan"],
       homeDir,
       configDir,
     );
@@ -130,7 +130,7 @@ describe("adopt — name mode", () => {
     await createSkillDir(claudeSkillsDir, "named-skill");
 
     const { exitCode, stdout, stderr } = await runSkilltap(
-      ["adopt", "named-skill", "--global", "--skip-scan"],
+      ["adopt", "named-skill", "--scope", "global", "--skip-scan"],
       homeDir,
       configDir,
     );
@@ -141,7 +141,7 @@ describe("adopt — name mode", () => {
 
   test("errors with clear message when name not found", async () => {
     const { exitCode, stdout, stderr } = await runSkilltap(
-      ["adopt", "nonexistent-skill", "--global"],
+      ["adopt", "nonexistent-skill", "--scope", "global"],
       homeDir,
       configDir,
     );

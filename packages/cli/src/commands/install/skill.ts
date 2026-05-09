@@ -19,18 +19,16 @@ export const skillCommand = defineCommand({
         "Git URL, github:owner/repo, tap skill name, or local path",
       required: true,
     },
-    project: {
-      type: "boolean",
-      description: "Install to .agents/skills/ in current project",
-      default: false,
-    },
-    global: {
-      type: "boolean",
-      description: "Install to ~/.agents/skills/",
-      default: false,
+    scope: {
+      type: "string",
+      description:
+        "Install scope (project | global). Defaults to smart-scope (project inside a git repo, global otherwise).",
+      valueHint: "project|global",
     },
     also: {
-      description: "Create symlink in agent-specific directory",
+      type: "string",
+      required: false,
+      description: "Create symlink in agent-specific directory (repeatable)",
       valueHint: "agent",
     },
     ref: {
@@ -52,10 +50,6 @@ export const skillCommand = defineCommand({
       type: "boolean",
       description: "Abort on any security warning",
     },
-    "no-strict": {
-      type: "boolean",
-      description: "Override config on_warn=fail for this invocation",
-    },
     quiet: {
       type: "boolean",
       description:
@@ -72,17 +66,21 @@ export const skillCommand = defineCommand({
       default: false,
     },
   },
-  async run({ args }) {
-    await runInstallSkill(args as unknown as SharedInstallArgs & { source: string });
+  async run({ args, rawArgs }) {
+    await runInstallSkill(
+      args as unknown as SharedInstallArgs & { source: string },
+      rawArgs,
+    );
   },
 });
 
 async function runInstallSkill(
   args: SharedInstallArgs & { source: string },
+  rawArgs: readonly string[],
 ): Promise<void> {
   const sources = (args as any)._ as string[];
 
-  const ctx = await setupInstallContext(args);
+  const ctx = await setupInstallContext(args, rawArgs);
   const { out, config, policy, scope, projectRoot, also, runSemantic, agent } = ctx;
 
   const errors: { source: string; message: string; hint?: string }[] = [];

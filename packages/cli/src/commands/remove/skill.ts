@@ -21,15 +21,11 @@ export const skillRemoveCommand = defineCommand({
       description: "Name(s) of skills to remove",
       required: false,
     },
-    project: {
-      type: "boolean",
-      description: "Remove from project scope",
-      default: false,
-    },
-    global: {
-      type: "boolean",
-      description: "Remove from global scope",
-      default: false,
+    scope: {
+      type: "string",
+      description:
+        "Install scope to remove from (project | global). Defaults to smart-scope (project inside a git repo, global otherwise).",
+      valueHint: "project|global",
     },
     yes: {
       type: "boolean",
@@ -44,7 +40,8 @@ export const skillRemoveCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const { out, config, projectRoot } = await setupRemoveContext(args);
+    const { out, config, projectRoot, scope: ctxScope, scopeProvided } =
+      await setupRemoveContext(args);
     const globalResult = await loadSkillState();
     if (!globalResult.ok) {
       out.error(globalResult.error.message);
@@ -115,11 +112,9 @@ export const skillRemoveCommand = defineCommand({
     }
 
     const scopeOf = (skill: InstalledSkill): "global" | "project" | "linked" =>
-      args.project
-        ? "project"
-        : args.global
-          ? "global"
-          : (skill.scope as "global" | "project" | "linked");
+      scopeProvided
+        ? ctxScope
+        : (skill.scope as "global" | "project" | "linked");
 
     if (!args.yes && args.name) {
       const label =

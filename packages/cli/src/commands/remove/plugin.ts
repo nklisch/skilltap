@@ -17,6 +17,12 @@ export const pluginRemoveCommand = defineCommand({
       description: "Plugin name",
       required: true,
     },
+    scope: {
+      type: "string",
+      description:
+        "Install scope to remove from (project | global). Defaults to whichever scope holds the plugin.",
+      valueHint: "project|global",
+    },
     yes: {
       type: "boolean",
       alias: "y",
@@ -31,6 +37,20 @@ export const pluginRemoveCommand = defineCommand({
   },
   async run({ args }) {
     const out = setupOutput(args);
+
+    const scopeArg = args.scope as string | undefined;
+    if (
+      scopeArg !== undefined &&
+      scopeArg !== "project" &&
+      scopeArg !== "global"
+    ) {
+      out.error(
+        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+      );
+      process.exit(1);
+    }
+    const scopeFlag = scopeArg as "project" | "global" | undefined;
+
     const projectRoot = await tryFindProjectRoot();
 
     const globalResult = await loadPlugins();
@@ -68,7 +88,10 @@ export const pluginRemoveCommand = defineCommand({
       }
     }
 
-    const result = await removeInstalledPlugin(plugin.name, { projectRoot });
+    const result = await removeInstalledPlugin(plugin.name, {
+      projectRoot,
+      scope: scopeFlag,
+    });
     if (!result.ok) {
       out.error(result.error.message, result.error.hint);
       process.exit(1);

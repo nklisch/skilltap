@@ -10,8 +10,12 @@ import type { PluginManifest } from "./schemas/plugin";
 import { type StaticWarning, scanStatic } from "./security";
 import { err, ok, type Result, type ScanError, UserError } from "./types";
 
+export type TryType = "skill" | "plugin" | "mcp";
+
 export interface TryReport {
   source: string;
+  /** The user-declared type for this preview ("skill" | "plugin" | "mcp"). */
+  type: TryType;
   resolved: ResolvedSource;
   /** Cloned commit SHA truncated to 12 chars; null for local sources or when revParse fails. */
   sha: string | null;
@@ -26,6 +30,8 @@ export interface TryReport {
 }
 
 export interface TryOptions {
+  /** What kind of source the user is previewing. Validated at the CLI layer. */
+  type?: TryType;
   /** Default git host for owner/repo shorthand. */
   gitHost?: string;
   /** Skip the static security scan. */
@@ -109,6 +115,7 @@ async function finalize(
 
   return ok({
     source,
+    type: options.type ?? "skill",
     resolved,
     sha,
     plugin: pluginResult.value,

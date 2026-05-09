@@ -85,7 +85,7 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
     const skillRepo = await createStandaloneSkillRepo();
     try {
       const { exitCode, stdout, stderr, projectRoot } = await setupProjectAndRun(
-        ["install", "skill", skillRepo.path, "--project", "--skip-scan", "--yes"],
+        ["install", "skill", skillRepo.path, "--scope", "project", "--skip-scan", "--yes"],
       );
       if (exitCode !== 0) {
         console.error("install stderr:", stderr);
@@ -112,7 +112,7 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
     const globalDir = await makeTmpDir(); // outside a git repo → would default global
     try {
       const { exitCode } = await runSkilltap(
-        ["install", "skill", skillRepo.path, "--global", "--skip-scan", "--yes"],
+        ["install", "skill", skillRepo.path, "--scope", "global", "--skip-scan", "--yes"],
         homeDir,
         configDir,
         globalDir,
@@ -139,7 +139,7 @@ describe("v2.0 redesign E2E — install skill (typed subcommand)", () => {
       const projectRoot = await makeTmpDir();
       await initRepo(projectRoot);
       const { exitCode, stderr } = await runSkilltap(
-        ["install", "skill", pluginRepo.path, "--project", "--yes", "--skip-scan"],
+        ["install", "skill", pluginRepo.path, "--scope", "project", "--yes", "--skip-scan"],
         homeDir,
         configDir,
         projectRoot,
@@ -165,7 +165,7 @@ describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { exitCode, stderr, projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
       );
       if (exitCode !== 0) {
         console.error("install plugin stderr:", stderr);
@@ -192,7 +192,7 @@ describe("v2.0 redesign E2E — install plugin (typed subcommand)", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
       );
 
       // status from same project root
@@ -229,7 +229,7 @@ describe("v2.0 redesign E2E — toggle plugin component", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
       );
 
       // Find out the installed plugin name
@@ -305,7 +305,7 @@ describe("v2.0 redesign E2E — adopt external path", () => {
       const skillPath = join(externalDir, "external-skill");
 
       const { exitCode, stderr } = await runSkilltap(
-        ["adopt", skillPath, "--global", "--skip-scan", "--yes"],
+        ["adopt", skillPath, "--scope", "global", "--skip-scan", "--yes"],
         homeDir,
         configDir,
         projectRoot,
@@ -336,7 +336,7 @@ describe("v2.0 redesign E2E — remove plugin", () => {
     const pluginRepo = await createClaudePluginRepo();
     try {
       const { projectRoot } = await setupProjectAndRun(
-        ["install", "plugin", pluginRepo.path, "--global", "--yes", "--skip-scan"],
+        ["install", "plugin", pluginRepo.path, "--scope", "global", "--yes", "--skip-scan"],
       );
 
       const stateText = await Bun.file(

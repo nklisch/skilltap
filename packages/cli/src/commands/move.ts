@@ -1,7 +1,11 @@
 import { loadConfig, moveSkill } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { setupOutput } from "../ui/setup";
-import { parseAlsoFlag, tryFindProjectRoot } from "../ui/resolve";
+import {
+  collectRepeatedFlag,
+  parseAlsoFlag,
+  tryFindProjectRoot,
+} from "../ui/resolve";
 
 export const moveCommand = defineCommand({
   meta: { name: "move", description: "Move a skill between scopes" },
@@ -11,44 +15,44 @@ export const moveCommand = defineCommand({
       description: "Skill name to move",
       required: true,
     },
-    global: {
-      type: "boolean",
-      description: "Move to global scope",
-      default: false,
-    },
-    project: {
-      type: "boolean",
-      description: "Move to project scope",
-      default: false,
+    scope: {
+      type: "string",
+      description: "Target scope to move into (project | global). Required.",
+      valueHint: "project|global",
     },
     also: {
-      description: "Also symlink to agent-specific directory",
+      type: "string",
+      required: false,
+      description: "Also symlink to agent-specific directory (repeatable)",
       valueHint: "agent",
     },
   },
-  async run({ args }) {
+  async run({ args, rawArgs }) {
     const out = setupOutput({ json: false, quiet: false });
     const configResult = await loadConfig();
 
-    if (!args.global && !args.project) {
-      out.error("Specify target scope: --global or --project");
+    const scopeArg = args.scope as string | undefined;
+    if (scopeArg === undefined) {
+      out.error("Specify target scope: --scope project|global");
+      process.exit(1);
+    }
+    if (scopeArg !== "project" && scopeArg !== "global") {
+      out.error(
+        `Invalid --scope value '${scopeArg}'. Use 'project' or 'global'.`,
+      );
       process.exit(1);
     }
 
-    if (args.global && args.project) {
-      out.error("Cannot specify both --global and --project");
-      process.exit(1);
-    }
-
+    const repeatedAlso = collectRepeatedFlag(rawArgs, "also");
     const also = parseAlsoFlag(
-      args.also,
-      configResult.ok ? configResult.value : undefined,
+      repeatedAlso,
+      configResult.ok ? configResult.value.defaults.also : [],
     );
 
     let to: Parameters<typeof moveSkill>[1]["to"];
     let fromProjectRoot: string | undefined;
 
-    if (args.global) {
+    if (scopeArg === "global") {
       to = { scope: "global" };
       fromProjectRoot = await tryFindProjectRoot();
     } else {

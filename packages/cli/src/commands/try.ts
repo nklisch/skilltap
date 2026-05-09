@@ -1,14 +1,27 @@
-import { type Output, type TryReport, tryPreview } from "@skilltap/core";
+import {
+  loadConfigIfExists,
+  type Output,
+  type TryReport,
+  type TryType,
+  tryPreview,
+} from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
 import { setupOutput } from "../ui/setup";
 
+const VALID_TRY_TYPES = ["skill", "plugin", "mcp"] as const satisfies readonly TryType[];
+
 export default defineCommand({
   meta: {
     name: "try",
-    description: "Preview a skill or plugin without installing",
+    description: "Preview a skill, plugin, or MCP server without installing",
   },
   args: {
+    type: {
+      type: "positional",
+      description: "skill | plugin | mcp",
+      required: true,
+    },
     source: {
       type: "positional",
       description:
@@ -29,7 +42,25 @@ export default defineCommand({
   async run({ args }) {
     const out = setupOutput(args);
 
+    const typeArg = args.type as string;
+    if (!VALID_TRY_TYPES.includes(typeArg as TryType)) {
+      out.error(
+        `Invalid try type '${typeArg}'.`,
+        `Use 'skill', 'plugin', or 'mcp'. Example: skilltap try skill owner/repo`,
+      );
+      process.exit(1);
+    }
+    const type = typeArg as TryType;
+
+    const configResult = await loadConfigIfExists();
+    if (!configResult.ok) {
+      out.error(configResult.error.message, configResult.error.hint);
+      process.exit(1);
+    }
+
     const result = await tryPreview(args.source as string, {
+      type,
+      gitHost: configResult.value.default_git_host,
       skipScan: args["skip-scan"] as boolean,
     });
     if (!result.ok) {
@@ -52,6 +83,7 @@ export default defineCommand({
 function reportToJson(report: TryReport): unknown {
   return {
     source: report.source,
+    type: report.type,
     resolved: report.resolved,
     sha: report.sha,
     plugin: report.plugin
@@ -134,5 +166,5 @@ function renderTry(out: Output, report: TryReport): void {
   }
 
   out.info(`${ansi.dim("This was a preview. Nothing was installed.")}`);
-  out.info(`${ansi.dim("To install: skilltap install ")}${report.source}`);
+  out.info(`${ansi.dim(`To install: skilltap install ${report.type} `)}${report.source}`);
 }

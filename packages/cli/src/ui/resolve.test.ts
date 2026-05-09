@@ -79,16 +79,16 @@ describe("resolveScope — smart inference", () => {
 });
 
 describe("resolveScope — flags override inference", () => {
-  test("--project flag wins over inference outside git repo", async () => {
+  test("--scope project wins over inference outside git repo", async () => {
     process.chdir(nonGitDir);
-    const result = await resolveScope({ project: true }, undefined);
+    const result = await resolveScope({ scope: "project" }, undefined);
     expect(result.scope).toBe("project");
     expect(result.inferred).toBeFalsy();
   });
 
-  test("--global flag wins over inference inside git repo", async () => {
+  test("--scope global wins over inference inside git repo", async () => {
     process.chdir(gitDir);
-    const result = await resolveScope({ global: true }, undefined);
+    const result = await resolveScope({ scope: "global" }, undefined);
     expect(result.scope).toBe("global");
     expect(result.inferred).toBeFalsy();
     // No projectRoot needed for global scope.
@@ -124,19 +124,25 @@ describe("resolveScope — config.defaults.scope overrides inference", () => {
 });
 
 describe("resolveScope — flag beats config beats inference (precedence chain)", () => {
-  test("--global beats config.scope='project' beats in-git inference", async () => {
+  test("--scope global beats config.scope='project' beats in-git inference", async () => {
     process.chdir(gitDir);
-    const result = await resolveScope({ global: true }, makeConfig("project"));
+    const result = await resolveScope(
+      { scope: "global" },
+      makeConfig("project"),
+    );
     expect(result.scope).toBe("global");
     expect(result.inferred).toBeFalsy();
   });
 
-  test("--project beats config.scope='global' beats outside-repo inference", async () => {
+  test("--scope project beats config.scope='global' beats outside-repo inference", async () => {
     process.chdir(nonGitDir);
-    // --project flag bypasses the inference; findProjectRoot will throw if no
+    // --scope project bypasses the inference; findProjectRoot will throw if no
     // git ancestor exists. So this case is exercised inside a git tree:
     process.chdir(gitDir);
-    const result = await resolveScope({ project: true }, makeConfig("global"));
+    const result = await resolveScope(
+      { scope: "project" },
+      makeConfig("global"),
+    );
     expect(result.scope).toBe("project");
     expect(result.inferred).toBeFalsy();
   });
