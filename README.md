@@ -119,10 +119,6 @@ add `.skilltap/<plugin-name>.toml` with `publish = true`. See
 [the spec](docs/SPEC.md#project-manifest-and-lockfile) for the full
 manifest format.
 
-If you're upgrading from any pre-v2.2 release, run `skilltap migrate` once to
-translate the config schema and consolidate state files. `loadConfig` hard-fails
-on legacy shapes and points you here — there is no silent fallback.
-
 ## Taps
 
 A **tap** is a git repo containing a `tap.json` index of skills. Taps make discovery and curation easy — and anyone can create one.
@@ -306,7 +302,6 @@ skilltap doctor --json # machine-readable output for CI
 - **npm installs use a source argument prefix.** `skilltap install skill vibe-rules` searches your taps. `skilltap install skill npm:vibe-rules` hits the npm registry.
 - **Bare `skilltap` requires a TTY.** In non-TTY environments, run `skilltap status` instead.
 - **`link`/`unlink`/`verify`/`enable`/`disable` are removed.** Use `adopt`, `doctor`, and `toggle` instead. Old paths print errors with hints.
-- **Coming from v2.1 or earlier?** Run `skilltap migrate` to translate config and state files.
 
 ## License
 

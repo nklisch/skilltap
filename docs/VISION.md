@@ -140,7 +140,7 @@ skilltap has one verb per action with typed args:
 - `sync` — reconcile manifest ↔ lockfile ↔ state.
 - `doctor [skill|plugin <path>]` — env check or per-artifact validation.
 - `status [--json]` — headless dashboard.
-- `migrate` — one-shot upgrade for pre-V2 setups.
+- `migrate` — translate legacy config and state to current format.
 
 Bare `skilltap` opens a multi-screen TUI dashboard (TTY only). See [UX.md](./UX.md) for the full command tree, flag combinations, and interactive prompt flows. See [SPEC.md](./SPEC.md#cli-commands) for the precise behavioral specification of each command.
 
@@ -228,7 +228,7 @@ See [SECURITY.md](./SECURITY.md) for the full configuration reference, scan mode
 - **Size limits** — flag skills over `scanner.max_size` (default 50 KB).
 - **Diff on update** — `skilltap update` shows what changed and re-scans the diff.
 
-### Future — community trust signals
+### Community trust signals
 
 Taps could optionally carry trust metadata (`verified`, `reviewedBy`). Social trust signal, not a security guarantee. Already implemented via npm provenance (Sigstore/SLSA) and GitHub attestations; per-skill trust tier displays in `list` / `info` / `find` output.
 
@@ -290,22 +290,3 @@ skilltap reads (and where applicable, writes) these formats:
 
 Skills and plugins published in any of these formats keep working.
 
----
-
-## Considered and removed
-
-These were proposed at various points and are not part of skilltap:
-
-- **HTTP registry adapter** — taps are git-only. The HTTP adapter and `[[registries]]` HTTP endpoint design shipped briefly in v0.2 and was removed before V2; auth/error paths were a maintenance burden, real usage was minimal, and the manifest+lockfile model assumes git-based reproducibility.
-- **`link` / `unlink` commands** — folded into `adopt [path]` (track-in-place vs `--move`).
-- **`verify` command** — folded into `doctor skill <path>` and `doctor plugin <path>`.
-- **`enable` / `disable` commands** — accessed via `toggle` or the TUI plugin manager.
-- **`skills` and `plugin` subcommand groups** — collapsed to top-level operations and the TUI.
-- **`mcp:` URL prefix** — type is explicit via `install mcp <source>`.
-- **Per-mode security (`[security.human]` / `[security.agent]`)** — replaced by single `[security]`.
-- **Security presets (`none`/`relaxed`/`standard`/`strict`)** — dropped; configure `scan` and `on_warn` directly.
-- **`[[security.overrides]]`** — replaced by the simpler `security.trust = []` glob list.
-- **`require_scan` config key** — set `scan = "static"` (or `"semantic"`) to require scanning; `none` is the only way to opt out.
-- **`[agent-mode]` / `[agent]` config blocks** — there is no separate agent runtime.
-- **`--agent` flag and `SKILLTAP_AGENT` env var** — TTY detection + `--yes` + `--json` cover unattended use.
-- **Agent symlinks across all agents by default** — `--also` is opt-in per agent.
