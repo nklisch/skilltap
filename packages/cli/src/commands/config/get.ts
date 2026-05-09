@@ -1,6 +1,7 @@
 import type { Output } from "@skilltap/core";
 import { formatConfigValue, getConfigValue, loadConfig } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { exitOnError } from "../../ui/exit";
 import { setupOutput } from "../../ui/setup";
 
 export default defineCommand({
@@ -41,11 +42,7 @@ export default defineCommand({
     }
 
     const result = getConfigValue(config, key);
-    if (!result.ok) {
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     if (args.json) {
       out.json(result.value);
     } else {

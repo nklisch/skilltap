@@ -8,6 +8,7 @@ import {
   type Output,
 } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { exitOnError } from "../ui/exit";
 import { pickOne } from "../ui/picker";
 import {
   collectRepeatedFlag,
@@ -137,12 +138,7 @@ async function runAdoptPicker(out: Output, args: AdoptArgs): Promise<void> {
     projectRoot,
   });
 
-  if (!result.ok) {
-    progress.fail("Scan failed");
-    out.error(result.error.message, result.error.hint);
-    process.exit(1);
-  }
-
+  exitOnError(result, out, { onError: () => progress.fail("Scan failed") });
   for (const { scanner, error } of result.value.scannerErrors) {
     out.warn(`Scanner "${scanner}" failed: ${error.message}`);
   }
@@ -270,11 +266,7 @@ async function runAdoptPath(
         },
   });
 
-  if (!result.ok) {
-    out.error(result.error.message, result.error.hint);
-    process.exit(1);
-  }
-
+  exitOnError(result, out);
   const { record } = result.value;
   out.success(
     `Adopted skill from ${path} (${mode})${mode === "track-in-place" ? " — use --move to relocate" : ""}`,
@@ -314,12 +306,7 @@ async function runAdoptName(
     projectRoot,
   });
 
-  if (!result.ok) {
-    progress.fail("Discovery failed");
-    out.error(result.error.message, result.error.hint);
-    process.exit(1);
-  }
-
+  exitOnError(result, out, { onError: () => progress.fail("Discovery failed") });
   progress.succeed("Discovery complete");
 
   const { skills, plugins, scannerErrors } = result.value;

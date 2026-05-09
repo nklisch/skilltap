@@ -13,6 +13,7 @@ import {
   updateTap,
   writeSkillUpdateCache,
 } from "@skilltap/core";
+import { exitOnError } from "../ui/exit";
 import { defineCommand } from "citty";
 import { sendEvent, telemetryBase } from "../telemetry";
 import { footerConfirm as confirm } from "../ui/footer";
@@ -447,18 +448,16 @@ async function runUpdateSkills(
     },
   });
 
-  if (!result.ok) {
-    sendEvent(config, "update", {
-      ...telemetryBase(),
-      success: false,
-      error_category: result.error.constructor.name,
-      updated_count: 0,
-      up_to_date_count: 0,
-    });
-    out.error(result.error.message, result.error.hint);
-    process.exit(1);
-  }
-
+  exitOnError(result, out, {
+    onError: () =>
+      sendEvent(config, "update", {
+        ...telemetryBase(),
+        success: false,
+        error_category: result.error.constructor.name,
+        updated_count: 0,
+        up_to_date_count: 0,
+      }),
+  });
   const { updated, skipped, upToDate } = result.value;
 
   sendEvent(config, "update", {

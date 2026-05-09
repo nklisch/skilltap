@@ -12,6 +12,7 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../ui/format";
+import { exitOnError } from "../ui/exit";
 import { pickOne } from "../ui/picker";
 import { componentLabel, loadPluginByName } from "../ui/plugin-format";
 import { tryFindProjectRoot } from "../ui/resolve";
@@ -138,11 +139,7 @@ async function runToggleSkill(
     result = await enableSkill(name, { scope: recordScope, projectRoot });
   }
 
-  if (!result.ok) {
-    out.error(result.error.message, result.error.hint);
-    process.exit(1);
-  }
-
+  exitOnError(result, out);
   const nowActive = !isCurrentlyActive;
   const action = nowActive ? "Enabled" : "Disabled";
 
@@ -189,11 +186,7 @@ async function runTogglePlugin(
       component.name,
       { projectRoot },
     );
-    if (!result.ok) {
-      out.error(result.error.message);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     const action = result.value.nowActive ? "Enabled" : "Disabled";
     if (json) {
       out.json({
