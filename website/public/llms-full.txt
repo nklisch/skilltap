@@ -64,8 +64,6 @@ Skills are never written to disk until they pass scanning. You always see what w
 
 **Read-only preview.** `skilltap try <type> <source>` (where type is `skill`, `plugin`, or `mcp`) clones, scans, and inspects a source — without writing anything to install paths or state. Useful for vetting unfamiliar sources before committing to install.
 
-**One-shot legacy migration.** Coming from a pre-v2.2 install? Run `skilltap migrate` once to convert your state to the canonical `state.json`, translate legacy config keys (e.g. `[security.human]`, `[[security.overrides]]`, `[agent-mode]`) into the flat `[security]` + `[scanner]` blocks, and rename leftover `installed.json` / `plugins.json` to `*.v1.bak`. After migration, `loadConfig` hard-fails on any remaining legacy markers — no silent translation at runtime.
-
 **Two-layer security scanning.** Every install runs a static scan that catches invisible Unicode, hidden HTML, obfuscated code, suspicious URLs, and tag injection attempts. Optionally run a semantic scan that uses your own agent CLI to evaluate intent.
 
 **Non-interactive automation.** TTY detection plus `--yes` (auto-confirm) and `--json` (machine-readable output) cover AI agents, CI pipelines, and cron jobs. Set `[security] on_warn = "fail"` to hard-fail on security warnings instead of prompting. No separate "agent mode" flag, env var, or config block — every invocation is the same command surface.
@@ -214,10 +212,6 @@ There is no `--agent` flag. TTY detection + `--yes` + `--json` covers all automa
 
 ::: tip Preview before installing
 Use `skilltap try skill <source>` to clone, scan, and inspect a source without writing anything. Safe to run on unfamiliar sources.
-:::
-
-::: info Coming from v0.x or v2.1?
-Run `skilltap migrate` once to translate your config and state files. Migrates `[security.human]`/`[security.agent]` blocks, removes `[agent-mode]` and `[[security.overrides]]`, collapses operational keys into `[scanner]`, and consolidates `installed.json` / `plugins.json` → `state.json`. After migration, `loadConfig` hard-fails if any legacy schema marker is still on disk — that's how skilltap tells you the migration didn't run.
 :::
 
 ### Agent symlinks
@@ -1369,8 +1363,6 @@ See the [Security](/guide/security) guide for details on what the scanner checks
 
 A **tap** is a git repository with a `tap.json` file or a [Claude Code marketplace repo](/reference/tap-format#claude-code-marketplace-repos) (`.claude-plugin/marketplace.json`) that lists skills. Think of taps as curated indexes — they don't contain skills themselves, they point to where skills live.
 
-> HTTP registry taps were removed in v2.0; see [the removal note below](#http-registry-taps-removed-in-v20). Taps today are always git-based.
-
 Creating a tap is as simple as a git repo and a JSON file. Anyone can stand one up in minutes and share the URL — no registry account, no approval process.
 
 ## Why taps?
@@ -1409,7 +1401,7 @@ skilltap tap add skilltap https://github.com/nklisch/skilltap-skills
 skilltap tap list
 ```
 
-Shows all registered taps with their names, URLs, and skill count. (Pre-v2.0, the type column also distinguished `git` from `http` taps; HTTP support was removed in v2.0.)
+Shows all registered taps with their names, URLs, and skill count.
 
 ## Inspecting a tap
 
@@ -1574,14 +1566,6 @@ skilltap tap add my-tap https://github.com/you/my-tap
 ```
 
 Anyone with access to the repo can add it as a tap.
-
-## HTTP registry taps (removed in v2.0)
-
-::: warning Removed in v2.0
-HTTP registry taps were removed in v2.0 — taps are now git-only. v0.x configs with `type = "http"` are silently filtered with a one-time stderr warning, and `skilltap migrate` lists them as needing manual conversion or removal. The original design is described in [VISION.md](https://github.com/nklisch/skilltap/blob/main/docs/VISION.md#http-registry-removed-in-v20--historical-reference-only) for historical reference.
-
-If you need a non-git distribution path, host your `tap.json` in a private git repo (Gitea, GitLab self-hosted, or any HTTP-accessible bare repo). `skilltap tap add` works against any git URL.
-:::
 
 ## Auth errors and URL fallback
 
@@ -2122,7 +2106,7 @@ Checks that `~/.config/skilltap/config.toml` exists, is valid TOML, and passes s
 - **Warn**: file doesn't exist → run `skilltap config` to create one
 - **Fix** (`--fix`): missing config → creates a default config file
 
-If the loader rejects the file because of a legacy schema marker (`[security.human]`, `[[security.overrides]]`, `[agent-mode]`, etc.), the failure message points at `skilltap migrate` — `loadConfig` hard-fails on legacy keys instead of silently translating.
+If the loader rejects the file because the schema doesn't match, the failure message points at `skilltap migrate`.
 
 ### 3. Directories
 
@@ -2187,7 +2171,7 @@ These run when there's a project root (a `.git` directory or `skilltap.toml`) be
 
 **13. mcp consistency** — Compares `state.json::mcpServers[]` against each agent's MCP config (Claude Code's `.claude/settings.json`, etc.). Warns on entries in state that aren't in the agent config (missing — needs fresh inject) or orphan agent-config entries with `skilltap:` prefix that have no state record. `--fix` prunes the orphans.
 
-**14. legacy file orphans** — Detects leftover `installed.json` / `plugins.json` / pre-v2.2 config blocks. `--fix` renames each orphan file to `<file>.v1.bak` and points you at `skilltap migrate` if a config translation is needed.
+**14. legacy file orphans** — Detects leftover `installed.json` / `plugins.json` files. `--fix` renames each orphan file to `<file>.v1.bak` and points you at `skilltap migrate` if a config translation is needed.
 
 ## Output
 
@@ -2515,8 +2499,6 @@ Most commands accept:
 | `--quiet` | Suppress non-essential output |
 | `--scope project\|global` | Explicit scope. Default: smart-scope (project inside a git repo, global otherwise). |
 
-`info` and `status` deliberately retain the legacy boolean pair (`--global` / `--project`) — they are read-only and the boolean shape matches their per-scope filtering UX.
-
 ---
 
 ## skilltap install
@@ -2822,9 +2804,7 @@ One-shot upgrade from any prior config/state version. Run once after upgrading. 
 - Splits operational keys (`agent_cli`, `ollama_model`, `threshold`, `max_size`) into the sibling `[scanner]` block
 - Drops `[agent-mode]`, `[agent]`, `[[security.overrides]]`, `preset = …`, `require_scan` (with notes printed for each removed key)
 - Consolidates `installed.json` / `plugins.json` → `state.json`; renames originals to `*.v1.bak`
-- Converts legacy HTTP taps into errors with a list for manual handling
-
-After migration, `loadConfig` hard-fails on any remaining legacy markers — there is no silent translation at runtime, the migration is the explicit upgrade path.
+- Errors on HTTP taps with a list for manual handling
 
 ---
 
@@ -2846,8 +2826,6 @@ Headless dashboard — skills, plugins, MCPs, taps, drift. Safe to pipe. Equival
 | `--active` | boolean | `false` | Show only active items |
 | `--global` | boolean | `false` | Show only global scope |
 | `--project` | boolean | `false` | Show only project scope |
-
-Note: `status` retains the legacy boolean `--global` / `--project` pair instead of the canonical `--scope` (deliberate carve-out — this is a read-only filter, not an install scope).
 
 ---
 
@@ -2877,8 +2855,6 @@ Show details about an installed skill, plugin, or MCP server.
 | `--global` | boolean | `false` | Restrict lookup to global scope |
 | `--project` | boolean | `false` | Restrict lookup to project scope |
 | `--json` | boolean | `false` | Output as JSON |
-
-Note: `info` retains the legacy boolean `--global` / `--project` pair (deliberate carve-out — read-only filter).
 
 ---
 
@@ -2943,7 +2919,7 @@ skilltap config security           # interactive security wizard
 skilltap config telemetry          # telemetry status / enable / disable
 ```
 
-`config set` is restricted to settable keys (the V2 surface). Internal fields (`telemetry.notice_shown`, `telemetry.anonymous_id`) and tap entries are blocked — use `tap add` / `tap remove` and `config telemetry` for those.
+`config set` is restricted to settable keys. Internal fields (`telemetry.notice_shown`, `telemetry.anonymous_id`) and tap entries are blocked — use `tap add` / `tap remove` and `config telemetry` for those.
 
 See [config-options.md](/reference/config-options) for the full settable-key list and value rules.
 
@@ -2979,30 +2955,6 @@ Update the running binary in place from GitHub Releases.
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--force` | boolean | `false` | Bypass cache and re-install even if already on the latest version |
-
----
-
-## Removed in v2.2
-
-The following commands were removed in the v2.2 redesign and emit a hint pointing at the canonical replacement:
-
-| Removed | Replacement |
-|---------|-------------|
-| `verify <path>` | `doctor skill <path>` (or `doctor plugin <path>`) |
-| `link <path>` | `adopt <path>` |
-| `unlink <name>` | `remove <type> <name>` |
-| `enable <name>` | `toggle <type> <name>[:<component>]` |
-| `disable <name>` | `toggle <type> <name>[:<component>]` |
-| `skills [...]` | Top-level `list` / `install` / `remove` / `update` / `toggle` |
-| `plugin info\|toggle\|remove` | Top-level `info`, `toggle`, `remove` |
-| `tap install` | `install skill <name>` (tap-resolved names work directly) |
-| `config agent-mode` | No replacement — agent mode (flag, env var, config block) was removed entirely |
-| `install <source>` (no type) | `install skill\|plugin\|mcp <source>` |
-| `remove <name>` (no type) | `remove skill\|plugin\|mcp <name>` |
-| `--no-strict` | Removed; `--strict` remains for one-shot hard-fail. |
-| `--project` / `--global` boolean pair (install/remove/update/etc.) | `--scope project\|global` (`info` and `status` keep the legacy pair) |
-
-Old paths return clear errors with hints pointing at the canonical command.
 
 ---
 
