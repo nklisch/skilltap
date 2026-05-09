@@ -7,38 +7,46 @@ export interface RejectedHttpTap {
 }
 
 export interface ConfigMigrationResult {
-  v2: Config;
+  migrated: Config;
   warnings: string[];
   httpTapsRejected: RejectedHttpTap[];
 }
 
-// Translate a v1.0 raw config (already parsed from TOML, before Zod) into a
-// v2 Config. Logs lossy translations as warnings and lists HTTP taps
-// separately so the orchestrator can decide to refuse migration.
+// Translate a v0.x or legacy-v2.x raw config (already parsed from TOML, before
+// Zod) into a V2 Config. Logs lossy translations as warnings and lists HTTP
+// taps separately so the orchestrator can decide to refuse migration.
 //
-// rawV1 may have any shape — we never trust the v1.0 schema strictly here
+// raw may have any shape — we never trust the legacy schema strictly here
 // since user config files in the wild may be partial.
 export function migrateV1Config(
-  rawV1: unknown,
+  raw: unknown,
 ): Result<ConfigMigrationResult, UserError> {
-  if (rawV1 === null || rawV1 === undefined) {
+  if (raw === null || raw === undefined) {
     return err(new UserError("Cannot migrate: config is null or undefined"));
   }
-  if (typeof rawV1 !== "object" || Array.isArray(rawV1)) {
+  if (typeof raw !== "object" || Array.isArray(raw)) {
     return err(new UserError("Cannot migrate: config is not a TOML table"));
   }
-  const v1 = rawV1 as Record<string, unknown>;
+  const v1 = raw as Record<string, unknown>;
   const warnings: string[] = [];
 
-  // ── [security] ────────────────────────────────────────────────────────
+  // ── [security] (V2: scan, on_warn, trust) ──────────────────────────────
   const security: { scan?: string; on_warn?: string; trust: string[] } = {
     trust: [],
   };
+  // ── [scanner] (V2: agent_cli, ollama_model, threshold, max_size) ───────
+  const scanner: {
+    agent_cli?: string;
+    ollama_model?: string;
+    threshold?: number;
+    max_size?: number;
+  } = {};
+
   const v1Sec = v1.security;
   if (v1Sec && typeof v1Sec === "object" && !Array.isArray(v1Sec)) {
     const sec = v1Sec as Record<string, unknown>;
 
-    // Per-mode → flat. Take the stricter on conflict.
+    // Per-mode (v0.x) → flat. Take the stricter on conflict.
     const human = sec.human as Record<string, unknown> | undefined;
     const agent = sec.agent as Record<string, unknown> | undefined;
     const humanScan = human?.scan as string | undefined;
@@ -49,20 +57,29 @@ export function migrateV1Config(
     if (humanScan && agentScan && humanScan !== agentScan) {
       warnings.push(
         `[security.human].scan ("${humanScan}") differs from [security.agent].scan ("${agentScan}"). ` +
-          `v2.0 has one [security] block; took stricter ("${pickStricterScan(humanScan, agentScan)}").`,
+          `v2.2 has one [security] block; took stricter ("${pickStricterScan(humanScan, agentScan)}").`,
       );
     }
     if (humanOnWarn && agentOnWarn && humanOnWarn !== agentOnWarn) {
       warnings.push(
         `[security.human].on_warn ("${humanOnWarn}") differs from [security.agent].on_warn ("${agentOnWarn}"). ` +
-          `v2.0 has one [security] block; took stricter ("${pickStricterOnWarn(humanOnWarn, agentOnWarn)}").`,
+          `v2.2 has one [security] block; took stricter ("${pickStricterOnWarn(humanOnWarn, agentOnWarn)}").`,
       );
     }
 
-    const pickedScan = pickStricterScan(humanScan, agentScan);
+    // Top-level [security].scan / on_warn (legacy-v2.x flat shape) — also
+    // considered, with per-mode taking precedence if both present.
+    const topScan = typeof sec.scan === "string" ? sec.scan : undefined;
+    const topOnWarn = typeof sec.on_warn === "string" ? sec.on_warn : undefined;
+
+    const pickedScan =
+      pickStricterScan(humanScan, agentScan) ??
+      (topScan !== undefined ? topScan : undefined);
     if (pickedScan !== undefined)
       security.scan = mapV1Scan(pickedScan, warnings);
-    const pickedOnWarn = pickStricterOnWarn(humanOnWarn, agentOnWarn);
+    const pickedOnWarn =
+      pickStricterOnWarn(humanOnWarn, agentOnWarn) ??
+      (topOnWarn !== undefined ? topOnWarn : undefined);
     if (pickedOnWarn !== undefined)
       security.on_warn = mapV1OnWarn(pickedOnWarn, warnings);
 
@@ -77,28 +94,78 @@ export function migrateV1Config(
           } else if (typeof o.match === "string") {
             warnings.push(
               `Dropped [[security.overrides]] match="${o.match}" preset="${o.preset}". ` +
-                `v2.0 only supports trust-list (equivalent to preset="none"); other presets are not supported.`,
+                `preset \`${o.preset}\` removed in v2.2; reconfigure with explicit \`scan\`/\`on_warn\` if needed.`,
             );
           }
         }
       }
     }
 
-    // Dropped fields: agent_cli, threshold, max_size, ollama_model
-    for (const f of ["agent_cli", "threshold", "max_size", "ollama_model"]) {
-      if (sec[f] !== undefined && sec[f] !== "" && sec[f] !== 0) {
+    // require_scan removed in v2.2 — both flat and per-mode forms.
+    const dropRequireScan = (where: string, value: unknown) => {
+      if (value !== undefined) {
         warnings.push(
-          `Dropped [security].${f} (not represented in v2.0 simple model).`,
+          `Dropped ${where}.require_scan = ${JSON.stringify(value)}. ` +
+            `require_scan removed; set \`on_warn = 'fail'\` if you want hard-fail behavior.`,
+        );
+      }
+    };
+    dropRequireScan("[security]", sec.require_scan);
+    if (human) dropRequireScan("[security.human]", human.require_scan);
+    if (agent) dropRequireScan("[security.agent]", agent.require_scan);
+
+    // Operational keys → [scanner]. Sources, in priority:
+    //   1. flat [security].agent_cli / threshold / max_size / ollama_model (legacy-v2.x)
+    //   2. [security.human].agent_cli etc. (v0.x)
+    //   3. [security.agent].agent_cli etc. (v0.x — fallback)
+    const pickOpString = (
+      key: "agent_cli" | "ollama_model",
+    ): string | undefined => {
+      const candidates: unknown[] = [sec[key], human?.[key], agent?.[key]];
+      for (const c of candidates) {
+        if (typeof c === "string" && c !== "") return c;
+      }
+      return undefined;
+    };
+    const pickOpNumber = (
+      key: "threshold" | "max_size",
+    ): number | undefined => {
+      const candidates: unknown[] = [sec[key], human?.[key], agent?.[key]];
+      for (const c of candidates) {
+        if (typeof c === "number") return c;
+      }
+      return undefined;
+    };
+    const agentCli = pickOpString("agent_cli");
+    if (agentCli !== undefined) scanner.agent_cli = agentCli;
+    const ollamaModel = pickOpString("ollama_model");
+    if (ollamaModel !== undefined) scanner.ollama_model = ollamaModel;
+    const threshold = pickOpNumber("threshold");
+    if (threshold !== undefined) scanner.threshold = threshold;
+    const maxSize = pickOpNumber("max_size");
+    if (maxSize !== undefined) scanner.max_size = maxSize;
+
+    // Surface that we translated these (so users know where they went).
+    for (const f of ["agent_cli", "threshold", "max_size", "ollama_model"]) {
+      const present =
+        sec[f] !== undefined && sec[f] !== "" && sec[f] !== 0
+          ? "[security]"
+          : human?.[f] !== undefined && human[f] !== "" && human[f] !== 0
+            ? "[security.human]"
+            : agent?.[f] !== undefined && agent[f] !== "" && agent[f] !== 0
+              ? "[security.agent]"
+              : null;
+      if (present) {
+        warnings.push(
+          `Translated ${present}.${f} → [scanner].${f} (operational scanner config moved to its own block in v2.2).`,
         );
       }
     }
   }
 
-  // ── [agent] (v2.0) ←── [agent-mode] (v1.0) ──────────────────────────────
-  const agentBlock: { default: boolean; block: boolean } = {
-    default: false,
-    block: false,
-  };
+  // ── [agent-mode] (v0.x) — dropped in v2.2. ─────────────────────────────
+  // We still salvage [agent-mode].scope into defaults.scope when defaults
+  // doesn't already pin one.
   let agentModeScope: string | undefined;
   const v1AgentMode = v1["agent-mode"];
   if (
@@ -107,15 +174,24 @@ export function migrateV1Config(
     !Array.isArray(v1AgentMode)
   ) {
     const am = v1AgentMode as Record<string, unknown>;
-    if (am.enabled === true) {
-      agentBlock.default = true;
-    }
     if (
       typeof am.scope === "string" &&
       (am.scope === "global" || am.scope === "project")
     ) {
       agentModeScope = am.scope;
     }
+    warnings.push(
+      `Dropped [agent-mode] block. Agent-mode behavior is removed in v2.2; ` +
+        `non-interactive runs are driven by --yes / --json / TTY detection.`,
+    );
+  }
+
+  // ── [agent] (legacy-v2.x) — also dropped in v2.2. ──────────────────────
+  if (v1.agent && typeof v1.agent === "object" && !Array.isArray(v1.agent)) {
+    warnings.push(
+      `Dropped [agent] block. Agent-mode config is removed in v2.2; ` +
+        `non-interactive runs are driven by --yes / --json / TTY detection.`,
+    );
   }
 
   // ── [defaults] ───────────────────────────────────────────────────────────
@@ -140,7 +216,7 @@ export function migrateV1Config(
     }
     if (d.yes === true) {
       warnings.push(
-        `Dropped [defaults].yes = true. v2.0 has no global yes default; use --yes per call or [agent].default.`,
+        `Dropped [defaults].yes = true. v2.2 has no global yes default; use --yes per call.`,
       );
     }
   }
@@ -150,7 +226,7 @@ export function migrateV1Config(
     defaults.scope = agentModeScope as "global" | "project";
     warnings.push(
       `[agent-mode].scope = "${agentModeScope}" transferred to [defaults].scope. ` +
-        `v2.0 uses [defaults].scope for the install scope default.`,
+        `v2.2 uses [defaults].scope for the install scope default.`,
     );
   }
 
@@ -174,16 +250,14 @@ export function migrateV1Config(
     }
   }
 
-  // ── [registry] (v1.0 — separate config block) ────────────────────────────
-  // v2.0 keeps registry support but the block is unchanged structurally; we
-  // just pass through the existing taps. Custom registry sources are out of
-  // scope for the migration (they're a pure-additive feature; users keep
-  // them by not editing).
+  // ── [registry] — preserve enabled/sources, drop allow_npm silently. ─────
+  const registry: Record<string, unknown> = {};
   const v1Registry = v1.registry;
-  if (v1Registry !== undefined) {
-    warnings.push(
-      `[registry] block was present in v1.0 config. It is preserved in v2.0 but should be reviewed manually.`,
-    );
+  if (v1Registry && typeof v1Registry === "object" && !Array.isArray(v1Registry)) {
+    const r = v1Registry as Record<string, unknown>;
+    if (Array.isArray(r.enabled)) registry.enabled = r.enabled;
+    if (Array.isArray(r.sources)) registry.sources = r.sources;
+    // allow_npm: dropped silently per design.
   }
 
   // ── pass-through blocks: [updates], [telemetry] ─────────────────────────
@@ -199,11 +273,12 @@ export function migrateV1Config(
       ? v1.default_git_host
       : "https://github.com";
 
-  // Build the v2 candidate
-  const v2Candidate = {
+  // Build the V2 candidate
+  const v2Candidate: Record<string, unknown> = {
     defaults,
-    agent: agentBlock,
     security,
+    scanner,
+    registry,
     taps,
     updates,
     telemetry,
@@ -217,13 +292,13 @@ export function migrateV1Config(
   if (!parsed.success) {
     return err(
       new UserError(
-        `Migrated config failed v2.0 validation: ${JSON.stringify(parsed.error.issues, null, 2)}`,
+        `Migrated config failed v2.2 validation: ${JSON.stringify(parsed.error.issues, null, 2)}`,
       ),
     );
   }
 
   return ok({
-    v2: parsed.data,
+    migrated: parsed.data,
     warnings,
     httpTapsRejected,
   });
@@ -268,7 +343,7 @@ function mapV1Scan(v1: string, warnings: string[]): string {
   if (v1 === "off") return "none";
   if (v1 === "static" || v1 === "semantic" || v1 === "none") return v1;
   warnings.push(
-    `Unknown v1 [security].scan value "${v1}" — defaulted to "static".`,
+    `Unknown legacy [security].scan value "${v1}" — defaulted to "static".`,
   );
   return "static";
 }
@@ -278,7 +353,7 @@ function mapV1OnWarn(v1: string, warnings: string[]): string {
   if (v1 === "prompt" || v1 === "fail") return v1;
   if (v1 === "install") return v1;
   warnings.push(
-    `Unknown v1 [security].on_warn value "${v1}" — defaulted to "install".`,
+    `Unknown legacy [security].on_warn value "${v1}" — defaulted to "install".`,
   );
   return "install";
 }

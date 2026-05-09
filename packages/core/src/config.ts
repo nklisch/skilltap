@@ -31,19 +31,21 @@ yes = false
 # Values: "global", "project", or "" (prompt)
 scope = ""
 
-# Security scanning settings (use 'skilltap config security' to configure)
+# Security policy (use 'skilltap config security' to configure)
 [security]
 # Scan mode for static analysis
-# Values: "static", "semantic", "off"
+# Values: "static", "semantic", "none"
 scan = "static"
 
 # What to do when security warnings are found
-# Values: "prompt" (ask), "fail" (abort), "allow" (ignore)
-on_warn = "prompt"
+# Values: "prompt" (ask), "fail" (abort), "install" (ignore)
+on_warn = "install"
 
-# Require security scan — blocks --skip-scan when true
-require_scan = false
+# Trust list — patterns that bypass the scan entirely.
+trust = []
 
+# Scanner operational settings
+[scanner]
 # Agent CLI to use for semantic scanning.
 # Values: see KNOWN_AGENT_NAMES in core/src/agents/detect.ts (claude, gemini, codex, opencode, ollama)
 # or an absolute path to a custom binary (e.g. "/usr/local/bin/my-llm").
@@ -119,7 +121,40 @@ export async function loadConfig(): Promise<Result<Config>> {
     return err(new UserError(`Invalid TOML in config.toml: ${e}`));
   }
 
+  // Hard-fail on legacy shapes — no silent fallback.
+  const legacyDetection = detectLegacyConfig(raw);
+  if (legacyDetection !== null) {
+    return err(
+      new UserError(
+        `Legacy config detected (${legacyDetection}). Run \`skilltap migrate\` to upgrade to the v2.2 config schema.`,
+        "skilltap migrate",
+      ),
+    );
+  }
+
   return parseWithResult(ConfigSchema, raw as Record<string, unknown>, "config.toml");
+}
+
+// Returns the name of the first legacy marker found, or null if none.
+function detectLegacyConfig(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const sec = r.security as Record<string, unknown> | undefined;
+
+  if (sec && typeof sec === "object" && !Array.isArray(sec)) {
+    if ("human" in sec) return "[security.human]";
+    if ("agent" in sec) return "[security.agent]";
+    if ("overrides" in sec) return "[[security.overrides]]";
+    if ("require_scan" in sec) return "security.require_scan";
+    if ("agent_cli" in sec) return "security.agent_cli";
+    if ("ollama_model" in sec) return "security.ollama_model";
+    if ("threshold" in sec) return "security.threshold";
+    if ("max_size" in sec) return "security.max_size";
+  }
+  if ("agent-mode" in r) return "[agent-mode]";
+  if ("agent" in r) return "[agent]";
+
+  return null;
 }
 
 export async function saveConfig(config: Config): Promise<Result<void>> {

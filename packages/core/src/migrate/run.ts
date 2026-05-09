@@ -6,6 +6,7 @@ import { runDoctor, type DoctorResult } from "../doctor";
 import { parseWithResult } from "../schemas/index";
 import { type InstalledJson, InstalledJsonSchema } from "../schemas/installed";
 import { type PluginsJson, PluginsJsonSchema } from "../schemas/plugins";
+import { loadState } from "../state/load";
 import { migrateV1State } from "../state/migrate-v1";
 import { saveState } from "../state/save";
 import { err, ok, type Result, UserError } from "../types";
@@ -119,7 +120,7 @@ export async function runMigrate(
   // migration. If the config is already in the current format (no v1 keys),
   // leave it untouched to avoid replacing it with the v2-schema format.
   if (configResult && globalMarkers.configToml && globalMarkers.configHasV1Keys) {
-    const newText = stringify(configResult.v2 as Record<string, unknown>);
+    const newText = stringify(configResult.migrated as Record<string, unknown>);
     const tmpPath = join(getConfigDir(), "config.toml.v2.tmp");
     await Bun.write(tmpPath, newText);
 
@@ -199,7 +200,19 @@ async function migrateScopeState(
   }
 
   const newState = migrateV1State(installed, plugins);
-  const saveResult = await saveState(newState, projectRoot);
+
+  // Preserve any pre-existing state.mcpServers — those entries come from a
+  // partial earlier migration or a restored backup and are not represented in
+  // legacy installed.json/plugins.json. The legacy formats have no MCP
+  // tracking, so this is purely additive.
+  const existingState = await loadState(projectRoot).catch(() => null);
+  const preservedMcps =
+    existingState && existingState.ok ? existingState.value.mcpServers : [];
+
+  const saveResult = await saveState(
+    { ...newState, mcpServers: preservedMcps },
+    projectRoot,
+  );
   if (!saveResult.ok) return saveResult;
   written.push(
     projectRoot

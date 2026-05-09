@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createTestEnv, pathExists, type TestEnv } from "@skilltap/test-utils";
+import { loadConfig } from "../config";
 import { loadState } from "../state/load";
+import { saveState } from "../state/save";
 import { runMigrate } from "./run";
 
 const V1_INSTALLED = {
@@ -261,6 +263,121 @@ preset = "none"
 
     // doctorReport is populated (doctor ran after migration)
     expect(result.value.doctorReport).toBeDefined();
+  });
+
+  // ── Unit 1.6: round-trip + hard-fail coverage ─────────────────────────────
+
+  const V0_FULL_CONFIG_FIXTURE = `
+[defaults]
+also = ["claude-code"]
+
+[security.human]
+scan = "static"
+on_warn = "prompt"
+agent_cli = "claude"
+threshold = 7
+max_size = 102400
+
+[security.agent]
+scan = "static"
+on_warn = "fail"
+require_scan = true
+
+["agent-mode"]
+enabled = true
+scope = "global"
+
+[[security.overrides]]
+match = "internal-tap"
+kind = "tap"
+preset = "none"
+`;
+
+  test("end-to-end: migrate output is readable by loadConfig", async () => {
+    const cfgDir = join(env.configDir, "skilltap");
+    const configPath = join(cfgDir, "config.toml");
+
+    // installed.json marker so the orchestrator detects v0.x state.
+    await writeFile(
+      join(cfgDir, "installed.json"),
+      JSON.stringify(V1_INSTALLED, null, 2),
+    );
+    await writeFile(configPath, V0_FULL_CONFIG_FIXTURE);
+
+    const result = await runMigrate({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Re-load via the production parser — must not trip the legacy gate.
+    const loaded = await loadConfig();
+    expect(loaded.ok).toBe(true);
+    if (!loaded.ok) return;
+
+    // Verify every translated field landed.
+    expect(loaded.value.security.scan).toBe("static");
+    expect(loaded.value.security.on_warn).toBe("fail"); // stricter wins
+    expect(loaded.value.security.trust).toEqual(["internal-tap"]);
+    expect(loaded.value.scanner.agent_cli).toBe("claude");
+    expect(loaded.value.scanner.threshold).toBe(7);
+  });
+
+  test("loadConfig hard-fails on un-migrated v0.x config", async () => {
+    const cfgDir = join(env.configDir, "skilltap");
+    await writeFile(
+      join(cfgDir, "config.toml"),
+      `[security.human]\nscan = "static"\n`,
+    );
+    const loaded = await loadConfig();
+    expect(loaded.ok).toBe(false);
+    if (loaded.ok) return;
+    expect(loaded.error.message).toContain("[security.human]");
+    expect(loaded.error.hint).toContain("skilltap migrate");
+  });
+
+  test("migrate preserves existing state.mcpServers", async () => {
+    const cfgDir = join(env.configDir, "skilltap");
+    const installedPath = join(cfgDir, "installed.json");
+
+    // Pre-seed state.json with one mcpServer entry.
+    const preExistingMcp = {
+      version: 2 as const,
+      skills: [],
+      plugins: [],
+      mcpServers: [
+        {
+          name: "ctx7",
+          source: "github:org/ctx7",
+          config: {
+            type: "stdio" as const,
+            command: "ctx7-server",
+            args: [],
+            env: {},
+          },
+          targets: [],
+          installedAt: "2026-05-05T00:00:00.000Z",
+        },
+      ],
+    };
+    const seedResult = await saveState(preExistingMcp);
+    expect(seedResult.ok).toBe(true);
+
+    // Now drop a v0.x marker so migrate runs scope state migration.
+    await writeFile(installedPath, JSON.stringify(V1_INSTALLED, null, 2));
+
+    const result = await runMigrate({});
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Reload state — the mcpServers entry must still be present.
+    const stateAfter = await loadState();
+    expect(stateAfter.ok).toBe(true);
+    if (!stateAfter.ok) return;
+    expect(stateAfter.value.mcpServers).toHaveLength(1);
+    expect(stateAfter.value.mcpServers[0].name).toBe("ctx7");
+    // And the migrated skill landed too.
+    expect(stateAfter.value.skills.map((s) => s.name)).toContain(
+      "commit-helper",
+    );
   });
 
   test("malformed skilltap.toml produces a warning but migration still succeeds", async () => {

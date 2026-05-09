@@ -436,7 +436,7 @@ describe("--get-completions — with state", () => {
     await mkdir(skilltapDir, { recursive: true });
     await writeFile(
       join(skilltapDir, "config.toml"),
-      '[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "prompt"\nrequire_scan = false\nagent = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n["agent-mode"]\nenabled = false\nscope = "project"\n[[taps]]\nname = "core"\nurl = "https://github.com/skilltap/taps"\ntype = "git"\n[[taps]]\nname = "my-tap"\nurl = "https://github.com/user/my-tap"\ntype = "git"\n',
+      '[defaults]\nalso = []\nyes = false\nscope = ""\n[security]\nscan = "static"\non_warn = "install"\ntrust = []\n[scanner]\nagent_cli = ""\nthreshold = 5\nmax_size = 51200\nollama_model = ""\n[[taps]]\nname = "core"\nurl = "https://github.com/skilltap/taps"\ntype = "git"\n[[taps]]\nname = "my-tap"\nurl = "https://github.com/user/my-tap"\ntype = "git"\n',
     );
 
     const { exitCode, stdout } = await runGetCompletions(

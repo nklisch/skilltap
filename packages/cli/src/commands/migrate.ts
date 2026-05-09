@@ -74,9 +74,9 @@ export default defineCommand({
     }
 
     if (report.warnings.length > 0) {
-      out.raw(`${ansi.yellow("Warnings:")}\n`);
+      out.raw(`${ansi.yellow("Behavior changes:")}\n`);
       for (const warning of report.warnings) {
-        out.raw(`  ${ansi.yellow("!")} ${warning}\n`);
+        out.raw(`  ${ansi.yellow("!")} Behavior change: ${warning}\n`);
       }
       out.raw("\n");
     }

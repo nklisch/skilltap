@@ -73,7 +73,7 @@ describe("loadConfig", () => {
     }
   });
 
-  test("parses existing config.toml", async () => {
+  test("parses existing V2 config.toml", async () => {
     const configDir = join(tmpDir, "skilltap");
     await ensureDirs();
     await Bun.write(
@@ -86,6 +86,8 @@ also = ["claude-code"]
 
 [security]
 scan = "semantic"
+
+[scanner]
 threshold = 8
 `,
     );
@@ -96,7 +98,7 @@ threshold = 8
       expect(result.value.defaults.scope).toBe("global");
       expect(result.value.defaults.also).toEqual(["claude-code"]);
       expect(result.value.security.scan).toBe("semantic");
-      expect(result.value.security.threshold).toBe(8);
+      expect(result.value.scanner.threshold).toBe(8);
     }
   });
 
@@ -114,11 +116,89 @@ threshold = 8
     await ensureDirs();
     await Bun.write(
       join(configDir, "config.toml"),
-      `[security]\nthreshold = 99\n`,
+      `[scanner]\nthreshold = 99\n`,
     );
     const result = await loadConfig();
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.message).toContain("Invalid config");
+  });
+});
+
+describe("loadConfig — legacy hard-fail gate (Unit 1.4)", () => {
+  const cases: Array<{ marker: string; toml: string }> = [
+    { marker: "[security.human]", toml: `[security.human]\nscan = "static"\n` },
+    { marker: "[security.agent]", toml: `[security.agent]\nscan = "static"\n` },
+    {
+      marker: "[[security.overrides]]",
+      toml: `[[security.overrides]]\nmatch = "x"\npreset = "none"\n`,
+    },
+    {
+      marker: "security.require_scan",
+      toml: `[security]\nrequire_scan = true\n`,
+    },
+    {
+      marker: "security.agent_cli",
+      toml: `[security]\nagent_cli = "claude"\n`,
+    },
+    {
+      marker: "security.ollama_model",
+      toml: `[security]\nollama_model = "llama3"\n`,
+    },
+    {
+      marker: "security.threshold",
+      toml: `[security]\nthreshold = 7\n`,
+    },
+    {
+      marker: "security.max_size",
+      toml: `[security]\nmax_size = 99999\n`,
+    },
+    {
+      marker: "[agent-mode]",
+      toml: `["agent-mode"]\nenabled = true\n`,
+    },
+    {
+      marker: "[agent]",
+      toml: `[agent]\ndefault = true\n`,
+    },
+  ];
+
+  for (const { marker, toml } of cases) {
+    test(`hard-fails on ${marker} with skilltap migrate hint`, async () => {
+      const configDir = join(tmpDir, "skilltap");
+      await ensureDirs();
+      await Bun.write(join(configDir, "config.toml"), toml);
+      const result = await loadConfig();
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain(marker);
+      expect(result.error.message).toContain("Legacy config detected");
+      expect(result.error.hint).toBe("skilltap migrate");
+    });
+  }
+
+  test("clean V2 config loads to ok", async () => {
+    const configDir = join(tmpDir, "skilltap");
+    await ensureDirs();
+    await Bun.write(
+      join(configDir, "config.toml"),
+      `[security]\nscan = "static"\non_warn = "install"\ntrust = []\n\n[scanner]\nagent_cli = ""\nthreshold = 5\n`,
+    );
+    const result = await loadConfig();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.security.scan).toBe("static");
+    expect(result.value.scanner.threshold).toBe(5);
+  });
+
+  test("empty config dir returns defaulted ConfigSchema.parse({})", async () => {
+    // No config file exists yet — loadConfig writes the default template and
+    // returns the defaulted parse result.
+    const result = await loadConfig();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.security.scan).toBe("static");
+    expect(result.value.security.on_warn).toBe("install");
+    expect(result.value.scanner.threshold).toBe(5);
   });
 });
 
@@ -135,7 +215,7 @@ describe("saveConfig", () => {
   test("round-trip: save then load produces equivalent config", async () => {
     const config = ConfigSchema.parse({
       defaults: { also: ["cursor"], yes: true, scope: "project" },
-      security: { threshold: 3 },
+      scanner: { threshold: 3 },
     });
     await saveConfig(config);
     const loaded = await loadConfig();
@@ -144,7 +224,7 @@ describe("saveConfig", () => {
       expect(loaded.value.defaults.also).toEqual(["cursor"]);
       expect(loaded.value.defaults.yes).toBe(true);
       expect(loaded.value.defaults.scope).toBe("project");
-      expect(loaded.value.security.threshold).toBe(3);
+      expect(loaded.value.scanner.threshold).toBe(3);
     }
   });
 });
@@ -191,36 +271,22 @@ describe("loadInstalled", () => {
   });
 });
 
-describe("loadConfig — flat security config", () => {
-  test("loads flat [security] block from config.toml", async () => {
+describe("loadConfig — V2 split security/scanner blocks", () => {
+  test("loads V2 [security] + [scanner] blocks", async () => {
     const configDir = join(tmpDir, "skilltap");
     await ensureDirs();
     await Bun.write(
       join(configDir, "config.toml"),
-      `[security]\nscan = "semantic"\non_warn = "fail"\nrequire_scan = true\nagent_cli = "claude"\nthreshold = 8\n`,
+      `[security]\nscan = "semantic"\non_warn = "fail"\ntrust = ["my-tap"]\n\n[scanner]\nagent_cli = "claude"\nthreshold = 8\n`,
     );
     const result = await loadConfig();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.security.scan).toBe("semantic");
     expect(result.value.security.on_warn).toBe("fail");
-    expect(result.value.security.require_scan).toBe(true);
-    expect(result.value.security.agent_cli).toBe("claude");
-    expect(result.value.security.threshold).toBe(8);
-  });
-
-  test("v1 config with per-mode and agent-mode keys parses without error (extras stripped)", async () => {
-    const configDir = join(tmpDir, "skilltap");
-    await ensureDirs();
-    await Bun.write(
-      join(configDir, "config.toml"),
-      `[security.human]\nscan = "semantic"\n[security.agent]\nscan = "off"\n["agent-mode"]\nenabled = true\nscope = "project"\n`,
-    );
-    const result = await loadConfig();
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    // Per-mode and agent-mode keys are stripped; flat fields use defaults
-    expect(result.value.security.scan).toBe("static");
+    expect(result.value.security.trust).toEqual(["my-tap"]);
+    expect(result.value.scanner.agent_cli).toBe("claude");
+    expect(result.value.scanner.threshold).toBe(8);
   });
 });
 
