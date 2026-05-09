@@ -7,6 +7,7 @@ import {
 } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { sendEvent, telemetryBase } from "../../telemetry";
+import { exitOnError } from "../../ui/exit";
 import { confirmRemove, selectSkillsToRemove } from "../../ui/prompts";
 import { setupRemoveContext } from "./shared";
 
@@ -150,17 +151,17 @@ export const skillRemoveCommand = defineCommand({
           );
         },
       });
-      if (!result.ok) {
-        p.fail("Failed.");
-        sendEvent(config, "remove", {
-          ...telemetryBase(),
-          success: false,
-          error_category: result.error.constructor.name,
-          scope: scopeOf(skill),
-        });
-        out.error(result.error.message, result.error.hint);
-        process.exit(1);
-      }
+      exitOnError(result, out, {
+        onError: () => {
+          p.fail("Failed.");
+          sendEvent(config, "remove", {
+            ...telemetryBase(),
+            success: false,
+            error_category: result.error.constructor.name,
+            scope: scopeOf(skill),
+          });
+        },
+      });
     }
 
     sendEvent(config, "remove", { ...telemetryBase(), success: true });

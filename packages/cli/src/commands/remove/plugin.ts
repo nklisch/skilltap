@@ -2,6 +2,7 @@ import { confirm } from "@clack/prompts";
 import { loadPlugins, removeInstalledPlugin } from "@skilltap/core";
 import { defineCommand } from "citty";
 import { ansi } from "../../ui/format";
+import { exitOnError } from "../../ui/exit";
 import { componentSummary } from "../../ui/plugin-format";
 import { tryFindProjectRoot } from "../../ui/resolve";
 import { setupOutput } from "../../ui/setup";
@@ -92,11 +93,7 @@ export const pluginRemoveCommand = defineCommand({
       projectRoot,
       scope: scopeFlag,
     });
-    if (!result.ok) {
-      out.error(result.error.message, result.error.hint);
-      process.exit(1);
-    }
-
+    exitOnError(result, out);
     out.json({ removed: result.value.name, components: summary });
     out.success(`Removed plugin ${plugin.name} (${summary})`);
   },

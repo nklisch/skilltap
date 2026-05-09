@@ -1,5 +1,6 @@
 import { findProjectRoot, installMcp } from "@skilltap/core";
 import { defineCommand } from "citty";
+import { exitOnError } from "../../ui/exit";
 import { loadPolicyOrExit } from "../../ui/policy";
 import {
   collectRepeatedFlag,
@@ -109,11 +110,7 @@ export const mcpCommand = defineCommand({
         gitHost: config.default_git_host,
       });
 
-      if (!result.ok) {
-        out.error(result.error.message, result.error.hint);
-        process.exit(1);
-      }
-
+      exitOnError(result, out);
       const r = result.value;
       out.success(
         `Installed ${r.records.length} MCP server${r.records.length === 1 ? "" : "s"} from ${source} → ${r.agents.join(", ")}`,
