@@ -508,6 +508,44 @@ function makeRecord(
   };
 }
 
+async function installTapPluginFromMatch(
+  tapDirPath: string,
+  manifest: PluginManifest,
+  match: TapEntry,
+  tapName: string,
+  options: InstallOptions,
+  also: string[],
+): Promise<Result<InstallResult, UserError | ScanError>> {
+  const result = await installPlugin(tapDirPath, manifest, {
+    scope: options.scope,
+    projectRoot: options.projectRoot,
+    also,
+    skipScan: options.skipScan,
+    onWarnings: options.onWarnings
+      ? async (w, n) => options.onWarnings?.(w, "plugin-static", n)
+      : undefined,
+    onConfirm: options.onConfirmInstall
+      ? async (m) => options.onConfirmInstall?.("plugin", m)
+      : undefined,
+    onCaptureConfirm: options.onPluginCaptureConfirm,
+    onCaptureConflict: options.onPluginCaptureConflict,
+    skipCapture: options.pluginSkipCapture,
+    repo: match.skill.repo ?? null,
+    ref: null,
+    sha: null,
+    tap: tapName,
+  });
+  if (!result.ok) return result;
+  return ok({
+    records: [],
+    warnings: result.value.warnings,
+    semanticWarnings: [],
+    updates: [],
+    pluginRecord: result.value.record,
+    captured: result.value.captured,
+  });
+}
+
 export async function installSkill(
   source: string,
   options: InstallOptions,
@@ -584,69 +622,26 @@ export async function installSkill(
             if (decision === "cancel")
               return err(new UserError("Install cancelled."));
             if (decision !== "skills-only") {
-              const result = await installPlugin(
+              return installTapPluginFromMatch(
                 tapDirPath,
                 manifestResult.value,
-                {
-                  scope: options.scope,
-                  projectRoot: options.projectRoot,
-                  also,
-                  skipScan: options.skipScan,
-                  onWarnings: options.onWarnings
-                    ? async (w, n) =>
-                        options.onWarnings?.(w, "plugin-static", n)
-                    : undefined,
-                  onConfirm: options.onConfirmInstall
-                    ? async (m) => options.onConfirmInstall?.("plugin", m)
-                    : undefined,
-                  onCaptureConfirm: options.onPluginCaptureConfirm,
-                  onCaptureConflict: options.onPluginCaptureConflict,
-                  skipCapture: options.pluginSkipCapture,
-                  repo: match.skill.repo ?? null,
-                  ref: null,
-                  sha: null,
-                  tap: tapPluginRef.tapName,
-                },
+                match,
+                tapPluginRef.tapName,
+                options,
+                also,
               );
-              if (!result.ok) return result;
-              return ok({
-                records: [],
-                warnings: result.value.warnings,
-                semanticWarnings: [],
-                updates: [],
-                pluginRecord: result.value.record,
-                captured: result.value.captured,
-              });
             }
             // decision === "skills-only": fall through to normal resolution
           } else {
             // No callback — auto-install as plugin
-            const result = await installPlugin(
+            return installTapPluginFromMatch(
               tapDirPath,
               manifestResult.value,
-              {
-                scope: options.scope,
-                projectRoot: options.projectRoot,
-                also,
-                skipScan: options.skipScan,
-                onCaptureConfirm: options.onPluginCaptureConfirm,
-                onCaptureConflict: options.onPluginCaptureConflict,
-                skipCapture: options.pluginSkipCapture,
-                repo: match.skill.repo ?? null,
-                ref: null,
-                sha: null,
-                tap: tapPluginRef.tapName,
-              },
+              match,
+              tapPluginRef.tapName,
+              options,
+              also,
             );
-            if (!result.ok) return result;
-            return ok({
-              records: [],
-              warnings: result.value.warnings,
-              semanticWarnings: [],
-              updates: [],
-              pluginRecord: result.value.record,
-              captured: result.value.captured,
-            });
           }
         }
       }
