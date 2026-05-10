@@ -56,9 +56,14 @@ describe("TUI smoke", () => {
       },
     });
     await session.waitForText("Installed", 20_000);
+    // Ink enables raw mode via useEffect after the first paint; "Installed"
+    // appearing in the buffer comes from the initial render but the input
+    // pipeline may not be wired yet. Sleep briefly so the first key isn't
+    // dropped (echoes back into the buffer instead of dispatching).
+    await new Promise((resolve) => setTimeout(resolve, 200));
     // 1-4 stay on Dashboard.
     session.send("2");
-    await session.waitForText("1-4 switch tabs", 3000);
+    await session.waitForText("2 Taps", 3000);
     // `f` navigates to Find.
     session.send("f");
     await session.waitForText("Search:", 3000);
