@@ -8,8 +8,8 @@ Core functions (`installSkill`, `updateSkill`) need user decisions at specific p
 
 ## Examples
 
-### Example 1: InstallOptions — 6 callback fields
-**File**: `packages/core/src/install.ts:24`
+### Example 1: InstallOptions — key callback fields
+**File**: `packages/core/src/install/types.ts:21`
 ```typescript
 export type InstallOptions = {
   scope: "global" | "project";
@@ -19,15 +19,24 @@ export type InstallOptions = {
   ref?: string;
   tap?: string | null;
   skipScan?: boolean;
-  onWarnings?: (warnings: StaticWarning[], skillName: string) => Promise<boolean>;
+  /** Optional Output handle for progress reporting (cloning, scanning). */
+  out?: Output;
+  /** Unified callback for static + semantic warnings. Return false to abort. */
+  onWarnings?: (
+    warnings: StaticWarning[] | SemanticWarning[],
+    kind: "skill-static" | "plugin-static" | "skill-semantic",
+    name: string,
+  ) => Promise<boolean>;
   onSelectSkills?: (skills: ScannedSkill[]) => Promise<string[]>;
   onSelectTap?: (matches: TapEntry[]) => Promise<TapEntry | null>;
+  onConfirmInstall?: (kind: "skill" | "plugin", names: string[] | PluginManifest) => Promise<boolean>;
+  onAlreadyInstalled?: (name: string) => Promise<"update" | "abort">;
+  onDeepScan?: (count: number) => Promise<boolean>;
+  onOrphansFound?: OnOrphansFound;
+  onPluginDetected?: (manifest: PluginManifest) => Promise<"plugin" | "skills-only" | "cancel">;
   agent?: AgentAdapter;
   semantic?: boolean;
   threshold?: number;
-  onSemanticWarnings?: (warnings: SemanticWarning[], skillName: string) => Promise<boolean>;
-  onOfferSemantic?: () => Promise<boolean>;
-  onSemanticProgress?: (completed: number, total: number) => void;
 };
 ```
 

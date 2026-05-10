@@ -1,7 +1,11 @@
 ---
 name: patterns
-description: "Project code patterns and conventions. Auto-loads when implementing, designing, verifying, or reviewing code. Provides detailed pattern definitions with code examples. Consult this whenever writing new code, reviewing changes, or trying to understand how this project structures things."
+description: "Project code patterns and conventions. Auto-loads when implementing,
+  designing, verifying, or reviewing code. Provides detailed pattern definitions
+  with code examples. Consult this whenever writing new code, reviewing changes,
+  or trying to understand how this project structures things."
 user-invocable: false
+allowed-tools: Read, Glob, Grep
 ---
 
 # Project Patterns Reference
@@ -21,29 +25,39 @@ The dense index at `.claude/rules/patterns.md` loads automatically and provides 
 ### Core Architecture
 - **result-type.md** — `Result<T,E>` discriminated union with `ok()`/`err()` constructors for railway-oriented error handling across all core functions
 - **error-hierarchy.md** — `SkilltapError` base class with typed subclasses (`UserError`, `GitError`, `ScanError`, `NetworkError`) and optional `hint` field
-- **zod-boundary.md** — Zod schema as single source of truth for types + validation; `safeParse` + `z.prettifyError` at every data boundary; `.prefault({})` for nested defaults
-- **config-io.md** — Config/state load-save algorithm: ensureDirs → exists check → read → parse → Zod validate → Result
+- **zod-boundary.md** — Zod schema as single source of truth for types + validation; `safeParse` + `z.prettifyError` at every data boundary; `.prefault({})` for nested defaults; `parseWithResult()` helper
+- **config-io.md** — Config/state load-save algorithm: ensureDirs → exists check → read → parse → Zod validate → Result; state.json uses `loadState`/`saveState`
+- **json-state-io.md** — `loadJsonState<T>` and `saveJsonState` generic helpers; all state modules delegate to these, no ad-hoc JSON I/O
 
 ### Adapter Patterns
 - **source-adapter.md** — `SourceAdapter` strategy pattern: plain object literals with `canHandle()` + `resolve()`, iterated by a priority-ordered resolver
 - **agent-adapter-strategy.md** — `AgentAdapter` interface with `detect()`/`invoke()`, factory functions for CLI/custom/Ollama adapters, three-priority resolution via `resolveAgent()`
+- **adapter-driven-branching.md** — `resolved.adapter` from `resolveSource()` gates source-type-specific logic (npm vs git vs local) throughout install, update, and trust flows
 
 ### Command Patterns
-- **callback-driven-options.md** — Core functions accept typed option objects with async callbacks for decision points; omitting callback = auto-proceed; 10+ callback fields across `InstallOptions`/`UpdateOptions`
-- **policy-composition.md** — `composePolicy(config, flags)` pure function centralizes all config + CLI flag precedence into `EffectivePolicy`; used for early command branching
-- **agent-mode-branching.md** — CLI commands fork into `runAgentMode()` (plain text, auto-accept, hard-fail) vs `runInteractiveMode()` (spinners, prompts, ANSI) based on policy
+- **output-interface.md** — `setupOutput(args)` → `Output` handle; 3 modes (tty/plain/json); all command output goes through `out.*` methods; replaces old agent-mode-branching split
+- **callback-driven-options.md** — Core functions accept typed option objects with async callbacks for decision points; omitting callback = auto-proceed; `out?: Output` for progress
+- **policy-composition.md** — `composePolicy(config, flags)` → `EffectivePolicy`; `composePolicyForSource` adds trust overlay; `loadPolicyOrExit()` is CLI-layer entry point
+- **scope-base.md** — `scopeBase(scope, projectRoot?)` pure helper — single-source scope-to-base-dir; use derived helpers (`skillInstallDir`, etc.) for full paths
+
+### State Management
+- **apply-state-change.md** — `applySkillStateChange({scope, projectRoot, mutate, manifestSync?})` atomic load→mutate→save for skills[]; fires manifest sync hooks on diff
 
 ### Git & Security
 - **bun-shell-git.md** — All git operations via `wrapGit<T>()` wrapper + Bun's `$` template tag with `.quiet()`; `extractStderr()` for consistent error extraction
 - **security-detector-composition.md** — 7 independent detector functions composed in a for-loop inside `scanStatic()`; `StaticWarning` extends `PatternMatch` with a `file` field
-- **install-result-with-warnings.md** — `installSkill()` returns `InstallResult { records, warnings, semanticWarnings }`; optional callbacks for per-skill interception; `skipScan: true` in tests
+- **install-result-with-warnings.md** — `installSkill()` returns `InstallResult { records, warnings, semanticWarnings, updates, pluginRecord? }`; unified `onWarnings(warnings, kind, name)` callback
 
 ### Testing
 - **test-fixtures.md** — Fixture repo factories: `createX()` returns `{ path, cleanup }`; copies static fixtures, initializes git repo, commits; always `dot:true` in Bun.Glob.scan
 - **test-result-assertions.md** — Result assertion pattern: `expect(result.ok).toBe(true)` + discriminated union guard; `VALID_*` constants with spread for schema test variants
-- **cli-subprocess-testing.md** — CLI integration tests use `Bun.spawn` with `SKILLTAP_HOME`/`XDG_CONFIG_HOME` env vars for isolation; `stdin: "pipe"` for non-TTY detection tests
+- **test-env-isolation.md** — `createTestEnv()` from `@skilltap/test-utils` returns `{ homeDir, configDir, cleanup() }`; replaces per-test manual env save/restore
+- **cli-subprocess-testing.md** — Use `runSkilltap(args, homeDir, configDir)` + `cliCmd()` from `@skilltap/test-utils`; routes to compiled binary when `SKILLTAP_TEST_BIN` set
 
 ### Trust & Source Handling
 - **injectable-dependencies.md** — Core functions with external I/O accept `_dep = realImpl` optional params; tests inject mocks as 2nd/3rd args; private `type Fn = typeof realFn` aliases enforce signature compatibility
 - **graceful-fallback-chain.md** — Optional verifiers return `T | null` not `Result`; caller cascades through priority tiers (provenance → publisher → curated → unverified); outer `try/catch` guarantees a valid result always
-- **adapter-driven-branching.md** — `resolved.adapter` from `resolveSource()` gates source-type-specific logic (npm vs git vs local) throughout install, update, and trust flows
+- **single-source-definitions.md** — One authoritative constant per enumerable concept; agent metadata in `symlink.ts`; config enum arrays in `schemas/config.ts`
+
+### Deprecated / Removed
+- **agent-mode-branching.md** — ⚠️ REMOVED. `policy.agentMode` and `runAgentMode()`/`runInteractiveMode()` no longer exist. See output-interface.md.

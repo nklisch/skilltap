@@ -1,116 +1,119 @@
 # Pattern: Policy Composition
 
-A pure function composes config values and CLI flags into a single `EffectivePolicy` object consumed by commands, centralizing all precedence rules and validation.
+A pure function composes config values and CLI flags into a single `EffectivePolicy` object consumed by commands, centralizing all precedence rules.
 
 ## Rationale
 
-Install and update commands need to reconcile config file settings with CLI flags, handling conflicts (e.g., `--skip-scan` vs `require_scan = true`) and mode overrides (agent mode forces specific values). Rather than scattering this logic across commands, `composePolicy()` is a single pure function that returns `Result<EffectivePolicy, UserError>` — testable, readable, and a single point of truth for "what should this command do?"
+Install and update commands need to reconcile config file settings with CLI flags (e.g., `--strict` overrides `on_warn`, `--skip-scan` overrides scan config, `--scope` overrides the default). Rather than scattering this logic across commands, `composePolicy()` is a single pure function — testable, readable, and the single source of truth for "what should this command do?"
 
 ## Examples
 
-### Example 1: Policy types
-**File**: `packages/core/src/policy.ts:4`
+### Example 1: EffectivePolicy and CliFlags types
+**File**: `packages/core/src/policy/types.ts:1`
 ```typescript
-export type CliFlags = {
-  strict?: boolean;
-  noStrict?: boolean;
-  skipScan?: boolean;
-  yes?: boolean;
-  semantic?: boolean;
-  project?: boolean;
-  global?: boolean;
-};
-
 export type EffectivePolicy = {
   yes: boolean;
-  onWarn: "prompt" | "fail" | "allow";
-  requireScan: boolean;
-  skipScan: boolean;
-  scanMode: "static" | "semantic" | "off";
   scope: "global" | "project" | "";
   also: string[];
-  agentMode: boolean;
+  scanMode: "semantic" | "static" | "none";
+  onWarn: "prompt" | "fail" | "install";
+  /** True when --skip-scan was passed. */
+  skipScan: boolean;
+  /** True when source matched a trust glob — scanMode forced to "none". */
+  trusted: boolean;
+};
+
+export type CliFlags = {
+  yes?: boolean;
+  noYes?: boolean;
+  strict?: boolean;    // → onWarn: "fail"
+  skipScan?: boolean;
+  deep?: boolean;      // → scanMode: "semantic"
+  scope?: "project" | "global";
 };
 ```
 
-### Example 2: The composition function
-**File**: `packages/core/src/policy.ts:29`
+### Example 2: composePolicy — the pure function
+**File**: `packages/core/src/policy/compose.ts:36`
 ```typescript
 export function composePolicy(
   config: Config,
   flags: CliFlags,
 ): Result<EffectivePolicy, UserError> {
-  const agentMode = config["agent-mode"].enabled;
-
-  // Select per-mode settings: security.agent when agent mode, security.human otherwise
-  const modeSec = agentMode ? config.security.agent : config.security.human;
-
-  if (agentMode) {
-    // Agent mode: forces yes=true, reads scan/onWarn/requireScan from config.security.agent
-    if (flags.skipScan && modeSec.require_scan) {
-      return err(new UserError("Security scanning is required by config."));
-    }
-    return ok({ yes: true, onWarn: modeSec.on_warn, requireScan: modeSec.require_scan, ... });
-  }
-
-  // Normal mode: CLI flags > config.security.human > defaults
-  if (flags.skipScan && modeSec.require_scan) {
-    return err(new UserError("Security scanning is required by config."));
-  }
-  // ...compose remaining fields with precedence rules
+  return ok({
+    yes: resolveYes(flags),           // flags.noYes overrides flags.yes
+    scope: resolveScope(config, flags), // flags.scope > config.defaults.scope
+    also: config.defaults.also,
+    scanMode: resolveScanMode(config, flags), // flags.deep → "semantic"; else config.security.scan
+    onWarn: resolveOnWarn(config, flags),     // flags.strict → "fail"; else config.security.on_warn
+    skipScan: flags.skipScan === true,
+    trusted: false,  // always false from base compose; set to true by composePolicyForSource
+  });
 }
 ```
 
-### Example 3: CLI helper that loads config + composes policy
-**File**: `packages/cli/src/ui/policy.ts:11`
+### Example 3: composePolicyForSource — per-source trust overlay
+**File**: `packages/core/src/policy/compose.ts:51`
+```typescript
+export function composePolicyForSource(
+  config: Config,
+  flags: CliFlags,
+  source: SourceForPolicy,  // { tapName?, sourceUrl }
+): Result<EffectivePolicy, UserError> {
+  const base = composePolicy(config, flags);
+  if (!base.ok) return base;
+
+  if (isTrusted(config.security.trust, source)) {
+    return ok({ ...base.value, trusted: true, scanMode: "none" });
+  }
+  return base;
+}
+```
+When the source matches a trust glob, `trusted: true` and `scanMode: "none"` — scanning is skipped entirely.
+
+### Example 4: loadPolicyOrExit — CLI-layer wrapper
+**File**: `packages/cli/src/ui/policy.ts:10`
 ```typescript
 export async function loadPolicyOrExit(flags: CliFlags) {
   const configResult = await loadConfig();
-  if (!configResult.ok) { errorLine(configResult.error.message); process.exit(1); }
-  const config = configResult.value;
+  if (!configResult.ok) { out.error(configResult.error.message); process.exit(1); }
 
-  const policyResult = composePolicy(config, flags);
-  if (!policyResult.ok) {
-    if (config["agent-mode"].enabled) agentError(policyResult.error.message);
-    else errorLine(policyResult.error.message, policyResult.error.hint);
-    process.exit(1);
-  }
-  return { config, policy: policyResult.value };
+  const policyResult = composePolicy(configResult.value, flags);
+  if (!policyResult.ok) { out.error(policyResult.error.message); process.exit(1); }
+
+  return { config: configResult.value, policy: policyResult.value };
 }
 ```
+Used by 4 commands: `install/shared.ts`, `install/mcp.ts`, `update.ts`, `remove/shared.ts`. The fifth call site (`find.ts`) calls `composePolicy` directly to avoid the exit behavior.
 
-### Example 4: Command consuming policy for early branching
-**File**: `packages/cli/src/commands/install.ts:92`
+### Example 5: Command consuming policy
+**File**: `packages/cli/src/commands/install/shared.ts:81`
 ```typescript
-async run({ args }) {
-  const { config, policy } = await loadPolicyOrExit({
-    strict: args.strict,
-    noStrict: args["no-strict"],
-    skipScan: args["skip-scan"],
-    yes: args.yes,
-    semantic: args.semantic,
-    project: args.project,
-    global: args.global,
-  });
+const { config, policy } = await loadPolicyOrExit({
+  strict: args.strict,
+  skipScan: args["skip-scan"],
+  yes: args.yes,
+  scope: scopeFlag,   // "project" | "global" | undefined
+});
 
-  if (policy.agentMode) return runAgentMode(args, config, policy);
-  return runInteractiveMode(args, config, policy);
-}
+// policy.scope, policy.scanMode, policy.onWarn, policy.skipScan used downstream
+const scope = await resolveScope(policy, ...);
 ```
 
 ## When to Use
 
-- Any command that needs config + CLI flag reconciliation (install, update)
+- Any command that needs config + CLI flag reconciliation (install, update, remove)
 - Testing policy precedence rules — `composePolicy` is pure, no I/O needed
 - Adding new config/flag interactions — add to `composePolicy`, not to individual commands
 
 ## When NOT to Use
 
-- Simple commands that don't have flag/config interactions (list, info, remove)
-- Commands that only read config without reconciling flags
+- Commands that don't have flag/config interactions (list, info, doctor)
+- Per-source trust decisions — use `composePolicyForSource` after resolving the source
 
 ## Common Violations
 
-- Scattering flag/config precedence logic across command files instead of centralizing in `composePolicy()`
-- Forgetting to validate conflicting flag combinations (e.g., `--skip-scan` + `require_scan`)
-- Not using `loadPolicyOrExit()` in CLI commands — it handles error display and exit codes
+- Scattering flag/config precedence logic across command files instead of centralizing in `composePolicy`
+- Directly comparing `policy.scanMode === "semantic"` vs `policy.skipScan` at call sites — check `policy.trusted` first (trusted sources skip scanning entirely)
+- Not using `loadPolicyOrExit()` in CLI commands — it handles error display and exit codes correctly
+- Confusing `"none"` (current `scanMode` off value) with old `"off"` — the enum is `"semantic" | "static" | "none"`

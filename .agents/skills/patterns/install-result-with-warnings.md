@@ -9,74 +9,73 @@ Security scan results are not errors — skills may still be installed despite w
 ## Examples
 
 ### Example 1: InstallResult type
-**File**: `packages/core/src/install.ts:58`
+**File**: `packages/core/src/install/types.ts:105`
 ```typescript
 export type InstallResult = {
   records: InstalledSkill[];
   warnings: StaticWarning[];
   semanticWarnings: SemanticWarning[];
+  /** Names of skills that were already installed and the user chose to update. */
+  updates: string[];
+  /** Plugin record if a plugin was installed. */
+  pluginRecord?: PluginRecord;
+  /** Components captured from standalone state into the plugin (if capture occurred). */
+  captured?: {
+    skills: string[];
+    mcpServers: string[];
+    forcedCrossSource: { skills: string[]; mcpServers: string[] };
+  };
 };
 ```
 
-### Example 2: Warning-related callbacks in InstallOptions
-**File**: `packages/core/src/install.ts:24`
+### Example 2: Warning callback in InstallOptions — unified signature
+**File**: `packages/core/src/install/types.ts:41`
 ```typescript
 export type InstallOptions = {
   // ...data fields...
   skipScan?: boolean;
-  onWarnings?: (warnings: StaticWarning[], skillName: string) => Promise<boolean>;
-  onSemanticWarnings?: (warnings: SemanticWarning[], skillName: string) => Promise<boolean>;
-  onOfferSemantic?: () => Promise<boolean>;
-  onSemanticProgress?: (completed: number, total: number) => void;
+  /** Unified callback for static AND semantic warnings. Return false to abort. */
+  onWarnings?: (
+    warnings: StaticWarning[] | SemanticWarning[],
+    kind: "skill-static" | "plugin-static" | "skill-semantic",
+    name: string,
+  ) => Promise<boolean>;
 };
 ```
+Static and semantic warnings share a single callback (unlike the old `onWarnings`/`onSemanticWarnings` split). The `kind` discriminator lets callers format messages differently.
 
-### Example 3: Per-skill scan and callback in runSecurityScan
-**File**: `packages/core/src/install.ts` (inside security scan helper)
+### Example 3: Unified onWarnings callback at the call site
+**File**: `packages/cli/src/ui/install-callbacks.ts`
 ```typescript
-if (scanResult.value.length > 0) {
-  allWarnings.push(...scanResult.value);
-  if (onWarnings) {
-    const proceed = await onWarnings(scanResult.value, skill.name);
-    if (!proceed) return err(new UserError("Install cancelled."));
+onWarnings: async (warnings, kind, name) => {
+  p.pause();
+  if (kind === "skill-static" || kind === "plugin-static") {
+    printWarnings(warnings as StaticWarning[], name);
+  } else {
+    printSemanticWarnings(warnings as SemanticWarning[], name);
   }
-}
+  if (policy.onWarn === "fail") return false;
+  return confirmInstall(name);
+},
 ```
+The `kind` discriminator lets the callback format static vs semantic warnings differently, with a single callback rather than two.
 
-### Example 4: Two-phase scan pipeline in install flow
-**File**: `packages/core/src/install.ts` (install flow)
+### Example 4: Warnings in the successful result
+**File**: `packages/core/src/install/orchestrate.ts`
 ```typescript
-// Phase 1: Static scan (unless skipScan)
-if (!options.skipScan) {
-  const scanResult = await runSecurityScan(selected, options.onWarnings);
-  if (!scanResult.ok) return scanResult;
-  allWarnings.push(...scanResult.value);
-}
-
-// Phase 2: Semantic scan (if agent available and enabled)
-if (shouldRunSemantic && options.agent) {
-  const semResult = await scanSemantic(skill.path, options.agent, { threshold });
-  if (semResult.ok && semResult.value.length > 0) {
-    allSemanticWarnings.push(...semResult.value);
-    if (options.onSemanticWarnings) {
-      const proceed = await options.onSemanticWarnings(semResult.value, skill.name);
-      if (!proceed) return err(new UserError("Install cancelled."));
-    }
-  }
-}
-```
-
-### Example 5: Warnings in the successful result
-**File**: `packages/core/src/install.ts` (end of function)
-```typescript
-return ok({ records: newRecords, warnings: allWarnings, semanticWarnings: allSemanticWarnings });
+return ok({
+  records: newRecords,
+  warnings: allWarnings,
+  semanticWarnings: allSemanticWarnings,
+  updates: updatedNames,
+});
 ```
 
 ## When to Use
 
-- `InstallResult` is the return type for `installSkill()` — always return all three fields
+- `InstallResult` is the return type for `installSkill()` — always populate all required fields
 - Use `skipScan: true` in tests that don't need security checks (avoids false positives on fixture content)
-- Use `onWarnings`/`onSemanticWarnings` in CLI commands to show interactive prompts; in non-interactive contexts, pass `undefined` to auto-proceed with warnings accumulated in the result
+- Use the unified `onWarnings(warnings, kind, name)` callback in CLI commands; pass `undefined` to auto-proceed
 
 ## When NOT to Use
 
@@ -87,4 +86,4 @@ return ok({ records: newRecords, warnings: allWarnings, semanticWarnings: allSem
 
 - Ignoring `result.value.warnings` or `result.value.semanticWarnings` in CLI output — users should see security warnings even when install succeeds
 - Not passing `skipScan: true` in tests — fixture content may contain patterns that trigger false positives
-- Forgetting to return both `warnings` and `semanticWarnings` arrays (even if empty) in the result
+- Implementing separate `onWarnings`/`onSemanticWarnings` callbacks — the unified `onWarnings(warnings, kind, name)` handles both

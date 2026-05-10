@@ -52,27 +52,19 @@ test("rejects missing name", () => {
 })
 ```
 
-### Example 4: beforeEach env setup with afterEach restore
-**File**: `packages/core/src/config.test.ts:10`
+### Example 4: Test env setup — use createTestEnv()
+**File**: `packages/cli/src/commands/install.test.ts:24`
 ```typescript
-let tmpDir: string
-let savedXdg: string | undefined
+import { createTestEnv, type TestEnv } from "@skilltap/test-utils";
 
-beforeEach(async () => {
-  tmpDir = await mkdtemp(join(tmpdir(), "skilltap-test-"))
-  savedXdg = process.env.XDG_CONFIG_HOME
-  process.env.XDG_CONFIG_HOME = tmpDir
-})
+let env: TestEnv;
+beforeEach(async () => { env = await createTestEnv(); });
+afterEach(async () => { await env.cleanup(); });
 
-afterEach(async () => {
-  if (savedXdg !== undefined) {
-    process.env.XDG_CONFIG_HOME = savedXdg
-  } else {
-    delete process.env.XDG_CONFIG_HOME
-  }
-  await rm(tmpDir, { recursive: true, force: true })
-})
+// env.homeDir = SKILLTAP_HOME, env.configDir = XDG_CONFIG_HOME
+// cleanup() restores originals and removes dirs
 ```
+See [test-env-isolation.md](test-env-isolation.md) for the full pattern.
 
 ## When to Use
 
@@ -89,4 +81,4 @@ afterEach(async () => {
 
 - Accessing `result.value` without `expect(result.ok).toBe(true)` first — test passes silently with wrong data
 - Using `as const` only on the whole object instead of on discriminant fields like `scope`
-- Forgetting to restore env vars in `afterEach` — bleeds into subsequent tests
+- Manual env var save/restore instead of `createTestEnv()` — use the helper (see test-env-isolation.md)

@@ -38,29 +38,21 @@ export async function loadConfig(): Promise<Result<Config, UserError>> {
 }
 ```
 
-### Example 2: Load installed.json (JSON)
-**File**: `packages/core/src/config.ts:147`
+### Example 2: Load state.json (JSON via loadJsonState helper)
+**File**: `packages/core/src/state/load.ts:13`
 ```typescript
-export async function loadInstalled(): Promise<Result<InstalledJson, UserError>> {
-  const filePath = installedPath()
-  const exists = await Bun.file(filePath).exists()
-  if (!exists) return ok({ skills: [] })           // default when missing
-
-  const text = await Bun.file(filePath).text()
-  let raw: unknown
-  try {
-    raw = JSON.parse(text)
-  } catch (e) {
-    return err(new UserError(`Corrupt installed.json: ${e}`))
-  }
-
-  const result = InstalledJsonSchema.safeParse(raw)
-  if (!result.success) {
-    return err(new UserError(`Invalid installed.json:\n${z.prettifyError(result.error)}`))
-  }
-  return ok(result.data)
+export async function loadState(
+  projectRoot?: string,
+): Promise<Result<State, UserError>> {
+  return loadJsonState(          // generic JSON helper handles exists check + Zod validation
+    getStatePath(projectRoot),
+    StateSchema,
+    "state.json",
+    DEFAULT_STATE,               // returned as-is when file is absent
+  );
 }
 ```
+State is accessed through `loadSkillState()` (skills slice) or `loadState()` (full state including plugins and MCP servers). The old `installed.json` and `loadInstalled()` no longer exist — `state.json` is the sole store.
 
 ### Example 3: Save config
 **File**: `packages/core/src/config.ts:128`

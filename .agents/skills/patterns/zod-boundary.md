@@ -35,17 +35,22 @@ if (!result.success) {
 return ok(result.data)
 ```
 
-### Example 3: Schema used at installed.json boundary
-**File**: `packages/core/src/config.ts:165`
+### Example 3: Schema used at state.json boundary (via parseWithResult helper)
+**File**: `packages/core/src/schemas/index.ts:13`
 ```typescript
-const result = InstalledJsonSchema.safeParse(raw)
-if (!result.success) {
-  return err(new UserError(
-    `Corrupt installed.json:\n${z.prettifyError(result.error)}`,
-  ))
+export function parseWithResult<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  label: string,
+): Result<T, UserError> {
+  const result = schema.safeParse(data);
+  if (!result.success) {
+    return err(new UserError(`Invalid ${label}:\n${z.prettifyError(result.error)}`));
+  }
+  return ok(result.data);
 }
-return ok(result.data)
 ```
+Used in `json-state.ts`, `config.ts`, `taps.ts`, `manifest/load.ts`, `manifest/lockfile.ts` — everywhere external JSON/TOML is ingested. The `label` becomes the error prefix so the user knows which file is invalid.
 
 ### Example 4: Frontmatter schema in scanner (permissive — collects warnings)
 **File**: `packages/core/src/scanner.ts:51`
@@ -70,7 +75,7 @@ export const ConfigSchema = z.object({
 ## When to Use
 
 - Every file/network/process boundary where data enters the system
-- Config load, installed.json load, tap.json load, marketplace.json load, SKILL.md frontmatter parse
+- Config load, state.json load, tap.json load, marketplace.json load, manifest/lock load, SKILL.md frontmatter parse
 
 ## When NOT to Use
 
