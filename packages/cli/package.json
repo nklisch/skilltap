@@ -1,6 +1,6 @@
 {
   "name": "@skilltap/skilltap",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "description": "Install agent skills from any git host",
   "type": "module",
   "license": "MIT",
