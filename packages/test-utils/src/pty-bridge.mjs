@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 /**
  * PTY bridge — runs as a Node.js subprocess, controls a PTY using node-pty,
  * and communicates with the Bun test runner via JSON-line streams on
@@ -42,13 +43,11 @@ const term = pty.spawn(cmd, args, {
 
 // Forward PTY output to stdout as JSON lines
 term.onData((text) => {
-  process.stdout.write(`${JSON.stringify({ type: "data", text })}\n`);
+  fs.writeSync(1, `${JSON.stringify({ type: "data", text })}\n`);
 });
 
 term.onExit(({ exitCode }) => {
-  process.stdout.write(
-    `${JSON.stringify({ type: "exit", code: exitCode ?? 0 })}\n`,
-  );
+  fs.writeSync(1, `${JSON.stringify({ type: "exit", code: exitCode ?? 0 })}\n`);
   process.exit(0);
 });
 
