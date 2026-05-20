@@ -106,7 +106,7 @@ export async function runInteractive(
     cmd: file,
     args,
     cwd,
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...env, CI: "false" },
     cols,
     rows,
   });
@@ -133,9 +133,6 @@ export async function runInteractive(
     try {
       for await (const chunk of bridge.stdout) {
         const decoded = decoder.decode(chunk, { stream: true });
-        if (process.env.CI) {
-          process.stderr.write(`[DEBUG PTY STDOUT]: ${decoded}`);
-        }
         pending += decoded;
         const lines = pending.split("\n");
         pending = lines.pop() ?? "";
