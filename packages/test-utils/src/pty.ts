@@ -115,7 +115,7 @@ export async function runInteractive(
   const bridge = Bun.spawn(["node", BRIDGE, bridgeConfig], {
     stdin: "pipe",
     stdout: "pipe",
-    stderr: "inherit", // surface bridge errors directly
+    stderr: "pipe",
   });
 
   let rawBuf = "";
@@ -127,15 +127,16 @@ export async function runInteractive(
 
   // Read JSON lines from the bridge's stdout
   async function readLoop() {
-    const reader = bridge.stdout.getReader();
     let pending = "";
     const decoder = new TextDecoder();
 
     try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        pending += decoder.decode(value, { stream: true });
+      for await (const chunk of bridge.stdout) {
+        const decoded = decoder.decode(chunk, { stream: true });
+        if (process.env.CI) {
+          process.stderr.write(`[DEBUG PTY STDOUT]: ${decoded}`);
+        }
+        pending += decoded;
         const lines = pending.split("\n");
         pending = lines.pop() ?? "";
         for (const line of lines) {
@@ -160,8 +161,22 @@ export async function runInteractive(
     }
   }
 
-  // Start the read loop (non-blocking; drives the event loop)
+  // Read from the bridge's stderr
+  async function readStderr() {
+    const decoder = new TextDecoder();
+    try {
+      for await (const chunk of bridge.stderr) {
+        const decoded = decoder.decode(chunk, { stream: true });
+        process.stderr.write(`[DEBUG PTY STDERR]: ${decoded}`);
+      }
+    } catch {
+      // bridge stderr closed
+    }
+  }
+
+  // Start the read loops (non-blocking; drives the event loop)
   readLoop();
+  readStderr();
 
   function sendToBridge(msg: object) {
     const line = `${JSON.stringify(msg)}\n`;
