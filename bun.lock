@@ -18,7 +18,7 @@
     },
     "packages/cli": {
       "name": "@skilltap/skilltap",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "bin": {
         "skilltap": "./src/index.ts",
       },
@@ -37,7 +37,7 @@
     },
     "packages/core": {
       "name": "@skilltap/core",
-      "version": "2.1.1",
+      "version": "2.2.0",
       "dependencies": {
         "anti-trojan-source": "^1.8.1",
         "out-of-character": "^2.1.0",
@@ -67,6 +67,9 @@
       },
     },
   },
+  "trustedDependencies": [
+    "@homebridge/node-pty-prebuilt-multiarch",
+  ],
   "patchedDependencies": {
     "@tufjs/models@4.1.0": "patches/@tufjs%2Fmodels@4.1.0.patch",
     "@sigstore/core@3.1.0": "patches/@sigstore%2Fcore@3.1.0.patch",

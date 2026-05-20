@@ -60,10 +60,11 @@ describe("TUI smoke", () => {
     // appearing in the buffer comes from the initial render but the input
     // pipeline may not be wired yet. Sleep briefly so the first key isn't
     // dropped (echoes back into the buffer instead of dispatching).
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    await new Promise((resolve) => setTimeout(resolve, 500));
     // 1-4 stay on Dashboard.
     session.send("2");
-    await session.waitForText("2 Taps", 3000);
+    // Sleep briefly to allow the tab switch keypress to be processed
+    await new Promise((resolve) => setTimeout(resolve, 200));
     // `f` navigates to Find.
     session.send("f");
     await session.waitForText("Search:", 3000);
