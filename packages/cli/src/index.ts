@@ -61,7 +61,9 @@ import { createOutput } from "./output";
 // auto-updates when any prompt is active. No-op on non-TTY.
 import { footer } from "./ui/footer";
 
-footer().open();
+if (!process.env.SKILLTAP_NO_STARTUP) {
+  footer().open();
+}
 
 // ─── Ctrl+C always exits ─────────────────────────────────────────────────────
 // Clack prompts put stdin in raw mode, catching Ctrl+C as a cancel symbol.
