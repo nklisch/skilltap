@@ -115,10 +115,7 @@ async function runLegacyStateDetectionNotice(): Promise<void> {
     if (await stateFile.exists()) return;
     const out = createOutput({ json: false, quiet: false });
     out.block(
-      [
-        "↑  Legacy state detected. Run 'skilltap migrate' to upgrade.",
-        "",
-      ],
+      ["↑  Legacy state detected. Run 'skilltap migrate' to upgrade.", ""],
       { stream: "stderr" },
     );
   } catch {
@@ -393,11 +390,16 @@ if (removedCmd && Object.hasOwn(REMOVED_COMMANDS, removedCmd)) {
 // Bare `skilltap` invocation: open TUI in TTY, error with hint when piped.
 // Detected up front so citty doesn't double-run both main's `run` and a subcommand.
 if (process.argv.length === 2) {
+  process.stderr.write("[DEBUG INDEX]: Entering bare invocation branch\n");
   if (process.stdout.isTTY) {
+    process.stderr.write("[DEBUG INDEX]: stdout is TTY, importing tui\n");
     const { mountTui } = await import("./tui");
+    process.stderr.write("[DEBUG INDEX]: tui imported, calling mountTui\n");
     await mountTui("dashboard");
+    process.stderr.write("[DEBUG INDEX]: mountTui finished\n");
     process.exit(0);
   } else {
+    process.stderr.write("[DEBUG INDEX]: stdout is NOT TTY\n");
     process.stderr.write(
       "skilltap requires a TTY for the dashboard.\n" +
         "  hint: Run `skilltap status` for headless output.\n",
