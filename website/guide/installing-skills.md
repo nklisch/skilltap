@@ -51,6 +51,16 @@ This is equivalent to `https://github.com/user/commit-helper`. You can also be e
 skilltap install skill github:user/commit-helper
 ```
 
+This also works for repos that package skills under `skills/` or `.agents/skills/`.
+For example, TweetClaw ships an X/Twitter automation skill in `skills/tweetclaw/`:
+
+```bash
+skilltap install skill Xquik-dev/tweetclaw --scope global --also codex --yes
+```
+
+With `--yes`, skilltap auto-selects discovered skills from the repo and keeps
+the command usable in CI, setup scripts, and agent bootstrapping flows.
+
 ### Tap name
 
 If you have taps configured, install by skill name:

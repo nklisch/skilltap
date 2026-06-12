@@ -1,7 +1,7 @@
 # skilltap — Complete Documentation
 
 > Source: https://skilltap.dev/llms-full.txt
-> Generated: 2026-05-09
+> Generated: 2026-06-12
 >
 > This file contains the complete skilltap documentation as a single Markdown document
 > for AI coding assistant ingestion. For a navigable index see https://skilltap.dev/llms.txt.
@@ -558,6 +558,16 @@ This is equivalent to `https://github.com/user/commit-helper`. You can also be e
 ```bash
 skilltap install skill github:user/commit-helper
 ```
+
+This also works for repos that package skills under `skills/` or `.agents/skills/`.
+For example, TweetClaw ships an X/Twitter automation skill in `skills/tweetclaw/`:
+
+```bash
+skilltap install skill Xquik-dev/tweetclaw --scope global --also codex --yes
+```
+
+With `--yes`, skilltap auto-selects discovered skills from the repo and keeps
+the command usable in CI, setup scripts, and agent bootstrapping flows.
 
 ### Tap name
 
