@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-policy
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-safe-update-automation
 depends_on: [epic-safe-update-automation-resolution, epic-cross-harness-materialization]
@@ -167,3 +167,18 @@ using a convenience semver path.
 
 - Direct-read design only; no peer advisory pass was run because this
   autopilot run is intentionally single-agent.
+
+## Implementation Notes
+
+- All three child stories are complete: typed policy decisions, compatibility
+  delta summaries, and read-only status projection.
+- `off` and disabled resources avoid resolution; `check` reports candidates
+  without granting safe application; only clean tracked candidates under
+  `apply-safe` classify as safe.
+- Verification: targeted core/CLI tests and clippy passed. The full workspace
+  gate remains before closing the safe-update epic.
+
+## Review Record
+
+- Inline deep review: **pass pending full workspace gate**. The policy is pure,
+  target-bound, and preserves exact reasons for later foreground/daemon plans.
