@@ -1,11 +1,15 @@
-use std::path::Path;
+use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use skilltap_core::{
-    domain::{HarnessReachability, UnreachableReason},
-    runtime::{JsonLimits, ObservationRuntimeError, ProcessLimits},
+    domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, UnreachableReason},
+    runtime::{
+        ExecutableResolutionRequest, ExecutableResolver, JsonLimits, NativeProcessRequest,
+        ObservationRuntimeError, ProcessLimits, SystemExecutableResolver,
+    },
 };
 use skilltap_harnesses::{
-    DetectionError, HarnessKind, detect_installation, select_profile, unreachable_installation,
+    DetectionError, HarnessKind, ProbeError, detect_installation, probe_profile, select_profile,
+    unreachable_installation,
 };
 use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
 
@@ -112,4 +116,53 @@ fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
     let unknown_profile = select_profile(HarnessKind::Codex, &unknown);
     assert!(unknown_profile.mutation_capabilities().is_none());
     assert!(unknown_profile.profile_id().is_none());
+}
+
+#[test]
+fn probe_narrowing_is_strict_and_never_widens_profiles() {
+    let known = skilltap_core::domain::NativeVersion::new("3.0.0").unwrap();
+    let profile = select_profile(HarnessKind::Codex, &known);
+    let narrowed = skilltap_harnesses::narrow_profile(
+        &profile,
+        &serde_json::json!({
+            "scope": "project",
+            "capabilities": { "plugin.install": "unsupported" }
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        narrowed
+            .observation_capabilities()
+            .for_scope_kind(skilltap_core::domain::CapabilityScope::Project)
+            .support(&skilltap_core::domain::CapabilityId::new("plugin.install").unwrap()),
+        Some(skilltap_core::domain::CapabilitySupport::Unsupported)
+    );
+    let drift = skilltap_harnesses::narrow_profile(
+        &profile,
+        &serde_json::json!({
+            "scope": "project",
+            "capabilities": { "future.capability": "supported" }
+        }),
+    )
+    .unwrap_err();
+    assert!(matches!(drift, ProbeError::Contract(_)));
+
+    let (root, _fixture) = install(FakeNativeMode::ProbeNarrow, "codex");
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(
+            ConfiguredBinary::absolute(
+                AbsolutePath::new(root.join("codex").to_str().unwrap()).unwrap(),
+            ),
+            None,
+        ))
+        .unwrap();
+    let request = NativeProcessRequest::new(
+        executable,
+        [OsString::from("probe")],
+        BTreeMap::new(),
+        None,
+        ProcessLimits::new(1_000, 4_096, 4_096, 8_192).unwrap(),
+    );
+    let probed = probe_profile(&profile, &request, JsonLimits::new(4_096, 16).unwrap()).unwrap();
+    assert_eq!(probed.profile_id().unwrap().as_str(), "codex-v3");
 }

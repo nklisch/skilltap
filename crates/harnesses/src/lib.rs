@@ -4,7 +4,7 @@ use skilltap_core::{
     domain::{
         CapabilityId, CapabilityProfileId, CapabilityProfileSelection, CapabilitySet,
         CapabilitySupport, ConfiguredBinary, HarnessId, HarnessInstallation, HarnessReachability,
-        NativeId, NativeVersion, ScopedCapabilitySets, UnreachableReason,
+        NativeId, NativeVersion, ProfileContractError, ScopedCapabilitySets, UnreachableReason,
     },
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, JsonLimits, NativeProcessRequest,
@@ -173,4 +173,79 @@ fn unknown_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
         unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Global)),
         unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Project)),
     )
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProbeError {
+    Runtime(ObservationRuntimeError),
+    NonZeroExit,
+    InvalidPayload,
+    Contract(ProfileContractError),
+}
+
+impl std::fmt::Display for ProbeError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Runtime(error) => error.fmt(formatter),
+            Self::NonZeroExit => formatter.write_str("the harness probe failed"),
+            Self::InvalidPayload => formatter.write_str("the harness probe payload is invalid"),
+            Self::Contract(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for ProbeError {}
+
+/// Runs a bounded JSON probe and monotonically narrows a compiled profile.
+pub fn probe_profile(
+    profile: &CapabilityProfileSelection,
+    request: &NativeProcessRequest,
+    json_limits: JsonLimits,
+) -> Result<CapabilityProfileSelection, ProbeError> {
+    let output = SystemNativeProcessRunner
+        .run(request)
+        .map_err(ProbeError::Runtime)?;
+    if !output.status().success() {
+        return Err(ProbeError::NonZeroExit);
+    }
+    let decoded = StrictJson
+        .decode(output.stdout(), json_limits)
+        .map_err(ProbeError::Runtime)?;
+    narrow_profile(profile, decoded.value())
+}
+
+/// Applies one strict probe payload to a profile without granting new authority.
+pub fn narrow_profile(
+    profile: &CapabilityProfileSelection,
+    payload: &serde_json::Value,
+) -> Result<CapabilityProfileSelection, ProbeError> {
+    let scope = payload
+        .get("scope")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(ProbeError::InvalidPayload)?;
+    let capabilities = payload
+        .get("capabilities")
+        .and_then(serde_json::Value::as_object)
+        .ok_or(ProbeError::InvalidPayload)?;
+    let parsed = capabilities
+        .iter()
+        .map(|(id, support)| {
+            let id = CapabilityId::new(id).map_err(|_| ProbeError::InvalidPayload)?;
+            let support = match support.as_str() {
+                Some("supported") => CapabilitySupport::Supported,
+                Some("unsupported") => CapabilitySupport::Unsupported,
+                Some("unverified") => CapabilitySupport::Unverified,
+                _ => return Err(ProbeError::InvalidPayload),
+            };
+            Ok((id, support))
+        })
+        .collect::<Result<Vec<_>, ProbeError>>()?;
+    let (global, project) = match scope {
+        "global" => (CapabilitySet::new(parsed), CapabilitySet::default()),
+        "project" => (CapabilitySet::default(), CapabilitySet::new(parsed)),
+        _ => return Err(ProbeError::InvalidPayload),
+    };
+    profile
+        .narrow(&ScopedCapabilitySets::new(global, project))
+        .map_err(ProbeError::Contract)
 }
