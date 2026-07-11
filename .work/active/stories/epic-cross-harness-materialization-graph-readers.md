@@ -48,3 +48,10 @@ Acceptance criteria:
 ## Review
 
 Verdict: Approve — story verified by implement; fast-lane advance.
+
+## Review follow-up
+
+The feature-level completeness pass identified MCP coverage as an acceptance
+gap. Added strict bounded parsing for documented MCP manifest files and a
+fixture assertion for named MCP servers; targeted harness tests and clippy
+remain green.

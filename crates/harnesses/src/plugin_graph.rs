@@ -112,15 +112,17 @@ impl PluginGraphReader for NativePluginGraphReader<'_> {
         if !decoded.value().is_object() {
             return Err(PluginGraphReadError::MalformedManifest);
         }
-        declarations_from_snapshot(snapshot.entries())
+        declarations_from_snapshot(snapshot.entries(), self.json_limits)
     }
 }
 
 fn declarations_from_snapshot(
     entries: &[skilltap_core::runtime::ExternalTreeEntry],
+    json_limits: JsonLimits,
 ) -> Result<Vec<ComponentDeclaration>, PluginGraphReadError> {
     let mut declarations = Vec::new();
     let mut seen = BTreeSet::new();
+    append_mcp_declarations(entries, json_limits, &mut declarations, &mut seen)?;
     for entry in entries {
         let path = entry.path().as_str();
         let Some((root, name)) = one_child(path) else {
@@ -162,6 +164,51 @@ fn declarations_from_snapshot(
         });
     }
     Ok(declarations)
+}
+
+fn append_mcp_declarations(
+    entries: &[skilltap_core::runtime::ExternalTreeEntry],
+    json_limits: JsonLimits,
+    declarations: &mut Vec<ComponentDeclaration>,
+    seen: &mut BTreeSet<ComponentId>,
+) -> Result<(), PluginGraphReadError> {
+    for entry in entries.iter().filter(|entry| {
+        matches!(
+            entry.path().as_str(),
+            "mcp.json" | ".mcp.json" | ".claude-plugin/mcp.json" | ".codex-plugin/mcp.json"
+        )
+    }) {
+        let bytes = entry
+            .file_bytes()
+            .ok_or(PluginGraphReadError::MalformedManifest)?;
+        let decoded = StrictJson
+            .decode(bytes, json_limits)
+            .map_err(|_| PluginGraphReadError::MalformedManifest)?;
+        let Some(object) = decoded.value().as_object() else {
+            return Err(PluginGraphReadError::MalformedManifest);
+        };
+        let names = object
+            .get("mcpServers")
+            .and_then(serde_json::Value::as_object)
+            .map(|servers| servers.keys().map(String::as_str).collect::<Vec<_>>())
+            .unwrap_or_else(|| vec!["default"]);
+        for name in names {
+            let id = ComponentId::new(format!("mcp:{name}"))
+                .map_err(|_| PluginGraphReadError::MalformedManifest)?;
+            if !seen.insert(id.clone()) {
+                return Err(PluginGraphReadError::MalformedManifest);
+            }
+            declarations.push(ComponentDeclaration {
+                id,
+                kind: ComponentKind::McpServer,
+                requiredness: ComponentRequiredness::Optional,
+                dependencies: BTreeSet::new(),
+                relative_path: entry.path().clone(),
+                declared_name: Some(name.to_owned()),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn one_child(path: &str) -> Option<(&str, &str)> {
@@ -254,6 +301,11 @@ mod tests {
         .unwrap();
         fs::create_dir_all(root.join("hooks")).unwrap();
         fs::write(root.join("hooks/notify.sh"), b"#!/bin/sh\n").unwrap();
+        fs::write(
+            root.join(".mcp.json"),
+            br#"{"mcpServers":{"docs":{"command":"docs"}}}"#,
+        )
+        .unwrap();
         let (tree_limits, json_limits) = limits();
         let reader = ClaudePluginGraphReader::new(
             AbsolutePath::new(root.path().to_str().unwrap()).unwrap(),
@@ -269,6 +321,11 @@ mod tests {
         assert!(declarations.iter().any(|value| {
             value.id.as_str() == "hook:notify.sh"
                 && value.requiredness == ComponentRequiredness::Optional
+        }));
+        assert!(declarations.iter().any(|value| {
+            value.id.as_str() == "mcp:docs"
+                && value.kind == ComponentKind::McpServer
+                && value.relative_path.as_str() == ".mcp.json"
         }));
     }
 
