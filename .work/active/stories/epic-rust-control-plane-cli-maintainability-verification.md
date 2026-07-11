@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-maintainability-verification
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing, infra]
 parent: epic-rust-control-plane-cli-maintainability
 depends_on: [epic-rust-control-plane-cli-maintainability-test-support]
@@ -40,3 +40,9 @@ constant. Run the locked and optimized binary ladders.
   which also verifies the wrapper's absolute explicit-path behavior.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. One explicit-path wrapper now runs smoke before the exact optimized
+compiled contract; CI and release use it without losing post-signing artifact
+verification, and the Rust version assertion follows the workspace constant.
