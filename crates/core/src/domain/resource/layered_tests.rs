@@ -399,6 +399,33 @@ fn exact_scope_is_preserved_in_dangling_self_and_cycle_diagnostics() {
             resources: BTreeSet::from([global, project]),
         }
     );
+
+    let project = project_key("plugin:observed", "/work/observed");
+    let mut duplicate = observed("plugin:observed", "codex", ObservationLayer::Declared, &[]);
+    duplicate.key = ObservationKey::new(
+        project.clone(),
+        harness("codex"),
+        ObservationLayer::Declared,
+    );
+    let duplicate_error = ResourceGraph::new([], [duplicate.clone(), duplicate], []).unwrap_err();
+    assert_eq!(
+        duplicate_error.to_string(),
+        "duplicate Declared observation for `plugin:observed [project:/work/observed]` in `codex`"
+    );
+
+    let mut self_dependent = observed("plugin:observed", "codex", ObservationLayer::Effective, &[]);
+    self_dependent.key = ObservationKey::new(
+        project.clone(),
+        harness("codex"),
+        ObservationLayer::Effective,
+    );
+    self_dependent.dependencies =
+        BTreeSet::from([ObservedDependency::Resolved { resource: project }]);
+    let self_error = ResourceGraph::new([], [self_dependent], []).unwrap_err();
+    assert_eq!(
+        self_error.to_string(),
+        "Effective observation for `plugin:observed [project:/work/observed]` in `codex` depends on itself"
+    );
 }
 
 #[test]

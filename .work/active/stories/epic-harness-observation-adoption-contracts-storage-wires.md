@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-storage-wires
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-key]
@@ -44,3 +44,11 @@ ladder passes.
 - Verification: locked format, workspace all-target check, warnings-denied
   Clippy, 209 workspace tests, warnings-denied rustdoc, optimized release build,
   binary smoke, and six compiled-binary tests all pass.
+
+## Review
+
+- Approved in the coordinated exact-key migration review.
+- Confirmed strict rejection of the retired inventory, state, and managed-owner
+  wire shapes; no migration or compatibility path remains.
+- Confirmed equal logical IDs coexist across global and project inventory and
+  state maps while retaining distinct managed artifact ownership.

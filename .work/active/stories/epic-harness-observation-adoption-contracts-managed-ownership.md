@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-managed-ownership
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-key]
@@ -35,3 +35,11 @@ before filesystem I/O.
   cycle. The broader strict document wire, fixture, and golden reset remains in
   the dependent storage-wires story.
 - Adjacent issues parked: none.
+
+## Review
+
+- Approved in the coordinated exact-key migration review.
+- Verified distinct artifact and backup paths for equal logical IDs across
+  scopes and exact owner rejection before filesystem I/O.
+- Locked workspace format, all-target check, warnings-denied Clippy, and all
+  209 tests pass with the storage bridge applied.

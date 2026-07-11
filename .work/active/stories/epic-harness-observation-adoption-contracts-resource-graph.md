@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-resource-graph
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-key]
@@ -46,3 +46,13 @@ validate exact self/dangling/cycle contexts.
   dependent storage-wire bridge: current storage unit/integration fixtures
   still call the pre-migration constructors and therefore cannot compile until
   that coordinated clean-break wire migration lands.
+
+## Review
+
+- Approved in the coordinated exact-key migration review after the storage
+  bridge restored the full workspace ladder.
+- Independent review found two observation diagnostic renderers that omitted
+  project scope. Both now render the complete `ResourceKey`, with regression
+  coverage for duplicate and self-dependent project observations.
+- Locked workspace format, all-target check, warnings-denied Clippy, and all
+  209 tests pass after the correction.

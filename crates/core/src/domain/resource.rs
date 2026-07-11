@@ -837,9 +837,7 @@ impl fmt::Display for ResourceGraphError {
             Self::DuplicateObservation { key } => write!(
                 formatter,
                 "duplicate {:?} observation for `{}` in `{}`",
-                key.layer,
-                key.resource.id(),
-                key.harness
+                key.layer, key.resource, key.harness
             ),
             Self::DanglingDependency {
                 collection,
@@ -867,9 +865,7 @@ impl fmt::Display for ResourceGraphError {
             Self::ObservedSelfDependency { key } => write!(
                 formatter,
                 "{:?} observation for `{}` in `{}` depends on itself",
-                key.layer,
-                key.resource.id(),
-                key.harness
+                key.layer, key.resource, key.harness
             ),
             Self::ObservedDependencyCycle {
                 harness,
