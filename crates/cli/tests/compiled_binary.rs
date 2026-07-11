@@ -468,6 +468,32 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
     assert_eq!(json(&update)["result"], "completed");
     assert_eq!(json(&update)["summary"]["changed"], true);
 
+    let second = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            "https://example.invalid/other.git",
+            "--name",
+            "other",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&second, 0);
+    assert_eq!(json(&second)["result"], "completed");
+
+    let update_all = run(
+        &machine,
+        &["marketplace", "update", "--target", "codex", "--json"],
+    );
+    assert_code(&update_all, 0);
+    let update_all_value = json(&update_all);
+    assert_eq!(update_all_value["result"], "completed");
+    assert_eq!(update_all_value["summary"]["changed"], true);
+    assert_eq!(update_all_value["summary"]["operations"], 1);
+
     let remove = run(
         &machine,
         &[

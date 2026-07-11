@@ -926,11 +926,20 @@ impl StatusApplication<'_> {
             }
         };
 
-        let request = match NativeLifecycleSpec::parse(kind, source_value, name_value) {
-            Ok(request) => request,
-            Err(error) => {
-                outcome.result = ResultClass::Invalid;
-                return outcome.with_error(error);
+        let update_all = name_value.is_none()
+            && matches!(
+                kind,
+                NativeLifecycleKind::MarketplaceUpdate | NativeLifecycleKind::PluginUpdate
+            );
+        let request = if update_all {
+            None
+        } else {
+            match NativeLifecycleSpec::parse(kind, source_value, name_value) {
+                Ok(request) => Some(request),
+                Err(error) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(error);
+                }
             }
         };
         let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
@@ -958,45 +967,67 @@ impl StatusApplication<'_> {
         let timestamp = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| ());
 
         for concrete_scope in &scope.resolved {
-            let resource = if request.is_update() {
-                let key = request.resource_key(concrete_scope).map_err(|_| {
-                    ErrorDetail::new(
-                        "resource_id_invalid",
-                        "The requested native resource identifier is invalid.",
-                    )
-                });
-                let key = match key {
-                    Ok(key) => key,
-                    Err(error) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(error);
+            let scope_requests = match request.as_ref() {
+                Some(request) => vec![request.clone()],
+                None => inventory
+                    .resources()
+                    .values()
+                    .filter(|resource| {
+                        resource.scope() == concrete_scope
+                            && resource.kind() == native_resource_kind(kind)
+                    })
+                    .filter_map(|resource| {
+                        resource
+                            .key()
+                            .id()
+                            .as_str()
+                            .strip_prefix(native_resource_prefix(kind))
+                            .and_then(|name| {
+                                NativeLifecycleSpec::parse(kind, None, Some(name)).ok()
+                            })
+                    })
+                    .collect::<Vec<_>>(),
+            };
+            for request in scope_requests {
+                let resource = if request.is_update() {
+                    let key = request.resource_key(concrete_scope).map_err(|_| {
+                        ErrorDetail::new(
+                            "resource_id_invalid",
+                            "The requested native resource identifier is invalid.",
+                        )
+                    });
+                    let key = match key {
+                        Ok(key) => key,
+                        Err(error) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(error);
+                        }
+                    };
+                    match inventory.resources().get(&key) {
+                        Some(existing) => existing.clone(),
+                        None => match request.desired_resource(concrete_scope, &targets.resolved) {
+                            Ok(resource) => resource,
+                            Err(error) => {
+                                outcome.result = ResultClass::Invalid;
+                                return outcome.with_error(error);
+                            }
+                        },
                     }
-                };
-                match inventory.resources().get(&key) {
-                    Some(existing) => existing.clone(),
-                    None => match request.desired_resource(concrete_scope, &targets.resolved) {
+                } else {
+                    match request.desired_resource(concrete_scope, &targets.resolved) {
                         Ok(resource) => resource,
                         Err(error) => {
                             outcome.result = ResultClass::Invalid;
                             return outcome.with_error(error);
                         }
-                    },
-                }
-            } else {
-                match request.desired_resource(concrete_scope, &targets.resolved) {
-                    Ok(resource) => resource,
-                    Err(error) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(error);
                     }
-                }
-            };
-            if request.retains_desired() && !request.is_update() {
-                match inventory.with_resource(resource.clone()) {
-                    Ok(next) => inventory = next,
-                    Err(_) => {
-                        outcome.result = ResultClass::AttentionRequired;
-                        return outcome
+                };
+                if request.retains_desired() && !request.is_update() {
+                    match inventory.with_resource(resource.clone()) {
+                        Ok(next) => inventory = next,
+                        Err(_) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            return outcome
                             .with_error(ErrorDetail::new(
                                 "inventory_resource_conflict",
                                 "The requested resource conflicts with an existing desired definition.",
@@ -1005,32 +1036,34 @@ impl StatusApplication<'_> {
                                 "inspect_inventory",
                                 "Inspect the existing resource definition before retrying.",
                             ));
+                        }
                     }
+                } else if let Some(next) = inventory.without_resource(resource.key()) {
+                    inventory = next;
                 }
-            } else if let Some(next) = inventory.without_resource(resource.key()) {
-                inventory = next;
-            }
 
-            let mut native_ids = BTreeMap::new();
-            for target_id in targets.iter() {
-                let Some((harness, configured, executable, capability)) = configured_native_profile(
-                    &documents.config,
-                    target_id,
-                    concrete_scope,
-                    process_limits,
-                    json_limits,
-                    search_path.clone(),
-                    match kind {
-                        NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
-                        NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
-                        NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
-                        NativeLifecycleKind::PluginInstall => "plugin.install",
-                        NativeLifecycleKind::PluginRemove => "plugin.remove",
-                        NativeLifecycleKind::PluginUpdate => "plugin.update",
-                    },
-                ) else {
-                    outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome
+                let mut native_ids = BTreeMap::new();
+                for target_id in targets.iter() {
+                    let Some((harness, configured, executable, capability)) =
+                        configured_native_profile(
+                            &documents.config,
+                            target_id,
+                            concrete_scope,
+                            process_limits,
+                            json_limits,
+                            search_path.clone(),
+                            match kind {
+                                NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+                                NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
+                                NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+                                NativeLifecycleKind::PluginInstall => "plugin.install",
+                                NativeLifecycleKind::PluginRemove => "plugin.remove",
+                                NativeLifecycleKind::PluginUpdate => "plugin.update",
+                            },
+                        )
+                    else {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome
                         .with_resource(
                             OutputEntry::new(
                                 format!("{}:{}", target_id, resource.key()),
@@ -1046,26 +1079,26 @@ impl StatusApplication<'_> {
                             )
                             .with_context("harness", target_id.as_str()),
                         );
-                    continue;
-                };
-                if capability != CapabilitySupport::Supported {
-                    outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome.with_warning(
-                        Warning::new(
-                            "native_capability_unverified",
-                            "The selected harness capability is not verified for mutation.",
-                        )
-                        .with_context("harness", target_id.as_str())
-                        .with_context("scope", scope_label(concrete_scope)),
-                    );
-                    continue;
-                }
-                let native_request = request.native_request(harness, concrete_scope.clone());
-                let arguments = match native_arguments(&native_request) {
-                    Ok(arguments) => arguments,
-                    Err(_) => {
+                        continue;
+                    };
+                    if capability != CapabilitySupport::Supported {
                         outcome.result = ResultClass::AttentionRequired;
                         outcome = outcome.with_warning(
+                            Warning::new(
+                                "native_capability_unverified",
+                                "The selected harness capability is not verified for mutation.",
+                            )
+                            .with_context("harness", target_id.as_str())
+                            .with_context("scope", scope_label(concrete_scope)),
+                        );
+                        continue;
+                    }
+                    let native_request = request.native_request(harness, concrete_scope.clone());
+                    let arguments = match native_arguments(&native_request) {
+                        Ok(arguments) => arguments,
+                        Err(_) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome.with_warning(
                             Warning::new(
                                 "native_scope_unsupported",
                                 "The selected harness has no verified lifecycle command for this scope.",
@@ -1073,89 +1106,93 @@ impl StatusApplication<'_> {
                             .with_context("harness", target_id.as_str())
                             .with_context("scope", scope_label(concrete_scope)),
                         );
+                            continue;
+                        }
+                    };
+                    let operation_id = lifecycle_operation_id(kind, target_id, resource.key());
+                    native_ids.insert(target_id.clone(), request.native_name.clone());
+                    if previously_applied(documents.state.as_ref(), resource.key(), &operation_id) {
+                        outcome = outcome.with_operation(
+                            crate::OperationOutcome::new(operation_id.to_string(), "no_change")
+                                .with_field("target", target_id.as_str())
+                                .with_field("scope", scope_label(concrete_scope)),
+                        );
                         continue;
                     }
-                };
-                let operation_id = lifecycle_operation_id(kind, target_id, resource.key());
-                native_ids.insert(target_id.clone(), request.native_name.clone());
-                if previously_applied(documents.state.as_ref(), resource.key(), &operation_id) {
-                    outcome = outcome.with_operation(
-                        crate::OperationOutcome::new(operation_id.to_string(), "no_change")
-                            .with_field("target", target_id.as_str())
-                            .with_field("scope", scope_label(concrete_scope)),
-                    );
-                    continue;
+                    let command_arguments = match command_arguments(arguments) {
+                        Ok(arguments) => arguments,
+                        Err(_) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "native_argument_encoding",
+                                "The native lifecycle arguments could not be represented safely.",
+                            ));
+                        }
+                    };
+                    let operation = match native_operation(
+                        operation_id.clone(),
+                        target_id.clone(),
+                        resource.key().clone(),
+                        request.operation_action(),
+                        executable,
+                        command_arguments,
+                    ) {
+                        Ok(operation) => operation,
+                        Err(_) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "operation_contract_invalid",
+                                "The native lifecycle operation could not be constructed safely.",
+                            ));
+                        }
+                    };
+                    operations.push(operation);
+                    requests.push((
+                        operation_id,
+                        configured,
+                        search_path.clone(),
+                        process_limits,
+                        native_request,
+                    ));
                 }
-                let command_arguments = match command_arguments(arguments) {
-                    Ok(arguments) => arguments,
-                    Err(_) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "native_argument_encoding",
-                            "The native lifecycle arguments could not be represented safely.",
-                        ));
-                    }
-                };
-                let operation = match native_operation(
-                    operation_id.clone(),
-                    target_id.clone(),
-                    resource.key().clone(),
-                    request.operation_action(),
-                    executable,
-                    command_arguments,
-                ) {
-                    Ok(operation) => operation,
-                    Err(_) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "operation_contract_invalid",
-                            "The native lifecycle operation could not be constructed safely.",
-                        ));
-                    }
-                };
-                operations.push(operation);
-                requests.push((
-                    operation_id,
-                    configured,
-                    search_path.clone(),
-                    process_limits,
-                    native_request,
-                ));
-            }
-            if !native_ids.is_empty() {
-                let observed_at = match timestamp {
-                    Ok(timestamp) => timestamp,
-                    Err(()) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "clock_unavailable",
-                            "The operation timestamp could not be recorded safely.",
-                        ));
-                    }
-                };
-                let native_state = match ResourceState::new(
-                    resource.key().clone(),
-                    native_ids,
-                    Provenance::Native,
-                    Ownership::Harness,
-                    request.source.clone(),
-                    None,
-                    None,
-                    None,
-                    None,
-                    observed_at,
-                    None,
-                ) {
-                    Ok(state) => state,
-                    Err(_) => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "state_seed_invalid",
-                            "The native lifecycle state seed was invalid.",
-                        ));
-                    }
-                };
-                seeds.insert(resource.key().clone(), native_state);
+                if !native_ids.is_empty() {
+                    let observed_at = match timestamp {
+                        Ok(timestamp) => timestamp,
+                        Err(()) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "clock_unavailable",
+                                "The operation timestamp could not be recorded safely.",
+                            ));
+                        }
+                    };
+                    let native_state = match ResourceState::new(
+                        resource.key().clone(),
+                        native_ids,
+                        Provenance::Native,
+                        Ownership::Harness,
+                        resource
+                            .source()
+                            .cloned()
+                            .or_else(|| request.source.clone()),
+                        None,
+                        None,
+                        None,
+                        None,
+                        observed_at,
+                        None,
+                    ) {
+                        Ok(state) => state,
+                        Err(_) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "state_seed_invalid",
+                                "The native lifecycle state seed was invalid.",
+                            ));
+                        }
+                    };
+                    seeds.insert(resource.key().clone(), native_state);
+                }
             }
         }
 
@@ -3378,6 +3415,7 @@ fn skill_remove_operation_id(target: &HarnessId, resource: &ResourceKey) -> Oper
         .expect("skill removal operation id is valid")
 }
 
+#[derive(Clone)]
 struct NativeLifecycleSpec {
     operation_action: OperationAction,
     native_action: NativeLifecycleAction,
@@ -3385,6 +3423,25 @@ struct NativeLifecycleSpec {
     resource_prefix: &'static str,
     native_name: NativeId,
     source: Option<Source>,
+}
+
+fn native_resource_kind(kind: NativeLifecycleKind) -> ResourceKind {
+    match kind {
+        NativeLifecycleKind::MarketplaceAdd
+        | NativeLifecycleKind::MarketplaceRemove
+        | NativeLifecycleKind::MarketplaceUpdate => ResourceKind::Marketplace,
+        NativeLifecycleKind::PluginInstall
+        | NativeLifecycleKind::PluginRemove
+        | NativeLifecycleKind::PluginUpdate => ResourceKind::Plugin,
+    }
+}
+
+fn native_resource_prefix(kind: NativeLifecycleKind) -> &'static str {
+    match native_resource_kind(kind) {
+        ResourceKind::Marketplace => "marketplace:",
+        ResourceKind::Plugin => "plugin:",
+        _ => unreachable!("native lifecycle resources have a marketplace or plugin kind"),
+    }
 }
 
 impl NativeLifecycleSpec {

@@ -48,4 +48,7 @@ drop the desired inventory entry idempotently while retaining the state journal
 for provenance. Explicit marketplace/plugin update now preserves the existing
 desired definition instead of replacing it with an incomplete synthetic source;
 native exact-resource post-observation and update-all selector expansion remain
-open.
+open. Update commands without a name now expand across matching desired
+marketplaces or plugins in each selected scope, while already-applied operation
+records remain idempotent; existing source provenance is retained in refreshed
+native state.
