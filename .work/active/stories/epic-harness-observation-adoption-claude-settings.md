@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude-settings
 kind: story
-stage: review
+stage: done
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-claude
 depends_on: [epic-harness-observation-adoption-claude-paths]
@@ -32,3 +32,8 @@ siblings, and trust/consent/policy/bridge evidence with safe typed findings.
 
 - Harness Clippy and all eleven detection/Codex/Claude path/settings tests pass
   in the locked offline workspace.
+
+## Review
+
+- Fast-lane review approved the qualified identity/shared-project parsing and
+  redacted strict JSON behavior.
