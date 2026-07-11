@@ -101,7 +101,7 @@ pub(super) fn try_acquire_with(
             path: path.clone(),
             source,
         })?;
-    try_lock_file(&directory, path)?;
+    let directory = ProvisionalLock::acquire(directory, path)?;
     verify_lock_identity(&parent_path, directory_identity, path)?;
 
     let file = open_lock_no_follow(path)?;
@@ -110,9 +110,12 @@ pub(super) fn try_acquire_with(
         path: path.clone(),
         source,
     })?;
-    try_lock_file(&file, path)?;
+    let file = ProvisionalLock::acquire(file, path)?;
     after_file_lock();
     verify_lock_identity(path, identity, path)?;
+
+    let file = file.into_file();
+    let directory = directory.into_file();
 
     Ok(SystemConfigurationLockGuard {
         file: Some(file),
@@ -121,14 +124,32 @@ pub(super) fn try_acquire_with(
     })
 }
 
-fn try_lock_file(file: &File, path: &AbsolutePath) -> Result<(), RuntimeError> {
-    match file.try_lock() {
-        Ok(()) => Ok(()),
-        Err(TryLockError::WouldBlock) => Err(RuntimeError::LockContended { path: path.clone() }),
-        Err(TryLockError::Error(source)) => Err(RuntimeError::Lock {
-            action: LockAction::Acquire,
-            path: path.clone(),
-            source,
-        }),
+struct ProvisionalLock(Option<File>);
+
+impl ProvisionalLock {
+    fn acquire(file: File, path: &AbsolutePath) -> Result<Self, RuntimeError> {
+        match file.try_lock() {
+            Ok(()) => Ok(Self(Some(file))),
+            Err(TryLockError::WouldBlock) => {
+                Err(RuntimeError::LockContended { path: path.clone() })
+            }
+            Err(TryLockError::Error(source)) => Err(RuntimeError::Lock {
+                action: LockAction::Acquire,
+                path: path.clone(),
+                source,
+            }),
+        }
+    }
+
+    fn into_file(mut self) -> File {
+        self.0.take().expect("provisional lock owns its file")
+    }
+}
+
+impl Drop for ProvisionalLock {
+    fn drop(&mut self) {
+        if let Some(file) = self.0.take() {
+            let _ = file.unlock();
+        }
     }
 }

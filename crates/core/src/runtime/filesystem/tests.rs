@@ -560,15 +560,20 @@ fn lock_path_swaps_cannot_create_two_successful_guards() {
     let displaced = temporary.path("displaced.lock");
     let lock = SystemConfigurationLock;
 
-    let acquisition_error = try_acquire_with(&path, || {
-        fs::rename(path.as_str(), displaced.as_str()).unwrap();
-        fs::write(path.as_str(), b"replacement").unwrap();
-    })
-    .unwrap_err();
-    assert!(matches!(
-        acquisition_error,
-        RuntimeError::LockIdentityChanged { .. }
-    ));
+    for _ in 0..128 {
+        let acquisition_error = try_acquire_with(&path, || {
+            fs::rename(path.as_str(), displaced.as_str()).unwrap();
+            fs::write(path.as_str(), b"replacement").unwrap();
+        })
+        .unwrap_err();
+        assert!(matches!(
+            acquisition_error,
+            RuntimeError::LockIdentityChanged { .. }
+        ));
+        lock.try_acquire(&path).unwrap().release().unwrap();
+        fs::remove_file(path.as_str()).unwrap();
+        fs::remove_file(displaced.as_str()).unwrap();
+    }
 
     let first = lock.try_acquire(&path).unwrap();
     fs::remove_file(path.as_str()).unwrap();
