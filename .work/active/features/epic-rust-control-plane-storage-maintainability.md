@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-maintainability
 kind: feature
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-storage]
@@ -101,3 +101,12 @@ Document codecs/schema probes are separated from filesystem orchestration, and
 runtime filesystem tests mirror their four adapter contracts. Pre/post test
 lists and public rustdoc/type identities are unchanged. The locked workspace
 passes 157 tests with the concurrently landed CLI output contracts included.
+
+## Review
+
+Approved in fresh context. The 149 core test identities are byte-identical
+before and after; all twelve public managed-artifact `type_name` and rustdoc
+paths remain canonical; test bodies differ only at file-boundary whitespace;
+and codec/error/filesystem behavior is mechanically preserved. The isolated
+locked format/check/Clippy/test/rustdoc ladder passes, with every touched module
+below roughly 400 lines.
