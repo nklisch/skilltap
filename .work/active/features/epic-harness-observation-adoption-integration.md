@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-integration
 kind: feature
-stage: implementing
+stage: done
 tags: [testing]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-adopt]
@@ -160,3 +160,33 @@ existing `SupportedPlatform` abstraction, never by assuming Linux paths.
   existing barriers and deterministic lock helpers instead of sleeps.
 - Native macOS CI may be unavailable locally; keep the portable contract suite
   runnable here and document any platform lane not exercised in this run.
+
+## Implementation notes
+
+- Added reusable no-follow native-tree snapshots to test support.
+- Expanded core adoption seams for declared-only candidates and lock
+  contention, compiled CLI coverage for partial sibling, project/all-scope, and
+  repeat adoption, and bounded flood-output diagnostics.
+- Existing runtime and native-process fixtures continue to cover CODEX_HOME,
+  platform path resolution, hangs, termination, and repeatable observations.
+
+## Review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Important: native macOS execution was not available in this Linux run; the
+  portable platform contracts are covered and the native lane remains a CI
+  responsibility.
+- Important: deeper per-plugin/per-skill manifest lineage and shared-Claude
+  declaration semantics remain follow-up work; current tests correctly assert
+  bounded surface observation and explicit attention rather than inventing
+  equivalence.
+
+### Notes
+
+All four integration stories passed their focused verification. Full workspace
+verification is required before the parent epic advances.
