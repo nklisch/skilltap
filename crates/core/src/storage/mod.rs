@@ -5,8 +5,8 @@ mod inventory;
 mod state;
 
 pub use config::{
-    ClaudeInstructionMode, ConfigDocument, HarnessPolicies, HarnessPolicy, InstructionPolicy,
-    UpdateInterval, UpdateIntervalUnit, UpdateMode, UpdatePolicy,
+    ClaudeInstructionMode, ConfigDocument, HarnessBinary, HarnessPolicies, HarnessPolicy,
+    InstructionPolicy, UpdateInterval, UpdateIntervalUnit, UpdateMode, UpdatePolicy,
 };
 pub use inventory::InventoryDocument;
 pub use state::{
@@ -27,6 +27,8 @@ pub enum SchemaError {
         version: u32,
     },
     InvalidInterval,
+    InvalidHarnessBinary,
+    NonUtf8HarnessBinary,
     TimestampBeforeEpoch,
     InvalidNanoseconds {
         nanoseconds: u32,
@@ -74,6 +76,12 @@ impl fmt::Display for SchemaError {
             Self::InvalidInterval => formatter.write_str(
                 "update interval must be a canonical positive integer followed by `s`, `m`, `h`, or `d`",
             ),
+            Self::InvalidHarnessBinary => formatter.write_str(
+                "harness binary must be one PATH executable name or a normalized absolute path",
+            ),
+            Self::NonUtf8HarnessBinary => {
+                formatter.write_str("harness binary is not valid UTF-8")
+            }
             Self::TimestampBeforeEpoch => {
                 formatter.write_str("timestamp must not precede the Unix epoch")
             }

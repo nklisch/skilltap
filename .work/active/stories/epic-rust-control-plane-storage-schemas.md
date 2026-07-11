@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-schemas
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: []
@@ -70,3 +70,20 @@ opaque `NativeId`, allowing undocumented relative paths such as
 `relative/path/codex`. The config boundary must accept either one normal PATH
 executable name or a validated absolute path, with the same constructor and
 TOML behavior. All other schema surfaces were approved.
+
+## Review correction
+
+- Replaced `HarnessPolicy.binary: NativeId` with the config-specific validated
+  `HarnessBinary` type. It accepts exactly one normal PATH executable component
+  or a domain-validated normalized absolute path.
+- Constructor and TOML deserialization now share the same validator and reject
+  relative multi-component paths, current/parent components, trailing or
+  redundant separators, invalid bounded text, and non-UTF-8 OS values. Error
+  rendering never includes rejected OS bytes.
+- The explicit defaults now construct validated `codex` and `claude` values.
+  The config golden remains intentionally byte-identical because the supported
+  wire representation is still a plain TOML string.
+- Added the failing relative-path regression before the fix, plus constructor/
+  TOML parity coverage for valid PATH names and absolute paths and all rejected
+  forms. Verification passed with 109 workspace tests across the full locked
+  format/check/Clippy/test/rustdoc ladder.

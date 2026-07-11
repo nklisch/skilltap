@@ -140,6 +140,14 @@ fn config_defaults_are_explicit_strict_and_golden() {
     assert!(
         toml::from_str::<ConfigDocument>(&encoded.replacen("schema = 1", "schema = 2", 1)).is_err()
     );
+    assert!(
+        toml::from_str::<ConfigDocument>(&encoded.replacen(
+            "binary = \"codex\"",
+            "binary = \"relative/path/codex\"",
+            1,
+        ))
+        .is_err()
+    );
 }
 
 #[test]
@@ -152,6 +160,48 @@ fn intervals_are_positive_and_canonical_at_both_boundaries() {
     assert_eq!(interval.value(), 15);
     assert_eq!(interval.unit(), UpdateIntervalUnit::Minutes);
     assert_eq!(serde_json::to_string(&interval).unwrap(), "\"15m\"");
+}
+
+#[test]
+fn harness_binaries_accept_only_path_names_or_normalized_absolute_paths() {
+    for valid in ["codex", "claude-code", "codex.exe", "/usr/local/bin/codex"] {
+        let binary = HarnessBinary::new(valid).unwrap();
+        assert_eq!(binary.as_str(), valid);
+        assert_eq!(
+            toml::from_str::<HarnessPolicy>(&format!("enabled = true\nbinary = {valid:?}\n"))
+                .unwrap()
+                .binary,
+            binary
+        );
+    }
+
+    for invalid in [
+        "relative/path/codex",
+        "./codex",
+        "../codex",
+        "codex/",
+        "codex//",
+        "/usr//bin/codex",
+        "/usr/bin/../codex",
+        "/usr/bin/codex/",
+    ] {
+        assert!(HarnessBinary::new(invalid).is_err(), "{invalid}");
+        assert!(
+            toml::from_str::<HarnessPolicy>(&format!("enabled = true\nbinary = {invalid:?}\n"))
+                .is_err(),
+            "{invalid}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn harness_binaries_reject_non_utf8_os_values_without_rendering_bytes() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let error = HarnessBinary::try_from(std::ffi::OsString::from_vec(vec![0xff])).unwrap_err();
+    assert!(matches!(error, SchemaError::NonUtf8HarnessBinary));
+    assert_eq!(error.to_string(), "harness binary is not valid UTF-8");
 }
 
 #[test]

@@ -1,9 +1,78 @@
-use std::{fmt, str::FromStr};
+use std::{
+    ffi::OsString,
+    fmt,
+    path::{Component, Path},
+    str::FromStr,
+};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{SCHEMA_VERSION, SchemaError};
-use crate::domain::NativeId;
+use crate::domain::{AbsolutePath, NativeId};
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HarnessBinary(String);
+
+impl HarnessBinary {
+    pub fn new(value: impl Into<String>) -> Result<Self, SchemaError> {
+        let value = value.into();
+        NativeId::new(value.clone())?;
+        let path = Path::new(&value);
+        if path.is_absolute() {
+            AbsolutePath::new(value.clone())?;
+            return Ok(Self(value));
+        }
+
+        let mut components = path.components();
+        let Some(Component::Normal(component)) = components.next() else {
+            return Err(SchemaError::InvalidHarnessBinary);
+        };
+        if components.next().is_some() || component.to_str() != Some(value.as_str()) {
+            return Err(SchemaError::InvalidHarnessBinary);
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<OsString> for HarnessBinary {
+    type Error = SchemaError;
+
+    fn try_from(value: OsString) -> Result<Self, Self::Error> {
+        Self::new(
+            value
+                .into_string()
+                .map_err(|_| SchemaError::NonUtf8HarnessBinary)?,
+        )
+    }
+}
+
+impl fmt::Display for HarnessBinary {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Serialize for HarnessBinary {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for HarnessBinary {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(String::deserialize(deserializer)?).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -115,7 +184,7 @@ impl<'de> Deserialize<'de> for UpdateInterval {
 #[serde(deny_unknown_fields)]
 pub struct HarnessPolicy {
     pub enabled: bool,
-    pub binary: NativeId,
+    pub binary: HarnessBinary,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -184,11 +253,11 @@ impl ConfigDocument {
             harnesses: HarnessPolicies {
                 codex: HarnessPolicy {
                     enabled: true,
-                    binary: NativeId::new("codex").expect("known valid binary"),
+                    binary: HarnessBinary::new("codex").expect("known valid binary"),
                 },
                 claude: HarnessPolicy {
                     enabled: true,
-                    binary: NativeId::new("claude").expect("known valid binary"),
+                    binary: HarnessBinary::new("claude").expect("known valid binary"),
                 },
             },
             instructions: InstructionPolicy {
