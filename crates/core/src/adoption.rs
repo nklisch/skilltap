@@ -541,6 +541,8 @@ mod tests {
 
     struct TestLock;
 
+    struct ContendedLock;
+
     struct TestGuard(AbsolutePath);
 
     impl ConfigurationLock for TestLock {
@@ -548,6 +550,14 @@ mod tests {
 
         fn try_acquire(&self, path: &AbsolutePath) -> Result<Self::Guard, RuntimeError> {
             Ok(TestGuard(path.clone()))
+        }
+    }
+
+    impl ConfigurationLock for ContendedLock {
+        type Guard = TestGuard;
+
+        fn try_acquire(&self, path: &AbsolutePath) -> Result<Self::Guard, RuntimeError> {
+            Err(RuntimeError::LockContended { path: path.clone() })
         }
     }
 
@@ -801,6 +811,22 @@ mod tests {
         let error =
             apply_adoption(&TestLock, &lock_path, &repository, &plan, |_| Ok(stale)).unwrap_err();
         assert!(matches!(error, AdoptionApplyError::StaleEvidence));
+        assert_eq!(repository.replacements.get(), 0);
+    }
+
+    #[test]
+    fn apply_fails_fast_on_lock_contention() {
+        let plan = plan_adoption(None, &environment(), &AdoptionSelection::new([])).unwrap();
+        let repository = MemoryInventory {
+            value: RefCell::new(DocumentState::Missing),
+            replacements: Cell::new(0),
+        };
+        let lock_path = AbsolutePath::new("/tmp/skilltap-adoption.lock").unwrap();
+        let error = apply_adoption(&ContendedLock, &lock_path, &repository, &plan, |_| {
+            Ok(environment())
+        })
+        .unwrap_err();
+        assert!(matches!(error, AdoptionApplyError::Lock(_)));
         assert_eq!(repository.replacements.get(), 0);
     }
 }
