@@ -3,12 +3,23 @@
 use std::collections::BTreeSet;
 
 use crate::{
+    compatibility::{
+        CompatibilityAnalysis, CompatibilityAnalysisError, CompatibilityRequest, analyze,
+    },
     domain::{
         Fingerprint, NativeId, ObservationKey, Operation, OperationClass, OperationContractError,
         Ownership, Plan, ResourceHealth, ResourceKey, Scope,
     },
     storage::ResourceState,
 };
+
+/// Expose target-bound compatibility through the reconciliation boundary
+/// without importing adapter implementations or performing external I/O.
+pub fn compatibility_for_target(
+    request: CompatibilityRequest<'_>,
+) -> Result<CompatibilityAnalysis, CompatibilityAnalysisError> {
+    analyze(request)
+}
 
 #[derive(Clone, Debug)]
 pub struct ReconciliationCandidate {
@@ -240,6 +251,7 @@ mod tests {
         AffectedSurface, CompatibilityClass, CompatibilityResult, ComponentGraph, EvidenceCode,
         EvidenceDetail, HarnessId, ObservationLayer, OperationAction, OperationId, OperationReason,
         OperationSelector, OperationSemantics, Provenance, ResourceId, ResourceKind,
+        TransferFidelity,
     };
 
     fn resource() -> ResourceKey {
@@ -381,5 +393,46 @@ mod tests {
             }),
             Err(ReconciliationError::DuplicateResource { .. })
         ));
+    }
+
+    #[test]
+    fn reconciliation_exposes_scope_exact_compatibility_selectors() {
+        let resource = resource();
+        let graph = crate::plugin_graph::normalize(
+            crate::domain::Source::new(
+                crate::domain::SourceKind::Git,
+                crate::domain::SourceLocator::new("https://example.test/plugin.git").unwrap(),
+                None,
+            )
+            .unwrap(),
+            [crate::plugin_graph::ComponentDeclaration {
+                id: crate::domain::ComponentId::new("hook:optional").unwrap(),
+                kind: crate::domain::ComponentKind::Hook,
+                requiredness: crate::domain::ComponentRequiredness::Optional,
+                dependencies: BTreeSet::new(),
+                relative_path: crate::domain::RelativeArtifactPath::new("hooks/optional").unwrap(),
+                declared_name: Some("optional".to_owned()),
+            }],
+        )
+        .unwrap();
+        let target = HarnessId::new("codex").unwrap();
+        let capabilities = crate::domain::CapabilitySet::new([]);
+        let analysis = compatibility_for_target(CompatibilityRequest {
+            resource: &resource,
+            graph: &graph,
+            target: &target,
+            capabilities: &capabilities,
+            occupied: &BTreeSet::new(),
+        })
+        .unwrap();
+        assert_eq!(analysis.aggregate.fidelity(), TransferFidelity::Partial);
+        assert!(
+            analysis
+                .acknowledgment_selectors
+                .contains(&OperationSelector::Component {
+                    resource,
+                    component_id: crate::domain::ComponentId::new("hook:optional").unwrap(),
+                })
+        );
     }
 }
