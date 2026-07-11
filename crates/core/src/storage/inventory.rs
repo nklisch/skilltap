@@ -87,6 +87,27 @@ impl InventoryDocument {
         }
         Self::new(INVENTORY_SCHEMA_VERSION, projects, resources)
     }
+
+    /// Return a copy without one desired resource. Removing an absent key is
+    /// idempotent; recorded project scopes remain available for `--all-scopes`
+    /// so a later adoption can still address them explicitly.
+    pub fn without_resource(&self, key: &ResourceKey) -> Option<Self> {
+        if !self.resources.contains_key(key) {
+            return Some(self.clone());
+        }
+        let resources = self
+            .resources
+            .iter()
+            .filter(|(resource_key, _)| *resource_key != key)
+            .map(|(_, resource)| resource.clone())
+            .collect::<Vec<_>>();
+        Self::new(
+            INVENTORY_SCHEMA_VERSION,
+            self.projects.iter().cloned(),
+            resources,
+        )
+        .ok()
+    }
 }
 
 impl From<InventoryDocument> for InventoryWire {

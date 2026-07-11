@@ -256,7 +256,11 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 | "plugin list"
                 | "instructions status"
                 | "marketplace add"
+                | "marketplace remove"
+                | "marketplace update"
                 | "plugin install"
+                | "plugin remove"
+                | "plugin update"
                 | "skill install"
                 | "instructions setup"
         ) {

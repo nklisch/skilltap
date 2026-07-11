@@ -579,7 +579,23 @@ fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
             CapabilitySupport::Supported,
         ),
         (
+            CapabilityId::new("plugin.remove").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+        (
+            CapabilityId::new("plugin.update").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+        (
             CapabilityId::new("marketplace.register").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+        (
+            CapabilityId::new("marketplace.remove").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+        (
+            CapabilityId::new("marketplace.update").expect("compiled capability is valid"),
             CapabilitySupport::Supported,
         ),
     ]);
@@ -597,7 +613,39 @@ fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
             },
         ),
         (
+            CapabilityId::new("plugin.remove").expect("compiled capability is valid"),
+            if matches!(harness, HarnessKind::Codex) {
+                CapabilitySupport::Unverified
+            } else {
+                CapabilitySupport::Supported
+            },
+        ),
+        (
+            CapabilityId::new("plugin.update").expect("compiled capability is valid"),
+            if matches!(harness, HarnessKind::Codex) {
+                CapabilitySupport::Unverified
+            } else {
+                CapabilitySupport::Supported
+            },
+        ),
+        (
             CapabilityId::new("marketplace.register").expect("compiled capability is valid"),
+            if matches!(harness, HarnessKind::Codex) {
+                CapabilitySupport::Unverified
+            } else {
+                CapabilitySupport::Supported
+            },
+        ),
+        (
+            CapabilityId::new("marketplace.remove").expect("compiled capability is valid"),
+            if matches!(harness, HarnessKind::Codex) {
+                CapabilitySupport::Unverified
+            } else {
+                CapabilitySupport::Supported
+            },
+        ),
+        (
+            CapabilityId::new("marketplace.update").expect("compiled capability is valid"),
             if matches!(harness, HarnessKind::Codex) {
                 CapabilitySupport::Unverified
             } else {

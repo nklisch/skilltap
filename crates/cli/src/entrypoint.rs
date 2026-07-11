@@ -113,6 +113,28 @@ where
             ),
             OutputChannel::Stdout,
         ),
+        Dispatch::MarketplaceRemove(args) => (
+            execute_system_native_lifecycle(
+                "marketplace remove",
+                NativeLifecycleKind::MarketplaceRemove,
+                &args.common.scope,
+                &args.common.target,
+                None,
+                Some(args.name.as_str()),
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::MarketplaceUpdate(args) => (
+            execute_system_native_lifecycle(
+                "marketplace update",
+                NativeLifecycleKind::MarketplaceUpdate,
+                &args.common.scope,
+                &args.common.target,
+                None,
+                args.name.as_ref().map(|value| value.as_str()),
+            ),
+            OutputChannel::Stdout,
+        ),
         Dispatch::PluginInstall(args) => (
             execute_system_native_lifecycle(
                 "plugin install",
@@ -121,6 +143,28 @@ where
                 &args.target,
                 Some(args.plugin.as_str()),
                 None,
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::PluginRemove(args) => (
+            execute_system_native_lifecycle(
+                "plugin remove",
+                NativeLifecycleKind::PluginRemove,
+                &args.common.scope,
+                &args.common.target,
+                None,
+                Some(args.plugin.as_str()),
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::PluginUpdate(args) => (
+            execute_system_native_lifecycle(
+                "plugin update",
+                NativeLifecycleKind::PluginUpdate,
+                &args.scope,
+                &args.target,
+                None,
+                args.plugin.as_ref().map(|value| value.as_str()),
             ),
             OutputChannel::Stdout,
         ),

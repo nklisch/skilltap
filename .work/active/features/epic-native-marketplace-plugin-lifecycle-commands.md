@@ -38,14 +38,12 @@ searches marketplace contents. Immediate repeats are no-ops.
 
 ## Implementation notes
 
-Marketplace/plugin list commands are inventory-backed and read-only. Add and
-install now expose deterministic operation previews with scope, target, source,
-and name fields. The harness crate supplies bounded native lifecycle vectors
-and an execution boundary. Core now has one validated constructor for faithful
-native operations, and state journaling is atomic and resource-exact. The
-harness layer exposes a typed `NativeLifecyclePort` that enforces exact
-operation/request identity and maps bounded native failures to operation
-failures. Marketplace add and plugin install now compose desired inventory,
-verified profiles, native execution, journaling, and fresh observation; remove
-and update verbs, native exact-resource observation, and full adapter coverage
-remain open.
+Marketplace/plugin list commands are inventory-backed and read-only. Add,
+install, remove, and update now compose deterministic desired-state changes,
+verified profile capabilities, native execution, journaling, and fresh
+observation. The harness crate supplies bounded native lifecycle vectors and an
+execution boundary; core has one validated constructor for faithful native
+operations, and state journaling is atomic and resource-exact. Remove operations
+drop the desired inventory entry idempotently while retaining the state journal
+for provenance. Native exact-resource post-observation and update-all selector
+expansion remain open.

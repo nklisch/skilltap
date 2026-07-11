@@ -70,7 +70,11 @@ pub(crate) enum NativeObservationMode {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum NativeLifecycleKind {
     MarketplaceAdd,
+    MarketplaceRemove,
+    MarketplaceUpdate,
     PluginInstall,
+    PluginRemove,
+    PluginUpdate,
 }
 
 /// State-backed journal for mutating lifecycle composition. It resolves each
@@ -798,20 +802,24 @@ impl StatusApplication<'_> {
                     return outcome.with_error(error);
                 }
             };
-            match inventory.with_resource(resource.clone()) {
-                Ok(next) => inventory = next,
-                Err(_) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    return outcome
-                        .with_error(ErrorDetail::new(
-                            "inventory_resource_conflict",
-                            "The requested resource conflicts with an existing desired definition.",
-                        ))
-                        .with_next_action(NextAction::new(
-                            "inspect_inventory",
-                            "Inspect the existing resource definition before retrying.",
-                        ));
+            if request.retains_desired() {
+                match inventory.with_resource(resource.clone()) {
+                    Ok(next) => inventory = next,
+                    Err(_) => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        return outcome
+                            .with_error(ErrorDetail::new(
+                                "inventory_resource_conflict",
+                                "The requested resource conflicts with an existing desired definition.",
+                            ))
+                            .with_next_action(NextAction::new(
+                                "inspect_inventory",
+                                "Inspect the existing resource definition before retrying.",
+                            ));
+                    }
                 }
+            } else if let Some(next) = inventory.without_resource(resource.key()) {
+                inventory = next;
             }
 
             let mut native_ids = BTreeMap::new();
@@ -825,7 +833,11 @@ impl StatusApplication<'_> {
                     search_path.clone(),
                     match kind {
                         NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+                        NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
+                        NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
                         NativeLifecycleKind::PluginInstall => "plugin.install",
+                        NativeLifecycleKind::PluginRemove => "plugin.remove",
+                        NativeLifecycleKind::PluginUpdate => "plugin.update",
                     },
                 ) else {
                     outcome.result = ResultClass::AttentionRequired;
@@ -2516,6 +2528,36 @@ impl NativeLifecycleSpec {
                     source: Some(source),
                 })
             }
+            NativeLifecycleKind::MarketplaceRemove | NativeLifecycleKind::MarketplaceUpdate => {
+                let native_name = name_value
+                    .ok_or_else(|| {
+                        ErrorDetail::new(
+                            "name_required",
+                            "The marketplace name is required for this lifecycle operation.",
+                        )
+                    })
+                    .and_then(|name| {
+                        NativeId::new(name).map_err(|_| {
+                            ErrorDetail::new("invalid_name", "The marketplace name is invalid.")
+                        })
+                    })?;
+                Ok(Self {
+                    operation_action: if kind == NativeLifecycleKind::MarketplaceRemove {
+                        OperationAction::MarketplaceRemove
+                    } else {
+                        OperationAction::MarketplaceUpdate
+                    },
+                    native_action: if kind == NativeLifecycleKind::MarketplaceRemove {
+                        NativeLifecycleAction::MarketplaceRemove
+                    } else {
+                        NativeLifecycleAction::MarketplaceUpdate
+                    },
+                    resource_kind: ResourceKind::Marketplace,
+                    resource_prefix: "marketplace",
+                    native_name,
+                    source: None,
+                })
+            }
             NativeLifecycleKind::PluginInstall => {
                 let selector = source_value.ok_or_else(|| {
                     ErrorDetail::new(
@@ -2541,7 +2583,47 @@ impl NativeLifecycleSpec {
                     source: None,
                 })
             }
+            NativeLifecycleKind::PluginRemove | NativeLifecycleKind::PluginUpdate => {
+                let selector = name_value.ok_or_else(|| {
+                    ErrorDetail::new(
+                        "plugin_required",
+                        "The plugin selector is required for this lifecycle operation.",
+                    )
+                })?;
+                skilltap_core::marketplace::PluginSelector::parse(selector).map_err(|_| {
+                    ErrorDetail::new(
+                        "invalid_plugin_selector",
+                        "The plugin selector must be an exact plugin@marketplace value.",
+                    )
+                })?;
+                let native_name = NativeId::new(selector).map_err(|_| {
+                    ErrorDetail::new("invalid_plugin_selector", "The plugin selector is invalid.")
+                })?;
+                Ok(Self {
+                    operation_action: if kind == NativeLifecycleKind::PluginRemove {
+                        OperationAction::PluginRemove
+                    } else {
+                        OperationAction::PluginUpdate
+                    },
+                    native_action: if kind == NativeLifecycleKind::PluginRemove {
+                        NativeLifecycleAction::PluginRemove
+                    } else {
+                        NativeLifecycleAction::PluginUpdate
+                    },
+                    resource_kind: ResourceKind::Plugin,
+                    resource_prefix: "plugin",
+                    native_name,
+                    source: None,
+                })
+            }
         }
+    }
+
+    fn retains_desired(&self) -> bool {
+        !matches!(
+            self.operation_action,
+            OperationAction::MarketplaceRemove | OperationAction::PluginRemove
+        )
     }
 
     fn desired_resource(

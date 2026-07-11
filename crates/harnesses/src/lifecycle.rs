@@ -396,6 +396,26 @@ mod tests {
             ]
             .map(OsString::from)
         );
+        let claude_update = native_arguments(&request(
+            HarnessKind::Claude,
+            NativeLifecycleAction::PluginUpdate,
+            Scope::Global,
+        ))
+        .unwrap();
+        assert_eq!(
+            claude_update,
+            ["plugin", "update", "formatter@team", "--scope", "user"].map(OsString::from)
+        );
+        let codex_remove = native_arguments(&request(
+            HarnessKind::Codex,
+            NativeLifecycleAction::MarketplaceRemove,
+            Scope::Global,
+        ))
+        .unwrap();
+        assert_eq!(
+            codex_remove,
+            ["plugin", "marketplace", "remove", "formatter@team"].map(OsString::from)
+        );
         assert!(matches!(
             native_arguments(&request(
                 HarnessKind::Codex,
