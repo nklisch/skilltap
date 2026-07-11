@@ -104,3 +104,22 @@ contracts before publication. Two maintainability cadences preserved public
 identities and product behavior while decomposing runtime, storage, and CLI
 pressure points. The locked workspace passes 192 tests, warnings-denied Clippy
 and rustdoc, optimized build, and explicit compiled-binary verification.
+
+## Completion review findings
+
+Fresh-context completion review requested two corrections before approval:
+
+1. The public website CLI reference and generated `llms-full.txt` still publish
+   obsolete result labels, JSON fields, and exit codes instead of the
+   authoritative schema-1 and `0`–`3` contract.
+2. Pre-merge CI is Ubuntu-only, so Apple-specific descriptor, errno, locking,
+   managed-artifact, and recovery paths run only after a release tag.
+
+Additional children:
+
+- `epic-rust-control-plane-website-cli-contract` — align the public website
+  reference and regenerate ingestion output — depends on
+  `[epic-rust-control-plane-cli-shell]`.
+- `epic-rust-control-plane-macos-ci` — add a native macOS pre-merge locked
+  workspace and optimized binary contract — depends on
+  `[epic-rust-control-plane-cli-shell]`.
