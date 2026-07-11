@@ -296,6 +296,8 @@ name = "skilltap"
 version = "3.0.0"
 dependencies = [
  "clap",
+ "serde",
+ "serde_json",
  "skilltap-core",
  "skilltap-harnesses",
 ]
