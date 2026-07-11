@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane
 kind: epic
-stage: implementing
+stage: review
 tags: [infra, cleanup]
 parent: null
 depends_on: []
@@ -85,3 +85,22 @@ from the preceding domain feature. The CLI shell is the integration
 point and therefore the likeliest place to expose an omitted primitive; any
 such discovery belongs in the producing feature contract rather than being
 reimplemented in the CLI crate.
+
+## Implementation summary
+
+The clean-break Rust control plane is complete. The repository now contains a
+pinned Edition 2024 Cargo workspace with legacy TypeScript/Bun product code
+removed; strict validated domain contracts; platform/scope/target, direct
+command, no-follow filesystem, locking, atomic document, and immutable managed
+artifact runtime/storage boundaries; and a runnable non-interactive CLI with
+the complete v3 grammar, stable plain/JSON outcomes, exact exits, read-only
+first-use status, and explicit unavailable results for later native capability
+epics. Complete skills remain whole directory trees, and no discovery,
+scanning, migration, or native behavior is simulated.
+
+The website, installer, Homebrew, CI, and four-platform release surfaces remain
+and are aligned to the Rust build. Optimized binaries run smoke and full CLI
+contracts before publication. Two maintainability cadences preserved public
+identities and product behavior while decomposing runtime, storage, and CLI
+pressure points. The locked workspace passes 192 tests, warnings-denied Clippy
+and rustdoc, optimized build, and explicit compiled-binary verification.
