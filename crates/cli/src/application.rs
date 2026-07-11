@@ -780,6 +780,59 @@ impl StatusApplication<'_> {
                     );
                 }
             }
+            if let Scope::Project(project) = concrete_scope
+                && enabled.iter().any(|target| target.as_str() == "claude")
+            {
+                let nested = AbsolutePath::new(format!("{}/.claude/CLAUDE.md", project.as_str()))
+                    .expect("nested project Claude bridge path is valid");
+                let nested_exists = filesystem
+                    .inspect(&nested)
+                    .map(|metadata| metadata.kind() != FileKind::Missing)
+                    .unwrap_or(false);
+                if nested_exists {
+                    let root = AbsolutePath::new(format!("{}/CLAUDE.md", project.as_str()))
+                        .expect("project Claude bridge path is valid");
+                    let root_exists = filesystem
+                        .inspect(&root)
+                        .map(|metadata| metadata.kind() != FileKind::Missing)
+                        .unwrap_or(false);
+                    path_count += 1;
+                    let nested_status = instruction_bridge_status_with_target(
+                        &filesystem,
+                        &nested,
+                        mode,
+                        "../AGENTS.md",
+                        b"@../AGENTS.md\n",
+                    );
+                    outcome = outcome.with_resource(
+                        OutputEntry::new(
+                            instruction_resource_key(concrete_scope, "bridge-nested", "claude")
+                                .map(|key| key.to_string())
+                                .unwrap_or_else(|| "instructions:bridge-nested:claude".to_owned()),
+                            if root_exists {
+                                "duplicate"
+                            } else {
+                                nested_status
+                            },
+                        )
+                        .with_field("path", nested.as_str())
+                        .with_field("target", "claude")
+                        .with_field("scope", scope_label(concrete_scope)),
+                    );
+                    healthy = false;
+                    outcome = outcome.with_warning(Warning::new(
+                        "instruction_duplicate_claude_bridge",
+                        if root_exists {
+                            "Both project Claude instruction locations exist; consolidate to one managed bridge."
+                        } else if nested_status == "managed" {
+                            "The project uses the nested Claude instruction bridge; setup should preserve that location."
+                        } else {
+                            "The nested project Claude instruction bridge is missing or divergent."
+                        },
+                    )
+                    .with_context("scope", scope_label(concrete_scope)));
+                }
+            }
         }
         if healthy {
             outcome.result = ResultClass::Completed;
@@ -2399,7 +2452,29 @@ impl StatusApplication<'_> {
             }
         };
         for concrete_scope in &scope.resolved {
-            let (canonical, bridges) = instruction_locations(&paths, concrete_scope, &enabled);
+            let (canonical, mut bridges) = instruction_locations(&paths, concrete_scope, &enabled);
+            if let Scope::Project(project) = concrete_scope
+                && enabled.iter().any(|target| target.as_str() == "claude")
+            {
+                let root = AbsolutePath::new(format!("{}/CLAUDE.md", project.as_str()))
+                    .expect("project Claude bridge path is valid");
+                let nested = AbsolutePath::new(format!("{}/.claude/CLAUDE.md", project.as_str()))
+                    .expect("nested project Claude bridge path is valid");
+                let root_missing = filesystem
+                    .inspect(&root)
+                    .map(|metadata| metadata.kind() == FileKind::Missing)
+                    .unwrap_or(false);
+                let nested_present = filesystem
+                    .inspect(&nested)
+                    .map(|metadata| metadata.kind() != FileKind::Missing)
+                    .unwrap_or(false);
+                if root_missing && nested_present {
+                    bridges = vec![(
+                        HarnessId::new("claude").expect("known harness id is valid"),
+                        nested,
+                    )];
+                }
+            }
             let canonical_id = instruction_operation_id(concrete_scope, "canonical", "root");
             let canonical_resource =
                 match instruction_resource_key(concrete_scope, "canonical", "root") {
@@ -2501,10 +2576,15 @@ impl StatusApplication<'_> {
             }
 
             for (target, bridge) in bridges {
-                let expected_symlink = match concrete_scope {
-                    Scope::Global => RelativeSymlinkTarget::new("../AGENTS.md"),
-                    Scope::Project(_) => RelativeSymlinkTarget::new("AGENTS.md"),
-                };
+                let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
+                    && bridge.as_str().ends_with("/.claude/CLAUDE.md");
+                let expected_symlink = RelativeSymlinkTarget::new(if nested_project_bridge {
+                    "../AGENTS.md"
+                } else if matches!(concrete_scope, Scope::Global) {
+                    "../AGENTS.md"
+                } else {
+                    "AGENTS.md"
+                });
                 let (write, expected_bytes) = match mode {
                     ClaudeInstructionMode::Symlink => (
                         InstructionWrite::Symlink {
@@ -2513,9 +2593,12 @@ impl StatusApplication<'_> {
                         Vec::new(),
                     ),
                     ClaudeInstructionMode::Import => {
-                        let bytes = match concrete_scope {
-                            Scope::Global => b"@~/AGENTS.md\n".to_vec(),
-                            Scope::Project(_) => b"@AGENTS.md\n".to_vec(),
+                        let bytes = if matches!(concrete_scope, Scope::Global) {
+                            b"@~/AGENTS.md\n".to_vec()
+                        } else if nested_project_bridge {
+                            b"@../AGENTS.md\n".to_vec()
+                        } else {
+                            b"@AGENTS.md\n".to_vec()
                         };
                         (
                             InstructionWrite::Import {
@@ -2525,32 +2608,20 @@ impl StatusApplication<'_> {
                         )
                     }
                 };
-                let bridge_health = match filesystem.inspect(&bridge) {
-                    Ok(metadata) => match metadata.kind() {
-                        FileKind::Missing => InstructionBridgeHealth::Missing,
-                        FileKind::Symlink => {
-                            if mode == ClaudeInstructionMode::Symlink
-                                && metadata.link_target()
-                                    == expected_symlink.as_ref().ok().map(|value| value.as_path())
-                            {
-                                InstructionBridgeHealth::Managed
-                            } else {
-                                InstructionBridgeHealth::Conflict
-                            }
-                        }
-                        FileKind::RegularFile => {
-                            if mode == ClaudeInstructionMode::Import
-                                && filesystem.read(&bridge).ok().as_deref()
-                                    == Some(expected_bytes.as_slice())
-                            {
-                                InstructionBridgeHealth::Managed
-                            } else {
-                                InstructionBridgeHealth::Conflict
-                            }
-                        }
-                        _ => InstructionBridgeHealth::Conflict,
+                let bridge_health = match instruction_bridge_status_with_target(
+                    &filesystem,
+                    &bridge,
+                    mode,
+                    if nested_project_bridge || matches!(concrete_scope, Scope::Global) {
+                        "../AGENTS.md"
+                    } else {
+                        "AGENTS.md"
                     },
-                    Err(_) => InstructionBridgeHealth::Conflict,
+                    &expected_bytes,
+                ) {
+                    "missing" => InstructionBridgeHealth::Missing,
+                    "managed" => InstructionBridgeHealth::Managed,
+                    _ => InstructionBridgeHealth::Conflict,
                 };
                 let bridge_resource =
                     match instruction_resource_key(concrete_scope, "bridge", target.as_str()) {
@@ -3294,6 +3365,20 @@ fn instruction_bridge_status(
     scope: &Scope,
     mode: ClaudeInstructionMode,
 ) -> &'static str {
+    let (symlink_target, import_contents) = match scope {
+        Scope::Global => ("../AGENTS.md", b"@~/AGENTS.md\n".as_slice()),
+        Scope::Project(_) => ("AGENTS.md", b"@AGENTS.md\n".as_slice()),
+    };
+    instruction_bridge_status_with_target(filesystem, bridge, mode, symlink_target, import_contents)
+}
+
+fn instruction_bridge_status_with_target(
+    filesystem: &dyn FileSystem,
+    bridge: &AbsolutePath,
+    mode: ClaudeInstructionMode,
+    symlink_target: &str,
+    import_contents: &[u8],
+) -> &'static str {
     let metadata = match filesystem.inspect(bridge) {
         Ok(metadata) => metadata,
         Err(_) => return "unreadable",
@@ -3301,14 +3386,10 @@ fn instruction_bridge_status(
     match metadata.kind() {
         FileKind::Missing => "missing",
         FileKind::Symlink => {
-            let expected = match scope {
-                Scope::Global => "../AGENTS.md",
-                Scope::Project(_) => "AGENTS.md",
-            };
             if mode == ClaudeInstructionMode::Symlink
                 && metadata
                     .link_target()
-                    .is_some_and(|target| target == std::path::Path::new(expected))
+                    .is_some_and(|target| target == std::path::Path::new(symlink_target))
             {
                 "managed"
             } else {
@@ -3316,12 +3397,8 @@ fn instruction_bridge_status(
             }
         }
         FileKind::RegularFile => {
-            let expected = match scope {
-                Scope::Global => b"@~/AGENTS.md\n".as_slice(),
-                Scope::Project(_) => b"@AGENTS.md\n".as_slice(),
-            };
             if mode == ClaudeInstructionMode::Import
-                && filesystem.read(bridge).ok().as_deref() == Some(expected)
+                && filesystem.read(bridge).ok().as_deref() == Some(import_contents)
             {
                 "managed"
             } else {

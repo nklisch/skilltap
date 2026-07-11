@@ -41,4 +41,9 @@ plan/lock/journal path, records instruction resources in inventory/state, and
 blocks divergent existing files. `instructions repair --yes` now accepts only
 divergent regular bridges, creates a recoverable backup under skilltap-managed
 storage before replacement, and journals the repair operation; symlink and
-special-file conflicts remain blocked.
+special-file conflicts remain blocked. Project status now reports both
+supported Claude locations when `.claude/CLAUDE.md` is present, distinguishing
+a nested managed bridge from a duplicate root/nested configuration so repair
+does not silently choose one. Setup preserves a supported nested bridge when
+the project root bridge is absent and validates its `../AGENTS.md` relative
+target or import form.

@@ -922,6 +922,69 @@ fn first_use_status_is_read_only_and_reports_no_enabled_harnesses() {
 }
 
 #[test]
+fn instruction_status_reports_duplicate_project_claude_bridges() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    fs::write(
+        machine.working_directory().join("AGENTS.md"),
+        b"canonical\n",
+    )
+    .unwrap();
+    fs::write(machine.working_directory().join("CLAUDE.md"), b"root\n").unwrap();
+    fs::create_dir_all(machine.working_directory().join(".claude")).unwrap();
+    fs::write(
+        machine.working_directory().join(".claude/CLAUDE.md"),
+        b"nested\n",
+    )
+    .unwrap();
+
+    let output = run(&machine, &["instructions", "status", "--project", "--json"]);
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert_eq!(value["result"], "attention_required");
+    assert!(
+        value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "instruction_duplicate_claude_bridge")
+    );
+    assert!(
+        value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| resource["status"] == "duplicate")
+    );
+}
+
+#[test]
+fn instruction_setup_preserves_existing_nested_project_claude_bridge() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    fs::write(
+        machine.working_directory().join("AGENTS.md"),
+        b"canonical\n",
+    )
+    .unwrap();
+    fs::create_dir_all(machine.working_directory().join(".claude")).unwrap();
+    std::os::unix::fs::symlink(
+        "../AGENTS.md",
+        machine.working_directory().join(".claude/CLAUDE.md"),
+    )
+    .unwrap();
+
+    let output = run(&machine, &["instructions", "setup", "--project", "--json"]);
+    assert_code(&output, 0);
+    assert_eq!(json(&output)["result"], "completed");
+    assert!(!machine.working_directory().join("CLAUDE.md").exists());
+    assert_eq!(
+        fs::read_link(machine.working_directory().join(".claude/CLAUDE.md")).unwrap(),
+        PathBuf::from("../AGENTS.md")
+    );
+}
+
+#[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
