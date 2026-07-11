@@ -212,11 +212,10 @@ fn recoverable_copy_is_atomic_no_clobber_for_concurrent_readers() {
 }
 
 #[test]
-fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
+fn clean_rollback_leaves_no_residual() {
     let temporary = TempDirectory::new();
     let filesystem = SystemFileSystem;
-    let source = temporary.path("source");
-    filesystem.atomic_write(&source, b"complete").unwrap();
+    let source = publication_source(&temporary);
 
     let cleaned_destination = temporary.path("cleaned-backup");
     let mut cleaned = InjectedPublication::new();
@@ -228,6 +227,12 @@ fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
         filesystem.inspect(&cleaned_destination).unwrap().kind(),
         FileKind::Missing
     );
+}
+
+#[test]
+fn prepublication_failure_reports_temporary_residual_without_sync() {
+    let temporary = TempDirectory::new();
+    let source = publication_source(&temporary);
 
     let prepublication_destination = temporary.path("prepublication-backup");
     let mut prepublication = InjectedPublication::new();
@@ -246,6 +251,12 @@ fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
         DirectorySyncState::NotRequired
     );
     assert_residual_paths_exist(prepublication_residuals);
+}
+
+#[test]
+fn rollback_reports_destination_only_residual() {
+    let temporary = TempDirectory::new();
+    let source = publication_source(&temporary);
 
     let destination_only_path = temporary.path("destination-only-backup");
     let mut destination_only = InjectedPublication::new();
@@ -267,6 +278,12 @@ fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
         DirectorySyncState::Synced
     );
     assert_residual_paths_exist(destination_only_residuals);
+}
+
+#[test]
+fn rollback_reports_temporary_only_residual() {
+    let temporary = TempDirectory::new();
+    let source = publication_source(&temporary);
 
     let temp_only_path = temporary.path("temp-only-backup");
     let mut temp_only = InjectedPublication::new();
@@ -283,6 +300,12 @@ fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
         DirectorySyncState::Synced
     );
     assert_residual_paths_exist(temp_only_residuals);
+}
+
+#[test]
+fn rollback_reports_both_residuals_and_safe_rendering() {
+    let temporary = TempDirectory::new();
+    let source = publication_source(&temporary);
 
     let both_path = temporary.path("both-backup");
     let mut both = InjectedPublication::new();
@@ -299,6 +322,18 @@ fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
     assert_eq!(both_residuals.directory_sync(), DirectorySyncState::Synced);
     assert_residual_paths_exist(both_residuals);
 
+    let rendered = both_error.to_string();
+    assert!(rendered.contains("temporary `"));
+    assert!(rendered.contains("destination `"));
+    assert!(rendered.contains("directory sync: synced"));
+    assert!(!rendered.contains("complete"));
+}
+
+#[test]
+fn sync_failure_without_residuals_reports_uncertainty() {
+    let temporary = TempDirectory::new();
+    let source = publication_source(&temporary);
+
     let uncertain_path = temporary.path("uncertain-sync-backup");
     let mut uncertain = InjectedPublication::new();
     uncertain.fail_sync_calls.extend([1, 2]);
@@ -310,12 +345,12 @@ fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
         uncertain_residuals.directory_sync(),
         DirectorySyncState::Uncertain
     );
+}
 
-    let rendered = both_error.to_string();
-    assert!(rendered.contains("temporary `"));
-    assert!(rendered.contains("destination `"));
-    assert!(rendered.contains("directory sync: synced"));
-    assert!(!rendered.contains("complete"));
+fn publication_source(temporary: &TempDirectory) -> AbsolutePath {
+    let source = temporary.path("source");
+    SystemFileSystem.atomic_write(&source, b"complete").unwrap();
+    source
 }
 
 fn partial_residuals(error: &RuntimeError) -> &PublicationResiduals {
