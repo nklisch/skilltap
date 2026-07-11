@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage
 kind: feature
-stage: drafting
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -40,4 +40,141 @@ or perform resource lifecycle operations.
 - `docs/ARCH.md` — Storage, Concurrency, Error Model
 - `docs/VISION.md` — Core Idea, Audience, Observable Ownership
 
-<!-- The feature design pass will fill in implementation units. -->
+## Design
+
+### Storage boundary
+
+Storage lives in `skilltap-core::storage` and depends only on domain and runtime
+ports. It exposes explicit typed schemas and repository traits for each owned
+document; a private document engine may share missing/present reads,
+decode/encode, complete validation, and atomic publication, but no public
+untyped or generic persistence API exists. Repositories never observe harness
+files, plan changes, acquire the process lock, write terminal output, or perform
+resource lifecycle operations.
+
+Every owned schema has its own `schema = 1`, rejects unknown fields, validates
+the complete document on construction/deserialization and again before write,
+and serializes deterministically. A missing document is `Missing`, not an empty
+or default document. Reads never create the configuration directory; the first
+successful replacement creates it. Present malformed or unsupported documents
+are typed errors and are never repaired implicitly.
+
+### Initial schemas
+
+`ConfigDocument` is strict TOML operating policy:
+
+- `schema`
+- Codex and Claude `HarnessPolicy { enabled, binary }`
+- `InstructionPolicy { claude_mode: symlink | import }`
+- `UpdatePolicy { mode: off | check | apply-safe, interval }`
+
+Defaults match the foundation (`codex`, `claude`, symlink, apply-safe, `6h`),
+but are returned only by an explicit constructor. `UpdateInterval` is a
+canonical positive integer plus `s|m|h|d`; no scheduler behavior enters storage.
+Binary values use the existing bounded native identifier and may be a PATH name
+or absolute configured string. Authentication/environment material has no
+field.
+
+`InventoryDocument` is strict TOML desired state:
+
+- `schema`
+- deterministic canonical project-root set
+- deterministic `DesiredResource` list covering marketplaces, plugins,
+  standalone whole-directory skills, and instruction locations
+
+The constructor sorts by `ResourceId`, rejects duplicates, validates the full
+desired dependency graph, and requires every project-scoped resource path to be
+declared in the project set. Existing domain values remain the single source of
+truth for targets, source/requested ref, update intent/pin, component choices,
+accepted consequences, and dependencies. If direct serde produces unreadable
+or unsupported TOML, explicit strict wire structs convert to/from the domain;
+validation is not weakened.
+
+`StateDocument` is strict JSON observation/provenance state:
+
+- `schema`
+- harness states (native version and observation time)
+- resource states keyed by stable `ResourceId`
+- last update check, successful observation, and successful application times
+
+State resource records carry native IDs, provenance/source, ownership, optional
+managed-artifact record, fingerprints, installed/available resolved revisions,
+observation time, and the last per-resource operation results. They do not carry
+desired targets, component policy, or update policy. A validated nonnegative
+Unix timestamp with nanosecond precision converts to/from the runtime clock.
+Operation IDs are unique per apply record. Managed artifact paths are unique,
+require skilltap ownership and direct/materialized provenance, and are forbidden
+for unmanaged ownership.
+
+### Managed artifacts
+
+`managed/` stores complete owner-bound directory trees. A managed record has a
+resource owner, role (`materialized_plugin`, `direct_skill`, or `backup`), a
+relative path beneath `managed/`, and optional fingerprint. An `ArtifactTree`
+is a deterministic map of validated relative file paths to bytes; the whole
+skill directory is the artifact, including its top-level `SKILL.md` when the
+caller publishes a standalone skill. Storage does not inspect skill semantics.
+
+Trees publish immutably to unique owner/fingerprint paths while the process lock
+is held by the application layer. Files are fully written and synced before a
+state document may reference the tree. Existing destinations never overwrite;
+failure removes only owned partial paths or returns exact residual context.
+Updates publish a new tree and atomically switch state to the new record; old
+owned trees can then be removed explicitly. This avoids claiming atomic
+replacement of a non-empty directory. Every derived path is proven beneath
+the non-symlink managed root, and load/remove require exact owner/path matches.
+Backups use generated unique owned paths and never overwrite.
+
+### Error model
+
+`StorageError` distinguishes document kind and action (read, decode, validate,
+encode, write), unsupported schema versions, ownership/path conflicts, runtime
+filesystem failures, and managed publication residuals. Error display includes
+only safe document/path context, never document contents, native stdout, or
+secrets.
+
+### Pre-mortem
+
+- **TOML cannot represent a tagged domain shape readably.** Spike a complete
+  inventory first; use explicit wire conversions rather than loosening domain
+  validation or storing JSON inside TOML.
+- **Defaults hide corrupt state.** Missing remains explicit and present
+  documents require every top-level section; defaults are opt-in only.
+- **State becomes a second desired source.** State schemas forbid target,
+  component-choice, and update-policy fields; inventory alone is authoritative.
+- **Managed removal escapes through a link.** Derive all paths from the managed
+  root, inspect each owned boundary without following, verify owner/path, and
+  adversarially test live/dangling ancestor links and traversal.
+- **A directory update becomes partially visible.** Publish immutable new trees
+  before state references them; never replace a referenced non-empty tree in
+  place.
+
+## Implementation units
+
+1. `epic-rust-control-plane-storage-schemas` — strict versioned config,
+   inventory, state, timestamp, and artifact records/wires — depends on `[]`.
+2. `epic-rust-control-plane-storage-document-repositories` — typed missing/
+   present config, inventory, and state repositories through runtime atomic file
+   publication — depends on `[epic-rust-control-plane-storage-schemas]`.
+3. `epic-rust-control-plane-storage-managed-artifacts` — immutable owner-bound
+   complete-tree and backup repository beneath `managed/` — depends on
+   `[epic-rust-control-plane-storage-schemas]`.
+4. `epic-rust-control-plane-storage-integration` — isolated machine-root
+   contract tests across all repositories — depends on
+   `[epic-rust-control-plane-storage-document-repositories,
+   epic-rust-control-plane-storage-managed-artifacts]`.
+
+## Acceptance criteria
+
+- Missing first-use state is explicit and reads create nothing.
+- All three document schemas independently version, reject unknown/malformed
+  input, validate complete domain invariants, and serialize deterministically.
+- Inventory expresses every foundation desired-resource primitive without
+  duplicating domain state; state records observation/provenance only.
+- Document replacement delegates to the one runtime atomic writer and repeated
+  identical replacement is byte-stable and semantically idempotent.
+- Managed trees contain complete directories, cannot escape/follow the managed
+  root, never overwrite, and require matching owner/path for removal.
+- Corruption in one repository does not rewrite or mask another; no storage
+  file contains authentication material.
+- Full locked format/check/Clippy/test/rustdoc ladder passes.
