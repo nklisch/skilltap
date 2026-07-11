@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-integration
 kind: story
-stage: implementing
+stage: review
 tags: [infra, testing]
 parent: epic-rust-control-plane-storage
 depends_on:
@@ -30,3 +30,28 @@ Compose all owned repositories against one isolated machine configuration root.
 - Fixtures assert no authentication-like material appears in owned files and
   reader observations are complete.
 - Full locked workspace and warnings-clean rustdoc pass.
+
+## Implementation notes
+
+- Added a Unix integration suite that composes the typed config, inventory,
+  state, and managed-artifact repositories against one isolated machine root.
+  No production contract changes were required.
+- First-use coverage proves missing reads and repository construction create
+  nothing. Sequential writes create exactly `config.toml`, `inventory.toml`,
+  `state.json`, and `managed/`; exact typed reload and a complete recursive byte
+  snapshot prove immediate repeat writes and publication are idempotent.
+- Corruption coverage independently replaces each owned document with malformed,
+  invalid, or unsupported-schema bytes. The affected repository returns its
+  typed error while the other documents and managed tree remain readable and
+  unchanged; the corrupt bytes are never rewritten.
+- Publication ordering coverage publishes and loads the complete multi-file
+  tree before atomically adding its state reference. A concurrent observer
+  accepts complete old/new state observations, retries the runtime boundary's
+  deliberate path-identity rejection during rename, and requires every visible
+  reference to load the exact complete tree.
+- A conflicting immutable publication proves failure leaves both the prior
+  state bytes and managed tree intact. Every owned-file fixture snapshot also
+  asserts that authentication-like sentinel material is absent.
+- The three integration tests passed three consecutive parallel runs. The full
+  locked format/check/Clippy/test/rustdoc ladder passes with 141 workspace tests.
+- Discrepancies from design: none. Adjacent issues parked: none.
