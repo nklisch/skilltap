@@ -6,14 +6,19 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-#[cfg(unix)]
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
-
 use crate::domain::{AbsolutePath, ValidationError};
 
 use super::{
     DirectorySyncState, FileSystemAction, LockAction, PathRole, PublicationResidual,
     PublicationResidualRole, PublicationResiduals, RuntimeError, path_value::absolute_path,
+};
+
+mod unix_identity;
+
+use unix_identity::{
+    FileIdentity, descriptor_identity, descriptor_identity_io, open_directory_no_follow,
+    open_lock_no_follow, open_read_no_follow, path_identity, verify_lock_identity,
+    verify_path_identity,
 };
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -211,12 +216,6 @@ impl FileSystem for SystemFileSystem {
         removed?;
         sync_parent(path, FileSystemAction::Remove)
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct FileIdentity {
-    device: u64,
-    inode: u64,
 }
 
 trait Publication {
@@ -473,97 +472,6 @@ fn require_path_identity(path: &Path, expected: FileIdentity) -> io::Result<()> 
     }
 }
 
-#[cfg(unix)]
-fn open_read_no_follow(path: &AbsolutePath) -> Result<File, RuntimeError> {
-    OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(path.as_str())
-        .map_err(|error| {
-            if error.raw_os_error() == Some(libc::ELOOP) {
-                unsafe_symlink(FileSystemAction::Copy, path)
-            } else {
-                filesystem_error(FileSystemAction::Copy, path, error)
-            }
-        })
-}
-
-#[cfg(not(unix))]
-fn open_read_no_follow(_path: &AbsolutePath) -> Result<File, RuntimeError> {
-    Err(RuntimeError::UnsupportedPlatform {
-        platform: std::env::consts::OS.to_owned(),
-    })
-}
-
-#[cfg(unix)]
-fn descriptor_identity(
-    file: &File,
-    action: FileSystemAction,
-    path: &AbsolutePath,
-) -> Result<FileIdentity, RuntimeError> {
-    descriptor_identity_io(file).map_err(|error| filesystem_error(action, path, error))
-}
-
-#[cfg(unix)]
-fn descriptor_identity_io(file: &File) -> io::Result<FileIdentity> {
-    let metadata = file.metadata()?;
-    Ok(FileIdentity {
-        device: metadata.dev(),
-        inode: metadata.ino(),
-    })
-}
-
-#[cfg(not(unix))]
-fn descriptor_identity(
-    _file: &File,
-    _action: FileSystemAction,
-    _path: &AbsolutePath,
-) -> Result<FileIdentity, RuntimeError> {
-    Err(RuntimeError::UnsupportedPlatform {
-        platform: std::env::consts::OS.to_owned(),
-    })
-}
-
-#[cfg(not(unix))]
-fn descriptor_identity_io(_file: &File) -> io::Result<FileIdentity> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "file identity requires a supported Unix platform",
-    ))
-}
-
-#[cfg(unix)]
-fn path_identity(path: &Path) -> io::Result<FileIdentity> {
-    let metadata = fs::symlink_metadata(path)?;
-    Ok(FileIdentity {
-        device: metadata.dev(),
-        inode: metadata.ino(),
-    })
-}
-
-#[cfg(not(unix))]
-fn path_identity(_path: &Path) -> io::Result<FileIdentity> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "file identity requires a supported Unix platform",
-    ))
-}
-
-fn verify_path_identity(
-    path: &AbsolutePath,
-    expected: FileIdentity,
-    action: FileSystemAction,
-) -> Result<(), RuntimeError> {
-    match path_identity(Path::new(path.as_str())) {
-        Ok(actual) if actual == expected => Ok(()),
-        Ok(_) => Err(RuntimeError::FileIdentityChanged {
-            action,
-            path: path.clone(),
-        }),
-        Err(error) => Err(filesystem_error(action, path, error)),
-    }
-}
-
 pub trait ConfigurationLock {
     type Guard: ConfigurationLockGuard;
 
@@ -699,62 +607,6 @@ fn try_lock_file(file: &File, path: &AbsolutePath) -> Result<(), RuntimeError> {
             action: LockAction::Acquire,
             path: path.clone(),
             source,
-        }),
-    }
-}
-
-#[cfg(unix)]
-fn open_directory_no_follow(path: &AbsolutePath) -> Result<File, RuntimeError> {
-    OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_DIRECTORY)
-        .open(path.as_str())
-        .map_err(|source| RuntimeError::Lock {
-            action: LockAction::Acquire,
-            path: path.clone(),
-            source,
-        })
-}
-
-#[cfg(not(unix))]
-fn open_directory_no_follow(_path: &AbsolutePath) -> Result<File, RuntimeError> {
-    Err(RuntimeError::UnsupportedPlatform {
-        platform: std::env::consts::OS.to_owned(),
-    })
-}
-
-#[cfg(unix)]
-fn open_lock_no_follow(path: &AbsolutePath) -> Result<File, RuntimeError> {
-    OpenOptions::new()
-        .read(true)
-        .write(true)
-        .create(true)
-        .truncate(false)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(path.as_str())
-        .map_err(|source| RuntimeError::Lock {
-            action: LockAction::Acquire,
-            path: path.clone(),
-            source,
-        })
-}
-
-#[cfg(not(unix))]
-fn open_lock_no_follow(_path: &AbsolutePath) -> Result<File, RuntimeError> {
-    Err(RuntimeError::UnsupportedPlatform {
-        platform: std::env::consts::OS.to_owned(),
-    })
-}
-
-fn verify_lock_identity(
-    checked_path: &AbsolutePath,
-    expected: FileIdentity,
-    lock_path: &AbsolutePath,
-) -> Result<(), RuntimeError> {
-    match path_identity(Path::new(checked_path.as_str())) {
-        Ok(actual) if actual == expected => Ok(()),
-        Ok(_) | Err(_) => Err(RuntimeError::LockIdentityChanged {
-            path: lock_path.clone(),
         }),
     }
 }
