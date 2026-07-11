@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-strict-json
 kind: story
-stage: review
+stage: done
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits]
@@ -59,3 +59,12 @@ depth ceiling and test zero plus every hard limit at minus/at/plus one.
   concurrently edited test-support fixture
   `native_process::tests::executable_publication_survives_parallel_fixture_churn`
   failed with `ETXTBSY`; correction remains with that story's owner.
+
+## Review
+
+- Approved after fresh-context review plus an additional adversarial probe.
+- Confirmed byte/UTF-8 precedence, escaped-equivalent and nested duplicate-key
+  rejection, exactly-one-document behavior, scalar/numeric/composite fidelity,
+  fixed source-free errors, and the 127/128 recursion boundary.
+- Focused tests pass 5/5 and strict core Clippy passes; the only coordinated
+  full-workspace exception is tracked in the fixture story.
