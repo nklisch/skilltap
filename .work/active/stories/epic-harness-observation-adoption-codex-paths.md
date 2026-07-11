@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex-paths
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-detection, epic-harness-observation-adoption-runtime]
@@ -32,3 +32,7 @@ project override precedence, and never create or scan paths.
 
 - Harness Clippy and all seven detection/Codex path tests pass in the locked
   offline workspace.
+
+## Review
+
+- Fast-lane review approved the read-only path derivation and green test record.
