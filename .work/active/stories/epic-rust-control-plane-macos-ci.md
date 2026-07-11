@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-macos-ci
 kind: story
-stage: review
+stage: done
 tags: [infra, testing]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-cli-shell]
@@ -33,3 +33,9 @@ website work.
 - Dispatch: direct-read implementation; the integration surface was limited to
   the existing CI and release workflow conventions.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Native macOS now runs the full locked workspace, optimized build, and
+exact compiled-binary contract on every push and pull request while existing
+Ubuntu, website, and release gates remain unchanged.
