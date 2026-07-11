@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-publish
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-skills-mcp, epic-cross-harness-materialization-hooks]
@@ -177,7 +177,7 @@ pub struct PublicationReceipt {
 
 ## Review Record
 
-- Inline deep review: **pass pending full workspace gate**. The implementation
+- Inline deep review: **pass**. The implementation
   preserves the lock/state handoff contract and fails closed on absent,
   unhealthy, or mismatched effective observations.
 

@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization
 kind: epic
-stage: implementing
+stage: done
 tags: []
 parent: null
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle]
@@ -95,3 +95,19 @@ stages followed by managed artifact publication.
    artifacts, preserve source ownership, and verify native load paths —
    depends on `[epic-cross-harness-materialization-skills-mcp,
    epic-cross-harness-materialization-hooks]`.
+
+## Implementation Notes
+
+- All five child features are complete: source graph normalization,
+  compatibility analysis, skill/MCP projections, hook mapping, and managed
+  publication with effective-load verification.
+- Cross-harness publication preserves complete skill directories, delegates
+  managed storage to the existing no-follow repository, requires fresh
+  effective observations, and refreshes ownership/state only after verification.
+- Required incompatibilities block; optional losses remain exact partial
+  consequences. Native caches are never used as write or verification APIs.
+
+## Review Record
+
+- Inline deep review: **pass** after the full workspace test and clippy gates.
+- No follow-up item filed.
