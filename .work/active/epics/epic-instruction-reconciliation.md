@@ -1,7 +1,7 @@
 ---
 id: epic-instruction-reconciliation
 kind: epic
-stage: review
+stage: done
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -103,3 +103,17 @@ All instruction model, global, project, repair, and command features are now
 done. The command surface covers canonical setup, bridge health, nested-project
 location preservation, duplicate consolidation with backups, and deterministic
 plain/JSON outcomes.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep aggregate review completed inline in degraded fresh-context
+mode because this run intentionally uses no sub-agents. The realized children
+cover the epic brief and its foundation decisions, including global canonical
+location, project bridge choice, explicit conflict acknowledgment, backup
+safety, and idempotent output. Full workspace clippy and tests pass.
