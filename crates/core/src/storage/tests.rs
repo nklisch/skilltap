@@ -215,6 +215,32 @@ fn harness_binaries_reject_non_utf8_os_values_without_rendering_bytes() {
 }
 
 #[test]
+fn harness_policy_updates_one_target_and_preserves_the_other() {
+    let config = ConfigDocument::defaults();
+    let codex = HarnessId::new("codex").unwrap();
+    let claude = HarnessId::new("claude").unwrap();
+    let custom = HarnessBinary::new("/opt/bin/codex").unwrap();
+
+    let updated = config
+        .with_harness_policy(&codex, true, Some(&custom))
+        .unwrap();
+    assert!(updated.harnesses().codex.enabled);
+    assert_eq!(updated.harnesses().codex.binary, custom);
+    assert!(!updated.harnesses().claude.enabled);
+    assert_eq!(updated.harnesses().claude, config.harnesses().claude);
+
+    let disabled = updated.with_harness_enabled(&codex, false).unwrap();
+    assert!(!disabled.harnesses().codex.enabled);
+    assert_eq!(disabled.harnesses().codex.binary.as_str(), "/opt/bin/codex");
+    assert!(disabled.with_harness_enabled(&claude, true).is_ok());
+    assert!(
+        disabled
+            .with_harness_enabled(&HarnessId::new("pi").unwrap(), true)
+            .is_err()
+    );
+}
+
+#[test]
 fn complete_inventory_is_readable_deterministic_golden_and_round_trips() {
     let inventory = representative_inventory();
     assert_eq!(inventory.schema(), INVENTORY_SCHEMA_VERSION);

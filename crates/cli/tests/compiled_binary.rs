@@ -148,11 +148,16 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
             arguments.push("--json");
         }
         let output = run(&machine, &arguments);
-        assert_code(&output, 1);
-        if *command == "daemon run" {
+        if command.starts_with("harness ") {
+            assert_code(&output, 0);
+            let value = json(&output);
+            assert_eq!(value["command"], *command, "arguments: {arguments:?}");
+            assert_eq!(value["result"], "completed");
+        } else if *command == "daemon run" {
             assert!(stdout(&output).is_empty());
             assert!(stderr(&output).contains("capability_unavailable"));
         } else {
+            assert_code(&output, 1);
             let value = json(&output);
             assert_eq!(value["command"], *command, "arguments: {arguments:?}");
             assert_eq!(value["errors"][0]["code"], "capability_unavailable");

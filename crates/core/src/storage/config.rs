@@ -8,7 +8,7 @@ use std::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{CONFIG_SCHEMA_VERSION, SchemaError};
-use crate::domain::{AbsolutePath, NativeId};
+use crate::domain::{AbsolutePath, HarnessId, NativeId};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HarnessBinary(String);
@@ -279,6 +279,40 @@ impl ConfigDocument {
     }
     pub const fn updates(&self) -> &UpdatePolicy {
         &self.updates
+    }
+
+    /// Returns a policy copy with one known harness's enabled state and binary.
+    pub fn with_harness_policy(
+        &self,
+        harness: &HarnessId,
+        enabled: bool,
+        binary: Option<&HarnessBinary>,
+    ) -> Result<Self, SchemaError> {
+        let mut harnesses = self.harnesses.clone();
+        let policy = match harness.as_str() {
+            "codex" => &mut harnesses.codex,
+            "claude" => &mut harnesses.claude,
+            _ => return Err(SchemaError::InvalidHarnessBinary),
+        };
+        policy.enabled = enabled;
+        if let Some(binary) = binary {
+            policy.binary = binary.clone();
+        }
+        Self::new(
+            CONFIG_SCHEMA_VERSION,
+            harnesses,
+            self.instructions.clone(),
+            self.updates.clone(),
+        )
+    }
+
+    /// Returns a policy copy with only one known harness enabled/disabled.
+    pub fn with_harness_enabled(
+        &self,
+        harness: &HarnessId,
+        enabled: bool,
+    ) -> Result<Self, SchemaError> {
+        self.with_harness_policy(harness, enabled, None)
     }
 }
 

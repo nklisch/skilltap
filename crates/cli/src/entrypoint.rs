@@ -7,12 +7,18 @@ use skilltap_core::{
         CommandGitRoot, PlatformPaths, ProcessEnvironment, ScopeResolver, SystemCommandRunner,
         SystemFileSystem, SystemWorkingDirectory,
     },
-    storage::{FileConfigRepository, FileInventoryRepository, FileStateRepository},
+    storage::{
+        ConfigDocument, ConfigRepository, DocumentState, FileConfigRepository,
+        FileInventoryRepository, FileStateRepository,
+    },
 };
 
 use crate::{
-    ErrorDetail, JsonRenderer, NextAction, Outcome, PlainRenderer, Renderer, ResultClass,
-    application::StatusApplication, command::Cli, dispatch::Dispatch,
+    ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
+    ResultClass,
+    application::StatusApplication,
+    command::{Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs},
+    dispatch::Dispatch,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,6 +74,13 @@ where
     let json = dispatch.json();
     let (outcome, plain_channel) = match dispatch {
         Dispatch::Status(args) => (execute_system_status(&args), OutputChannel::Stdout),
+        Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
+        Dispatch::HarnessEnable(args) => {
+            (execute_system_harness_enable(&args), OutputChannel::Stdout)
+        }
+        Dispatch::HarnessDisable(args) => {
+            (execute_system_harness_disable(&args), OutputChannel::Stdout)
+        }
         Dispatch::Unavailable { command, .. } => {
             (capability_unavailable(command), OutputChannel::Stderr)
         }
@@ -114,6 +127,94 @@ fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
         working_directory: &working_directory,
     }
     .execute(args)
+}
+
+fn harness_repository()
+-> Result<(FileConfigRepository<'static>, &'static SystemFileSystem), Outcome> {
+    // Harness command execution is routed through the same system-owned config root
+    // as status; the leaked zero-sized filesystem is process-lifetime infrastructure.
+    let paths =
+        PlatformPaths::resolve(&ProcessEnvironment).map_err(|_| repository_composition_error())?;
+    let filesystem: &'static SystemFileSystem = Box::leak(Box::new(SystemFileSystem));
+    let repository = FileConfigRepository::new(filesystem, paths.skilltap_config().clone())
+        .map_err(|_| repository_composition_error())?;
+    Ok((repository, filesystem))
+}
+
+fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
+    let (repository, _) = match harness_repository() {
+        Ok(value) => value,
+        Err(outcome) => return outcome,
+    };
+    let config = match repository.load() {
+        Ok(DocumentState::Missing) => ConfigDocument::defaults(),
+        Ok(DocumentState::Present(value)) => value,
+        Err(_) => return repository_composition_error(),
+    };
+    Outcome::new("harness list", ResultClass::Completed)
+        .with_resource(OutputEntry::new(
+            "codex",
+            if config.harnesses().codex.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+        ))
+        .with_resource(OutputEntry::new(
+            "claude",
+            if config.harnesses().claude.enabled {
+                "enabled"
+            } else {
+                "disabled"
+            },
+        ))
+}
+
+fn execute_system_harness_enable(args: &HarnessEnableArgs) -> Outcome {
+    execute_harness_change("harness enable", &args.harness, true, args.binary.as_ref())
+}
+
+fn execute_system_harness_disable(args: &HarnessChangeArgs) -> Outcome {
+    execute_harness_change("harness disable", &args.harness, false, None)
+}
+
+fn execute_harness_change(
+    command: &'static str,
+    harness: &skilltap_core::domain::HarnessId,
+    enabled: bool,
+    binary: Option<&skilltap_core::storage::HarnessBinary>,
+) -> Outcome {
+    let (repository, _) = match harness_repository() {
+        Ok(value) => value,
+        Err(outcome) => return outcome,
+    };
+    let current = match repository.load() {
+        Ok(DocumentState::Missing) => ConfigDocument::defaults(),
+        Ok(DocumentState::Present(value)) => value,
+        Err(_) => return repository_composition_error(),
+    };
+    let next = match current.with_harness_policy(harness, enabled, binary) {
+        Ok(value) => value,
+        Err(_) => {
+            return Outcome::new("harness", ResultClass::Invalid).with_error(ErrorDetail::new(
+                "invalid_harness",
+                "The requested harness is not supported.",
+            ));
+        }
+    };
+    if next == current {
+        return Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
+            harness.as_str(),
+            if enabled { "enabled" } else { "disabled" },
+        ));
+    }
+    if repository.replace(&next).is_err() {
+        return repository_composition_error();
+    }
+    Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
+        harness.as_str(),
+        if enabled { "enabled" } else { "disabled" },
+    ))
 }
 
 fn repository_composition_error() -> Outcome {

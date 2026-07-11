@@ -1,10 +1,13 @@
 use crate::command::{
-    Command, DaemonCommand, HarnessCommand, InstructionsCommand, MarketplaceCommand, PluginCommand,
-    SkillCommand, StatusArgs,
+    Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
+    InstructionsCommand, MarketplaceCommand, OutputArgs, PluginCommand, SkillCommand, StatusArgs,
 };
 
 pub(crate) enum Dispatch {
     Status(StatusArgs),
+    HarnessList(OutputArgs),
+    HarnessEnable(HarnessEnableArgs),
+    HarnessDisable(HarnessChangeArgs),
     Unavailable { command: &'static str, json: bool },
 }
 
@@ -16,9 +19,9 @@ impl Dispatch {
             Command::Plan(args) => unavailable("plan", args.output.json),
             Command::Sync(args) => unavailable("sync", args.output.json),
             Command::Harness(args) => match args.command {
-                HarnessCommand::List(args) => unavailable("harness list", args.json),
-                HarnessCommand::Enable(args) => unavailable("harness enable", args.output.json),
-                HarnessCommand::Disable(args) => unavailable("harness disable", args.output.json),
+                HarnessCommand::List(args) => Self::HarnessList(args),
+                HarnessCommand::Enable(args) => Self::HarnessEnable(args),
+                HarnessCommand::Disable(args) => Self::HarnessDisable(args),
             },
             Command::Marketplace(args) => match args.command {
                 MarketplaceCommand::Add(args) => {
@@ -69,6 +72,9 @@ impl Dispatch {
     pub(crate) const fn json(&self) -> bool {
         match self {
             Self::Status(args) => args.output.json,
+            Self::HarnessList(args) => args.json,
+            Self::HarnessEnable(args) => args.output.json,
+            Self::HarnessDisable(args) => args.output.json,
             Self::Unavailable { json, .. } => *json,
         }
     }
