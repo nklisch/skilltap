@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-git-probe-errors
 kind: story
-stage: review
+stage: done
 tags: [infra, correctness]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-scope-target]
@@ -55,3 +55,12 @@ standalone project.
   `cargo test --locked --workspace` (93 tests), and
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - No design discrepancies or adjacent issues were found.
+
+## Review
+
+Approved. Nonzero probes now inspect only `.git` markers on the supplied
+canonical ancestor chain. A metadata-free chain preserves ordinary non-Git
+fallback, while existing or inaccessible metadata produces a typed error with
+only safe directory/status context. Corrupt file/directory, nested, rejected,
+inaccessible, bounded-inspection, and secrecy cases are covered. Ten focused
+scope tests and warnings-denied workspace Clippy pass on review.
