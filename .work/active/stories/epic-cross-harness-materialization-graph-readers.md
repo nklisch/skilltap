@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-graph-readers
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-cross-harness-materialization-graph
 depends_on: [epic-cross-harness-materialization-graph-contract]
@@ -25,3 +25,22 @@ Acceptance criteria:
 - Cache and marketplace browsing are not used as write or discovery surfaces.
 - Tests assert bounded native arguments, explicit source scoping, and unknown
   field preservation at the adapter boundary.
+
+## Implementation notes
+
+- Files changed: `crates/harnesses/src/plugin_graph.rs`,
+  `crates/harnesses/src/lib.rs`.
+- Tests added: Codex/Claude fixture reader tests for complete skills, known
+  components, malformed manifests, and remote catalog rejection.
+- Discrepancies from design: readers take an explicit checked-out root so the
+  composition layer can resolve Git sources without granting the reader any
+  browse or checkout authority; only documented component directories/files
+  are normalized and skills are required while other component kinds default
+  optional pending manifest-level requiredness evidence.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo test -p skilltap-harnesses --offline` — passed.
+- `cargo clippy -p skilltap-harnesses --all-targets --offline -- -D warnings`
+  — passed.
