@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-graph-integration
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization-graph
 depends_on: [epic-cross-harness-materialization-graph-readers]
@@ -41,3 +41,7 @@ Acceptance criteria:
 - `cargo test -p skilltap-core materialization::tests --offline` — passed.
 - `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings` —
   passed.
+
+## Review
+
+Verdict: Approve — story verified by implement; fast-lane advance.
