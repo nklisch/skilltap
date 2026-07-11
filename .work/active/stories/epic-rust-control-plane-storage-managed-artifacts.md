@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -182,3 +182,13 @@ locked ladder.
 - All 137 pre-fix workspace identities remain; one lock-lifetime regression was
   added and 138 tests pass. Safe public error rendering is unchanged and no
   generic runtime failure is retried or masked.
+
+## Final review
+
+Approved after the full hardening sequence. Apple errno/stat types, cooperating
+writer locking, creation/open/type/path identity proofs, exact residual
+presence/identity/durability, stale backup retries, post-open special-file
+rejection, and action preservation are all verified. Explicit writer-lock
+release passed 30 parallel core and five full workspace stress runs. Focused
+directory-tree/artifact tests, 138 workspace tests, and the full locked ladder
+pass with no remaining significant finding.
