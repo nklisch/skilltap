@@ -120,6 +120,11 @@ interval = "6h"
 
 Harness binaries default to `codex` and `claude` from `PATH`. An absolute binary path may override either default.
 
+A missing `config.toml` is an explicit first-use state. Read-only status may
+detect both known harness installations, but neither harness is enabled until
+the user runs `harness enable`. Read-only commands do not synthesize or persist
+default policy.
+
 `instructions.claude_mode` accepts:
 
 - `symlink` — create `CLAUDE.md` as a symlink to `AGENTS.md`.
@@ -148,11 +153,15 @@ It contains:
 - Project paths containing locally managed native configuration.
 - Per-resource update policy and version pins.
 
-Every entry has a stable skilltap identifier. Paths are stored as canonical absolute paths. Authentication material is prohibited.
+Every entry has a stable logical `ResourceId` and a concrete scope. Together
+they form the exact `ResourceKey` used by inventory, state, dependencies, and
+planned operations. The same logical identifier may exist independently in
+global and multiple project scopes. Project paths are canonical absolute paths.
+Authentication material is prohibited.
 
 ### `state.json`
 
-`state.json` is machine-written operational state.
+`state.json` is machine-written provenance and apply state.
 
 It records:
 
@@ -164,11 +173,16 @@ It records:
 - Installed and available versions or source revisions.
 - Requested Git refs and resolved commit SHAs.
 - Last update check.
-- Last successful observation and application.
+- Last successful observation and application timestamps.
 - Native harness versions.
 - Per-resource apply results.
 
 Users and agents may inspect `state.json`, but do not edit it as desired configuration.
+
+Fresh declared/effective observations, capability-profile evidence, and health
+findings are ephemeral. `status` and `adopt` do not persist their snapshots.
+Successful mutation workflows may update provenance, fingerprints, revisions,
+harness versions, timestamps, and apply results after re-observation.
 
 ### `managed/`
 
@@ -188,7 +202,8 @@ skilltap harness disable <harness> [--json]
 
 `harness enable` creates the configuration directory when needed and enables one harness. It does not adopt or modify native configuration.
 
-`harness disable` stops reconciliation for that harness. It does not uninstall native resources or remove observed state.
+`harness disable` stops reconciliation for that harness. It does not uninstall
+native resources or remove retained provenance and apply history.
 
 ## Adoption
 
@@ -207,6 +222,9 @@ Adoption:
 - Reports conflicts rather than choosing a winner.
 - Leaves conflicting entries unadopted.
 - May adopt all non-conflicting resources in the same invocation.
+- Observes project-shared Claude declarations as health evidence but does not
+  adopt them into personal project scope; the CLI has no shared-scope adoption
+  selector.
 
 Adopting a native resource makes it managed by reconciliation. It does not transfer the resource to other harnesses until `sync` is run.
 
@@ -243,13 +261,17 @@ Status does not mutate skilltap or harness state.
 skilltap plan [--target <target>] [--project [<path>] | --all-scopes] [--json]
 ```
 
-`plan` compares desired inventory, last-applied state, current observed native state, and current harness capabilities.
+`plan` compares desired inventory, last-applied state, fresh native
+observations, and the capabilities selected from a verified compiled profile
+for each concrete scope. Runtime probes may preserve or narrow compiled
+support; they never grant mutation authority. Unknown harness versions remain
+observe-only.
 
 Every planned operation includes:
 
 - Operation identifier.
 - Target harness.
-- Resource identifier.
+- Exact scope-bearing resource or component selector.
 - Action and reason.
 - Compatibility classification.
 - Provenance.
@@ -285,7 +307,11 @@ Without `--yes`:
 
 With `--yes`, partial operations may apply using the exact component set shown in the plan. `--yes` acknowledges the reported loss; it does not make unsupported components functional.
 
-`--include` and `--exclude` constrain the operation set. Selectors may address a whole resource or one component. Exclusion takes precedence over inclusion.
+`--include` and `--exclude` constrain the operation set. Input selectors may
+address a logical resource or one component within the command's selected
+scopes. Each resulting operation carries an exact `ResourceKey`, and its
+selector scope must equal its operation scope. Exclusion takes precedence over
+inclusion.
 
 A resource with unsupported required components remains blocked even with `--yes`. A component is required when the native manifest declares it as a dependency or omitting it prevents the remaining resource from functioning.
 

@@ -105,9 +105,14 @@ Environment
 └── Instruction location
 ```
 
-Every managed resource has a stable skilltap identity, desired target harnesses, native identities per harness, scope, source identity, provenance, compatibility, update policy, last-applied fingerprint, and dependency relationships.
+Every managed resource has a stable logical `ResourceId`. `ResourceKey` combines
+that identifier with one concrete global or canonical project scope and is the
+identity used by graphs, inventory, state, dependencies, managed ownership, and
+operations. Native versions, resolved revisions, fingerprints, observation
+layers, and target harnesses are evidence or policy, never resource identity.
 
-Harness-specific metadata is namespaced and opaque to the general planner. Only the owning adapter interprets it.
+Raw native documents and harness-specific DTOs remain private to the owning
+adapter. Only normalized domain types cross the adapter port.
 
 ## Core Types
 
@@ -115,6 +120,7 @@ The core defines validated types for:
 
 - `HarnessId`
 - `ResourceId`
+- `ResourceKey`
 - `ResourceKind`
 - `Scope`
 - `Source`
@@ -130,41 +136,43 @@ The core defines validated types for:
 - `OperationDependency`
 - `ApplyResult`
 - `AttentionReason`
+- `HarnessInstallation`
+- `CapabilityProfileSelection`
+- `ObservationRequest`
+- `HarnessObservation`
+- `ObservedEnvironment`
 
 Raw strings do not represent resource identifiers, revisions, canonical paths, or compatibility states inside the domain.
 
 ## Harness Adapter Contract
 
-Each harness adapter implements behavior equivalent to:
+Read-only adapters and their coordinator implement behavior equivalent to the
+current core ports:
 
 ```rust
-trait HarnessAdapter {
-    fn id(&self) -> HarnessId;
-    fn detect(&self) -> Result<HarnessInstallation, HarnessError>;
-    fn capabilities(
-        &self,
-        installation: &HarnessInstallation,
-    ) -> Result<CapabilitySet, HarnessError>;
+trait HarnessObservationAdapter {
+    fn harness(&self) -> &HarnessId;
     fn observe(
         &self,
         request: &ObservationRequest,
-    ) -> Result<ObservedEnvironment, HarnessError>;
-    fn resolve_native_action(
+    ) -> Result<HarnessObservation, ObservationAdapterError>;
+}
+
+trait ObservationCoordinator {
+    fn observe(
         &self,
-        operation: &SemanticOperation,
-    ) -> Result<NativeAction, HarnessError>;
-    fn apply(
-        &self,
-        action: &NativeAction,
-    ) -> Result<NativeApplyResult, HarnessError>;
+        batch: &ObservationBatch,
+    ) -> ObservedEnvironment;
 }
 ```
 
-The exact Rust signatures may differ, but the responsibilities remain separate:
+The responsibilities remain separate:
 
 - The core decides what semantic change is needed.
-- The adapter decides whether and how the harness can perform it natively.
-- The executor performs the resolved native action.
+- A verified lifecycle adapter decides whether and how the harness can perform
+  a semantic mutation natively.
+- The executor performs a resolved native action only after revalidating its
+  executable and observation evidence.
 - The adapter observes the result.
 - The core determines whether desired state was reached.
 
@@ -174,9 +182,15 @@ Adapters never mutate during observation or capability detection.
 
 Harness support is runtime-versioned.
 
-An adapter locates the configured binary, reads its version, probes documented machine-readable commands where necessary, selects a known capability profile, and reports unsupported or unverified capabilities explicitly.
+An adapter resolves the configured binary to one canonical executable identity,
+reads its opaque version, and selects a compiled capability profile whose
+support may differ between global and project scope. Compiled verified profiles
+are the only source of mutation authority.
 
-A newer unknown harness version may use capabilities that remain contract-compatible, but skilltap does not assume undocumented mutation behavior.
+Runtime probes may confirm that compiled support remains usable or narrow it to
+unsupported or unverified. They cannot add a capability or widen support. An
+unknown harness version has no verified profile and is observe-only when its
+documented state remains parseable.
 
 The maintained capability profiles and native contracts live in [HARNESS-CONTRACTS.md](./HARNESS-CONTRACTS.md).
 
@@ -186,7 +200,8 @@ Storage is divided by purpose:
 
 - `config.toml` contains operating policy.
 - `inventory.toml` contains human-readable desired resources.
-- `state.json` contains machine-written observations and provenance.
+- `state.json` contains machine-written provenance, revision/fingerprint
+  evidence, timestamps, and apply history.
 - `managed/` contains skilltap-owned artifacts and recoverable backups.
 
 Schemas are versioned independently.
@@ -204,6 +219,16 @@ Observation produces a normalized snapshot without changing the machine.
 Each adapter reads native CLI JSON output where available, documented native configuration, installed resource manifests, managed artifact fingerprints, and harness and plugin versions.
 
 Observations include malformed and unmanaged resources as health findings rather than silently omitting them.
+
+Snapshots are ephemeral. Declared/effective resources, selected capability
+evidence, and findings from `status` or `adopt` are not written to `state.json`.
+Successful mutation workflows may persist provenance and apply evidence after
+re-observing the affected targets.
+
+Findings are safe by construction: source-registered codes, authored summaries,
+severity, a typed harness-or-resource subject, and a bounded vocabulary of
+typed scalar fields. Raw argv, stdout/stderr, settings documents, unknown JSON,
+dynamic messages, and native filesystem bytes cannot enter a finding.
 
 `status`, `adopt`, `plan`, and `sync` share the same observation pipeline.
 
@@ -226,15 +251,22 @@ sequenceDiagram
     App-->>Caller: adopted resources and decisions required
 ```
 
-Adoption writes inventory and provenance only. It never invokes native mutation.
+Adoption writes desired entries and adopted-origin provenance to inventory
+only. It never writes a fresh observation snapshot or invokes native mutation.
 
 ## Planning
 
-The planner is pure with respect to external state. Its inputs are desired inventory, last-applied state, fresh observations, harness capability sets, compatibility evidence, requested targets and selectors, and user acknowledgment flags.
+The planner is pure with respect to external state. Its inputs are desired
+inventory, last-applied state, fresh observations, verified scoped capability
+profiles, compatibility evidence, requested targets and selectors, and user
+acknowledgment flags.
 
 The planner emits a dependency graph of semantic operations classified as safe native, safe faithful equivalent, safe materialization, partial and acknowledgment-required, unsupported, conflict, or no-op.
 
-A plan contains enough information for human and JSON renderers without exposing adapter-internal implementation objects.
+A plan contains enough information for human and JSON renderers without
+exposing adapter-internal implementation objects. Every operation and
+acknowledgment carries an exact scope-bearing resource or component selector;
+the selector's `ResourceKey` scope must equal the operation's semantic scope.
 
 ## Apply Flow
 

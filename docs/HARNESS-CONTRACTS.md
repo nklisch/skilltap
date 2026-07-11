@@ -2,7 +2,10 @@
 
 This document defines the native capabilities skilltap relies on for Codex and Claude Code, along with the mappings skilltap considers faithful.
 
-A harness contract describes current supported behavior. Runtime detection confirms that the installed harness provides the required commands and formats before skilltap mutates it.
+A harness contract describes current supported behavior. Verified compiled
+profiles grant mutation authority for known versions and scopes. Runtime
+detection binds that profile to one executable and may narrow its support
+before skilltap mutates anything.
 
 ## Contract Rules
 
@@ -11,9 +14,13 @@ A harness contract describes current supported behavior. Runtime detection confi
 3. Harness caches are observed but never used as undocumented write APIs.
 4. Project scope is personal to the skilltap user unless the native artifact is inherently project-shared.
 5. A native file changed by skilltap appears explicitly in the reconciliation plan.
-6. Unknown harness versions do not gain mutation capabilities by assumption.
+6. Unknown harness versions are observe-only and never gain mutation authority
+   from runtime probing.
 7. Unsupported native behavior may be materialized only through documented load paths.
 8. Every cross-harness mapping has an explicit compatibility classification.
+9. Observation findings expose only registered codes, authored summaries, typed
+   subjects, and bounded typed scalar fields; raw native payloads never cross
+   the adapter boundary.
 
 ## Common Capability Model
 
@@ -55,7 +62,10 @@ component.executable
 component.settings
 ```
 
-Capabilities may vary by harness version and scope.
+Capabilities may vary by harness version and scope. A compiled verified profile
+is the mutation allowlist. Runtime probes may preserve or narrow its support;
+they never grant an undocumented capability or widen an unverified or
+unsupported capability.
 
 ## Scope Mapping
 
@@ -70,6 +80,11 @@ all-scopes
 `all-scopes` expands into global scope plus every project recorded in inventory. Adapters receive one concrete global or project scope at a time.
 
 Global resources are personal and available across projects. Project scope applies to one canonical project root.
+
+A logical `ResourceId` plus one concrete scope forms the exact `ResourceKey`.
+The same logical identifier may coexist globally and in multiple projects;
+dependencies, observations, state records, and mutation selectors name the
+exact key rather than inferring scope from the identifier.
 
 skilltap does not write its own metadata into the project. Native harness files, skill directories, `AGENTS.md`, and `CLAUDE.md` may be created or changed when they are the documented representation of the desired resource.
 
@@ -104,7 +119,10 @@ Existing user-authored native instruction files are conflicts until their conten
 
 The Codex adapter locates the configured `codex` binary and reads its version.
 
-The adapter probes relevant command help and JSON behavior before enabling mutation capabilities. Native plugin installation is available only when the installed CLI exposes:
+The adapter selects a verified compiled profile for the exact Codex version and
+scope. Help and JSON probes may narrow that profile before use. Native plugin
+installation is available only when the profile includes the operation and the
+installed CLI still exposes:
 
 ```text
 codex plugin add
@@ -163,7 +181,9 @@ A Codex plugin contains `.codex-plugin/plugin.json`.
 
 Documented Codex plugin components include skills, hooks, apps and connectors, MCP servers, and assets.
 
-Native global installation uses `codex plugin add` when runtime probing confirms support.
+Native global installation uses `codex plugin add` only when the verified
+compiled profile grants that scoped operation and runtime evidence has not
+narrowed it.
 
 When Codex lacks an explicit project-scoped install operation, a project plugin may be represented through a managed project marketplace and a managed plugin directory. This is materialization, not a native marketplace installation, and provenance reflects that distinction.
 
@@ -195,7 +215,9 @@ Direct TOML editing is used only for documented settings without a native lifecy
 
 The Claude adapter locates the configured `claude` binary and reads its version.
 
-Native plugin lifecycle is available only when runtime probing confirms:
+Native plugin lifecycle is available only when a verified compiled profile for
+the exact Claude version and scope includes the operation and runtime evidence
+has not narrowed it:
 
 ```text
 claude plugin install
@@ -206,7 +228,8 @@ claude plugin enable
 claude plugin disable
 ```
 
-Native marketplace lifecycle is available only when runtime probing confirms:
+Native marketplace lifecycle follows the same compiled-authority and
+narrowing-only rule for:
 
 ```text
 claude plugin marketplace add
@@ -243,7 +266,9 @@ skilltap global scope maps to Claude's `user` scope.
 
 skilltap project scope maps to Claude's `local` scope for marketplace and plugin lifecycle. This keeps personal skilltap state from silently creating team-wide plugin requirements in `.claude/settings.json`.
 
-A user may independently maintain project-shared Claude configuration. skilltap observes it and reports its effect, but does not adopt it into personal project scope unless explicitly requested.
+A user may independently maintain project-shared Claude configuration. skilltap
+observes it as declared state and reports its effect, but the current CLI has no
+shared-scope adoption selector and never adopts it into personal project scope.
 
 ### Marketplaces
 
@@ -331,15 +356,22 @@ An unsupported optional hook may be omitted only through acknowledged partial ma
 
 ## Marketplace Identity
 
-A marketplace is identified by native harness, native marketplace name, normalized source, requested ref, resolved revision when available, and scope.
+A marketplace's stable native lineage consists of its harness, native
+marketplace name, normalized declared source and requested selector, and exact
+scope. A resolved revision is mutable observation evidence, not identity.
 
 Two marketplaces with similar names are not coalesced unless their normalized sources and identities match.
 
 ## Plugin Identity
 
-A native plugin is identified by its harness-native plugin name, marketplace identity, scope, and resolved version.
+A native plugin's stable lineage consists of its harness-native qualified name,
+marketplace lineage, and exact scope. Its resolved version, revision, and
+fingerprint are mutable observations, not identity.
 
-Cross-harness entries are associated in skilltap state only when they originate from the same declared source or the user explicitly adopts them as equivalents. Matching names alone do not establish identity.
+Cross-harness entries are associated only when they originate from the same
+declared source with compatible semantics or the user records an explicit
+mapping. Matching names, similar URLs, equal fingerprints, or compatible
+resolved versions alone do not establish identity.
 
 ## Version and Update Contract
 
@@ -355,7 +387,8 @@ Unknown native version formats are preserved as opaque values and compared only 
 
 An unknown harness version may be observed when its structured output and documented files remain parseable.
 
-Mutation requires a verified capability profile or successful runtime probe for the exact native operation.
+Mutation requires a verified compiled capability profile for the exact version
+and scope. Runtime probes may narrow that authority but cannot create it.
 
 If verification fails, status remains available and mutation is blocked with a harness-contract error.
 

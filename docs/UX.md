@@ -117,6 +117,11 @@ Only commands for which a flag is meaningful accept it. `--project` and `--all-s
 
 `--include` and `--exclude` are repeatable. Exclusion wins when both match the same resource or component.
 
+Input selectors are resolved separately inside every concrete selected scope.
+Planned operations carry the resulting exact scope-bearing resource or
+component selector, so equal logical IDs in global and project scopes never
+authorize one another.
+
 ## First Use
 
 `status` works before any skilltap files exist.
@@ -148,6 +153,10 @@ Result: changes needed
 ```
 
 Status discovers the global environment but does not create configuration. Use `status --project` for the current project or `status --all-scopes` for the complete managed computer.
+
+When configuration is missing, installation detection does not imply
+enablement: both known harnesses are reported as not enabled until an explicit
+`harness enable` command records policy.
 
 ## Enabling Harnesses
 
@@ -190,6 +199,10 @@ Adopted 2 plugins and 3 skills.
 ```
 
 Adoption imports all non-conflicting resources. One conflict does not discard unrelated adoptable state. Adoption does not automatically push resources into another harness.
+
+Claude project-shared declarations remain visible in project observations and
+health output, but they are not adoption candidates for personal project scope.
+The current CLI has no shared-scope adoption selector.
 
 ## Status
 
@@ -235,6 +248,10 @@ Next actions
 Result: user decision required
 ```
 
+Health findings use registered codes and authored summaries with typed scalar
+context. Plain and JSON output never include raw native argv, stdout/stderr,
+settings objects, unknown JSON, or dynamic parser messages.
+
 ## Planning and Synchronization
 
 Bare planning and synchronization operate globally. Project or whole-computer operation is explicit.
@@ -263,6 +280,11 @@ Summary
 ```
 
 `sync` applies safe operations and reports blocked resources. A non-empty plan exits `2`.
+
+Native mutation is available only through a verified compiled capability
+profile for the detected executable version and concrete scope. Runtime probes
+may narrow that profile. Unknown versions remain observable but mutation is
+reported as blocked.
 
 ```console
 $ skilltap sync --project
