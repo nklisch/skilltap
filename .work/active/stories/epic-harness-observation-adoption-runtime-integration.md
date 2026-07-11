@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-integration
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-executable-resolution, epic-harness-observation-adoption-runtime-bounded-process, epic-harness-observation-adoption-runtime-strict-json, epic-harness-observation-adoption-runtime-codex-home, epic-harness-observation-adoption-runtime-external-tree]
@@ -40,3 +40,9 @@ jobs; make only final export/composition corrections here.
 - Focused integration tests pass 3/3 with the locked workspace.
 - Full workspace format/check/Clippy/tests, rustdoc, release build, and
   compiled-binary verification remain green after this addition.
+
+## Review
+
+- Fast-lane review approved the green implementation record and the complete
+  locked workspace verification. The integration suite composes existing
+  adapters without adding production coupling or mutation surfaces.
