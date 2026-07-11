@@ -62,6 +62,9 @@ pub enum SchemaError {
     DuplicateStateResource {
         resource: ResourceKey,
     },
+    StateResourceNotFound {
+        resource: ResourceKey,
+    },
     DuplicateOperation {
         operation: OperationId,
     },
@@ -120,6 +123,9 @@ impl fmt::Display for SchemaError {
             }
             Self::DuplicateStateResource { resource } => {
                 write!(formatter, "duplicate state resource `{resource}`")
+            }
+            Self::StateResourceNotFound { resource } => {
+                write!(formatter, "state resource `{resource}` was not found")
             }
             Self::DuplicateOperation { operation } => {
                 write!(formatter, "duplicate apply operation `{operation}`")

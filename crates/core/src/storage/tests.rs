@@ -128,6 +128,51 @@ fn representative_state() -> StateDocument {
 }
 
 #[test]
+fn state_journal_updates_exact_resource_without_touching_siblings() {
+    let first = managed_resource("skill:first");
+    let second = managed_resource("skill:second");
+    let document = StateDocument::new(
+        STATE_SCHEMA_VERSION,
+        [],
+        [first.clone(), second.clone()],
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let updated = document
+        .with_operation_result(
+            first.key(),
+            Timestamp::new(200, 0).unwrap(),
+            OperationResult::new(
+                OperationId::new("update:first").unwrap(),
+                OperationOutcome::Applied,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    assert_eq!(updated.resources().get(second.key()), Some(&second));
+    assert_eq!(
+        updated
+            .resources()
+            .get(first.key())
+            .unwrap()
+            .last_apply()
+            .unwrap()
+            .operations()
+            .keys()
+            .next()
+            .unwrap()
+            .as_str(),
+        "update:first"
+    );
+    assert_eq!(
+        updated.last_successful_application(),
+        Some(Timestamp::new(200, 0).unwrap())
+    );
+}
+
+#[test]
 fn config_defaults_are_explicit_strict_and_golden() {
     let config = ConfigDocument::defaults();
     assert_eq!(config.schema(), CONFIG_SCHEMA_VERSION);

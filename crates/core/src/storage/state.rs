@@ -427,6 +427,48 @@ impl StateDocument {
     pub const fn last_successful_application(&self) -> Option<Timestamp> {
         self.last_successful_application
     }
+
+    /// Return a copy with one operation result atomically attached to its
+    /// exact resource record. Callers publish the returned document through
+    /// `StateRepository`; this method performs no I/O.
+    pub fn with_operation_result(
+        &self,
+        resource: &ResourceKey,
+        at: Timestamp,
+        operation: OperationResult,
+    ) -> Result<Self, SchemaError> {
+        let current =
+            self.resources
+                .get(resource)
+                .ok_or_else(|| SchemaError::StateResourceNotFound {
+                    resource: resource.clone(),
+                })?;
+        let apply = ApplyRecord::new(at, [operation])?;
+        let updated = ResourceState::new(
+            current.key().clone(),
+            current.native_ids().clone(),
+            current.provenance(),
+            current.ownership(),
+            current.source().cloned(),
+            current.managed_artifact().cloned(),
+            current.fingerprint().cloned(),
+            current.installed_revision().cloned(),
+            current.available_revision().cloned(),
+            current.observed_at(),
+            Some(apply),
+        )?;
+        let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
+        resources.retain(|value| value.key() != resource);
+        resources.push(updated);
+        Self::new(
+            STATE_SCHEMA_VERSION,
+            self.harnesses.values().cloned(),
+            resources,
+            self.last_update_check,
+            self.last_successful_observation,
+            Some(at),
+        )
+    }
 }
 
 impl From<StateDocument> for StateWire {
