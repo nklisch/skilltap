@@ -28,6 +28,19 @@ release ships.
 | `testing` | Test infrastructure, coverage, fixtures, harness. |
 | `cleanup` | AI cruft / dead code / drift identified by gates. |
 | `documentation` | Foundation-doc drift identified by the docs gate. |
+| `research` | Grounded research input; routes to agentic-research and never binds to a release. |
+| `scan` | Deep-code-scan engagement scaffold; excluded from the ordinary autopilot queue. |
+| `correctness` | Deep-code-scan correctness lane. |
+| `tests` | Deep-code-scan test-quality lane. |
+| `performance` | Deep-code-scan performance lane. |
+| `quality` | Deep-code-scan holistic quality lane. |
+| `structure` | Deep-code-scan structure and refactor lane. |
+| `architecture` | Deep-code-scan architecture lane. |
+| `custom` | Deep-code-scan custom lane. |
+| `leaf` | Deep-code-scan leaf altitude band. |
+| `module` | Deep-code-scan module altitude band. |
+| `subsystem` | Deep-code-scan subsystem altitude band. |
+| `system` | Deep-code-scan system altitude band. |
 
 Items can carry multiple tags. Gates emit their `gate_origin:<name>` as an
 additional non-taxonomy tag.
@@ -51,9 +64,39 @@ arise; they MAY use a bare topic when the slug is already unique in `.work/`.
 None. Use the plugin defaults: `drafting → implementing → review → done` for
 features and stories; `drafting → implementing → released → done` for releases.
 
+## Research engagements
+
+Research items carry `research_refs` and `research_origin`. Their
+`research_dials:` block commissions `scope_authority`, `verification_rigor`,
+`intent`, and `output_kind` for the research orchestrator.
+
+## Scan engagements
+
+Scan campaigns and their remediation items carry `scan_origin`. Scan scaffold
+items use the `scan` tag plus a lane tag and, for stories, an altitude-band tag.
+
+## Terminal-tier retention
+
+delete-refs
+
 ## Gate configuration
 
 `gates_for_release: [security, tests, cruft, docs, patterns]`
+
+```yaml
+gate_finding_routing:
+  critical: implementing
+  high: implementing
+  medium: drafting
+  low: backlog
+  info: skip
+gate_refactor_scan_library_roots:
+  - .agents/skills
+  - .claude/skills
+binding_guard: warn
+epic_cohesion: phased
+backlog_staleness_days: 90
+```
 
 All five gates run in the listed order during `/agile-workflow:release-deploy`.
 Each gate emits items (not pass/fail reports) tagged `gate_origin:<gate>`.

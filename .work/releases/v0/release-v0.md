@@ -15,8 +15,9 @@ during `/agile-workflow:convert` based on git history and prior placement in
 
 Bound items:
 
-- `feature-refactor-project-wide-cleanup` — project-wide structural cleanup
-  (13-step refactor plan), marked complete in `1ec2f6b`.
+| ID | Title | Kind | archived_atop | Git ref |
+|---|---|---|---|---|
+| `feature-refactor-project-wide-cleanup` | Project-wide structural cleanup | feature | `pre-release` | `bb11b244dbc165bf5f0e895c332f5f09c51e69c8` |
 
 No specific git tag corresponds to this synthetic release. Future releases
 will use real semver tags (`v2.2.6`, `v2.3.0`, etc.) as `release_binding`.
