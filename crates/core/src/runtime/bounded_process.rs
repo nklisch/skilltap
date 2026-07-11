@@ -8,6 +8,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+const TERMINATION_GRACE: Duration = Duration::from_millis(100);
+
 use super::{
     ExecutableResolver, NativeProcessOutput, NativeProcessRequest, NativeProcessRunner,
     NativeProcessStatus, ObservationRuntimeError, ObservationRuntimeError::*, OutputStream,
@@ -53,7 +55,7 @@ impl NativeProcessRunner for SystemNativeProcessRunner {
             Some(stdout) => stdout,
             None => {
                 let _ = terminate_group(&mut child);
-                let _ = child.wait();
+                let _ = reap_child(&mut child, Instant::now() + TERMINATION_GRACE);
                 return Err(ProcessIoFailed);
             }
         };
@@ -61,18 +63,18 @@ impl NativeProcessRunner for SystemNativeProcessRunner {
             Some(stderr) => stderr,
             None => {
                 let _ = terminate_group(&mut child);
-                let _ = child.wait();
+                let _ = reap_child(&mut child, Instant::now() + TERMINATION_GRACE);
                 return Err(ProcessIoFailed);
             }
         };
         if set_nonblocking(stdout.as_raw_fd()).is_err() {
             let _ = terminate_group(&mut child);
-            let _ = child.wait();
+            let _ = reap_child(&mut child, Instant::now() + TERMINATION_GRACE);
             return Err(ProcessIoFailed);
         }
         if set_nonblocking(stderr.as_raw_fd()).is_err() {
             let _ = terminate_group(&mut child);
-            let _ = child.wait();
+            let _ = reap_child(&mut child, Instant::now() + TERMINATION_GRACE);
             return Err(ProcessIoFailed);
         }
 
@@ -93,7 +95,14 @@ impl NativeProcessRunner for SystemNativeProcessRunner {
             }
 
             if status.is_none() {
-                status = child.try_wait().map_err(|_| ProcessWaitFailed)?;
+                match child.try_wait() {
+                    Ok(next) => status = next,
+                    Err(_) => {
+                        if failure.is_none() {
+                            failure = Some(ProcessWaitFailed);
+                        }
+                    }
+                }
             }
 
             if failure.is_none() && status.is_some() && output.closed() {
@@ -106,10 +115,12 @@ impl NativeProcessRunner for SystemNativeProcessRunner {
             }
             if failure.is_some() || (status.is_some() && !output.closed()) {
                 if post_kill_deadline.is_none() {
-                    if let Err(error) = terminate_group(&mut child) {
+                    if let Err(error) = terminate_group(&mut child)
+                        && failure.is_none()
+                    {
                         failure = Some(error);
                     }
-                    post_kill_deadline = Some(Instant::now() + Duration::from_millis(100));
+                    post_kill_deadline = Some(Instant::now() + TERMINATION_GRACE);
                 }
                 if let Some(end) = post_kill_deadline
                     && Instant::now() >= end
@@ -125,12 +136,26 @@ impl NativeProcessRunner for SystemNativeProcessRunner {
 
         drop(stdout);
         drop(stderr);
-        let waited = child.wait().map_err(|_| ProcessWaitFailed)?;
-        let status = status.unwrap_or(waited);
+        if status.is_none() {
+            let reap_deadline = post_kill_deadline.unwrap_or(Instant::now() + TERMINATION_GRACE);
+            match reap_child(&mut child, reap_deadline) {
+                Ok(Some(waited)) => status = Some(waited),
+                Ok(None) => {
+                    if failure.is_none() {
+                        failure = Some(ProcessTerminationFailed);
+                    }
+                }
+                Err(error) => {
+                    if failure.is_none() {
+                        failure = Some(error);
+                    }
+                }
+            }
+        }
         if let Some(error) = failure {
             return Err(error);
         }
-        let status = process_status(status);
+        let status = process_status(status.ok_or(ProcessWaitFailed)?);
         NativeProcessOutput::new(
             status,
             output.stdout,
@@ -246,15 +271,56 @@ fn set_nonblocking(fd: i32) -> io::Result<()> {
 }
 
 fn terminate_group(child: &mut Child) -> Result<(), ObservationRuntimeError> {
-    let pid = i32::try_from(child.id()).map_err(|_| ProcessTerminationFailed)?;
-    let result = unsafe { libc::kill(-pid, libc::SIGKILL) };
-    if result == -1 {
-        let error = io::Error::last_os_error();
-        if error.raw_os_error() != Some(libc::ESRCH) {
-            child.kill().map_err(|_| ProcessTerminationFailed)?;
+    let group_error = match i32::try_from(child.id()) {
+        Ok(pid) => {
+            let result = unsafe { libc::kill(-pid, libc::SIGKILL) };
+            if result == -1 {
+                let error = io::Error::last_os_error();
+                (error.raw_os_error() != Some(libc::ESRCH)).then_some(ProcessTerminationFailed)
+            } else {
+                None
+            }
         }
+        Err(_) => Some(ProcessTerminationFailed),
+    };
+
+    // A descendant may call setsid(2) and escape the process group. Always
+    // terminate the direct child through its handle as a second line of
+    // defense, even when group signaling succeeds.
+    let direct_error = terminate_direct_child(child).err();
+    if group_error.is_some() || direct_error.is_some() {
+        return Err(ProcessTerminationFailed);
     }
     Ok(())
+}
+
+fn terminate_direct_child(child: &mut Child) -> Result<(), ObservationRuntimeError> {
+    match child.try_wait() {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) | Err(_) => match child.kill() {
+            Ok(()) => Ok(()),
+            Err(error) if error.raw_os_error() == Some(libc::ESRCH) => {
+                matches!(child.try_wait(), Ok(Some(_)))
+                    .then_some(())
+                    .ok_or(ProcessTerminationFailed)
+            }
+            Err(_) => Err(ProcessTerminationFailed),
+        },
+    }
+}
+
+fn reap_child(
+    child: &mut Child,
+    deadline: Instant,
+) -> Result<Option<std::process::ExitStatus>, ObservationRuntimeError> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Ok(Some(status)),
+            Ok(None) if Instant::now() >= deadline => return Ok(None),
+            Ok(None) => thread::sleep(Duration::from_millis(1)),
+            Err(_) => return Err(ProcessWaitFailed),
+        }
+    }
 }
 
 fn process_status(status: std::process::ExitStatus) -> NativeProcessStatus {
@@ -275,7 +341,7 @@ fn process_status(status: std::process::ExitStatus) -> NativeProcessStatus {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, ffi::OsString, time::Duration};
+    use std::{collections::BTreeMap, ffi::OsString, thread, time::Duration};
 
     use skilltap_test_support::{
         FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, PipeHolder, TempRoot,
@@ -379,12 +445,58 @@ mod tests {
     }
 
     #[test]
+    fn direct_child_fallback_terminates_without_a_process_group() {
+        let mut child = Command::new("/bin/sleep").arg("10").spawn().unwrap();
+        terminate_group(&mut child).unwrap();
+        assert!(
+            reap_child(&mut child, Instant::now() + Duration::from_secs(1))
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn reap_deadline_is_bounded_before_cleanup() {
+        let mut child = Command::new("/bin/sleep").arg("10").spawn().unwrap();
+        assert!(
+            reap_child(&mut child, Instant::now() + Duration::from_millis(5))
+                .unwrap()
+                .is_none()
+        );
+        terminate_group(&mut child).unwrap();
+        assert!(
+            reap_child(&mut child, Instant::now() + Duration::from_secs(1))
+                .unwrap()
+                .is_some()
+        );
+    }
+
+    #[test]
     fn escaped_descendants_do_not_hold_parent_completion_forever() {
         let fixture =
-            FakeNativeProcess::new(FakeNativeMode::RetainPipes(PipeHolder::EscapedDescendant))
+            FakeNativeBuilder::new(FakeNativeMode::RetainPipes(PipeHolder::EscapedDescendant))
+                .wait_for_release()
+                .build()
                 .unwrap();
+        let start_barrier = fixture.start_barrier().unwrap().clone();
+        let barrier = fixture.pipe_holder_barrier().unwrap().clone();
+        let request = request(&fixture, &[], limits());
         let started = Instant::now();
-        let result = SystemNativeProcessRunner.run(&request(&fixture, &[], limits()));
+        let result = thread::scope(|scope| {
+            let handle = scope.spawn(|| SystemNativeProcessRunner.run(&request));
+            start_barrier
+                .wait_until_ready(Duration::from_secs(1))
+                .unwrap();
+            start_barrier.release().unwrap();
+            let ready = barrier.wait_until_ready(Duration::from_secs(1));
+            let result = handle.join().unwrap();
+            barrier.release().unwrap();
+            fixture
+                .wait_for_escaped_helper_exit(Duration::from_secs(1))
+                .unwrap();
+            ready.unwrap();
+            result
+        });
         assert!(matches!(result, Ok(_) | Err(ProcessDrainFailed)));
         assert!(started.elapsed() < Duration::from_secs(2));
     }

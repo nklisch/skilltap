@@ -2,7 +2,9 @@ use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant},
 };
 
 use crate::{FileBarrier, TempRoot};
@@ -100,6 +102,12 @@ impl FakeNativeBuilder {
             Ok::<_, io::Error>(path)
         })
         .transpose()?;
+        let escaped_helper_done = escaped_helper
+            .as_ref()
+            .map(|_| root.join("barriers/pipe-holder.done"));
+        let escaped_helper_pid = escaped_helper
+            .as_ref()
+            .map(|_| root.join("barriers/pipe-holder.pid"));
         let executable = root.join("fake-native");
         let behavior = render_script(
             &captures,
@@ -109,6 +117,8 @@ impl FakeNativeBuilder {
             hang_barrier.as_ref(),
             pipe_holder_barrier.as_ref(),
             escaped_helper.as_deref(),
+            escaped_helper_done.as_deref(),
+            escaped_helper_pid.as_deref(),
         );
         fs::write(root.join("behavior"), behavior)?;
         fs::hard_link(stable_executable, &executable)?;
@@ -122,6 +132,8 @@ impl FakeNativeBuilder {
             start_barrier,
             hang_barrier,
             pipe_holder_barrier,
+            escaped_helper_done,
+            escaped_helper_pid,
         })
     }
 }
@@ -136,6 +148,8 @@ pub struct FakeNativeProcess {
     start_barrier: Option<FileBarrier>,
     hang_barrier: Option<FileBarrier>,
     pipe_holder_barrier: Option<FileBarrier>,
+    escaped_helper_done: Option<PathBuf>,
+    escaped_helper_pid: Option<PathBuf>,
 }
 
 impl FakeNativeProcess {
@@ -161,6 +175,46 @@ impl FakeNativeProcess {
 
     pub fn pipe_holder_barrier(&self) -> Option<&FileBarrier> {
         self.pipe_holder_barrier.as_ref()
+    }
+
+    /// Waits until an escaped pipe-holder helper has observed release and exited.
+    pub fn wait_for_escaped_helper_exit(&self, timeout: Duration) -> io::Result<()> {
+        let (Some(done), Some(pid_path)) = (&self.escaped_helper_done, &self.escaped_helper_pid)
+        else {
+            return Ok(());
+        };
+        let deadline = Instant::now() + timeout;
+        loop {
+            match fs::symlink_metadata(done) {
+                Ok(_) => {
+                    let pid = fs::read_to_string(pid_path)
+                        .map_err(|_| {
+                            io::Error::new(io::ErrorKind::InvalidData, "missing escaped helper pid")
+                        })?
+                        .parse::<u32>()
+                        .map_err(|_| {
+                            io::Error::new(io::ErrorKind::InvalidData, "invalid escaped helper pid")
+                        })?;
+                    let status = Command::new("/bin/kill")
+                        .args(["-0", &pid.to_string()])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .status()?;
+                    if !status.success() {
+                        return Ok(());
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+            if Instant::now() >= deadline {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "escaped pipe-holder helper did not exit",
+                ));
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
     }
 
     pub fn captured_invocation(&self) -> io::Result<CapturedInvocation> {
@@ -233,6 +287,7 @@ impl std::fmt::Debug for CapturedInvocation {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_script(
     captures: &Path,
     environment: &[String],
@@ -241,6 +296,8 @@ fn render_script(
     hang_barrier: Option<&FileBarrier>,
     pipe_holder_barrier: Option<&FileBarrier>,
     escaped_helper: Option<&Path>,
+    escaped_helper_done: Option<&Path>,
+    escaped_helper_pid: Option<&Path>,
 ) -> String {
     let mut script = String::from("umask 077\n");
     script.push_str(&format!(
@@ -293,10 +350,12 @@ fn render_script(
                 }
                 PipeHolder::EscapedDescendant => {
                     script.push_str(&format!(
-                        "{} {} {} &\nexit 0\n",
+                        "{} {} {} {} {} &\nwait\nexit 0\n",
                         shell_quote(escaped_helper.expect("escaped mode has helper")),
                         shell_quote(barrier.ready_path()),
                         shell_quote(barrier.release_path()),
+                        shell_quote(escaped_helper_done.expect("escaped mode has exit marker")),
+                        shell_quote(escaped_helper_pid.expect("escaped mode has pid marker")),
                     ));
                 }
             }

@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-bounded-process
 kind: story
-stage: review
+stage: done
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits, epic-harness-observation-adoption-runtime-adversarial-fixtures, epic-harness-observation-adoption-runtime-executable-resolution]
@@ -42,10 +42,32 @@ behavior suites.
 - Process drain/termination failures use the distinct closed runtime error
   categories introduced by the contracts story.
 
+## Review correction
+
+- The review identified that group-only signaling could leave a `setsid` child
+  alive and that the final blocking `wait` could hang after the drain deadline.
+  Termination now always attempts the direct child handle after group signaling,
+  converts `try_wait` failures into cleanup state, and uses bounded polling for
+  reaping with no unbounded wait fallback.
+- The escaped-descendant test now gates helper startup, waits for confirmed
+  pipe retention, releases the helper after the runner returns, and waits for
+  its exit marker and process disappearance before dropping the fixture root.
+  The helper's fork parent waits for the post-`setsid` readiness marker, so the
+  test proves the escaped process-group case rather than racing it.
+
 ## Verification
 
-- Focused bounded-process tests pass 4/4 with warnings-denied core Clippy.
+- Focused bounded-process tests pass 6/6 with warnings-denied core Clippy.
 - Full workspace format/check/Clippy/tests pass: 209 core tests, 3 foundation
   integrations, 3 storage integrations, 15 fixture tests, and 6 compiled
   binary tests.
 - Workspace rustdoc, release build, and compiled-binary verification pass.
+
+## Review
+
+- Independent deep review approved the direct-child fallback, bounded reap,
+  `try_wait` cleanup, post-`setsid` startup handshake, and exact escaped-helper
+  disappearance check. Repeated escaped-process runs left no helper processes.
+- The review also accepted the focused direct-fallback and reap-deadline
+  regressions as sufficient coverage; syscall-fault injection remains outside
+  this story's required surface.
