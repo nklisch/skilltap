@@ -32,8 +32,8 @@ success while expanding only requested scopes and never scanning or writing.
   being reported.
 - Global native trees use the documented Codex/Claude observation adapters.
   Project status deliberately does not recursively scan arbitrary project
-  content; documented project inputs are represented as an observation-limit
-  warning until a file-specific adapter exists.
+  content; it observes only documented `.agents`, `.codex`, and `.claude`
+  project roots through dedicated bounded adapters.
 - Status never writes state or native configuration and no longer emits the
   `native_observation_unavailable` placeholder.
 
@@ -43,5 +43,6 @@ success while expanding only requested scopes and never scanning or writing.
 - `cargo check -p skilltap --all-targets --offline`
 - `cargo test -p skilltap --all-targets --offline`
 - `cargo test -p skilltap-harnesses --test detection --offline`
+- `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
 
 Stage: review

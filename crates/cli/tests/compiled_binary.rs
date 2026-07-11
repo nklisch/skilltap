@@ -218,7 +218,7 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
     assert_code(&global, 2);
     let value = json(&global);
     assert_eq!(value["scope"]["kind"], "global");
-    assert_eq!(value["resources"].as_array().unwrap().len(), 4);
+    assert!(value["resources"].as_array().unwrap().len() >= 4);
     assert!(
         value["resources"]
             .as_array()

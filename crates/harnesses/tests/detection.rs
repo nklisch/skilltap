@@ -312,6 +312,32 @@ fn codex_resource_observation_reads_complete_skill_trees_without_writing() {
 }
 
 #[test]
+fn project_resource_observation_stays_inside_documented_native_roots() {
+    let root = TempRoot::new("skilltap-project-resources").unwrap();
+    let home = root.join("home");
+    let project = root.join("project");
+    let skill = project.join(".agents/skills/example");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), b"name: example\n").unwrap();
+    std::fs::write(project.join("unrelated.txt"), b"not observed").unwrap();
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, home.to_str().unwrap())
+        .with(
+            EnvironmentVariable::CodexHome,
+            root.join("codex").to_str().unwrap(),
+        );
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let limits = ExternalTreeLimits::new(8, 64, 4096, 8192, 1024).unwrap();
+    let paths = skilltap_harnesses::codex_observation_paths(
+        &platform,
+        &Scope::Project(AbsolutePath::new(project.to_str().unwrap()).unwrap()),
+    )
+    .unwrap();
+    let count = skilltap_harnesses::observe_codex_project_resources(&paths, limits).unwrap();
+    assert!(count >= 2);
+}
+
+#[test]
 fn claude_paths_keep_global_and_personal_project_inputs_separate() {
     let environment = TestEnvironment::default()
         .with(EnvironmentVariable::Home, "/home/user")

@@ -247,6 +247,64 @@ pub fn observe_claude_resources(
     ))
 }
 
+/// Observes only documented project-owned native roots, never the arbitrary
+/// project root. Missing optional roots are tolerated; an entirely absent
+/// project native surface remains an explicit unavailable observation.
+pub fn observe_codex_project_resources(
+    paths: &CodexObservationPaths,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<usize, ObservationRuntimeError> {
+    let project = paths
+        .project_root
+        .as_ref()
+        .ok_or(ObservationRuntimeError::TreeRootUnavailable)?;
+    observe_project_roots(
+        [
+            absolute_child(project, ".agents"),
+            absolute_child(project, ".codex"),
+        ],
+        limits,
+    )
+}
+
+/// Observes only Claude's documented project directory, never arbitrary
+/// project content outside `.claude`.
+pub fn observe_claude_project_resources(
+    paths: &ClaudeObservationPaths,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<usize, ObservationRuntimeError> {
+    let project = paths
+        .project_root
+        .as_ref()
+        .ok_or(ObservationRuntimeError::TreeRootUnavailable)?;
+    observe_project_roots([absolute_child(project, ".claude")], limits)
+}
+
+fn observe_project_roots(
+    roots: impl IntoIterator<Item = Option<skilltap_core::domain::AbsolutePath>>,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<usize, ObservationRuntimeError> {
+    let mut observed = false;
+    let mut entries = 0_usize;
+    for root in roots.into_iter().flatten() {
+        match SystemExternalTreeObserver.observe(&skilltap_core::runtime::ExternalTreeRequest::new(
+            root, limits,
+        )) {
+            Ok(snapshot) => {
+                observed = true;
+                entries = entries.saturating_add(snapshot.entries().len());
+            }
+            Err(ObservationRuntimeError::TreeRootUnavailable) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    if observed {
+        Ok(entries)
+    } else {
+        Err(ObservationRuntimeError::TreeRootUnavailable)
+    }
+}
+
 /// Composes successful and failed harness siblings without dropping any target.
 pub fn normalize_observations(
     batch: ObservationBatch,

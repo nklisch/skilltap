@@ -15,7 +15,8 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    HarnessKind, detect_configured_installation, observe_claude_resources, observe_codex_resources,
+    HarnessKind, detect_configured_installation, observe_claude_project_resources,
+    observe_claude_resources, observe_codex_project_resources, observe_codex_resources,
     select_profile,
 };
 
@@ -422,10 +423,10 @@ impl NativeObservation {
                     entry = entry.with_field("profile", profile_id.as_str());
                 }
                 match observe_tree(kind, &paths, current_scope, tree_limits) {
-                    Ok(snapshot) => {
+                    Ok(entry_count) => {
                         result.observed_targets += 1;
-                        result.native_entries += snapshot.entries().len();
-                        entry = entry.with_field("native_entries", snapshot.entries().len() as u64);
+                        result.native_entries += entry_count;
+                        entry = entry.with_field("native_entries", entry_count as u64);
                     }
                     Err(error) => {
                         result.failed_targets += 1;
@@ -464,10 +465,7 @@ fn observe_tree(
     paths: &PlatformPaths,
     scope: &Scope,
     limits: ExternalTreeLimits,
-) -> Result<
-    skilltap_core::runtime::ExternalTreeSnapshot,
-    skilltap_core::runtime::ObservationRuntimeError,
-> {
+) -> Result<usize, skilltap_core::runtime::ObservationRuntimeError> {
     match kind {
         HarnessKind::Codex => {
             let inputs =
@@ -475,11 +473,9 @@ fn observe_tree(
                     skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
                 })?;
             if matches!(scope, Scope::Global) {
-                observe_codex_resources(&inputs, limits)
+                observe_codex_resources(&inputs, limits).map(|snapshot| snapshot.entries().len())
             } else {
-                // Project instruction files are single documented inputs. Do not
-                // recursively walk an arbitrary project root during status.
-                Err(skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable)
+                observe_codex_project_resources(&inputs, limits)
             }
         }
         HarnessKind::Claude => {
@@ -488,11 +484,9 @@ fn observe_tree(
                     skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
                 })?;
             if matches!(scope, Scope::Global) {
-                observe_claude_resources(&inputs, limits)
+                observe_claude_resources(&inputs, limits).map(|snapshot| snapshot.entries().len())
             } else {
-                // Claude project settings are a documented file input; avoid a
-                // broad recursive walk of user project content.
-                Err(skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable)
+                observe_claude_project_resources(&inputs, limits)
             }
         }
     }
