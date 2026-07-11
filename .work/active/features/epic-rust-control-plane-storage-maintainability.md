@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-maintainability
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-storage]
@@ -90,3 +90,14 @@ and concurrency coverage.
 - No touched production or test module exceeds roughly 400 lines unless a
   cohesive declaration surface makes that limit actively less clear.
 - The full locked format/check/Clippy/test/rustdoc ladder passes.
+
+## Implementation summary
+
+All four children are complete. Managed-artifact tests are separated into
+tree, lifecycle/security, and failure-mapping files; the production boundary
+keeps every public declaration in its canonical parent while private tree,
+error-translation, and repository implementations live in focused children.
+Document codecs/schema probes are separated from filesystem orchestration, and
+runtime filesystem tests mirror their four adapter contracts. Pre/post test
+lists and public rustdoc/type identities are unchanged. The locked workspace
+passes 157 tests with the concurrently landed CLI output contracts included.
