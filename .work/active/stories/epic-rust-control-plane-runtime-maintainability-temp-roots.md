@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-temp-roots
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: [epic-rust-control-plane-runtime-maintainability-sidecar-tests]
@@ -45,3 +45,11 @@ full locked verification ladder.
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. `TempRoot` owns only generic unique-root creation/path access and
+best-effort cleanup; test-support remains independent of core. Command,
+filesystem, and scope keep their local fixture semantics. All 93 prior test
+identities remain exact and the new lifecycle test brings the green workspace
+inventory to 94.
