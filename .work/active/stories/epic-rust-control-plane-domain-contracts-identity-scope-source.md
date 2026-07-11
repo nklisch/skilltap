@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-identity-scope-source
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: []
@@ -35,3 +35,18 @@ requested/resolved revisions, absolute/relative paths, and fingerprints.
 - Adjacent issues parked: none.
 - Dispatch rationale: direct-read only; Unit 1 had a bounded new-module surface with no existing integration ambiguity.
 - Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace` all pass.
+
+## Review findings (2026-07-11)
+
+- Blocker: `AbsolutePath` and `RelativeArtifactPath` reject `.`/`..` but retain
+  duplicate separators and trailing separators, allowing equivalent filesystem
+  locations to compare as different identity values. Enforce one lexical form
+  at both constructor and serde boundaries.
+- Blocker: `Source` is infallible across fields, permits revisions on local or
+  native sources, and lacks the explicit remote-catalog source kind required by
+  the foundation. Use a fallible constructor/deserializer; permit requested
+  revisions only for Git; require a validated absolute path for local sources;
+  model remote catalogs explicitly; keep native identity in `NativeId` and
+  `ResolvedRevision`, not as a source kind.
+- Important: skilltap-owned tagged/wire values should reject unknown fields so
+  nested persisted contracts cannot silently discard schema drift.
