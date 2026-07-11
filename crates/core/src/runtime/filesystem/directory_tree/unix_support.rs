@@ -167,7 +167,7 @@ pub(super) fn require_regular(file: &File) -> io::Result<DirectoryIdentity> {
 
 pub(super) fn stat_identity_at(parent: RawFd, name: &CStr) -> io::Result<DirectoryIdentity> {
     let metadata = stat_at(parent, name)?;
-    Ok(DirectoryIdentity::new(metadata.st_dev, metadata.st_ino))
+    normalize_stat_identity(metadata.st_dev, metadata.st_ino)
 }
 
 pub(super) fn create_dir_at_verified(parent: &File, name: &CStr) -> io::Result<File> {
@@ -196,12 +196,32 @@ pub(super) fn lock_exclusive(directory: &File) -> io::Result<()> {
 }
 
 pub(super) fn verify_at(parent: RawFd, name: &CStr, expected: DirectoryIdentity) -> io::Result<()> {
-    let actual = stat_at(parent, name)?;
-    if actual.st_dev == expected.device() && actual.st_ino == expected.inode() {
+    let actual = stat_identity_at(parent, name)?;
+    if actual == expected {
         Ok(())
     } else {
         Err(io::Error::other("artifact path identity changed"))
     }
+}
+
+fn normalize_stat_identity<D, I>(device: D, inode: I) -> io::Result<DirectoryIdentity>
+where
+    D: TryInto<u64>,
+    I: TryInto<u64>,
+{
+    let device = device.try_into().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "filesystem device identity is outside the normalized u64 range",
+        )
+    })?;
+    let inode = inode.try_into().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "filesystem inode identity is outside the normalized u64 range",
+        )
+    })?;
+    Ok(DirectoryIdentity::new(device, inode))
 }
 
 pub(super) fn cvt(result: libc::c_int) -> io::Result<libc::c_int> {
@@ -224,11 +244,23 @@ fn clear_errno() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
     fn apple_errno_access_uses_the_platform_symbol() {
         let source = include_str!("unix_support.rs");
         assert!(source.contains("target_vendor = \"apple\""));
         assert!(source.contains("libc::__error()"));
         assert!(source.contains("libc::__errno_location()"));
+    }
+
+    #[test]
+    fn stat_identity_normalizes_linux_unsigned_and_apple_signed_shapes() {
+        let linux = normalize_stat_identity(7_u64, 11_u64).unwrap();
+        let apple = normalize_stat_identity(7_i32, 11_u64).unwrap();
+        assert_eq!(linux, DirectoryIdentity::new(7, 11));
+        assert_eq!(apple, linux);
+        assert!(normalize_stat_identity(-1_i32, 11_u64).is_err());
+        assert!(normalize_stat_identity(7_i32, -1_i64).is_err());
     }
 }

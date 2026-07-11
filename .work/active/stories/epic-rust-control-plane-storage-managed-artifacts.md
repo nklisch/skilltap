@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -140,3 +140,19 @@ substitute for the platform type contract.
 - Corrected verification passed: locked format, all-target check,
   warnings-denied Clippy, 136 workspace tests, warnings-denied rustdoc, exact
   identity comparison, and diff hygiene.
+
+## Final portability correction
+
+- Raw `libc::stat` device and inode values now flow through one checked generic
+  `u64` normalizer. Both identity construction and path comparison consume the
+  normalized `DirectoryIdentity`; no raw signed/unsigned comparison remains.
+- The production normalizer is instantiated in tests with Linux-style unsigned
+  values and Apple-style signed `dev_t` values. Positive identities normalize
+  identically, while negative signed device or inode values fail explicitly.
+- No Apple Rust target is installed in the environment (only
+  `x86_64-unknown-linux-gnu`), so an actual Apple target check was not possible
+  without mutating the global toolchain. The typed signed-shape test exercises
+  the production helper rather than relying on source-string inspection.
+- All 136 pre-correction workspace identities remain; one typed portability
+  identity was added and 137 tests pass. The full locked ladder and three
+  additional consecutive full workspace test runs pass.
