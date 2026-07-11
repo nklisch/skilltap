@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude-integration
 kind: story
-stage: implementing
+stage: review
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-claude
 depends_on: [epic-harness-observation-adoption-claude-paths, epic-harness-observation-adoption-claude-settings, epic-harness-observation-adoption-claude-resources]
@@ -20,3 +20,15 @@ plugin, cache, and skill fixtures. Cover qualified identity, shared project
 non-adoptability, enabled/effective/cache distinctions, trust/consent/policy,
 malformed siblings, deterministic repeated observation, secret-safe errors, and
 byte/type/link/mtime no-mutation.
+
+## Implementation
+
+- Extended the harness integration suite with Claude global/personal path
+  policy, qualified settings identities, shared-project state, complete skill
+  trees, cache/effective evidence composition, malformed siblings, repeat
+  determinism, and no-mutation checks.
+
+## Verification
+
+- Twelve locked harness integration tests and warnings-denied Clippy pass; the
+  full workspace ladder remains green.
