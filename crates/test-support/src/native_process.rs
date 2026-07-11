@@ -1,14 +1,14 @@
 use std::{
     collections::BTreeMap,
     fs, io,
-    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::Command,
 };
 
 use crate::{FileBarrier, TempRoot};
 
-const ESCAPED_PIPE_HOLDER: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/escaped-pipe-holder"));
+const FAKE_NATIVE_EXECUTABLE: &str = env!("SKILLTAP_FAKE_NATIVE_EXECUTABLE");
+const ESCAPED_PIPE_HOLDER: &str = env!("SKILLTAP_ESCAPED_PIPE_HOLDER");
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PipeHolder {
@@ -66,7 +66,13 @@ impl FakeNativeBuilder {
     }
 
     pub fn build(self) -> io::Result<FakeNativeProcess> {
-        let root = TempRoot::new("skilltap-fake-native")?;
+        let stable_executable = Path::new(FAKE_NATIVE_EXECUTABLE);
+        let root = TempRoot::new_in(
+            stable_executable
+                .parent()
+                .expect("build-time fixture has a parent"),
+            "skilltap-fake-native",
+        )?;
         let captures = root.join("captures");
         fs::create_dir_all(captures.join("argv"))?;
         fs::create_dir_all(captures.join("environment"))?;
@@ -78,6 +84,9 @@ impl FakeNativeBuilder {
             .start_barrier
             .then(|| FileBarrier::new(&root.join("barriers"), "start"))
             .transpose()?;
+        let hang_barrier = matches!(self.mode, FakeNativeMode::Hang)
+            .then(|| FileBarrier::new(&root.join("barriers"), "hang"))
+            .transpose()?;
         let pipe_holder_barrier = matches!(self.mode, FakeNativeMode::RetainPipes(_))
             .then(|| FileBarrier::new(&root.join("barriers"), "pipe-holder"))
             .transpose()?;
@@ -87,20 +96,22 @@ impl FakeNativeBuilder {
         )
         .then(|| {
             let path = root.join("escaped-pipe-holder");
-            materialize_executable(&path, ESCAPED_PIPE_HOLDER)?;
+            fs::hard_link(ESCAPED_PIPE_HOLDER, &path)?;
             Ok::<_, io::Error>(path)
         })
         .transpose()?;
         let executable = root.join("fake-native");
-        let script = render_script(
+        let behavior = render_script(
             &captures,
             &self.environment,
             self.mode,
             start_barrier.as_ref(),
+            hang_barrier.as_ref(),
             pipe_holder_barrier.as_ref(),
             escaped_helper.as_deref(),
         );
-        materialize_executable(&executable, script.as_bytes())?;
+        fs::write(root.join("behavior"), behavior)?;
+        fs::hard_link(stable_executable, &executable)?;
 
         Ok(FakeNativeProcess {
             _root: root,
@@ -109,6 +120,7 @@ impl FakeNativeBuilder {
             environment: self.environment,
             mode: self.mode,
             start_barrier,
+            hang_barrier,
             pipe_holder_barrier,
         })
     }
@@ -122,6 +134,7 @@ pub struct FakeNativeProcess {
     environment: Vec<String>,
     mode: FakeNativeMode,
     start_barrier: Option<FileBarrier>,
+    hang_barrier: Option<FileBarrier>,
     pipe_holder_barrier: Option<FileBarrier>,
 }
 
@@ -140,6 +153,10 @@ impl FakeNativeProcess {
 
     pub fn start_barrier(&self) -> Option<&FileBarrier> {
         self.start_barrier.as_ref()
+    }
+
+    pub fn hang_barrier(&self) -> Option<&FileBarrier> {
+        self.hang_barrier.as_ref()
     }
 
     pub fn pipe_holder_barrier(&self) -> Option<&FileBarrier> {
@@ -221,10 +238,11 @@ fn render_script(
     environment: &[String],
     mode: FakeNativeMode,
     start_barrier: Option<&FileBarrier>,
+    hang_barrier: Option<&FileBarrier>,
     pipe_holder_barrier: Option<&FileBarrier>,
     escaped_helper: Option<&Path>,
 ) -> String {
-    let mut script = String::from("#!/bin/sh\nset -eu\numask 077\n");
+    let mut script = String::from("umask 077\n");
     script.push_str(&format!(
         "capture={}\nprintf '%s' \"$PWD\" > \"$capture/working-directory\"\n",
         shell_quote(captures)
@@ -245,7 +263,13 @@ fn render_script(
     }
     match mode {
         FakeNativeMode::Exit(code) => script.push_str(&format!("exit {code}\n")),
-        FakeNativeMode::Hang => script.push_str("while :; do /bin/sleep 3600; done\n"),
+        FakeNativeMode::Hang => {
+            let barrier = hang_barrier.expect("hang mode has a readiness barrier");
+            script.push_str(&format!(
+                ": > {}\nexec /bin/sleep 3600\n",
+                shell_quote(barrier.ready_path())
+            ));
+        }
         FakeNativeMode::Flood {
             stdout_bytes,
             stderr_bytes,
@@ -326,16 +350,9 @@ fn validate_environment_name(name: &str) -> io::Result<()> {
     }
 }
 
-fn materialize_executable(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    fs::write(path, bytes)?;
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_mode(0o700);
-    fs::set_permissions(path, permissions)
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{io::Read, process::Stdio, time::Duration};
+    use std::{io::Read, process::Stdio, thread, time::Duration};
 
     use super::*;
 
@@ -348,6 +365,10 @@ mod tests {
             .unwrap()
             .build()
             .unwrap();
+        assert_eq!(
+            native.executable().canonicalize().unwrap(),
+            native.executable()
+        );
         let status = native
             .command()
             .args(["", "two words", "line\nbreak"])
@@ -453,5 +474,47 @@ mod tests {
                 .kind(),
             io::ErrorKind::InvalidInput
         );
+    }
+
+    #[test]
+    fn hang_stays_alive_until_deterministically_killed_and_reaped() {
+        let native = FakeNativeProcess::new(FakeNativeMode::Hang).unwrap();
+        let mut child = native.command().spawn().unwrap();
+        let process_id = child.id();
+        native
+            .hang_barrier()
+            .unwrap()
+            .wait_until_ready(Duration::from_secs(1))
+            .unwrap();
+        assert!(child.try_wait().unwrap().is_none());
+
+        child.kill().unwrap();
+        assert!(!child.wait().unwrap().success());
+        let probe = Command::new("/bin/kill")
+            .args(["-0", &process_id.to_string()])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .unwrap();
+        assert!(!probe.success(), "reaped fixture process must not remain");
+    }
+
+    #[test]
+    fn executable_publication_survives_parallel_fixture_churn() {
+        thread::scope(|scope| {
+            let workers = (0..8)
+                .map(|_| {
+                    scope.spawn(|| {
+                        for _ in 0..32 {
+                            let native = FakeNativeProcess::new(FakeNativeMode::Exit(0)).unwrap();
+                            assert!(native.command().status().unwrap().success());
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
     }
 }

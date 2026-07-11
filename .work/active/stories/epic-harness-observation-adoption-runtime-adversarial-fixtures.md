@@ -40,3 +40,23 @@ cfg-specific Unix behavior must execute natively on Linux and macOS.
   support embeds a tiny build-time POSIX helper so Linux and macOS do not depend
   on a platform `setsid` executable.
 - Adjacent issues parked: none.
+
+## Review correction
+
+- Root cause: fake executables were written directly at their final path and an
+  immediate parallel `exec` can intermittently receive `ETXTBSY` on the test
+  filesystem even after the convenience write returns.
+- The build script now publishes one generic fake-native executable and escaped
+  pipe-holder helper under `OUT_DIR`, before tests start. Each fixture creates
+  only unique hard links to those stable executable inodes and a non-executable
+  behavior file resolved from `$0`; keeping the fixture root on the same
+  filesystem also means canonical executable resolution preserves that unique
+  hard-link path. Raw `command()` and `executable()` use the same path as
+  product-runner tests, with no hidden retry, environment, or argv.
+- Added a parallel stress regression (eight workers creating and executing 32
+  fixtures each) that failed immediately before the correction, plus a focused
+  hang regression that observes readiness, proves liveness, kills, reaps, and
+  verifies that the fixture PID no longer exists. Hang uses `exec sleep`, so it
+  cannot leave a shell child orphan.
+- Verification: the stress regression passed 20 consecutive iterations and the
+  normal parallel package suite passed 30 consecutive iterations.
