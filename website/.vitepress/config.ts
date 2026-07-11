@@ -1,15 +1,14 @@
 import { defineConfig, type HeadConfig } from "vitepress";
 
 const SITE_URL = "https://skilltap.dev";
-const OG_TITLE = "skilltap — Homebrew taps for AI agent skills";
+const OG_TITLE = "skilltap — Manage Codex and Claude Code environments";
 const OG_DESC =
-  "Install agent skills from any git host. Agent-agnostic, multi-source, secure.";
+  "A personal control plane for marketplaces, plugins, skills, and shared instructions.";
 const OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 export default defineConfig({
   title: "skilltap",
-  description:
-    "Install agent skills from any git host. Homebrew taps for AI agent skills.",
+  description: OG_DESC,
   cleanUrls: true,
   lastUpdated: true,
   appearance: "force-dark",
@@ -112,10 +111,6 @@ gtag('config', 'G-B0D0L2YB0N');`],
         activeMatch: "/reference/",
       },
       {
-        text: "Changelog",
-        link: "/changelog",
-      },
-      {
         text: "GitHub",
         link: "https://github.com/nklisch/skilltap",
       },
@@ -128,30 +123,14 @@ gtag('config', 'G-B0D0L2YB0N');`],
           items: [
             { text: "What is skilltap?", link: "/guide/what-is-skilltap" },
             { text: "Getting Started", link: "/guide/getting-started" },
-            { text: "Installation", link: "/guide/installation" },
+            { text: "Manage Environments", link: "/guide/managing-environments" },
           ],
         },
         {
-          text: "Using skilltap",
+          text: "Operations",
           items: [
-            { text: "Installing Skills", link: "/guide/installing-skills" },
-            { text: "Creating Skills", link: "/guide/creating-skills" },
-            { text: "Taps", link: "/guide/taps" },
-            { text: "Teams & Organizations", link: "/guide/teams" },
-          ],
-        },
-        {
-          text: "Configuration",
-          items: [
-            { text: "Security", link: "/guide/security" },
-            { text: "Configuration", link: "/guide/configuration" },
-          ],
-        },
-        {
-          text: "Tooling",
-          items: [
-            { text: "Doctor", link: "/guide/doctor" },
-            { text: "Shell Completions", link: "/guide/shell-completions" },
+            { text: "Shared Instructions", link: "/guide/instructions" },
+            { text: "Updates and Daemon", link: "/guide/updates" },
           ],
         },
       ],
@@ -160,9 +139,7 @@ gtag('config', 'G-B0D0L2YB0N');`],
           text: "Reference",
           items: [
             { text: "CLI Commands", link: "/reference/cli" },
-            { text: "SKILL.md Format", link: "/reference/skill-format" },
-            { text: "tap.json Format", link: "/reference/tap-format" },
-            { text: "Config Options", link: "/reference/config-options" },
+            { text: "State and Configuration", link: "/reference/state" },
           ],
         },
       ],

@@ -9,8 +9,8 @@ VitePress site for [skilltap.dev](https://skilltap.dev).
 ## Development
 
 ```bash
-bun install          # from repo root
-bun run --cwd website dev
+npm ci
+npm run dev
 ```
 
 Dev server starts at `http://localhost:5173`.
@@ -18,9 +18,12 @@ Dev server starts at `http://localhost:5173`.
 ## Build & Preview
 
 ```bash
-bun run --cwd website build
-bun run --cwd website preview
+npm run build
+npm run preview
 ```
+
+The website is an isolated npm project. Root Cargo commands never install or
+execute its dependencies.
 
 ## Deployment
 

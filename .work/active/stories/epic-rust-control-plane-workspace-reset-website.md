@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-website
 kind: story
-stage: implementing
+stage: review
 tags: [content, infra]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: [epic-rust-control-plane-workspace-reset-workspace]
@@ -22,7 +22,22 @@ Rust product build or reintroduce retired behavior.
 
 ## Acceptance criteria
 
-- [ ] Clean npm install and website build pass.
-- [ ] Public pages and generated LLM content contain no retired v2 surface.
-- [ ] The website installer copy matches root `install.sh`.
-- [ ] Root Cargo commands remain independent of website dependencies.
+- [x] Clean npm install and website build pass.
+- [x] Public pages and generated LLM content contain no retired v2 surface.
+- [x] The website installer copy matches root `install.sh`.
+- [x] Root Cargo commands remain independent of website dependencies.
+
+## Implementation notes
+
+- Files changed: `website/**` and `.github/workflows/deploy.yml`.
+- Tests added: none; this story is verified through the clean website build,
+  deterministic generator comparison, installer comparison, workflow parse,
+  and root Cargo metadata check.
+- Discrepancies from design: the deployment workflow also moved from Bun to
+  Node/npm so the production website path observes the same isolation contract.
+- Adjacent issues parked: none.
+- Verification: `npm --prefix website ci`, two consecutive
+  `npm --prefix website run build` runs with identical `llms-full.txt` hashes,
+  `cmp install.sh website/public/install.sh`, Ruby YAML parsing of the deploy
+  workflow, `cargo metadata --no-deps --format-version 1`, retired-surface
+  searches, and `git diff --check` all passed.
