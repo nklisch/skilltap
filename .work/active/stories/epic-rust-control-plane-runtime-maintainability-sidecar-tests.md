@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-sidecar-tests
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: []
@@ -36,3 +36,10 @@ and the 93-test inventory. Run the full locked verification ladder.
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Both parent modules retain the same private `tests` module name; all
+22 filesystem/scope fully qualified names and the complete 93-test inventory
+match the baseline exactly. The change is mechanical and the focused listing
+plus full locked verification remain green.
