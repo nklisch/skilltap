@@ -33,8 +33,8 @@ next steps in plain and JSON modes.
 
 ## Implementation notes
 
-`instructions status` now exposes a deterministic modeled-scope report and
-explicitly reports that native bridge probing is pending. Global/project setup
+`instructions status` now probes canonical and bridge paths and reports
+managed/missing/divergent/broken health deterministically. Global/project setup
 now creates a missing
 canonical `AGENTS.md` and missing Codex/Claude bridges through the core
 plan/lock/journal path, records instruction resources in inventory/state, and

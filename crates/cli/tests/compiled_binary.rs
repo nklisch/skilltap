@@ -543,6 +543,18 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
             .contains("instructions:")
     );
 
+    let status = run(&machine, &["instructions", "status", "--json"]);
+    assert_code(&status, 0);
+    let status_value = json(&status);
+    assert_eq!(status_value["result"], "completed");
+    assert!(
+        status_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["status"] == "managed")
+    );
+
     let repeat = run(&machine, &["instructions", "setup", "--json"]);
     assert_code(&repeat, 0);
     assert_eq!(json(&repeat)["summary"]["changed"], false);

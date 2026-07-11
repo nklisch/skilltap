@@ -535,22 +535,97 @@ impl StatusApplication<'_> {
             }
         };
         outcome.scope = Some(scope.output.clone());
-        let path_count = if scope.resolved.is_empty() {
-            0
+        let enabled = enabled_harnesses(&documents.config);
+        if enabled.is_empty() {
+            return outcome.with_error(ErrorDetail::new(
+                "no_enabled_harnesses",
+                "No harness is enabled in skilltap configuration.",
+            ));
+        }
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "platform_paths_unavailable",
+                    "The skilltap configuration paths could not be resolved.",
+                ));
+            }
+        };
+        let filesystem = SystemFileSystem;
+        let mode = documents.config.instructions().claude_mode;
+        let mut path_count = 0_u64;
+        let mut healthy = true;
+        for concrete_scope in &scope.resolved {
+            let (canonical, bridges) = instruction_locations(&paths, concrete_scope, &enabled);
+            let canonical_status = match filesystem.inspect(&canonical) {
+                Ok(metadata) => match metadata.kind() {
+                    FileKind::Missing => "missing",
+                    FileKind::RegularFile => "present",
+                    _ => "conflict",
+                },
+                Err(_) => "unreadable",
+            };
+            path_count += 1;
+            outcome = outcome.with_resource(
+                OutputEntry::new(
+                    instruction_resource_key(concrete_scope, "canonical", "root")
+                        .map(|key| key.to_string())
+                        .unwrap_or_else(|| "instructions:canonical".to_owned()),
+                    canonical_status,
+                )
+                .with_field("path", canonical.as_str())
+                .with_field("scope", scope_label(concrete_scope)),
+            );
+            if canonical_status != "present" {
+                healthy = false;
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "instruction_canonical_unhealthy",
+                        "The canonical AGENTS.md file is missing or not a regular file.",
+                    )
+                    .with_context("scope", scope_label(concrete_scope)),
+                );
+            }
+            for (target, bridge) in bridges {
+                path_count += 1;
+                let status = instruction_bridge_status(&filesystem, &bridge, concrete_scope, mode);
+                outcome = outcome.with_resource(
+                    OutputEntry::new(
+                        instruction_resource_key(concrete_scope, "bridge", target.as_str())
+                            .map(|key| key.to_string())
+                            .unwrap_or_else(|| format!("instructions:bridge:{}", target)),
+                        status,
+                    )
+                    .with_field("path", bridge.as_str())
+                    .with_field("target", target.as_str())
+                    .with_field("scope", scope_label(concrete_scope)),
+                );
+                if status != "managed" {
+                    healthy = false;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "instruction_bridge_unhealthy",
+                            "The harness instruction bridge is missing or divergent.",
+                        )
+                        .with_context("target", target.as_str())
+                        .with_context("scope", scope_label(concrete_scope)),
+                    );
+                }
+            }
+        }
+        if healthy {
+            outcome.result = ResultClass::Completed;
         } else {
-            scope.resolved.len() * 2
-        } as u64;
+            outcome.result = ResultClass::AttentionRequired;
+            outcome = outcome.with_next_action(NextAction::new(
+                "repair_instruction_bridges",
+                "Run instructions setup or repair after reviewing the reported paths.",
+            ));
+        }
         outcome
             .with_summary("scopes", scope.count)
             .with_summary("instruction_paths", path_count)
-            .with_warning(Warning::new(
-                "instruction_observation_pending",
-                "Instruction locations are modeled, but native bridge probing is not yet composed.",
-            ))
-            .with_next_action(NextAction::new(
-                "inspect_instruction_bridges",
-                "Run status again after instruction bridge observation is enabled.",
-            ))
     }
 
     /// Render a deterministic lifecycle preview while the resource-specific
@@ -2313,6 +2388,50 @@ fn instruction_desired_resource(resource: ResourceKey, target: HarnessId) -> Des
         BTreeSet::new(),
     )
     .expect("instruction desired resource is valid")
+}
+
+fn instruction_bridge_status(
+    filesystem: &dyn FileSystem,
+    bridge: &AbsolutePath,
+    scope: &Scope,
+    mode: ClaudeInstructionMode,
+) -> &'static str {
+    let metadata = match filesystem.inspect(bridge) {
+        Ok(metadata) => metadata,
+        Err(_) => return "unreadable",
+    };
+    match metadata.kind() {
+        FileKind::Missing => "missing",
+        FileKind::Symlink => {
+            let expected = match scope {
+                Scope::Global => "../AGENTS.md",
+                Scope::Project(_) => "AGENTS.md",
+            };
+            if mode == ClaudeInstructionMode::Symlink
+                && metadata
+                    .link_target()
+                    .is_some_and(|target| target == std::path::Path::new(expected))
+            {
+                "managed"
+            } else {
+                "divergent"
+            }
+        }
+        FileKind::RegularFile => {
+            let expected = match scope {
+                Scope::Global => b"@~/AGENTS.md\n".as_slice(),
+                Scope::Project(_) => b"@AGENTS.md\n".as_slice(),
+            };
+            if mode == ClaudeInstructionMode::Import
+                && filesystem.read(bridge).ok().as_deref() == Some(expected)
+            {
+                "managed"
+            } else {
+                "divergent"
+            }
+        }
+        _ => "broken",
+    }
 }
 
 fn skill_destination(
