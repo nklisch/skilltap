@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-maintainability-managed-module
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-storage-maintainability
 depends_on: [epic-rust-control-plane-storage-maintainability-managed-tests]
@@ -39,3 +39,9 @@ locked ladder and compare the identity baseline.
   pass.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. All public declarations and their rustdoc/type identities remain in
+the parent module; the private implementation split preserves the exact test
+list, behavior, and locked verification ladder.
