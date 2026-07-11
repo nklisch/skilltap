@@ -1,6 +1,6 @@
 use std::{
     ffi::{CStr, CString, OsString},
-    fs::File,
+    fs::{File, TryLockError},
     io,
     os::{
         fd::{AsRawFd, FromRawFd, RawFd},
@@ -25,9 +25,9 @@ pub(super) fn open_absolute_directory(path: &AbsolutePath, create: bool) -> io::
         match open_dir_at(directory.as_raw_fd(), &name) {
             Ok(next) => directory = next,
             Err(error) if create && error.kind() == io::ErrorKind::NotFound => {
-                mkdir_at(directory.as_raw_fd(), &name)?;
+                let next = create_dir_at_verified(&directory, &name)?;
                 directory.sync_all()?;
-                directory = open_dir_at(directory.as_raw_fd(), &name)?;
+                directory = next;
             }
             Err(error) => return Err(error),
         }
@@ -70,9 +70,9 @@ pub(super) fn open_relative_parent(
         match open_dir_at(directory.as_raw_fd(), &name) {
             Ok(next) => directory = next,
             Err(error) if create && error.kind() == io::ErrorKind::NotFound => {
-                mkdir_at(directory.as_raw_fd(), &name)?;
+                let next = create_dir_at_verified(&directory, &name)?;
                 directory.sync_all()?;
-                directory = open_dir_at(directory.as_raw_fd(), &name)?;
+                directory = next;
             }
             Err(error) => return Err(error),
         }
@@ -89,7 +89,7 @@ pub(super) fn directory_names(directory: &File) -> io::Result<Vec<String>> {
     }
     let mut names = Vec::new();
     loop {
-        unsafe { *libc::__errno_location() = 0 };
+        clear_errno();
         let entry = unsafe { libc::readdir(stream) };
         if entry.is_null() {
             let error = io::Error::last_os_error();
@@ -149,9 +149,50 @@ pub(super) fn stat_at(parent: RawFd, name: &CStr) -> io::Result<libc::stat> {
     Ok(unsafe { metadata.assume_init() })
 }
 
-pub(super) fn directory_identity(file: &File) -> io::Result<DirectoryIdentity> {
+pub(super) fn require_directory(file: &File) -> io::Result<DirectoryIdentity> {
     let metadata = file.metadata()?;
+    if !metadata.is_dir() {
+        return Err(io::Error::other("expected an opened directory"));
+    }
     Ok(DirectoryIdentity::new(metadata.dev(), metadata.ino()))
+}
+
+pub(super) fn require_regular(file: &File) -> io::Result<DirectoryIdentity> {
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Err(io::Error::other("expected an opened regular file"));
+    }
+    Ok(DirectoryIdentity::new(metadata.dev(), metadata.ino()))
+}
+
+pub(super) fn stat_identity_at(parent: RawFd, name: &CStr) -> io::Result<DirectoryIdentity> {
+    let metadata = stat_at(parent, name)?;
+    Ok(DirectoryIdentity::new(metadata.st_dev, metadata.st_ino))
+}
+
+pub(super) fn create_dir_at_verified(parent: &File, name: &CStr) -> io::Result<File> {
+    mkdir_at(parent.as_raw_fd(), name)?;
+    let created = stat_identity_at(parent.as_raw_fd(), name)?;
+    let directory = open_dir_at(parent.as_raw_fd(), name)?;
+    let opened = require_directory(&directory)?;
+    if created != opened {
+        return Err(io::Error::other(
+            "created directory identity changed before open",
+        ));
+    }
+    verify_at(parent.as_raw_fd(), name, opened)?;
+    Ok(directory)
+}
+
+pub(super) fn lock_exclusive(directory: &File) -> io::Result<()> {
+    match directory.try_lock() {
+        Ok(()) => Ok(()),
+        Err(TryLockError::WouldBlock) => Err(io::Error::new(
+            io::ErrorKind::WouldBlock,
+            "managed directory is locked by another writer",
+        )),
+        Err(TryLockError::Error(source)) => Err(source),
+    }
 }
 
 pub(super) fn verify_at(parent: RawFd, name: &CStr, expected: DirectoryIdentity) -> io::Result<()> {
@@ -168,5 +209,26 @@ pub(super) fn cvt(result: libc::c_int) -> io::Result<libc::c_int> {
         Err(io::Error::last_os_error())
     } else {
         Ok(result)
+    }
+}
+
+#[cfg(target_vendor = "apple")]
+fn clear_errno() {
+    unsafe { *libc::__error() = 0 };
+}
+
+#[cfg(not(target_vendor = "apple"))]
+fn clear_errno() {
+    unsafe { *libc::__errno_location() = 0 };
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn apple_errno_access_uses_the_platform_symbol() {
+        let source = include_str!("unix_support.rs");
+        assert!(source.contains("target_vendor = \"apple\""));
+        assert!(source.contains("libc::__error()"));
+        assert!(source.contains("libc::__errno_location()"));
     }
 }

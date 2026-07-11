@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -103,3 +103,34 @@ contract is therefore the same as the configuration lock: exclusive parent
 advisory locking for cooperating skilltap CLI/daemon writers, descriptor-bound
 no-follow operations, and identity verification at every namespace boundary.
 Tests must deterministically exercise each former seam and every residual state.
+
+## Review corrections
+
+- Portability: directory enumeration now clears errno through Apple `__error()`
+  under `target_vendor = "apple"` and `__errno_location()` elsewhere; a
+  source-level guard test requires both cfg branches.
+- Cooperating writers: publish and remove hold an exclusive advisory lock on
+  the durable `managed/` root for the complete namespace operation. A
+  deterministic contention test proves a second writer fails before creation.
+- Identity proof: every created directory is `mkdirat` → `fstatat` → no-follow
+  `openat` → descriptor-type check → path identity check. Destination and file
+  identities are verified before writes, after file sync, and before success.
+- Entry safety: recursive load/remove re-check descriptor file type immediately
+  after nonblocking open. Deterministic post-stat swaps to FIFOs are rejected
+  without reading, unlinking, or hanging; the replacement FIFO remains.
+- Residuals: partial directory errors and managed residuals now carry exact
+  destination presence (`present`, `removed`, or `unknown`), optional observed
+  device/inode, and parent-directory sync state. Injected cleanup tests cover a
+  present owned inode after removal refusal and removed destination with
+  uncertain durability after unlink succeeds but parent sync fails.
+- Occupied paths: publish retains `Publish` across occupied load/compare errors.
+  Backup retries occupied stale/mismatched candidates, including load failures,
+  and only reports `Backup` conflict after 32 exclusive candidates are exhausted.
+- Structure: recursive Unix tree I/O moved to private `tree_io.rs`; production
+  directory-tree modules are 368, 176, and 234 lines.
+- Tests added by correction: eight deterministic identities (Apple cfg, writer
+  lock, two FIFO races, two residual states, publish action, backup retry).
+  All 128 pre-correction workspace identities remain and 136 now pass.
+- Corrected verification passed: locked format, all-target check,
+  warnings-denied Clippy, 136 workspace tests, warnings-denied rustdoc, exact
+  identity comparison, and diff hygiene.

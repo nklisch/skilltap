@@ -1,13 +1,13 @@
 #![cfg(unix)]
 
-use std::{collections::BTreeMap, fs, io, path::PathBuf};
+use std::{cell::Cell, collections::BTreeMap, fs, io, path::PathBuf};
 
 use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::{
     domain::FingerprintAlgorithm,
-    runtime::{DirectoryPublishOutcome, SystemFileSystem},
+    runtime::{DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState, SystemFileSystem},
 };
 
 fn setup() -> (TempRoot, FileManagedArtifactRepository<'static>) {
@@ -278,7 +278,9 @@ impl DirectoryTreeFileSystem for PartialFileSystem {
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
         Err(RuntimeError::PartialDirectoryPublication {
             path: managed_root.clone(),
-            identity: DirectoryIdentity::new(7, 11),
+            identity: Some(DirectoryIdentity::new(7, 11)),
+            presence: DirectoryPathState::Present,
+            parent_sync: DirectorySyncState::Synced,
             source: io::Error::other("publish failed"),
             cleanup: io::Error::other("cleanup failed"),
         })
@@ -322,5 +324,125 @@ fn cleanup_failure_reports_exact_owned_residual_context() {
     let residual = error.residual().unwrap();
     assert_eq!(residual.owner(), &owner);
     assert_eq!(residual.path(), error.path().unwrap());
-    assert_eq!(residual.identity(), DirectoryIdentity::new(7, 11));
+    assert_eq!(residual.identity(), Some(DirectoryIdentity::new(7, 11)));
+    assert_eq!(residual.presence(), DirectoryPathState::Present);
+    assert_eq!(residual.parent_sync(), DirectorySyncState::Synced);
+}
+
+struct OccupiedFileSystem {
+    occupied: usize,
+    calls: Cell<usize>,
+    load_fails: bool,
+}
+
+impl OccupiedFileSystem {
+    fn new(occupied: usize, load_fails: bool) -> Self {
+        Self {
+            occupied,
+            calls: Cell::new(0),
+            load_fails,
+        }
+    }
+}
+
+impl DirectoryTreeFileSystem for OccupiedFileSystem {
+    fn publish_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    ) -> Result<DirectoryPublishOutcome, RuntimeError> {
+        let call = self.calls.get() + 1;
+        self.calls.set(call);
+        if call <= self.occupied {
+            Ok(DirectoryPublishOutcome::AlreadyExists)
+        } else {
+            Ok(DirectoryPublishOutcome::Published(DirectoryIdentity::new(
+                3,
+                call as u64,
+            )))
+        }
+    }
+
+    fn load_tree_no_follow(
+        &self,
+        managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+        if self.load_fails {
+            Err(RuntimeError::FileSystem {
+                action: crate::runtime::FileSystemAction::Read,
+                path: managed_root.clone(),
+                source: io::Error::other("occupied path cannot be loaded"),
+            })
+        } else {
+            Ok((
+                DirectoryIdentity::new(2, 2),
+                BTreeMap::from([(RelativeArtifactPath::new("different").unwrap(), vec![9])]),
+            ))
+        }
+    }
+
+    fn remove_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+        _expected: DirectoryIdentity,
+    ) -> Result<DirectoryIdentity, RuntimeError> {
+        unreachable!()
+    }
+}
+
+#[test]
+fn occupied_publish_errors_keep_the_publish_action_for_load_and_compare() {
+    let owner = owner("skill:occupied");
+    for load_fails in [false, true] {
+        let filesystem = OccupiedFileSystem::new(usize::MAX, load_fails);
+        let repository = FileManagedArtifactRepository::new(
+            &filesystem,
+            AbsolutePath::new("/machine/skilltap").unwrap(),
+        )
+        .unwrap();
+        let error = repository
+            .publish(
+                &owner,
+                ArtifactRole::DirectSkill,
+                &fingerprint('a'),
+                &skill_tree(),
+            )
+            .unwrap_err();
+        assert_eq!(error.action(), ManagedArtifactAction::Publish);
+        assert_eq!(
+            error.failure(),
+            if load_fails {
+                ManagedArtifactFailure::Runtime
+            } else {
+                ManagedArtifactFailure::Conflict
+            }
+        );
+    }
+}
+
+#[test]
+fn backup_retries_stale_occupied_paths_and_exhausts_with_backup_context() {
+    let owner = owner("skill:backup-collision");
+    let filesystem = OccupiedFileSystem::new(2, false);
+    let repository = FileManagedArtifactRepository::new(
+        &filesystem,
+        AbsolutePath::new("/machine/skilltap").unwrap(),
+    )
+    .unwrap();
+    repository.backup(&owner, &skill_tree()).unwrap();
+    assert_eq!(filesystem.calls.get(), 3);
+
+    let exhausted = OccupiedFileSystem::new(usize::MAX, true);
+    let repository = FileManagedArtifactRepository::new(
+        &exhausted,
+        AbsolutePath::new("/machine/skilltap").unwrap(),
+    )
+    .unwrap();
+    let error = repository.backup(&owner, &skill_tree()).unwrap_err();
+    assert_eq!(exhausted.calls.get(), 32);
+    assert_eq!(error.action(), ManagedArtifactAction::Backup);
+    assert_eq!(error.failure(), ManagedArtifactFailure::Conflict);
 }

@@ -117,7 +117,9 @@ pub enum ManagedArtifactFailure {
 pub struct ManagedArtifactResidual {
     owner: ResourceId,
     path: RelativeArtifactPath,
-    identity: DirectoryIdentity,
+    identity: Option<DirectoryIdentity>,
+    presence: crate::runtime::DirectoryPathState,
+    parent_sync: crate::runtime::DirectorySyncState,
 }
 
 impl ManagedArtifactResidual {
@@ -129,8 +131,16 @@ impl ManagedArtifactResidual {
         &self.path
     }
 
-    pub const fn identity(&self) -> DirectoryIdentity {
+    pub const fn identity(&self) -> Option<DirectoryIdentity> {
         self.identity
+    }
+
+    pub const fn presence(&self) -> crate::runtime::DirectoryPathState {
+        self.presence
+    }
+
+    pub const fn parent_sync(&self) -> crate::runtime::DirectorySyncState {
+        self.parent_sync
     }
 }
 
@@ -139,7 +149,7 @@ pub struct ManagedArtifactError {
     owner: ResourceId,
     path: Option<RelativeArtifactPath>,
     failure: ManagedArtifactFailure,
-    residual: Option<ManagedArtifactResidual>,
+    residual: Option<Box<ManagedArtifactResidual>>,
 }
 
 impl ManagedArtifactError {
@@ -159,8 +169,8 @@ impl ManagedArtifactError {
         self.failure
     }
 
-    pub const fn residual(&self) -> Option<&ManagedArtifactResidual> {
-        self.residual.as_ref()
+    pub fn residual(&self) -> Option<&ManagedArtifactResidual> {
+        self.residual.as_deref()
     }
 
     fn new(
@@ -185,16 +195,23 @@ impl ManagedArtifactError {
         error: RuntimeError,
     ) -> Self {
         match error {
-            RuntimeError::PartialDirectoryPublication { identity, .. } => Self {
+            RuntimeError::PartialDirectoryPublication {
+                identity,
+                presence,
+                parent_sync,
+                ..
+            } => Self {
                 action,
                 owner: owner.clone(),
                 path: Some(path.clone()),
                 failure: ManagedArtifactFailure::PartialPublication,
-                residual: Some(ManagedArtifactResidual {
+                residual: Some(Box::new(ManagedArtifactResidual {
                     owner: owner.clone(),
                     path: path.clone(),
                     identity,
-                }),
+                    presence,
+                    parent_sync,
+                })),
             },
             _ => Self::new(action, owner, Some(path), ManagedArtifactFailure::Runtime),
         }
@@ -354,7 +371,7 @@ impl<'a> FileManagedArtifactRepository<'a> {
                 }))
             }
             DirectoryPublishOutcome::AlreadyExists => {
-                let loaded = self.load(owner, &record)?;
+                let loaded = self.load_with_action(owner, &record, action)?;
                 if loaded.tree() == tree {
                     Ok(ArtifactPublication::Existing(loaded.handle))
                 } else {
@@ -367,6 +384,41 @@ impl<'a> FileManagedArtifactRepository<'a> {
                 }
             }
         }
+    }
+
+    fn load_with_action(
+        &self,
+        owner: &ResourceId,
+        record: &ManagedArtifactRecord,
+        action: ManagedArtifactAction,
+    ) -> Result<LoadedArtifact, ManagedArtifactError> {
+        validate_record(owner, record).map_err(|()| {
+            ManagedArtifactError::new(
+                action,
+                owner,
+                Some(record.path()),
+                ManagedArtifactFailure::InvalidRecord,
+            )
+        })?;
+        let (identity, files) = self
+            .filesystem
+            .load_tree_no_follow(&self.managed_root, record.path())
+            .map_err(|error| ManagedArtifactError::runtime(action, owner, record.path(), error))?;
+        let tree = ArtifactTree::from_validated(files).map_err(|_| {
+            ManagedArtifactError::new(
+                action,
+                owner,
+                Some(record.path()),
+                ManagedArtifactFailure::Conflict,
+            )
+        })?;
+        Ok(LoadedArtifact {
+            handle: ManagedArtifactHandle {
+                record: record.clone(),
+                identity,
+            },
+            tree,
+        })
     }
 }
 
@@ -424,16 +476,25 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
                     ManagedArtifactFailure::InvalidRecord,
                 )
             })?;
-            match self.publish_at(
-                owner,
-                ArtifactRole::Backup,
-                None,
-                path,
-                tree,
-                ManagedArtifactAction::Backup,
-            )? {
-                ArtifactPublication::Published(handle) => return Ok(handle),
-                ArtifactPublication::Existing(_) => {}
+            let record =
+                ManagedArtifactRecord::new(owner.clone(), ArtifactRole::Backup, path.clone(), None);
+            match self
+                .filesystem
+                .publish_tree_no_follow(&self.managed_root, &path, tree.files())
+                .map_err(|error| {
+                    ManagedArtifactError::runtime(
+                        ManagedArtifactAction::Backup,
+                        owner,
+                        &path,
+                        error,
+                    )
+                })? {
+                DirectoryPublishOutcome::Published(identity) => {
+                    return Ok(ManagedArtifactHandle { record, identity });
+                }
+                DirectoryPublishOutcome::AlreadyExists => {
+                    let _ = self.load_with_action(owner, &record, ManagedArtifactAction::Backup);
+                }
             }
         }
         Err(ManagedArtifactError::new(
@@ -449,40 +510,7 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
         owner: &ResourceId,
         record: &ManagedArtifactRecord,
     ) -> Result<LoadedArtifact, ManagedArtifactError> {
-        validate_record(owner, record).map_err(|()| {
-            ManagedArtifactError::new(
-                ManagedArtifactAction::Load,
-                owner,
-                Some(record.path()),
-                ManagedArtifactFailure::InvalidRecord,
-            )
-        })?;
-        let (identity, files) = self
-            .filesystem
-            .load_tree_no_follow(&self.managed_root, record.path())
-            .map_err(|error| {
-                ManagedArtifactError::runtime(
-                    ManagedArtifactAction::Load,
-                    owner,
-                    record.path(),
-                    error,
-                )
-            })?;
-        let tree = ArtifactTree::from_validated(files).map_err(|_| {
-            ManagedArtifactError::new(
-                ManagedArtifactAction::Load,
-                owner,
-                Some(record.path()),
-                ManagedArtifactFailure::Conflict,
-            )
-        })?;
-        Ok(LoadedArtifact {
-            handle: ManagedArtifactHandle {
-                record: record.clone(),
-                identity,
-            },
-            tree,
-        })
+        self.load_with_action(owner, record, ManagedArtifactAction::Load)
     }
 
     fn remove(

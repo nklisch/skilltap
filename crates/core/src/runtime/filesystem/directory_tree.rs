@@ -1,29 +1,32 @@
 use std::collections::BTreeMap;
 
 #[cfg(unix)]
-use std::{
-    collections::BTreeSet,
-    ffi::CString,
-    fs::File,
-    io::{self, Read, Write},
-    os::fd::{AsRawFd, FromRawFd},
-    path::Path,
-};
+use std::{ffi::CString, fs::File, io, os::fd::AsRawFd, path::Path};
 
 use crate::{
     domain::{AbsolutePath, RelativeArtifactPath},
-    runtime::{DirectoryIdentity, FileSystemAction, RuntimeError},
+    runtime::{
+        DirectoryIdentity, DirectoryPathState, DirectorySyncState, FileSystemAction, RuntimeError,
+    },
 };
 
 use super::{SystemFileSystem, filesystem_error};
 
 #[cfg(unix)]
+mod tree_io;
+#[cfg(unix)]
 mod unix_support;
 
 #[cfg(unix)]
+use tree_io::{read_tree, remove_open_tree, write_tree};
+#[cfg(all(unix, test))]
+use tree_io::{read_tree_with, remove_open_tree_with};
+
+#[cfg(unix)]
 use unix_support::{
-    cvt, directory_identity, directory_names, mkdir_at, open_absolute_directory, open_dir_at,
-    open_relative_directory, open_relative_parent, stat_at, unlink_at, verify_at,
+    create_dir_at_verified, lock_exclusive, open_absolute_directory, open_dir_at,
+    open_relative_directory, open_relative_parent, require_directory, stat_identity_at, unlink_at,
+    verify_at,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -91,55 +94,97 @@ fn publish_tree(
     let root = open_absolute_directory(managed_root, true).map_err(|source| {
         filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
     })?;
+    lock_exclusive(&root).map_err(|source| {
+        filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
+    })?;
     let (parent, name) = open_relative_parent(&root, destination, true).map_err(|source| {
         filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
     })?;
-    match mkdir_at(parent.as_raw_fd(), &name) {
-        Ok(()) => {}
+    let directory = match create_dir_at_verified(&parent, &name) {
+        Ok(directory) => directory,
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {
             return Ok(DirectoryPublishOutcome::AlreadyExists);
         }
         Err(source) => {
-            return Err(filesystem_error(
-                FileSystemAction::CreateDirectory,
-                managed_root,
-                source,
-            ));
+            let (presence, identity) = observe_at(&parent, &name);
+            return if presence == DirectoryPathState::Removed {
+                Err(filesystem_error(
+                    FileSystemAction::CreateDirectory,
+                    managed_root,
+                    source,
+                ))
+            } else {
+                Err(RuntimeError::PartialDirectoryPublication {
+                    path: join_absolute(managed_root, destination),
+                    identity,
+                    presence,
+                    parent_sync: DirectorySyncState::Uncertain,
+                    source,
+                    cleanup: io::Error::other(
+                        "created destination could not be proven safe for cleanup",
+                    ),
+                })
+            };
         }
-    }
-    let directory = open_dir_at(parent.as_raw_fd(), &name).map_err(|source| {
-        filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
+    };
+    let identity = require_directory(&directory).map_err(|source| {
+        RuntimeError::PartialDirectoryPublication {
+            path: join_absolute(managed_root, destination),
+            identity: None,
+            presence: DirectoryPathState::Present,
+            parent_sync: DirectorySyncState::Uncertain,
+            source,
+            cleanup: io::Error::other("opened destination is not an owned directory"),
+        }
     })?;
-    let identity = directory_identity(&directory).map_err(|source| {
-        filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
+    verify_at(parent.as_raw_fd(), &name, identity).map_err(|source| {
+        let (presence, observed) = observe_at(&parent, &name);
+        RuntimeError::PartialDirectoryPublication {
+            path: join_absolute(managed_root, destination),
+            identity: observed,
+            presence,
+            parent_sync: DirectorySyncState::Uncertain,
+            source,
+            cleanup: io::Error::other("destination changed before publication writes"),
+        }
     })?;
 
+    if let Err(source) = parent.sync_all() {
+        return Err(clean_publication_failure(
+            managed_root,
+            destination,
+            &parent,
+            &name,
+            &directory,
+            identity,
+            DirectorySyncState::Uncertain,
+            source,
+        ));
+    }
+
     let result = write_tree(&directory, files).and_then(|()| {
+        let actual = require_directory(&directory)?;
+        if actual != identity {
+            return Err(io::Error::other(
+                "destination descriptor identity changed during publication",
+            ));
+        }
+        verify_at(parent.as_raw_fd(), &name, identity)?;
         directory.sync_all()?;
         parent.sync_all()
     });
     match result {
         Ok(()) => Ok(DirectoryPublishOutcome::Published(identity)),
-        Err(source) => {
-            let cleanup = remove_open_tree(&directory).and_then(|()| {
-                verify_at(parent.as_raw_fd(), &name, identity)?;
-                unlink_at(parent.as_raw_fd(), &name, true)?;
-                parent.sync_all()
-            });
-            match cleanup {
-                Ok(()) => Err(filesystem_error(
-                    FileSystemAction::Write,
-                    managed_root,
-                    source,
-                )),
-                Err(cleanup) => Err(RuntimeError::PartialDirectoryPublication {
-                    path: join_absolute(managed_root, destination),
-                    identity,
-                    source,
-                    cleanup,
-                }),
-            }
-        }
+        Err(source) => Err(clean_publication_failure(
+            managed_root,
+            destination,
+            &parent,
+            &name,
+            &directory,
+            identity,
+            DirectorySyncState::Synced,
+            source,
+        )),
     }
 }
 
@@ -163,7 +208,7 @@ fn load_tree(
         .map_err(|source| filesystem_error(FileSystemAction::Read, managed_root, source))?;
     let directory = open_relative_directory(&root, destination)
         .map_err(|source| filesystem_error(FileSystemAction::Read, managed_root, source))?;
-    let identity = directory_identity(&directory)
+    let identity = require_directory(&directory)
         .map_err(|source| filesystem_error(FileSystemAction::Read, managed_root, source))?;
     let mut files = BTreeMap::new();
     read_tree(&directory, None, &mut files)
@@ -189,11 +234,13 @@ fn remove_tree(
 ) -> Result<DirectoryIdentity, RuntimeError> {
     let root = open_absolute_directory(managed_root, false)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
+    lock_exclusive(&root)
+        .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
     let (parent, name) = open_relative_parent(&root, destination, false)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
     let directory = open_dir_at(parent.as_raw_fd(), &name)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
-    let identity = directory_identity(&directory)
+    let identity = require_directory(&directory)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
     if identity != expected {
         return Err(RuntimeError::FileIdentityChanged {
@@ -221,129 +268,81 @@ fn remove_tree(
 }
 
 #[cfg(unix)]
-fn write_tree(root: &File, files: &BTreeMap<RelativeArtifactPath, Vec<u8>>) -> io::Result<()> {
-    let directories = files
-        .keys()
-        .flat_map(|path| ancestor_paths(path.as_str()))
-        .collect::<BTreeSet<_>>();
-    for directory in &directories {
-        let path = RelativeArtifactPath::new(directory.clone())
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-        let (parent, name) = open_relative_parent(root, &path, false)?;
-        mkdir_at(parent.as_raw_fd(), &name)?;
-        parent.sync_all()?;
-    }
-    for (path, contents) in files {
-        let (parent, name) = open_relative_parent(root, path, false)?;
-        let fd = cvt(unsafe {
-            libc::openat(
-                parent.as_raw_fd(),
-                name.as_ptr(),
-                libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-                0o600,
-            )
-        })?;
-        let mut file = unsafe { File::from_raw_fd(fd) };
-        file.write_all(contents)?;
-        file.sync_all()?;
-        let identity = directory_identity(&file)?;
-        verify_at(parent.as_raw_fd(), &name, identity)?;
-    }
-    for directory in directories.iter().rev() {
-        let path = RelativeArtifactPath::new(directory.clone())
-            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error))?;
-        open_relative_directory(root, &path)?.sync_all()?;
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn read_tree(
+#[allow(clippy::too_many_arguments)]
+fn clean_publication_failure(
+    managed_root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+    parent: &File,
+    name: &CString,
     directory: &File,
-    prefix: Option<&str>,
-    files: &mut BTreeMap<RelativeArtifactPath, Vec<u8>>,
-) -> io::Result<()> {
-    let names = directory_names(directory)?;
-    if prefix.is_some() && names.is_empty() {
-        return Err(io::Error::other(
-            "artifact tree contains an empty directory",
-        ));
-    }
-    for name in names {
-        let relative = match prefix {
-            Some(prefix) => format!("{prefix}/{name}"),
-            None => name.clone(),
-        };
-        let name = CString::new(name).map_err(|_| io::Error::other("NUL in directory entry"))?;
-        let metadata = stat_at(directory.as_raw_fd(), &name)?;
-        match metadata.st_mode & libc::S_IFMT {
-            libc::S_IFDIR => {
-                let child = open_dir_at(directory.as_raw_fd(), &name)?;
-                let identity = directory_identity(&child)?;
-                read_tree(&child, Some(&relative), files)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-            }
-            libc::S_IFREG => {
-                let fd = cvt(unsafe {
-                    libc::openat(
-                        directory.as_raw_fd(),
-                        name.as_ptr(),
-                        libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK,
-                    )
-                })?;
-                let mut file = unsafe { File::from_raw_fd(fd) };
-                let identity = directory_identity(&file)?;
-                let mut contents = Vec::new();
-                file.read_to_end(&mut contents)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-                let path = RelativeArtifactPath::new(relative)
-                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-                files.insert(path, contents);
-            }
-            _ => {
-                return Err(io::Error::other(
-                    "artifact tree contains a non-regular entry",
-                ));
-            }
-        }
-    }
-    Ok(())
+    identity: DirectoryIdentity,
+    prior_parent_sync: DirectorySyncState,
+    source: io::Error,
+) -> RuntimeError {
+    clean_publication_failure_with_parent_sync(
+        managed_root,
+        destination,
+        parent,
+        name,
+        directory,
+        identity,
+        prior_parent_sync,
+        source,
+        || parent.sync_all(),
+    )
 }
 
 #[cfg(unix)]
-fn remove_open_tree(directory: &File) -> io::Result<()> {
-    for name in directory_names(directory)? {
-        let name = CString::new(name).map_err(|_| io::Error::other("NUL in directory entry"))?;
-        let metadata = stat_at(directory.as_raw_fd(), &name)?;
-        match metadata.st_mode & libc::S_IFMT {
-            libc::S_IFDIR => {
-                let child = open_dir_at(directory.as_raw_fd(), &name)?;
-                let identity = directory_identity(&child)?;
-                remove_open_tree(&child)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-                unlink_at(directory.as_raw_fd(), &name, true)?;
-            }
-            libc::S_IFREG => {
-                let fd = cvt(unsafe {
-                    libc::openat(
-                        directory.as_raw_fd(),
-                        name.as_ptr(),
-                        libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK,
-                    )
-                })?;
-                let file = unsafe { File::from_raw_fd(fd) };
-                let identity = directory_identity(&file)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-                unlink_at(directory.as_raw_fd(), &name, false)?;
-            }
-            _ => {
-                return Err(io::Error::other(
-                    "refusing to remove non-regular artifact entry",
-                ));
+#[allow(clippy::too_many_arguments)]
+fn clean_publication_failure_with_parent_sync(
+    managed_root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+    parent: &File,
+    name: &CString,
+    directory: &File,
+    identity: DirectoryIdentity,
+    prior_parent_sync: DirectorySyncState,
+    source: io::Error,
+    sync_parent: impl FnOnce() -> io::Result<()>,
+) -> RuntimeError {
+    let cleanup = remove_open_tree(directory)
+        .and_then(|()| verify_at(parent.as_raw_fd(), name, identity))
+        .and_then(|()| unlink_at(parent.as_raw_fd(), name, true));
+    match cleanup {
+        Ok(()) => match sync_parent() {
+            Ok(()) => filesystem_error(FileSystemAction::Write, managed_root, source),
+            Err(cleanup) => RuntimeError::PartialDirectoryPublication {
+                path: join_absolute(managed_root, destination),
+                identity: None,
+                presence: DirectoryPathState::Removed,
+                parent_sync: DirectorySyncState::Uncertain,
+                source,
+                cleanup,
+            },
+        },
+        Err(cleanup) => {
+            let (presence, observed) = observe_at(parent, name);
+            RuntimeError::PartialDirectoryPublication {
+                path: join_absolute(managed_root, destination),
+                identity: observed,
+                presence,
+                parent_sync: prior_parent_sync,
+                source,
+                cleanup,
             }
         }
     }
-    directory.sync_all()
+}
+
+#[cfg(unix)]
+fn observe_at(parent: &File, name: &CString) -> (DirectoryPathState, Option<DirectoryIdentity>) {
+    match stat_identity_at(parent.as_raw_fd(), name) {
+        Ok(identity) => (DirectoryPathState::Present, Some(identity)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            (DirectoryPathState::Removed, None)
+        }
+        Err(_) => (DirectoryPathState::Unknown, None),
+    }
 }
 
 fn ancestor_paths(path: &str) -> Vec<String> {
@@ -364,3 +363,6 @@ fn join_absolute(root: &AbsolutePath, path: &RelativeArtifactPath) -> AbsolutePa
     AbsolutePath::new(format!("{}/{}", root.as_str(), path.as_str()))
         .expect("validated absolute root plus relative artifact path remains valid")
 }
+
+#[cfg(test)]
+mod tests;

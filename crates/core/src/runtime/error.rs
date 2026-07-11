@@ -122,6 +122,13 @@ pub enum DirectorySyncState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DirectoryPathState {
+    Present,
+    Removed,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DirectoryIdentity {
     device: u64,
     inode: u64,
@@ -245,7 +252,9 @@ pub enum RuntimeError {
     },
     PartialDirectoryPublication {
         path: AbsolutePath,
-        identity: DirectoryIdentity,
+        identity: Option<DirectoryIdentity>,
+        presence: DirectoryPathState,
+        parent_sync: DirectorySyncState,
         source: io::Error,
         cleanup: io::Error,
     },
@@ -388,14 +397,20 @@ impl fmt::Display for RuntimeError {
             Self::PartialDirectoryPublication {
                 path,
                 identity,
+                presence,
+                parent_sync,
                 source,
                 cleanup,
-            } => write!(
-                formatter,
-                "directory publication for `{path}` failed ({source}); residual identity {}:{}; cleanup failed ({cleanup})",
-                identity.device(),
-                identity.inode()
-            ),
+            } => {
+                let identity = identity.map_or_else(
+                    || "unknown".to_owned(),
+                    |value| format!("{}:{}", value.device(), value.inode()),
+                );
+                write!(
+                    formatter,
+                    "directory publication for `{path}` failed ({source}); destination: {presence:?}; identity: {identity}; parent sync: {parent_sync}; cleanup failed ({cleanup})"
+                )
+            }
             Self::LockContended { path } => {
                 write!(formatter, "configuration lock `{path}` is already held")
             }
