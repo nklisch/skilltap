@@ -2,6 +2,7 @@ pub mod adoption;
 pub mod domain;
 pub mod executor;
 pub mod instructions;
+pub mod lifecycle_operation;
 pub mod marketplace;
 pub mod materialization;
 pub mod native_config;
