@@ -2,6 +2,7 @@
 
 use crate::{
     domain::AbsolutePath,
+    foreground_update::ForegroundUpdatePlan,
     storage::{UpdateInterval, UpdateIntervalUnit},
 };
 
@@ -66,6 +67,38 @@ impl std::fmt::Display for ServiceRenderError {
 }
 
 impl std::error::Error for ServiceRenderError {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DaemonCyclePlan {
+    safe: Vec<crate::domain::ResourceKey>,
+    pending: Vec<crate::domain::ResourceKey>,
+}
+
+impl DaemonCyclePlan {
+    pub fn safe(&self) -> &[crate::domain::ResourceKey] {
+        &self.safe
+    }
+
+    pub fn pending(&self) -> &[crate::domain::ResourceKey] {
+        &self.pending
+    }
+}
+
+/// Reduce a foreground update plan to the only work a daemon may apply. The
+/// daemon has no acknowledgment set, so every non-safe decision remains
+/// pending and visible to status.
+pub fn plan_daemon_cycle(plan: &ForegroundUpdatePlan) -> DaemonCyclePlan {
+    let mut safe = Vec::new();
+    let mut pending = Vec::new();
+    for entry in plan.entries() {
+        if entry.is_safe() {
+            safe.push(entry.resource().clone());
+        } else if entry.available_revision().is_some() {
+            pending.push(entry.resource().clone());
+        }
+    }
+    DaemonCyclePlan { safe, pending }
+}
 
 pub fn render_service(spec: &DaemonServiceSpec) -> Result<ServiceDefinition, ServiceRenderError> {
     if spec.executable.as_str().is_empty() || !spec.executable.as_str().starts_with('/') {
@@ -180,5 +213,50 @@ mod tests {
                 .contents()
                 .contains("OnUnitActiveSec=21600s")
         );
+    }
+
+    #[test]
+    fn daemon_cycle_never_selects_non_safe_entries() {
+        let resource = crate::domain::ResourceKey::new(
+            crate::domain::ResourceId::new("skill:demo").unwrap(),
+            crate::domain::Scope::Global,
+        );
+        let candidate = crate::updates::UpdateCandidate {
+            resource: resource.clone(),
+            current_revision: None,
+            available_revision: None,
+            resolution_error: Some(crate::updates::ResolutionError::UnreachableSource),
+            pinned: false,
+            drifted: false,
+            compatibility_changed: false,
+            requires_acknowledgment: false,
+            intent: crate::domain::UpdateIntent::Track,
+            acknowledgment_selectors: std::collections::BTreeSet::new(),
+        };
+        let desired = crate::domain::DesiredResource::new(
+            resource,
+            crate::domain::ResourceKind::StandaloneSkill,
+            crate::domain::HarnessSet::new([crate::domain::HarnessId::new("codex").unwrap()])
+                .unwrap(),
+            crate::domain::DesiredOrigin::Direct,
+            None,
+            crate::domain::UpdateIntent::Track,
+            crate::domain::ComponentGraph::new([]).unwrap(),
+            std::collections::BTreeMap::new(),
+            std::collections::BTreeMap::new(),
+            std::collections::BTreeSet::new(),
+        )
+        .unwrap();
+        let plan = crate::foreground_update::plan_foreground_updates(
+            crate::foreground_update::ForegroundUpdateRequest {
+                resources: &[desired],
+                candidates: &[candidate],
+                mode: crate::storage::UpdateMode::ApplySafe,
+            },
+        )
+        .unwrap();
+        let cycle = plan_daemon_cycle(&plan);
+        assert!(cycle.safe().is_empty());
+        assert!(cycle.pending().is_empty());
     }
 }
