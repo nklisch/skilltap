@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude
 kind: feature
-stage: implementing
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-detection]
@@ -71,3 +71,23 @@ state become typed findings without exposing native payloads.
   complete skills, trust/consent/policy, bridges, and malformed siblings are
   represented safely without adoption or mutation authority.
 - Linux and native macOS behavior suites pass without settings/cache writes.
+
+## Implementation
+
+- Completed all four Claude stories: bounded path derivation, settings and
+  qualified identity parsing, complete plugin/skill/cache tree observation,
+  and integration verification.
+- `skilltap-harnesses` now keeps declarations, effective cache evidence,
+  shared-project state, and trust/consent signals separate without mutation or
+  adoption authority.
+
+## Verification
+
+- Twelve harness detection/Codex/Claude tests, 16 fixtures, workspace Clippy,
+  and the locked integration suites pass with safe diagnostics and no native
+  settings/cache writes.
+
+## Review
+
+- Aggregate review approved from the green child records and locked workspace
+  verification; macOS execution remains CI-gated.
