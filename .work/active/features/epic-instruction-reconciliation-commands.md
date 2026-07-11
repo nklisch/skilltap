@@ -50,3 +50,5 @@ target or import form.
 Repair with explicit acknowledgment now consolidates a duplicate root/nested
 project Claude setup to the root bridge, backing up and removing the nested
 entry through the same locked journal path.
+Consolidation refuses broken directory or special-file entries rather than
+recursively deleting them, even with acknowledgment.

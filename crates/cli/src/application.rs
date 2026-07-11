@@ -2518,6 +2518,26 @@ impl StatusApplication<'_> {
                     .map(|metadata| metadata.kind() != FileKind::Missing)
                     .unwrap_or(false);
                 if !root_missing && nested_present {
+                    let nested_kind = filesystem
+                        .inspect(&nested)
+                        .ok()
+                        .map(|metadata| metadata.kind());
+                    if !matches!(nested_kind, Some(FileKind::RegularFile | FileKind::Symlink)) {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome
+                            .with_warning(
+                                Warning::new(
+                                    "instruction_duplicate_bridge_broken",
+                                    "The nested project Claude entry is not a removable regular file or symlink; consolidation is blocked.",
+                                )
+                                .with_context("scope", scope_label(concrete_scope)),
+                            )
+                            .with_next_action(NextAction::new(
+                                "repair_duplicate_bridge_manually",
+                                "Replace the broken nested Claude entry with a regular file or symlink, then retry repair.",
+                            ));
+                        continue;
+                    }
                     duplicate_nested = Some(nested.clone());
                     if !(repair && acknowledged) {
                         outcome.result = ResultClass::AttentionRequired;

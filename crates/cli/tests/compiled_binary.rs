@@ -1134,6 +1134,32 @@ fn instruction_repair_consolidates_duplicate_project_claude_bridges() {
 }
 
 #[test]
+fn instruction_repair_does_not_remove_broken_duplicate_bridge_entries() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    fs::write(
+        machine.working_directory().join("AGENTS.md"),
+        b"canonical\n",
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("AGENTS.md", machine.working_directory().join("CLAUDE.md")).unwrap();
+    fs::create_dir_all(machine.working_directory().join(".claude/CLAUDE.md")).unwrap();
+
+    let output = run(
+        &machine,
+        &["instructions", "repair", "--project", "--yes", "--json"],
+    );
+    assert_code(&output, 2);
+    assert_eq!(json(&output)["result"], "attention_required");
+    assert!(
+        machine
+            .working_directory()
+            .join(".claude/CLAUDE.md")
+            .is_dir()
+    );
+}
+
+#[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
