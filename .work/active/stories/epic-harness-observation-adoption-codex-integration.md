@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex-integration
 kind: story
-stage: implementing
+stage: review
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-codex-paths, epic-harness-observation-adoption-codex-config, epic-harness-observation-adoption-codex-resources]
@@ -20,3 +20,15 @@ Cover `CODEX_HOME`, instruction precedence, whole skill directories,
 declared/effective/cache distinctions, malformed siblings, trust findings,
 replacement/type/link edges, deterministic repeat observation, secret-safe
 diagnostics, and byte/type/link/mtime no-mutation.
+
+## Implementation
+
+- The harness detection integration suite now exercises Codex global and
+  canonical project path policy, strict config evidence, complete skill-tree
+  observation, instruction input derivation, malformed sibling isolation,
+  repeated detection, profile/probe authority, and no-mutation behavior.
+
+## Verification
+
+- Nine locked harness integration tests and warnings-denied Clippy pass; the
+  full workspace ladder remains green.
