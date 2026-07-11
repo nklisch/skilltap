@@ -244,3 +244,10 @@ and an isolated Node/npm VitePress site containing only the v3 control-plane
 model. All four child stories are done and the integrated quality, binary,
 shell, workflow, Ruby, website-build, installer-equality, and stale-surface
 checks pass.
+
+Deep review removed the retained v2 Bun, TypeScript, Zod, and CLI framework
+skills plus their obsolete pattern library. Only current cross-harness
+standards remain; Rust-native patterns will be documented after they emerge.
+It also added release tag/version validation, locked Cargo CI, a pre-merge
+website build, and release-time synchronization of the embedded Homebrew
+formula into a pull request against the external tap.

@@ -93,10 +93,10 @@ future state, never the past; git history is the audit trail. Item files are
 the durable state: update the body with implementation discoveries, review
 findings, blockers, and decisions instead of relying on chat history.
 
-Reusable code patterns live in `.agents/skills/patterns/` (load the `patterns`
-skill for detail). Project agent rules live in `.agents/rules/*.md`
-(plugin-managed rules in `.agents/rules/agile-workflow.md`); do not maintain
-`.claude/rules/*.md` as a source of truth.
+Project agent rules live in `.agents/rules/*.md` (plugin-managed rules in
+`.agents/rules/agile-workflow.md`); do not maintain `.claude/rules/*.md` as a
+source of truth. No Rust code-pattern skill exists yet; document reusable
+patterns only after they emerge from the v3 implementation.
 
 **Before designing, implementing, or reviewing, read `.agents/rules/*.md`** —
 the project's force-loaded agent rules. The agile-workflow hook auto-loads

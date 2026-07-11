@@ -11,7 +11,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install pinned Rust toolchain
         run: rustup show active-toolchain
@@ -20,13 +20,30 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint workspace
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Test workspace
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
       - name: Build release binary
-        run: cargo build --release -p skilltap
+        run: cargo build --locked --release -p skilltap
 
       - name: Verify compiled binary
         run: scripts/verify-binary.sh target/release/skilltap
+
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install website dependencies
+        run: npm --prefix website ci
+
+      - name: Build website
+        run: npm --prefix website run build

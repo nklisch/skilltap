@@ -1,5 +1,9 @@
 name: Update Formula
 
+permissions:
+  contents: write
+  pull-requests: write
+
 on:
   repository_dispatch:
     types: [release]
@@ -13,7 +17,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Resolve version
         id: version
@@ -35,7 +39,7 @@ jobs:
           ./scripts/update-formula.sh "${{ steps.version.outputs.num }}" checksums.txt
 
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           commit-message: "Update skilltap to ${{ steps.version.outputs.tag }}"
           title: "skilltap ${{ steps.version.outputs.tag }}"
