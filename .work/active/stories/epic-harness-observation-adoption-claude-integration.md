@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude-integration
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-claude
 depends_on: [epic-harness-observation-adoption-claude-paths, epic-harness-observation-adoption-claude-settings, epic-harness-observation-adoption-claude-resources]
@@ -32,3 +32,8 @@ byte/type/link/mtime no-mutation.
 
 - Twelve locked harness integration tests and warnings-denied Clippy pass; the
   full workspace ladder remains green.
+
+## Review
+
+- Fast-lane review approved the Claude composition suite and green no-mutation
+  verification.
