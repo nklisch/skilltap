@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-publication-module
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: [epic-rust-control-plane-runtime-maintainability-unix-identity]
@@ -46,3 +46,10 @@ complete recovery matrix and full locked ladder.
   `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Only the private publication state machine and its narrow injected
+test seam moved; shared atomic-write helpers and locking remain in the parent as
+designed. Error precedence, residual ordering/sync state, public API, all 17
+filesystem tests, and the exact 99-test workspace inventory are unchanged.
