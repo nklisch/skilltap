@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-storage, epic-rust-control-plane-runtime-primitives]
@@ -145,3 +145,12 @@ The optimized compiled-binary suite covers every leaf command, scope/target and
 malformed-storage cases, output channels, JSON purity, no-create behavior, and
 exits `0`/`1`/`2`; renderer contracts cover `3`. The locked workspace passes
 191 tests, and CI/release runners test the optimized binary before publication.
+
+## Review
+
+Approved in fresh context with no findings. The reviewer independently checked
+the documented grammar and flag relevance, parsing safety, first-use no-create
+status, real storage/scope/target composition, sanitized failures, explicit
+unavailable handlers, plain/JSON channels, all exit classes, dependency
+direction, and Linux/macOS release gates. The locked 191-test ladder, rustdoc,
+release build, smoke script, and optimized compiled-binary suite all pass.
