@@ -9,6 +9,140 @@ use crate::{
     },
 };
 
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum ProjectionRoot {
+    CanonicalAgentsSkills,
+    CodexSkills,
+    ClaudeSkills,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ComponentProjection {
+    pub component: ComponentId,
+    pub target: HarnessId,
+    pub root: ProjectionRoot,
+    pub source_path: crate::domain::RelativeArtifactPath,
+    pub destination: crate::domain::RelativeArtifactPath,
+    pub complete_tree: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ProjectionError {
+    MissingProvenance { component: ComponentId },
+    InvalidSkillPath { component: ComponentId },
+    UnsupportedTarget { target: HarnessId },
+    ComponentNotFound { component: ComponentId },
+    ComponentKindMismatch { component: ComponentId },
+}
+
+impl std::fmt::Display for ProjectionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingProvenance { component } => {
+                write!(
+                    formatter,
+                    "component `{component}` has no source provenance"
+                )
+            }
+            Self::InvalidSkillPath { component } => {
+                write!(
+                    formatter,
+                    "skill `{component}` does not name a complete skill directory"
+                )
+            }
+            Self::UnsupportedTarget { target } => {
+                write!(
+                    formatter,
+                    "target `{target}` has no documented skill projection root"
+                )
+            }
+            Self::ComponentNotFound { component } => {
+                write!(
+                    formatter,
+                    "materialization references unknown component `{component}`"
+                )
+            }
+            Self::ComponentKindMismatch { component } => {
+                write!(formatter, "component `{component}` is not a skill")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ProjectionError {}
+
+/// Plan complete portable skill directories for one target. Publication is a
+/// later transaction and is intentionally absent from this function.
+pub fn plan_skill_projections(
+    graph: &SourceComponentGraph,
+    materialization: &MaterializationPlan,
+    target: &HarnessId,
+) -> Result<Vec<ComponentProjection>, ProjectionError> {
+    let mut projections = Vec::new();
+    for component_id in &materialization.included {
+        let Some(component) = graph.components().get(component_id) else {
+            return Err(ProjectionError::ComponentNotFound {
+                component: component_id.clone(),
+            });
+        };
+        if component.kind != crate::domain::ComponentKind::Skill {
+            continue;
+        }
+        let Some(provenance) = graph.provenance(component_id) else {
+            return Err(ProjectionError::MissingProvenance {
+                component: component_id.clone(),
+            });
+        };
+        let source_path = provenance.relative_path().clone();
+        let Some(name) = component_id.as_str().strip_prefix("skill:") else {
+            return Err(ProjectionError::InvalidSkillPath {
+                component: component_id.clone(),
+            });
+        };
+        if name.is_empty()
+            || !source_path.as_str().starts_with("skills/")
+            || source_path.as_str().ends_with("/SKILL.md")
+        {
+            return Err(ProjectionError::InvalidSkillPath {
+                component: component_id.clone(),
+            });
+        }
+        let destination = crate::domain::RelativeArtifactPath::new(format!("skills/{name}"))
+            .map_err(|_| ProjectionError::InvalidSkillPath {
+                component: component_id.clone(),
+            })?;
+        let roots = match target.as_str() {
+            "codex" => vec![ProjectionRoot::CanonicalAgentsSkills],
+            "claude" => vec![
+                ProjectionRoot::CanonicalAgentsSkills,
+                ProjectionRoot::ClaudeSkills,
+            ],
+            _ => {
+                return Err(ProjectionError::UnsupportedTarget {
+                    target: target.clone(),
+                });
+            }
+        };
+        for root in roots {
+            projections.push(ComponentProjection {
+                component: component_id.clone(),
+                target: target.clone(),
+                root,
+                source_path: source_path.clone(),
+                destination: destination.clone(),
+                complete_tree: true,
+            });
+        }
+    }
+    projections.sort_by(|left, right| {
+        left.component
+            .cmp(&right.component)
+            .then(left.root.cmp(&right.root))
+            .then(left.destination.cmp(&right.destination))
+    });
+    Ok(projections)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum GraphPlanningError {
     Read(PluginGraphReadError),
@@ -214,5 +348,79 @@ mod tests {
                 PluginGraphReadError::SourceUnavailable
             ))
         );
+    }
+
+    #[test]
+    fn skill_projection_keeps_complete_tree_and_canonical_claude_bridge() {
+        let graph = normalize(
+            Source::new(
+                SourceKind::Git,
+                SourceLocator::new("https://example.test/plugin.git").unwrap(),
+                None,
+            )
+            .unwrap(),
+            [ComponentDeclaration {
+                id: id("skill:demo"),
+                kind: ComponentKind::Skill,
+                requiredness: ComponentRequiredness::Required,
+                dependencies: BTreeSet::new(),
+                relative_path: crate::domain::RelativeArtifactPath::new("skills/demo").unwrap(),
+                declared_name: Some("demo".to_owned()),
+            }],
+        )
+        .unwrap();
+        let support = MaterializationSupport {
+            target: HarnessId::new("claude").unwrap(),
+            supported: [id("skill:demo")].into_iter().collect(),
+        };
+        let materialization = plan_materialization(graph.components(), &support);
+        let target = HarnessId::new("claude").unwrap();
+        let projections = plan_skill_projections(&graph, &materialization, &target).unwrap();
+        assert_eq!(projections.len(), 2);
+        assert!(
+            projections
+                .iter()
+                .all(|projection| projection.complete_tree)
+        );
+        assert!(
+            projections
+                .iter()
+                .any(|projection| projection.root == ProjectionRoot::CanonicalAgentsSkills)
+        );
+        assert!(
+            projections
+                .iter()
+                .any(|projection| projection.root == ProjectionRoot::ClaudeSkills)
+        );
+    }
+
+    #[test]
+    fn excluded_components_do_not_reappear_in_skill_projection() {
+        let graph = normalize(
+            Source::new(
+                SourceKind::Git,
+                SourceLocator::new("https://example.test/plugin.git").unwrap(),
+                None,
+            )
+            .unwrap(),
+            [ComponentDeclaration {
+                id: id("skill:demo"),
+                kind: ComponentKind::Skill,
+                requiredness: ComponentRequiredness::Optional,
+                dependencies: BTreeSet::new(),
+                relative_path: crate::domain::RelativeArtifactPath::new("skills/demo").unwrap(),
+                declared_name: Some("demo".to_owned()),
+            }],
+        )
+        .unwrap();
+        let support = MaterializationSupport {
+            target: HarnessId::new("codex").unwrap(),
+            supported: BTreeSet::new(),
+        };
+        let materialization = plan_materialization(graph.components(), &support);
+        let projections =
+            plan_skill_projections(&graph, &materialization, &HarnessId::new("codex").unwrap())
+                .unwrap();
+        assert!(projections.is_empty());
     }
 }
