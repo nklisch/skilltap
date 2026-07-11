@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-ci
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: [epic-rust-control-plane-workspace-reset-workspace]
@@ -33,3 +33,14 @@ script for the Rust artifact and keep it extensible for later CLI commands.
   negative smoke cases using a missing path, `/bin/true`, and `/bin/false`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Story verified by implement and integrated Rust/shell checks;
+fast-lane advance.
