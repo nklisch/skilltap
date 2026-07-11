@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex-config
 kind: story
-stage: review
+stage: done
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-codex-paths]
@@ -33,3 +33,8 @@ or replaced. No writes, cache browsing, or guessed install behavior.
 
 - Harness Clippy and all eight detection/Codex path/config tests pass in the
   locked offline workspace.
+
+## Review
+
+- Fast-lane review approved the bounded, unknown-field-tolerant parser and
+  redacted diagnostics with green warnings-denied tests.
