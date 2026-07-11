@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-filesystem-lock
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-errors-paths]
@@ -53,3 +53,14 @@ machine-wide, fail-fast mutation lock.
 - Verification: locked workspace format, all-target check, Clippy with warnings denied, tests (78
   core tests), and rustdoc with warnings denied all pass.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Link metadata is inspected without following the destination,
+ownership-sensitive writes and copies refuse destination/source links, and
+removal unlinks a symlink without touching its target. Same-directory writes
+sync before rename, preserve old-or-new reader visibility, and clean failed
+temporaries. The standard-library lock fails immediately under contention and
+both explicit release and guard drop make it available again. Managed-root
+ancestor validation correctly remains with storage, which owns that boundary.
+All seven focused adversarial tests pass on review.
