@@ -2,6 +2,7 @@ pub mod adoption;
 pub mod compatibility;
 pub mod domain;
 pub mod executor;
+pub mod hook_mapping;
 pub mod instructions;
 pub mod lifecycle_operation;
 pub mod marketplace;
