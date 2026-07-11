@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status
 kind: feature
-stage: implementing
+stage: review
 tags: [cli]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-normalization]
@@ -78,14 +78,16 @@ creates paths, or mutates native settings.
 Deep review requested changes. The remaining implementation is intentionally
 not marked complete:
 
-- Status still projects aggregate native-tree counts rather than normalized
-  `ObservationBatch`/`HarnessObservation` resources and typed findings.
-- Codex observation does not yet include all canonical `~/AGENTS.md`,
-  `~/.agents/skills`, marketplace, and project instruction/config inputs.
-- Status does not compare normalized native resources against desired inventory
-  and recorded state, so drift/unmanaged/missing findings are not complete.
-- Broad global-tree observation and `harness list` reachability/compatibility
-  reporting remain to be tightened against the foundation contracts.
+- Status now composes `ObservationBatch`/`HarnessObservation` outcomes through
+  `normalize_observations`, emitting stable typed surface identities, kinds,
+  health, and capability findings while preserving failed siblings.
+- Canonical observation roots are named and bounded for Codex `.agents/skills`,
+  Codex plugin/skill roots, project `.agents`/`.codex`, and Claude plugin/skill
+  roots; unrelated parent files are excluded. Top-level instruction/config
+  details remain typed surfaces rather than copied payloads.
+- Desired-vs-observed resource counts now produce conservative attention
+  warnings without mutation. Remaining harness-list health detail and deeper
+  native config/settings parsing are follow-up work for lifecycle features.
 
 Local policy fixes in this pass make already-disabled harness changes explicit
 errors, preserve command names on storage failures, and isolate application
