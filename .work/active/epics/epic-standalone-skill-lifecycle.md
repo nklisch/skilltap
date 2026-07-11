@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle
 kind: epic
-stage: drafting
+stage: implementing
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -62,3 +62,45 @@ separating `SKILL.md` from its directory.
 - Ref-to-SHA update resolution, pins, and safe replacement
 
 <!-- The design pass on each child feature will fill in real specifics. -->
+
+## Decomposition
+
+The lifecycle is split so source resolution and whole-directory integrity are
+pure and reusable, while storage/projection and command orchestration remain
+behind the existing reconciliation ports.
+
+### Child features
+
+1. `epic-standalone-skill-lifecycle-source` — resolve explicit local/Git
+   sources, requested refs, subdirectories, and expected names without scanning
+   for skills — depends on `[]`.
+2. `epic-standalone-skill-lifecycle-tree` — validate a complete skill
+   directory, require top-level `SKILL.md`, preserve siblings, and fingerprint
+   deterministic tree contents — depends on
+   `[epic-standalone-skill-lifecycle-source]`.
+3. `epic-standalone-skill-lifecycle-storage` — publish immutable canonical
+   `.agents/skills/<name>/` trees and managed records at global/project scope,
+   with no-clobber backups and ownership checks — depends on
+   `[epic-standalone-skill-lifecycle-tree]`.
+4. `epic-standalone-skill-lifecycle-compatibility` — parse frontmatter and
+   classify Codex/Claude loadability, warnings, and exact partial consequences
+   without inventing faithful equivalence — depends on
+   `[epic-standalone-skill-lifecycle-tree]`.
+5. `epic-standalone-skill-lifecycle-commands` — compose install/list/remove/
+   update with Git SHA comparison, pins, projections, selectors, and
+   idempotent CLI output — depends on
+   `[epic-standalone-skill-lifecycle-storage,
+   epic-standalone-skill-lifecycle-compatibility]`.
+
+## Design review
+
+### Verdict
+
+Approved for implementation.
+
+### Notes
+
+The canonical managed form is always the complete directory. A source tree is
+never live-linked into managed storage, and no command recursively discovers
+skills. Native harness links/copies remain projections owned by later command
+and harness adapters.
