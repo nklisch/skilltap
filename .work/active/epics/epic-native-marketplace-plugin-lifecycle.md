@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle
 kind: epic
-stage: implementing
+stage: review
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -66,6 +66,14 @@ materialization are deliberately deferred to their own epic.
 Native lifecycle work is split by source identity, harness adapters, document
 preservation, and command composition. No child may enumerate marketplace
 contents or write undocumented caches.
+
+## Children complete
+
+Identity, Codex, Claude, native-preservation, and command features are done.
+The realized lifecycle invokes only verified native vectors, preserves desired
+inventory and state safely across failure, supports explicit and update-all
+selectors, and exposes fresh post-mutation observation without browsing
+marketplace contents.
 
 ### Child features
 
