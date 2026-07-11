@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-resolution-orchestration
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-safe-update-automation-resolution
 depends_on: [epic-safe-update-automation-resolution-adapters]
@@ -45,3 +45,7 @@ Acceptance criteria:
   — passed.
 - `cargo test -p skilltap --offline` — passed.
 - `cargo clippy -p skilltap --all-targets --offline -- -D warnings` — passed.
+
+## Review
+
+Verdict: Approve — story verified by implement; fast-lane advance.
