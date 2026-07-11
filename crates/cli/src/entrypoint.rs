@@ -17,7 +17,9 @@ use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_pro
 use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
     ResultClass,
-    application::{NativeLifecycleKind, NativeObservationMode, StatusApplication},
+    application::{
+        NativeLifecycleKind, NativeObservationMode, SkillInstallRequest, StatusApplication,
+    },
     command::{
         AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
         ScopedOutputArgs, ScopedTargetArgs, SyncArgs,
@@ -173,9 +175,16 @@ where
                 "skill install",
                 &args.scope,
                 &args.target,
-                Some(args.source.as_str()),
-                args.name.as_ref().map(|value| value.as_str()),
-                args.acknowledgment.yes,
+                SkillInstallRequest {
+                    source: args.source.as_str(),
+                    name: args.name.as_ref().map(|value| value.as_str()),
+                    requested_revision: args
+                        .requested_revision
+                        .as_ref()
+                        .map(|value| value.as_str()),
+                    subdirectory: args.path.as_ref().map(|value| value.as_str()),
+                    acknowledged: args.acknowledgment.yes,
+                },
             ),
             OutputChannel::Stdout,
         ),
@@ -193,11 +202,19 @@ where
             execute_system_instruction_setup(
                 "instructions setup",
                 &args.scope,
-                &crate::command::TargetArgs::default(),
-                None,
-                None,
                 args.mode,
                 args.acknowledgment.yes,
+                false,
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::InstructionRepair(args) => (
+            execute_system_instruction_setup(
+                "instructions repair",
+                &args.scope,
+                None,
+                args.acknowledgment.yes,
+                true,
             ),
             OutputChannel::Stdout,
         ),
@@ -262,18 +279,10 @@ fn execute_system_skill_install(
     command: &'static str,
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
-    source: Option<&str>,
-    name: Option<&str>,
-    acknowledged: bool,
+    request: SkillInstallRequest<'_>,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        let Some(source) = source else {
-            return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
-                "skill_source_required",
-                "An explicit skill source is required.",
-            ));
-        };
-        application.execute_skill_install(command, scope, target, source, name, acknowledged)
+        application.execute_skill_install(command, scope, target, request)
     })
 }
 
@@ -292,14 +301,12 @@ fn execute_system_skill_remove(
 fn execute_system_instruction_setup(
     command: &'static str,
     scope: &crate::command::ScopeArgs,
-    _target: &crate::command::TargetArgs,
-    _source: Option<&str>,
-    _name: Option<&str>,
     mode: Option<skilltap_core::storage::ClaudeInstructionMode>,
     acknowledged: bool,
+    repair: bool,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        application.execute_instruction_setup(command, scope, mode, acknowledged)
+        application.execute_instruction_setup(command, scope, mode, acknowledged, repair)
     })
 }
 

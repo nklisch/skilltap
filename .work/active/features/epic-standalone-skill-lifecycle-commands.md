@@ -43,8 +43,10 @@ the canonical `.agents/skills/<name>` tree through the core lock/plan/journal
 path, and is idempotent. Local `skill remove` now verifies the skilltap
 ownership record and current complete-tree fingerprint, removes only an exact
 owned tree through descriptor-checked deletion, and drops the desired inventory
-entry. Git-backed resolution, safe replacement/update, drift acknowledgment,
-and ownership backup retention remain open.
+entry. Git-backed install now uses the bounded direct Git resolver, supports
+requested refs and subdirectories, and records the resolved commit SHA in
+state. Safe replacement/update, drift acknowledgment, and ownership backup
+retention remain open.
 
 ## Review
 

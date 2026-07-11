@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ffi::OsString,
     path::{Component, Path, PathBuf},
 };
 
@@ -10,7 +11,7 @@ use skilltap_core::{
     },
     domain::{
         AbsolutePath, CapabilityId, CapabilitySupport, CommandArgument, ComponentGraph,
-        ConfiguredBinary, DesiredOrigin, DesiredResource, HarnessId, HarnessObservation,
+        ConfiguredBinary, DesiredOrigin, DesiredResource, GitCommit, HarnessId, HarnessObservation,
         HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
         ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
@@ -24,10 +25,12 @@ use skilltap_core::{
     lifecycle_operation::native_operation,
     reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
-        DirectoryTreeFileSystem, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
-        FileKind, FileSystem, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
-        RelativeSymlinkTarget, ScopeRequest, ScopeResolver, SystemConfigurationLock,
-        SystemExternalTreeObserver, SystemFileSystem, WorkingDirectory, resolve_targets,
+        DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
+        ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, FileKind, FileSystem,
+        JsonLimits, NativeProcessRequest, NativeProcessRunner, PlatformPaths, ProcessEnvironment,
+        ProcessLimits, RelativeSymlinkTarget, ScopeRequest, ScopeResolver, SystemConfigurationLock,
+        SystemExecutableResolver, SystemExternalTreeObserver, SystemFileSystem,
+        SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
     },
     skill::ValidatedSkillTree,
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
@@ -75,6 +78,14 @@ pub(crate) enum NativeLifecycleKind {
     PluginInstall,
     PluginRemove,
     PluginUpdate,
+}
+
+pub(crate) struct SkillInstallRequest<'a> {
+    pub(crate) source: &'a str,
+    pub(crate) name: Option<&'a str>,
+    pub(crate) requested_revision: Option<&'a str>,
+    pub(crate) subdirectory: Option<&'a str>,
+    pub(crate) acknowledged: bool,
 }
 
 /// State-backed journal for mutating lifecycle composition. It resolves each
@@ -353,12 +364,17 @@ struct InstructionPort<'a> {
 struct InstructionEntry {
     path: AbsolutePath,
     write: InstructionWrite,
+    action: OperationAction,
+    backup: Option<AbsolutePath>,
 }
 
 impl ExecutionPort for InstructionPort<'_> {
     fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
         for (_, operation) in plan.iter() {
-            if operation.action() != OperationAction::InstructionSetup {
+            if !matches!(
+                operation.action(),
+                OperationAction::InstructionSetup | OperationAction::InstructionRepair
+            ) {
                 continue;
             }
             let Some(entry) = self.entries.get(operation.id()) else {
@@ -371,6 +387,16 @@ impl ExecutionPort for InstructionPort<'_> {
                     .expect("static evidence detail is valid"),
                 ));
             };
+            if entry.action != operation.action() {
+                return Err(ExecutionError::revalidation(
+                    skilltap_core::domain::EvidenceCode::new("instructions.action_mismatch")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The instruction operation action no longer matches the validated adapter entry.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            }
             if !operation
                 .affected_surfaces()
                 .iter()
@@ -413,6 +439,35 @@ impl ExecutionPort for InstructionPort<'_> {
         self.filesystem.create_directory_all(&parent).map_err(|_| {
             instruction_apply_failure("The instruction parent directory could not be created.")
         })?;
+        if let Some(backup) = &entry.backup {
+            let backup_parent = backup
+                .as_str()
+                .rsplit_once('/')
+                .map(|(parent, _)| parent)
+                .and_then(|parent| AbsolutePath::new(parent).ok())
+                .ok_or_else(|| {
+                    instruction_apply_failure("The instruction backup path is invalid.")
+                })?;
+            self.filesystem
+                .create_directory_all(&backup_parent)
+                .map_err(|_| {
+                    instruction_apply_failure(
+                        "The instruction backup directory could not be created.",
+                    )
+                })?;
+            self.filesystem
+                .copy_recoverable(&entry.path, backup)
+                .map_err(|_| {
+                    instruction_apply_failure(
+                        "The existing instruction bridge could not be backed up safely.",
+                    )
+                })?;
+            self.filesystem.remove(&entry.path).map_err(|_| {
+                instruction_apply_failure(
+                    "The existing instruction bridge could not be replaced safely.",
+                )
+            })?;
+        }
         match &entry.write {
             InstructionWrite::Canonical => {
                 self.filesystem
@@ -1120,9 +1175,7 @@ impl StatusApplication<'_> {
         command: &'static str,
         requested_scope: &ScopeArgs,
         target: &TargetArgs,
-        source_value: &str,
-        name_value: Option<&str>,
-        acknowledged: bool,
+        request: SkillInstallRequest<'_>,
     ) -> Outcome {
         let (documents, mut outcome) = match self.load_documents(command) {
             Ok(value) => value,
@@ -1157,7 +1210,7 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let locator = match SourceLocator::new(source_value) {
+        let locator = match SourceLocator::new(request.source) {
             Ok(locator) => locator,
             Err(_) => {
                 outcome.result = ResultClass::Invalid;
@@ -1167,19 +1220,74 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let source_root = match AbsolutePath::new(locator.as_str()) {
-            Ok(path) => path,
-            Err(_) => {
-                outcome.result = ResultClass::AttentionRequired;
-                return outcome
-                    .with_warning(Warning::new(
-                        "git_skill_source_pending",
-                        "Git-backed skill resolution is not available in this adapter yet.",
-                    ))
-                    .with_next_action(NextAction::new(
-                        "use_local_source",
-                        "Provide an explicit local skill directory or wait for Git source support.",
+        let requested_revision = match request.requested_revision {
+            Some(value) => match skilltap_core::domain::RequestedRevision::new(value) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "invalid_requested_revision",
+                        "The requested Git revision is invalid.",
                     ));
+                }
+            },
+            None => None,
+        };
+        let subdirectory = match request.subdirectory {
+            Some(value) => match skilltap_core::domain::RelativeArtifactPath::new(value) {
+                Ok(value) => Some(value),
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "invalid_skill_subdirectory",
+                        "The skill source subdirectory is invalid.",
+                    ));
+                }
+            },
+            None => None,
+        };
+        let (source_root, source_kind, git_commit) = match AbsolutePath::new(locator.as_str()) {
+            Ok(path) => match append_skill_subdirectory(path, subdirectory.as_ref()) {
+                Some(path) => (path, SourceKind::Local, None),
+                None => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "invalid_skill_subdirectory",
+                        "The skill source subdirectory could not be joined safely.",
+                    ));
+                }
+            },
+            Err(_) => {
+                let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+                    Ok(paths) => paths,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "platform_paths_unavailable",
+                            "The skilltap configuration paths could not be resolved.",
+                        ));
+                    }
+                };
+                match resolve_git_skill_source(
+                    &paths,
+                    &locator,
+                    requested_revision.as_ref(),
+                    subdirectory.as_ref(),
+                ) {
+                    Ok(resolved) => (resolved.root, SourceKind::Git, Some(resolved.commit)),
+                    Err(_) => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        return outcome
+                            .with_warning(Warning::new(
+                                "git_skill_source_unavailable",
+                                "The Git skill source could not be cloned and checked out safely.",
+                            ))
+                            .with_next_action(NextAction::new(
+                                "verify_git_source",
+                                "Verify the Git source, revision, and credentials before retrying.",
+                            ));
+                    }
+                }
             }
         };
         let limits =
@@ -1231,13 +1339,9 @@ impl StatusApplication<'_> {
                 SkillCompatibilityClass::Compatible => {}
             }
         }
-        let name = match name_value {
+        let name = match request.name {
             Some(name) => NativeId::new(name).map_err(|_| ()).ok(),
-            None => source_root
-                .as_str()
-                .rsplit('/')
-                .next()
-                .and_then(|name| NativeId::new(name).ok()),
+            None => derive_skill_name(&locator, subdirectory.as_ref()),
         };
         let Some(name) = name else {
             outcome.result = ResultClass::Invalid;
@@ -1266,7 +1370,7 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let source = Source::new(SourceKind::Local, locator, None)
+        let source = Source::new(source_kind, locator, requested_revision)
             .map_err(|_| ())
             .ok();
         let Some(source) = source else {
@@ -1378,7 +1482,7 @@ impl StatusApplication<'_> {
                         native_ids.insert(target_id.clone(), name.clone());
                         continue;
                     }
-                    if !acknowledged {
+                    if !request.acknowledged {
                         outcome.result = ResultClass::AttentionRequired;
                         outcome = outcome.with_warning(
                             Warning::new(
@@ -1447,7 +1551,9 @@ impl StatusApplication<'_> {
                     Some(source.clone()),
                     None,
                     Some(skill.fingerprint().clone()),
-                    None,
+                    git_commit
+                        .clone()
+                        .map(skilltap_core::domain::ResolvedRevision::GitCommit),
                     None,
                     timestamp,
                     None,
@@ -1857,6 +1963,7 @@ impl StatusApplication<'_> {
         requested_scope: &ScopeArgs,
         mode: Option<ClaudeInstructionMode>,
         acknowledged: bool,
+        repair: bool,
     ) -> Outcome {
         let (documents, mut outcome) = match self.load_documents(command) {
             Ok(value) => value,
@@ -1972,6 +2079,8 @@ impl StatusApplication<'_> {
                     InstructionEntry {
                         path: canonical.clone(),
                         write: InstructionWrite::Canonical,
+                        action: OperationAction::InstructionSetup,
+                        backup: None,
                     },
                 );
                 canonical_dependency = Some(canonical_id);
@@ -2113,27 +2222,55 @@ impl StatusApplication<'_> {
                     continue;
                 }
                 if bridge_health == InstructionBridgeHealth::Conflict {
+                    let repairable = repair
+                        && acknowledged
+                        && filesystem
+                            .inspect(&bridge)
+                            .map(|metadata| metadata.kind() == FileKind::RegularFile)
+                            .unwrap_or(false);
+                    if repairable {
+                        // The repair operation below creates a recoverable
+                        // backup before removing the divergent regular file.
+                    } else {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "instruction_bridge_conflict",
+                                if repair {
+                                    "The bridge requires --yes and must be a divergent regular file before repair."
+                                } else {
+                                    "The bridge contains existing content; use instructions repair with --yes."
+                                },
+                            )
+                            .with_context("target", target.as_str()),
+                        );
+                        continue;
+                    }
+                }
+                let repair_operation =
+                    repair && acknowledged && bridge_health == InstructionBridgeHealth::Conflict;
+                if repair_operation {
                     outcome.result = ResultClass::AttentionRequired;
                     outcome = outcome.with_warning(
                         Warning::new(
-                            "instruction_bridge_conflict",
-                            if acknowledged {
-                                "The bridge differs from the managed form; replacement remains blocked pending backup composition."
-                            } else {
-                                "The bridge contains existing content; setup requires an explicit repair plan."
-                            },
+                            "instruction_bridge_repair",
+                            "The divergent instruction bridge will be backed up before replacement.",
                         )
                         .with_context("target", target.as_str()),
                     );
-                    continue;
                 }
                 let operation_id =
                     instruction_operation_id(concrete_scope, "bridge", target.as_str());
+                let operation_action = if repair_operation {
+                    OperationAction::InstructionRepair
+                } else {
+                    OperationAction::InstructionSetup
+                };
                 let operation = match skilltap_core::lifecycle_operation::faithful_file_operation_with_dependencies(
                     operation_id.clone(),
                     target.clone(),
                     bridge_resource,
-                    OperationAction::InstructionSetup,
+                    operation_action,
                     bridge.clone(),
                     canonical_dependency
                         .clone()
@@ -2155,6 +2292,8 @@ impl StatusApplication<'_> {
                     InstructionEntry {
                         path: bridge.clone(),
                         write,
+                        action: operation_action,
+                        backup: repair_operation.then(|| instruction_backup_path(&paths, &bridge)),
                     },
                 );
             }
@@ -2714,6 +2853,19 @@ fn instruction_operation_id(scope: &Scope, role: &str, target: &str) -> Operatio
         .expect("instruction operation id is valid")
 }
 
+fn instruction_backup_path(paths: &PlatformPaths, bridge: &AbsolutePath) -> AbsolutePath {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in bridge.as_str().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    AbsolutePath::new(format!(
+        "{}/managed/backups/instructions/{hash:016x}.bak",
+        paths.skilltap_config().as_str()
+    ))
+    .expect("instruction backup path is valid")
+}
+
 fn instruction_desired_resource(resource: ResourceKey, target: HarnessId) -> DesiredResource {
     DesiredResource::new(
         resource,
@@ -2795,6 +2947,144 @@ fn skill_destination(
     };
     let full = AbsolutePath::new(format!("{}/{}", root.as_str(), destination.as_str())).ok()?;
     Some((root, full))
+}
+
+struct ResolvedGitSkill {
+    root: AbsolutePath,
+    commit: GitCommit,
+}
+
+/// Resolve a Git source into skilltap's private managed cache using bounded,
+/// direct Git invocations. The cache identity is derived from the locator, so
+/// repeated installs fetch into the same checkout and can observe a changed
+/// commit without scanning unrelated repositories.
+fn resolve_git_skill_source(
+    paths: &PlatformPaths,
+    locator: &SourceLocator,
+    requested_revision: Option<&skilltap_core::domain::RequestedRevision>,
+    subdirectory: Option<&skilltap_core::domain::RelativeArtifactPath>,
+) -> Result<ResolvedGitSkill, ()> {
+    let source_root = AbsolutePath::new(format!(
+        "{}/managed/sources",
+        paths.skilltap_config().as_str()
+    ))
+    .map_err(|_| ())?;
+    SystemFileSystem
+        .create_directory_all(&source_root)
+        .map_err(|_| ())?;
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in locator.as_str().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    let checkout =
+        AbsolutePath::new(format!("{}/git-{hash:016x}", source_root.as_str())).map_err(|_| ())?;
+    let git = NativeId::new("git").map_err(|_| ())?;
+    let configured = ConfiguredBinary::path_lookup(git).map_err(|_| ())?;
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(
+            configured,
+            std::env::var_os("PATH"),
+        ))
+        .map_err(|_| ())?;
+    let limits = ProcessLimits::new(120_000, 256 * 1024, 256 * 1024, 512 * 1024).map_err(|_| ())?;
+    let filesystem = SystemFileSystem;
+    let existing = filesystem.inspect(&checkout).map_err(|_| ())?;
+    if existing.kind() == FileKind::Missing {
+        let clone = NativeProcessRequest::new(
+            executable.clone(),
+            [
+                OsString::from("clone"),
+                OsString::from("--no-checkout"),
+                OsString::from("--depth"),
+                OsString::from("1"),
+                OsString::from(locator.as_str()),
+                OsString::from(checkout.as_str()),
+            ],
+            BTreeMap::new(),
+            None,
+            limits,
+        );
+        let output = SystemNativeProcessRunner.run(&clone).map_err(|_| ())?;
+        if !output.status().success() {
+            return Err(());
+        }
+    } else if existing.kind() != FileKind::Directory {
+        return Err(());
+    } else {
+        let fetch = NativeProcessRequest::new(
+            executable.clone(),
+            [
+                OsString::from("-C"),
+                OsString::from(checkout.as_str()),
+                OsString::from("fetch"),
+                OsString::from("--prune"),
+                OsString::from("origin"),
+            ],
+            BTreeMap::new(),
+            None,
+            limits,
+        );
+        let output = SystemNativeProcessRunner.run(&fetch).map_err(|_| ())?;
+        if !output.status().success() {
+            return Err(());
+        }
+    }
+    let revision = requested_revision
+        .map(|revision| revision.as_str())
+        .unwrap_or("HEAD");
+    let verify = NativeProcessRequest::new(
+        executable.clone(),
+        [
+            OsString::from("-C"),
+            OsString::from(checkout.as_str()),
+            OsString::from("rev-parse"),
+            OsString::from("--verify"),
+            OsString::from(format!("{revision}^{{commit}}")),
+        ],
+        BTreeMap::new(),
+        None,
+        limits,
+    );
+    let output = SystemNativeProcessRunner.run(&verify).map_err(|_| ())?;
+    if !output.status().success() {
+        return Err(());
+    }
+    let commit_text = std::str::from_utf8(output.stdout())
+        .map_err(|_| ())?
+        .trim()
+        .to_owned();
+    let commit = GitCommit::new(commit_text).map_err(|_| ())?;
+    let checkout_root = checkout.clone();
+    let checkout = NativeProcessRequest::new(
+        executable,
+        [
+            OsString::from("-C"),
+            OsString::from(checkout.as_str()),
+            OsString::from("checkout"),
+            OsString::from("--detach"),
+            OsString::from("--force"),
+            OsString::from(commit.as_str()),
+        ],
+        BTreeMap::new(),
+        None,
+        limits,
+    );
+    let output = SystemNativeProcessRunner.run(&checkout).map_err(|_| ())?;
+    if !output.status().success() {
+        return Err(());
+    }
+    let root = append_skill_subdirectory(checkout_root, subdirectory).ok_or(())?;
+    Ok(ResolvedGitSkill { root, commit })
+}
+
+fn append_skill_subdirectory(
+    root: AbsolutePath,
+    subdirectory: Option<&skilltap_core::domain::RelativeArtifactPath>,
+) -> Option<AbsolutePath> {
+    subdirectory
+        .map(|path| AbsolutePath::new(format!("{}/{}", root.as_str(), path.as_str())).ok())
+        .unwrap_or(Some(root))
 }
 
 fn skill_operation_id(target: &HarnessId, resource: &ResourceKey) -> OperationId {
@@ -3026,6 +3316,17 @@ fn derive_marketplace_name(locator: &str) -> Option<NativeId> {
         .next()?
         .strip_suffix(".git")
         .unwrap_or(trimmed.rsplit('/').next()?);
+    NativeId::new(segment).ok()
+}
+
+fn derive_skill_name(
+    locator: &SourceLocator,
+    subdirectory: Option<&skilltap_core::domain::RelativeArtifactPath>,
+) -> Option<NativeId> {
+    let segment = subdirectory
+        .and_then(|path| path.as_str().rsplit('/').next())
+        .or_else(|| locator.as_str().trim_end_matches('/').rsplit('/').next())?;
+    let segment = segment.strip_suffix(".git").unwrap_or(segment);
     NativeId::new(segment).ok()
 }
 

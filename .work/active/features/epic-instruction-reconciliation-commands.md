@@ -38,5 +38,7 @@ managed/missing/divergent/broken health deterministically. Global/project setup
 now creates a missing
 canonical `AGENTS.md` and missing Codex/Claude bridges through the core
 plan/lock/journal path, records instruction resources in inventory/state, and
-blocks divergent existing files. Bridge probing/status and acknowledged backup
-replacement remain open.
+blocks divergent existing files. `instructions repair --yes` now accepts only
+divergent regular bridges, creates a recoverable backup under skilltap-managed
+storage before replacement, and journals the repair operation; symlink and
+special-file conflicts remain blocked.

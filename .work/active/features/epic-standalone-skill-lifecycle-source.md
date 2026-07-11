@@ -44,8 +44,10 @@ Resolution is deterministic, explicit, and never recursively scans for skills.
 
 Added `skilltap_core::skill_source` with validated explicit local/Git source
 requests, optional subdirectories, expected-name assertions, and local-root
-resolution. Git ref resolution remains behind the bounded command adapter used
-by lifecycle commands.
+resolution. The CLI lifecycle now resolves Git locators into a deterministic
+skilltap-managed checkout cache with bounded direct `git clone`/`fetch`, exact
+requested-ref verification, detached checkout, and resolved commit tracking in
+state before publication. Recursive repository discovery remains absent.
 
 ## Review
 

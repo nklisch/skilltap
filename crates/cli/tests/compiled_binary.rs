@@ -264,6 +264,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 | "skill install"
                 | "skill remove"
                 | "instructions setup"
+                | "instructions repair"
         ) {
             assert_code(&output, 2);
             let value = json(&output);
@@ -541,6 +542,71 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
 }
 
 #[test]
+fn git_skill_install_clones_a_bounded_source_and_records_the_commit() {
+    let machine = machine();
+    let repository = machine.home().join("git-skill-source");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: git-demo\ndescription: git skill\n---\nbody\n",
+    )
+    .unwrap();
+    let init = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            "SKILL.md",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source = format!("file://{}", repository.to_str().unwrap());
+    let output = run(
+        &machine,
+        &["skill", "install", &source, "--target", "codex", "--json"],
+    );
+    assert_code(&output, 0);
+    assert_eq!(json(&output)["result"], "completed");
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/git-skill-source/SKILL.md")
+            .is_file(),
+        "{}",
+        stdout(&output)
+    );
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("installed_revision"));
+    assert!(state.contains("git_commit"));
+}
+
+#[test]
 fn instruction_setup_creates_canonical_global_file_and_bridges() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
@@ -583,6 +649,23 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
     let repeat = run(&machine, &["instructions", "setup", "--json"]);
     assert_code(&repeat, 0);
     assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    fs::remove_file(machine.home().join(".claude/CLAUDE.md")).unwrap();
+    fs::write(machine.home().join(".claude/CLAUDE.md"), "legacy bridge\n").unwrap();
+    let repair = run(&machine, &["instructions", "repair", "--yes", "--json"]);
+    assert_code(&repair, 2);
+    assert!(
+        fs::symlink_metadata(machine.home().join(".claude/CLAUDE.md"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert!(
+        fs::read_dir(config_root(&machine).join("managed/backups/instructions"))
+            .unwrap()
+            .next()
+            .is_some()
+    );
 }
 
 #[test]

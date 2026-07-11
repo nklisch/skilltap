@@ -1,9 +1,9 @@
 use crate::command::{
     AdoptArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
-    InstructionsCommand, InstructionsSetupArgs, MarketplaceAddArgs, MarketplaceCommand,
-    MarketplaceNamedArgs, MarketplaceUpdateArgs, OutputArgs, PlanArgs, PluginCommand,
-    PluginInstallArgs, PluginNamedArgs, PluginUpdateArgs, ScopedOutputArgs, ScopedTargetArgs,
-    SkillCommand, SkillInstallArgs, SkillNamedArgs, StatusArgs, SyncArgs,
+    InstructionsCommand, InstructionsRepairArgs, InstructionsSetupArgs, MarketplaceAddArgs,
+    MarketplaceCommand, MarketplaceNamedArgs, MarketplaceUpdateArgs, OutputArgs, PlanArgs,
+    PluginCommand, PluginInstallArgs, PluginNamedArgs, PluginUpdateArgs, ScopedOutputArgs,
+    ScopedTargetArgs, SkillCommand, SkillInstallArgs, SkillNamedArgs, StatusArgs, SyncArgs,
 };
 
 pub(crate) enum Dispatch {
@@ -24,6 +24,7 @@ pub(crate) enum Dispatch {
     SkillInstall(SkillInstallArgs),
     SkillRemove(SkillNamedArgs),
     InstructionSetup(InstructionsSetupArgs),
+    InstructionRepair(InstructionsRepairArgs),
     HarnessList(OutputArgs),
     HarnessEnable(HarnessEnableArgs),
     HarnessDisable(HarnessChangeArgs),
@@ -63,9 +64,7 @@ impl Dispatch {
             Command::Instructions(args) => match args.command {
                 InstructionsCommand::Setup(args) => Self::InstructionSetup(args),
                 InstructionsCommand::Status(args) => Self::InstructionStatus(args),
-                InstructionsCommand::Repair(args) => {
-                    unavailable("instructions repair", args.output.json)
-                }
+                InstructionsCommand::Repair(args) => Self::InstructionRepair(args),
             },
             Command::Daemon(args) => match args.command {
                 DaemonCommand::Enable(args) => unavailable("daemon enable", args.output.json),
@@ -95,6 +94,7 @@ impl Dispatch {
             Self::SkillInstall(args) => args.output.json,
             Self::SkillRemove(args) => args.common.output.json,
             Self::InstructionSetup(args) => args.output.json,
+            Self::InstructionRepair(args) => args.output.json,
             Self::HarnessList(args) => args.json,
             Self::HarnessEnable(args) => args.output.json,
             Self::HarnessDisable(args) => args.output.json,
