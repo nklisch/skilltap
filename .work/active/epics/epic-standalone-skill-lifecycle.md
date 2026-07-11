@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle
 kind: epic
-stage: implementing
+stage: review
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -68,6 +68,14 @@ separating `SKILL.md` from its directory.
 The lifecycle is split so source resolution and whole-directory integrity are
 pure and reusable, while storage/projection and command orchestration remain
 behind the existing reconciliation ports.
+
+## Children complete
+
+All source, tree, storage, compatibility, and command features are done. The
+realized lifecycle persists Git refs/SHA and subdirectories, filters repository
+metadata from complete skill trees, publishes canonical `.agents/skills`
+artifacts plus required Claude projections, and handles update-all, drift, and
+ownership safely.
 
 ### Child features
 
