@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status-integration
 kind: story
-stage: review
+stage: done
 tags: [cli,testing]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-policy, epic-harness-observation-adoption-status-observation]
@@ -35,3 +35,7 @@ safe diagnostics, and native byte/type/link/mtime no-mutation.
 ## Verification
 
 - `cargo test -p skilltap --test compiled_binary --offline` (8 passed).
+
+## Review
+
+Verdict: Approve - story verified by implement; fast-lane advance.
