@@ -2,6 +2,7 @@ pub mod capability;
 pub mod compatibility;
 mod dependency_graph;
 pub mod identity;
+pub mod installation;
 pub mod operation;
 pub mod resource;
 pub mod scope;
@@ -15,6 +16,11 @@ pub use compatibility::{
     TransferFidelity,
 };
 pub use identity::{HarnessId, NativeId, OperationId, ResourceId, ResourceKey};
+pub use installation::{
+    CapabilityProfileId, CapabilityProfileSelection, CapabilityScope, ConfiguredBinary,
+    ExecutableFileIdentity, ExecutableIdentity, HarnessInstallation, HarnessReachability,
+    NativeVersion, ProfileAuthority, ProfileContractError, ScopedCapabilitySets, UnreachableReason,
+};
 pub use operation::{
     AcknowledgmentRequirement, AffectedSurface, ApplyOutcome, ApplyResult, AttentionKind,
     AttentionReason, CommandArgument, Operation, OperationAction, OperationClass,
