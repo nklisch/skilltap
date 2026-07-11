@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-record-contract
 kind: story
-stage: review
+stage: done
 tags: [correctness]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-managed-artifacts]
@@ -47,3 +47,11 @@ Run the full locked ladder.
   all-target check, warnings-denied Clippy, 144 workspace tests, and
   warnings-denied rustdoc.
 - Discrepancies from design: none. Adjacent issues parked: none.
+
+## Review
+
+Approved. One module now owns owner hashing, role components, canonical artifact
+and backup leaves, fallible construction, serde, and owner validation. State and
+repository consume that same contract; the golden is loadable and a real
+StateDocument JSON round-trip resolves the published tree. Five parallel runs
+and the locked 144-test ladder pass.
