@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage
 kind: feature
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -129,7 +129,7 @@ Backups use generated unique owned paths and never overwrite.
 
 `StorageError` distinguishes document kind and action (read, decode, validate,
 encode, write), unsupported schema versions, ownership/path conflicts, runtime
-filesystem failures, and managed publication residuals. Error display includes
+filesystem failures, and managed publication or removal residuals. Error display includes
 only safe document/path context, never document contents, native stdout, or
 secrets.
 
@@ -181,7 +181,7 @@ secrets.
 
 ## Implementation summary
 
-All four children are complete. Storage now provides strict schema-1 config,
+All eight children are complete. Storage now provides strict schema-1 config,
 inventory, state, timestamp/apply, and artifact records; typed missing/present
 TOML/JSON document repositories with descriptor-bound reads and atomic writes;
 immutable owner/fingerprint-bound complete-tree publication, exact load/remove,
@@ -225,3 +225,12 @@ Fresh-context cross-contract review requested four corrections:
 8. `epic-rust-control-plane-storage-removal-residuals` — report exact partial
    managed-tree removal recovery state — depends on
    `[epic-rust-control-plane-storage-managed-artifacts]`.
+
+## Review
+
+Approved after a fresh-context re-review of the complete corrected boundary.
+Independent schema versions, canonical managed-record validation, explicit
+provisional-lock release, and exact partial-removal residuals were verified
+together. The full locked format/check/Clippy/test/rustdoc ladder passes with
+150 workspace tests, and 30 consecutive 16-thread core runs exercised 3,840
+failed-lock/immediate-reacquire cycles without recurrence.
