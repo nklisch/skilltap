@@ -1,7 +1,7 @@
 ---
 id: refactor-cli-composition-boundary
 kind: feature
-stage: drafting
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -38,3 +38,20 @@ side effects. Add parity tests before deleting duplicated paths.
 
 Awaiting the normal refactor-design pass after the current lifecycle adapter
 wave. This item is intentionally not folded into a behavior-changing feature.
+
+## Implementation notes
+
+Extracted the shared document-loading/error projection boundary into
+`StatusApplication::load_documents`. Status, adoption, reconciliation, list,
+and lifecycle-preview paths now share identical document ordering and repair
+actions without changing their command-specific scope or observation logic.
+
+## Review
+
+### Verdict
+
+Approve.
+
+### Verification
+
+CLI tests and strict clippy pass; output and first-use behavior remain stable.

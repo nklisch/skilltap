@@ -88,17 +88,9 @@ impl StatusApplication<'_> {
         args: &ScopedTargetArgs,
         kind: ResourceKind,
     ) -> Outcome {
-        let documents = DocumentLoadPhase::execute(self);
-        let mut outcome = documents.project(Outcome::new(command, ResultClass::AttentionRequired));
-        let documents = match documents.finish() {
-            Ok(documents) => documents,
-            Err(errors) => {
-                outcome.result = ResultClass::Invalid;
-                for error in errors {
-                    outcome = outcome.with_error(error);
-                }
-                return outcome;
-            }
+        let (documents, mut outcome) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
         };
         let status_args = StatusArgs {
             target: args.target.clone(),
@@ -163,20 +155,9 @@ impl StatusApplication<'_> {
     }
 
     pub(crate) fn execute_instruction_status(&self, args: &ScopedOutputArgs) -> Outcome {
-        let documents = DocumentLoadPhase::execute(self);
-        let mut outcome = documents.project(Outcome::new(
-            "instructions status",
-            ResultClass::AttentionRequired,
-        ));
-        let documents = match documents.finish() {
-            Ok(documents) => documents,
-            Err(errors) => {
-                outcome.result = ResultClass::Invalid;
-                for error in errors {
-                    outcome = outcome.with_error(error);
-                }
-                return outcome;
-            }
+        let (documents, mut outcome) = match self.load_documents("instructions status") {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
         };
         let status_args = StatusArgs {
             target: TargetArgs::default(),
@@ -220,17 +201,9 @@ impl StatusApplication<'_> {
         source: Option<&str>,
         name: Option<&str>,
     ) -> Outcome {
-        let documents = DocumentLoadPhase::execute(self);
-        let mut outcome = documents.project(Outcome::new(command, ResultClass::AttentionRequired));
-        let documents = match documents.finish() {
-            Ok(documents) => documents,
-            Err(errors) => {
-                outcome.result = ResultClass::Invalid;
-                for error in errors {
-                    outcome = outcome.with_error(error);
-                }
-                return outcome;
-            }
+        let (documents, mut outcome) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
         };
         let status_args = StatusArgs {
             target: target.clone(),
@@ -306,20 +279,9 @@ impl StatusApplication<'_> {
         excludes: &[NativeId],
         acknowledged: bool,
     ) -> Outcome {
-        let documents = DocumentLoadPhase::execute(self);
-        let mut outcome = documents.project(Outcome::new(command, ResultClass::AttentionRequired));
-        let documents = match documents.finish() {
-            Ok(documents) => documents,
-            Err(errors) => {
-                outcome.result = ResultClass::Invalid;
-                for error in errors {
-                    outcome = outcome.with_error(error);
-                }
-                return outcome.with_next_action(NextAction::new(
-                    "repair_owned_documents",
-                    "Repair the reported skilltap-owned documents before retrying.",
-                ));
-            }
+        let (documents, mut outcome) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
         };
 
         let status_args = StatusArgs {
@@ -442,20 +404,9 @@ impl StatusApplication<'_> {
     }
 
     pub(crate) fn execute(&self, args: &StatusArgs) -> Outcome {
-        let documents = DocumentLoadPhase::execute(self);
-        let mut outcome = documents.project(Outcome::new("status", ResultClass::AttentionRequired));
-        let documents = match documents.finish() {
-            Ok(documents) => documents,
-            Err(errors) => {
-                outcome.result = ResultClass::Invalid;
-                for error in errors {
-                    outcome = outcome.with_error(error);
-                }
-                return outcome.with_next_action(NextAction::new(
-                    "repair_owned_documents",
-                    "Repair the reported skilltap-owned documents before retrying.",
-                ));
-            }
+        let (documents, mut outcome) = match self.load_documents("status") {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
         };
 
         let scope = match StatusScope::resolve(self, args, &documents) {
@@ -510,20 +461,9 @@ impl StatusApplication<'_> {
     }
 
     pub(crate) fn execute_adopt(&self, args: &AdoptArgs) -> Outcome {
-        let documents = DocumentLoadPhase::execute(self);
-        let mut outcome = documents.project(Outcome::new("adopt", ResultClass::AttentionRequired));
-        let documents = match documents.finish() {
-            Ok(documents) => documents,
-            Err(errors) => {
-                outcome.result = ResultClass::Invalid;
-                for error in errors {
-                    outcome = outcome.with_error(error);
-                }
-                return outcome.with_next_action(NextAction::new(
-                    "repair_owned_documents",
-                    "Repair the reported skilltap-owned documents before retrying adoption.",
-                ));
-            }
+        let (documents, mut outcome) = match self.load_documents("adopt") {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
         };
 
         let status_args = StatusArgs {
@@ -663,6 +603,27 @@ impl StatusApplication<'_> {
             Err(error) => outcome
                 .with_error(adoption_apply_error(&error))
                 .with_next_action(adoption_next_action(&error)),
+        }
+    }
+
+    fn load_documents(
+        &self,
+        command: &'static str,
+    ) -> Result<(StatusDocuments, Outcome), Box<Outcome>> {
+        let loaded = DocumentLoadPhase::execute(self);
+        let mut outcome = loaded.project(Outcome::new(command, ResultClass::AttentionRequired));
+        match loaded.finish() {
+            Ok(documents) => Ok((documents, outcome)),
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                Err(Box::new(outcome.with_next_action(NextAction::new(
+                    "repair_owned_documents",
+                    "Repair the reported skilltap-owned documents before retrying.",
+                ))))
+            }
         }
     }
 
