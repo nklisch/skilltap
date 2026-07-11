@@ -1,3 +1,4 @@
+mod bounded_process;
 mod clock;
 mod command;
 mod error;
@@ -10,6 +11,7 @@ mod paths;
 mod scope;
 mod strict_json;
 
+pub use bounded_process::SystemNativeProcessRunner;
 pub use clock::{Clock, FakeClock, SystemClock};
 pub use command::{CommandOutput, CommandRequest, CommandRunner, SystemCommandRunner};
 pub use error::{

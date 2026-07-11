@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-bounded-process
 kind: story
-stage: implementing
+stage: review
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits, epic-harness-observation-adoption-runtime-adversarial-fixtures, epic-harness-observation-adoption-runtime-executable-resolution]
@@ -25,3 +25,27 @@ hard post-kill drain deadline and close parent read descriptors so even a
 Return non-zero exit as a bounded result, revalidate executable identity just
 before spawn, and keep all errors/output Debug-safe in native Linux and macOS
 behavior suites.
+
+## Implementation
+
+- Added `SystemNativeProcessRunner` with direct absolute executable invocation,
+  explicit cleared environment, null stdin, optional cwd, immediate identity
+  revalidation, and a dedicated process group.
+- Parent-owned nonblocking stdout/stderr readers drain concurrently while
+  enforcing per-stream and combined caps. Deadline and overflow paths kill the
+  group, fall back to direct child termination if necessary, reap the child,
+  and close parent descriptors after a hard post-kill drain window for escaped
+  descendants.
+- Added direct tests for nonzero status, literal args, explicit environment and
+  cwd forwarding, stream flood limits, hang timeout/reap, and escaped-pipe
+  completion. No native payloads enter Debug or error text.
+- Process drain/termination failures use the distinct closed runtime error
+  categories introduced by the contracts story.
+
+## Verification
+
+- Focused bounded-process tests pass 4/4 with warnings-denied core Clippy.
+- Full workspace format/check/Clippy/tests pass: 209 core tests, 3 foundation
+  integrations, 3 storage integrations, 15 fixture tests, and 6 compiled
+  binary tests.
+- Workspace rustdoc, release build, and compiled-binary verification pass.
