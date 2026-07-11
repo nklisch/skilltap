@@ -33,6 +33,22 @@ unmanaged resources, or gains additional mutation authority.
 - `docs/HARNESS-CONTRACTS.md` — Version and Update Contract, Unknown Harness Versions
 - `docs/UX.md` — Updates, Daemon
 
+## Design decisions
+
+- **What makes an update safe enough for automatic application?** Evaluate the
+  fresh semantic plan rather than version magnitude. Auto-apply only when the
+  update adds no capability, component, authentication requirement,
+  compatibility warning, partial result, drift overwrite, or other new user
+  decision. Semver alone neither grants nor removes automatic safety.
+- **How does the optional daemon run?** Install a service-manager timer that
+  invokes one finite `skilltap daemon run` cycle per interval. Do not keep a
+  resident skilltap scheduler or watcher process alive between cycles.
+- **How are background results surfaced?** Record applied, pending, failed,
+  unreachable, and contended results for `skilltap status` and ordinary
+  service logs. Do not send desktop notifications in v3.
+- **Does this epic require UI mockups?** No. Daemon lifecycle and update health
+  are CLI, JSON, and service-manager surfaces.
+
 ## Anticipated child features
 
 - Unified native-plugin and Git-revision update resolution
