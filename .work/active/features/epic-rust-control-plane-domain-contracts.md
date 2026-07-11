@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts
 kind: feature
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-workspace-reset]
@@ -188,3 +188,19 @@ Story reviews corrected canonical path/source invariants, component identity and
 deterministic finding order, target-bound compatibility, and plan/result
 truthfulness before approval. Locked format, check, warnings-as-errors clippy,
 and all workspace tests pass with 42 core tests.
+
+## Feature review findings (2026-07-11)
+
+Two fresh-context feature reviews blocked approval and created corrective child
+stories rather than reopening completed story history.
+
+- `epic-rust-control-plane-domain-contracts-resource-layers` corrects observed
+  identity so Codex/Claude and native-declared/effective-installed records remain
+  distinct; adds durable desired adoption origin, explicit component choices,
+  and target-bound accepted consequences; and makes graph cycle diagnostics
+  report actual cycle members.
+- `epic-rust-control-plane-domain-contracts-operation-semantics` adds the
+  semantic action, scope, reason, compatibility, provenance, and affected
+  surfaces required by the planning contract; binds consent consequences to
+  selectors; validates plan-class/outcome and dependency execution rules; and
+  makes operation-cycle diagnostics exact.
