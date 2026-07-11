@@ -1,5 +1,5 @@
 use crate::{
-    domain::{RelativeArtifactPath, ResourceId},
+    domain::{RelativeArtifactPath, ResourceKey},
     runtime::RuntimeError,
 };
 
@@ -11,7 +11,7 @@ use super::{
 impl ManagedArtifactError {
     pub(super) fn new(
         action: ManagedArtifactAction,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         path: Option<&RelativeArtifactPath>,
         failure: ManagedArtifactFailure,
     ) -> Self {
@@ -27,7 +27,7 @@ impl ManagedArtifactError {
 
     pub(super) fn runtime(
         action: ManagedArtifactAction,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         path: &RelativeArtifactPath,
         error: RuntimeError,
     ) -> Self {

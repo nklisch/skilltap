@@ -41,29 +41,38 @@ fn whole_skill_directory_publishes_immutably_and_round_trips_exact_bytes() {
 #[test]
 fn backups_are_unique_exclusive_complete_trees() {
     let (_temporary, repository) = setup();
-    let owner = owner("plugin:tools");
+    let backup_owner = owner("plugin:tools");
     let tree = skill_tree();
-    let first = repository.backup(&owner, &tree).unwrap();
-    let second = repository.backup(&owner, &tree).unwrap();
+    let first = repository.backup(&backup_owner, &tree).unwrap();
+    let second = repository.backup(&backup_owner, &tree).unwrap();
     assert_ne!(first.record().path(), second.record().path());
     assert_eq!(first.record().role(), ArtifactRole::Backup);
     assert_eq!(first.record().fingerprint(), None);
     assert_eq!(
-        repository.load(&owner, first.record()).unwrap().tree(),
+        repository
+            .load(&backup_owner, first.record())
+            .unwrap()
+            .tree(),
         &tree
     );
     assert_eq!(
-        repository.load(&owner, second.record()).unwrap().tree(),
+        repository
+            .load(&backup_owner, second.record())
+            .unwrap()
+            .tree(),
         &tree
     );
-    repository.remove(&owner, &first).unwrap();
-    assert!(repository.load(&owner, first.record()).is_err());
+    repository.remove(&backup_owner, &first).unwrap();
+    assert!(repository.load(&backup_owner, first.record()).is_err());
     assert_eq!(
-        repository.load(&owner, second.record()).unwrap().tree(),
+        repository
+            .load(&backup_owner, second.record())
+            .unwrap()
+            .tree(),
         &tree
     );
 
-    let maximum_owner = ResourceId::new("a".repeat(256)).unwrap();
+    let maximum_owner = owner(&"a".repeat(256));
     let maximum = repository
         .publish(
             &maximum_owner,
@@ -76,7 +85,7 @@ fn backups_are_unique_exclusive_complete_trees() {
         ArtifactPublication::Published(handle) => handle,
         ArtifactPublication::Existing(_) => unreachable!(),
     };
-    let distinct_owner = ResourceId::new("b".repeat(256)).unwrap();
+    let distinct_owner = owner(&"b".repeat(256));
     let distinct = match repository
         .publish(
             &distinct_owner,
@@ -96,12 +105,12 @@ fn backups_are_unique_exclusive_complete_trees() {
 #[test]
 fn owner_path_and_loaded_inode_are_required_for_removal() {
     let (_temporary, repository) = setup();
-    let owner = owner("skill:owned");
-    let other = ResourceId::new("skill:other").unwrap();
+    let managed_owner = owner("skill:owned");
+    let other = owner("skill:other");
     let fingerprint = fingerprint('b');
     let handle = match repository
         .publish(
-            &owner,
+            &managed_owner,
             ArtifactRole::DirectSkill,
             &fingerprint,
             &skill_tree(),
@@ -119,7 +128,7 @@ fn owner_path_and_loaded_inode_are_required_for_removal() {
         ManagedArtifactFailure::InvalidRecord
     );
     let wrong_path = ManagedArtifactRecord::new(
-        owner.clone(),
+        managed_owner.clone(),
         ArtifactRole::DirectSkill,
         RelativeArtifactPath::new("unowned-path").unwrap(),
         Some(fingerprint.clone()),
@@ -129,13 +138,15 @@ fn owner_path_and_loaded_inode_are_required_for_removal() {
         Err(SchemaError::InvalidManagedArtifactRecord { .. })
     ));
 
-    let loaded = repository.load(&owner, handle.record()).unwrap();
+    let loaded = repository.load(&managed_owner, handle.record()).unwrap();
     let path = absolute(&repository, handle.record().path());
     let displaced = path.with_extension("displaced");
     fs::rename(&path, &displaced).unwrap();
     fs::create_dir(&path).unwrap();
     fs::write(path.join("victim"), b"preserve").unwrap();
-    let error = repository.remove(&owner, loaded.handle()).unwrap_err();
+    let error = repository
+        .remove(&managed_owner, loaded.handle())
+        .unwrap_err();
     assert_eq!(error.failure(), ManagedArtifactFailure::PartialRemoval);
     let residual = error.removal_residual().unwrap();
     assert_eq!(residual.expected_identity(), loaded.handle().identity());

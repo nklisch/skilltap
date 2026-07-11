@@ -8,7 +8,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use super::{ArtifactRole, ManagedArtifactRecord, STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
     Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership, Provenance,
-    ResolvedRevision, ResourceId, Source,
+    ResolvedRevision, ResourceKey, Source,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -155,7 +155,7 @@ pub struct HarnessState {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "ResourceStateWire")]
 pub struct ResourceState {
-    resource_id: ResourceId,
+    key: ResourceKey,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     native_ids: BTreeMap<HarnessId, NativeId>,
     provenance: Provenance,
@@ -178,7 +178,7 @@ pub struct ResourceState {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ResourceStateWire {
-    resource_id: ResourceId,
+    key: ResourceKey,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     native_ids: BTreeMap<HarnessId, NativeId>,
     provenance: Provenance,
@@ -201,7 +201,7 @@ struct ResourceStateWire {
 impl ResourceState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        resource_id: ResourceId,
+        key: ResourceKey,
         native_ids: BTreeMap<HarnessId, NativeId>,
         provenance: Provenance,
         ownership: Ownership,
@@ -224,12 +224,10 @@ impl ResourceState {
             )
         );
         if !ownership_valid {
-            return Err(SchemaError::InvalidOwnership {
-                resource: resource_id,
-            });
+            return Err(SchemaError::InvalidOwnership { resource: key });
         }
         if let Some(artifact) = &managed_artifact {
-            artifact.validate_for_owner(&resource_id)?;
+            artifact.validate_for_owner(&key)?;
             let role_valid = matches!(
                 (artifact.role(), provenance),
                 (ArtifactRole::MaterializedPlugin, Provenance::Materialized)
@@ -240,13 +238,11 @@ impl ResourceState {
                     )
             );
             if !role_valid {
-                return Err(SchemaError::InvalidArtifactRole {
-                    resource: resource_id,
-                });
+                return Err(SchemaError::InvalidArtifactRole { resource: key });
             }
         }
         Ok(Self {
-            resource_id,
+            key,
             native_ids,
             provenance,
             ownership,
@@ -259,8 +255,8 @@ impl ResourceState {
             last_apply,
         })
     }
-    pub fn resource_id(&self) -> &ResourceId {
-        &self.resource_id
+    pub const fn key(&self) -> &ResourceKey {
+        &self.key
     }
     pub const fn provenance(&self) -> Provenance {
         self.provenance
@@ -297,7 +293,7 @@ impl ResourceState {
 impl From<ResourceState> for ResourceStateWire {
     fn from(value: ResourceState) -> Self {
         Self {
-            resource_id: value.resource_id,
+            key: value.key,
             native_ids: value.native_ids,
             provenance: value.provenance,
             ownership: value.ownership,
@@ -317,7 +313,7 @@ impl TryFrom<ResourceStateWire> for ResourceState {
 
     fn try_from(value: ResourceStateWire) -> Result<Self, Self::Error> {
         Self::new(
-            value.resource_id,
+            value.key,
             value.native_ids,
             value.provenance,
             value.ownership,
@@ -347,7 +343,7 @@ impl<'de> Deserialize<'de> for ResourceState {
 #[serde(into = "StateWire")]
 pub struct StateDocument {
     harnesses: BTreeMap<HarnessId, HarnessState>,
-    resources: BTreeMap<ResourceId, ResourceState>,
+    resources: BTreeMap<ResourceKey, ResourceState>,
     last_update_check: Option<Timestamp>,
     last_successful_observation: Option<Timestamp>,
     last_successful_application: Option<Timestamp>,
@@ -396,7 +392,7 @@ impl StateDocument {
         let mut resource_map = BTreeMap::new();
         let mut managed_paths = BTreeSet::new();
         for state in resources {
-            let id = state.resource_id.clone();
+            let id = state.key.clone();
             if let Some(artifact) = &state.managed_artifact
                 && !managed_paths.insert(artifact.path().clone())
             {
@@ -419,7 +415,7 @@ impl StateDocument {
     pub const fn harnesses(&self) -> &BTreeMap<HarnessId, HarnessState> {
         &self.harnesses
     }
-    pub const fn resources(&self) -> &BTreeMap<ResourceId, ResourceState> {
+    pub const fn resources(&self) -> &BTreeMap<ResourceKey, ResourceState> {
         &self.resources
     }
     pub const fn last_update_check(&self) -> Option<Timestamp> {

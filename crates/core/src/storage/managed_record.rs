@@ -2,7 +2,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::SchemaError;
-use crate::domain::{Fingerprint, RelativeArtifactPath, ResourceId};
+use crate::domain::{Fingerprint, RelativeArtifactPath, ResourceKey};
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -15,7 +15,7 @@ pub enum ArtifactRole {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "ManagedArtifactRecordWire")]
 pub struct ManagedArtifactRecord {
-    owner: ResourceId,
+    owner: ResourceKey,
     role: ArtifactRole,
     path: RelativeArtifactPath,
     fingerprint: Option<Fingerprint>,
@@ -24,7 +24,7 @@ pub struct ManagedArtifactRecord {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct ManagedArtifactRecordWire {
-    owner: ResourceId,
+    owner: ResourceKey,
     role: ArtifactRole,
     path: RelativeArtifactPath,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,7 +33,7 @@ struct ManagedArtifactRecordWire {
 
 impl ManagedArtifactRecord {
     pub fn new(
-        owner: ResourceId,
+        owner: ResourceKey,
         role: ArtifactRole,
         path: RelativeArtifactPath,
         fingerprint: Option<Fingerprint>,
@@ -49,7 +49,7 @@ impl ManagedArtifactRecord {
     }
 
     pub fn for_artifact(
-        owner: ResourceId,
+        owner: ResourceKey,
         role: ArtifactRole,
         fingerprint: Fingerprint,
     ) -> Result<Self, SchemaError> {
@@ -60,7 +60,11 @@ impl ManagedArtifactRecord {
         Self::new(owner, role, path, Some(fingerprint))
     }
 
-    pub fn for_backup(owner: ResourceId, process: u32, sequence: u64) -> Result<Self, SchemaError> {
+    pub fn for_backup(
+        owner: ResourceKey,
+        process: u32,
+        sequence: u64,
+    ) -> Result<Self, SchemaError> {
         if process == 0 {
             return Err(invalid_record(&owner));
         }
@@ -70,7 +74,7 @@ impl ManagedArtifactRecord {
         Self::new(owner, ArtifactRole::Backup, path, None)
     }
 
-    pub(crate) fn validate_for_owner(&self, owner: &ResourceId) -> Result<(), SchemaError> {
+    pub(crate) fn validate_for_owner(&self, owner: &ResourceKey) -> Result<(), SchemaError> {
         if &self.owner != owner {
             return Err(SchemaError::ManagedOwnerMismatch {
                 resource: owner.clone(),
@@ -99,7 +103,7 @@ impl ManagedArtifactRecord {
         }
     }
 
-    pub fn owner(&self) -> &ResourceId {
+    pub fn owner(&self) -> &ResourceKey {
         &self.owner
     }
 
@@ -147,7 +151,7 @@ impl<'de> Deserialize<'de> for ManagedArtifactRecord {
 }
 
 fn artifact_path(
-    owner: &ResourceId,
+    owner: &ResourceKey,
     role: ArtifactRole,
     fingerprint: &Fingerprint,
 ) -> Result<RelativeArtifactPath, SchemaError> {
@@ -161,7 +165,7 @@ fn artifact_path(
     .map_err(|_| invalid_record(owner))
 }
 
-fn valid_backup_path(owner: &ResourceId, path: &RelativeArtifactPath) -> bool {
+fn valid_backup_path(owner: &ResourceKey, path: &RelativeArtifactPath) -> bool {
     let prefix = format!("backup-{}-", owner_key(owner));
     let Some((process, sequence)) = path.as_str().strip_prefix(&prefix).and_then(|suffix| {
         let (process, sequence) = suffix.split_once('-')?;
@@ -188,11 +192,11 @@ const fn role_component(role: ArtifactRole) -> &'static str {
     }
 }
 
-fn owner_key(owner: &ResourceId) -> String {
-    format!("{:x}", Sha256::digest(owner.as_str().as_bytes()))
+fn owner_key(owner: &ResourceKey) -> String {
+    format!("{:x}", Sha256::digest(owner.canonical_bytes()))
 }
 
-fn invalid_record(owner: &ResourceId) -> SchemaError {
+fn invalid_record(owner: &ResourceKey) -> SchemaError {
     SchemaError::InvalidManagedArtifactRecord {
         owner: owner.clone(),
     }
@@ -201,7 +205,11 @@ fn invalid_record(owner: &ResourceId) -> SchemaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::FingerprintAlgorithm;
+    use crate::domain::{AbsolutePath, FingerprintAlgorithm, ResourceId, Scope};
+
+    fn global_owner(value: impl Into<String>) -> ResourceKey {
+        ResourceKey::new(ResourceId::new(value).unwrap(), Scope::Global)
+    }
 
     fn fingerprint() -> Fingerprint {
         Fingerprint::new(FingerprintAlgorithm::Sha256, "a".repeat(64)).unwrap()
@@ -209,7 +217,7 @@ mod tests {
 
     #[test]
     fn canonical_records_derive_bounded_owner_bound_paths_and_round_trip() {
-        let owner = ResourceId::new("a".repeat(256)).unwrap();
+        let owner = global_owner("a".repeat(256));
         let artifact = ManagedArtifactRecord::for_artifact(
             owner.clone(),
             ArtifactRole::DirectSkill,
@@ -238,7 +246,7 @@ mod tests {
 
     #[test]
     fn arbitrary_construction_and_deserialization_reject_noncanonical_records() {
-        let owner = ResourceId::new("skill:invalid").unwrap();
+        let owner = global_owner("skill:invalid");
         for (role, path, fingerprint) in [
             (ArtifactRole::DirectSkill, "arbitrary", Some(fingerprint())),
             (ArtifactRole::DirectSkill, "arbitrary", None),
@@ -277,5 +285,41 @@ mod tests {
         let mut invalid_backup = serde_json::to_value(backup).unwrap();
         invalid_backup["fingerprint"] = serde_json::to_value(fingerprint()).unwrap();
         assert!(serde_json::from_value::<ManagedArtifactRecord>(invalid_backup).is_err());
+    }
+
+    #[test]
+    fn equal_ids_in_distinct_scopes_have_distinct_canonical_paths() {
+        let id = ResourceId::new("skill:shared").unwrap();
+        let owners = [
+            ResourceKey::new(id.clone(), Scope::Global),
+            ResourceKey::new(
+                id.clone(),
+                Scope::Project(AbsolutePath::new("/work/a").unwrap()),
+            ),
+            ResourceKey::new(id, Scope::Project(AbsolutePath::new("/work/b").unwrap())),
+        ];
+
+        let artifact_paths = owners
+            .iter()
+            .cloned()
+            .map(|owner| {
+                ManagedArtifactRecord::for_artifact(owner, ArtifactRole::DirectSkill, fingerprint())
+                    .unwrap()
+                    .path()
+                    .clone()
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        let backup_paths = owners
+            .into_iter()
+            .map(|owner| {
+                ManagedArtifactRecord::for_backup(owner, 42, 7)
+                    .unwrap()
+                    .path()
+                    .clone()
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+
+        assert_eq!(artifact_paths.len(), 3);
+        assert_eq!(backup_paths.len(), 3);
     }
 }

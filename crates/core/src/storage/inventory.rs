@@ -3,13 +3,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::{INVENTORY_SCHEMA_VERSION, SchemaError};
-use crate::domain::{AbsolutePath, DesiredResource, ResourceGraph, ResourceId, Scope};
+use crate::domain::{AbsolutePath, DesiredResource, ResourceGraph, ResourceKey, Scope};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "InventoryWire")]
 pub struct InventoryDocument {
     projects: BTreeSet<AbsolutePath>,
-    resources: BTreeMap<ResourceId, DesiredResource>,
+    resources: BTreeMap<ResourceKey, DesiredResource>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -48,7 +48,7 @@ impl InventoryDocument {
                 && !project_set.contains(path)
             {
                 return Err(SchemaError::UndeclaredProject {
-                    resource: resource.id().clone(),
+                    resource: resource.key().clone(),
                     path: path.clone(),
                 });
             }
@@ -63,7 +63,7 @@ impl InventoryDocument {
         &self.projects
     }
 
-    pub const fn resources(&self) -> &BTreeMap<ResourceId, DesiredResource> {
+    pub const fn resources(&self) -> &BTreeMap<ResourceKey, DesiredResource> {
         &self.resources
     }
 }

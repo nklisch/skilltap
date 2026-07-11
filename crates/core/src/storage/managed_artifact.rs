@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fmt};
 
 use crate::{
-    domain::{AbsolutePath, Fingerprint, RelativeArtifactPath, ResourceId},
+    domain::{AbsolutePath, Fingerprint, RelativeArtifactPath, ResourceId, ResourceKey, Scope},
     runtime::{
         DirectoryContentState, DirectoryIdentity, DirectoryPathState, DirectorySyncState,
         DirectoryTreeFileSystem,
@@ -76,7 +76,7 @@ pub enum ManagedArtifactFailure {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManagedRemovalResidual {
-    owner: ResourceId,
+    owner: ResourceKey,
     path: RelativeArtifactPath,
     expected_identity: DirectoryIdentity,
     observed_identity: Option<DirectoryIdentity>,
@@ -86,7 +86,7 @@ pub struct ManagedRemovalResidual {
 }
 
 impl ManagedRemovalResidual {
-    pub fn owner(&self) -> &ResourceId {
+    pub fn owner(&self) -> &ResourceKey {
         &self.owner
     }
 
@@ -117,7 +117,7 @@ impl ManagedRemovalResidual {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManagedArtifactResidual {
-    owner: ResourceId,
+    owner: ResourceKey,
     path: RelativeArtifactPath,
     identity: Option<DirectoryIdentity>,
     presence: crate::runtime::DirectoryPathState,
@@ -125,7 +125,7 @@ pub struct ManagedArtifactResidual {
 }
 
 impl ManagedArtifactResidual {
-    pub fn owner(&self) -> &ResourceId {
+    pub fn owner(&self) -> &ResourceKey {
         &self.owner
     }
 
@@ -148,7 +148,7 @@ impl ManagedArtifactResidual {
 
 pub struct ManagedArtifactError {
     action: ManagedArtifactAction,
-    owner: ResourceId,
+    owner: ResourceKey,
     path: Option<RelativeArtifactPath>,
     failure: ManagedArtifactFailure,
     residual: Option<Box<ManagedArtifactResidual>>,
@@ -160,7 +160,7 @@ impl ManagedArtifactError {
         self.action
     }
 
-    pub fn owner(&self) -> &ResourceId {
+    pub fn owner(&self) -> &ResourceKey {
         &self.owner
     }
 
@@ -199,7 +199,7 @@ impl fmt::Display for ManagedArtifactError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "managed artifact {:?} for `{}` failed",
+            "managed artifact {:?} for `{:?}` failed",
             self.action, self.owner
         )?;
         if let Some(path) = &self.path {
@@ -256,7 +256,7 @@ pub enum ArtifactPublication {
 pub trait ManagedArtifactRepository {
     fn publish(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         role: ArtifactRole,
         fingerprint: &Fingerprint,
         tree: &ArtifactTree,
@@ -264,19 +264,19 @@ pub trait ManagedArtifactRepository {
 
     fn backup(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         tree: &ArtifactTree,
     ) -> Result<ManagedArtifactHandle, ManagedArtifactError>;
 
     fn load(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         record: &ManagedArtifactRecord,
     ) -> Result<LoadedArtifact, ManagedArtifactError>;
 
     fn remove(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         handle: &ManagedArtifactHandle,
     ) -> Result<(), ManagedArtifactError>;
 }
@@ -291,8 +291,10 @@ impl<'a> FileManagedArtifactRepository<'a> {
         filesystem: &'a dyn DirectoryTreeFileSystem,
         config_root: AbsolutePath,
     ) -> Result<Self, ManagedArtifactError> {
-        let owner =
-            ResourceId::new("skilltap:managed").expect("static managed-root owner is valid");
+        let owner = ResourceKey::new(
+            ResourceId::new("skilltap:managed").expect("static managed-root owner is valid"),
+            Scope::Global,
+        );
         let managed_root =
             AbsolutePath::new(format!("{}/managed", config_root.as_str())).map_err(|_| {
                 ManagedArtifactError::new(

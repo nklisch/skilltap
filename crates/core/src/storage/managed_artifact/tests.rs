@@ -6,7 +6,7 @@ use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::{
-    domain::FingerprintAlgorithm,
+    domain::{FingerprintAlgorithm, ResourceId, ResourceKey, Scope},
     runtime::{
         DirectoryContentState, DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState,
         RuntimeError, SystemFileSystem,
@@ -22,8 +22,8 @@ fn setup() -> (TempRoot, FileManagedArtifactRepository<'static>) {
     (temporary, repository)
 }
 
-fn owner(value: &str) -> ResourceId {
-    ResourceId::new(value).unwrap()
+fn owner(value: &str) -> ResourceKey {
+    ResourceKey::new(ResourceId::new(value).unwrap(), Scope::Global)
 }
 
 fn fingerprint(byte: char) -> Fingerprint {

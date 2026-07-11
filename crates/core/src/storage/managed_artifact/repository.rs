@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{
-    domain::{Fingerprint, ResourceId},
+    domain::{Fingerprint, ResourceKey},
     runtime::DirectoryPublishOutcome,
 };
 
@@ -51,7 +51,7 @@ impl FileManagedArtifactRepository<'_> {
 
     fn load_with_action(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         record: &ManagedArtifactRecord,
         action: ManagedArtifactAction,
     ) -> Result<LoadedArtifact, ManagedArtifactError> {
@@ -88,7 +88,7 @@ impl FileManagedArtifactRepository<'_> {
 impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
     fn publish(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         role: ArtifactRole,
         fingerprint: &Fingerprint,
         tree: &ArtifactTree,
@@ -115,7 +115,7 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
 
     fn backup(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         tree: &ArtifactTree,
     ) -> Result<ManagedArtifactHandle, ManagedArtifactError> {
         for _ in 0..32 {
@@ -160,7 +160,7 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
 
     fn load(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         record: &ManagedArtifactRecord,
     ) -> Result<LoadedArtifact, ManagedArtifactError> {
         self.load_with_action(owner, record, ManagedArtifactAction::Load)
@@ -168,7 +168,7 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
 
     fn remove(
         &self,
-        owner: &ResourceId,
+        owner: &ResourceKey,
         handle: &ManagedArtifactHandle,
     ) -> Result<(), ManagedArtifactError> {
         handle.record().validate_for_owner(owner).map_err(|_| {

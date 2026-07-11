@@ -28,7 +28,7 @@ pub use state::{ApplyRecord, HarnessState, ResourceState, StateDocument, Timesta
 
 use std::fmt;
 
-use crate::domain::{AbsolutePath, OperationId, ResourceGraphError, ResourceId, ValidationError};
+use crate::domain::{AbsolutePath, OperationId, ResourceGraphError, ResourceKey, ValidationError};
 
 pub const CONFIG_SCHEMA_VERSION: u32 = 1;
 pub const INVENTORY_SCHEMA_VERSION: u32 = 1;
@@ -52,7 +52,7 @@ pub enum SchemaError {
         path: AbsolutePath,
     },
     UndeclaredProject {
-        resource: ResourceId,
+        resource: ResourceKey,
         path: AbsolutePath,
     },
     ResourceGraph(ResourceGraphError),
@@ -60,23 +60,23 @@ pub enum SchemaError {
         harness: crate::domain::HarnessId,
     },
     DuplicateStateResource {
-        resource: ResourceId,
+        resource: ResourceKey,
     },
     DuplicateOperation {
         operation: OperationId,
     },
     ManagedOwnerMismatch {
-        resource: ResourceId,
-        owner: ResourceId,
+        resource: ResourceKey,
+        owner: ResourceKey,
     },
     InvalidManagedArtifactRecord {
-        owner: ResourceId,
+        owner: ResourceKey,
     },
     InvalidOwnership {
-        resource: ResourceId,
+        resource: ResourceKey,
     },
     InvalidArtifactRole {
-        resource: ResourceId,
+        resource: ResourceKey,
     },
     DuplicateManagedPath {
         path: crate::domain::RelativeArtifactPath,
@@ -126,10 +126,10 @@ impl fmt::Display for SchemaError {
             }
             Self::ManagedOwnerMismatch { resource, owner } => write!(
                 formatter,
-                "managed artifact owner `{owner}` does not match resource `{resource}`"
+                "managed artifact owner `{owner:?}` does not match resource `{resource:?}`"
             ),
             Self::InvalidManagedArtifactRecord { owner } => {
-                write!(formatter, "managed artifact record for `{owner}` is invalid")
+                write!(formatter, "managed artifact record for `{owner:?}` is invalid")
             }
             Self::InvalidOwnership { resource } => write!(
                 formatter,

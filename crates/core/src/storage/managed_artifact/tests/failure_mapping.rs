@@ -131,6 +131,79 @@ fn partial_removal_maps_to_safe_owned_residual_context() {
     assert_eq!(residual.parent_sync(), DirectorySyncState::NotRequired);
 }
 
+struct CountingFileSystem {
+    calls: Cell<usize>,
+}
+
+impl DirectoryTreeFileSystem for CountingFileSystem {
+    fn publish_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    ) -> Result<DirectoryPublishOutcome, RuntimeError> {
+        self.calls.set(self.calls.get() + 1);
+        unreachable!("owner mismatch must fail before publication")
+    }
+
+    fn load_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+        self.calls.set(self.calls.get() + 1);
+        unreachable!("owner mismatch must fail before loading")
+    }
+
+    fn remove_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+        _expected: DirectoryIdentity,
+    ) -> Result<DirectoryIdentity, RuntimeError> {
+        self.calls.set(self.calls.get() + 1);
+        unreachable!("owner mismatch must fail before removal")
+    }
+}
+
+#[test]
+fn owner_mismatch_fails_before_filesystem_io() {
+    let filesystem = CountingFileSystem {
+        calls: Cell::new(0),
+    };
+    let repository = FileManagedArtifactRepository::new(
+        &filesystem,
+        AbsolutePath::new("/machine/skilltap").unwrap(),
+    )
+    .unwrap();
+    let id = ResourceId::new("skill:shared").unwrap();
+    let global = ResourceKey::new(id.clone(), Scope::Global);
+    let project = ResourceKey::new(
+        id,
+        Scope::Project(AbsolutePath::new("/work/project").unwrap()),
+    );
+    let record =
+        ManagedArtifactRecord::for_artifact(global, ArtifactRole::DirectSkill, fingerprint('f'))
+            .unwrap();
+
+    let load_error = repository.load(&project, &record).unwrap_err();
+    assert_eq!(load_error.failure(), ManagedArtifactFailure::InvalidRecord);
+    assert_eq!(load_error.owner(), &project);
+    assert_eq!(filesystem.calls.get(), 0);
+
+    let handle = ManagedArtifactHandle {
+        record,
+        identity: DirectoryIdentity::new(17, 23),
+    };
+    let remove_error = repository.remove(&project, &handle).unwrap_err();
+    assert_eq!(
+        remove_error.failure(),
+        ManagedArtifactFailure::InvalidRecord
+    );
+    assert_eq!(remove_error.owner(), &project);
+    assert_eq!(filesystem.calls.get(), 0);
+}
+
 struct OccupiedFileSystem {
     occupied: usize,
     calls: Cell<usize>,
