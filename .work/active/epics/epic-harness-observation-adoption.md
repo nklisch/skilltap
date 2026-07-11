@@ -31,6 +31,16 @@ native resources and provenance but does not transfer or mutate them.
 - `docs/HARNESS-CONTRACTS.md` — Common Capability Model, Codex Contract, Claude Code Contract
 - `docs/UX.md` — First Use, Enabling Harnesses, Adoption, Status
 
+## Design decisions
+
+- **How are harness capability profiles updated?** Compile verified profiles
+  into skilltap and update them through ordinary skilltap releases. Runtime
+  probes may confirm or narrow a compiled profile, but never grant undocumented
+  mutation authority. Unknown harness versions remain observable when their
+  state is parseable and stay mutation-blocked until a verified profile ships.
+- **Does this epic require UI mockups?** No. Harness status and adoption are
+  non-interactive CLI surfaces represented through plain and JSON output.
+
 ## Anticipated child features
 
 - Harness detection and capability-profile selection
