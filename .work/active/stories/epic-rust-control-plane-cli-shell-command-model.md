@@ -50,6 +50,18 @@ nested-command forms with tests. Run the locked ladder.
   Clippy with warnings denied, workspace locked tests (172 tests), rustdoc with
   warnings denied, release build, compiled-binary help/version smoke, and an
   explicit no-subcommand exit-1/usage assertion.
-- Files changed: `crates/cli/src/command.rs`, `crates/cli/src/lib.rs`,
+- Files changed: `crates/cli/src/command.rs`,
+  `crates/cli/src/command/tests.rs`, `crates/cli/src/lib.rs`, and
   `crates/cli/src/main.rs`.
 - Discrepancies from design: none. Adjacent issues parked: none.
+
+## Review correction
+
+- Moved the unchanged parser contract tests from the 847-line command module to
+  the private `command/tests.rs` sidecar. Production grammar and conversion code
+  now occupy 499 lines, while test module paths and test identities remain
+  unchanged.
+- Added compile-time slice assertions in the existing sync test proving that
+  both repeatable selection collections contain validated core `NativeId`
+  values. The CLI continues to treat selector spelling as opaque because the
+  foundation documents define no further selector grammar.
