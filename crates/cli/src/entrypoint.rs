@@ -183,7 +183,6 @@ where
                         .as_ref()
                         .map(|value| value.as_str()),
                     subdirectory: args.path.as_ref().map(|value| value.as_str()),
-                    acknowledged: args.acknowledgment.yes,
                 },
             ),
             OutputChannel::Stdout,
@@ -204,7 +203,6 @@ where
                 &args.scope,
                 &args.target,
                 args.skill.as_ref().map(|value| value.as_str()),
-                args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
@@ -313,10 +311,9 @@ fn execute_system_skill_update(
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
     skill: Option<&str>,
-    acknowledged: bool,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        application.execute_skill_update(command, scope, target, skill, acknowledged)
+        application.execute_skill_update(command, scope, target, skill)
     })
 }
 

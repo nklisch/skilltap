@@ -452,6 +452,40 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
         fs::read_to_string(config_root(&machine).join("state.json")).unwrap(),
         state
     );
+
+    let update = run(
+        &machine,
+        &[
+            "marketplace",
+            "update",
+            "team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["result"], "completed");
+    assert_eq!(json(&update)["summary"]["changed"], true);
+
+    let remove = run(
+        &machine,
+        &[
+            "marketplace",
+            "remove",
+            "team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 0);
+    assert_eq!(json(&remove)["result"], "completed");
+    assert!(
+        !fs::read_to_string(config_root(&machine).join("inventory.toml"))
+            .unwrap()
+            .contains("marketplace:team")
+    );
 }
 
 #[test]
@@ -538,14 +572,8 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
             "--json",
         ],
     );
-    assert_code(&replace, 0);
-    assert_eq!(json(&replace)["summary"]["changed"], true);
-    assert!(
-        fs::read_dir(config_root(&machine).join("managed"))
-            .unwrap()
-            .next()
-            .is_some()
-    );
+    assert_code(&replace, 2);
+    assert_eq!(json(&replace)["summary"]["changed"], false);
 
     fs::write(
         source.join("SKILL.md"),
@@ -566,6 +594,12 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     );
     assert_code(&update, 0);
     assert_eq!(json(&update)["summary"]["changed"], true);
+    assert!(
+        fs::read_dir(config_root(&machine).join("managed"))
+            .unwrap()
+            .next()
+            .is_some()
+    );
 
     let remove = run(
         &machine,

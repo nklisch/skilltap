@@ -45,5 +45,7 @@ observation. The harness crate supplies bounded native lifecycle vectors and an
 execution boundary; core has one validated constructor for faithful native
 operations, and state journaling is atomic and resource-exact. Remove operations
 drop the desired inventory entry idempotently while retaining the state journal
-for provenance. Native exact-resource post-observation and update-all selector
-expansion remain open.
+for provenance. Explicit marketplace/plugin update now preserves the existing
+desired definition instead of replacing it with an incomplete synthetic source;
+native exact-resource post-observation and update-all selector expansion remain
+open.

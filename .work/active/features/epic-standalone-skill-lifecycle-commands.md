@@ -48,8 +48,10 @@ requested refs and subdirectories, and records the resolved commit SHA in
 state. Explicit `--yes` replacement and `skill update <name>` now back up the
 complete prior tree into skilltap-managed storage, replace it through the
 descriptor-checked directory boundary, refresh the recorded fingerprint, and
-remain idempotent. Drift acknowledgment is still generic at the CLI boundary;
-operation-scoped consequence flags and update-all planning remain open.
+remain idempotent. A changed installed tree is treated as local drift and is
+never overwritten by `--yes`; only an explicit named update may replace an
+intact managed tree. Operation-scoped consequence flags, update-all planning,
+and pin enforcement remain open.
 
 ## Review
 

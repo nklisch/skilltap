@@ -85,7 +85,6 @@ pub(crate) struct SkillInstallRequest<'a> {
     pub(crate) name: Option<&'a str>,
     pub(crate) requested_revision: Option<&'a str>,
     pub(crate) subdirectory: Option<&'a str>,
-    pub(crate) acknowledged: bool,
 }
 
 /// State-backed journal for mutating lifecycle composition. It resolves each
@@ -959,14 +958,40 @@ impl StatusApplication<'_> {
         let timestamp = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| ());
 
         for concrete_scope in &scope.resolved {
-            let resource = match request.desired_resource(concrete_scope, &targets.resolved) {
-                Ok(resource) => resource,
-                Err(error) => {
-                    outcome.result = ResultClass::Invalid;
-                    return outcome.with_error(error);
+            let resource = if request.is_update() {
+                let key = request.resource_key(concrete_scope).map_err(|_| {
+                    ErrorDetail::new(
+                        "resource_id_invalid",
+                        "The requested native resource identifier is invalid.",
+                    )
+                });
+                let key = match key {
+                    Ok(key) => key,
+                    Err(error) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(error);
+                    }
+                };
+                match inventory.resources().get(&key) {
+                    Some(existing) => existing.clone(),
+                    None => match request.desired_resource(concrete_scope, &targets.resolved) {
+                        Ok(resource) => resource,
+                        Err(error) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(error);
+                        }
+                    },
+                }
+            } else {
+                match request.desired_resource(concrete_scope, &targets.resolved) {
+                    Ok(resource) => resource,
+                    Err(error) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(error);
+                    }
                 }
             };
-            if request.retains_desired() {
+            if request.retains_desired() && !request.is_update() {
                 match inventory.with_resource(resource.clone()) {
                     Ok(next) => inventory = next,
                     Err(_) => {
@@ -1565,12 +1590,29 @@ impl StatusApplication<'_> {
                         native_ids.insert(target_id.clone(), name.clone());
                         continue;
                     }
-                    if !request.acknowledged {
+                    let managed_fingerprint = documents
+                        .state
+                        .as_ref()
+                        .and_then(|state| state.resources().get(&key))
+                        .and_then(|state| state.fingerprint());
+                    if managed_fingerprint != Some(current.fingerprint()) {
                         outcome.result = ResultClass::AttentionRequired;
                         outcome = outcome.with_warning(
                             Warning::new(
                                 "skill_destination_drifted",
-                                "The existing skill destination differs from the requested tree; no replacement was made.",
+                                "The installed skill has local drift; no replacement was made. `--yes` does not override unidentified edits.",
+                            )
+                            .with_context("target", target_id.as_str())
+                            .with_context("scope", scope_label(concrete_scope)),
+                        );
+                        continue;
+                    }
+                    if command != "skill update" {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "skill_update_required",
+                                "The source changed while the installed tree is intact; use `skill update <name>` to replace it explicitly.",
                             )
                             .with_context("target", target_id.as_str())
                             .with_context("scope", scope_label(concrete_scope)),
@@ -1787,7 +1829,6 @@ impl StatusApplication<'_> {
         requested_scope: &ScopeArgs,
         target: &TargetArgs,
         skill_name: Option<&str>,
-        acknowledged: bool,
     ) -> Outcome {
         let (documents, _) = match self.load_documents(command) {
             Ok(value) => value,
@@ -1856,7 +1897,6 @@ impl StatusApplication<'_> {
                 name: Some(name.as_str()),
                 requested_revision: source.requested_revision().map(|value| value.as_str()),
                 subdirectory: None,
-                acknowledged,
             },
         )
     }
@@ -3459,6 +3499,28 @@ impl NativeLifecycleSpec {
             self.operation_action,
             OperationAction::MarketplaceRemove | OperationAction::PluginRemove
         )
+    }
+
+    fn is_update(&self) -> bool {
+        matches!(
+            self.operation_action,
+            OperationAction::MarketplaceUpdate | OperationAction::PluginUpdate
+        )
+    }
+
+    fn resource_key(&self, scope: &Scope) -> Result<ResourceKey, ErrorDetail> {
+        ResourceId::new(format!(
+            "{}:{}",
+            self.resource_prefix,
+            self.native_name.as_str()
+        ))
+        .map(|id| ResourceKey::new(id, scope.clone()))
+        .map_err(|_| {
+            ErrorDetail::new(
+                "resource_id_invalid",
+                "The requested native resource identifier is invalid.",
+            )
+        })
     }
 
     fn desired_resource(
