@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-maintainability-codecs
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-storage-maintainability
 depends_on: []
@@ -37,3 +37,9 @@ ordering, public identities, and test list. Run the full locked ladder.
   warnings-denied rustdoc ladder pass (150 workspace tests).
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Codec/schema probing is private and focused while repository ports,
+public identities, exact bytes, classifications, and the locked test list are
+unchanged.

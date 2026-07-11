@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-maintainability-runtime-tests
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-storage-maintainability
 depends_on: []
@@ -37,3 +37,8 @@ scenario. Compare the test list and run the full locked ladder.
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. All twenty filesystem test identities, assertions, platform guards,
+and fault scenarios are preserved across the four lexical contract files.

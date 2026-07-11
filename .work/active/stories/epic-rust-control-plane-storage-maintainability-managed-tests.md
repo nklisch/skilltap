@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-maintainability-managed-tests
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-storage-maintainability
 depends_on: []
@@ -34,3 +34,8 @@ doubles. Record and compare the test list, then run the full locked ladder.
   workspace suite including doctests, and warnings-denied rustdoc all pass.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. The lexical split preserves all nine fully qualified test identities,
+assertions, explicit fakes, and the complete locked test list.
