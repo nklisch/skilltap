@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell-composition
 kind: story
-stage: review
+stage: done
 tags: [cli, infra]
 parent: epic-rust-control-plane-cli-shell
 depends_on: [epic-rust-control-plane-cli-shell-command-model, epic-rust-control-plane-cli-shell-output]
@@ -77,3 +77,10 @@ native-format/domain business logic and run the locked ladder.
   confirms first-use plain status writes only stdout with exit `2`, all-scopes
   JSON retains scope kind `all` with one resolved scope, unavailable plain
   commands write only stderr, and no configuration root is created.
+
+## Review
+
+Approved after the scope-label and output-channel corrections. Status composes
+the real read-only storage/scope/target adapters, creates nothing, preserves the
+requested scope, reports native observation honestly, and keeps expected
+reports on stdout while input/unavailable failures remain safely classified.
