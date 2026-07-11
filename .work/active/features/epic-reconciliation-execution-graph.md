@@ -1,7 +1,7 @@
 ---
 id: epic-reconciliation-execution-graph
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-reconciliation-execution
 depends_on: [epic-reconciliation-execution-planner]
@@ -120,3 +120,39 @@ write output.
   dependency-blocked finding rather than guessing whether the user intended to
   omit a prerequisite.
 - Keep this feature free of CLI parsing so later commands can share it.
+
+## Implementation notes
+
+- Added `skilltap_core::operation_graph` with deterministic dependency waves,
+  transitive dependency closure, exact resource/component selector matching,
+  exclusion findings, and acknowledgment validation.
+- Graph helpers reuse the validated `Plan` contract and never perform I/O or
+  emit terminal output.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap-core operation_graph --offline`
+- `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings`
+
+## Review
+
+### Summary
+
+The graph service now supplies stable dependency waves and transitive closure,
+exact scope-bearing selector filtering, exclusion findings, and acknowledgment
+shape validation on top of the existing validated operation plan.
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Important follow-up: executor integration must preserve dependency-excluded
+  findings as blockers and must not execute a filtered incomplete graph.
+
+### Notes
+
+Inline deep review completed; focused tests and strict clippy pass. CLI parsing
+and mutation remain in the dependent features.

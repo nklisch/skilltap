@@ -1,5 +1,6 @@
 pub mod adoption;
 pub mod domain;
+pub mod operation_graph;
 pub mod reconciliation;
 pub mod runtime;
 pub mod storage;
