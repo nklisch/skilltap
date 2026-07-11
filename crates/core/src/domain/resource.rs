@@ -256,35 +256,6 @@ pub enum ResourceHealth {
     Unknown,
 }
 
-/// Adapter-owned JSON grouped by harness. Core preserves these values verbatim
-/// and does not interpret keys inside a harness namespace.
-#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
-#[serde(transparent)]
-pub struct OpaqueHarnessMetadata(BTreeMap<HarnessId, Value>);
-
-impl OpaqueHarnessMetadata {
-    pub fn new(values: impl IntoIterator<Item = (HarnessId, Value)>) -> Self {
-        Self(values.into_iter().collect())
-    }
-
-    pub fn get(&self, harness: &HarnessId) -> Option<&Value> {
-        self.0.get(harness)
-    }
-
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&HarnessId, &Value)> {
-        self.0.iter()
-    }
-}
-
-impl<'de> Deserialize<'de> for OpaqueHarnessMetadata {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        BTreeMap::<HarnessId, Value>::deserialize(deserializer).map(Self)
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(
     tag = "kind",

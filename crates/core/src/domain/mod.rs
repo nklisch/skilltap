@@ -14,15 +14,17 @@ pub use compatibility::{
 };
 pub use identity::{HarnessId, NativeId, OperationId, ResourceId};
 pub use operation::{
-    AcknowledgmentRequirement, ApplyOutcome, ApplyResult, AttentionKind, AttentionReason,
-    Operation, OperationClass, OperationContractError, OperationDependency, OperationOutcome,
-    OperationResult, OperationSelector, Plan, Reversibility,
+    AcknowledgmentRequirement, AffectedSurface, ApplyOutcome, ApplyResult, AttentionKind,
+    AttentionReason, CommandArgument, Operation, OperationAction, OperationClass,
+    OperationContractError, OperationDependency, OperationOutcome, OperationReason,
+    OperationResult, OperationSelector, OperationSemantics, Plan, Reversibility,
 };
 pub use resource::{
-    ComponentGraph, ComponentGraphError, ComponentId, ComponentKind, ComponentRequiredness,
-    DesiredResource, GraphCollection, ObservationFinding, ObservationFindingKind, ObservedResource,
-    OpaqueHarnessMetadata, Ownership, Provenance, ResourceComponent, ResourceGraph,
-    ResourceGraphError, ResourceHealth, ResourceKind, UpdateIntent,
+    ComponentChoice, ComponentGraph, ComponentGraphError, ComponentId, ComponentKind,
+    ComponentRequiredness, DesiredOrigin, DesiredResource, GraphCollection, ObservationFinding,
+    ObservationFindingKind, ObservationKey, ObservationLayer, ObservedResource, Ownership,
+    Provenance, ResourceComponent, ResourceContractError, ResourceGraph, ResourceGraphError,
+    ResourceHealth, ResourceKind, UpdateIntent,
 };
 pub use scope::{
     AbsolutePath, HarnessSet, RelativeArtifactPath, Scope, ScopeSelection, TargetSelection,
