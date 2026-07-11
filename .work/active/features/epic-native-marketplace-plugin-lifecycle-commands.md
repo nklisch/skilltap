@@ -54,3 +54,6 @@ records remain idempotent; existing source provenance is retained in refreshed
 native state. Each mutating result now includes the fresh observed native
 surface entries, making post-mutation evidence visible in structured output;
 exact plugin identity parsing remains a future harness-observation refinement.
+Native removals now defer desired-inventory deletion until every planned native
+operation succeeds, preserving retryable intent after a failed or partial
+removal.

@@ -1043,6 +1043,11 @@ impl StatusApplication<'_> {
             InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
                 .expect("empty inventory is valid")
         });
+        let original_inventory = inventory.clone();
+        let removal = matches!(
+            kind,
+            NativeLifecycleKind::MarketplaceRemove | NativeLifecycleKind::PluginRemove
+        );
         let mut operations = Vec::new();
         let mut requests = Vec::new();
         let mut seeds = BTreeMap::new();
@@ -1283,13 +1288,8 @@ impl StatusApplication<'_> {
             }
         }
 
-        if inventory
-            != documents.inventory.clone().unwrap_or_else(|| {
-                InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
-                    .expect("empty inventory is valid")
-            })
-            && self.inventory.replace(&inventory).is_err()
-        {
+        let inventory_changed = inventory != original_inventory;
+        if inventory_changed && !removal && self.inventory.replace(&inventory).is_err() {
             outcome.result = ResultClass::Invalid;
             return outcome.with_error(ErrorDetail::new(
                 "inventory_publish_failed",
@@ -1297,6 +1297,13 @@ impl StatusApplication<'_> {
             ));
         }
         if operations.is_empty() {
+            if inventory_changed && removal && self.inventory.replace(&inventory).is_err() {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "inventory_publish_failed",
+                    "The desired inventory could not be published after the native removal.",
+                ));
+            }
             if let Err(()) = seed_state_if_missing(self.state, &seeds) {
                 outcome.result = ResultClass::Invalid;
                 return outcome.with_error(ErrorDetail::new(
@@ -1389,7 +1396,21 @@ impl StatusApplication<'_> {
                 outcome.result = ResultClass::AttentionRequired;
             }
         }
-        if report.changed && observation.failed_targets == 0 {
+        let successful = report.result.operations().values().all(|result| {
+            matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            )
+        });
+        if removal && inventory_changed && successful && self.inventory.replace(&inventory).is_err()
+        {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "inventory_publish_failed",
+                "The desired inventory could not be published after the native removal.",
+            ));
+        }
+        if report.changed && observation.failed_targets == 0 && successful {
             outcome.result = ResultClass::Completed;
         }
         outcome
