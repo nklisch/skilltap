@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-path-conversion
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: []
@@ -34,3 +34,10 @@ ordering. Run all path/scope/filesystem tests and the full locked ladder.
 - Verification: focused suites, locked format/all-target check, warnings-denied Clippy, full
   workspace tests, and warnings-denied rustdoc pass.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. The private helper replaces exactly the five conversions with the
+same UTF-8-before-domain-validation order and role-specific errors. Environment,
+Git stdout, publication invariant, and lock conversions remain intentionally
+separate. Focused path/scope/filesystem and full locked checks pass.
