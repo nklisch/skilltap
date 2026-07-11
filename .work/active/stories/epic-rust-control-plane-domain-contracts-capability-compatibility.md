@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-capability-compatibility
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -48,3 +48,13 @@ classifications carrying target-specific evidence and consequences.
   core tests plus all workspace/doc-test targets). A parallel resource-graph
   edit introduced a transient unrelated warning after the clippy snapshot; it
   does not affect these owned modules and is being handled in that story.
+
+## Review findings (2026-07-11)
+
+- Blocker: `CompatibilityResult` has no target, so a faithful result with empty
+  evidence is unscoped and non-faithful evidence can mix harnesses. Add an
+  explicit `HarnessId` target to the result/wire/accessor and reject evidence
+  for any other target at constructor and serde boundaries.
+- Blocker: affected components currently use `ResourceId` values that do not
+  identify the new resource-local component graph. After the resource story
+  lands `ComponentId`, use it consistently in evidence and consequences.
