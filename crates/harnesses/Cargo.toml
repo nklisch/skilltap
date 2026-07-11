@@ -7,6 +7,10 @@ repository.workspace = true
 
 [dependencies]
 skilltap-core.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+skilltap-test-support.workspace = true
 
 [lib]
 path = "src/lib.rs"

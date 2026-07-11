@@ -171,6 +171,22 @@ impl FakeNativeProcess {
         &self.executable
     }
 
+    /// Publishes a named executable alias with the behavior companion file.
+    pub fn install_alias(&self, destination: &Path, name: &str) -> io::Result<PathBuf> {
+        fs::create_dir_all(destination)?;
+        let executable = destination.join(name);
+        fs::copy(&self.executable, &executable)?;
+        let mut permissions = fs::metadata(&executable)?.permissions();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(0o755);
+        }
+        fs::set_permissions(&executable, permissions)?;
+        fs::copy(self._root.join("behavior"), destination.join("behavior"))?;
+        Ok(executable)
+    }
+
     pub fn start_barrier(&self) -> Option<&FileBarrier> {
         self.start_barrier.as_ref()
     }

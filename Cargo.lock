@@ -319,7 +319,9 @@ dependencies = [
 name = "skilltap-harnesses"
 version = "3.0.0"
 dependencies = [
+ "serde_json",
  "skilltap-core",
+ "skilltap-test-support",
 ]
 
 [[package]]
