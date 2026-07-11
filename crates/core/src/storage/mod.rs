@@ -2,6 +2,7 @@
 
 mod config;
 mod inventory;
+mod managed_artifact;
 mod repository;
 mod state;
 
@@ -10,6 +11,11 @@ pub use config::{
     InstructionPolicy, UpdateInterval, UpdateIntervalUnit, UpdateMode, UpdatePolicy,
 };
 pub use inventory::InventoryDocument;
+pub use managed_artifact::{
+    ArtifactPublication, ArtifactTree, ArtifactTreeError, FileManagedArtifactRepository,
+    LoadedArtifact, ManagedArtifactAction, ManagedArtifactError, ManagedArtifactFailure,
+    ManagedArtifactHandle, ManagedArtifactRepository, ManagedArtifactResidual,
+};
 pub use repository::{
     ConfigRepository, DocumentAction, DocumentKind, DocumentState, FileConfigRepository,
     FileInventoryRepository, FileStateRepository, InventoryRepository, StateRepository,

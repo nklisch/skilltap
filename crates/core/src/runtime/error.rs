@@ -121,6 +121,26 @@ pub enum DirectorySyncState {
     Uncertain,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DirectoryIdentity {
+    device: u64,
+    inode: u64,
+}
+
+impl DirectoryIdentity {
+    pub const fn new(device: u64, inode: u64) -> Self {
+        Self { device, inode }
+    }
+
+    pub const fn device(self) -> u64 {
+        self.device
+    }
+
+    pub const fn inode(self) -> u64 {
+        self.inode
+    }
+}
+
 impl fmt::Display for DirectorySyncState {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
@@ -223,6 +243,12 @@ pub enum RuntimeError {
         source: io::Error,
         cleanup: io::Error,
     },
+    PartialDirectoryPublication {
+        path: AbsolutePath,
+        identity: DirectoryIdentity,
+        source: io::Error,
+        cleanup: io::Error,
+    },
     LockContended {
         path: AbsolutePath,
     },
@@ -262,7 +288,8 @@ impl RuntimeError {
             Self::FileSystem { .. }
             | Self::UnsafeSymlink { .. }
             | Self::FileIdentityChanged { .. }
-            | Self::PartialPublication { .. } => RuntimeBoundary::FileSystem,
+            | Self::PartialPublication { .. }
+            | Self::PartialDirectoryPublication { .. } => RuntimeBoundary::FileSystem,
             Self::LockContended { .. } | Self::LockIdentityChanged { .. } | Self::Lock { .. } => {
                 RuntimeBoundary::Lock
             }
@@ -358,6 +385,17 @@ impl fmt::Display for RuntimeError {
                     residuals.directory_sync()
                 )
             }
+            Self::PartialDirectoryPublication {
+                path,
+                identity,
+                source,
+                cleanup,
+            } => write!(
+                formatter,
+                "directory publication for `{path}` failed ({source}); residual identity {}:{}; cleanup failed ({cleanup})",
+                identity.device(),
+                identity.inode()
+            ),
             Self::LockContended { path } => {
                 write!(formatter, "configuration lock `{path}` is already held")
             }
@@ -398,6 +436,7 @@ impl std::error::Error for RuntimeError {
             }
             Self::FileSystem { source, .. }
             | Self::PartialPublication { source, .. }
+            | Self::PartialDirectoryPublication { source, .. }
             | Self::Lock { source, .. }
             | Self::Command { source, .. }
             | Self::WorkingDirectory { source } => Some(source),
