@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -174,3 +174,12 @@ The corrective children below cover these findings before re-review.
 6. `epic-rust-control-plane-runtime-primitives-git-probe-errors` — distinguish
    genuine non-repository fallback from existing-but-broken Git metadata —
    depends on `[epic-rust-control-plane-runtime-primitives-scope-target]`.
+
+Both corrective children are complete. Recoverable copies now use synced
+same-directory staging plus atomic no-clobber publication and typed cleanup
+states; source/lock opens are no-follow and identity-verified, with cooperating
+writers holding the parent directory lock. Relative links have a canonical
+leading-parent form. Git probing now falls back only when the bounded ancestor
+chain contains no `.git` metadata; broken or inaccessible metadata is a typed
+safe error. The locked workspace passes 93 tests plus doctests and
+warnings-clean rustdoc.
