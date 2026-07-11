@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex
 kind: feature
-stage: drafting
+stage: implementing
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-detection]
@@ -24,3 +24,54 @@ directories and conformance/loadability, project trust, layered configuration,
 and `AGENTS.override.md` precedence. Structured/native drift and malformed
 siblings become safe findings; no cache/config write, marketplace browsing,
 interactive plugin action, or guessed install/update behavior is allowed.
+
+## Design
+
+The Codex adapter composes the detection registry, `PlatformPaths::codex_home`,
+bounded external-tree observation, and shared observation contracts. It supports
+global and exactly one canonical project scope, never scans unrelated paths,
+and keeps `~/AGENTS.md` as the global instruction source. Declared config is
+read from documented Codex TOML/skill/plugin locations; cache and manifests are
+effective evidence only and never write APIs.
+
+The adapter emits layered declared/effective resources, trust and project
+override findings, whole-directory skill conformance, and safe malformed
+siblings. Native bytes remain inside the adapter boundary; normalized records
+carry typed identities, ownership, source, and findings only. Missing,
+malformed, and partially unreadable siblings are retained independently.
+
+## Design decisions
+
+- **Scope**: global and one canonical project are supported; `--all-scopes`
+  composition belongs to the later normalizer/status feature.
+- **Instruction precedence**: `AGENTS.override.md` is an effective project
+  override while root `AGENTS.md` remains the declared canonical document.
+- **Effective state**: caches/manifests confirm loadability and version basis
+  only; they never create desired resources or imply install authority.
+
+## Implementation units
+
+1. `epic-harness-observation-adoption-codex-paths` — derive bounded Codex
+   global/project roots and documented file inputs — depends on `[detection,
+   runtime]`.
+2. `epic-harness-observation-adoption-codex-config` — parse strict config,
+   trust, marketplace, and malformed sibling evidence — depends on
+   `[epic-harness-observation-adoption-codex-paths]`.
+3. `epic-harness-observation-adoption-codex-resources` — observe layered
+   plugins, whole skills, instructions, and effective cache evidence — depends
+   on `[epic-harness-observation-adoption-codex-config]`.
+4. `epic-harness-observation-adoption-codex-integration` — verify global,
+   project, precedence, malformed sibling, no-mutation, and safe-output
+   behavior — depends on `[epic-harness-observation-adoption-codex-paths,
+   epic-harness-observation-adoption-codex-config,
+   epic-harness-observation-adoption-codex-resources]`.
+
+## Acceptance criteria
+
+- Codex observation is bounded, deterministic, read-only, and limited to global
+  plus one canonical project scope.
+- Declared/effective plugin state, whole skill directories, instruction
+  precedence, trust, malformed siblings, and cache evidence are represented in
+  shared typed observations without native payload leakage.
+- No cache/config/marketplace write or resource scanning occurs; focused and
+  workspace tests pass on Linux and native macOS behavior jobs.
