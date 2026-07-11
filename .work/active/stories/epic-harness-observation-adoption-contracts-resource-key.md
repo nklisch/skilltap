@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-resource-key
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: []
@@ -42,3 +42,9 @@ global and multiple projects remain distinct and malformed qualified IDs fail.
 - Adjacent issues parked: none.
 - Dispatch rationale: the item named one bounded domain surface, so direct
   implementation was sufficient and no exploratory fanout was used.
+
+## Review
+
+Approved. Scope-bearing keys are strict, totally ordered/hashable, and use
+domain-separated unambiguous bytes; only ResourceId gains one validated `@`
+qualification, with every other identifier grammar unchanged.
