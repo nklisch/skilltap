@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell-integration
 kind: story
-stage: review
+stage: done
 tags: [cli, testing]
 parent: epic-rust-control-plane-cli-shell
 depends_on: [epic-rust-control-plane-cli-shell-composition]
@@ -41,3 +41,11 @@ and exit codes. Run the full locked ladder plus release-binary smoke checks.
 - Discrepancies from design: none.
 - Adjacent issues parked: `idea-cli-bare-invocation-omits-help` was promoted and
   resolved by the sibling bare-help story.
+
+## Review
+
+Approved. The isolated compiled-binary suite covers every leaf command and the
+documented scope, target, storage, channel, JSON, help/version, no-create, and
+0/1/2 exit contracts; partial exit `3` remains truthfully covered at the
+renderer boundary. CI and each native release runner exercise the optimized
+binary before publication.
