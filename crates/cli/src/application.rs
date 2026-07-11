@@ -1,11 +1,11 @@
 use std::path::{Component, Path, PathBuf};
 
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId, Scope},
+    domain::{AbsolutePath, HarnessId, HarnessSet, Scope},
     runtime::{ScopeRequest, ScopeResolver, WorkingDirectory, resolve_targets},
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, InventoryDocument, InventoryRepository,
-        StateRepository, StorageError, StorageFailure,
+        StateDocument, StateRepository, StorageError, StorageFailure,
     },
 };
 
@@ -24,85 +24,45 @@ pub(crate) struct StatusApplication<'a> {
 
 impl StatusApplication<'_> {
     pub(crate) fn execute(&self, args: &StatusArgs) -> Outcome {
-        let config = self.config.load();
-        let inventory = self.inventory.load();
-        let state = self.state.load();
-
-        let mut outcome = Outcome::new("status", ResultClass::AttentionRequired);
-        outcome = document_result(outcome, "config", &config);
-        outcome = document_result(outcome, "inventory", &inventory);
-        outcome = document_result(outcome, "state", &state);
-
-        let mut storage_errors = Vec::new();
-        if let Err(error) = &config {
-            storage_errors.push(storage_error(error));
-        }
-        if let Err(error) = &inventory {
-            storage_errors.push(storage_error(error));
-        }
-        if let Err(error) = &state {
-            storage_errors.push(storage_error(error));
-        }
-        if !storage_errors.is_empty() {
-            outcome.result = ResultClass::Invalid;
-            for error in storage_errors {
-                outcome = outcome.with_error(error);
+        let documents = DocumentLoadPhase::execute(self);
+        let mut outcome = documents.project(Outcome::new("status", ResultClass::AttentionRequired));
+        let documents = match documents.finish() {
+            Ok(documents) => documents,
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                return outcome.with_next_action(NextAction::new(
+                    "repair_owned_documents",
+                    "Repair the reported skilltap-owned documents before retrying.",
+                ));
             }
-            return outcome.with_next_action(NextAction::new(
-                "repair_owned_documents",
-                "Repair the reported skilltap-owned documents before retrying.",
-            ));
-        }
-
-        let config = match config.expect("checked above") {
-            DocumentState::Missing => ConfigDocument::defaults(),
-            DocumentState::Present(config) => config,
-        };
-        let inventory = match inventory.expect("checked above") {
-            DocumentState::Missing => None,
-            DocumentState::Present(inventory) => Some(inventory),
-        };
-        let state = match state.expect("checked above") {
-            DocumentState::Missing => None,
-            DocumentState::Present(state) => Some(state),
         };
 
-        let scope_request = match self.scope_request(args, inventory.as_ref()) {
-            Ok(request) => request,
+        let scope = match StatusScope::resolve(self, args, &documents) {
+            Ok(scope) => scope,
             Err(error) => {
                 outcome.result = ResultClass::Invalid;
                 return outcome.with_error(error);
             }
         };
-        let scopes = match self.scopes.resolve(&scope_request) {
-            Ok(scopes) => scopes,
-            Err(_) => {
-                outcome.result = ResultClass::Invalid;
-                return outcome.with_error(ErrorDetail::new(
-                    "project_scope_unavailable",
-                    "The requested project scope could not be resolved.",
-                ));
-            }
-        };
-        let resolved_scopes = scopes.into_scopes();
-        let scope_count = resolved_scopes.len() as u64;
-        outcome.scope = Some(output_scope(&args.scope.argument(), &resolved_scopes));
+        outcome.scope = Some(scope.output.clone());
 
-        let enabled = enabled_harnesses(&config);
-        if enabled.is_empty() {
-            return outcome
-                .with_error(ErrorDetail::new(
-                    "no_enabled_harnesses",
-                    "No harness is enabled in skilltap configuration.",
-                ))
-                .with_next_action(
-                    NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                        .with_command("skilltap harness enable <codex|claude>"),
-                );
-        }
-        let targets = match resolve_targets(args.target.target.as_ref(), enabled) {
+        let targets = match StatusTargets::resolve(args, &documents) {
             Ok(targets) => targets,
-            Err(_) => {
+            Err(StatusTargetError::NoneEnabled) => {
+                return outcome
+                    .with_error(ErrorDetail::new(
+                        "no_enabled_harnesses",
+                        "No harness is enabled in skilltap configuration.",
+                    ))
+                    .with_next_action(
+                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                            .with_command("skilltap harness enable <codex|claude>"),
+                    );
+            }
+            Err(StatusTargetError::NotEnabled) => {
                 outcome.result = ResultClass::Invalid;
                 return outcome
                     .with_error(ErrorDetail::new(
@@ -116,34 +76,12 @@ impl StatusApplication<'_> {
             }
         };
 
-        let target_count = targets.iter().len() as u64;
-        for target in targets.iter() {
-            outcome = outcome.with_resource(OutputEntry::new(target.as_str(), "selected"));
+        StatusProjection {
+            documents: &documents,
+            scope: &scope,
+            targets: &targets,
         }
-        outcome = outcome
-            .with_summary(
-                "desired_resources",
-                inventory
-                    .as_ref()
-                    .map_or(0, |value| value.resources().len() as u64),
-            )
-            .with_summary(
-                "recorded_resources",
-                state
-                    .as_ref()
-                    .map_or(0, |value| value.resources().len() as u64),
-            )
-            .with_summary("scopes", scope_count)
-            .with_summary("targets", target_count)
-            .with_warning(Warning::new(
-                "native_observation_unavailable",
-                "Native harness observation is not available in this build.",
-            ))
-            .with_next_action(NextAction::new(
-                "retry_after_native_observation",
-                "Retry status when native harness observation is available.",
-            ));
-        outcome
+        .apply(outcome)
     }
 
     fn scope_request(
@@ -170,6 +108,155 @@ impl StatusApplication<'_> {
                 Ok(ScopeRequest::Project { path: Some(path) })
             }
         }
+    }
+}
+
+struct DocumentLoadPhase {
+    config: Result<DocumentState<ConfigDocument>, StorageError>,
+    inventory: Result<DocumentState<InventoryDocument>, StorageError>,
+    state: Result<DocumentState<StateDocument>, StorageError>,
+}
+
+impl DocumentLoadPhase {
+    fn execute(application: &StatusApplication<'_>) -> Self {
+        Self {
+            config: application.config.load(),
+            inventory: application.inventory.load(),
+            state: application.state.load(),
+        }
+    }
+
+    fn project(&self, outcome: Outcome) -> Outcome {
+        let outcome = document_result(outcome, "config", &self.config);
+        let outcome = document_result(outcome, "inventory", &self.inventory);
+        document_result(outcome, "state", &self.state)
+    }
+
+    fn finish(self) -> Result<StatusDocuments, Vec<ErrorDetail>> {
+        let mut errors = Vec::new();
+        if let Err(error) = &self.config {
+            errors.push(storage_error(error));
+        }
+        if let Err(error) = &self.inventory {
+            errors.push(storage_error(error));
+        }
+        if let Err(error) = &self.state {
+            errors.push(storage_error(error));
+        }
+        if !errors.is_empty() {
+            return Err(errors);
+        }
+
+        Ok(StatusDocuments {
+            config: match self.config.expect("checked above") {
+                DocumentState::Missing => ConfigDocument::defaults(),
+                DocumentState::Present(config) => config,
+            },
+            inventory: match self.inventory.expect("checked above") {
+                DocumentState::Missing => None,
+                DocumentState::Present(inventory) => Some(inventory),
+            },
+            state: match self.state.expect("checked above") {
+                DocumentState::Missing => None,
+                DocumentState::Present(state) => Some(state),
+            },
+        })
+    }
+}
+
+struct StatusDocuments {
+    config: ConfigDocument,
+    inventory: Option<InventoryDocument>,
+    state: Option<StateDocument>,
+}
+
+struct StatusScope {
+    output: OutputScope,
+    count: u64,
+}
+
+impl StatusScope {
+    fn resolve(
+        application: &StatusApplication<'_>,
+        args: &StatusArgs,
+        documents: &StatusDocuments,
+    ) -> Result<Self, ErrorDetail> {
+        let request = application.scope_request(args, documents.inventory.as_ref())?;
+        let scopes = application.scopes.resolve(&request).map_err(|_| {
+            ErrorDetail::new(
+                "project_scope_unavailable",
+                "The requested project scope could not be resolved.",
+            )
+        })?;
+        let resolved = scopes.into_scopes();
+        Ok(Self {
+            output: output_scope(&args.scope.argument(), &resolved),
+            count: resolved.len() as u64,
+        })
+    }
+}
+
+struct StatusTargets {
+    resolved: HarnessSet,
+}
+
+enum StatusTargetError {
+    NoneEnabled,
+    NotEnabled,
+}
+
+impl StatusTargets {
+    fn resolve(args: &StatusArgs, documents: &StatusDocuments) -> Result<Self, StatusTargetError> {
+        let enabled = enabled_harnesses(&documents.config);
+        if enabled.is_empty() {
+            return Err(StatusTargetError::NoneEnabled);
+        }
+        resolve_targets(args.target.target.as_ref(), enabled)
+            .map(|resolved| Self { resolved })
+            .map_err(|_| StatusTargetError::NotEnabled)
+    }
+
+    fn iter(&self) -> impl ExactSizeIterator<Item = &HarnessId> {
+        self.resolved.iter()
+    }
+}
+
+struct StatusProjection<'a> {
+    documents: &'a StatusDocuments,
+    scope: &'a StatusScope,
+    targets: &'a StatusTargets,
+}
+
+impl StatusProjection<'_> {
+    fn apply(self, mut outcome: Outcome) -> Outcome {
+        for target in self.targets.iter() {
+            outcome = outcome.with_resource(OutputEntry::new(target.as_str(), "selected"));
+        }
+        outcome
+            .with_summary(
+                "desired_resources",
+                self.documents
+                    .inventory
+                    .as_ref()
+                    .map_or(0, |value| value.resources().len() as u64),
+            )
+            .with_summary(
+                "recorded_resources",
+                self.documents
+                    .state
+                    .as_ref()
+                    .map_or(0, |value| value.resources().len() as u64),
+            )
+            .with_summary("scopes", self.scope.count)
+            .with_summary("targets", self.targets.iter().len() as u64)
+            .with_warning(Warning::new(
+                "native_observation_unavailable",
+                "Native harness observation is not available in this build.",
+            ))
+            .with_next_action(NextAction::new(
+                "retry_after_native_observation",
+                "Retry status when native harness observation is available.",
+            ))
     }
 }
 
