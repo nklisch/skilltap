@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::{fs, path::PathBuf};
 
 use skilltap_core::{
     domain::{AbsolutePath, HarnessId},
@@ -12,33 +8,17 @@ use skilltap_core::{
         FileStateRepository, HarnessPolicies, HarnessPolicy,
     },
 };
+use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::command::{OutputArgs, ScopeArgs, TargetArgs};
 
-static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-
-struct TempRoot(PathBuf);
-
-impl TempRoot {
-    fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "skilltap-cli-application-{}-{}",
-            std::process::id(),
-            SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
-        Self(path)
-    }
-
-    fn absolute(&self) -> AbsolutePath {
-        AbsolutePath::new(self.0.to_str().unwrap()).unwrap()
-    }
+fn application_root(root: &TempRoot) -> PathBuf {
+    root.join("skilltap")
 }
 
-impl Drop for TempRoot {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
+fn absolute(path: &std::path::Path) -> AbsolutePath {
+    AbsolutePath::new(path.to_str().unwrap()).unwrap()
 }
 
 struct FixedWorkingDirectory(AbsolutePath);
@@ -68,11 +48,11 @@ fn status_args(scope: ScopeArgs) -> StatusArgs {
     }
 }
 
-fn execute(root: &TempRoot, args: &StatusArgs, cwd: AbsolutePath) -> Outcome {
+fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outcome {
     let filesystem = SystemFileSystem;
-    let config = FileConfigRepository::new(&filesystem, root.absolute()).unwrap();
-    let inventory = FileInventoryRepository::new(&filesystem, root.absolute()).unwrap();
-    let state = FileStateRepository::new(&filesystem, root.absolute()).unwrap();
+    let config = FileConfigRepository::new(&filesystem, absolute(root)).unwrap();
+    let inventory = FileInventoryRepository::new(&filesystem, absolute(root)).unwrap();
+    let state = FileStateRepository::new(&filesystem, absolute(root)).unwrap();
     let working_directory = FixedWorkingDirectory(cwd);
     let git = NoGitRoot;
     let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
@@ -88,9 +68,10 @@ fn execute(root: &TempRoot, args: &StatusArgs, cwd: AbsolutePath) -> Outcome {
 
 #[test]
 fn first_use_status_uses_defaults_and_creates_nothing() {
-    let root = TempRoot::new();
+    let temporary = TempRoot::new("skilltap-cli-application").unwrap();
+    let root = application_root(&temporary);
     let cwd = AbsolutePath::new(std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
-    assert!(!root.0.exists());
+    assert!(!root.exists());
 
     let outcome = execute(&root, &status_args(ScopeArgs::default()), cwd);
 
@@ -103,12 +84,13 @@ fn first_use_status_uses_defaults_and_creates_nothing() {
             .iter()
             .any(|warning| warning.code == "native_observation_unavailable")
     );
-    assert!(!root.0.exists());
+    assert!(!root.exists());
 }
 
 #[test]
 fn missing_inventory_makes_all_scopes_global_only() {
-    let root = TempRoot::new();
+    let temporary = TempRoot::new("skilltap-cli-application").unwrap();
+    let root = application_root(&temporary);
     let cwd = AbsolutePath::new(std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
     let args = status_args(ScopeArgs {
         project: None,
@@ -125,10 +107,11 @@ fn missing_inventory_makes_all_scopes_global_only() {
 
 #[test]
 fn relative_project_is_resolved_against_the_working_directory() {
-    let root = TempRoot::new();
-    let workspace = TempRoot::new();
-    let current = workspace.0.join("current");
-    let project = workspace.0.join("project");
+    let temporary = TempRoot::new("skilltap-cli-application").unwrap();
+    let root = application_root(&temporary);
+    let workspace = TempRoot::new("skilltap-cli-application-workspace").unwrap();
+    let current = workspace.join("current");
+    let project = workspace.join("project");
     fs::create_dir_all(&current).unwrap();
     fs::create_dir_all(&project).unwrap();
     let args = status_args(ScopeArgs {
@@ -152,9 +135,10 @@ fn relative_project_is_resolved_against_the_working_directory() {
 
 #[test]
 fn zero_enabled_harnesses_requires_attention_without_panicking() {
-    let root = TempRoot::new();
+    let temporary = TempRoot::new("skilltap-cli-application").unwrap();
+    let root = application_root(&temporary);
     let filesystem = SystemFileSystem;
-    let repository = FileConfigRepository::new(&filesystem, root.absolute()).unwrap();
+    let repository = FileConfigRepository::new(&filesystem, absolute(&root)).unwrap();
     let defaults = ConfigDocument::defaults();
     let disabled = ConfigDocument::new(
         defaults.schema(),
@@ -193,9 +177,10 @@ fn malformed_owned_documents_are_classified_independently_without_source_text() 
         ("inventory.toml", "inventory"),
         ("state.json", "state"),
     ] {
-        let root = TempRoot::new();
-        fs::create_dir_all(&root.0).unwrap();
-        fs::write(root.0.join(file), "SECRET invalid [[[\n").unwrap();
+        let temporary = TempRoot::new("skilltap-cli-application").unwrap();
+        let root = application_root(&temporary);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join(file), "SECRET invalid [[[\n").unwrap();
         let cwd = AbsolutePath::new(std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
 
         let outcome = execute(&root, &status_args(ScopeArgs::default()), cwd);
@@ -213,9 +198,10 @@ fn malformed_owned_documents_are_classified_independently_without_source_text() 
 
 #[test]
 fn explicit_disabled_target_is_invalid_and_actionable() {
-    let root = TempRoot::new();
+    let temporary = TempRoot::new("skilltap-cli-application").unwrap();
+    let root = application_root(&temporary);
     let filesystem = SystemFileSystem;
-    let repository = FileConfigRepository::new(&filesystem, root.absolute()).unwrap();
+    let repository = FileConfigRepository::new(&filesystem, absolute(&root)).unwrap();
     let defaults = ConfigDocument::defaults();
     let config = ConfigDocument::new(
         defaults.schema(),

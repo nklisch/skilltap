@@ -1,80 +1,42 @@
 use std::{
-    env, fs,
-    path::{Path, PathBuf},
+    fs,
+    path::Path,
     process::{Command, Output},
 };
 
 use serde_json::Value;
-use skilltap_test_support::TempRoot;
+use skilltap_test_support::{IsolatedMachine, captured_stderr, captured_stdout, compiled_binary};
 
-struct IsolatedMachine {
-    _root: TempRoot,
-    home: PathBuf,
-    xdg: PathBuf,
-    cwd: PathBuf,
+fn machine() -> IsolatedMachine {
+    IsolatedMachine::new("skilltap-compiled-cli").expect("create isolated machine")
 }
 
-impl IsolatedMachine {
-    fn new() -> Self {
-        let root = TempRoot::new("skilltap-compiled-cli").expect("create isolated machine");
-        let home = root.join("home");
-        let xdg = root.join("xdg");
-        let cwd = root.join("work");
-        fs::create_dir_all(&home).expect("create isolated home");
-        fs::create_dir_all(&xdg).expect("create isolated configuration home");
-        fs::create_dir_all(&cwd).expect("create isolated working directory");
-        Self {
-            _root: root,
-            home,
-            xdg,
-            cwd,
-        }
-    }
-
-    fn config_root(&self) -> PathBuf {
-        self.xdg.join("skilltap")
-    }
-
-    fn write_owned(&self, name: &str, contents: &str) {
-        let root = self.config_root();
-        fs::create_dir_all(&root).expect("create configuration root");
-        fs::write(root.join(name), contents).expect("write owned document");
-    }
-
-    fn run(&self, arguments: &[&str]) -> Output {
-        Command::new(binary())
-            .args(arguments)
-            .current_dir(&self.cwd)
-            .env("HOME", &self.home)
-            .env("XDG_CONFIG_HOME", &self.xdg)
-            .env_remove("SKILLTAP_HOME")
-            .output()
-            .expect("run compiled skilltap binary")
-    }
+fn binary() -> std::path::PathBuf {
+    compiled_binary(env!("CARGO_BIN_EXE_skilltap")).expect("resolve compiled skilltap binary")
 }
 
-fn binary() -> PathBuf {
-    env::var_os("SKILLTAP_TEST_BIN").map_or_else(
-        || PathBuf::from(env!("CARGO_BIN_EXE_skilltap")),
-        |value| {
-            let path = PathBuf::from(value);
-            if path.is_absolute() {
-                path
-            } else {
-                env::current_dir()
-                    .expect("read test working directory")
-                    .join(path)
-            }
-        },
-    )
+fn config_root(machine: &IsolatedMachine) -> std::path::PathBuf {
+    machine.configuration_home().join("skilltap")
+}
+
+fn write_owned(machine: &IsolatedMachine, name: &str, contents: &str) {
+    let root = config_root(machine);
+    fs::create_dir_all(&root).expect("create configuration root");
+    fs::write(root.join(name), contents).expect("write owned document");
+}
+
+fn run(machine: &IsolatedMachine, arguments: &[&str]) -> Output {
+    machine
+        .run(&binary(), arguments)
+        .expect("run compiled skilltap binary")
 }
 
 fn stdout(output: &Output) -> &str {
-    std::str::from_utf8(&output.stdout).expect("stdout is UTF-8")
+    captured_stdout(output).expect("stdout is UTF-8")
 }
 
 fn stderr(output: &Output) -> &str {
-    std::str::from_utf8(&output.stderr).expect("stderr is UTF-8")
+    captured_stderr(output).expect("stderr is UTF-8")
 }
 
 fn json(output: &Output) -> Value {
@@ -99,8 +61,8 @@ fn assert_code(output: &Output, expected: i32) {
 
 #[test]
 fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
-    let machine = IsolatedMachine::new();
-    let version = machine.run(&["--version"]);
+    let machine = machine();
+    let version = run(&machine, &["--version"]);
     assert_code(&version, 0);
     assert_eq!(stdout(&version).trim(), "skilltap 3.0.0");
     assert!(version.stderr.is_empty());
@@ -119,7 +81,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         vec!["instructions", "--help"],
         vec!["daemon", "--help"],
     ] {
-        let output = machine.run(&arguments);
+        let output = run(&machine, &arguments);
         assert_code(&output, 0);
         assert!(
             stdout(&output).contains("Usage:"),
@@ -166,7 +128,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         if *command != "daemon run" {
             arguments.push("--json");
         }
-        let output = machine.run(&arguments);
+        let output = run(&machine, &arguments);
         assert_code(&output, 1);
         if *command == "daemon run" {
             assert!(stdout(&output).is_empty());
@@ -181,8 +143,8 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
 
 #[test]
 fn bare_invocation_prints_concise_help_and_fails_as_input() {
-    let machine = IsolatedMachine::new();
-    let output = machine.run(&[]);
+    let machine = machine();
+    let output = run(&machine, &[]);
 
     assert_code(&output, 1);
     assert!(output.stdout.is_empty());
@@ -193,10 +155,10 @@ fn bare_invocation_prints_concise_help_and_fails_as_input() {
 
 #[test]
 fn first_use_status_is_read_only_and_uses_global_defaults() {
-    let machine = IsolatedMachine::new();
-    assert!(!machine.config_root().exists());
+    let machine = machine();
+    assert!(!config_root(&machine).exists());
 
-    let output = machine.run(&["status", "--json"]);
+    let output = run(&machine, &["status", "--json"]);
     assert_code(&output, 2);
     let value = json(&output);
     assert_eq!(value["command"], "status");
@@ -207,13 +169,13 @@ fn first_use_status_is_read_only_and_uses_global_defaults() {
         value["warnings"][0]["code"],
         "native_observation_unavailable"
     );
-    assert!(!machine.config_root().exists());
+    assert!(!config_root(&machine).exists());
 }
 
 #[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
-    let machine = IsolatedMachine::new();
-    let project = machine.cwd.join("project");
+    let machine = machine();
+    let project = machine.working_directory().join("project");
     let nested = project.join("nested");
     fs::create_dir_all(&nested).unwrap();
     let git = Command::new("git")
@@ -223,7 +185,7 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
         .expect("initialize Git fixture");
     assert!(git.status.success(), "{}", stderr(&git));
 
-    let global = machine.run(&["status", "--target", "codex", "--json"]);
+    let global = run(&machine, &["status", "--target", "codex", "--json"]);
     assert_code(&global, 2);
     let value = json(&global);
     assert_eq!(value["scope"]["kind"], "global");
@@ -253,27 +215,34 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
             .any(|entry| entry["id"] == "claude")
     );
 
-    let explicit = machine.run(&[
-        "status",
-        "--project",
-        nested.to_str().unwrap(),
-        "--target",
-        "all",
-        "--json",
-    ]);
+    let explicit = run(
+        &machine,
+        &[
+            "status",
+            "--project",
+            nested.to_str().unwrap(),
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
     assert_code(&explicit, 2);
     let value = json(&explicit);
     assert_eq!(value["scope"]["path"], project.to_str().unwrap());
     assert_eq!(value["summary"]["targets"], 2);
 
-    machine.write_owned(
+    write_owned(
+        &machine,
         "inventory.toml",
         &format!(
             "schema = 1\nprojects = [{}]\nresources = []\n",
             toml_string(&project)
         ),
     );
-    let all = machine.run(&["status", "--all-scopes", "--target", "all", "--json"]);
+    let all = run(
+        &machine,
+        &["status", "--all-scopes", "--target", "all", "--json"],
+    );
     assert_code(&all, 2);
     let value = json(&all);
     assert_eq!(value["scope"]["kind"], "all");
@@ -281,13 +250,8 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
 }
 
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
-    Command::new(binary())
-        .args(arguments)
-        .current_dir(cwd)
-        .env("HOME", &machine.home)
-        .env("XDG_CONFIG_HOME", &machine.xdg)
-        .env_remove("SKILLTAP_HOME")
-        .output()
+    machine
+        .run_in(&binary(), cwd, arguments)
         .expect("run compiled skilltap binary")
 }
 
@@ -304,9 +268,9 @@ fn toml_string(path: &Path) -> String {
 #[test]
 fn malformed_owned_documents_fail_safely_and_name_only_the_document() {
     for name in ["config.toml", "inventory.toml", "state.json"] {
-        let machine = IsolatedMachine::new();
-        machine.write_owned(name, "not valid {{{ secret-marker");
-        let output = machine.run(&["status", "--json"]);
+        let machine = machine();
+        write_owned(&machine, name, "not valid {{{ secret-marker");
+        let output = run(&machine, &["status", "--json"]);
         assert_code(&output, 1);
         let value = json(&output);
         assert_eq!(value["result"], "invalid");
@@ -321,21 +285,21 @@ fn malformed_owned_documents_fail_safely_and_name_only_the_document() {
 
 #[test]
 fn json_and_plain_modes_use_stable_channels_and_exit_classes() {
-    let machine = IsolatedMachine::new();
+    let machine = machine();
 
-    let attention = machine.run(&["status"]);
+    let attention = run(&machine, &["status"]);
     assert_code(&attention, 2);
     assert!(attention.stderr.is_empty());
     assert!(stdout(&attention).contains("Result: attention required"));
     assert!(!stdout(&attention).contains("\u{1b}["));
 
-    let unavailable = machine.run(&["plan"]);
+    let unavailable = run(&machine, &["plan"]);
     assert_code(&unavailable, 1);
     assert!(unavailable.stdout.is_empty());
     assert!(stderr(&unavailable).contains("Code: capability_unavailable"));
     assert!(!stderr(&unavailable).contains("\u{1b}["));
 
-    let invalid = machine.run(&["status", "--target", "pi"]);
+    let invalid = run(&machine, &["status", "--target", "pi"]);
     assert_code(&invalid, 1);
     assert!(invalid.stdout.is_empty());
     assert!(stderr(&invalid).contains("Code: invalid_arguments"));
@@ -349,7 +313,7 @@ fn json_and_plain_modes_use_stable_channels_and_exit_classes() {
         &["status", "--yes", "--json"][..],
         &["plugin", "install", "not-a-selector", "--json"][..],
     ] {
-        let output = machine.run(arguments);
+        let output = run(&machine, arguments);
         let value = json(&output);
         assert_eq!(value["schema"], 1);
         assert!(!stdout(&output).contains("\u{1b}["));
