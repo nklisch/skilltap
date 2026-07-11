@@ -16,8 +16,8 @@ pub const MAX_PROCESS_DEADLINE_MILLISECONDS: u64 = 300_000;
 pub const MAX_PROCESS_STREAM_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_PROCESS_COMBINED_BYTES: u64 = 128 * 1024 * 1024;
 pub const MAX_JSON_BYTES: u64 = 64 * 1024 * 1024;
-/// Compatible with a recursive duplicate-aware visitor without unbounded stack use.
-pub const MAX_JSON_DEPTH: u32 = 128;
+/// Highest container nesting accepted below serde_json's built-in recursion guard.
+pub const MAX_JSON_DEPTH: u32 = 127;
 pub const MAX_TREE_DEPTH: u32 = 64;
 pub const MAX_TREE_ENTRIES: u64 = 100_000;
 pub const MAX_TREE_FILE_BYTES: u64 = 64 * 1024 * 1024;

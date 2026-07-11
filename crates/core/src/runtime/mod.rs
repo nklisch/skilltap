@@ -6,6 +6,7 @@ mod observation;
 mod path_value;
 mod paths;
 mod scope;
+mod strict_json;
 
 pub use clock::{Clock, FakeClock, SystemClock};
 pub use command::{CommandOutput, CommandRequest, CommandRunner, SystemCommandRunner};
@@ -35,3 +36,4 @@ pub use scope::{
     CommandGitRoot, GitRoot, ResolvedScopes, ScopeRequest, ScopeResolver, SystemWorkingDirectory,
     WorkingDirectory, resolve_targets,
 };
+pub use strict_json::StrictJson;
