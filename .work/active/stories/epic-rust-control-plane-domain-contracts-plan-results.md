@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-plan-results
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -65,3 +65,20 @@ attention reasons, and validated per-operation and final apply outcomes.
 - Important: failed outcomes require `OperationFailed` attention, while blocked
   outcomes accept only non-failure blocking reasons. Enforce at constructor and
   serde boundaries.
+
+## Review corrections (2026-07-11)
+
+- Added read-only accessors for every `Operation` field and typed optional
+  accessors for each `AttentionReason` payload.
+- Bound `ApplyResult` to its complete serialized `Plan`; construction and
+  deserialization now require exactly one result for every planned operation
+  and reject extra result ids.
+- Restricted dependency skips to dependencies declared by that exact operation
+  and required each named dependency to have a failed, blocked, or skipped
+  result.
+- Restricted acknowledgment selectors to the operation's resource or exact
+  component scope.
+- Enforced `NotApplicable` only for unsupported, conflict, and no-op classes,
+  and enforced the permitted attention kinds for failed and blocked results.
+- Added constructor and serde regressions for all corrected boundaries. Locked
+  format, check, clippy with warnings denied, and all workspace tests pass.
