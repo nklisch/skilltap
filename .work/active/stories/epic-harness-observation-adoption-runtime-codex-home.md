@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-codex-home
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits]
@@ -17,7 +17,7 @@ updated: 2026-07-11
 
 Extend runtime path resolution so a non-empty normalized absolute `CODEX_HOME`
 wins and absent/empty falls back to `$HOME/.codex`. Reject relative,
-non-normalized, inaccessible, and non-UTF-8 values without rendering bytes.
+non-normalized, and non-UTF-8 values without rendering bytes.
 Resolution creates nothing. XDG continues to relocate only skilltap state and
 Codex-native paths never relocate canonical global `~/AGENTS.md`.
 
@@ -32,3 +32,13 @@ Codex-native paths never relocate canonical global `~/AGENTS.md`.
   path policy intentionally resolves normalized absolute paths without
   requiring them to exist.
 - Adjacent issues parked: none.
+
+## Review
+
+- Initial review approved runtime behavior but found foundation/public docs
+  still hard-coded `~/.codex`; correction `2718009` aligned native paths with
+  `${CODEX_HOME:-$HOME/.codex}` without moving skilltap state or `~/AGENTS.md`.
+- Re-review found no remaining drift. Nine focused path tests and the website
+  build pass; repeated LLM-document generation is byte-identical.
+- The story requirement now explicitly reflects the no-I/O contract: policy
+  resolution validates path shape but does not require the path to exist.
