@@ -247,10 +247,15 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         } else if *command == "daemon run" {
             assert!(stdout(&output).is_empty());
             assert!(stderr(&output).contains("capability_unavailable"));
+        } else if matches!(*command, "plan" | "sync") {
+            assert_code(&output, 2);
+            let value = json(&output);
+            assert_eq!(value["command"], *command, "arguments: {arguments:?}");
+            assert_eq!(value["result"], "attention_required");
         } else if *command == "adopt" {
             assert_code(&output, 2);
             let value = json(&output);
-            assert_eq!(value["command"], "adopt", "arguments: {arguments:?}");
+            assert_eq!(value["command"], *command, "arguments: {arguments:?}");
             assert_eq!(value["result"], "attention_required");
             assert_eq!(value["errors"][0]["code"], "no_enabled_harnesses");
         } else {
@@ -711,11 +716,11 @@ fn json_and_plain_modes_use_stable_channels_and_exit_classes() {
     assert!(stdout(&attention).contains("Result: attention required"));
     assert!(!stdout(&attention).contains("\u{1b}["));
 
-    let unavailable = run(&machine, &["plan"]);
-    assert_code(&unavailable, 1);
-    assert!(unavailable.stdout.is_empty());
-    assert!(stderr(&unavailable).contains("Code: capability_unavailable"));
-    assert!(!stderr(&unavailable).contains("\u{1b}["));
+    let plan = run(&machine, &["plan"]);
+    assert_code(&plan, 2);
+    assert!(plan.stderr.is_empty());
+    assert!(stdout(&plan).contains("Result: attention required"));
+    assert!(!stdout(&plan).contains("\u{1b}["));
 
     let invalid = run(&machine, &["status", "--target", "pi"]);
     assert_code(&invalid, 1);

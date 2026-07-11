@@ -18,7 +18,9 @@ use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
     ResultClass,
     application::{NativeObservationMode, StatusApplication},
-    command::{AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs},
+    command::{
+        AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs, SyncArgs,
+    },
     dispatch::Dispatch,
 };
 
@@ -76,6 +78,8 @@ where
     let (outcome, plain_channel) = match dispatch {
         Dispatch::Status(args) => (execute_system_status(&args), OutputChannel::Stdout),
         Dispatch::Adopt(args) => (execute_system_adopt(&args), OutputChannel::Stdout),
+        Dispatch::Plan(args) => (execute_system_plan(&args), OutputChannel::Stdout),
+        Dispatch::Sync(args) => (execute_system_sync(&args), OutputChannel::Stdout),
         Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessEnable(args) => {
             (execute_system_harness_enable(&args), OutputChannel::Stdout)
@@ -88,6 +92,53 @@ where
         }
     };
     render(outcome, json, plain_channel)
+}
+
+fn execute_system_plan(args: &PlanArgs) -> Outcome {
+    execute_system_reconciliation("plan", |application| application.execute_plan(args))
+}
+
+fn execute_system_sync(args: &SyncArgs) -> Outcome {
+    execute_system_reconciliation("sync", |application| application.execute_sync(args))
+}
+
+fn execute_system_reconciliation(
+    command: &'static str,
+    execute: impl FnOnce(StatusApplication<'_>) -> Outcome,
+) -> Outcome {
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let filesystem = SystemFileSystem;
+    let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(command),
+    };
+    let inventory = match FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone())
+    {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(command),
+    };
+    let state = match FileStateRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(command),
+    };
+    let runner = SystemCommandRunner;
+    let git = CommandGitRoot::new(
+        &runner,
+        NativeId::new("git").expect("known command identifier"),
+    );
+    let working_directory = SystemWorkingDirectory;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    execute(StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+        native_observation: NativeObservationMode::System,
+    })
 }
 
 fn execute_system_adopt(args: &AdoptArgs) -> Outcome {

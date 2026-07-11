@@ -3,11 +3,11 @@ use serde_json::Value;
 use super::*;
 
 #[test]
-fn unavailable_commands_fail_before_composition_in_plain_and_json() {
+fn plan_composes_as_an_attention_report_and_other_unavailable_commands_remain_explicit() {
     let plain = run_from(["skilltap", "plan"]);
-    assert_eq!(plain.exit_code, 1);
-    assert_eq!(plain.channel, OutputChannel::Stderr);
-    assert!(plain.document.contains("Code: capability_unavailable"));
+    assert_eq!(plain.exit_code, 2);
+    assert_eq!(plain.channel, OutputChannel::Stdout);
+    assert!(plain.document.contains("Result: attention required"));
 
     let json = run_from(["skilltap", "plugin", "install", "format@team", "--json"]);
     assert_eq!(json.exit_code, 1);

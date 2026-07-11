@@ -17,6 +17,7 @@ use skilltap_core::{
         ObservationTarget, ObservedResource, Ownership, ProfileAuthority, Provenance,
         ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope,
     },
+    reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
         ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
         ScopeRequest, ScopeResolver, SystemConfigurationLock, WorkingDirectory, resolve_targets,
@@ -33,7 +34,9 @@ use skilltap_harnesses::{
 
 use crate::{
     ErrorDetail, NextAction, Outcome, OutputEntry, OutputScope, ResultClass, Warning,
-    command::{AdoptArgs, OutputArgs, ScopeArgument, StatusArgs, TargetArgs},
+    command::{
+        AdoptArgs, OutputArgs, PlanArgs, ScopeArgs, ScopeArgument, StatusArgs, SyncArgs, TargetArgs,
+    },
 };
 
 pub(crate) struct StatusApplication<'a> {
@@ -52,6 +55,170 @@ pub(crate) enum NativeObservationMode {
 }
 
 impl StatusApplication<'_> {
+    /// Build a fresh, adapter-neutral reconciliation plan from the current
+    /// documents and bounded native observation. Lifecycle adapters add
+    /// concrete candidates in their respective feature slices; until then an
+    /// empty inventory is a valid no-op plan and populated inventory is
+    /// reported as attention rather than guessed into a mutation.
+    pub(crate) fn execute_plan(&self, args: &PlanArgs) -> Outcome {
+        self.execute_reconciliation("plan", &args.target, &args.scope, &[], &[], false)
+    }
+
+    pub(crate) fn execute_sync(&self, args: &SyncArgs) -> Outcome {
+        self.execute_reconciliation(
+            "sync",
+            &args.target,
+            &args.scope,
+            &args.selection.include,
+            &args.selection.exclude,
+            args.acknowledgment.yes,
+        )
+    }
+
+    fn execute_reconciliation(
+        &self,
+        command: &'static str,
+        target: &TargetArgs,
+        requested_scope: &ScopeArgs,
+        includes: &[NativeId],
+        excludes: &[NativeId],
+        acknowledged: bool,
+    ) -> Outcome {
+        let documents = DocumentLoadPhase::execute(self);
+        let mut outcome = documents.project(Outcome::new(command, ResultClass::AttentionRequired));
+        let documents = match documents.finish() {
+            Ok(documents) => documents,
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                return outcome.with_next_action(NextAction::new(
+                    "repair_owned_documents",
+                    "Repair the reported skilltap-owned documents before retrying.",
+                ));
+            }
+        };
+
+        let status_args = StatusArgs {
+            target: target.clone(),
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+
+        let targets = match StatusTargets::resolve(&status_args, &documents) {
+            Ok(targets) => targets,
+            Err(StatusTargetError::NoneEnabled) => {
+                return first_use_harness_report(
+                    &documents.config,
+                    outcome,
+                    self.native_observation,
+                    target.target.as_ref(),
+                )
+                .with_summary("scopes", scope.count)
+                .with_summary("targets", 0_u64)
+                .with_next_action(
+                    NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                        .with_command("skilltap harness enable <codex|claude>"),
+                );
+            }
+            Err(StatusTargetError::NotEnabled) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(
+                    ErrorDetail::new(
+                        "target_not_enabled",
+                        "The requested harness target is not enabled.",
+                    )
+                    .with_next_action(
+                        NextAction::new("enable_harness", "Enable the requested harness.")
+                            .with_command("skilltap harness enable <codex|claude>"),
+                    ),
+                );
+            }
+        };
+
+        if let Some(selector) = includes.first().or_else(|| excludes.first()) {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(
+                ErrorDetail::new(
+                    "selector_unavailable",
+                    "The requested selector is not present in the current reconciliation plan.",
+                )
+                .with_context("selector", selector.as_str()),
+            );
+        }
+
+        let observation = match self.native_observation {
+            NativeObservationMode::Disabled => NativeObservation::default(),
+            NativeObservationMode::System => NativeObservation::run(&documents, &scope, &targets),
+        };
+        for resource in observation.resources.iter().cloned() {
+            outcome = outcome.with_resource(resource);
+        }
+        for warning in observation.warnings.iter().cloned() {
+            outcome = outcome.with_warning(warning);
+        }
+
+        let planned = match plan_reconciliation(ReconciliationRequest::default()) {
+            Ok(plan) => plan,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(
+                    ErrorDetail::new(
+                        "reconciliation_plan_invalid",
+                        "The reconciliation plan could not be validated safely.",
+                    )
+                    .with_context("detail", error.to_string()),
+                );
+            }
+        };
+        let operation_count = planned.plan.iter().count() as u64;
+        let desired_count = documents
+            .inventory
+            .as_ref()
+            .map_or(0, |inventory| inventory.resources().len());
+        let mut result = if observation.failed_targets > 0 {
+            ResultClass::AttentionRequired
+        } else {
+            ResultClass::Completed
+        };
+        if desired_count > 0 {
+            result = ResultClass::AttentionRequired;
+            outcome = outcome
+                .with_warning(Warning::new(
+                    "reconciliation_candidates_unavailable",
+                    "Desired resources are present, but no lifecycle adapter can safely produce mutation candidates yet.",
+                ))
+                .with_next_action(NextAction::new(
+                    "review_lifecycle_support",
+                    "Review the planned resource lifecycle support before retrying synchronization.",
+                ));
+        }
+        if acknowledged {
+            outcome = outcome.with_warning(Warning::new(
+                "acknowledgment_not_applicable",
+                "--yes acknowledged no exact consequence because this plan contains no partial operation.",
+            ));
+        }
+        outcome.result = result;
+        outcome
+            .with_summary("desired_resources", desired_count as u64)
+            .with_summary("operations", operation_count)
+            .with_summary("scopes", scope.count)
+            .with_summary("targets", targets.iter().len() as u64)
+            .with_summary("observed_targets", observation.observed_targets as u64)
+            .with_summary("failed_targets", observation.failed_targets as u64)
+            .with_summary("changed", false)
+    }
+
     pub(crate) fn execute(&self, args: &StatusArgs) -> Outcome {
         let documents = DocumentLoadPhase::execute(self);
         let mut outcome = documents.project(Outcome::new("status", ResultClass::AttentionRequired));
