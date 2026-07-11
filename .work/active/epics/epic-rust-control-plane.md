@@ -31,6 +31,20 @@ or resource lifecycle behavior; those capabilities build on this foundation.
 - `docs/SPEC.md` — Operating Model, Configuration Directory, Output, Exit Codes
 - `docs/ARCH.md` — Workspace, Dependency Direction, Domain Model, Storage, Technology
 
+## Design decisions
+
+- **How destructive is the repository reset?** Remove the legacy TypeScript,
+  Bun, and npm product implementation and rebuild supporting infrastructure for
+  Rust. Preserve the website, Homebrew, installer, and release experience as
+  product surfaces, but rewrite their implementation and content where the old
+  stack or v2 behavior leaks through.
+- **What Rust compatibility policy applies initially?** Use Rust Edition 2024
+  with a pinned stable toolchain. Defer a declared MSRV until v3 approaches
+  release and its actual dependency floor is known.
+- **Does this epic require UI mockups?** No. skilltap is a non-interactive CLI
+  and daemon with no visual UI surface; do not install project mockup rules or
+  create mockups for this epic.
+
 ## Anticipated child features
 
 - Destructive legacy removal and Rust workspace bootstrap
