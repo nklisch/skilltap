@@ -217,6 +217,17 @@ pub fn observe_codex_resources(
     ))
 }
 
+/// Observes the bounded Claude native tree; cache contents remain evidence only.
+pub fn observe_claude_resources(
+    paths: &ClaudeObservationPaths,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<skilltap_core::runtime::ExternalTreeSnapshot, ObservationRuntimeError> {
+    SystemExternalTreeObserver.observe(&skilltap_core::runtime::ExternalTreeRequest::new(
+        paths.claude_home.clone(),
+        limits,
+    ))
+}
+
 impl std::fmt::Debug for CodexConfigObservation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter

@@ -328,3 +328,32 @@ fn claude_settings_preserve_qualified_identity_counts_and_shared_project_state()
     assert!(observed.shared_project);
     assert!(!format!("{observed:?}").contains("anthropic"));
 }
+
+#[test]
+fn claude_resource_observation_keeps_complete_skills_and_cache_evidence_read_only() {
+    let root = TempRoot::new("skilltap-claude-resources").unwrap();
+    let home = root.join("home");
+    let claude_home = home.join(".claude");
+    let skill = claude_home.join("skills/example");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), b"name: example\n").unwrap();
+    let environment =
+        TestEnvironment::default().with(EnvironmentVariable::Home, home.to_str().unwrap());
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let paths = skilltap_harnesses::claude_observation_paths(&platform, &Scope::Global).unwrap();
+    let snapshot = skilltap_harnesses::observe_claude_resources(
+        &paths,
+        ExternalTreeLimits::new(8, 32, 4096, 8192, 1024).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        snapshot
+            .entries()
+            .iter()
+            .any(|entry| entry.path().as_str() == "skills/example/SKILL.md")
+    );
+    assert_eq!(
+        std::fs::read(skill.join("SKILL.md")).unwrap(),
+        b"name: example\n"
+    );
+}
