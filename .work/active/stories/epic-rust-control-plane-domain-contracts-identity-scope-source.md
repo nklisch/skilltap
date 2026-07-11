@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-identity-scope-source
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: []
@@ -59,3 +59,16 @@ requested/resolved revisions, absolute/relative paths, and fingerprints.
 - Skilltap-owned source and fingerprint wires plus scope, scope-selection, target-selection, and resolved-revision tagged values reject unknown fields.
 - Regression coverage includes raw and serde forms for non-canonical paths and source-kind violations, plus unknown fields on owned object/tagged forms.
 - Verification after fixes: `cargo fmt --all -- --check`, `cargo check --locked --workspace`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace` all pass.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Initial invariant findings were corrected in `1439a72`. Raw and
+serde boundaries now enforce identical canonical paths, source-kind rules, and
+unknown-field rejection. Story verified by implement and integrated locked
+workspace checks; fast-lane advance.
