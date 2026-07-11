@@ -4,7 +4,7 @@ kind: story
 stage: implementing
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
-depends_on: [epic-harness-observation-adoption-contracts-resource-graph, epic-harness-observation-adoption-contracts-managed-ownership]
+depends_on: [epic-harness-observation-adoption-contracts-resource-key]
 release_binding: null
 research_refs: []
 research_origin: null
@@ -19,3 +19,8 @@ Migrate inventory/state maps, resource state, schema errors, managed ownership,
 strict goldens, repositories, and storage integration to nested scope-bearing
 keys. Keep independent schema constants at 1 for unreleased clean-break v3;
 reject old ResourceId-only shapes with no migration or compatibility path.
+
+This story is the coordinated compile bridge for the resource-graph and
+managed-ownership migrations. It may implement while those siblings await
+review; none of the three can be approved until the combined strict workspace
+ladder passes.
