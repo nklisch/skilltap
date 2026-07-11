@@ -5,8 +5,8 @@ use std::{
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, ComponentGraph, ConfiguredBinary, HarnessId, HarnessObservation,
-        HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
+        AbsolutePath, CapabilitySupport, ComponentGraph, ConfiguredBinary, HarnessId,
+        HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
         ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
         ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
@@ -81,6 +81,7 @@ impl StatusApplication<'_> {
                     &documents.config,
                     outcome,
                     self.native_observation,
+                    args.target.target.as_ref(),
                 )
                 .with_summary("targets", 0_u64)
                 .with_error(ErrorDetail::new(
@@ -146,12 +147,21 @@ fn first_use_harness_report(
     config: &ConfigDocument,
     mut outcome: Outcome,
     mode: NativeObservationMode,
+    requested: Option<&skilltap_core::domain::TargetSelection>,
 ) -> Outcome {
     let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
         .expect("bounded status process limits are valid");
     let json_limits =
         JsonLimits::new(256 * 1024, 64).expect("bounded status JSON limits are valid");
     let search_path = std::env::var_os("PATH");
+    let all_harnesses = [
+        HarnessId::new("codex").expect("known harness"),
+        HarnessId::new("claude").expect("known harness"),
+    ];
+    let selected = skilltap_core::runtime::resolve_targets(requested, all_harnesses.clone())
+        .unwrap_or_else(|_| {
+            skilltap_core::domain::HarnessSet::new(all_harnesses).expect("known harnesses")
+        });
     for (harness, kind, binary) in [
         (
             "codex",
@@ -163,7 +173,10 @@ fn first_use_harness_report(
             HarnessKind::Claude,
             config.harnesses().claude.binary.as_str(),
         ),
-    ] {
+    ]
+    .into_iter()
+    .filter(|(harness, _, _)| selected.iter().any(|value| value.as_str() == *harness))
+    {
         let mut entry = OutputEntry::new(harness, "not_enabled").with_field("enabled", false);
         if mode == NativeObservationMode::Disabled {
             outcome = outcome.with_resource(entry);
@@ -644,17 +657,33 @@ impl NativeObservation {
             match outcome {
                 HarnessObservationOutcome::Observed { observation } => {
                     result.observed_targets += 1;
+                    let evidence = observation.request().evidence();
+                    let profile = evidence.profile();
+                    let target = observation.target();
+                    let scope = target.scope();
                     result.resources.push(
                         OutputEntry::new(
-                            observation_id(
-                                observation.target().harness(),
-                                observation.target().scope(),
-                            ),
+                            observation_id(target.harness(), target.scope()),
                             "observed",
                         )
-                        .with_field("harness", observation.target().harness().as_str())
-                        .with_field("scope", scope_label(observation.target().scope()))
-                        .with_field("typed", true),
+                        .with_field("harness", target.harness().as_str())
+                        .with_field("scope", scope_label(target.scope()))
+                        .with_field("typed", true)
+                        .with_field("version", evidence.native_version().as_str())
+                        .with_field("profile_authority", profile_authority(profile.authority()))
+                        .with_field(
+                            "capabilities_supported",
+                            capability_count(profile, scope, CapabilitySupport::Supported) as u64,
+                        )
+                        .with_field(
+                            "capabilities_unverified",
+                            capability_count(profile, scope, CapabilitySupport::Unverified) as u64,
+                        )
+                        .with_field(
+                            "capabilities_unsupported",
+                            capability_count(profile, scope, CapabilitySupport::Unsupported) as u64,
+                        )
+                        .with_field("native_entries", observation.resources().len() as u64),
                     );
                     for resource in observation.resources().values() {
                         let mut entry = OutputEntry::new(
@@ -743,20 +772,59 @@ fn instruction_surface_labels(
 ) -> Vec<&'static str> {
     match kind {
         HarnessKind::Codex => {
-            let _ = skilltap_harnesses::codex_observation_paths(paths, scope);
+            let inputs = match skilltap_harnesses::codex_observation_paths(paths, scope) {
+                Ok(inputs) => inputs,
+                Err(_) => return Vec::new(),
+            };
             match scope {
-                Scope::Global => vec!["codex.global.instructions"],
-                Scope::Project(_) => vec!["project.agents.instructions", "project.agents.override"],
+                Scope::Global => path_exists(inputs.global_agents.as_str())
+                    .then_some("codex.global.instructions")
+                    .into_iter()
+                    .collect(),
+                Scope::Project(_) => {
+                    let mut labels = Vec::new();
+                    if inputs
+                        .project_agents
+                        .as_ref()
+                        .is_some_and(|path| path_exists(path.as_str()))
+                    {
+                        labels.push("project.agents.instructions");
+                    }
+                    if inputs
+                        .project_override
+                        .as_ref()
+                        .is_some_and(|path| path_exists(path.as_str()))
+                    {
+                        labels.push("project.agents.override");
+                    }
+                    labels
+                }
             }
         }
         HarnessKind::Claude => {
-            let _ = skilltap_harnesses::claude_observation_paths(paths, scope);
+            let inputs = match skilltap_harnesses::claude_observation_paths(paths, scope) {
+                Ok(inputs) => inputs,
+                Err(_) => return Vec::new(),
+            };
             match scope {
-                Scope::Global => vec!["claude.settings"],
-                Scope::Project(_) => vec!["project.claude.settings"],
+                Scope::Global => path_exists(inputs.global_settings.as_str())
+                    .then_some("claude.settings")
+                    .into_iter()
+                    .collect(),
+                Scope::Project(_) => inputs
+                    .project_settings
+                    .as_ref()
+                    .filter(|path| path_exists(path.as_str()))
+                    .map(|_| "project.claude.settings")
+                    .into_iter()
+                    .collect(),
             }
         }
     }
+}
+
+fn path_exists(path: &str) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
 }
 
 fn native_surface_resource(
@@ -860,6 +928,26 @@ fn resource_kind(kind: ResourceKind) -> &'static str {
         ResourceKind::StandaloneSkill => "standalone_skill",
         ResourceKind::InstructionLocation => "instruction_location",
     }
+}
+
+fn profile_authority(authority: ProfileAuthority) -> &'static str {
+    match authority {
+        ProfileAuthority::VerifiedCompiled => "verified_compiled",
+        ProfileAuthority::ObserveOnly => "observe_only",
+    }
+}
+
+fn capability_count(
+    profile: &skilltap_core::domain::CapabilityProfileSelection,
+    scope: &Scope,
+    support: CapabilitySupport,
+) -> usize {
+    profile
+        .observation_capabilities()
+        .for_scope(scope)
+        .iter()
+        .filter(|(_, value)| *value == support)
+        .count()
 }
 
 fn finding_warning(finding: &ObservationFinding) -> Warning {

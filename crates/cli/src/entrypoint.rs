@@ -131,22 +131,23 @@ fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
 }
 
 fn with_harness_repository(
+    command: &'static str,
     operation: impl FnOnce(&FileConfigRepository<'_>) -> Outcome,
 ) -> Outcome {
     let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
         Ok(paths) => paths,
-        Err(_) => return repository_composition_error("harness list"),
+        Err(_) => return repository_composition_error(command),
     };
     let filesystem = SystemFileSystem;
     let repository = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
         Ok(repository) => repository,
-        Err(_) => return repository_composition_error("harness list"),
+        Err(_) => return repository_composition_error(command),
     };
     operation(&repository)
 }
 
 fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
-    with_harness_repository(|repository| {
+    with_harness_repository("harness list", |repository| {
         let config = match repository.load() {
             Ok(DocumentState::Missing) => ConfigDocument::defaults(),
             Ok(DocumentState::Present(value)) => value,
@@ -186,7 +187,7 @@ fn execute_harness_change(
     enabled: bool,
     binary: Option<&skilltap_core::storage::HarnessBinary>,
 ) -> Outcome {
-    with_harness_repository(|repository| {
+    with_harness_repository(command, |repository| {
         let current = match repository.load() {
             Ok(DocumentState::Missing) => ConfigDocument::defaults(),
             Ok(DocumentState::Present(value)) => value,
