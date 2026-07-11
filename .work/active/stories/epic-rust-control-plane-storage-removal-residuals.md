@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-removal-residuals
 kind: story
-stage: review
+stage: done
 tags: [correctness]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-managed-artifacts]
@@ -45,3 +45,11 @@ locked ladder.
 - `cargo test --locked --workspace` (150 tests)
 - `cargo build --locked --release -p skilltap`
 - 30 concurrent locked core unit-suite runs across eight workers
+
+## Review
+
+Approved. The runtime residual preserves expected and observed identity, exact
+path presence, recursive content progress, and parent-sync durability without
+following or removing a replacement directory. Storage exposes the recovery
+state through a dedicated safe residual. Focused runtime and storage suites,
+formatting, and strict locked Clippy all pass.
