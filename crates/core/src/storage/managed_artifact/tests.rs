@@ -9,7 +9,7 @@ use crate::{
     domain::FingerprintAlgorithm,
     runtime::{
         DirectoryContentState, DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState,
-        SystemFileSystem,
+        RuntimeError, SystemFileSystem,
     },
     storage::SchemaError,
 };
