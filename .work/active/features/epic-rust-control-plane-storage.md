@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage
 kind: feature
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -190,3 +190,34 @@ Unix operations; plus real-adapter machine-root integration tests. The
 implementation performs no harness observation, planning, locking policy,
 resource lifecycle, skill semantic validation, or discovery. The locked
 workspace passes 141 tests plus doctests and warnings-clean rustdoc.
+
+## Feature review findings
+
+Fresh-context cross-contract review requested four corrections:
+
+1. Config, inventory, and state use one shared schema version despite the
+   architecture requiring independent evolution; repository probing must bind
+   to the selected document's version.
+2. `StateDocument` accepts arbitrary managed record paths that the managed
+   repository refuses, including the committed golden; record construction and
+   serde must share the repository's canonical owner/role/fingerprint/path
+   validator.
+3. Failed configuration-lock acquisition still relies on implicit unlock of
+   provisional directory/file descriptors and intermittently poisons an
+   immediate parallel acquisition.
+4. Managed removal can partially delete contents or unlink before a failed
+   parent sync yet returns only generic runtime failure; recovery needs exact
+   presence, expected/observed identity, content-progress, and durability.
+
+5. `epic-rust-control-plane-storage-independent-versions` — split and bind
+   config/inventory/state schema versions — depends on
+   `[epic-rust-control-plane-storage-document-repositories]`.
+6. `epic-rust-control-plane-storage-managed-record-contract` — unify canonical
+   managed record construction/serde/repository validation — depends on
+   `[epic-rust-control-plane-storage-managed-artifacts]`.
+7. `epic-rust-control-plane-storage-lock-release` — explicitly release
+   provisional configuration locks on every failed acquisition path — depends
+   on `[epic-rust-control-plane-storage-document-repositories]`.
+8. `epic-rust-control-plane-storage-removal-residuals` — report exact partial
+   managed-tree removal recovery state — depends on
+   `[epic-rust-control-plane-storage-managed-artifacts]`.
