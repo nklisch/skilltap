@@ -1,21 +1,10 @@
 use std::process::ExitCode;
 
-use clap::{Parser, error::ErrorKind};
-
 fn main() -> ExitCode {
-    match skilltap::command::Cli::try_parse() {
-        Ok(_) => ExitCode::SUCCESS,
-        Err(error) => {
-            let exit = if matches!(
-                error.kind(),
-                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
-            ) {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::from(1)
-            };
-            let _ = error.print();
-            exit
-        }
+    let execution = skilltap::run_from(std::env::args_os());
+    match execution.channel {
+        skilltap::OutputChannel::Stdout => print!("{}", execution.document),
+        skilltap::OutputChannel::Stderr => eprint!("{}", execution.document),
     }
+    ExitCode::from(execution.exit_code)
 }

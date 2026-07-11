@@ -1,0 +1,174 @@
+use std::ffi::{OsStr, OsString};
+
+use clap::{Parser, error::ErrorKind};
+use skilltap_core::{
+    domain::NativeId,
+    runtime::{
+        CommandGitRoot, PlatformPaths, ProcessEnvironment, ScopeResolver, SystemCommandRunner,
+        SystemFileSystem, SystemWorkingDirectory,
+    },
+    storage::{FileConfigRepository, FileInventoryRepository, FileStateRepository},
+};
+
+use crate::{
+    ErrorDetail, JsonRenderer, NextAction, Outcome, PlainRenderer, Renderer, ResultClass,
+    application::StatusApplication, command::Cli, dispatch::Dispatch,
+};
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OutputChannel {
+    Stdout,
+    Stderr,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct CommandExecution {
+    pub document: String,
+    pub exit_code: u8,
+    pub channel: OutputChannel,
+}
+
+pub fn run_from<I, T>(arguments: I) -> CommandExecution
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let arguments = arguments
+        .into_iter()
+        .map(Into::into)
+        .collect::<Vec<OsString>>();
+    let json_requested = arguments.iter().any(|value| value == OsStr::new("--json"));
+    let dispatch = match Cli::try_parse_from(arguments) {
+        Ok(cli) => Dispatch::from_command(cli.command.expect("Clap requires a subcommand")),
+        Err(error)
+            if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+            ) =>
+        {
+            return CommandExecution {
+                document: error.to_string(),
+                exit_code: 0,
+                channel: OutputChannel::Stdout,
+            };
+        }
+        Err(error) => return render(parse_error(error.kind()), json_requested),
+    };
+    let json = dispatch.json();
+    let outcome = match dispatch {
+        Dispatch::Status(args) => execute_system_status(&args),
+        Dispatch::Unavailable { command, .. } => capability_unavailable(command),
+    };
+    render(outcome, json)
+}
+
+fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => {
+            return Outcome::new("status", ResultClass::Invalid).with_error(ErrorDetail::new(
+                "platform_paths_unavailable",
+                "The skilltap configuration paths could not be resolved.",
+            ));
+        }
+    };
+    let filesystem = SystemFileSystem;
+    let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(),
+    };
+    let inventory = match FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone())
+    {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(),
+    };
+    let state = match FileStateRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(),
+    };
+    let runner = SystemCommandRunner;
+    let git = CommandGitRoot::new(
+        &runner,
+        NativeId::new("git").expect("known command identifier"),
+    );
+    let working_directory = SystemWorkingDirectory;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+    }
+    .execute(args)
+}
+
+fn repository_composition_error() -> Outcome {
+    Outcome::new("status", ResultClass::Invalid).with_error(ErrorDetail::new(
+        "storage_unavailable",
+        "The skilltap storage repositories could not be composed.",
+    ))
+}
+
+fn capability_unavailable(command: &str) -> Outcome {
+    Outcome::new(command, ResultClass::Invalid)
+        .with_error(ErrorDetail::new(
+            "capability_unavailable",
+            "This command capability is not available in this build.",
+        ))
+        .with_next_action(NextAction::new(
+            "retry_after_capability_available",
+            "Retry when this command capability is available.",
+        ))
+}
+
+fn parse_error(kind: ErrorKind) -> Outcome {
+    let (code, summary) = match kind {
+        ErrorKind::MissingSubcommand => ("missing_command", "A command is required."),
+        ErrorKind::InvalidUtf8 => (
+            "invalid_utf8_argument",
+            "A command argument is not valid UTF-8.",
+        ),
+        _ => ("invalid_arguments", "The command arguments are invalid."),
+    };
+    Outcome::new("skilltap", ResultClass::Invalid)
+        .with_error(ErrorDetail::new(code, summary))
+        .with_next_action(
+            NextAction::new("show_help", "Review the command grammar.")
+                .with_command("skilltap --help"),
+        )
+}
+
+fn render(outcome: Outcome, json: bool) -> CommandExecution {
+    let result = outcome.result;
+    let rendered = if json {
+        JsonRenderer.render(&outcome)
+    } else {
+        PlainRenderer.render(&outcome)
+    };
+    let (document, exit_code) = match rendered {
+        Ok(document) => (document, outcome.exit_code()),
+        Err(_) if json => (
+            r#"{"schema":1,"command":"skilltap","result":"invalid","summary":{},"resources":[],"operations":[],"warnings":[],"errors":[{"code":"output_unavailable","summary":"The command outcome could not be rendered."}],"next_actions":[]}"#
+                .to_owned(),
+            1,
+        ),
+        Err(_) => (
+            "Error: The command outcome could not be rendered.\nCode: output_unavailable\n\nResult: invalid\n"
+                .to_owned(),
+            1,
+        ),
+    };
+    CommandExecution {
+        document,
+        exit_code,
+        channel: if json || result == ResultClass::Completed {
+            OutputChannel::Stdout
+        } else {
+            OutputChannel::Stderr
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests;
