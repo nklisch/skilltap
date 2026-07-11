@@ -593,6 +593,80 @@ fn adopt_publishes_inventory_and_is_idempotent_without_native_mutation() {
     assert_eq!(snapshot_native_tree(&codex_home), before);
 }
 
+#[test]
+fn adopt_reports_partial_sibling_and_still_publishes_healthy_candidates() {
+    let machine = machine();
+    let codex = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::MalformedJson).unwrap();
+    let codex_home = machine.home().join(".codex");
+    fs::create_dir_all(codex_home.join("skills/example")).unwrap();
+    fs::write(
+        codex_home.join("skills/example/SKILL.md"),
+        "---\nname: example\n---\n",
+    )
+    .unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+
+    let output = run(&machine, &["adopt", "--from", "all", "--json"]);
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert_eq!(value["result"], "attention_required");
+    assert!(value["summary"]["adopted"].as_u64().unwrap() > 0);
+    assert!(value["warnings"].as_array().unwrap().iter().any(|warning| {
+        warning["code"] == "native_detection_failed" && warning["context"]["harness"] == "claude"
+    }));
+    assert!(config_root(&machine).join("inventory.toml").is_file());
+}
+
+#[test]
+fn adopt_project_and_all_scopes_preserve_project_inventory_scope() {
+    let machine = machine();
+    let codex = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let project = machine.working_directory().join("project");
+    fs::create_dir_all(project.join(".agents/skills/example")).unwrap();
+    fs::write(
+        project.join(".agents/skills/example/SKILL.md"),
+        "---\nname: project-example\n---\n",
+    )
+    .unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), codex.executable()),
+    );
+
+    let project_output = run(
+        &machine,
+        &[
+            "adopt",
+            "--from",
+            "codex",
+            "--project",
+            project.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert_code(&project_output, 0);
+    let project_value = json(&project_output);
+    assert_eq!(project_value["scope"]["kind"], "project");
+    assert!(project_value["summary"]["adopted"].as_u64().unwrap() > 0);
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(inventory.contains(project.to_str().unwrap()));
+
+    let all = run(
+        &machine,
+        &["adopt", "--all-scopes", "--from", "codex", "--json"],
+    );
+    assert_code(&all, 2);
+    let all_value = json(&all);
+    assert_eq!(all_value["scope"]["kind"], "all");
+    assert!(all_value["summary"]["already_managed"].as_u64().unwrap() > 0);
+}
+
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
     machine
         .run_in(&binary(), cwd, arguments)

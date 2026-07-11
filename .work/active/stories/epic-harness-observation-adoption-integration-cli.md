@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-integration-cli
 kind: story
-stage: implementing
+stage: done
 tags: [cli,testing]
 parent: epic-harness-observation-adoption-integration
 depends_on: [epic-harness-observation-adoption-integration-core]
@@ -18,3 +18,20 @@ updated: 2026-07-11
 Expand compiled-binary coverage for global/current/explicit/all scopes, omitted
 and explicit `--from` targets, stable plain/JSON decisions, partial/conflict
 attention exits, and inventory-only mutation with immediate repeat idempotence.
+
+## Implementation notes
+
+- Added compiled coverage for healthy Codex adoption with immediate repeat,
+  partial Claude sibling failure, current project adoption, and all-recorded-
+  scopes replay.
+- Assertions cover stable JSON result classes, attention warnings, project
+  inventory registration, and inventory-only publication.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap --test compiled_binary adopt_ --offline`
+
+## Review
+
+Verdict: Approve - story verified by implement; fast-lane advance.
