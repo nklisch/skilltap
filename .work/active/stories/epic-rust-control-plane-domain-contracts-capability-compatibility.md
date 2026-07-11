@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-capability-compatibility
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -64,3 +64,16 @@ classifications carrying target-specific evidence and consequences.
   raw construction and deserialization tests prove identical enforcement.
 - Replaced affected-component `ResourceId` values with the resource graph's
   validated `ComponentId` in both evidence and material consequences.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Initial target-identity and component-selector findings were resolved
+in `fdc9f4c`; stable public re-exports landed in `ed65b63`. Story verified by
+implement, adversarial contract review, and integrated locked workspace checks;
+fast-lane advance.
