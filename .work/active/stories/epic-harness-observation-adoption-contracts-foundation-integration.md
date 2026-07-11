@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-foundation-integration
 kind: story
-stage: review
+stage: done
 tags: [documentation, testing]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-operation-selectors, epic-harness-observation-adoption-contracts-snapshots-ports]
@@ -52,3 +52,13 @@ documentation artifacts when applicable.
   focused suites pass.
 - `npm run build` passes in `website/`; repeated LLM documentation generation
   is byte-identical (`c653da723571ec84e97e579ce1fcc3fc768a4ce99d726409196072a50d849a71`).
+
+## Review
+
+- Approved after a fresh-context cross-document and cross-layer review of the
+  three implementation commits.
+- Confirmed foundation and public wording matches compiled-only authority,
+  exact scoped identity/selectors, ephemeral observations, disabled first-use
+  defaults, and shared-Claude non-adoption.
+- Confirmed 3/3 foundation tests, config and CLI suites, compiled-binary tests,
+  deterministic LLM generation, and the website build all pass.

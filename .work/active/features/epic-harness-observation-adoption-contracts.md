@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: []
@@ -52,16 +52,18 @@ ResourceId-only shapes are rejected without migration code.
 Fresh normalized observations are ephemeral values. `ObservedResource` carries
 a typed optional `Source` and no arbitrary JSON metadata. Observed dependencies
 retain exact keys and resolved/unresolved evidence so one malformed native edge
-does not invalidate healthy siblings. Findings use validated open codes,
-authored static summaries, severity, harness/scope/resource subject, and a small
-typed scalar field vocabulary; constructors cannot accept raw native output,
-settings objects, arbitrary JSON, or dynamic messages.
+does not invalidate healthy siblings. Findings use source-registered codes,
+authored static summaries, severity, harness/scope/resource subjects, and a
+small registered typed scalar field vocabulary; constructors cannot accept raw
+native output, settings objects, arbitrary JSON, or dynamic messages. Runtime-
+open diagnostic codes were rejected during review because identifier-shaped
+secrets could otherwise enter rendered and serialized output.
 
 The installation/profile vocabulary separates configured binary, resolved
 absolute executable identity, opaque native version, compiled profile ID,
 profile authority, reachability, and scoped capability sets. A profile may
 narrow support per global/project scope. Unknown versions have no verified
-profile and all mutation capabilities remain unverified.
+profile and expose no mutation capability set.
 
 `ObservationRequest` always contains one concrete scope plus installation and
 profile evidence bound to the same executable. `HarnessObservation` returns
@@ -128,6 +130,30 @@ remain downstream.
    compiled CLI compatibility — depends on
    `[epic-harness-observation-adoption-contracts-operation-selectors,
    epic-harness-observation-adoption-contracts-snapshots-ports]`.
+
+## Implementation
+
+- All nine child stories are done and independently reviewed.
+- Exact scope-bearing keys now span resources, dependencies, inventory/state,
+  managed ownership, artifact paths, operation selectors, acknowledgments, and
+  snapshot contexts without mutable revision/version identity.
+- Installation/profile evidence binds one reachable executable and version;
+  verified compiled profiles alone grant mutation authority and probes only
+  narrow support. Unknown versions remain observable and expose no mutation
+  capabilities.
+- Findings and adapter errors have safe typed vocabularies; observation
+  requests and complete partial environments are ephemeral normalized values
+  behind core behavior ports.
+- Foundation, README, website, generated LLM documents, first-use policy, and
+  cross-layer tests now match the compiled contracts.
+
+## Verification
+
+- Locked formatting, workspace/all-target checks and tests, warnings-denied
+  Clippy/rustdoc, release build, and compiled-binary verification pass.
+- The workspace has 226 passing Rust tests, including 3 cross-layer foundation
+  tests and 6 compiled-binary tests.
+- Website build and repeated byte-identical LLM documentation generation pass.
 
 ## Acceptance criteria
 
