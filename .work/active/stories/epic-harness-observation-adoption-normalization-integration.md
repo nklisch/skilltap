@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization-integration
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-normalization
 depends_on: [epic-harness-observation-adoption-normalization-graph, epic-harness-observation-adoption-normalization-correlation, epic-harness-observation-adoption-normalization-findings]
@@ -30,3 +30,7 @@ findings, and safe deterministic output without writing state or native trees.
 ## Verification
 
 - Harness Clippy, normalization tests, and the locked workspace suite pass.
+
+## Review
+
+- Fast-lane review approved the deterministic normalization integration record.
