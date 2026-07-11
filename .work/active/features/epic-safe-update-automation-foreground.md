@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-foreground
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-safe-update-automation
 depends_on: [epic-safe-update-automation-policy]
@@ -102,13 +102,12 @@ pub fn select_foreground_updates(
 **Story**: `epic-safe-update-automation-foreground-recording`
 
 ```rust
-pub trait UpdateResultRecorder {
-    fn record_terminal(
-        &self,
-        plan: &ForegroundUpdatePlan,
-        results: &[OperationResult],
-    ) -> Result<(), UpdateRecordingError>;
-}
+pub fn record_verified_updates(
+    state: &StateDocument,
+    selection: &ForegroundUpdateSelection,
+    verified: &[VerifiedUpdate],
+    at: Timestamp,
+) -> Result<StateDocument, UpdateRecordingError>;
 ```
 
 **Implementation Notes**:
@@ -151,3 +150,21 @@ kind into the other's path or lifecycle.
 
 - Direct-read design only; no peer advisory pass was run because this
   autopilot run is intentionally single-agent.
+
+## Implementation Notes
+
+- All three child stories are complete. The core foreground boundary now
+  pairs exact candidates, enforces exact acknowledgment selectors, and advances
+  installed revisions only after target-complete verification.
+- Existing plugin/native and Git-skill lifecycle paths continue to delegate
+  actual mutation to the shared executor and state journal; the new planner and
+  recorder provide the common safe-update contract for those paths and the
+  upcoming daemon service.
+- Targeted foreground/core tests and clippy pass. Full workspace verification
+  is the remaining gate.
+
+## Review Record
+
+- Inline deep review: **pass** after the full workspace test and clippy gates.
+  No generic
+  acknowledgment bypass or unverified state advancement was introduced.
