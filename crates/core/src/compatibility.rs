@@ -29,6 +29,7 @@ pub enum CompatibilityAnalysisError {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentDecision {
     pub component: ComponentId,
+    pub requiredness: ComponentRequiredness,
     pub result: CompatibilityResult,
     pub selector: OperationSelector,
 }
@@ -107,6 +108,7 @@ pub fn analyze_component(
     .map_err(CompatibilityAnalysisError::InvalidResult)?;
     Ok(ComponentDecision {
         component: component.id.clone(),
+        requiredness: component.requiredness,
         result,
         selector,
     })
@@ -198,6 +200,7 @@ pub fn analyze(
                 id.clone(),
                 ComponentDecision {
                     component: id.clone(),
+                    requiredness: current.requiredness,
                     result,
                     selector: current.selector.clone(),
                 },
@@ -545,5 +548,62 @@ mod tests {
                 .iter()
                 .any(|item| item.code.as_str() == "component.dependency_unavailable")
         );
+    }
+
+    #[test]
+    fn update_change_summary_counts_new_required_and_partial_components() {
+        let resource = ResourceKey::new(ResourceId::new("plugin:test").unwrap(), Scope::Global);
+        let target = HarnessId::new("codex").unwrap();
+        let capabilities = CapabilitySet::new([(
+            CapabilityId::new("component.skill").unwrap(),
+            CapabilitySupport::Supported,
+        )]);
+        let before_graph = graph([component(
+            "skill:demo",
+            ComponentKind::Skill,
+            ComponentRequiredness::Required,
+            &[],
+        )]);
+        let after_graph = graph([
+            component(
+                "skill:demo",
+                ComponentKind::Skill,
+                ComponentRequiredness::Required,
+                &[],
+            ),
+            component(
+                "hook:required",
+                ComponentKind::Hook,
+                ComponentRequiredness::Required,
+                &[],
+            ),
+            component(
+                "hook:optional",
+                ComponentKind::Hook,
+                ComponentRequiredness::Optional,
+                &[],
+            ),
+        ]);
+        let before = analyze(request(
+            &resource,
+            &before_graph,
+            &capabilities,
+            &BTreeSet::new(),
+            &target,
+        ))
+        .unwrap();
+        let after = analyze(request(
+            &resource,
+            &after_graph,
+            &capabilities,
+            &BTreeSet::new(),
+            &target,
+        ))
+        .unwrap();
+        let summary = crate::updates::update_change_summary(&before, &after);
+        assert_eq!(summary.added_required_components, 1);
+        assert_eq!(summary.partial_components, 1);
+        assert!(summary.compatibility_changed);
+        assert!(summary.requires_acknowledgment);
     }
 }

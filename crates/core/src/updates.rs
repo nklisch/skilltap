@@ -1,8 +1,10 @@
 //! Pure update resolution and safety classification shared by foreground and
 //! daemon paths.
 
+use crate::compatibility::CompatibilityAnalysis;
 use crate::domain::{
-    DesiredResource, HarnessId, ResolvedRevision, Source, SourceKind, UpdateIntent,
+    DesiredResource, HarnessId, ResolvedRevision, Source, SourceKind, TransferFidelity,
+    UpdateIntent,
 };
 use crate::storage::UpdateMode;
 
@@ -197,6 +199,54 @@ pub enum UpdateDecisionReason {
 pub struct UpdateDecision {
     pub safety: UpdateSafety,
     pub reason: Option<UpdateDecisionReason>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UpdateChangeSummary {
+    pub compatibility_changed: bool,
+    pub added_required_components: usize,
+    pub partial_components: usize,
+    pub requires_acknowledgment: bool,
+}
+
+/// Compare two target-bound analyses without using revision text as a proxy
+/// for behavior. The resulting summary is safe to feed into an update
+/// candidate before policy classification.
+pub fn update_change_summary(
+    before: &CompatibilityAnalysis,
+    after: &CompatibilityAnalysis,
+) -> UpdateChangeSummary {
+    let mut added_required_components = 0;
+    let mut partial_components = 0;
+    for (component, next) in &after.components {
+        let previous = before.components.get(component);
+        let previous_fidelity = previous
+            .map(|decision| decision.result.fidelity())
+            .unwrap_or(TransferFidelity::Faithful);
+        if next.requiredness == crate::domain::ComponentRequiredness::Required
+            && next.result.fidelity() == TransferFidelity::Blocked
+            && previous_fidelity != TransferFidelity::Blocked
+        {
+            added_required_components += 1;
+        }
+        if next.result.fidelity() == TransferFidelity::Partial
+            && previous_fidelity != TransferFidelity::Partial
+        {
+            partial_components += 1;
+        }
+    }
+    let new_selectors = after
+        .acknowledgment_selectors
+        .difference(&before.acknowledgment_selectors)
+        .count();
+    let compatibility_changed =
+        before.aggregate != after.aggregate || before.components != after.components;
+    UpdateChangeSummary {
+        compatibility_changed,
+        added_required_components,
+        partial_components,
+        requires_acknowledgment: new_selectors > 0,
+    }
 }
 
 impl UpdateDecision {
