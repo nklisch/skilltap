@@ -1,5 +1,21 @@
 //! Shared test fixtures for skilltap workspace crates.
 
+#[cfg(unix)]
+mod barrier;
+#[cfg(unix)]
+mod external_tree;
+#[cfg(unix)]
+mod native_process;
+
+#[cfg(unix)]
+pub use barrier::FileBarrier;
+#[cfg(unix)]
+pub use external_tree::{ExternalTreeFixture, InjectedIoFault, ReplacementRace};
+#[cfg(unix)]
+pub use native_process::{
+    CapturedInvocation, FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, PipeHolder,
+};
+
 use std::{
     ffi::OsStr,
     fs, io,
