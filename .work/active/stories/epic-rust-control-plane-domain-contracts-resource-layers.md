@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-layers
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -32,8 +32,9 @@ different representations never overwrite one another.
 - [x] Desired resources preserve direct versus adopted origin (including source
   harness), explicit default/include/exclude component choices over the complete
   component graph, and accepted material consequences per target.
-- [x] Constructors and serde reject source-harness/target mismatches, selections
-  for absent components, consequences for untargeted harnesses, and invalid
+- [x] Constructors and serde preserve adoption provenance independently of
+  current targets and reject selections for absent components, consequences
+  for untargeted harnesses, and invalid
   dependency graphs within each observation context.
 - [x] Resource/component cycle errors report actual cycle members, not merely
   downstream nodes blocked by a cycle.
@@ -52,7 +53,8 @@ different representations never overwrite one another.
 - Observed dependencies resolve only within their harness/layer. Desired,
   observed, and component cycle errors use deterministic DFS back-edges to
   report exact cycle members rather than downstream blocked nodes.
-- Tests added: 15 focused raw/serde tests covering adoption source targets,
+- Tests added: focused raw/serde tests covering adoption provenance independent
+  of current targets,
   complete component choice maps, accepted consequence targets/components,
   exact observation duplicates, cross-context dependency rejection,
   multi-harness/two-layer deterministic round trips, exact cycle diagnostics,
@@ -68,6 +70,9 @@ different representations never overwrite one another.
   the current target set. Remove the requirement that an adopted source harness
   remain targeted and add a round-trip case for “adopt from Claude, manage only
   Codex.”
+- Resolution: removed the false adoption-source/current-target invariant and
+  added a deterministic constructor and serde round trip for a resource adopted
+  from Claude whose sole current target is Codex.
 - Verification: `cargo fmt --all -- --check`, `cargo check --workspace --locked`,
   `cargo clippy --workspace --all-targets --locked -- -D warnings`, and
-  `cargo test --workspace --locked` pass with 52 core tests.
+  `cargo test --workspace --locked` pass with 56 core tests.

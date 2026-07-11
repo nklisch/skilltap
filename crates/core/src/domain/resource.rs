@@ -315,9 +315,6 @@ impl ObservationKey {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ResourceContractError {
-    AdoptionSourceNotTargeted {
-        source_harness: HarnessId,
-    },
     MissingComponentChoice {
         component: ComponentId,
     },
@@ -340,10 +337,6 @@ pub enum ResourceContractError {
 impl fmt::Display for ResourceContractError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::AdoptionSourceNotTargeted { source_harness } => write!(
-                formatter,
-                "adoption source harness `{source_harness}` must be a desired target"
-            ),
             Self::MissingComponentChoice { component } => {
                 write!(formatter, "component `{component}` has no explicit choice")
             }
@@ -429,13 +422,6 @@ impl DesiredResource {
         accepted_consequences: BTreeMap<HarnessId, BTreeSet<MaterialConsequence>>,
         dependencies: BTreeSet<ResourceId>,
     ) -> Result<Self, ResourceContractError> {
-        if let DesiredOrigin::Adopted(source_harness) = &origin
-            && !targets.contains(source_harness)
-        {
-            return Err(ResourceContractError::AdoptionSourceNotTargeted {
-                source_harness: source_harness.clone(),
-            });
-        }
         for component in components.0.keys() {
             if !component_choices.contains_key(component) {
                 return Err(ResourceContractError::MissingComponentChoice {
@@ -1388,21 +1374,9 @@ mod layered_tests {
     }
 
     #[test]
-    fn desired_contract_validates_origin_choices_and_accepted_consequence_contexts() {
+    fn desired_contract_validates_choices_and_accepted_consequence_contexts() {
         let codex = harness("codex");
         let targets = HarnessSet::new([codex.clone()]).unwrap();
-        assert!(matches!(
-            desired_with(
-                "plugin:a",
-                DesiredOrigin::Adopted(harness("claude")),
-                targets.clone(),
-                choices(),
-                BTreeMap::new(),
-                &[],
-            ),
-            Err(ResourceContractError::AdoptionSourceNotTargeted { .. })
-        ));
-
         let mut missing = choices();
         missing.remove(&component_id("hook:format"));
         assert!(matches!(
@@ -1459,6 +1433,32 @@ mod layered_tests {
     }
 
     #[test]
+    fn adopted_origin_is_independent_of_current_targets_and_round_trips() {
+        let adopted = desired_with(
+            "plugin:a",
+            DesiredOrigin::Adopted(harness("claude")),
+            HarnessSet::new([harness("codex")]).unwrap(),
+            choices(),
+            BTreeMap::new(),
+            &[],
+        )
+        .unwrap();
+        let json = serde_json::to_string(&adopted).unwrap();
+        let decoded = serde_json::from_str::<DesiredResource>(&json).unwrap();
+        assert_eq!(decoded, adopted);
+        assert_eq!(decoded.origin(), &DesiredOrigin::Adopted(harness("claude")));
+        assert_eq!(
+            decoded
+                .targets()
+                .iter()
+                .map(HarnessId::as_str)
+                .collect::<Vec<_>>(),
+            ["codex"]
+        );
+        assert_eq!(serde_json::to_string(&decoded).unwrap(), json);
+    }
+
+    #[test]
     fn serde_cannot_bypass_desired_context_validation_or_owned_wires() {
         let valid = desired_with(
             "plugin:a",
@@ -1472,10 +1472,6 @@ mod layered_tests {
             &[],
         )
         .unwrap();
-        let mut wire = serde_json::to_value(&valid).unwrap();
-        wire["targets"] = json!(["codex"]);
-        assert!(serde_json::from_value::<DesiredResource>(wire).is_err());
-
         let mut wire = serde_json::to_value(&valid).unwrap();
         wire["component_choices"]
             .as_object_mut()
