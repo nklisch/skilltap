@@ -58,6 +58,7 @@ pub struct ResolvedUpdate {
 /// A candidate consumed by the existing safety policy.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UpdateCandidate {
+    pub resource: crate::domain::ResourceKey,
     pub current_revision: Option<ResolvedRevision>,
     pub available_revision: Option<ResolvedRevision>,
     pub resolution_error: Option<ResolutionError>,
@@ -165,6 +166,7 @@ pub fn candidate_for(
     resolved: &ResolvedUpdate,
 ) -> UpdateCandidate {
     UpdateCandidate {
+        resource: resource.key().clone(),
         current_revision: resolved.current.clone(),
         available_revision: resolved.available.clone(),
         resolution_error: resolved.error.clone(),
@@ -333,6 +335,7 @@ mod tests {
 
     fn candidate() -> UpdateCandidate {
         UpdateCandidate {
+            resource: ResourceKey::new(ResourceId::new("plugin:test").unwrap(), Scope::Global),
             current_revision: Some(commit('a')),
             available_revision: Some(commit('b')),
             resolution_error: None,

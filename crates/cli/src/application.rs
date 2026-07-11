@@ -4692,6 +4692,7 @@ fn status_update_projection(
             || resource.update() == UpdateIntent::Disabled
         {
             let candidate = UpdateCandidate {
+                resource: resource.key().clone(),
                 current_revision: installed.cloned(),
                 available_revision: None,
                 resolution_error: None,
