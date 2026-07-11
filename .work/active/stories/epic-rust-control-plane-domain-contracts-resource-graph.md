@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-graph
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -55,3 +55,17 @@ namespacing, observation findings, and validated dependency graphs.
 - Important: observation-finding ordering omits opaque metadata, so findings
   with otherwise equal keys serialize according to adapter input order. Add a
   deterministic metadata tie-break and prove reversed inputs serialize equally.
+
+## Review resolution (2026-07-11)
+
+- Added validated, serde-safe `ComponentId`, explicit
+  `ComponentRequiredness`, and `ResourceComponent` records with component-local
+  dependency identities.
+- Replaced the lossy kind sets on desired and observed resources with a
+  deterministic `ComponentGraph`. Its constructor and deserializer reject
+  duplicate ids, dangling and self dependencies, and multi-node cycles while
+  preserving multiple components of the same kind.
+- Added canonical recursive JSON ordering as the final finding sort key and a
+  reversed-input regression test proving byte-identical graph JSON.
+- Re-ran the complete locked format, workspace check, warnings-as-errors clippy,
+  focused core test, and workspace test ladder successfully.

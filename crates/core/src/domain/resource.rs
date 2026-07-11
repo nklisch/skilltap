@@ -5,13 +5,53 @@ use std::{
     fmt,
 };
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
 use super::{
     Fingerprint, HarnessId, HarnessSet, NativeId, ResolvedRevision, ResourceId, Scope, Source,
-    ValidationError, validate_text,
+    ValidationError, validate_identifier, validate_text,
 };
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct ComponentId(String);
+
+impl ComponentId {
+    pub fn new(value: impl Into<String>) -> Result<Self, ValidationError> {
+        let value = value.into();
+        validate_identifier(&value, "component id", 256)?;
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for ComponentId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl Serialize for ComponentId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for ComponentId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -45,6 +85,166 @@ pub enum ComponentKind {
     Executable,
     Settings,
     HarnessSpecific(NativeId),
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ComponentRequiredness {
+    Required,
+    Optional,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResourceComponent {
+    pub id: ComponentId,
+    pub kind: ComponentKind,
+    pub requiredness: ComponentRequiredness,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub dependencies: BTreeSet<ComponentId>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ComponentGraphError {
+    DuplicateComponent {
+        id: ComponentId,
+    },
+    DanglingDependency {
+        component: ComponentId,
+        dependency: ComponentId,
+    },
+    SelfDependency {
+        id: ComponentId,
+    },
+    DependencyCycle {
+        components: BTreeSet<ComponentId>,
+    },
+}
+
+impl fmt::Display for ComponentGraphError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DuplicateComponent { id } => write!(formatter, "duplicate component `{id}`"),
+            Self::DanglingDependency {
+                component,
+                dependency,
+            } => write!(
+                formatter,
+                "component `{component}` depends on unknown component `{dependency}`"
+            ),
+            Self::SelfDependency { id } => write!(formatter, "component `{id}` depends on itself"),
+            Self::DependencyCycle { components } => write!(
+                formatter,
+                "component dependency cycle includes {}",
+                components
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ComponentGraphError {}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize)]
+#[serde(into = "Vec<ResourceComponent>")]
+pub struct ComponentGraph(BTreeMap<ComponentId, ResourceComponent>);
+
+impl ComponentGraph {
+    pub fn new(
+        components: impl IntoIterator<Item = ResourceComponent>,
+    ) -> Result<Self, ComponentGraphError> {
+        let mut collected = BTreeMap::new();
+        for component in components {
+            let id = component.id.clone();
+            if collected.insert(id.clone(), component).is_some() {
+                return Err(ComponentGraphError::DuplicateComponent { id });
+            }
+        }
+        validate_component_dependencies(&collected)?;
+        Ok(Self(collected))
+    }
+
+    pub fn get(&self, id: &ComponentId) -> Option<&ResourceComponent> {
+        self.0.get(id)
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&ComponentId, &ResourceComponent)> {
+        self.0.iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl From<ComponentGraph> for Vec<ResourceComponent> {
+    fn from(value: ComponentGraph) -> Self {
+        value.0.into_values().collect()
+    }
+}
+
+impl<'de> Deserialize<'de> for ComponentGraph {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let components = Vec::<ResourceComponent>::deserialize(deserializer)?;
+        Self::new(components).map_err(serde::de::Error::custom)
+    }
+}
+
+fn validate_component_dependencies(
+    components: &BTreeMap<ComponentId, ResourceComponent>,
+) -> Result<(), ComponentGraphError> {
+    let mut remaining = BTreeMap::new();
+    let mut dependents: BTreeMap<&ComponentId, BTreeSet<&ComponentId>> = BTreeMap::new();
+    for (id, component) in components {
+        for dependency in &component.dependencies {
+            if dependency == id {
+                return Err(ComponentGraphError::SelfDependency { id: id.clone() });
+            }
+            if !components.contains_key(dependency) {
+                return Err(ComponentGraphError::DanglingDependency {
+                    component: id.clone(),
+                    dependency: dependency.clone(),
+                });
+            }
+            dependents.entry(dependency).or_default().insert(id);
+        }
+        remaining.insert(id, component.dependencies.len());
+    }
+
+    let mut ready = remaining
+        .iter()
+        .filter_map(|(&id, &count)| (count == 0).then_some(id))
+        .collect::<BTreeSet<_>>();
+    let mut visited = 0;
+    while let Some(component) = ready.pop_first() {
+        visited += 1;
+        if let Some(children) = dependents.get(component) {
+            for child in children {
+                let count = remaining
+                    .get_mut(child)
+                    .expect("validated dependent belongs to component graph");
+                *count -= 1;
+                if *count == 0 {
+                    ready.insert(child);
+                }
+            }
+        }
+    }
+    if visited != components.len() {
+        let components = remaining
+            .into_iter()
+            .filter(|(_, count)| *count > 0)
+            .map(|(id, _)| id.clone())
+            .collect();
+        return Err(ComponentGraphError::DependencyCycle { components });
+    }
+    Ok(())
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -120,8 +320,8 @@ pub struct DesiredResource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<Source>,
     pub update: UpdateIntent,
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub components: BTreeSet<ComponentKind>,
+    #[serde(default, skip_serializing_if = "ComponentGraph::is_empty")]
+    pub components: ComponentGraph,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub dependencies: BTreeSet<ResourceId>,
 }
@@ -135,8 +335,8 @@ pub struct ObservedResource {
     pub provenance: Provenance,
     pub ownership: Ownership,
     pub health: ResourceHealth,
-    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    pub components: BTreeSet<ComponentKind>,
+    #[serde(default, skip_serializing_if = "ComponentGraph::is_empty")]
+    pub components: ComponentGraph,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub dependencies: BTreeSet<ResourceId>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -484,7 +684,9 @@ fn validate_dependencies<'a>(
 }
 
 fn finding_order(left: &ObservationFinding, right: &ObservationFinding) -> std::cmp::Ordering {
-    finding_key(left).cmp(&finding_key(right))
+    finding_key(left)
+        .cmp(&finding_key(right))
+        .then_with(|| canonical_json(&left.metadata).cmp(&canonical_json(&right.metadata)))
 }
 
 fn finding_key(
@@ -507,6 +709,47 @@ fn finding_key(
         finding.native_identity.as_ref(),
         &finding.message,
     )
+}
+
+fn canonical_json(value: &Value) -> String {
+    fn write(value: &Value, output: &mut String) {
+        match value {
+            Value::Null => output.push_str("null"),
+            Value::Bool(value) => output.push_str(if *value { "true" } else { "false" }),
+            Value::Number(value) => output.push_str(&value.to_string()),
+            Value::String(value) => {
+                output.push_str(&serde_json::to_string(value).expect("JSON strings serialize"));
+            }
+            Value::Array(values) => {
+                output.push('[');
+                for (index, value) in values.iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    write(value, output);
+                }
+                output.push(']');
+            }
+            Value::Object(values) => {
+                output.push('{');
+                let mut entries = values.iter().collect::<Vec<_>>();
+                entries.sort_unstable_by_key(|(key, _)| *key);
+                for (index, (key, value)) in entries.into_iter().enumerate() {
+                    if index > 0 {
+                        output.push(',');
+                    }
+                    output.push_str(&serde_json::to_string(key).expect("JSON keys serialize"));
+                    output.push(':');
+                    write(value, output);
+                }
+                output.push('}');
+            }
+        }
+    }
+
+    let mut output = String::new();
+    write(value, &mut output);
+    output
 }
 
 impl From<ResourceGraph> for ResourceGraphWire {
@@ -552,6 +795,19 @@ mod tests {
         HarnessId::new(value).unwrap()
     }
 
+    fn component_id(value: &str) -> ComponentId {
+        ComponentId::new(value).unwrap()
+    }
+
+    fn component(value: &str, dependencies: &[&str]) -> ResourceComponent {
+        ResourceComponent {
+            id: component_id(value),
+            kind: ComponentKind::Skill,
+            requiredness: ComponentRequiredness::Required,
+            dependencies: dependencies.iter().copied().map(component_id).collect(),
+        }
+    }
+
     fn desired(value: &str, dependencies: &[&str]) -> DesiredResource {
         DesiredResource {
             id: id(value),
@@ -560,7 +816,7 @@ mod tests {
             targets: HarnessSet::new([harness("codex"), harness("claude")]).unwrap(),
             source: None,
             update: UpdateIntent::Track,
-            components: BTreeSet::from([ComponentKind::Skill]),
+            components: ComponentGraph::new([component("skill:main", &[])]).unwrap(),
             dependencies: dependencies.iter().copied().map(id).collect(),
         }
     }
@@ -573,7 +829,7 @@ mod tests {
             provenance: Provenance::Native,
             ownership: Ownership::Harness,
             health: ResourceHealth::Healthy,
-            components: BTreeSet::from([ComponentKind::Skill]),
+            components: ComponentGraph::new([component("skill:main", &[])]).unwrap(),
             dependencies: dependencies.iter().copied().map(id).collect(),
             native_identities: BTreeMap::from([(
                 harness("claude"),
@@ -614,6 +870,99 @@ mod tests {
                 error,
                 ResourceGraphError::DuplicateResource { .. }
             ));
+        }
+    }
+
+    #[test]
+    fn component_ids_validate_during_construction_and_deserialization() {
+        let expected = ComponentId::new(" Skill:Main").unwrap_err();
+        assert_eq!(
+            expected,
+            ValidationError::SurroundingWhitespace {
+                kind: "component id"
+            }
+        );
+        assert!(
+            serde_json::from_str::<ComponentId>(r#"" Skill:Main""#)
+                .unwrap_err()
+                .to_string()
+                .contains(&expected.to_string())
+        );
+    }
+
+    #[test]
+    fn component_graph_preserves_same_kind_components_and_orders_them_by_id() {
+        let graph = ComponentGraph::new([
+            component("skill:z", &["skill:a"]),
+            ResourceComponent {
+                id: component_id("skill:a"),
+                kind: ComponentKind::Skill,
+                requiredness: ComponentRequiredness::Optional,
+                dependencies: BTreeSet::new(),
+            },
+        ])
+        .unwrap();
+
+        assert_eq!(graph.iter().count(), 2);
+        assert_eq!(
+            graph.iter().map(|(id, _)| id.as_str()).collect::<Vec<_>>(),
+            ["skill:a", "skill:z"]
+        );
+        let json = serde_json::to_string(&graph).unwrap();
+        assert!(json.find("skill:a").unwrap() < json.find("skill:z").unwrap());
+        assert_eq!(
+            serde_json::from_str::<ComponentGraph>(&json).unwrap(),
+            graph
+        );
+    }
+
+    #[test]
+    fn component_graph_rejects_invalid_edges_from_constructor_and_json() {
+        let cases = [
+            ComponentGraph::new([component("skill:a", &[]), component("skill:a", &[])])
+                .unwrap_err(),
+            ComponentGraph::new([component("skill:a", &["skill:missing"])]).unwrap_err(),
+            ComponentGraph::new([component("skill:a", &["skill:a"])]).unwrap_err(),
+            ComponentGraph::new([
+                component("skill:a", &["skill:b"]),
+                component("skill:b", &["skill:a"]),
+            ])
+            .unwrap_err(),
+        ];
+        assert!(matches!(
+            cases[0],
+            ComponentGraphError::DuplicateComponent { .. }
+        ));
+        assert!(matches!(
+            cases[1],
+            ComponentGraphError::DanglingDependency { .. }
+        ));
+        assert!(matches!(
+            cases[2],
+            ComponentGraphError::SelfDependency { .. }
+        ));
+        assert!(matches!(
+            cases[3],
+            ComponentGraphError::DependencyCycle { .. }
+        ));
+
+        for invalid in [
+            json!([
+                {"id":"skill:a","kind":{"kind":"skill"},"requiredness":"required"},
+                {"id":"skill:a","kind":{"kind":"skill"},"requiredness":"optional"}
+            ]),
+            json!([
+                {"id":"skill:a","kind":{"kind":"skill"},"requiredness":"required","dependencies":["skill:missing"]}
+            ]),
+            json!([
+                {"id":"skill:a","kind":{"kind":"skill"},"requiredness":"required","dependencies":["skill:a"]}
+            ]),
+            json!([
+                {"id":"skill:a","kind":{"kind":"skill"},"requiredness":"required","dependencies":["skill:b"]},
+                {"id":"skill:b","kind":{"kind":"skill"},"requiredness":"required","dependencies":["skill:a"]}
+            ]),
+        ] {
+            assert!(serde_json::from_value::<ComponentGraph>(invalid).is_err());
         }
     }
 
@@ -690,6 +1039,35 @@ mod tests {
                 .get(&harness("claude"))
                 .unwrap()["future_field"]["nested"][0],
             1
+        );
+    }
+
+    #[test]
+    fn finding_order_uses_canonical_metadata_as_its_final_tie_break() {
+        let first = ObservationFinding::new(
+            harness("claude"),
+            Scope::Global,
+            ObservationFindingKind::MalformedUnmanagedEntry,
+            None,
+            "same envelope",
+            json!({"z": 1, "nested": {"b": 2, "a": 1}}),
+        )
+        .unwrap();
+        let second = ObservationFinding::new(
+            harness("claude"),
+            Scope::Global,
+            ObservationFindingKind::MalformedUnmanagedEntry,
+            None,
+            "same envelope",
+            json!({"a": 2}),
+        )
+        .unwrap();
+
+        let forward = ResourceGraph::new([], [], [first.clone(), second.clone()]).unwrap();
+        let reversed = ResourceGraph::new([], [], [second, first]).unwrap();
+        assert_eq!(
+            serde_json::to_string(&forward).unwrap(),
+            serde_json::to_string(&reversed).unwrap()
         );
     }
 
