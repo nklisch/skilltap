@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime
 kind: feature
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-contracts]
@@ -171,3 +171,13 @@ over-entry, and over-byte entries fail with safe typed context.
   read-only resolver/process/JSON/path/tree checks.
 - Linux behavior is exercised in CI and the fixture contracts are cfg-gated for
   native macOS execution; no platform-specific production fallback was added.
+
+## Review
+
+- Aggregate feature review approved after verifying all eight child stories,
+  their dependency order, runtime boundary contracts, and the locked workspace
+  ladder. No production writes, marketplace discovery, raw native payload
+  leakage, or unbounded process/tree operations were introduced.
+- Fresh macOS execution remains CI-gated rather than available in this Linux
+  workspace; the Unix implementations and cfg-specific fixture suites are
+  covered by the existing native behavior job.
