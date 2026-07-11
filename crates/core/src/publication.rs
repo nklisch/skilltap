@@ -1,13 +1,16 @@
 //! Pure publication batching for target materializations.
 
+use std::collections::BTreeMap;
+
 use crate::{
     domain::{
-        Fingerprint, HarnessId, NativeId, ObservationLayer, ObservedResource, ResourceHealth,
-        ResourceKey,
+        Fingerprint, HarnessId, NativeId, ObservationLayer, ObservedResource, Ownership,
+        Provenance, ResourceHealth, ResourceKey,
     },
     storage::{
         ArtifactPublication, ArtifactRole, ArtifactTree, ManagedArtifactError,
-        ManagedArtifactRecord, ManagedArtifactRepository,
+        ManagedArtifactRecord, ManagedArtifactRepository, ResourceState, SchemaError,
+        StateDocument, Timestamp,
     },
 };
 
@@ -185,6 +188,47 @@ impl std::fmt::Display for PublicationVerificationError {
 
 impl std::error::Error for PublicationVerificationError {}
 
+#[derive(Debug)]
+pub enum PublicationStateError {
+    EmptyReceipt,
+    MissingVerification {
+        resource: ResourceKey,
+        target: HarnessId,
+    },
+    ConflictingArtifacts {
+        resource: ResourceKey,
+    },
+    State(SchemaError),
+}
+
+impl std::fmt::Display for PublicationStateError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyReceipt => {
+                formatter.write_str("publication receipt has no verified targets")
+            }
+            Self::MissingVerification { resource, target } => write!(
+                formatter,
+                "publication `{resource}` for `{target}` has no matching verification"
+            ),
+            Self::ConflictingArtifacts { resource } => write!(
+                formatter,
+                "verified publication entries for `{resource}` disagree on managed artifact identity"
+            ),
+            Self::State(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for PublicationStateError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::State(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 /// Verify all managed publications against fresh effective observations. The
 /// verifier is supplied by the harness adapter and must not inspect caches.
 pub fn verify_publication<V: LoadVerifier>(
@@ -215,6 +259,105 @@ pub fn verify_publication<V: LoadVerifier>(
         published: receipt.published,
         verified,
     })
+}
+
+/// Refresh ownership, managed-artifact provenance, and verified native ids in
+/// one pure state document. Callers publish the returned document through the
+/// existing state repository while holding the configuration lock.
+pub fn record_verified_publication(
+    state: &StateDocument,
+    receipt: &PublicationReceipt,
+    at: Timestamp,
+) -> Result<StateDocument, PublicationStateError> {
+    if receipt.published.is_empty() || receipt.verified.is_empty() {
+        return Err(PublicationStateError::EmptyReceipt);
+    }
+    let mut grouped: BTreeMap<ResourceKey, Vec<(&PublishedArtifact, &VerifiedTarget)>> =
+        BTreeMap::new();
+    for artifact in &receipt.published {
+        let Some(verified) = receipt.verified.iter().find(|verified| {
+            verified.resource() == artifact.resource() && verified.target() == artifact.target()
+        }) else {
+            return Err(PublicationStateError::MissingVerification {
+                resource: artifact.resource().clone(),
+                target: artifact.target().clone(),
+            });
+        };
+        grouped
+            .entry(artifact.resource().clone())
+            .or_default()
+            .push((artifact, verified));
+    }
+    for verified in &receipt.verified {
+        if !receipt.published.iter().any(|artifact| {
+            artifact.resource() == verified.resource() && artifact.target() == verified.target()
+        }) {
+            return Err(PublicationStateError::MissingVerification {
+                resource: verified.resource().clone(),
+                target: verified.target().clone(),
+            });
+        }
+    }
+
+    let mut updated = state.clone();
+    for (resource, entries) in grouped {
+        let current = state.resources().get(&resource).ok_or_else(|| {
+            PublicationStateError::State(SchemaError::StateResourceNotFound {
+                resource: resource.clone(),
+            })
+        })?;
+        let first_record = entries[0].0.record();
+        if entries
+            .iter()
+            .any(|(artifact, _)| artifact.record() != first_record)
+        {
+            return Err(PublicationStateError::ConflictingArtifacts { resource });
+        }
+        let provenance = match first_record.role() {
+            ArtifactRole::MaterializedPlugin => Provenance::Materialized,
+            ArtifactRole::DirectSkill => Provenance::Direct,
+            ArtifactRole::Backup => {
+                return Err(PublicationStateError::State(
+                    SchemaError::InvalidArtifactRole {
+                        resource: resource.clone(),
+                    },
+                ));
+            }
+        };
+        let mut native_ids = current.native_ids().clone();
+        for (_, verified) in entries {
+            native_ids.insert(
+                verified.target().clone(),
+                verified.native_identity().clone(),
+            );
+        }
+        let refreshed = ResourceState::new(
+            resource.clone(),
+            native_ids,
+            provenance,
+            Ownership::Skilltap,
+            current.source().cloned(),
+            Some(first_record.clone()),
+            first_record.fingerprint().cloned(),
+            current.installed_revision().cloned(),
+            current.available_revision().cloned(),
+            current.observed_at(),
+            current.last_apply().cloned(),
+        )
+        .map_err(PublicationStateError::State)?;
+        updated = updated
+            .refresh_resource_state(refreshed)
+            .map_err(PublicationStateError::State)?;
+    }
+    StateDocument::new(
+        updated.schema(),
+        updated.harnesses().values().cloned(),
+        updated.resources().values().cloned(),
+        updated.last_update_check(),
+        updated.last_successful_observation(),
+        Some(at),
+    )
+    .map_err(PublicationStateError::State)
 }
 
 /// Compare one fresh effective observation to the exact publication entry.
@@ -443,6 +586,7 @@ pub fn plan_publication(
 #[cfg(test)]
 mod tests {
     use std::cell::RefCell;
+    use std::collections::BTreeMap;
 
     use super::*;
     use crate::domain::{
@@ -650,6 +794,52 @@ mod tests {
         assert_eq!(
             verify_observed_load(&entry, &artifact, Some(&unhealthy)),
             Err(LoadVerificationError::Unhealthy(ResourceHealth::Degraded))
+        );
+    }
+
+    #[test]
+    fn verified_publication_refreshes_owned_state_after_load_verification() {
+        let entry = entry("plugin:a", "codex", 'a');
+        let record = ManagedArtifactRecord::for_artifact(
+            entry.resource.clone(),
+            entry.role,
+            entry.fingerprint.clone(),
+        )
+        .unwrap();
+        let artifact =
+            PublishedArtifact::new(entry.resource.clone(), entry.target.clone(), record, false);
+        let receipt = PublicationReceipt {
+            published: vec![artifact],
+            verified: vec![VerifiedTarget::new(
+                entry.resource.clone(),
+                entry.target.clone(),
+                NativeId::new("native-demo").unwrap(),
+            )],
+        };
+        let current = ResourceState::new(
+            entry.resource.clone(),
+            BTreeMap::new(),
+            Provenance::Native,
+            Ownership::Harness,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Timestamp::new(1, 0).unwrap(),
+            None,
+        )
+        .unwrap();
+        let state = StateDocument::new(1, [], [current], None, None, None).unwrap();
+        let refreshed =
+            record_verified_publication(&state, &receipt, Timestamp::new(2, 0).unwrap()).unwrap();
+        let updated = refreshed.resources().get(&entry.resource).unwrap();
+        assert_eq!(updated.provenance(), Provenance::Materialized);
+        assert_eq!(updated.ownership(), Ownership::Skilltap);
+        assert_eq!(updated.native_ids()[&entry.target].as_str(), "native-demo");
+        assert_eq!(
+            refreshed.last_successful_application(),
+            Some(Timestamp::new(2, 0).unwrap())
         );
     }
 }

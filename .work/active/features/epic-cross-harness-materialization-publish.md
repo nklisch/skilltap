@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-publish
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-skills-mcp, epic-cross-harness-materialization-hooks]
@@ -76,9 +76,9 @@ pub fn plan_publication(
 - Publication planning has no I/O and no state mutation.
 
 **Acceptance Criteria**:
-- [ ] Batch entries sort deterministically by scope-bearing resource and target.
-- [ ] Duplicate or malformed entries fail before publication.
-- [ ] Replanning the same entries produces byte- and order-stable output.
+- [x] Batch entries sort deterministically by scope-bearing resource and target.
+- [x] Duplicate or malformed entries fail before publication.
+- [x] Replanning the same entries produces byte- and order-stable output.
 
 ### Unit 2: Managed artifact transaction
 **File**: `crates/core/src/publication.rs` and `crates/cli/src/application.rs`
@@ -86,10 +86,12 @@ pub fn plan_publication(
 
 ```rust
 pub trait PublicationSink {
+    type Error;
+
     fn publish(
         &self,
         entry: &PublicationEntry,
-    ) -> Result<PublishedArtifact, PublicationApplyError>;
+    ) -> Result<PublishedArtifact, Self::Error>;
 }
 
 pub fn apply_publication(
@@ -106,11 +108,11 @@ pub fn apply_publication(
   a native failure prevents a fallback write unless the plan explicitly chose
   managed projection.
 
-**Acceptance Criteria**:
-- [ ] A repeated apply is a no-op when the complete tree and fingerprint match.
-- [ ] A conflict or partial publication is surfaced with target and resource
+- **Acceptance Criteria**:
+- [x] A repeated apply is a no-op when the complete tree and fingerprint match.
+- [x] A conflict or partial publication is surfaced with target and resource
   identity and never silently marked healthy.
-- [ ] No unmanaged destination is removed or overwritten.
+- [x] No unmanaged destination is removed or overwritten.
 
 ### Unit 3: Effective-load verification and state receipt
 **File**: `crates/core/src/publication.rs`, `crates/harnesses/src/lib.rs`, and `crates/cli/src/application.rs`
@@ -122,7 +124,7 @@ pub trait LoadVerifier {
         &self,
         entry: &PublicationEntry,
         artifact: &PublishedArtifact,
-    ) -> Result<(), LoadVerificationError>;
+    ) -> Result<VerifiedTarget, LoadVerificationError>;
 }
 
 pub struct PublicationReceipt {
@@ -140,12 +142,12 @@ pub struct PublicationReceipt {
 - A verification mismatch is a typed attention result; it cannot be converted
   into success by a generic confirmation flag.
 
-**Acceptance Criteria**:
-- [ ] Successful publication records managed ownership only after effective
+- **Acceptance Criteria**:
+- [x] Successful publication records managed ownership only after effective
       load verification.
-- [ ] Verification failures retain enough typed context for `status` without
+- [x] Verification failures retain enough typed context for `status` without
       retaining native secrets or raw payloads.
-- [ ] State publication is atomic across the successfully verified entries.
+- [x] State publication is atomic across the successfully verified entries.
 
 ## Implementation Order
 
@@ -161,6 +163,23 @@ pub struct PublicationReceipt {
   idempotence, conflict handling, lock scope, and residual reporting.
 - Adapter tests use fresh effective observations and prove caches are ignored;
   integration tests prove state is not owned before verification.
+
+## Implementation Notes
+
+- All three child stories are complete. The core publication boundary now
+  validates deterministic batches, delegates complete-tree writes to the
+  existing managed-artifact repository, verifies fresh effective observations,
+  and records ownership/native identities in one pure state refresh.
+- Harnesses expose `EffectiveObservationVerifier`; cache reads are not part of
+  the verification path.
+- Targeted core/harness tests and clippy pass. Full workspace verification is
+  the remaining release gate.
+
+## Review Record
+
+- Inline deep review: **pass pending full workspace gate**. The implementation
+  preserves the lock/state handoff contract and fails closed on absent,
+  unhealthy, or mismatched effective observations.
 
 ## Risks
 
