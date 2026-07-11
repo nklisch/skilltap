@@ -14,9 +14,10 @@ use skilltap_core::{
         ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
         ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
-        ObservationTarget, ObservedResource, Ownership, ProfileAuthority, Provenance,
-        ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope,
+        ObservationTarget, ObservedResource, OperationResult, Ownership, Plan, ProfileAuthority,
+        Provenance, ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope,
     },
+    executor::{ExecutionError, ExecutionJournal},
     reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
         ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
@@ -24,7 +25,7 @@ use skilltap_core::{
     },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, InventoryDocument, InventoryRepository,
-        StateDocument, StateRepository, StorageError, StorageFailure,
+        StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
     },
 };
 use skilltap_harnesses::{
@@ -53,6 +54,83 @@ pub(crate) struct StatusApplication<'a> {
 pub(crate) enum NativeObservationMode {
     Disabled,
     System,
+}
+
+/// State-backed journal used by future mutating lifecycle composition. It
+/// resolves each result through the validated plan, updates only the exact
+/// resource record, and publishes atomically through the repository port.
+#[allow(dead_code)]
+pub(crate) struct StateExecutionJournal<'a> {
+    pub(crate) plan: &'a Plan,
+    pub(crate) state: &'a dyn StateRepository,
+}
+
+impl ExecutionJournal for StateExecutionJournal<'_> {
+    fn record(&self, result: &OperationResult) -> Result<(), ExecutionError> {
+        let operation = self.plan.get(result.operation_id()).ok_or_else(|| {
+            ExecutionError::journal_failure(
+                skilltap_core::domain::EvidenceCode::new("state.operation_unknown")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The state journal received an operation outside the validated plan.",
+                )
+                .expect("static evidence detail is valid"),
+            )
+        })?;
+        let resource = operation.selector().resource();
+        let current = self.state.load().map_err(|_| {
+            ExecutionError::journal_failure(
+                skilltap_core::domain::EvidenceCode::new("state.load_failed")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The state document could not be loaded for journaling.",
+                )
+                .expect("static evidence detail is valid"),
+            )
+        })?;
+        let DocumentState::Present(current) = current else {
+            return Err(ExecutionError::journal_failure(
+                skilltap_core::domain::EvidenceCode::new("state.missing")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The state document is missing for a mutating operation.",
+                )
+                .expect("static evidence detail is valid"),
+            ));
+        };
+        let at = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| {
+            ExecutionError::journal_failure(
+                skilltap_core::domain::EvidenceCode::new("state.clock_invalid")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The operation timestamp could not be recorded.",
+                )
+                .expect("static evidence detail is valid"),
+            )
+        })?;
+        let next = current
+            .with_operation_result(resource, at, result.clone())
+            .map_err(|_| {
+                ExecutionError::journal_failure(
+                    skilltap_core::domain::EvidenceCode::new("state.resource_unavailable")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The operation resource could not be journaled in state.",
+                    )
+                    .expect("static evidence detail is valid"),
+                )
+            })?;
+        self.state.replace(&next).map_err(|_| {
+            ExecutionError::journal_failure(
+                skilltap_core::domain::EvidenceCode::new("state.publish_failed")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The state journal could not be published atomically.",
+                )
+                .expect("static evidence detail is valid"),
+            )
+        })
+    }
 }
 
 impl StatusApplication<'_> {

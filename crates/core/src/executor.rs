@@ -74,6 +74,10 @@ pub enum ExecutionError {
         after_apply: bool,
         source: Box<ExecutionError>,
     },
+    JournalBoundary {
+        code: EvidenceCode,
+        detail: EvidenceDetail,
+    },
     InvalidOutcome {
         operation: OperationId,
     },
@@ -91,6 +95,11 @@ impl ExecutionError {
     /// Construct a redacted revalidation error for an adapter boundary.
     pub fn revalidation(code: EvidenceCode, detail: EvidenceDetail) -> Self {
         Self::Revalidation { code, detail }
+    }
+
+    /// Construct a redacted persistence-boundary failure from an adapter.
+    pub fn journal_failure(code: EvidenceCode, detail: EvidenceDetail) -> Self {
+        Self::JournalBoundary { code, detail }
     }
 }
 
@@ -124,6 +133,12 @@ impl fmt::Display for ExecutionError {
                     ""
                 }
             ),
+            Self::JournalBoundary { code, detail } => {
+                write!(
+                    formatter,
+                    "state journal boundary failed ({code}): {detail}"
+                )
+            }
             Self::InvalidOutcome { operation } => {
                 write!(
                     formatter,
@@ -143,7 +158,10 @@ impl std::error::Error for ExecutionError {
             Self::Journal { source, .. } => Some(source),
             Self::Graph(error) => Some(error),
             Self::Contract(error) => Some(error),
-            Self::Revalidation { .. } | Self::Apply { .. } | Self::InvalidOutcome { .. } => None,
+            Self::Revalidation { .. }
+            | Self::Apply { .. }
+            | Self::JournalBoundary { .. }
+            | Self::InvalidOutcome { .. } => None,
         }
     }
 }
