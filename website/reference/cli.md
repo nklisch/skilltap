@@ -66,14 +66,20 @@ Only commands for which a flag is meaningful accept it. `--project` and
 
 ## Results and exit codes
 
-Plain output ends with one of these result lines:
+Plain output uses command-specific human result labels rather than exposing the
+JSON result class verbatim. Human-readable `status` output ends with one of:
 
 ```text
-Result: completed
-Result: invalid
-Result: attention required
-Result: partial apply; recovery required
+Result: healthy
+Result: changes needed
+Result: user decision required
+Result: unhealthy
 ```
+
+Other commands use the same human vocabulary where it applies to their
+outcome; for example, successful marketplace and daemon operations end with
+`Result: healthy`, while a blocked partial transfer ends with
+`Result: user decision required`.
 
 `--json` emits exactly one schema-1 JSON document. `schema`, `command`,
 `result`, `summary`, `resources`, `operations`, `warnings`, `errors`, and

@@ -34,3 +34,12 @@ behavior or foundation docs.
 - Adjacent issues parked: none.
 - Dispatch: direct-read only; the authoritative foundation and renderer/output
   implementation made the correction surface unambiguous.
+
+## Review correction
+
+- Restored the foundation's command-specific human result vocabulary for plain
+  output. The initial correction had mistakenly documented the temporary
+  generic renderer labels as the intended public contract.
+- Kept the schema-1 JSON result classes and exit-code mapping unchanged.
+- Regenerated the LLM bundle, repeated the byte-identity check, and rebuilt the
+  website after the correction.
