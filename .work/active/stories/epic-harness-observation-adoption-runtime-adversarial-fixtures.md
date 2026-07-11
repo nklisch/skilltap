@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-adversarial-fixtures
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: []
@@ -40,6 +40,17 @@ cfg-specific Unix behavior must execute natively on Linux and macOS.
   support embeds a tiny build-time POSIX helper so Linux and macOS do not depend
   on a platform `setsid` executable.
 - Adjacent issues parked: none.
+
+## Review
+
+- Initial review found parallel `ETXTBSY` failures and missing direct hang
+  liveness/reap coverage.
+- Correction `c17805b` moved fake executables to build-time stable inodes and
+  gives each fixture a hard link plus non-executable `$0`-keyed behavior file;
+  it adds the hang readiness/kill/reap assertion.
+- Fresh re-review passed 20/20 churn stress iterations, 30/30 normal parallel
+  package runs, escaped `setsid` retention, hang cleanup, and Linux/macOS
+  portability/injection checks.
 
 ## Review correction
 
