@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -114,3 +114,7 @@ keeping implementations and acquisition helpers split.
 8. `epic-rust-control-plane-runtime-maintainability-lock-identities` — restore
    canonical parent-module identities for public lock types — depends on
    `[epic-rust-control-plane-runtime-maintainability-locking-module]`.
+
+The corrective child is complete. Canonical lock identities match the baseline
+while implementation remains separated; the parent is 386 lines and the
+locked workspace remains green at 99 tests.

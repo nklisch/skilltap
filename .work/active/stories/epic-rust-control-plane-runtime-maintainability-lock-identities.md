@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-lock-identities
 kind: story
-stage: review
+stage: done
 tags: [refactor, correctness]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: [epic-rust-control-plane-runtime-maintainability-locking-module]
@@ -62,3 +62,11 @@ Move the four public lock trait/struct declarations and guard storage back to
   `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. All four declarations again have canonical
+`skilltap_core::runtime::filesystem::*` rustdoc identities; external
+`type_name` confirms both structs and the guard associated type. Implementations
+and acquisition remain private in the child, the parent is 386 lines, and the
+exact 99-test inventory and focused filesystem suite remain green.
