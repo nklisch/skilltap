@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-website-cli-contract
 kind: story
-stage: review
+stage: done
 tags: [content, documentation]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-cli-shell]
@@ -43,3 +43,9 @@ behavior or foundation docs.
 - Kept the schema-1 JSON result classes and exit-code mapping unchanged.
 - Regenerated the LLM bundle, repeated the byte-identity check, and rebuilt the
   website after the correction.
+
+## Review
+
+Approved after distinguishing foundation-defined command-specific human labels
+from machine JSON result classes. Public JSON fields and exits now match the
+authoritative schema, and generated ingestion output is byte-stable and builds.
