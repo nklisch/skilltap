@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives
 kind: feature
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -198,3 +198,13 @@ The residual-state correction is complete. Partial errors now carry exact
 owned residual paths and roles plus independent parent-directory durability;
 all cleanup steps run independently. The locked workspace remains green at 93
 tests plus doctests and warnings-clean rustdoc.
+
+## Final review
+
+Approved after three fresh-context passes. The initial atomic-backup,
+no-follow/lock identity, Git failure classification, and relative-link
+normalization findings are closed. The follow-up recovery finding is also
+closed with exact residual paths/roles, independent directory-sync state, and
+independent cleanup attempts. Focused filesystem and scope suites, locked
+format and all-target check, warnings-denied Clippy, 93 workspace tests and
+doctests, and warnings-denied rustdoc all pass.
