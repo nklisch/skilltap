@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-hooks
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-compatibility]
