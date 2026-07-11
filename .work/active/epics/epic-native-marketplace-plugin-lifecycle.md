@@ -34,6 +34,22 @@ materialization are deliberately deferred to their own epic.
 - `docs/HARNESS-CONTRACTS.md` — Marketplaces, Plugins, Marketplace Identity, Plugin Identity
 - `docs/UX.md` — Marketplace Management, Plugin Management
 
+## Design decisions
+
+- **How are cross-harness native installations associated?** One explicitly
+  selected source may be one logical desired resource with separate
+  harness-native marketplace names, plugin identities, scopes, versions, and
+  apply results. Matching names alone never create that association.
+- **What happens when a native lifecycle operation is unavailable?** Report
+  the missing capability and hand the semantic request to the later
+  cross-harness materialization planner when an accessible source exists.
+  Never substitute an undocumented cache or configuration mutation.
+- **Does marketplace management expose remote inventory?** No. List commands
+  report registered marketplaces and installed or desired plugins only; they
+  never enumerate, search, rank, or recommend marketplace contents.
+- **Does this epic require UI mockups?** No. Its lifecycle is exposed through
+  deterministic CLI and JSON operations.
+
 ## Anticipated child features
 
 - Marketplace source and native identity model
