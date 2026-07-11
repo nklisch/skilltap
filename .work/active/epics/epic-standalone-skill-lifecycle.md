@@ -33,6 +33,25 @@ separating `SKILL.md` from its directory.
 - `docs/HARNESS-CONTRACTS.md` — Standalone Skill Contract, Version and Update Contract
 - `docs/UX.md` — Standalone Skills, Skill Updates
 
+## Design decisions
+
+- **How are local-directory skills installed?** Copy a snapshot of the entire
+  source directory into the canonical managed location. Source changes become
+  detectable drift or an available explicit update; they do not alter the
+  installed skill live. A source already occupying the canonical location is
+  handled through adoption rather than a self-referential install.
+- **What does `--name` mean?** Treat it as an expected-name assertion. The
+  resolved `SKILL.md` name must equal the supplied value; skilltap never creates
+  an alias or rewrites the skill directory or frontmatter.
+- **Must every managed skill strictly conform to Agent Skills?** Track strict
+  conformance separately from verified harness loadability. A nonconforming
+  skill may install only when every selected harness is known to load that
+  exact shape, and the plan warns about the violation and requires explicit
+  foreground acknowledgment. If any target cannot load it or loadability is
+  unknown, the operation remains blocked.
+- **Does this epic require UI mockups?** No. Skill lifecycle and compatibility
+  decisions are non-interactive CLI and JSON surfaces.
+
 ## Anticipated child features
 
 - Explicit local and Git skill source resolution
