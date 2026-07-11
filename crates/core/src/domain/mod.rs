@@ -5,7 +5,19 @@ pub mod resource;
 pub mod scope;
 pub mod source;
 
+pub use capability::{CapabilityId, CapabilitySet, CapabilitySupport};
+pub use compatibility::{
+    CompatibilityClass, CompatibilityError, CompatibilityEvidence, CompatibilityResult,
+    ConsequenceCode, ConsequenceSummary, EvidenceCode, EvidenceDetail, MaterialConsequence,
+    TransferFidelity,
+};
 pub use identity::{HarnessId, NativeId, OperationId, ResourceId};
+pub use resource::{
+    ComponentGraph, ComponentGraphError, ComponentId, ComponentKind, ComponentRequiredness,
+    DesiredResource, GraphCollection, ObservationFinding, ObservationFindingKind, ObservedResource,
+    OpaqueHarnessMetadata, Ownership, Provenance, ResourceComponent, ResourceGraph,
+    ResourceGraphError, ResourceHealth, ResourceKind, UpdateIntent,
+};
 pub use scope::{
     AbsolutePath, HarnessSet, RelativeArtifactPath, Scope, ScopeSelection, TargetSelection,
 };
