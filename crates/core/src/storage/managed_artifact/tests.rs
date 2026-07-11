@@ -7,7 +7,10 @@ use skilltap_test_support::TempRoot;
 use super::*;
 use crate::{
     domain::FingerprintAlgorithm,
-    runtime::{DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState, SystemFileSystem},
+    runtime::{
+        DirectoryContentState, DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState,
+        SystemFileSystem,
+    },
     storage::SchemaError,
 };
 
@@ -216,7 +219,16 @@ fn owner_path_and_loaded_inode_are_required_for_removal() {
     fs::create_dir(&path).unwrap();
     fs::write(path.join("victim"), b"preserve").unwrap();
     let error = repository.remove(&owner, loaded.handle()).unwrap_err();
-    assert_eq!(error.failure(), ManagedArtifactFailure::Runtime);
+    assert_eq!(error.failure(), ManagedArtifactFailure::PartialRemoval);
+    let residual = error.removal_residual().unwrap();
+    assert_eq!(residual.expected_identity(), loaded.handle().identity());
+    assert_ne!(
+        residual.observed_identity(),
+        Some(loaded.handle().identity())
+    );
+    assert_eq!(residual.presence(), DirectoryPathState::Present);
+    assert_eq!(residual.content(), DirectoryContentState::Intact);
+    assert_eq!(residual.parent_sync(), DirectorySyncState::NotRequired);
     assert_eq!(fs::read(path.join("victim")).unwrap(), b"preserve");
 }
 
@@ -335,6 +347,77 @@ fn cleanup_failure_reports_exact_owned_residual_context() {
     assert_eq!(residual.identity(), Some(DirectoryIdentity::new(7, 11)));
     assert_eq!(residual.presence(), DirectoryPathState::Present);
     assert_eq!(residual.parent_sync(), DirectorySyncState::Synced);
+}
+
+struct PartialRemovalFileSystem;
+
+impl DirectoryTreeFileSystem for PartialRemovalFileSystem {
+    fn publish_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    ) -> Result<DirectoryPublishOutcome, RuntimeError> {
+        unreachable!()
+    }
+
+    fn load_tree_no_follow(
+        &self,
+        _managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+        unreachable!()
+    }
+
+    fn remove_tree_no_follow(
+        &self,
+        managed_root: &AbsolutePath,
+        _destination: &RelativeArtifactPath,
+        expected: DirectoryIdentity,
+    ) -> Result<DirectoryIdentity, RuntimeError> {
+        Err(RuntimeError::PartialDirectoryRemoval {
+            path: managed_root.clone(),
+            expected,
+            observed: Some(expected),
+            presence: DirectoryPathState::Present,
+            content: DirectoryContentState::Partial,
+            parent_sync: DirectorySyncState::NotRequired,
+            source: io::Error::other("remove failed after one entry"),
+        })
+    }
+}
+
+#[test]
+fn partial_removal_maps_to_safe_owned_residual_context() {
+    let repository = FileManagedArtifactRepository::new(
+        &PartialRemovalFileSystem,
+        AbsolutePath::new("/machine/skilltap").unwrap(),
+    )
+    .unwrap();
+    let owner = owner("skill:partial-removal");
+    let record = ManagedArtifactRecord::for_artifact(
+        owner.clone(),
+        ArtifactRole::DirectSkill,
+        fingerprint('f'),
+    )
+    .unwrap();
+    let expected = DirectoryIdentity::new(17, 23);
+    let handle = ManagedArtifactHandle {
+        record,
+        identity: expected,
+    };
+
+    let error = repository.remove(&owner, &handle).unwrap_err();
+    assert_eq!(error.failure(), ManagedArtifactFailure::PartialRemoval);
+    assert!(error.residual().is_none());
+    let residual = error.removal_residual().unwrap();
+    assert_eq!(residual.owner(), &owner);
+    assert_eq!(residual.path(), error.path().unwrap());
+    assert_eq!(residual.expected_identity(), expected);
+    assert_eq!(residual.observed_identity(), Some(expected));
+    assert_eq!(residual.presence(), DirectoryPathState::Present);
+    assert_eq!(residual.content(), DirectoryContentState::Partial);
+    assert_eq!(residual.parent_sync(), DirectorySyncState::NotRequired);
 }
 
 struct OccupiedFileSystem {

@@ -129,6 +129,14 @@ pub enum DirectoryPathState {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DirectoryContentState {
+    Intact,
+    Partial,
+    Empty,
+    Unknown,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DirectoryIdentity {
     device: u64,
     inode: u64,
@@ -258,6 +266,15 @@ pub enum RuntimeError {
         source: io::Error,
         cleanup: io::Error,
     },
+    PartialDirectoryRemoval {
+        path: AbsolutePath,
+        expected: DirectoryIdentity,
+        observed: Option<DirectoryIdentity>,
+        presence: DirectoryPathState,
+        content: DirectoryContentState,
+        parent_sync: DirectorySyncState,
+        source: io::Error,
+    },
     LockContended {
         path: AbsolutePath,
     },
@@ -298,7 +315,8 @@ impl RuntimeError {
             | Self::UnsafeSymlink { .. }
             | Self::FileIdentityChanged { .. }
             | Self::PartialPublication { .. }
-            | Self::PartialDirectoryPublication { .. } => RuntimeBoundary::FileSystem,
+            | Self::PartialDirectoryPublication { .. }
+            | Self::PartialDirectoryRemoval { .. } => RuntimeBoundary::FileSystem,
             Self::LockContended { .. } | Self::LockIdentityChanged { .. } | Self::Lock { .. } => {
                 RuntimeBoundary::Lock
             }
@@ -411,6 +429,26 @@ impl fmt::Display for RuntimeError {
                     "directory publication for `{path}` failed ({source}); destination: {presence:?}; identity: {identity}; parent sync: {parent_sync}; cleanup failed ({cleanup})"
                 )
             }
+            Self::PartialDirectoryRemoval {
+                path,
+                expected,
+                observed,
+                presence,
+                content,
+                parent_sync,
+                source,
+            } => {
+                let observed = observed.map_or_else(
+                    || "unknown".to_owned(),
+                    |value| format!("{}:{}", value.device(), value.inode()),
+                );
+                write!(
+                    formatter,
+                    "directory removal for `{path}` failed ({source}); expected identity: {}:{}; observed identity: {observed}; destination: {presence:?}; content: {content:?}; parent sync: {parent_sync}",
+                    expected.device(),
+                    expected.inode(),
+                )
+            }
             Self::LockContended { path } => {
                 write!(formatter, "configuration lock `{path}` is already held")
             }
@@ -452,6 +490,7 @@ impl std::error::Error for RuntimeError {
             Self::FileSystem { source, .. }
             | Self::PartialPublication { source, .. }
             | Self::PartialDirectoryPublication { source, .. }
+            | Self::PartialDirectoryRemoval { source, .. }
             | Self::Lock { source, .. }
             | Self::Command { source, .. }
             | Self::WorkingDirectory { source } => Some(source),

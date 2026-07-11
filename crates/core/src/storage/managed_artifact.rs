@@ -7,7 +7,10 @@ use std::{
 
 use crate::{
     domain::{AbsolutePath, Fingerprint, RelativeArtifactPath, ResourceId},
-    runtime::{DirectoryIdentity, DirectoryPublishOutcome, DirectoryTreeFileSystem, RuntimeError},
+    runtime::{
+        DirectoryContentState, DirectoryIdentity, DirectoryPathState, DirectoryPublishOutcome,
+        DirectorySyncState, DirectoryTreeFileSystem, RuntimeError,
+    },
 };
 
 use super::{ArtifactRole, ManagedArtifactRecord};
@@ -109,6 +112,48 @@ pub enum ManagedArtifactFailure {
     Conflict,
     Runtime,
     PartialPublication,
+    PartialRemoval,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManagedRemovalResidual {
+    owner: ResourceId,
+    path: RelativeArtifactPath,
+    expected_identity: DirectoryIdentity,
+    observed_identity: Option<DirectoryIdentity>,
+    presence: DirectoryPathState,
+    content: DirectoryContentState,
+    parent_sync: DirectorySyncState,
+}
+
+impl ManagedRemovalResidual {
+    pub fn owner(&self) -> &ResourceId {
+        &self.owner
+    }
+
+    pub fn path(&self) -> &RelativeArtifactPath {
+        &self.path
+    }
+
+    pub const fn expected_identity(&self) -> DirectoryIdentity {
+        self.expected_identity
+    }
+
+    pub const fn observed_identity(&self) -> Option<DirectoryIdentity> {
+        self.observed_identity
+    }
+
+    pub const fn presence(&self) -> DirectoryPathState {
+        self.presence
+    }
+
+    pub const fn content(&self) -> DirectoryContentState {
+        self.content
+    }
+
+    pub const fn parent_sync(&self) -> DirectorySyncState {
+        self.parent_sync
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -148,6 +193,7 @@ pub struct ManagedArtifactError {
     path: Option<RelativeArtifactPath>,
     failure: ManagedArtifactFailure,
     residual: Option<Box<ManagedArtifactResidual>>,
+    removal_residual: Option<Box<ManagedRemovalResidual>>,
 }
 
 impl ManagedArtifactError {
@@ -171,6 +217,10 @@ impl ManagedArtifactError {
         self.residual.as_deref()
     }
 
+    pub fn removal_residual(&self) -> Option<&ManagedRemovalResidual> {
+        self.removal_residual.as_deref()
+    }
+
     fn new(
         action: ManagedArtifactAction,
         owner: &ResourceId,
@@ -183,6 +233,7 @@ impl ManagedArtifactError {
             path: path.cloned(),
             failure,
             residual: None,
+            removal_residual: None,
         }
     }
 
@@ -210,6 +261,30 @@ impl ManagedArtifactError {
                     presence,
                     parent_sync,
                 })),
+                removal_residual: None,
+            },
+            RuntimeError::PartialDirectoryRemoval {
+                expected,
+                observed,
+                presence,
+                content,
+                parent_sync,
+                ..
+            } => Self {
+                action,
+                owner: owner.clone(),
+                path: Some(path.clone()),
+                failure: ManagedArtifactFailure::PartialRemoval,
+                residual: None,
+                removal_residual: Some(Box::new(ManagedRemovalResidual {
+                    owner: owner.clone(),
+                    path: path.clone(),
+                    expected_identity: expected,
+                    observed_identity: observed,
+                    presence,
+                    content,
+                    parent_sync,
+                })),
             },
             _ => Self::new(action, owner, Some(path), ManagedArtifactFailure::Runtime),
         }
@@ -225,6 +300,7 @@ impl fmt::Debug for ManagedArtifactError {
             .field("path", &self.path)
             .field("failure", &self.failure)
             .field("residual", &self.residual)
+            .field("removal_residual", &self.removal_residual)
             .finish()
     }
 }

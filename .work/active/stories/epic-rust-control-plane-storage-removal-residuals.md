@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-removal-residuals
 kind: story
-stage: implementing
+stage: review
 tags: [correctness]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-managed-artifacts]
@@ -22,3 +22,26 @@ content removal, identity/path replacement, empty-but-present, and
 unlink-success/sync-failure. State/reference callers must be able to choose
 re-observation without guessing. Preserve safe error rendering and run the full
 locked ladder.
+
+## Implementation Notes
+
+- Added a structured runtime removal residual carrying the expected and
+  observed identities, path presence, recursive content progress, and parent
+  sync state.
+- Made recursive deletion propagate whether it removed any owned entry and
+  whether the opened directory reached empty, without changing publication
+  cleanup behavior.
+- Split top-directory unlink from parent-directory sync so an empty-present
+  destination and a removed-but-not-proven-durable destination remain distinct.
+- Mapped runtime residuals into a dedicated storage `PartialRemoval` failure and
+  `ManagedRemovalResidual`; publication residual access remains unchanged.
+- Covered pre-change failure, partial deletion, replacement, injected top
+  unlink failure, injected parent sync failure, and storage mapping.
+
+## Verification
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --locked --workspace --all-targets -- -D warnings`
+- `cargo test --locked --workspace` (150 tests)
+- `cargo build --locked --release -p skilltap`
+- 30 concurrent locked core unit-suite runs across eight workers

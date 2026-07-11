@@ -9,9 +9,10 @@ mod scope;
 pub use clock::{Clock, FakeClock, SystemClock};
 pub use command::{CommandOutput, CommandRequest, CommandRunner, SystemCommandRunner};
 pub use error::{
-    ClockAction, CommandAction, DirectoryIdentity, DirectoryPathState, DirectorySyncState,
-    EnvironmentVariable, FileSystemAction, LockAction, PathRole, PublicationResidual,
-    PublicationResidualRole, PublicationResiduals, RuntimeBoundary, RuntimeError,
+    ClockAction, CommandAction, DirectoryContentState, DirectoryIdentity, DirectoryPathState,
+    DirectorySyncState, EnvironmentVariable, FileSystemAction, LockAction, PathRole,
+    PublicationResidual, PublicationResidualRole, PublicationResiduals, RuntimeBoundary,
+    RuntimeError,
 };
 pub use filesystem::{
     ConfigurationLock, ConfigurationLockGuard, DirectoryPublishOutcome, DirectoryTreeFileSystem,

@@ -130,26 +130,89 @@ pub(super) fn read_tree_with(
     Ok(())
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) struct RemovalProgress {
+    pub(super) removed_any: bool,
+}
+
+#[derive(Debug)]
+pub(super) struct TreeRemovalError {
+    pub(super) source: io::Error,
+    pub(super) removed_any: bool,
+    pub(super) emptied: bool,
+}
+
+impl std::fmt::Display for TreeRemovalError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.source.fmt(formatter)
+    }
+}
+
+impl TreeRemovalError {
+    fn before(source: io::Error, removed_any: bool) -> Self {
+        Self {
+            source,
+            removed_any,
+            emptied: false,
+        }
+    }
+
+    fn empty(source: io::Error, removed_any: bool) -> Self {
+        Self {
+            source,
+            removed_any,
+            emptied: true,
+        }
+    }
+}
+
 pub(super) fn remove_open_tree(directory: &File) -> io::Result<()> {
+    remove_open_tree_tracked(directory)
+        .map(|_| ())
+        .map_err(|failure| failure.source)
+}
+
+pub(super) fn remove_open_tree_tracked(
+    directory: &File,
+) -> Result<RemovalProgress, TreeRemovalError> {
     remove_open_tree_with(directory, &mut |_| {})
 }
 
 pub(super) fn remove_open_tree_with(
     directory: &File,
     before_open: &mut impl FnMut(&str),
-) -> io::Result<()> {
-    for name in directory_names(directory)? {
-        let name = CString::new(name).map_err(|_| io::Error::other("NUL in directory entry"))?;
-        let metadata = stat_at(directory.as_raw_fd(), &name)?;
+) -> Result<RemovalProgress, TreeRemovalError> {
+    let mut removed_any = false;
+    let names = directory_names(directory)
+        .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+    for name in names {
+        let name = CString::new(name).map_err(|_| {
+            TreeRemovalError::before(io::Error::other("NUL in directory entry"), removed_any)
+        })?;
+        let metadata = stat_at(directory.as_raw_fd(), &name)
+            .map_err(|source| TreeRemovalError::before(source, removed_any))?;
         match metadata.st_mode & libc::S_IFMT {
             libc::S_IFDIR => {
                 before_open(name.to_str().unwrap_or("<non-utf8>"));
-                let child = open_dir_at(directory.as_raw_fd(), &name)?;
-                let identity = require_directory(&child)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-                remove_open_tree_with(&child, before_open)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-                unlink_at(directory.as_raw_fd(), &name, true)?;
+                let child = open_dir_at(directory.as_raw_fd(), &name)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                let identity = require_directory(&child)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                verify_at(directory.as_raw_fd(), &name, identity)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                match remove_open_tree_with(&child, before_open) {
+                    Ok(progress) => removed_any |= progress.removed_any,
+                    Err(mut failure) => {
+                        failure.removed_any |= removed_any;
+                        failure.emptied = false;
+                        return Err(failure);
+                    }
+                }
+                verify_at(directory.as_raw_fd(), &name, identity)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                unlink_at(directory.as_raw_fd(), &name, true)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                removed_any = true;
             }
             libc::S_IFREG => {
                 before_open(name.to_str().unwrap_or("<non-utf8>"));
@@ -159,18 +222,27 @@ pub(super) fn remove_open_tree_with(
                         name.as_ptr(),
                         libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK,
                     )
-                })?;
+                })
+                .map_err(|source| TreeRemovalError::before(source, removed_any))?;
                 let file = unsafe { File::from_raw_fd(fd) };
-                let identity = require_regular(&file)?;
-                verify_at(directory.as_raw_fd(), &name, identity)?;
-                unlink_at(directory.as_raw_fd(), &name, false)?;
+                let identity = require_regular(&file)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                verify_at(directory.as_raw_fd(), &name, identity)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                unlink_at(directory.as_raw_fd(), &name, false)
+                    .map_err(|source| TreeRemovalError::before(source, removed_any))?;
+                removed_any = true;
             }
             _ => {
-                return Err(io::Error::other(
-                    "refusing to remove non-regular artifact entry",
+                return Err(TreeRemovalError::before(
+                    io::Error::other("refusing to remove non-regular artifact entry"),
+                    removed_any,
                 ));
             }
         }
     }
-    directory.sync_all()
+    directory
+        .sync_all()
+        .map_err(|source| TreeRemovalError::empty(source, removed_any))?;
+    Ok(RemovalProgress { removed_any })
 }

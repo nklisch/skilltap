@@ -16,6 +16,7 @@ pub use managed_artifact::{
     ArtifactPublication, ArtifactTree, ArtifactTreeError, FileManagedArtifactRepository,
     LoadedArtifact, ManagedArtifactAction, ManagedArtifactError, ManagedArtifactFailure,
     ManagedArtifactHandle, ManagedArtifactRepository, ManagedArtifactResidual,
+    ManagedRemovalResidual,
 };
 pub use managed_record::{ArtifactRole, ManagedArtifactRecord};
 pub use repository::{

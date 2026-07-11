@@ -6,7 +6,8 @@ use std::{ffi::CString, fs::File, io, os::fd::AsRawFd, path::Path};
 use crate::{
     domain::{AbsolutePath, RelativeArtifactPath},
     runtime::{
-        DirectoryIdentity, DirectoryPathState, DirectorySyncState, FileSystemAction, RuntimeError,
+        DirectoryContentState, DirectoryIdentity, DirectoryPathState, DirectorySyncState,
+        FileSystemAction, RuntimeError,
     },
 };
 
@@ -18,7 +19,9 @@ mod tree_io;
 mod unix_support;
 
 #[cfg(unix)]
-use tree_io::{read_tree, remove_open_tree, write_tree};
+use tree_io::{
+    TreeRemovalError, read_tree, remove_open_tree, remove_open_tree_tracked, write_tree,
+};
 #[cfg(all(unix, test))]
 use tree_io::{read_tree_with, remove_open_tree_with};
 
@@ -232,28 +235,172 @@ fn remove_tree(
     destination: &RelativeArtifactPath,
     expected: DirectoryIdentity,
 ) -> Result<DirectoryIdentity, RuntimeError> {
+    remove_tree_with(
+        managed_root,
+        destination,
+        expected,
+        |parent, name| unlink_at(parent.as_raw_fd(), name, true),
+        File::sync_all,
+    )
+}
+
+#[cfg(unix)]
+fn remove_tree_with(
+    managed_root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+    expected: DirectoryIdentity,
+    unlink_top: impl FnOnce(&File, &CString) -> io::Result<()>,
+    sync_parent: impl FnOnce(&File) -> io::Result<()>,
+) -> Result<DirectoryIdentity, RuntimeError> {
     let root = open_absolute_directory(managed_root, false)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
     let _lock = lock_exclusive(&root)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
     let (parent, name) = open_relative_parent(&root, destination, false)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
-    let directory = open_dir_at(parent.as_raw_fd(), &name)
-        .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
-    let identity = require_directory(&directory)
-        .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
+    let path = join_absolute(managed_root, destination);
+    let directory = open_dir_at(parent.as_raw_fd(), &name).map_err(|source| {
+        let (presence, observed) = observe_at(&parent, &name);
+        partial_removal(
+            path.clone(),
+            expected,
+            observed,
+            presence,
+            DirectoryContentState::Unknown,
+            DirectorySyncState::NotRequired,
+            source,
+        )
+    })?;
+    let identity = require_directory(&directory).map_err(|source| {
+        let (presence, observed) = observe_at(&parent, &name);
+        partial_removal(
+            path.clone(),
+            expected,
+            observed,
+            presence,
+            DirectoryContentState::Unknown,
+            DirectorySyncState::NotRequired,
+            source,
+        )
+    })?;
     if identity != expected {
-        return Err(RuntimeError::FileIdentityChanged {
-            action: FileSystemAction::Remove,
-            path: join_absolute(managed_root, destination),
-        });
+        let (presence, observed) = observe_at(&parent, &name);
+        return Err(partial_removal(
+            path,
+            expected,
+            observed,
+            presence,
+            DirectoryContentState::Intact,
+            DirectorySyncState::NotRequired,
+            io::Error::other("destination identity changed before removal"),
+        ));
     }
-    remove_open_tree(&directory)
-        .and_then(|()| verify_at(parent.as_raw_fd(), &name, identity))
-        .and_then(|()| unlink_at(parent.as_raw_fd(), &name, true))
-        .and_then(|()| parent.sync_all())
-        .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
+    if let Err(failure) = remove_open_tree_tracked(&directory) {
+        let (presence, observed) = observe_at(&parent, &name);
+        let content = removal_content(&failure, expected, presence, observed);
+        return Err(partial_removal(
+            path,
+            expected,
+            observed,
+            presence,
+            content,
+            DirectorySyncState::NotRequired,
+            failure.source,
+        ));
+    }
+    if let Err(source) = verify_at(parent.as_raw_fd(), &name, identity) {
+        let (presence, observed) = observe_at(&parent, &name);
+        let content = if presence == DirectoryPathState::Present && observed == Some(expected) {
+            DirectoryContentState::Empty
+        } else {
+            DirectoryContentState::Unknown
+        };
+        return Err(partial_removal(
+            path,
+            expected,
+            observed,
+            presence,
+            content,
+            DirectorySyncState::NotRequired,
+            source,
+        ));
+    }
+    if let Err(source) = unlink_top(&parent, &name) {
+        let (presence, observed) = observe_at(&parent, &name);
+        let content = if presence == DirectoryPathState::Present && observed == Some(expected) {
+            DirectoryContentState::Empty
+        } else {
+            DirectoryContentState::Unknown
+        };
+        return Err(partial_removal(
+            path,
+            expected,
+            observed,
+            presence,
+            content,
+            DirectorySyncState::NotRequired,
+            source,
+        ));
+    }
+    if let Err(source) = sync_parent(&parent) {
+        let (presence, observed) = observe_at(&parent, &name);
+        let content = if presence == DirectoryPathState::Removed {
+            DirectoryContentState::Empty
+        } else {
+            DirectoryContentState::Unknown
+        };
+        return Err(partial_removal(
+            path,
+            expected,
+            observed,
+            presence,
+            content,
+            DirectorySyncState::Uncertain,
+            source,
+        ));
+    }
     Ok(identity)
+}
+
+#[cfg(unix)]
+fn removal_content(
+    failure: &TreeRemovalError,
+    expected: DirectoryIdentity,
+    presence: DirectoryPathState,
+    observed: Option<DirectoryIdentity>,
+) -> DirectoryContentState {
+    if presence != DirectoryPathState::Present || observed != Some(expected) {
+        return DirectoryContentState::Unknown;
+    }
+    if failure.emptied {
+        DirectoryContentState::Empty
+    } else if failure.removed_any {
+        DirectoryContentState::Partial
+    } else {
+        DirectoryContentState::Intact
+    }
+}
+
+#[cfg(unix)]
+#[allow(clippy::too_many_arguments)]
+fn partial_removal(
+    path: AbsolutePath,
+    expected: DirectoryIdentity,
+    observed: Option<DirectoryIdentity>,
+    presence: DirectoryPathState,
+    content: DirectoryContentState,
+    parent_sync: DirectorySyncState,
+    source: io::Error,
+) -> RuntimeError {
+    RuntimeError::PartialDirectoryRemoval {
+        path,
+        expected,
+        observed,
+        presence,
+        content,
+        parent_sync,
+        source,
+    }
 }
 
 #[cfg(not(unix))]

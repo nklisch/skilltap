@@ -157,3 +157,153 @@ fn cleanup_reports_present_identity_when_owned_tree_cannot_be_removed() {
         } if observed == identity
     ));
 }
+
+fn removal_fixture(
+    name: &str,
+) -> (
+    TempRoot,
+    AbsolutePath,
+    RelativeArtifactPath,
+    DirectoryIdentity,
+) {
+    let temporary = TempRoot::new(name).unwrap();
+    let managed = temporary.join("managed");
+    let artifact = managed.join("artifact");
+    fs::create_dir(&managed).unwrap();
+    fs::create_dir(&artifact).unwrap();
+    let identity = require_directory(&File::open(&artifact).unwrap()).unwrap();
+    (
+        temporary,
+        AbsolutePath::new(managed.to_str().unwrap()).unwrap(),
+        RelativeArtifactPath::new("artifact").unwrap(),
+        identity,
+    )
+}
+
+fn make_fifo(path: &std::path::Path) {
+    let path = CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+}
+
+#[test]
+fn removal_failure_before_changes_reports_intact_present_identity() {
+    let (temporary, managed, destination, expected) =
+        removal_fixture("skilltap-removal-intact-test");
+    make_fifo(&temporary.join("managed/artifact/blocked"));
+
+    let error = remove_tree(&managed, &destination, expected).unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::PartialDirectoryRemoval {
+            expected: actual_expected,
+            observed: Some(observed),
+            presence: DirectoryPathState::Present,
+            content: DirectoryContentState::Intact,
+            parent_sync: DirectorySyncState::NotRequired,
+            ..
+        } if actual_expected == expected && observed == expected
+    ));
+}
+
+#[test]
+fn removal_failure_after_an_entry_reports_partial_content() {
+    let (temporary, managed, destination, expected) =
+        removal_fixture("skilltap-removal-partial-test");
+    fs::write(temporary.join("managed/artifact/a-file"), b"removed first").unwrap();
+    make_fifo(&temporary.join("managed/artifact/z-blocked"));
+
+    let error = remove_tree(&managed, &destination, expected).unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::PartialDirectoryRemoval {
+            expected: actual_expected,
+            observed: Some(observed),
+            presence: DirectoryPathState::Present,
+            content: DirectoryContentState::Partial,
+            parent_sync: DirectorySyncState::NotRequired,
+            ..
+        } if actual_expected == expected && observed == expected
+    ));
+    assert!(!temporary.join("managed/artifact/a-file").exists());
+    assert!(temporary.join("managed/artifact/z-blocked").exists());
+}
+
+#[test]
+fn replacement_before_removal_reports_both_identities_without_guessing_contents() {
+    let (temporary, managed, destination, expected) =
+        removal_fixture("skilltap-removal-replacement-test");
+    fs::rename(
+        temporary.join("managed/artifact"),
+        temporary.join("managed/original"),
+    )
+    .unwrap();
+    fs::create_dir(temporary.join("managed/artifact")).unwrap();
+    let replacement =
+        require_directory(&File::open(temporary.join("managed/artifact")).unwrap()).unwrap();
+
+    let error = remove_tree(&managed, &destination, expected).unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::PartialDirectoryRemoval {
+            expected: actual_expected,
+            observed: Some(observed),
+            presence: DirectoryPathState::Present,
+            content: DirectoryContentState::Intact,
+            parent_sync: DirectorySyncState::NotRequired,
+            ..
+        } if actual_expected == expected && observed == replacement && observed != expected
+    ));
+}
+
+#[test]
+fn top_unlink_failure_reports_empty_present_directory() {
+    let (_temporary, managed, destination, expected) =
+        removal_fixture("skilltap-removal-empty-present-test");
+
+    let error = remove_tree_with(
+        &managed,
+        &destination,
+        expected,
+        |_parent, _name| Err(io::Error::other("injected top unlink failure")),
+        |_parent| panic!("parent sync must not run when unlink fails"),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::PartialDirectoryRemoval {
+            expected: actual_expected,
+            observed: Some(observed),
+            presence: DirectoryPathState::Present,
+            content: DirectoryContentState::Empty,
+            parent_sync: DirectorySyncState::NotRequired,
+            ..
+        } if actual_expected == expected && observed == expected
+    ));
+}
+
+#[test]
+fn parent_sync_failure_reports_removed_path_and_uncertain_durability() {
+    let (temporary, managed, destination, expected) =
+        removal_fixture("skilltap-removal-sync-uncertain-test");
+
+    let error = remove_tree_with(
+        &managed,
+        &destination,
+        expected,
+        |parent, name| unlink_at(parent.as_raw_fd(), name, true),
+        |_parent| Err(io::Error::other("injected parent sync failure")),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::PartialDirectoryRemoval {
+            expected: actual_expected,
+            observed: None,
+            presence: DirectoryPathState::Removed,
+            content: DirectoryContentState::Empty,
+            parent_sync: DirectorySyncState::Uncertain,
+            ..
+        } if actual_expected == expected
+    ));
+    assert!(!temporary.join("managed/artifact").exists());
+}
