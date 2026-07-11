@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle-commands
 kind: feature
-stage: done
+stage: implementing
 tags: []
 parent: epic-standalone-skill-lifecycle
 depends_on: [epic-standalone-skill-lifecycle-storage, epic-standalone-skill-lifecycle-compatibility]
@@ -37,15 +37,18 @@ and an immediate repeat is a no-op.
 ## Implementation notes
 
 Added the pure SHA/fingerprint lifecycle decision model and exposed an
-inventory-backed `skill list` command. Listing is read-only and never scans
-sources; install/update/remove remain explicitly unavailable until their
-filesystem and Git command adapters are composed.
+inventory-backed `skill list` command. Explicit local-directory install now
+validates the complete tree, checks target frontmatter compatibility, publishes
+the canonical `.agents/skills/<name>` tree through the core lock/plan/journal
+path, and is idempotent. Git-backed resolution, safe replacement/update, and
+ownership-checked remove remain open.
 
 ## Review
 
 ### Verdict
 
-Approve with comments.
+Interim approve with comments; the feature remains implementing until all
+source and lifecycle verbs are wired.
 
 ### Findings
 

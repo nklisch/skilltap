@@ -448,6 +448,74 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
 }
 
 #[test]
+fn local_skill_install_publishes_the_complete_canonical_tree() {
+    let machine = machine();
+    let source = machine.home().join("source-skill");
+    fs::create_dir_all(source.join("docs")).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: demo\ndescription: test skill\n---\nbody\n",
+    )
+    .unwrap();
+    fs::write(source.join("docs/example.txt"), "sibling").unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source_text = source.to_str().unwrap();
+
+    let output = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&output, 0);
+    let value = json(&output);
+    assert_eq!(value["result"], "completed");
+    assert_eq!(value["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(machine.home().join(".agents/skills/source-skill/SKILL.md")).unwrap(),
+        "---\nname: demo\ndescription: test skill\n---\nbody\n"
+    );
+    assert_eq!(
+        fs::read_to_string(
+            machine
+                .home()
+                .join(".agents/skills/source-skill/docs/example.txt")
+        )
+        .unwrap(),
+        "sibling"
+    );
+    assert!(
+        fs::read_to_string(config_root(&machine).join("inventory.toml"))
+            .unwrap()
+            .contains("skill:source-skill")
+    );
+    assert!(
+        fs::read_to_string(config_root(&machine).join("state.json"))
+            .unwrap()
+            .contains("skill:codex:")
+    );
+
+    let repeat = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+}
+
+#[test]
 fn bare_invocation_prints_concise_help_and_fails_as_input() {
     let machine = machine();
     let output = run(&machine, &[]);

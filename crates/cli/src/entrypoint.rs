@@ -125,12 +125,13 @@ where
             OutputChannel::Stdout,
         ),
         Dispatch::SkillInstall(args) => (
-            execute_system_lifecycle_preview(
+            execute_system_skill_install(
                 "skill install",
                 &args.scope,
                 &args.target,
                 Some(args.source.as_str()),
                 args.name.as_ref().map(|value| value.as_str()),
+                args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
@@ -197,6 +198,25 @@ fn execute_system_lifecycle_preview(
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
         application.execute_lifecycle_preview(command, scope, target, source, name)
+    })
+}
+
+fn execute_system_skill_install(
+    command: &'static str,
+    scope: &crate::command::ScopeArgs,
+    target: &crate::command::TargetArgs,
+    source: Option<&str>,
+    name: Option<&str>,
+    acknowledged: bool,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        let Some(source) = source else {
+            return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                "skill_source_required",
+                "An explicit skill source is required.",
+            ));
+        };
+        application.execute_skill_install(command, scope, target, source, name, acknowledged)
     })
 }
 

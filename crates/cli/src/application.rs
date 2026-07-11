@@ -19,16 +19,21 @@ use skilltap_core::{
         OperationResult, Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId,
         ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
-    executor::{ExecutionError, ExecutionJournal, execute_plan},
+    executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
     lifecycle_operation::native_operation,
     reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
-        ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
-        ScopeRequest, ScopeResolver, SystemConfigurationLock, WorkingDirectory, resolve_targets,
+        DirectoryTreeFileSystem, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
+        JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits, ScopeRequest, ScopeResolver,
+        SystemConfigurationLock, SystemExternalTreeObserver, SystemFileSystem, WorkingDirectory,
+        resolve_targets,
     },
+    skill::ValidatedSkillTree,
+    skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
     storage::{
-        ConfigDocument, ConfigRepository, DocumentState, InventoryDocument, InventoryRepository,
-        ResourceState, StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
+        ArtifactTree, ConfigDocument, ConfigRepository, DocumentState, InventoryDocument,
+        InventoryRepository, ResourceState, StateDocument, StateRepository, StorageError,
+        StorageFailure, Timestamp,
     },
 };
 use skilltap_harnesses::{
@@ -177,6 +182,129 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
             )
         })
     }
+}
+
+struct ManagedSkillPort<'a> {
+    filesystem: &'a dyn DirectoryTreeFileSystem,
+    entries: BTreeMap<OperationId, ManagedSkillEntry>,
+}
+
+struct ManagedSkillEntry {
+    root: AbsolutePath,
+    destination: skilltap_core::domain::RelativeArtifactPath,
+    tree: ArtifactTree,
+}
+
+impl ExecutionPort for ManagedSkillPort<'_> {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        for (_, operation) in plan.iter() {
+            if operation.action() != OperationAction::SkillInstall {
+                continue;
+            }
+            let Some(entry) = self.entries.get(operation.id()) else {
+                return Err(ExecutionError::revalidation(
+                    skilltap_core::domain::EvidenceCode::new("managed.skill_request_missing")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The managed skill adapter did not receive a request for a planned operation.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            };
+            let expected = AbsolutePath::new(format!(
+                "{}/{}",
+                entry.root.as_str(),
+                entry.destination.as_str()
+            ))
+            .map_err(|_| {
+                ExecutionError::revalidation(
+                    skilltap_core::domain::EvidenceCode::new("managed.skill_path_invalid")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The managed skill destination could not be represented safely.",
+                    )
+                    .expect("static evidence detail is valid"),
+                )
+            })?;
+            if !operation
+                .affected_surfaces()
+                .iter()
+                .any(|surface| surface.path() == Some(&expected))
+            {
+                return Err(ExecutionError::revalidation(
+                    skilltap_core::domain::EvidenceCode::new("managed.skill_surface_mismatch")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The managed skill destination no longer matches the validated operation.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply(
+        &self,
+        operation: &skilltap_core::domain::Operation,
+    ) -> Result<OperationOutcome, ExecutionError> {
+        let Some(entry) = self.entries.get(operation.id()) else {
+            return Err(ExecutionError::revalidation(
+                skilltap_core::domain::EvidenceCode::new("managed.skill_request_missing")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The managed skill adapter did not receive a request for a planned operation.",
+                )
+                .expect("static evidence detail is valid"),
+            ));
+        };
+        match self
+            .filesystem
+            .publish_tree_no_follow(&entry.root, &entry.destination, entry.tree.files())
+            .map_err(|_| {
+                managed_skill_apply_failure("The managed skill tree could not be published.")
+            })? {
+            skilltap_core::runtime::DirectoryPublishOutcome::Published(_) => {
+                Ok(OperationOutcome::Applied)
+            }
+            skilltap_core::runtime::DirectoryPublishOutcome::AlreadyExists => {
+                let (_, files) = self
+                    .filesystem
+                    .load_tree_no_follow(&entry.root, &entry.destination)
+                    .map_err(|_| {
+                        managed_skill_apply_failure(
+                            "The existing managed skill tree could not be re-read safely.",
+                        )
+                    })?;
+                let current = ArtifactTree::new(
+                    files
+                        .into_iter()
+                        .map(|(path, bytes)| (path.as_str().to_owned(), bytes)),
+                )
+                .map_err(|_| {
+                    managed_skill_apply_failure(
+                        "The existing managed skill tree had an invalid shape.",
+                    )
+                })?;
+                if current == entry.tree {
+                    Ok(OperationOutcome::NoChange)
+                } else {
+                    Err(managed_skill_apply_failure(
+                        "The managed skill destination changed before publication.",
+                    ))
+                }
+            }
+        }
+    }
+}
+
+fn managed_skill_apply_failure(detail: &'static str) -> ExecutionError {
+    ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
+        skilltap_core::domain::EvidenceCode::new("managed.skill_publish_failed")
+            .expect("static evidence code is valid"),
+        skilltap_core::domain::EvidenceDetail::new(detail)
+            .expect("static evidence detail is valid"),
+    ))
 }
 
 impl StatusApplication<'_> {
@@ -751,6 +879,437 @@ impl StatusApplication<'_> {
             ))
     }
 
+    /// Install an explicit local complete skill tree into native skill paths.
+    /// Git-backed sources deliberately remain a separate adapter until their
+    /// clone/resolve boundary is available.
+    pub(crate) fn execute_skill_install(
+        &self,
+        command: &'static str,
+        requested_scope: &ScopeArgs,
+        target: &TargetArgs,
+        source_value: &str,
+        name_value: Option<&str>,
+        acknowledged: bool,
+    ) -> Outcome {
+        let (documents, mut outcome) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
+        };
+        let status_args = StatusArgs {
+            target: target.clone(),
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let targets = match StatusTargets::resolve(&status_args, &documents) {
+            Ok(targets) => targets,
+            Err(StatusTargetError::NoneEnabled) => {
+                return outcome.with_error(ErrorDetail::new(
+                    "no_enabled_harnesses",
+                    "No harness is enabled in skilltap configuration.",
+                ));
+            }
+            Err(StatusTargetError::NotEnabled) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "target_not_enabled",
+                    "The requested harness target is not enabled.",
+                ));
+            }
+        };
+        let locator = match SourceLocator::new(source_value) {
+            Ok(locator) => locator,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "invalid_skill_source",
+                    "The explicit skill source is invalid.",
+                ));
+            }
+        };
+        let source_root = match AbsolutePath::new(locator.as_str()) {
+            Ok(path) => path,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome
+                    .with_warning(Warning::new(
+                        "git_skill_source_pending",
+                        "Git-backed skill resolution is not available in this adapter yet.",
+                    ))
+                    .with_next_action(NextAction::new(
+                        "use_local_source",
+                        "Provide an explicit local skill directory or wait for Git source support.",
+                    ));
+            }
+        };
+        let limits =
+            ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
+                .expect("bounded skill tree limits are valid");
+        let source_snapshot = match SystemExternalTreeObserver
+            .observe(&ExternalTreeRequest::new(source_root.clone(), limits))
+        {
+            Ok(snapshot) => snapshot,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "skill_source_unavailable",
+                    "The explicit local skill directory could not be observed safely.",
+                ));
+            }
+        };
+        let skill = match ValidatedSkillTree::validate(&source_snapshot) {
+            Ok(skill) => skill,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "skill_tree_invalid",
+                    "The skill source must be a complete directory with a top-level SKILL.md.",
+                ));
+            }
+        };
+        for compatibility in SkillCompatibility::evaluate(&skill, &targets.resolved) {
+            match compatibility.class() {
+                SkillCompatibilityClass::Blocked => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_warning(
+                        Warning::new(
+                            "skill_incompatible",
+                            "The skill frontmatter is not loadable by the selected harness.",
+                        )
+                        .with_context("harness", compatibility.target().as_str()),
+                    );
+                }
+                SkillCompatibilityClass::Warning => {
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill_frontmatter_warning",
+                            "The skill is loadable but its frontmatter is not fully strict.",
+                        )
+                        .with_context("harness", compatibility.target().as_str()),
+                    );
+                }
+                SkillCompatibilityClass::Compatible => {}
+            }
+        }
+        let name = match name_value {
+            Some(name) => NativeId::new(name).map_err(|_| ()).ok(),
+            None => source_root
+                .as_str()
+                .rsplit('/')
+                .next()
+                .and_then(|name| NativeId::new(name).ok()),
+        };
+        let Some(name) = name else {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "skill_name_required",
+                "The skill name could not be derived; provide --name.",
+            ));
+        };
+        let destination = match skill_relative_destination(&name) {
+            Some(destination) => destination,
+            None => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "skill_name_invalid",
+                    "The skill name cannot be used as a safe directory component.",
+                ));
+            }
+        };
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "platform_paths_unavailable",
+                    "The skilltap configuration paths could not be resolved.",
+                ));
+            }
+        };
+        let source = Source::new(SourceKind::Local, locator, None)
+            .map_err(|_| ())
+            .ok();
+        let Some(source) = source else {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "invalid_skill_source",
+                "The local skill source could not be represented safely.",
+            ));
+        };
+        let mut inventory = documents.inventory.clone().unwrap_or_else(|| {
+            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                .expect("empty inventory is valid")
+        });
+        let mut operations = Vec::new();
+        let mut entries = BTreeMap::new();
+        let mut seeds = BTreeMap::new();
+        let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
+            Ok(timestamp) => timestamp,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "clock_unavailable",
+                    "The skill operation timestamp could not be recorded safely.",
+                ));
+            }
+        };
+        for concrete_scope in &scope.resolved {
+            let key = ResourceKey::new(
+                match ResourceId::new(format!("skill:{}", name.as_str())) {
+                    Ok(id) => id,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "skill_name_invalid",
+                            "The skill name cannot be represented as a resource identifier.",
+                        ));
+                    }
+                },
+                concrete_scope.clone(),
+            );
+            let desired = match DesiredResource::new(
+                key.clone(),
+                ResourceKind::StandaloneSkill,
+                targets.resolved.clone(),
+                DesiredOrigin::Direct,
+                Some(source.clone()),
+                UpdateIntent::Track,
+                ComponentGraph::new([]).expect("empty component graph is valid"),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeSet::new(),
+            ) {
+                Ok(desired) => desired,
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "skill_resource_invalid",
+                        "The skill resource could not be represented safely.",
+                    ));
+                }
+            };
+            inventory = match inventory.with_resource(desired) {
+                Ok(inventory) => inventory,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_resource_conflict",
+                        "The requested skill conflicts with an existing desired definition.",
+                    ));
+                }
+            };
+            let mut native_ids = BTreeMap::new();
+            for target_id in targets.iter() {
+                let Some((root, full_path)) =
+                    skill_destination(&paths, concrete_scope, target_id, &destination)
+                else {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "skill_destination_invalid",
+                        "The selected harness skill destination could not be resolved.",
+                    ));
+                };
+                let current = match SystemExternalTreeObserver
+                    .observe(&ExternalTreeRequest::new(full_path.clone(), limits))
+                {
+                    Ok(snapshot) => match ValidatedSkillTree::validate(&snapshot) {
+                        Ok(current) => Some(current),
+                        Err(_) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome.with_warning(
+                                Warning::new(
+                                    "skill_destination_invalid",
+                                    "An existing skill destination is not a valid complete skill tree.",
+                                )
+                                .with_context("target", target_id.as_str())
+                                .with_context("scope", scope_label(concrete_scope)),
+                            );
+                            None
+                        }
+                    },
+                    Err(_) => None,
+                };
+                if let Some(current) = current {
+                    if current.fingerprint() == skill.fingerprint() {
+                        outcome = outcome.with_operation(crate::OperationOutcome::new(
+                            format!("skill:{}:{}", target_id, name),
+                            "no_change",
+                        ));
+                        native_ids.insert(target_id.clone(), name.clone());
+                        continue;
+                    }
+                    if !acknowledged {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "skill_destination_drifted",
+                                "The existing skill destination differs from the requested tree; no replacement was made.",
+                            )
+                            .with_context("target", target_id.as_str())
+                            .with_context("scope", scope_label(concrete_scope)),
+                        );
+                        continue;
+                    }
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill_replace_pending",
+                            "Explicit replacement acknowledgment was supplied, but safe backup/removal composition is still pending.",
+                        )
+                        .with_context("target", target_id.as_str()),
+                    );
+                    continue;
+                }
+                let operation_id = skill_operation_id(target_id, &key);
+                if previously_applied(documents.state.as_ref(), &key, &operation_id) {
+                    outcome = outcome.with_operation(crate::OperationOutcome::new(
+                        operation_id.to_string(),
+                        "no_change",
+                    ));
+                    native_ids.insert(target_id.clone(), name.clone());
+                    continue;
+                }
+                let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
+                    operation_id.clone(),
+                    target_id.clone(),
+                    key.clone(),
+                    OperationAction::SkillInstall,
+                    full_path,
+                ) {
+                    Ok(operation) => operation,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "operation_contract_invalid",
+                            "The managed skill operation could not be constructed safely.",
+                        ));
+                    }
+                };
+                operations.push(operation);
+                entries.insert(
+                    operation_id,
+                    ManagedSkillEntry {
+                        root,
+                        destination: destination.clone(),
+                        tree: skill.tree().clone(),
+                    },
+                );
+                native_ids.insert(target_id.clone(), name.clone());
+            }
+            if !native_ids.is_empty() {
+                let state = match ResourceState::new(
+                    key.clone(),
+                    native_ids,
+                    Provenance::Direct,
+                    Ownership::Skilltap,
+                    Some(source.clone()),
+                    None,
+                    Some(skill.fingerprint().clone()),
+                    None,
+                    None,
+                    timestamp,
+                    None,
+                ) {
+                    Ok(state) => state,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "state_seed_invalid",
+                            "The standalone skill state seed was invalid.",
+                        ));
+                    }
+                };
+                seeds.insert(key, state);
+            }
+        }
+        let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
+            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                .expect("empty inventory is valid")
+        });
+        if inventory != empty_inventory && self.inventory.replace(&inventory).is_err() {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "inventory_publish_failed",
+                "The skill inventory could not be published before installation.",
+            ));
+        }
+        if operations.is_empty() {
+            if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+                outcome.result = ResultClass::Completed;
+            }
+            let operation_count = outcome.operations.len() as u64;
+            return outcome
+                .with_summary("operations", operation_count)
+                .with_summary("changed", false);
+        }
+        let plan = match Plan::new(operations) {
+            Ok(plan) => plan,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "operation_plan_invalid",
+                    "The standalone skill operation plan was invalid.",
+                ));
+            }
+        };
+        let filesystem = SystemFileSystem;
+        let port = ManagedSkillPort {
+            filesystem: &filesystem,
+            entries,
+        };
+        let journal = StateExecutionJournal {
+            plan: &plan,
+            state: self.state,
+            seeds,
+        };
+        let lock_path = match AbsolutePath::new(format!(
+            "{}/skilltap.lock",
+            paths.skilltap_config().as_str()
+        )) {
+            Ok(path) => path,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "lock_path_invalid",
+                    "The skilltap configuration lock path is invalid.",
+                ));
+            }
+        };
+        let report =
+            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
+                Ok(report) => report,
+                Err(error) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(native_execution_error(&error));
+                }
+            };
+        for result in report.result.operations().values() {
+            outcome = outcome.with_operation(crate::OperationOutcome::new(
+                result.operation_id().to_string(),
+                operation_result_status(result.outcome()),
+            ));
+            if !matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            ) {
+                outcome.result = ResultClass::AttentionRequired;
+            }
+        }
+        if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
+            outcome.result = ResultClass::Completed;
+        }
+        outcome
+            .with_summary("operations", report.result.operations().len() as u64)
+            .with_summary("changed", report.changed)
+    }
+
     fn execute_reconciliation(
         &self,
         command: &'static str,
@@ -1133,6 +1692,45 @@ impl StatusApplication<'_> {
             }
         }
     }
+}
+
+fn skill_relative_destination(
+    name: &NativeId,
+) -> Option<skilltap_core::domain::RelativeArtifactPath> {
+    skilltap_core::domain::RelativeArtifactPath::new(format!("skills/{}", name.as_str())).ok()
+}
+
+fn skill_destination(
+    paths: &PlatformPaths,
+    scope: &Scope,
+    target: &HarnessId,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+) -> Option<(AbsolutePath, AbsolutePath)> {
+    let root = match (scope, target.as_str()) {
+        (Scope::Global, "codex") => {
+            AbsolutePath::new(format!("{}/.agents", paths.home().as_str())).ok()?
+        }
+        (Scope::Global, "claude") => paths.claude_home().clone(),
+        (Scope::Project(project), "codex") => {
+            AbsolutePath::new(format!("{}/.agents", project.as_str())).ok()?
+        }
+        (Scope::Project(project), "claude") => {
+            AbsolutePath::new(format!("{}/.claude", project.as_str())).ok()?
+        }
+        _ => return None,
+    };
+    let full = AbsolutePath::new(format!("{}/{}", root.as_str(), destination.as_str())).ok()?;
+    Some((root, full))
+}
+
+fn skill_operation_id(target: &HarnessId, resource: &ResourceKey) -> OperationId {
+    let label = format!("skill:{target}:{}", resource.id().as_str());
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in label.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    OperationId::new(format!("skill:{target}:{hash:016x}")).expect("skill operation id is valid")
 }
 
 struct NativeLifecycleSpec {

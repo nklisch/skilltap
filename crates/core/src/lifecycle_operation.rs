@@ -63,6 +63,47 @@ pub fn native_operation(
     )
 }
 
+/// Build a faithful managed-file operation for a complete resource tree.
+pub fn faithful_file_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    path: crate::domain::AbsolutePath,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::Compatible,
+        TransferFidelity::Faithful,
+        [],
+        [],
+    )
+    .expect("faithful file operations have no evidence or consequences");
+    let semantics = OperationSemantics::new(
+        action,
+        resource.scope().clone(),
+        OperationReason::new(
+            EvidenceCode::new("managed.file").expect("static evidence code is valid"),
+            EvidenceDetail::new("The complete managed resource tree will be published.")
+                .expect("static evidence detail is valid"),
+        ),
+        compatibility,
+        Provenance::Direct,
+        [AffectedSurface::file(path)],
+    );
+    Operation::new(
+        id,
+        target,
+        OperationSelector::Resource { resource },
+        semantics,
+        OperationClass::SafeFaithfulEquivalent,
+        Reversibility::Reversible,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +149,24 @@ mod tests {
             [],
         );
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn faithful_file_operation_uses_the_complete_tree_surface() {
+        let target = HarnessId::new("codex").unwrap();
+        let operation = faithful_file_operation(
+            OperationId::new("skill-install-codex").unwrap(),
+            target,
+            ResourceKey::new(ResourceId::new("skill:demo").unwrap(), Scope::Global),
+            OperationAction::SkillInstall,
+            crate::domain::AbsolutePath::new("/home/user/.agents/skills/demo").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(operation.class(), OperationClass::SafeFaithfulEquivalent);
+        assert!(operation.affected_surfaces().iter().any(|surface| {
+            surface
+                .path()
+                .is_some_and(|path| path.as_str().ends_with("/demo"))
+        }));
     }
 }
