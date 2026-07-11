@@ -470,8 +470,16 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
         ],
     );
     assert_code(&update, 0);
-    assert_eq!(json(&update)["result"], "completed");
-    assert_eq!(json(&update)["summary"]["changed"], true);
+    let update_value = json(&update);
+    assert_eq!(update_value["result"], "completed");
+    assert_eq!(update_value["summary"]["changed"], true);
+    assert!(
+        update_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| resource["status"] == "observed")
+    );
 
     let second = run(
         &machine,

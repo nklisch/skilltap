@@ -1360,6 +1360,9 @@ impl StatusApplication<'_> {
                 }
             };
         let observation = NativeObservation::run(&documents, &scope, &targets);
+        for resource in observation.resources.iter().cloned() {
+            outcome = outcome.with_resource(resource);
+        }
         for warning in observation.warnings.iter().cloned() {
             outcome = outcome.with_warning(warning);
         }

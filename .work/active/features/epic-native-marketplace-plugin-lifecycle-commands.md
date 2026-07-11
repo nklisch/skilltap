@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle-commands
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-native-marketplace-plugin-lifecycle
 depends_on: [epic-native-marketplace-plugin-lifecycle-preservation]
@@ -51,4 +51,6 @@ native exact-resource post-observation and update-all selector expansion remain
 open. Update commands without a name now expand across matching desired
 marketplaces or plugins in each selected scope, while already-applied operation
 records remain idempotent; existing source provenance is retained in refreshed
-native state.
+native state. Each mutating result now includes the fresh observed native
+surface entries, making post-mutation evidence visible in structured output;
+exact plugin identity parsing remains a future harness-observation refinement.
