@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-operation-semantics
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-plan-results]
@@ -59,3 +59,14 @@ without introducing adapter-internal actions or execution algorithms.
   operations and apply results round-trip deterministically.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-11)
+
+- Blocker: executable safe/partial operations may carry an empty affected-surface
+  set. Require at least one affected file or target-bound native command through
+  constructor and serde paths.
+- Blocker: operation class is not checked against transfer fidelity, and partial
+  acknowledgment consequences may differ from the authoritative compatibility
+  consequences. Enforce the class/fidelity matrix and exact consequence equality
+  for partial operations. `NoOp` may represent already-satisfied faithful,
+  materializable, or previously accepted partial state, but never blocked state.
