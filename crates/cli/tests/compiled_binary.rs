@@ -556,6 +556,43 @@ fn status_preserves_successful_sibling_observation_and_never_mutates_native_tree
     assert_eq!(snapshot_native_tree(&claude_home), before_claude);
 }
 
+#[test]
+fn adopt_publishes_inventory_and_is_idempotent_without_native_mutation() {
+    let machine = machine();
+    let codex = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let codex_home = machine.home().join(".codex");
+    fs::create_dir_all(codex_home.join("skills/example")).unwrap();
+    fs::write(
+        codex_home.join("skills/example/SKILL.md"),
+        "---\nname: example\ndescription: Example\n---\n",
+    )
+    .unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), codex.executable()),
+    );
+    let before = snapshot_native_tree(&codex_home);
+
+    let first = run(&machine, &["adopt", "--from", "codex", "--json"]);
+    assert_code(&first, 0);
+    let first_value = json(&first);
+    assert_eq!(first_value["command"], "adopt");
+    assert_eq!(first_value["result"], "completed");
+    assert!(first_value["summary"]["adopted"].as_u64().unwrap() > 0);
+    let inventory = config_root(&machine).join("inventory.toml");
+    assert!(inventory.is_file());
+    let first_inventory = fs::read(&inventory).unwrap();
+
+    let second = run(&machine, &["adopt", "--from", "codex", "--json"]);
+    assert_code(&second, 0);
+    let second_value = json(&second);
+    assert_eq!(second_value["result"], "completed");
+    assert!(second_value["summary"]["already_managed"].as_u64().unwrap() > 0);
+    assert_eq!(fs::read(&inventory).unwrap(), first_inventory);
+    assert_eq!(snapshot_native_tree(&codex_home), before);
+}
+
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
     machine
         .run_in(&binary(), cwd, arguments)
