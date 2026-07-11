@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -193,3 +193,8 @@ and attempts directory sync regardless of which removals fail.
    exact temporary/destination residual paths and independent directory-sync
    state after cleanup attempts — depends on
    `[epic-rust-control-plane-runtime-primitives-filesystem-hardening]`.
+
+The residual-state correction is complete. Partial errors now carry exact
+owned residual paths and roles plus independent parent-directory durability;
+all cleanup steps run independently. The locked workspace remains green at 93
+tests plus doctests and warnings-clean rustdoc.

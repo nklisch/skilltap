@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-publication-residuals
 kind: story
-stage: review
+stage: done
 tags: [infra, correctness]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-filesystem-hardening]
@@ -52,3 +52,12 @@ durability.
 - Verification: locked format, all-target check, warnings-denied Clippy, workspace tests (93 core
   tests), and warnings-denied rustdoc pass.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Partial errors now expose a deterministic set of exact owned paths
+with temporary/destination roles and an independent directory-sync state.
+Rollback attempts destination removal, temporary removal, and parent sync even
+when earlier steps fail. The complete residual matrix, on-disk path identity,
+and safe rendering are exercised; successful and fully cleaned paths retain
+their behavior. Twelve focused filesystem tests and warnings-denied Clippy pass.
