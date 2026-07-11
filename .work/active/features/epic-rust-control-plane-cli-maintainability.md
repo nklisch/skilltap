@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-maintainability
 kind: feature
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-cli-shell]
@@ -110,3 +110,13 @@ sidecar with an unchanged test list. CI and release call one explicit optimized
 binary verification script, and version expectations use the workspace
 constant. The locked workspace passes 192 tests plus rustdoc and the optimized
 six-test binary contract.
+
+## Review
+
+Approved in fresh context. Independently built baseline and current optimized
+binaries produced byte-identical output and exits across representative scope,
+target, JSON/plain, and malformed-document cases. Every prior test identity is
+preserved except the declared redundant bare test, whose assertions remain;
+only two test-support identities were added. Absolute and relative binary
+overrides pass, and CI/release preserve smoke, compiled, and post-signing gates.
+The full locked 192-test, rustdoc, and isolated optimized wrapper ladders pass.
