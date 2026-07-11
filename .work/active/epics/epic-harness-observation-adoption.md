@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption
 kind: epic
-stage: implementing
+stage: done
 tags: []
 parent: null
 depends_on: [epic-rust-control-plane]
@@ -149,3 +149,44 @@ follow, then locked conflict-aware adoption and a final end-to-end contract.
 
 Each child feature's design pass owns exact schemas, fixture inventories, and
 story decomposition within these boundaries.
+
+## Review
+
+### Summary
+
+The epic now has a read-only, bounded observation pipeline and a safe adoption
+path for Codex and Claude: detection is version/profile aware, observations are
+normalized and ephemeral, status is deterministic, and adoption coalesces only
+exact semantic matches before locked inventory publication. The final
+integration contracts cover partial siblings, project/all-scope selection,
+repeat no-op behavior, lock contention, stale evidence, native no-mutation,
+platform path isolation, and bounded failure diagnostics.
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Important follow-up: adapters still expose bounded canonical surfaces rather
+  than complete per-plugin/per-skill manifest lineage. Deeper native settings,
+  marketplace, plugin, and complete skill parsing must land before claiming
+  granular reconciliation behavior.
+- Important follow-up: native macOS execution was not available in this Linux
+  run; the portable platform contracts are green and the native macOS lane
+  remains CI responsibility.
+
+### Verification
+
+- `cargo test --workspace --all-targets --offline` — 222 core tests plus all
+  CLI, harness, runtime, storage, and test-support suites passed.
+- `cargo clippy --workspace --all-targets --offline -- -D warnings` passed.
+- No native harness configuration, state snapshot, or managed artifact is
+  mutated by status/adopt; successful adoption changes only inventory.
+
+### Notes
+
+Deep aggregate review was performed inline in this run because no different
+model-class reviewer was available. The epic is complete for its bounded
+surface-observation/adoption contract; the findings above are intentionally
+follow-up scope rather than guessed support.
