@@ -8,9 +8,10 @@ use skilltap_core::{
         UnreachableReason,
     },
     runtime::{
-        ExecutableResolutionRequest, ExecutableResolver, JsonLimits, NativeProcessRequest,
-        NativeProcessRunner, ObservationRuntimeError, ProcessLimits, StrictJson, StrictJsonDecoder,
-        SystemExecutableResolver, SystemNativeProcessRunner,
+        ExecutableResolutionRequest, ExecutableResolver, ExternalTreeObserver, JsonLimits,
+        NativeProcessRequest, NativeProcessRunner, ObservationRuntimeError, ProcessLimits,
+        StrictJson, StrictJsonDecoder, SystemExecutableResolver, SystemExternalTreeObserver,
+        SystemNativeProcessRunner,
     },
 };
 
@@ -151,6 +152,18 @@ pub struct CodexConfigObservation {
     pub marketplace_count: usize,
     pub plugin_count: usize,
     pub trust_policy_present: bool,
+}
+
+/// Observes the bounded Codex native tree without materializing or interpreting
+/// resource payloads in the harness boundary.
+pub fn observe_codex_resources(
+    paths: &CodexObservationPaths,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<skilltap_core::runtime::ExternalTreeSnapshot, ObservationRuntimeError> {
+    SystemExternalTreeObserver.observe(&skilltap_core::runtime::ExternalTreeRequest::new(
+        paths.codex_home.clone(),
+        limits,
+    ))
 }
 
 impl std::fmt::Debug for CodexConfigObservation {

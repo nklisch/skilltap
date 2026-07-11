@@ -4,8 +4,8 @@ use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, Scope, UnreachableReason},
     runtime::{
         Environment, EnvironmentVariable, ExecutableResolutionRequest, ExecutableResolver,
-        JsonLimits, NativeProcessRequest, ObservationRuntimeError, PlatformPaths, ProcessLimits,
-        SupportedPlatform, SystemExecutableResolver,
+        ExternalTreeLimits, JsonLimits, NativeProcessRequest, ObservationRuntimeError,
+        PlatformPaths, ProcessLimits, SupportedPlatform, SystemExecutableResolver,
     },
 };
 use skilltap_harnesses::{
@@ -256,5 +256,35 @@ trust = true
     assert_eq!(
         observe_codex_config(b"not = [valid"),
         Err(CodexConfigError::Malformed)
+    );
+}
+
+#[test]
+fn codex_resource_observation_reads_complete_skill_trees_without_writing() {
+    let root = TempRoot::new("skilltap-codex-resources").unwrap();
+    let home = root.join("home");
+    let codex_home = root.join("codex");
+    let skill = codex_home.join("skills/example");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), b"name: example\n").unwrap();
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, home.to_str().unwrap())
+        .with(EnvironmentVariable::CodexHome, codex_home.to_str().unwrap());
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let paths = skilltap_harnesses::codex_observation_paths(&platform, &Scope::Global).unwrap();
+    let snapshot = skilltap_harnesses::observe_codex_resources(
+        &paths,
+        ExternalTreeLimits::new(8, 32, 4096, 8192, 1024).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        snapshot
+            .entries()
+            .iter()
+            .any(|entry| entry.path().as_str() == "skills/example/SKILL.md")
+    );
+    assert_eq!(
+        std::fs::read(skill.join("SKILL.md")).unwrap(),
+        b"name: example\n"
     );
 }

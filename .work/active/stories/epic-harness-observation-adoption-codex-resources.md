@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex-resources
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-codex-config]
@@ -20,3 +20,16 @@ directories containing top-level `SKILL.md`, global/project instructions, and
 effective cache/manifests. Track conformance/loadability, declared versus
 effective plugin state, source/provenance, and `AGENTS.override.md` precedence
 without reading outside bounded native trees or emitting raw bytes.
+
+## Implementation
+
+- Added bounded `observe_codex_resources` composition over the descriptor-
+  relative external-tree observer. Complete skill directories and their
+  top-level `SKILL.md` remain native tree evidence; the adapter performs no
+  writes or cache materialization.
+- Added a no-mutation integration test for a complete Codex skill directory.
+
+## Verification
+
+- Harness Clippy and all nine detection/Codex path/config/resource tests pass
+  in the locked offline workspace.
