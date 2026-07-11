@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-graph
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle]
@@ -198,3 +198,13 @@ an equivalent kind.
 
 - Direct-read design only; no peer advisory pass was run because this autopilot
   run is intentionally single-agent and no different model was selected.
+
+## Implementation notes
+
+- Completed child stories: `epic-cross-harness-materialization-graph-contract`,
+  `epic-cross-harness-materialization-graph-readers`, and
+  `epic-cross-harness-materialization-graph-integration`.
+- Delivered typed source graph normalization, bounded Codex/Claude manifest
+  readers, provenance, and pure graph-to-materialization planning handoff.
+- Verification: targeted core and harness tests plus clippy passed; the full
+  workspace suite remains the final feature review gate.

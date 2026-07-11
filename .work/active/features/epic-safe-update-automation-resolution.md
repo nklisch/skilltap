@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-resolution
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-safe-update-automation
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle]
@@ -213,3 +213,14 @@ reports attention instead of inferring a version from cache paths.
 
 - Direct-read design only; no peer advisory pass was run because this autopilot
   run is intentionally single-agent and no different model was selected.
+
+## Implementation notes
+
+- Completed child stories: `epic-safe-update-automation-resolution-contract`,
+  `epic-safe-update-automation-resolution-adapters`, and
+  `epic-safe-update-automation-resolution-orchestration`.
+- Delivered typed revision candidates, bounded Git/native resolvers,
+  read-only status update projection, and atomic available-revision state cache
+  primitives.
+- Verification: targeted core, harness, and CLI tests plus clippy passed; the
+  full workspace suite remains the final feature review gate.
