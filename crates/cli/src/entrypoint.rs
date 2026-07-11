@@ -247,7 +247,7 @@ where
         Dispatch::DaemonStatus(args) => {
             (execute_system_daemon_status(&args), OutputChannel::Stdout)
         }
-        Dispatch::DaemonRun => (capability_unavailable("daemon run"), OutputChannel::Stderr),
+        Dispatch::DaemonRun => (execute_system_daemon_run(), OutputChannel::Stdout),
     };
     render(outcome, json, plain_channel)
 }
@@ -258,6 +258,12 @@ fn execute_system_plan(args: &PlanArgs) -> Outcome {
 
 fn execute_system_sync(args: &SyncArgs) -> Outcome {
     execute_system_reconciliation("sync", |application| application.execute_sync(args))
+}
+
+fn execute_system_daemon_run() -> Outcome {
+    execute_system_reconciliation("daemon run", |application| {
+        application.execute_daemon_cycle()
+    })
 }
 
 fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outcome {
@@ -958,18 +964,6 @@ fn repository_composition_error(command: &'static str) -> Outcome {
         "storage_unavailable",
         "The skilltap storage repositories could not be composed.",
     ))
-}
-
-fn capability_unavailable(command: &str) -> Outcome {
-    Outcome::new(command, ResultClass::Invalid)
-        .with_error(ErrorDetail::new(
-            "capability_unavailable",
-            "This command capability is not available in this build.",
-        ))
-        .with_next_action(NextAction::new(
-            "retry_after_capability_available",
-            "Retry when this command capability is available.",
-        ))
 }
 
 fn parse_error(kind: ErrorKind) -> Outcome {

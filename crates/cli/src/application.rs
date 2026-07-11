@@ -645,6 +645,88 @@ impl StatusApplication<'_> {
         )
     }
 
+    /// Run one bounded safe-update cycle. The cycle delegates each selected
+    /// resource to the existing native/skill lifecycle executor without any
+    /// acknowledgment selectors; pinned, disabled, drifted, or incompatible
+    /// resources remain pending in their child outcome.
+    pub(crate) fn execute_daemon_cycle(&self) -> Outcome {
+        let command = "daemon run";
+        let (documents, mut aggregate) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
+        };
+        if documents.config.updates().mode != skilltap_core::storage::UpdateMode::ApplySafe {
+            return aggregate
+                .with_warning(Warning::new(
+                    "daemon_policy_not_apply_safe",
+                    "The configured update policy does not permit automatic application.",
+                ))
+                .with_summary("changed", false)
+                .with_summary("safe_operations", 0_u64)
+                .with_summary("pending_operations", 0_u64);
+        }
+        let mut tasks = Vec::new();
+        if let Some(inventory) = documents.inventory.as_ref() {
+            for resource in inventory.resources().values() {
+                if resource.update() != UpdateIntent::Track {
+                    continue;
+                }
+                let name = if resource.kind() == ResourceKind::Plugin {
+                    resource.id().as_str().strip_prefix("plugin:")
+                } else if resource.kind() == ResourceKind::StandaloneSkill
+                    && resource
+                        .source()
+                        .is_some_and(|source| source.kind() == SourceKind::Git)
+                {
+                    resource.id().as_str().strip_prefix("skill:")
+                } else {
+                    None
+                };
+                let Some(name) = name else { continue };
+                tasks.push((resource.kind(), name.to_owned(), resource.scope().clone()));
+            }
+        }
+        let mut changed = false;
+        let mut safe_operations = 0_u64;
+        let mut pending_operations = 0_u64;
+        for (kind, name, scope) in tasks {
+            let child_scope = scope_args_for_scope(&scope);
+            let child = match kind {
+                ResourceKind::Plugin => self.execute_native_lifecycle(
+                    command,
+                    NativeLifecycleKind::PluginUpdate,
+                    &child_scope,
+                    &TargetArgs::default(),
+                    None,
+                    Some(&name),
+                ),
+                ResourceKind::StandaloneSkill => self.execute_skill_update(
+                    command,
+                    &child_scope,
+                    &TargetArgs::default(),
+                    Some(&name),
+                ),
+                _ => continue,
+            };
+            changed |= child.summary.get("changed") == Some(&OutputValue::Boolean(true));
+            if child.result == ResultClass::Completed {
+                safe_operations += child.operations.len() as u64;
+            } else {
+                pending_operations += 1;
+            }
+            aggregate.result = merge_result(aggregate.result, child.result);
+            aggregate.resources.extend(child.resources);
+            aggregate.operations.extend(child.operations);
+            aggregate.warnings.extend(child.warnings);
+            aggregate.errors.extend(child.errors);
+            aggregate.next_actions.extend(child.next_actions);
+        }
+        aggregate
+            .with_summary("changed", changed)
+            .with_summary("safe_operations", safe_operations)
+            .with_summary("pending_operations", pending_operations)
+    }
+
     /// List desired standalone skills only. This is deliberately inventory
     /// backed and never scans source directories or marketplace contents.
     pub(crate) fn execute_skill_list(&self, args: &ScopedTargetArgs) -> Outcome {

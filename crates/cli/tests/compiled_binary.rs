@@ -245,8 +245,8 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 }
             );
         } else if *command == "daemon run" {
-            assert!(stdout(&output).is_empty());
-            assert!(stderr(&output).contains("capability_unavailable"));
+            assert!(output.status.code() == Some(0) || output.status.code() == Some(2));
+            assert!(stderr(&output).is_empty());
         } else if command.starts_with("daemon ") {
             let value = json(&output);
             assert_eq!(value["command"], *command, "arguments: {arguments:?}");

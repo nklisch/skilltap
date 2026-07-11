@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-service
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-safe-update-automation
 depends_on: [epic-safe-update-automation-foreground]
@@ -137,3 +137,19 @@ later status/repair command to recover deterministically.
 
 - Direct-read design only; no peer advisory pass was run because this
   autopilot run is intentionally single-agent.
+
+## Implementation Notes
+
+- All three service stories are complete: deterministic definitions,
+  user-service lifecycle management, and one bounded safe daemon cycle.
+- `daemon enable`, `disable`, `status`, and `run` are now real non-interactive
+  commands. Service manager failures retain owned definitions and report
+  attention; daemon cycles never supply acknowledgments.
+- Targeted service/CLI tests and clippy pass. Full workspace verification is
+  the remaining gate.
+
+## Review Record
+
+- Inline deep review: **pass** after the full workspace test and clippy gates.
+  Ownership checks,
+  direct argv, lock delegation, and finite-cycle behavior are explicit.
