@@ -1,4 +1,7 @@
+pub mod capability;
+pub mod compatibility;
 pub mod identity;
+pub mod resource;
 pub mod scope;
 pub mod source;
 
