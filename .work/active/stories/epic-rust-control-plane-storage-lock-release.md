@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-lock-release
 kind: story
-stage: review
+stage: done
 tags: [correctness]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-document-repositories]
@@ -44,3 +44,11 @@ contention.
   diff hygiene.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Each acquired provisional descriptor now owns an explicit-unlock RAII
+guard until all identity checks pass, then transfers into the unchanged public
+guard. The 128-cycle failed-swap/immediate-reacquire regression and 30 parallel
+core runs pass; ordering, error precedence, and the 142-test inventory remain
+unchanged.
