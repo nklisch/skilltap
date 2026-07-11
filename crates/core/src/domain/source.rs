@@ -2,54 +2,13 @@ use std::{fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{AbsolutePath, NativeId, ValidationError, validate_text};
+use super::{
+    AbsolutePath, NativeId, ValidationError, validate_text,
+    validated_newtype::validated_string_newtype,
+};
 
-macro_rules! opaque_text_type {
-    ($name:ident, $kind:literal, $max:expr) => {
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $name(String);
-
-        impl $name {
-            pub fn new(value: impl Into<String>) -> Result<Self, ValidationError> {
-                let value = value.into();
-                validate_text(&value, $kind, $max)?;
-                Ok(Self(value))
-            }
-
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str(&self.0)
-            }
-        }
-
-        impl Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
-            {
-                serializer.serialize_str(&self.0)
-            }
-        }
-
-        impl<'de> Deserialize<'de> for $name {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                let value = String::deserialize(deserializer)?;
-                Self::new(value).map_err(serde::de::Error::custom)
-            }
-        }
-    };
-}
-
-opaque_text_type!(SourceLocator, "source locator", 4096);
-opaque_text_type!(RequestedRevision, "requested revision", 512);
+validated_string_newtype!(SourceLocator, "source locator", 4096, validate_text);
+validated_string_newtype!(RequestedRevision, "requested revision", 512, validate_text);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]

@@ -5,6 +5,7 @@ pub mod operation;
 pub mod resource;
 pub mod scope;
 pub mod source;
+mod validated_newtype;
 
 pub use capability::{CapabilityId, CapabilitySet, CapabilitySupport};
 pub use compatibility::{

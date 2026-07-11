@@ -5,7 +5,8 @@ use std::{collections::BTreeSet, fmt};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{
-    HarnessId, ValidationError, resource::ComponentId, validate_identifier, validate_text,
+    HarnessId, resource::ComponentId, validate_identifier, validate_text,
+    validated_newtype::validated_string_newtype,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -32,69 +33,25 @@ impl TransferFidelity {
     }
 }
 
-macro_rules! validated_compatibility_text {
-    ($name:ident, $kind:literal, $max:expr, $validator:ident) => {
-        #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-        pub struct $name(String);
-
-        impl $name {
-            pub fn new(value: impl Into<String>) -> Result<Self, ValidationError> {
-                let value = value.into();
-                $validator(&value, $kind, $max)?;
-                Ok(Self(value))
-            }
-
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-        }
-
-        impl fmt::Display for $name {
-            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str(&self.0)
-            }
-        }
-
-        impl Serialize for $name {
-            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
-            {
-                serializer.serialize_str(&self.0)
-            }
-        }
-
-        impl<'de> Deserialize<'de> for $name {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-            where
-                D: Deserializer<'de>,
-            {
-                let value = String::deserialize(deserializer)?;
-                Self::new(value).map_err(serde::de::Error::custom)
-            }
-        }
-    };
-}
-
-validated_compatibility_text!(
+validated_string_newtype!(
     EvidenceCode,
     "compatibility evidence code",
     128,
     validate_identifier
 );
-validated_compatibility_text!(
+validated_string_newtype!(
     EvidenceDetail,
     "compatibility evidence detail",
     1024,
     validate_text
 );
-validated_compatibility_text!(
+validated_string_newtype!(
     ConsequenceCode,
     "compatibility consequence code",
     128,
     validate_identifier
 );
-validated_compatibility_text!(
+validated_string_newtype!(
     ConsequenceSummary,
     "compatibility consequence summary",
     1024,
