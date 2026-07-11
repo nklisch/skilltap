@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-command-clock
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-errors-paths]
@@ -45,3 +45,12 @@ terminal output, or ambient-secret capture.
 - Adjacent issues parked: none.
 - Dispatch rationale: direct-read only; the prior runtime errors and story acceptance criteria defined the complete integration surface.
 - Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace --all-targets`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace`, and `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps` all pass (71 workspace tests).
+
+## Review
+
+Approved. The system runner uses `std::process::Command` with exact `OsString`
+arguments, null stdin, piped outputs, and no shell; non-zero exits remain
+inspectable results while spawn/wait failures stay typed. Request/output debug
+forms and errors omit argument and output contents. The deterministic clock and
+system clock are synchronous and terminal-free. Thirteen focused runtime tests
+and warnings-denied workspace Clippy pass on review.
