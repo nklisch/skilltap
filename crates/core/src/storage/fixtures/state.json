@@ -12,13 +12,23 @@
   ],
   "resources": [
     {
-      "resource_id": "skill:review",
+      "key": {
+        "id": "skill:review",
+        "scope": {
+          "kind": "global"
+        }
+      },
       "provenance": "direct",
       "ownership": "skilltap",
       "managed_artifact": {
-        "owner": "skill:review",
+        "owner": {
+          "id": "skill:review",
+          "scope": {
+            "kind": "global"
+          }
+        },
         "role": "direct_skill",
-        "path": "artifact-direct-skill-54bad1d89206c233bdd66fed835a7303efe4eed42a7fda2e20ee6d567e4e4e19-sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "path": "artifact-direct-skill-c05d6415c054e1efb1a65975253d47362856c834f7b5e3cf2029dc0baad7e3da-sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "fingerprint": {
           "algorithm": "sha256",
           "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

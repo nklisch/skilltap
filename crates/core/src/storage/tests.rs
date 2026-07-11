@@ -7,19 +7,19 @@ use super::*;
 use crate::domain::{
     ComponentGraph, DesiredOrigin, DesiredResource, Fingerprint, FingerprintAlgorithm, HarnessId,
     HarnessSet, NativeId, OperationId, OperationOutcome, OperationResult, Ownership, Provenance,
-    RelativeArtifactPath, ResourceId, ResourceKind, Scope, UpdateIntent,
+    RelativeArtifactPath, ResourceId, ResourceKey, ResourceKind, Scope, UpdateIntent,
 };
 
 fn resource(
     id: &str,
     kind: ResourceKind,
     scope: Scope,
-    dependencies: impl IntoIterator<Item = ResourceId>,
+    dependencies: impl IntoIterator<Item = ResourceKey>,
 ) -> DesiredResource {
+    let key = ResourceKey::new(ResourceId::new(id).unwrap(), scope);
     DesiredResource::new(
-        ResourceId::new(id).unwrap(),
+        key,
         kind,
-        scope,
         HarnessSet::new([HarnessId::new("codex").unwrap()]).unwrap(),
         DesiredOrigin::Direct,
         None,
@@ -39,25 +39,25 @@ fn representative_inventory() -> InventoryDocument {
         "marketplace:personal",
         ResourceKind::Marketplace,
         Scope::Global,
-        [harness.id().clone()],
+        [harness.key().clone()],
     );
     let plugin = resource(
         "plugin:tools",
         ResourceKind::Plugin,
         Scope::Global,
-        [marketplace.id().clone()],
+        [marketplace.key().clone()],
     );
     let skill = resource(
         "skill:review",
         ResourceKind::StandaloneSkill,
         Scope::Project(project.clone()),
-        [plugin.id().clone()],
+        [plugin.key().clone()],
     );
     let instructions = resource(
         "instructions:global",
         ResourceKind::InstructionLocation,
         Scope::Global,
-        [skill.id().clone()],
+        [skill.key().clone()],
     );
     InventoryDocument::new(
         INVENTORY_SCHEMA_VERSION,
@@ -72,17 +72,21 @@ fn fingerprint() -> Fingerprint {
 }
 
 fn managed_resource(id: &str) -> ResourceState {
-    let id = ResourceId::new(id).unwrap();
+    managed_resource_at(id, Scope::Global)
+}
+
+fn managed_resource_at(id: &str, scope: Scope) -> ResourceState {
+    let key = ResourceKey::new(ResourceId::new(id).unwrap(), scope);
     let artifact_fingerprint = fingerprint();
     ResourceState::new(
-        id.clone(),
+        key.clone(),
         BTreeMap::new(),
         Provenance::Direct,
         Ownership::Skilltap,
         None,
         Some(
             ManagedArtifactRecord::for_artifact(
-                id,
+                key,
                 ArtifactRole::DirectSkill,
                 artifact_fingerprint.clone(),
             )
@@ -256,20 +260,29 @@ fn inventory_constructor_and_toml_reject_graph_and_project_violations() {
         "plugin:dangling",
         ResourceKind::Plugin,
         Scope::Global,
-        [ResourceId::new("missing").unwrap()],
+        [ResourceKey::new(
+            ResourceId::new("missing").unwrap(),
+            Scope::Global,
+        )],
     );
     assert!(InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [dangling]).is_err());
     let left = resource(
         "plugin:left",
         ResourceKind::Plugin,
         Scope::Global,
-        [ResourceId::new("plugin:right").unwrap()],
+        [ResourceKey::new(
+            ResourceId::new("plugin:right").unwrap(),
+            Scope::Global,
+        )],
     );
     let right = resource(
         "plugin:right",
         ResourceKind::Plugin,
         Scope::Global,
-        [ResourceId::new("plugin:left").unwrap()],
+        [ResourceKey::new(
+            ResourceId::new("plugin:left").unwrap(),
+            Scope::Global,
+        )],
     );
     assert!(InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [left, right]).is_err());
 
@@ -288,6 +301,55 @@ fn inventory_constructor_and_toml_reject_graph_and_project_violations() {
     let mut undeclared: toml::Value = toml::from_str(&encoded).unwrap();
     undeclared["projects"] = toml::Value::Array(Vec::new());
     assert!(toml::from_str::<InventoryDocument>(&toml::to_string(&undeclared).unwrap()).is_err());
+
+    let old_shape = encoded.replacen(
+        "[resources.key]\nid = \"harness:codex\"\n\n[resources.key.scope]",
+        "id = \"harness:codex\"\n\n[resources.scope]",
+        1,
+    );
+    assert_ne!(old_shape, encoded);
+    assert!(toml::from_str::<InventoryDocument>(&old_shape).is_err());
+}
+
+#[test]
+fn equal_ids_in_distinct_scopes_coexist_in_inventory_and_state() {
+    let project = AbsolutePath::new("/work/skilltap").unwrap();
+    let global_desired = resource(
+        "skill:shared",
+        ResourceKind::StandaloneSkill,
+        Scope::Global,
+        [],
+    );
+    let project_desired = resource(
+        "skill:shared",
+        ResourceKind::StandaloneSkill,
+        Scope::Project(project.clone()),
+        [],
+    );
+    let inventory = InventoryDocument::new(
+        INVENTORY_SCHEMA_VERSION,
+        [project.clone()],
+        [global_desired, project_desired],
+    )
+    .unwrap();
+    assert_eq!(inventory.resources().len(), 2);
+
+    let global_state = managed_resource_at("skill:shared", Scope::Global);
+    let project_state = managed_resource_at("skill:shared", Scope::Project(project));
+    assert_ne!(
+        global_state.managed_artifact().unwrap().path(),
+        project_state.managed_artifact().unwrap().path()
+    );
+    let state = StateDocument::new(
+        STATE_SCHEMA_VERSION,
+        [],
+        [global_state, project_state],
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(state.resources().len(), 2);
 }
 
 #[test]
@@ -336,6 +398,12 @@ fn state_is_strict_golden_and_excludes_desired_policy() {
         ))
         .is_err()
     );
+
+    let mut old_shape: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+    let resource = old_shape["resources"][0].as_object_mut().unwrap();
+    let key = resource.remove("key").unwrap();
+    resource.insert("resource_id".into(), key["id"].clone());
+    assert!(serde_json::from_value::<StateDocument>(old_shape).is_err());
 }
 
 #[test]
@@ -366,16 +434,16 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
         .is_err()
     );
 
-    let id = ResourceId::new("skill:bad").unwrap();
+    let key = ResourceKey::new(ResourceId::new("skill:bad").unwrap(), Scope::Global);
     let wrong_owner = ManagedArtifactRecord::for_artifact(
-        ResourceId::new("skill:other").unwrap(),
+        ResourceKey::new(ResourceId::new("skill:other").unwrap(), Scope::Global),
         ArtifactRole::DirectSkill,
         fingerprint(),
     )
     .unwrap();
     assert!(
         ResourceState::new(
-            id.clone(),
+            key.clone(),
             BTreeMap::new(),
             Provenance::Direct,
             Ownership::Skilltap,
@@ -391,7 +459,7 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
     );
     assert!(
         ResourceState::new(
-            id.clone(),
+            key.clone(),
             BTreeMap::new(),
             Provenance::Direct,
             Ownership::Unmanaged,
@@ -406,14 +474,14 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
         .is_err()
     );
     let wrong_role = ManagedArtifactRecord::for_artifact(
-        id.clone(),
+        key.clone(),
         ArtifactRole::MaterializedPlugin,
         fingerprint(),
     )
     .unwrap();
     assert!(
         ResourceState::new(
-            id,
+            key,
             BTreeMap::new(),
             Provenance::Direct,
             Ownership::Skilltap,
@@ -440,9 +508,7 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
     )
     .unwrap();
     let mut duplicate_path = serde_json::to_value(state).unwrap();
-    let mut second = duplicate_path["resources"][0].clone();
-    second["resource_id"] = serde_json::json!("skill:second");
-    second["managed_artifact"]["owner"] = serde_json::json!("skill:second");
+    let second = duplicate_path["resources"][0].clone();
     duplicate_path["resources"]
         .as_array_mut()
         .unwrap()
@@ -458,7 +524,7 @@ fn constructor_and_deserialization_enforce_state_invariants_equally() {
     assert!(serde_json::from_value::<ResourceState>(value).is_err());
 
     let apply = valid.managed_artifact().unwrap();
-    assert_eq!(apply.owner(), valid.resource_id());
+    assert_eq!(apply.owner(), valid.key());
     assert_eq!(apply.role(), ArtifactRole::DirectSkill);
     assert!(apply.path().as_str().starts_with("artifact-direct-skill-"));
 
@@ -487,4 +553,8 @@ fn constructor_and_deserialization_enforce_state_invariants_equally() {
         .unwrap()
         .insert("target".into(), serde_json::json!("codex"));
     assert!(serde_json::from_value::<ManagedArtifactRecord>(unknown_artifact).is_err());
+
+    let mut old_artifact_owner = serde_json::to_value(apply).unwrap();
+    old_artifact_owner["owner"] = serde_json::json!("skill:review");
+    assert!(serde_json::from_value::<ManagedArtifactRecord>(old_artifact_owner).is_err());
 }

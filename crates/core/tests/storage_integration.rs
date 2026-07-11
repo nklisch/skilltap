@@ -17,7 +17,7 @@ use skilltap_core::{
     domain::{
         AbsolutePath, ComponentGraph, DesiredOrigin, DesiredResource, Fingerprint,
         FingerprintAlgorithm, HarnessId, HarnessSet, Ownership, Provenance, ResourceId,
-        ResourceKind, Scope, UpdateIntent,
+        ResourceKey, ResourceKind, Scope, UpdateIntent,
     },
     runtime::SystemFileSystem,
     storage::{
@@ -36,7 +36,7 @@ const AUTH_SENTINEL: &str = "sk-test-auth-material-must-not-persist";
 struct Fixture {
     _temporary: TempRoot,
     root: AbsolutePath,
-    owner: ResourceId,
+    owner: ResourceKey,
     fingerprint: Fingerprint,
     tree: ArtifactTree,
     config: ConfigDocument,
@@ -47,7 +47,7 @@ impl Fixture {
     fn new() -> Self {
         let temporary = TempRoot::new("skilltap-storage-integration").unwrap();
         let root = AbsolutePath::new(temporary.join("skilltap").to_str().unwrap()).unwrap();
-        let owner = ResourceId::new("skill:integration").unwrap();
+        let owner = ResourceKey::new(ResourceId::new("skill:integration").unwrap(), Scope::Global);
         let fingerprint = Fingerprint::new(FingerprintAlgorithm::Sha256, "a".repeat(64)).unwrap();
         let tree = ArtifactTree::new([
             ("SKILL.md", b"---\nname: integration\n---\n".to_vec()),
@@ -58,7 +58,6 @@ impl Fixture {
         let desired = DesiredResource::new(
             owner.clone(),
             ResourceKind::StandaloneSkill,
-            Scope::Global,
             HarnessSet::new([HarnessId::new("codex").unwrap()]).unwrap(),
             DesiredOrigin::Direct,
             None,
