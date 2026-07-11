@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-compatibility
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-graph]
@@ -176,3 +176,29 @@ future rule-table change with new fixture evidence.
 
 - Direct-read design only; no peer advisory pass was run because this autopilot
   run is intentionally single-agent and no different model was selected.
+
+## Implementation notes
+
+- Completed child stories: `epic-cross-harness-materialization-compatibility-policy`,
+  `epic-cross-harness-materialization-compatibility-aggregate`, and
+  `epic-cross-harness-materialization-compatibility-integration`.
+- Delivered a single capability-rule registry, fail-closed per-component
+  results, dependency-loss propagation, collision blocking, exact partial
+  selectors, and reconciliation forwarding.
+- Verification: targeted core tests and clippy passed; the full workspace
+  suite is the final feature review gate.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep feature review completed inline in degraded fresh-context mode
+because this run is intentionally single-agent. The completeness pass verified
+all support states, requiredness, collisions, dependencies, and scope-bearing
+selectors. The adversarial pass added propagation evidence for already-partial
+dependents and confirmed that no capability or equivalence mapping can silently
+grant faithful transfer. Full workspace tests and clippy passed.
