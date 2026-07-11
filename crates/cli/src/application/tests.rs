@@ -67,7 +67,7 @@ fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outc
 }
 
 #[test]
-fn first_use_status_uses_defaults_and_creates_nothing() {
+fn first_use_status_reports_no_enabled_harnesses_and_creates_nothing() {
     let temporary = TempRoot::new("skilltap-cli-application").unwrap();
     let root = application_root(&temporary);
     let cwd = AbsolutePath::new(std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
@@ -77,20 +77,50 @@ fn first_use_status_uses_defaults_and_creates_nothing() {
 
     assert_eq!(outcome.result, ResultClass::AttentionRequired);
     assert_eq!(outcome.scope, Some(OutputScope::Global));
-    assert_eq!(outcome.summary.get("targets"), Some(&2_u64.into()));
+    assert_eq!(outcome.summary.get("targets"), Some(&0_u64.into()));
     assert!(
         outcome
-            .warnings
+            .errors
             .iter()
-            .any(|warning| warning.code == "native_observation_unavailable")
+            .any(|error| error.code == "no_enabled_harnesses")
+    );
+    assert!(
+        outcome
+            .resources
+            .iter()
+            .all(|resource| resource.id != "codex" && resource.id != "claude")
     );
     assert!(!root.exists());
+}
+
+fn enable_all_harnesses(root: &std::path::Path) {
+    let filesystem = SystemFileSystem;
+    let repository = FileConfigRepository::new(&filesystem, absolute(root)).unwrap();
+    let defaults = ConfigDocument::defaults();
+    let enabled = ConfigDocument::new(
+        defaults.schema(),
+        HarnessPolicies {
+            codex: HarnessPolicy {
+                enabled: true,
+                binary: defaults.harnesses().codex.binary.clone(),
+            },
+            claude: HarnessPolicy {
+                enabled: true,
+                binary: defaults.harnesses().claude.binary.clone(),
+            },
+        },
+        defaults.instructions().clone(),
+        defaults.updates().clone(),
+    )
+    .unwrap();
+    repository.replace(&enabled).unwrap();
 }
 
 #[test]
 fn missing_inventory_makes_all_scopes_global_only() {
     let temporary = TempRoot::new("skilltap-cli-application").unwrap();
     let root = application_root(&temporary);
+    enable_all_harnesses(&root);
     let cwd = AbsolutePath::new(std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
     let args = status_args(ScopeArgs {
         project: None,
@@ -109,6 +139,7 @@ fn missing_inventory_makes_all_scopes_global_only() {
 fn relative_project_is_resolved_against_the_working_directory() {
     let temporary = TempRoot::new("skilltap-cli-application").unwrap();
     let root = application_root(&temporary);
+    enable_all_harnesses(&root);
     let workspace = TempRoot::new("skilltap-cli-application-workspace").unwrap();
     let current = workspace.join("current");
     let project = workspace.join("project");

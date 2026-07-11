@@ -53,6 +53,7 @@ impl StatusApplication<'_> {
             Ok(targets) => targets,
             Err(StatusTargetError::NoneEnabled) => {
                 return outcome
+                    .with_summary("targets", 0_u64)
                     .with_error(ErrorDetail::new(
                         "no_enabled_harnesses",
                         "No harness is enabled in skilltap configuration.",

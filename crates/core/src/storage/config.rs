@@ -252,11 +252,11 @@ impl ConfigDocument {
         Self {
             harnesses: HarnessPolicies {
                 codex: HarnessPolicy {
-                    enabled: true,
+                    enabled: false,
                     binary: HarnessBinary::new("codex").expect("known valid binary"),
                 },
                 claude: HarnessPolicy {
-                    enabled: true,
+                    enabled: false,
                     binary: HarnessBinary::new("claude").expect("known valid binary"),
                 },
             },

@@ -1,11 +1,11 @@
 schema = 1
 
 [harnesses.codex]
-enabled = true
+enabled = false
 binary = "codex"
 
 [harnesses.claude]
-enabled = true
+enabled = false
 binary = "claude"
 
 [instructions]

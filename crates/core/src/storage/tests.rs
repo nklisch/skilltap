@@ -131,6 +131,8 @@ fn representative_state() -> StateDocument {
 fn config_defaults_are_explicit_strict_and_golden() {
     let config = ConfigDocument::defaults();
     assert_eq!(config.schema(), CONFIG_SCHEMA_VERSION);
+    assert!(!config.harnesses().codex.enabled);
+    assert!(!config.harnesses().claude.enabled);
     assert_eq!(config.harnesses().codex.binary.as_str(), "codex");
     assert_eq!(config.harnesses().claude.binary.as_str(), "claude");
     assert_eq!(

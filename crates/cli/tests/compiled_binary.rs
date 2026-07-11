@@ -8,6 +8,24 @@ use serde_json::Value;
 use skilltap_core::VERSION;
 use skilltap_test_support::{IsolatedMachine, captured_stderr, captured_stdout, compiled_binary};
 
+const ENABLED_CONFIG: &str = r#"schema = 1
+
+[harnesses.codex]
+enabled = true
+binary = "codex"
+
+[harnesses.claude]
+enabled = true
+binary = "claude"
+
+[instructions]
+claude_mode = "symlink"
+
+[updates]
+mode = "apply-safe"
+interval = "6h"
+"#;
+
 fn machine() -> IsolatedMachine {
     IsolatedMachine::new("skilltap-compiled-cli").expect("create isolated machine")
 }
@@ -155,7 +173,7 @@ fn bare_invocation_prints_concise_help_and_fails_as_input() {
 }
 
 #[test]
-fn first_use_status_is_read_only_and_uses_global_defaults() {
+fn first_use_status_is_read_only_and_reports_no_enabled_harnesses() {
     let machine = machine();
     assert!(!config_root(&machine).exists());
 
@@ -165,10 +183,14 @@ fn first_use_status_is_read_only_and_uses_global_defaults() {
     assert_eq!(value["command"], "status");
     assert_eq!(value["result"], "attention_required");
     assert_eq!(value["scope"]["kind"], "global");
-    assert_eq!(value["summary"]["targets"], 2);
-    assert_eq!(
-        value["warnings"][0]["code"],
-        "native_observation_unavailable"
+    assert_eq!(value["summary"]["targets"], 0);
+    assert_eq!(value["errors"][0]["code"], "no_enabled_harnesses");
+    assert!(
+        value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|resource| { resource["id"] != "codex" && resource["id"] != "claude" })
     );
     assert!(!config_root(&machine).exists());
 }
@@ -176,6 +198,7 @@ fn first_use_status_is_read_only_and_uses_global_defaults() {
 #[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
     let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
     let project = machine.working_directory().join("project");
     let nested = project.join("nested");
     fs::create_dir_all(&nested).unwrap();
