@@ -47,6 +47,16 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
+    #[cfg(test)]
+    pub(crate) const fn for_test(kind: FileKind, length: u64) -> Self {
+        Self {
+            kind,
+            length,
+            link_target: None,
+            link_target_exists: None,
+        }
+    }
+
     pub const fn kind(&self) -> FileKind {
         self.kind
     }

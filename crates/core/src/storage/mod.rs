@@ -2,6 +2,7 @@
 
 mod config;
 mod inventory;
+mod repository;
 mod state;
 
 pub use config::{
@@ -9,6 +10,11 @@ pub use config::{
     InstructionPolicy, UpdateInterval, UpdateIntervalUnit, UpdateMode, UpdatePolicy,
 };
 pub use inventory::InventoryDocument;
+pub use repository::{
+    ConfigRepository, DocumentAction, DocumentKind, DocumentState, FileConfigRepository,
+    FileInventoryRepository, FileStateRepository, InventoryRepository, StateRepository,
+    StorageError, StorageFailure,
+};
 pub use state::{
     ApplyRecord, ArtifactRole, HarnessState, ManagedArtifactRecord, ResourceState, StateDocument,
     Timestamp,
