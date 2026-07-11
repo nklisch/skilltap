@@ -10,7 +10,9 @@ use serde_json::Value;
 
 use super::{
     Fingerprint, HarnessId, HarnessSet, MaterialConsequence, NativeId, ResolvedRevision,
-    ResourceId, Scope, Source, ValidationError, validate_identifier, validate_text,
+    ResourceId, Scope, Source, ValidationError,
+    dependency_graph::{ReferenceError, find_exact_cycle, validate_references},
+    validate_identifier, validate_text,
     validated_newtype::validated_string_newtype,
 };
 
@@ -162,24 +164,19 @@ impl<'de> Deserialize<'de> for ComponentGraph {
 fn validate_component_dependencies(
     components: &BTreeMap<ComponentId, ResourceComponent>,
 ) -> Result<(), ComponentGraphError> {
-    for (id, component) in components {
-        for dependency in &component.dependencies {
-            if dependency == id {
-                return Err(ComponentGraphError::SelfDependency { id: id.clone() });
-            }
-            if !components.contains_key(dependency) {
-                return Err(ComponentGraphError::DanglingDependency {
-                    component: id.clone(),
-                    dependency: dependency.clone(),
-                });
+    let dependencies = components
+        .iter()
+        .map(|(id, component)| (id, &component.dependencies));
+    validate_references(dependencies.clone()).map_err(|error| match error {
+        ReferenceError::SelfReference { node } => ComponentGraphError::SelfDependency { id: node },
+        ReferenceError::UnknownReference { node, reference } => {
+            ComponentGraphError::DanglingDependency {
+                component: node,
+                dependency: reference,
             }
         }
-    }
-    if let Some(components) = find_exact_cycle(
-        components
-            .iter()
-            .map(|(id, component)| (id, &component.dependencies)),
-    ) {
+    })?;
+    if let Some(components) = find_exact_cycle(dependencies) {
         return Err(ComponentGraphError::DependencyCycle { components });
     }
     Ok(())
@@ -998,24 +995,24 @@ fn validate_dependencies<'a>(
     resources: impl IntoIterator<Item = (&'a ResourceId, &'a BTreeSet<ResourceId>)>,
 ) -> Result<(), ResourceGraphError> {
     let resources = resources.into_iter().collect::<BTreeMap<_, _>>();
-    let ids = resources.keys().copied().collect::<BTreeSet<_>>();
-    for (&resource, dependencies) in &resources {
-        for dependency in *dependencies {
-            if dependency == resource {
-                return Err(ResourceGraphError::SelfDependency {
-                    collection,
-                    id: resource.clone(),
-                });
-            }
-            if !ids.contains(dependency) {
-                return Err(ResourceGraphError::DanglingDependency {
-                    collection,
-                    resource: resource.clone(),
-                    dependency: dependency.clone(),
-                });
+    validate_references(
+        resources
+            .iter()
+            .map(|(&id, &dependencies)| (id, dependencies)),
+    )
+    .map_err(|error| match error {
+        ReferenceError::SelfReference { node } => ResourceGraphError::SelfDependency {
+            collection,
+            id: node,
+        },
+        ReferenceError::UnknownReference { node, reference } => {
+            ResourceGraphError::DanglingDependency {
+                collection,
+                resource: node,
+                dependency: reference,
             }
         }
-    }
+    })?;
     if let Some(resources) = find_exact_cycle(resources.iter().map(|(&id, &deps)| (id, deps))) {
         return Err(ResourceGraphError::DependencyCycle {
             collection,
@@ -1039,20 +1036,17 @@ fn validate_observed_dependencies(
             .insert(key.resource.clone(), resource.dependencies.clone());
     }
     for ((harness, layer), resources) in contexts {
-        for (resource, dependencies) in &resources {
-            let key = ObservationKey::new(resource.clone(), harness.clone(), layer);
-            for dependency in dependencies {
-                if dependency == resource {
-                    return Err(ResourceGraphError::ObservedSelfDependency { key });
-                }
-                if !resources.contains_key(dependency) {
-                    return Err(ResourceGraphError::DanglingObservedDependency {
-                        key,
-                        dependency: dependency.clone(),
-                    });
+        validate_references(resources.iter()).map_err(|error| match error {
+            ReferenceError::SelfReference { node } => ResourceGraphError::ObservedSelfDependency {
+                key: ObservationKey::new(node, harness.clone(), layer),
+            },
+            ReferenceError::UnknownReference { node, reference } => {
+                ResourceGraphError::DanglingObservedDependency {
+                    key: ObservationKey::new(node, harness.clone(), layer),
+                    dependency: reference,
                 }
             }
-        }
+        })?;
         if let Some(resources) = find_exact_cycle(resources.iter()) {
             return Err(ResourceGraphError::ObservedDependencyCycle {
                 harness,
@@ -1062,56 +1056,6 @@ fn validate_observed_dependencies(
         }
     }
     Ok(())
-}
-
-fn find_exact_cycle<'a, K>(
-    graph: impl IntoIterator<Item = (&'a K, &'a BTreeSet<K>)>,
-) -> Option<BTreeSet<K>>
-where
-    K: Clone + Ord + 'a,
-{
-    fn visit<K: Clone + Ord>(
-        node: &K,
-        graph: &BTreeMap<&K, &BTreeSet<K>>,
-        complete: &mut BTreeSet<K>,
-        stack: &mut Vec<K>,
-        active: &mut BTreeMap<K, usize>,
-    ) -> Option<BTreeSet<K>> {
-        if complete.contains(node) {
-            return None;
-        }
-        if let Some(start) = active.get(node) {
-            return Some(stack[*start..].iter().cloned().collect());
-        }
-        active.insert(node.clone(), stack.len());
-        stack.push(node.clone());
-        if let Some(dependencies) = graph.get(node) {
-            for dependency in *dependencies {
-                if let Some(cycle) = visit(dependency, graph, complete, stack, active) {
-                    return Some(cycle);
-                }
-            }
-        }
-        stack.pop();
-        active.remove(node);
-        complete.insert(node.clone());
-        None
-    }
-
-    let graph = graph.into_iter().collect::<BTreeMap<_, _>>();
-    let mut complete = BTreeSet::new();
-    for node in graph.keys() {
-        if let Some(cycle) = visit(
-            *node,
-            &graph,
-            &mut complete,
-            &mut Vec::new(),
-            &mut BTreeMap::new(),
-        ) {
-            return Some(cycle);
-        }
-    }
-    None
 }
 
 fn finding_order(left: &ObservationFinding, right: &ObservationFinding) -> std::cmp::Ordering {

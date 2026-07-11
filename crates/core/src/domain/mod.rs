@@ -1,5 +1,6 @@
 pub mod capability;
 pub mod compatibility;
+mod dependency_graph;
 pub mod identity;
 pub mod operation;
 pub mod resource;

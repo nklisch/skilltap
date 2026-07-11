@@ -290,6 +290,32 @@ fn plan_rejects_duplicate_unknown_self_and_cyclic_dependencies() {
 }
 
 #[test]
+fn plan_reports_all_disjoint_cycle_members_without_downstream_nodes() {
+    let error = Plan::new([
+        safe_operation("one", &["two"]),
+        safe_operation("two", &["one"]),
+        safe_operation("three", &["four"]),
+        safe_operation("four", &["three"]),
+        safe_operation("downstream", &["one"]),
+    ])
+    .unwrap_err();
+
+    assert_eq!(
+        error,
+        OperationContractError::DependencyCycle {
+            operations: [
+                operation_id("one"),
+                operation_id("two"),
+                operation_id("three"),
+                operation_id("four"),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    );
+}
+
+#[test]
 fn partial_operations_require_exact_selectors_consequences_and_matching_attention() {
     assert_eq!(
         AcknowledgmentRequirement::required([], [consequence()]).unwrap_err(),

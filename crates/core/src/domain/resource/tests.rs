@@ -422,6 +422,82 @@ fn cycle_diagnostics_exclude_downstream_non_cycle_nodes() {
 }
 
 #[test]
+fn resource_graphs_select_the_first_of_multiple_disjoint_cycles() {
+    let component_error = ComponentGraph::new([
+        component("skill:a", &["skill:b"]),
+        component("skill:b", &["skill:a"]),
+        component("skill:c", &["skill:d"]),
+        component("skill:d", &["skill:c"]),
+    ])
+    .unwrap_err();
+    assert_eq!(
+        component_error,
+        ComponentGraphError::DependencyCycle {
+            components: BTreeSet::from([component_id("skill:a"), component_id("skill:b")])
+        }
+    );
+
+    let desired_error = ResourceGraph::new(
+        [
+            desired("plugin:a", &["plugin:b"]),
+            desired("plugin:b", &["plugin:a"]),
+            desired("plugin:c", &["plugin:d"]),
+            desired("plugin:d", &["plugin:c"]),
+        ],
+        [],
+        [],
+    )
+    .unwrap_err();
+    assert_eq!(
+        desired_error,
+        ResourceGraphError::DependencyCycle {
+            collection: GraphCollection::Desired,
+            resources: BTreeSet::from([id("plugin:a"), id("plugin:b")]),
+        }
+    );
+
+    let observed_error = ResourceGraph::new(
+        [],
+        [
+            observed(
+                "plugin:a",
+                "claude",
+                ObservationLayer::Effective,
+                &["plugin:b"],
+            ),
+            observed(
+                "plugin:b",
+                "claude",
+                ObservationLayer::Effective,
+                &["plugin:a"],
+            ),
+            observed(
+                "plugin:c",
+                "claude",
+                ObservationLayer::Effective,
+                &["plugin:d"],
+            ),
+            observed(
+                "plugin:d",
+                "claude",
+                ObservationLayer::Effective,
+                &["plugin:c"],
+            ),
+        ],
+        [],
+    )
+    .unwrap_err();
+    assert_eq!(
+        observed_error,
+        ResourceGraphError::ObservedDependencyCycle {
+            harness: harness("claude"),
+            layer: ObservationLayer::Effective,
+            resources: BTreeSet::from([id("plugin:a"), id("plugin:b")]),
+        }
+    );
+}
+
+#[test]
 fn observation_constructor_and_deserializer_reject_non_object_metadata() {
     let key = ObservationKey::new(
         id("plugin:a"),

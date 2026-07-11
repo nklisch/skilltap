@@ -11,6 +11,7 @@ use super::{
     AbsolutePath, CompatibilityResult, ComponentId, ConsequenceCode, EvidenceCode, EvidenceDetail,
     HarnessId, MaterialConsequence, NativeId, OperationId, Provenance, ResourceId, Scope,
     TransferFidelity,
+    dependency_graph::{ReferenceError, cyclic_members, validate_references},
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -916,20 +917,36 @@ impl<'de> Deserialize<'de> for Plan {
 fn validate_operation_graph(
     operations: &BTreeMap<OperationId, Operation>,
 ) -> Result<(), OperationContractError> {
+    let dependencies = operations
+        .iter()
+        .map(|(id, operation)| {
+            (
+                id.clone(),
+                operation
+                    .dependencies
+                    .iter()
+                    .map(|dependency| dependency.operation_id().clone())
+                    .collect::<BTreeSet<_>>(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    validate_references(dependencies.iter()).map_err(|error| match error {
+        ReferenceError::SelfReference { node } => {
+            OperationContractError::SelfDependency { id: node }
+        }
+        ReferenceError::UnknownReference { node, reference } => {
+            OperationContractError::UnknownDependency {
+                operation: node,
+                dependency: reference,
+            }
+        }
+    })?;
+
     let mut remaining = BTreeMap::new();
     let mut dependents: BTreeMap<&OperationId, BTreeSet<&OperationId>> = BTreeMap::new();
     for (id, operation) in operations {
         for dependency in &operation.dependencies {
             let dependency_id = dependency.operation_id();
-            if dependency_id == id {
-                return Err(OperationContractError::SelfDependency { id: id.clone() });
-            }
-            if !operations.contains_key(dependency_id) {
-                return Err(OperationContractError::UnknownDependency {
-                    operation: id.clone(),
-                    dependency: dependency_id.clone(),
-                });
-            }
             dependents.entry(dependency_id).or_default().insert(id);
         }
         remaining.insert(id, operation.dependencies.len());
@@ -961,42 +978,10 @@ fn validate_operation_graph(
             .map(|(id, _)| id.clone())
             .collect::<BTreeSet<_>>();
         return Err(OperationContractError::DependencyCycle {
-            operations: unresolved
-                .iter()
-                .filter(|id| {
-                    operation_reaches(id, id, operations, &unresolved, &mut BTreeSet::new())
-                })
-                .cloned()
-                .collect(),
+            operations: cyclic_members(dependencies.iter(), &unresolved),
         });
     }
     Ok(())
-}
-
-fn operation_reaches(
-    current: &OperationId,
-    target: &OperationId,
-    operations: &BTreeMap<OperationId, Operation>,
-    allowed: &BTreeSet<OperationId>,
-    visited: &mut BTreeSet<OperationId>,
-) -> bool {
-    for dependency in &operations
-        .get(current)
-        .expect("cycle search only visits known operations")
-        .dependencies
-    {
-        let dependency = dependency.operation_id();
-        if dependency == target {
-            return true;
-        }
-        if allowed.contains(dependency)
-            && visited.insert(dependency.clone())
-            && operation_reaches(dependency, target, operations, allowed, visited)
-        {
-            return true;
-        }
-    }
-    false
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
