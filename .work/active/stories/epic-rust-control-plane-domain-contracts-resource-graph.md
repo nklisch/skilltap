@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-graph
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -55,6 +55,19 @@ namespacing, observation findings, and validated dependency graphs.
 - Important: observation-finding ordering omits opaque metadata, so findings
   with otherwise equal keys serialize according to adapter input order. Add a
   deterministic metadata tie-break and prove reversed inputs serialize equally.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Initial component-identity and deterministic-order findings were
+resolved in `f1caac4`. Constructor and serde paths now validate both resource
+and component graphs. Story verified by implement, adversarial contract review,
+and integrated locked workspace checks; fast-lane advance.
 
 ## Review resolution (2026-07-11)
 
