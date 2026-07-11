@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status-integration
 kind: story
-stage: implementing
+stage: review
 tags: [cli,testing]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-policy, epic-harness-observation-adoption-status-observation]
@@ -19,3 +19,19 @@ Exercise plain and JSON list/enable/disable/status flows across global,
 current/explicit project, all-scopes, and named targets. Cover first-use
 no-create, partial sibling success, stable exit classes, repeat idempotence,
 safe diagnostics, and native byte/type/link/mtime no-mutation.
+
+## Implementation notes
+
+- Extended the compiled CLI integration suite with first-use `harness list`,
+  JSON/plain policy changes, binary overrides, and repeat-enable byte/mtime
+  idempotence checks.
+- Added a Codex-success/Claude-failure status fixture to verify sibling
+  observations remain visible while the aggregate stays attention-required.
+- Snapshotted native file bytes, entry types, symlink targets, and mtimes before
+  and after status to assert the observation path is read-only.
+- Isolated-machine subprocesses now clear an inherited `CODEX_HOME` so status
+  fixtures cannot accidentally observe the developer's native tree.
+
+## Verification
+
+- `cargo test -p skilltap --test compiled_binary --offline` (8 passed).

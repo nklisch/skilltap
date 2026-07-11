@@ -1,12 +1,16 @@
 use std::{
     fs,
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, Output},
+    time::SystemTime,
 };
 
 use serde_json::Value;
 use skilltap_core::VERSION;
-use skilltap_test_support::{IsolatedMachine, captured_stderr, captured_stdout, compiled_binary};
+use skilltap_test_support::{
+    FakeNativeMode, FakeNativeProcess, IsolatedMachine, captured_stderr, captured_stdout,
+    compiled_binary,
+};
 
 const ENABLED_CONFIG: &str = r#"schema = 1
 
@@ -38,6 +42,30 @@ fn config_root(machine: &IsolatedMachine) -> std::path::PathBuf {
     machine.configuration_home().join("skilltap")
 }
 
+fn native_config(codex: &Path, claude: &Path) -> String {
+    format!(
+        r#"schema = 1
+
+[harnesses.codex]
+enabled = true
+binary = {}
+
+[harnesses.claude]
+enabled = true
+binary = {}
+
+[instructions]
+claude_mode = "symlink"
+
+[updates]
+mode = "apply-safe"
+interval = "6h"
+"#,
+        toml_string(codex),
+        toml_string(claude),
+    )
+}
+
 fn write_owned(machine: &IsolatedMachine, name: &str, contents: &str) {
     let root = config_root(machine);
     fs::create_dir_all(&root).expect("create configuration root");
@@ -67,6 +95,62 @@ fn json(output: &Output) -> Value {
     let document = stdout(output);
     assert_eq!(document.lines().count(), 1, "JSON must be one document");
     serde_json::from_str(document).expect("stdout is one JSON document")
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct NativeEntrySnapshot {
+    relative: PathBuf,
+    kind: &'static str,
+    bytes: Option<Vec<u8>>,
+    link: Option<PathBuf>,
+    modified: Option<SystemTime>,
+}
+
+fn snapshot_native_tree(root: &Path) -> Vec<NativeEntrySnapshot> {
+    fn visit(root: &Path, current: &Path, entries: &mut Vec<NativeEntrySnapshot>) {
+        let metadata = fs::symlink_metadata(current).expect("read native metadata");
+        let file_type = metadata.file_type();
+        let kind = if file_type.is_dir() {
+            "directory"
+        } else if file_type.is_symlink() {
+            "symlink"
+        } else if file_type.is_file() {
+            "file"
+        } else {
+            "other"
+        };
+        entries.push(NativeEntrySnapshot {
+            relative: current
+                .strip_prefix(root)
+                .expect("native entry is beneath root")
+                .to_owned(),
+            kind,
+            bytes: file_type
+                .is_file()
+                .then(|| fs::read(current).expect("read native file")),
+            link: file_type
+                .is_symlink()
+                .then(|| fs::read_link(current).expect("read native link")),
+            modified: metadata.modified().ok(),
+        });
+        if file_type.is_dir() {
+            let mut children = fs::read_dir(current)
+                .expect("read native directory")
+                .map(|entry| entry.expect("read native entry").path())
+                .collect::<Vec<_>>();
+            children.sort();
+            for child in children {
+                visit(root, &child, entries);
+            }
+        }
+    }
+
+    if !root.exists() {
+        return Vec::new();
+    }
+    let mut entries = Vec::new();
+    visit(root, root, &mut entries);
+    entries
 }
 
 fn assert_code(output: &Output, expected: i32) {
@@ -163,6 +247,102 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
             assert_eq!(value["errors"][0]["code"], "capability_unavailable");
         }
     }
+}
+
+#[test]
+fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_only() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+
+    let first_list = run(&machine, &["harness", "list", "--json"]);
+    assert_code(&first_list, 0);
+    let first_value = json(&first_list);
+    assert_eq!(first_value["command"], "harness list");
+    assert_eq!(first_value["result"], "completed");
+    assert!(
+        first_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "codex" && entry["status"] == "disabled" })
+    );
+    assert!(
+        first_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "claude" && entry["status"] == "disabled" })
+    );
+    assert!(!config_root(&machine).exists());
+
+    let binary = fixture.executable();
+    let binary_text = binary.to_str().expect("fake binary path is UTF-8");
+    let enable = run(
+        &machine,
+        &[
+            "harness",
+            "enable",
+            "codex",
+            "--binary",
+            binary_text,
+            "--json",
+        ],
+    );
+    assert_code(&enable, 0);
+    assert_eq!(json(&enable)["result"], "completed");
+    let config_path = config_root(&machine).join("config.toml");
+    assert!(config_path.is_file());
+    let initial_bytes = fs::read(&config_path).expect("read enabled config");
+    assert!(String::from_utf8_lossy(&initial_bytes).contains(binary_text));
+    let initial_mtime = fs::metadata(&config_path)
+        .expect("stat enabled config")
+        .modified()
+        .expect("config mtime");
+
+    let repeat_enable = run(
+        &machine,
+        &[
+            "harness",
+            "enable",
+            "codex",
+            "--binary",
+            binary_text,
+            "--json",
+        ],
+    );
+    assert_code(&repeat_enable, 0);
+    assert_eq!(json(&repeat_enable)["result"], "completed");
+    assert_eq!(fs::read(&config_path).unwrap(), initial_bytes);
+    assert_eq!(
+        fs::metadata(&config_path).unwrap().modified().unwrap(),
+        initial_mtime
+    );
+
+    let list_plain = run(&machine, &["harness", "list"]);
+    assert_code(&list_plain, 0);
+    assert!(list_plain.stderr.is_empty());
+    assert!(stdout(&list_plain).contains("codex  enabled"));
+    assert!(stdout(&list_plain).contains("claude  disabled"));
+    assert!(stdout(&list_plain).contains("Result: completed"));
+
+    let disable = run(&machine, &["harness", "disable", "codex"]);
+    assert_code(&disable, 0);
+    assert!(disable.stderr.is_empty());
+    assert!(stdout(&disable).contains("codex  disabled"));
+    assert!(stdout(&disable).contains("Result: completed"));
+    let final_bytes = fs::read(&config_path).expect("read disabled config");
+    assert!(String::from_utf8_lossy(&final_bytes).contains("enabled = false"));
+
+    let final_list = run(&machine, &["harness", "list", "--json"]);
+    assert_code(&final_list, 0);
+    let final_value = json(&final_list);
+    assert!(
+        final_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "codex" && entry["status"] == "disabled" })
+    );
 }
 
 #[test]
@@ -276,6 +456,76 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
     let value = json(&all);
     assert_eq!(value["scope"]["kind"], "all");
     assert_eq!(value["summary"]["scopes"], 2);
+}
+
+#[test]
+fn status_preserves_successful_sibling_observation_and_never_mutates_native_trees() {
+    let machine = machine();
+    let codex = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::MalformedJson).unwrap();
+    let codex_home = machine.home().join(".codex");
+    let claude_home = machine.home().join(".claude");
+    fs::create_dir_all(codex_home.join("skills/example")).unwrap();
+    fs::create_dir_all(&claude_home).unwrap();
+    fs::write(
+        codex_home.join("config.toml"),
+        "[features]\nplugins = true\n",
+    )
+    .unwrap();
+    fs::write(
+        codex_home.join("skills/example/SKILL.md"),
+        "---\nname: example\n---\n",
+    )
+    .unwrap();
+    fs::write(
+        claude_home.join("settings.json"),
+        "{\"enabledPlugins\": []}\n",
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("config.toml", codex_home.join("config-link"))
+        .expect("create native symlink");
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+
+    let before_codex = snapshot_native_tree(&codex_home);
+    let before_claude = snapshot_native_tree(&claude_home);
+    let output = run(&machine, &["status", "--target", "all", "--json"]);
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert_eq!(value["result"], "attention_required");
+    assert_eq!(value["summary"]["targets"], 2);
+    assert_eq!(value["summary"]["observed_targets"], 1);
+    assert_eq!(value["summary"]["failed_targets"], 1);
+    assert!(
+        value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "codex:global" && entry["status"] == "observed" })
+    );
+    assert!(
+        value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "claude:global" && entry["status"] == "unreachable" })
+    );
+    assert!(value["warnings"].as_array().unwrap().iter().any(|warning| {
+        warning["code"] == "native_detection_failed" && warning["context"]["harness"] == "claude"
+    }));
+
+    let plain = run(&machine, &["status", "--target", "codex"]);
+    assert_code(&plain, 0);
+    assert!(plain.stderr.is_empty());
+    assert!(stdout(&plain).contains("Result: completed"));
+    assert!(stdout(&plain).contains("codex:global  observed"));
+
+    assert_eq!(snapshot_native_tree(&codex_home), before_codex);
+    assert_eq!(snapshot_native_tree(&claude_home), before_claude);
 }
 
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {

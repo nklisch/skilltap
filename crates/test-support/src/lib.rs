@@ -133,6 +133,7 @@ impl IsolatedMachine {
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.configuration_home)
             .env_remove("SKILLTAP_HOME")
+            .env_remove("CODEX_HOME")
             .output()
     }
 }
