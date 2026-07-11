@@ -14,7 +14,7 @@ use skilltap_core::{
     },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, FileConfigRepository,
-        FileInventoryRepository, FileStateRepository,
+        FileInventoryRepository, FileStateRepository, StateRepository,
     },
 };
 use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_profile};
@@ -465,6 +465,12 @@ fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
             skilltap_core::daemon::SYSTEMD_TIMER.to_owned(),
         ],
     };
+    let state_record = FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone())
+        .ok()
+        .and_then(|repository| match repository.load().ok()? {
+            DocumentState::Present(state) => state.daemon_run().cloned(),
+            DocumentState::Missing => None,
+        });
     let mut installed = true;
     for name in &names {
         let path = AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap();
@@ -483,8 +489,17 @@ fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
         }
     }
     if !installed {
+        let mut entry = OutputEntry::new(root.as_str(), "disabled");
+        entry = daemon_record_fields(entry, state_record.as_ref());
         return Outcome::new(command, ResultClass::Completed)
-            .with_resource(OutputEntry::new(root.as_str(), "disabled"));
+            .with_resource(entry)
+            .with_next_action(
+                NextAction::new(
+                    "enable_daemon",
+                    "Enable the optional user daemon before expecting automatic updates.",
+                )
+                .with_command("skilltap daemon enable"),
+            );
     }
     let manager = run_service_manager(
         platform,
@@ -492,15 +507,96 @@ fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
         &AbsolutePath::new(format!("{}/{}", root.as_str(), names[0])).unwrap(),
     );
     if manager.is_err() {
+        let entry = daemon_record_fields(
+            OutputEntry::new(root.as_str(), "installed"),
+            state_record.as_ref(),
+        );
         return Outcome::new(command, ResultClass::AttentionRequired)
-            .with_resource(OutputEntry::new(root.as_str(), "installed"))
+            .with_resource(entry)
             .with_warning(Warning::new(
                 "daemon_manager_unavailable",
                 "The owned daemon definition exists, but manager state could not be confirmed.",
-            ));
+            ))
+            .with_next_action(
+                NextAction::new(
+                    "retry_daemon_enable",
+                    "Retry daemon enable after checking the user service manager.",
+                )
+                .with_command("skilltap daemon enable"),
+            );
     }
-    Outcome::new(command, ResultClass::Completed)
-        .with_resource(OutputEntry::new(root.as_str(), "enabled"))
+    let status = state_record.as_ref().map_or("enabled_never_run", |record| {
+        daemon_result_label(record.result())
+    });
+    let entry = daemon_record_fields(
+        OutputEntry::new(root.as_str(), status),
+        state_record.as_ref(),
+    );
+    let mut outcome = Outcome::new(command, ResultClass::Completed).with_resource(entry);
+    if let Some(record) = state_record.as_ref()
+        && record.result() != skilltap_core::storage::DaemonRunResult::Completed
+    {
+        outcome = outcome.with_next_action(daemon_recovery_action(record.result()));
+    } else if state_record.is_none() {
+        outcome = outcome.with_next_action(
+            NextAction::new(
+                "run_daemon_cycle",
+                "Run one bounded daemon cycle to establish update health.",
+            )
+            .with_command("skilltap daemon run"),
+        );
+    }
+    outcome
+}
+
+fn daemon_result_label(result: skilltap_core::storage::DaemonRunResult) -> &'static str {
+    match result {
+        skilltap_core::storage::DaemonRunResult::Completed => "completed",
+        skilltap_core::storage::DaemonRunResult::Pending => "pending",
+        skilltap_core::storage::DaemonRunResult::Contended => "contended",
+        skilltap_core::storage::DaemonRunResult::Failed => "failed",
+    }
+}
+
+fn daemon_record_fields(
+    mut entry: OutputEntry,
+    record: Option<&skilltap_core::storage::DaemonRunRecord>,
+) -> OutputEntry {
+    let Some(record) = record else { return entry };
+    entry = entry
+        .with_field("last_run_seconds", record.at().seconds())
+        .with_field("run_result", daemon_result_label(record.result()))
+        .with_field("safe_operations", record.safe_operations())
+        .with_field("pending_operations", record.pending_operations());
+    if let Some(code) = record.failure_code() {
+        entry = entry.with_field("failure", code.as_str());
+    }
+    entry
+}
+
+fn daemon_recovery_action(result: skilltap_core::storage::DaemonRunResult) -> NextAction {
+    match result {
+        skilltap_core::storage::DaemonRunResult::Pending => NextAction::new(
+            "review_pending_updates",
+            "Review pending updates and their decisions before foreground application.",
+        )
+        .with_command("skilltap status --all-scopes"),
+        skilltap_core::storage::DaemonRunResult::Contended => NextAction::new(
+            "retry_daemon_cycle",
+            "Retry one bounded daemon cycle after the configuration lock is available.",
+        )
+        .with_command("skilltap daemon run"),
+        skilltap_core::storage::DaemonRunResult::Failed => NextAction::new(
+            "inspect_daemon_status",
+            "Inspect daemon status and retry only after resolving the reported failure.",
+        )
+        .with_command("skilltap daemon status"),
+        skilltap_core::storage::DaemonRunResult::Completed => NextAction::new(
+            "run_daemon_cycle",
+            "Run one bounded daemon cycle when another update check is needed.",
+        )
+        .with_command("skilltap daemon run"),
+    }
 }
 
 #[derive(Clone, Copy)]

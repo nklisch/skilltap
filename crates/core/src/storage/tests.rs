@@ -5,9 +5,10 @@ use std::{
 
 use super::*;
 use crate::domain::{
-    ComponentGraph, DesiredOrigin, DesiredResource, Fingerprint, FingerprintAlgorithm, HarnessId,
-    HarnessSet, NativeId, OperationId, OperationOutcome, OperationResult, Ownership, Provenance,
-    RelativeArtifactPath, ResourceId, ResourceKey, ResourceKind, Scope, UpdateIntent,
+    ComponentGraph, DesiredOrigin, DesiredResource, EvidenceCode, Fingerprint,
+    FingerprintAlgorithm, HarnessId, HarnessSet, NativeId, OperationId, OperationOutcome,
+    OperationResult, Ownership, Provenance, RelativeArtifactPath, ResourceId, ResourceKey,
+    ResourceKind, Scope, UpdateIntent,
 };
 
 fn resource(
@@ -652,4 +653,44 @@ fn constructor_and_deserialization_enforce_state_invariants_equally() {
     let mut old_artifact_owner = serde_json::to_value(apply).unwrap();
     old_artifact_owner["owner"] = serde_json::json!("skill:review");
     assert!(serde_json::from_value::<ManagedArtifactRecord>(old_artifact_owner).is_err());
+}
+
+#[test]
+fn daemon_run_record_round_trips_and_survives_state_updates() {
+    let state = StateDocument::new(STATE_SCHEMA_VERSION, [], [], None, None, None).unwrap();
+    let record = DaemonRunRecord::new(
+        Timestamp::new(4, 0).unwrap(),
+        DaemonRunResult::Pending,
+        2,
+        1,
+        Some(EvidenceCode::new("daemon.update_failed").unwrap()),
+    )
+    .unwrap();
+    let recorded = state.with_daemon_run(record.clone()).unwrap();
+    assert_eq!(recorded.daemon_run(), Some(&record));
+    let round_trip: StateDocument =
+        serde_json::from_value(serde_json::to_value(&recorded).unwrap()).unwrap();
+    assert_eq!(round_trip, recorded);
+    let state_with_resource = StateDocument::new(
+        STATE_SCHEMA_VERSION,
+        [],
+        [managed_resource("skill:review")],
+        None,
+        None,
+        None,
+    )
+    .unwrap()
+    .with_daemon_run(record.clone())
+    .unwrap();
+    let preserved = state_with_resource
+        .with_available_revision(
+            &ResourceKey::new(ResourceId::new("skill:review").unwrap(), Scope::Global),
+            None,
+            Timestamp::new(5, 0).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(preserved.daemon_run(), Some(&record));
+    let mut invalid = serde_json::to_value(record).unwrap();
+    invalid["failure_code"] = serde_json::json!("daemon.raw_secret");
+    assert!(serde_json::from_value::<DaemonRunRecord>(invalid).is_err());
 }

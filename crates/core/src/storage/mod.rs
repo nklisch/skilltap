@@ -24,7 +24,10 @@ pub use repository::{
     FileInventoryRepository, FileStateRepository, InventoryRepository, StateRepository,
     StorageError, StorageFailure,
 };
-pub use state::{ApplyRecord, HarnessState, ResourceState, StateDocument, Timestamp};
+pub use state::{
+    ApplyRecord, DaemonRunRecord, DaemonRunResult, HarnessState, ResourceState, StateDocument,
+    Timestamp,
+};
 
 use std::fmt;
 
@@ -87,6 +90,7 @@ pub enum SchemaError {
     InvalidArtifactRole {
         resource: ResourceKey,
     },
+    InvalidDaemonFailureCode,
     DuplicateManagedPath {
         path: crate::domain::RelativeArtifactPath,
     },
@@ -157,6 +161,9 @@ impl fmt::Display for SchemaError {
                 formatter,
                 "resource `{resource}` has an artifact role inconsistent with its provenance"
             ),
+            Self::InvalidDaemonFailureCode => {
+                formatter.write_str("daemon failure code is not registered or conflicts with its result")
+            }
             Self::DuplicateManagedPath { path } => {
                 write!(formatter, "duplicate managed artifact path `{path}`")
             }

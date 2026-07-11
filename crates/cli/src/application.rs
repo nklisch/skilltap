@@ -656,7 +656,7 @@ impl StatusApplication<'_> {
             Err(outcome) => return *outcome,
         };
         if documents.config.updates().mode != skilltap_core::storage::UpdateMode::ApplySafe {
-            return aggregate
+            aggregate = aggregate
                 .with_warning(Warning::new(
                     "daemon_policy_not_apply_safe",
                     "The configured update policy does not permit automatic application.",
@@ -664,6 +664,8 @@ impl StatusApplication<'_> {
                 .with_summary("changed", false)
                 .with_summary("safe_operations", 0_u64)
                 .with_summary("pending_operations", 0_u64);
+            self.persist_daemon_run(&mut aggregate, 0, 0);
+            return aggregate;
         }
         let mut tasks = Vec::new();
         if let Some(inventory) = documents.inventory.as_ref() {
@@ -721,10 +723,104 @@ impl StatusApplication<'_> {
             aggregate.errors.extend(child.errors);
             aggregate.next_actions.extend(child.next_actions);
         }
-        aggregate
+        aggregate = aggregate
             .with_summary("changed", changed)
             .with_summary("safe_operations", safe_operations)
-            .with_summary("pending_operations", pending_operations)
+            .with_summary("pending_operations", pending_operations);
+        self.persist_daemon_run(&mut aggregate, safe_operations, pending_operations);
+        aggregate
+    }
+
+    fn persist_daemon_run(
+        &self,
+        outcome: &mut Outcome,
+        safe_operations: u64,
+        pending_operations: u64,
+    ) {
+        let at = match Timestamp::from_system_time(std::time::SystemTime::now()) {
+            Ok(at) => at,
+            Err(_) => {
+                outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+                *outcome = outcome.clone().with_warning(Warning::new(
+                    "daemon_record_failed",
+                    "The daemon result timestamp could not be recorded safely.",
+                ));
+                return;
+            }
+        };
+        let result = if pending_operations > 0 {
+            skilltap_core::storage::DaemonRunResult::Pending
+        } else if outcome.result == ResultClass::Completed {
+            skilltap_core::storage::DaemonRunResult::Completed
+        } else {
+            skilltap_core::storage::DaemonRunResult::Failed
+        };
+        let failure_code = (!matches!(result, skilltap_core::storage::DaemonRunResult::Completed))
+            .then(|| skilltap_core::domain::EvidenceCode::new("daemon.update_failed").unwrap());
+        let record = match skilltap_core::storage::DaemonRunRecord::new(
+            at,
+            result,
+            safe_operations,
+            pending_operations,
+            failure_code,
+        ) {
+            Ok(record) => record,
+            Err(_) => {
+                outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+                *outcome = outcome.clone().with_warning(Warning::new(
+                    "daemon_record_failed",
+                    "The daemon result could not be represented safely.",
+                ));
+                return;
+            }
+        };
+        let current = match self.state.load() {
+            Ok(DocumentState::Present(state)) => state,
+            Ok(DocumentState::Missing) => match StateDocument::new(
+                skilltap_core::storage::STATE_SCHEMA_VERSION,
+                [],
+                [],
+                None,
+                None,
+                None,
+            ) {
+                Ok(state) => state,
+                Err(_) => {
+                    outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+                    *outcome = outcome.clone().with_warning(Warning::new(
+                        "daemon_record_failed",
+                        "The daemon state document could not be initialized safely.",
+                    ));
+                    return;
+                }
+            },
+            Err(_) => {
+                outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+                *outcome = outcome.clone().with_warning(Warning::new(
+                    "daemon_record_failed",
+                    "The daemon state document could not be loaded safely.",
+                ));
+                return;
+            }
+        };
+        let next = match current.with_daemon_run(record) {
+            Ok(next) => next,
+            Err(_) => {
+                outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+                *outcome = outcome.clone().with_warning(Warning::new(
+                    "daemon_record_failed",
+                    "The daemon result could not be attached to state safely.",
+                ));
+                return;
+            }
+        };
+        if self.state.replace(&next).is_err() {
+            outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);
+            *outcome = outcome.clone().with_warning(Warning::new(
+                "daemon_record_failed",
+                "The daemon result could not be published atomically.",
+            ));
+        }
     }
 
     /// List desired standalone skills only. This is deliberately inventory
@@ -4639,6 +4735,9 @@ impl StatusProjection<'_> {
         for warning in update_warnings {
             outcome = outcome.with_warning(warning);
         }
+        if let Some(state) = self.documents.state.as_ref() {
+            outcome = outcome.with_resource(daemon_status_projection(state.daemon_run()));
+        }
         if observation.failed_targets == 0 {
             outcome.result = ResultClass::Completed;
         }
@@ -4724,6 +4823,28 @@ impl StatusProjection<'_> {
         }
         outcome
     }
+}
+
+fn daemon_status_projection(
+    record: Option<&skilltap_core::storage::DaemonRunRecord>,
+) -> OutputEntry {
+    let Some(record) = record else {
+        return OutputEntry::new("daemon", "never_run");
+    };
+    let status = match record.result() {
+        skilltap_core::storage::DaemonRunResult::Completed => "completed",
+        skilltap_core::storage::DaemonRunResult::Pending => "pending",
+        skilltap_core::storage::DaemonRunResult::Contended => "contended",
+        skilltap_core::storage::DaemonRunResult::Failed => "failed",
+    };
+    let mut entry = OutputEntry::new("daemon", status)
+        .with_field("last_run_seconds", record.at().seconds())
+        .with_field("safe_operations", record.safe_operations())
+        .with_field("pending_operations", record.pending_operations());
+    if let Some(code) = record.failure_code() {
+        entry = entry.with_field("failure", code.as_str());
+    }
+    entry
 }
 
 struct UnavailableSourceRevisionResolver;

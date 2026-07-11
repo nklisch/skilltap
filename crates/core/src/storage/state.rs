@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::{ArtifactRole, ManagedArtifactRecord, STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
-    Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership, Provenance,
-    ResolvedRevision, ResourceKey, Source,
+    EvidenceCode, Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership,
+    Provenance, ResolvedRevision, ResourceKey, Source,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -138,6 +138,125 @@ impl<'de> Deserialize<'de> for ApplyRecord {
         D: Deserializer<'de>,
     {
         ApplyRecordWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DaemonRunResult {
+    Completed,
+    Pending,
+    Contended,
+    Failed,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "DaemonRunRecordWire")]
+pub struct DaemonRunRecord {
+    at: Timestamp,
+    result: DaemonRunResult,
+    safe_operations: u64,
+    pending_operations: u64,
+    failure_code: Option<EvidenceCode>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DaemonRunRecordWire {
+    at: Timestamp,
+    result: DaemonRunResult,
+    safe_operations: u64,
+    pending_operations: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    failure_code: Option<EvidenceCode>,
+}
+
+impl DaemonRunRecord {
+    pub fn new(
+        at: Timestamp,
+        result: DaemonRunResult,
+        safe_operations: u64,
+        pending_operations: u64,
+        failure_code: Option<EvidenceCode>,
+    ) -> Result<Self, SchemaError> {
+        if let Some(code) = &failure_code
+            && !matches!(
+                code.as_str(),
+                "daemon.lock_contended"
+                    | "daemon.source_unreachable"
+                    | "daemon.update_failed"
+                    | "daemon.manager_unavailable"
+            )
+        {
+            return Err(SchemaError::InvalidDaemonFailureCode);
+        }
+        if matches!(result, DaemonRunResult::Completed) && failure_code.is_some() {
+            return Err(SchemaError::InvalidDaemonFailureCode);
+        }
+        Ok(Self {
+            at,
+            result,
+            safe_operations,
+            pending_operations,
+            failure_code,
+        })
+    }
+
+    pub const fn at(&self) -> Timestamp {
+        self.at
+    }
+
+    pub const fn result(&self) -> DaemonRunResult {
+        self.result
+    }
+
+    pub const fn safe_operations(&self) -> u64 {
+        self.safe_operations
+    }
+
+    pub const fn pending_operations(&self) -> u64 {
+        self.pending_operations
+    }
+
+    pub const fn failure_code(&self) -> Option<&EvidenceCode> {
+        self.failure_code.as_ref()
+    }
+}
+
+impl From<DaemonRunRecord> for DaemonRunRecordWire {
+    fn from(value: DaemonRunRecord) -> Self {
+        Self {
+            at: value.at,
+            result: value.result,
+            safe_operations: value.safe_operations,
+            pending_operations: value.pending_operations,
+            failure_code: value.failure_code,
+        }
+    }
+}
+
+impl TryFrom<DaemonRunRecordWire> for DaemonRunRecord {
+    type Error = SchemaError;
+
+    fn try_from(value: DaemonRunRecordWire) -> Result<Self, Self::Error> {
+        Self::new(
+            value.at,
+            value.result,
+            value.safe_operations,
+            value.pending_operations,
+            value.failure_code,
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for DaemonRunRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        DaemonRunRecordWire::deserialize(deserializer)?
             .try_into()
             .map_err(serde::de::Error::custom)
     }
@@ -347,6 +466,7 @@ pub struct StateDocument {
     last_update_check: Option<Timestamp>,
     last_successful_observation: Option<Timestamp>,
     last_successful_application: Option<Timestamp>,
+    daemon_run: Option<DaemonRunRecord>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -361,6 +481,8 @@ struct StateWire {
     last_successful_observation: Option<Timestamp>,
     #[serde(skip_serializing_if = "Option::is_none")]
     last_successful_application: Option<Timestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    daemon_run: Option<DaemonRunRecord>,
 }
 
 impl StateDocument {
@@ -410,6 +532,7 @@ impl StateDocument {
             last_update_check,
             last_successful_observation,
             last_successful_application,
+            daemon_run: None,
         })
     }
     pub const fn harnesses(&self) -> &BTreeMap<HarnessId, HarnessState> {
@@ -426,6 +549,32 @@ impl StateDocument {
     }
     pub const fn last_successful_application(&self) -> Option<Timestamp> {
         self.last_successful_application
+    }
+
+    pub const fn daemon_run(&self) -> Option<&DaemonRunRecord> {
+        self.daemon_run.as_ref()
+    }
+
+    /// Return a copy with one typed daemon result attached. Callers publish
+    /// the returned document through `StateRepository`.
+    pub fn with_daemon_run(&self, record: DaemonRunRecord) -> Result<Self, SchemaError> {
+        let mut next = Self::new(
+            STATE_SCHEMA_VERSION,
+            self.harnesses.values().cloned(),
+            self.resources.values().cloned(),
+            self.last_update_check,
+            self.last_successful_observation,
+            self.last_successful_application,
+        )?;
+        next.daemon_run = Some(record);
+        Ok(next)
+    }
+
+    fn preserve_daemon_run(&self, next: Self) -> Result<Self, SchemaError> {
+        match self.daemon_run.clone() {
+            Some(record) => next.with_daemon_run(record),
+            None => Ok(next),
+        }
     }
 
     /// Return a copy with one operation result atomically attached to its
@@ -465,14 +614,14 @@ impl StateDocument {
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
         resources.push(updated);
-        Self::new(
+        self.preserve_daemon_run(Self::new(
             STATE_SCHEMA_VERSION,
             self.harnesses.values().cloned(),
             resources,
             self.last_update_check,
             self.last_successful_observation,
             Some(at),
-        )
+        )?)
     }
 
     /// Cache one freshly resolved available revision while preserving the
@@ -507,14 +656,14 @@ impl StateDocument {
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
         resources.push(updated);
-        Self::new(
+        self.preserve_daemon_run(Self::new(
             STATE_SCHEMA_VERSION,
             self.harnesses.values().cloned(),
             resources,
             Some(checked_at),
             self.last_successful_observation,
             self.last_successful_application,
-        )
+        )?)
     }
 
     /// Return a copy with a resource seed added idempotently.
@@ -527,7 +676,7 @@ impl StateDocument {
                 resource: resource.key().clone(),
             });
         }
-        Self::new(
+        self.preserve_daemon_run(Self::new(
             STATE_SCHEMA_VERSION,
             self.harnesses.values().cloned(),
             self.resources
@@ -537,7 +686,7 @@ impl StateDocument {
             self.last_update_check,
             self.last_successful_observation,
             self.last_successful_application,
-        )
+        )?)
     }
 
     /// Refresh mutable provenance fields for an already-known resource while
@@ -564,14 +713,14 @@ impl StateDocument {
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource.key());
         resources.push(refreshed);
-        Self::new(
+        self.preserve_daemon_run(Self::new(
             STATE_SCHEMA_VERSION,
             self.harnesses.values().cloned(),
             resources,
             self.last_update_check,
             self.last_successful_observation,
             self.last_successful_application,
-        )
+        )?)
     }
 }
 
@@ -584,6 +733,7 @@ impl From<StateDocument> for StateWire {
             last_update_check: value.last_update_check,
             last_successful_observation: value.last_successful_observation,
             last_successful_application: value.last_successful_application,
+            daemon_run: value.daemon_run,
         }
     }
 }
@@ -599,6 +749,10 @@ impl TryFrom<StateWire> for StateDocument {
             value.last_successful_observation,
             value.last_successful_application,
         )
+        .and_then(|state| match value.daemon_run {
+            Some(record) => state.with_daemon_run(record),
+            None => Ok(state),
+        })
     }
 }
 
