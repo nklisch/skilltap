@@ -35,6 +35,22 @@ write surfaces.
 - `docs/HARNESS-CONTRACTS.md` — Cross-Harness Component Matrix, MCP Mapping, Hook Mapping
 - `docs/UX.md` — Plugin Management, partial-result examples
 
+## Design decisions
+
+- **Can users define their own faithful-equivalence mappings?** No in v3.
+  Harness adapters own equivalence rules and their evidence. Users may accept
+  an exact partial result and select included or excluded components, but
+  configuration cannot force skilltap to classify unsupported behavior as
+  faithful.
+- **What happens when a materialized component cannot preserve its identity?**
+  Block that component when its source identity or a documented target
+  namespace collides. Do not rename skills, invocations, frontmatter, or other
+  behavior-bearing identifiers. An unsupported required collision blocks the
+  resource; an optional collision can appear only as an acknowledged omission.
+- **Does this epic require UI mockups?** No. Compatibility evidence,
+  omissions, and acknowledgments are expressed through plans and structured
+  CLI output.
+
 ## Anticipated child features
 
 - Source plugin component graph and dependency model
