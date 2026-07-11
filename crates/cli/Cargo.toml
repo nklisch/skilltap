@@ -1,0 +1,15 @@
+[package]
+name = "skilltap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+clap.workspace = true
+skilltap-core.workspace = true
+skilltap-harnesses.workspace = true
+
+[[bin]]
+name = "skilltap"
+path = "src/main.rs"

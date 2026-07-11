@@ -1,0 +1,12 @@
+[package]
+name = "skilltap-harnesses"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+skilltap-core.workspace = true
+
+[lib]
+path = "src/lib.rs"
