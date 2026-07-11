@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status-observation
 kind: story
-stage: review
+stage: done
 tags: [cli,infra]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-policy]
@@ -45,4 +45,6 @@ success while expanding only requested scopes and never scanning or writing.
 - `cargo test -p skilltap-harnesses --test detection --offline`
 - `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
 
-Stage: review
+## Review
+
+Verdict: Approve - story verified by implement; fast-lane advance.
