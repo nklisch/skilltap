@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -144,3 +144,15 @@ validate; they are not interpolated into generic error text.
   path failures. Target tests cover all enabled and one enabled/disabled target.
 - `cargo fmt --all -- --check`, locked all-target check, Clippy with warnings
   denied, workspace tests/doctests, and warnings-clean rustdoc pass.
+
+## Implementation summary
+
+All four children are complete. `skilltap-core::runtime` now exposes safe typed
+boundary errors and XDG/home paths; direct-argv synchronous command execution
+and deterministic/system clocks; link-aware filesystem operations, durable
+same-directory atomic file publication, recoverable copies, relative symlinks,
+and a fail-fast RAII configuration lock; plus global/project/all-scopes and
+enabled-target resolution. The implementation is terminal-free, performs no
+resource discovery, and retains storage, harness, and reconciliation semantics
+outside the runtime layer. The locked workspace passes 85 tests plus doctests
+and warnings-clean rustdoc.
