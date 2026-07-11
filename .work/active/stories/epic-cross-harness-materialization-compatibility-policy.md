@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-compatibility-policy
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-cross-harness-materialization-compatibility
 depends_on: []
@@ -22,3 +22,19 @@ Acceptance criteria:
   target-bound and validated through `CompatibilityResult`.
 - Requiredness controls blocked versus partial classification.
 - Every non-faithful result has exact evidence and consequence data.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/compatibility.rs`, `crates/core/src/lib.rs`.
+- Tests added: required/optional capability loss, target identity collision,
+  supported capability, and dependency fixture coverage.
+- Discrepancies from design: unknown component kinds use the same typed
+  capability-unknown evidence path as missing registry entries, preserving a
+  single fail-closed policy without inventing equivalences.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo test -p skilltap-core compatibility::tests --offline` — passed.
+- `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings` —
+  passed.

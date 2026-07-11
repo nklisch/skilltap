@@ -1,4 +1,5 @@
 pub mod adoption;
+pub mod compatibility;
 pub mod domain;
 pub mod executor;
 pub mod instructions;
