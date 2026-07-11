@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-document-repositories
 kind: story
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -62,3 +62,18 @@ adapters with a private shared codec/publication engine.
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review findings
+
+Fresh-context review requested three corrections:
+
+- bind owned-document validation and bytes to one no-follow regular-file
+  descriptor so an inspect/read pathname swap cannot follow a link;
+- make duplicate top-level JSON fields, especially `schema`, invalid regardless
+  of duplicate key order before unsupported-version classification; and
+- prevent raw runtime/I/O details from escaping through `Error::source()` as
+  well as display/debug output.
+
+The runtime filesystem port may gain the narrow descriptor-bound read primitive
+required by the first correction; ordinary link-following reads remain
+unchanged for callers that explicitly need them.
