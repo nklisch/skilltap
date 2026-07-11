@@ -33,7 +33,9 @@ The runtime is a set of harness-neutral adapters behind core observation
 contracts. Every external boundary receives explicit non-zero limits and
 returns a closed error category whose Debug/Display forms contain no argv,
 environment values, native output, file bytes, parser excerpts, or raw paths.
-Limits cover process deadline, stdout/stderr and combined output, JSON bytes
+Limits have hard compile-time ceilings and checked cross-field relationships;
+callers cannot request pathological deadlines, recursion, allocation sizes, or
+counter ranges. They cover process deadline, stdout/stderr and combined output, JSON bytes
 and nesting depth, tree depth and entries, per-file bytes, total tree bytes,
 and symlink-target bytes.
 
@@ -52,9 +54,11 @@ Native commands use direct argument vectors, null stdin, an explicit cleared
 environment, optional canonical working directory, and the previously resolved
 absolute executable. Stdout and stderr are drained concurrently while limits
 are enforced. Timeout or overflow terminates the dedicated Unix process group
-and always reaps the child, including when descendants retain inherited pipe
-descriptors. Non-zero native exit is a bounded result, not an infrastructure
-error.
+and always reaps the child. Pipes are nonblocking and owned by a bounded
+poll/select/kqueue-style loop; after termination a short hard drain deadline
+closes parent read descriptors, so a descendant that escapes the process group
+with `setsid` cannot keep the command waiting forever. Non-zero native exit is
+a bounded result, not an infrastructure error.
 
 JSON decoding first applies a byte cap and UTF-8 boundary, then accepts exactly
 one document. A custom recursive visitor rejects duplicate keys at every depth,
@@ -72,13 +76,17 @@ External harness trees are observed separately from skilltap-managed artifact
 trees. Traversal is descriptor-relative and no-follow, deterministic, and
 bounded while walking. Regular files are read only after identity checks;
 directories are traversed; symlinks are reported with bounded opaque targets
-but never followed. FIFO, socket, device, non-UTF-8, raced, over-depth,
+but never followed. External tree snapshots are non-serializable with custom
+redacted Debug; raw target bytes are accessible only inside the owning adapter
+and never enter findings, errors, state, or output. FIFO, socket, device, non-UTF-8, raced, over-depth,
 over-entry, and over-byte entries fail with safe typed context.
 
 ### Pre-mortem
 
 - **A child keeps pipes open after timeout.** Put the native process in its own
-  group, drain both streams concurrently, kill the group, and always reap.
+  group, drain both streams nonblockingly, kill the group, reap, and close
+  parent readers after a hard post-kill drain deadline even if an escaped
+  descendant retains the write ends.
 - **A large output is buffered before the cap.** Enforce per-stream and total
   caps during reads rather than after `wait_with_output`.
 - **JSON silently accepts duplicate keys.** Parse through a duplicate-aware
@@ -91,8 +99,8 @@ over-entry, and over-byte entries fail with safe typed context.
 - **Environment inheritance leaks secrets or changes behavior.** Clear the
   child environment and pass an explicit allowlist supplied by the adapter.
 - **Linux-only behavior lands accidentally.** Keep errno/process-group and
-  descriptor primitives portable across Linux and macOS and retain the macOS
-  compile gate.
+  descriptor primitives portable across Linux and macOS and run native
+  behavior suites on both platforms.
 
 ## Implementation units
 
@@ -126,7 +134,8 @@ over-entry, and over-byte entries fail with safe typed context.
 
 - Executable resolution is deterministic, scope-free, canonical, and bound to
   file identity; unsafe PATH and replacement cases fail explicitly.
-- Processes receive direct argv, null stdin, exact environment and cwd, enforce
+- Process fixtures include a `setsid`-escaped descendant retaining pipe handles;
+  processes receive direct argv, null stdin, exact environment and cwd, enforce
   deadline and all output caps during concurrent reads, terminate descendants,
   and always reap.
 - JSON rejects over-limit bytes/depth, invalid UTF-8, duplicate keys, trailing
@@ -135,8 +144,10 @@ over-entry, and over-byte entries fail with safe typed context.
   not relocate global `~/AGENTS.md`.
 - External trees are deterministic and bounded, report but never follow links,
   reject special/non-UTF-8/raced entries, and never reuse managed write APIs.
+- Tree snapshots cannot serialize raw file or link-target bytes, use redacted
+  Debug, and keep opaque targets inside the owning adapter boundary.
 - Adversarial fixtures cover boundary minus/at/plus one, both-pipe pressure,
   descendant pipe holders, executable replacement, tree swaps, and secret
   canaries.
-- Full locked format/check/Clippy/test/rustdoc, release/compiled-binary, Linux
-  execution, and macOS compile gates pass.
+- Full locked format/check/Clippy/test/rustdoc, release/compiled-binary, and
+  native Linux and macOS runtime behavior gates pass.

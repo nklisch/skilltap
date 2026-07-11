@@ -18,7 +18,10 @@ updated: 2026-07-11
 Replace unbounded observation command execution with direct `OsString` argv,
 null stdin, explicit cleared environment, optional canonical cwd, and the
 resolved absolute executable. Concurrently drain stdout/stderr while enforcing
-per-stream and combined caps. On timeout or overflow, terminate the dedicated
-Unix process group and always reap even when descendants retain pipe handles.
+per-stream and combined caps through nonblocking owned readers. On timeout or
+overflow, terminate the dedicated Unix process group and always reap. Apply a
+hard post-kill drain deadline and close parent read descriptors so even a
+`setsid`-escaped descendant retaining pipe handles cannot block completion.
 Return non-zero exit as a bounded result, revalidate executable identity just
-before spawn, and keep all errors/output Debug-safe on Linux and macOS.
+before spawn, and keep all errors/output Debug-safe in native Linux and macOS
+behavior suites.

@@ -20,4 +20,5 @@ with trailing whitespace only. Use a recursive seed/visitor to reject duplicate
 object keys at every depth and enforce an explicit nesting limit before typed
 decode; do not rely on `serde_json::Value` last-key-wins behavior. Reject
 trailing documents/garbage and invalid UTF-8 with fixed safe errors that never
-echo native bytes or parser excerpts. Test every limit at minus/at/plus one.
+echo native bytes or parser excerpts. Honor the contract's hard stack-safe
+depth ceiling and test zero plus every hard limit at minus/at/plus one.

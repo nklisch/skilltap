@@ -18,7 +18,8 @@ updated: 2026-07-11
 Exercise resolve identity -> bounded direct run -> strict typed JSON as one
 pipeline, alongside isolated `CODEX_HOME` resolution and bounded external-tree
 snapshots. Prove repeat determinism, zero mutation, safe failure rendering,
-boundary limits, executable/tree replacement handling, descendant termination,
+boundary limits, executable/tree replacement handling, process-group escape
+with retained pipes, descendant termination,
 and output secret canaries with adversarial fixtures. Run the full locked Rust
-ladder, optimized compiled-binary verification, Linux execution, and macOS
-compile gate; make only final export/composition corrections here.
+ladder, optimized compiled-binary verification, and native Linux/macOS behavior
+jobs; make only final export/composition corrections here.
