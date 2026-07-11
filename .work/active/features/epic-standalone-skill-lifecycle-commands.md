@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle-commands
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-standalone-skill-lifecycle
 depends_on: [epic-standalone-skill-lifecycle-storage, epic-standalone-skill-lifecycle-compatibility]
@@ -67,6 +67,21 @@ exists, so status drift can be repaired by repeating the explicit install.
 The standalone lifecycle is ready for review; partial-operation selectors remain
 owned by the downstream cross-harness materialization epic rather than this
 faithful standalone path.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: native compatibility projections beyond complete skill directories remain downstream materialization work.
+
+**Notes**: Deep substrate review completed inline in degraded fresh-context
+mode because this run intentionally uses no sub-agents. The review checked
+whole-directory integrity, Git ref/SHA and subdirectory persistence, canonical
+`.agents/skills` publication, Claude projection/removal, ownership and drift
+safety, scope/target selection, idempotency, and CLI output. Full workspace
+clippy and tests pass.
 
 ## Review
 
