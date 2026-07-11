@@ -4701,6 +4701,7 @@ fn status_update_projection(
                 compatibility_changed: false,
                 requires_acknowledgment: false,
                 intent: resource.update(),
+                acknowledgment_selectors: BTreeSet::new(),
             };
             let decision = classify_update_with_mode(&candidate, update_mode);
             entries.push(update_projection_entry(resource, &candidate, decision));

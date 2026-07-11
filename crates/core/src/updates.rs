@@ -3,8 +3,8 @@
 
 use crate::compatibility::CompatibilityAnalysis;
 use crate::domain::{
-    DesiredResource, HarnessId, ResolvedRevision, Source, SourceKind, TransferFidelity,
-    UpdateIntent,
+    DesiredResource, HarnessId, OperationSelector, ResolvedRevision, Source, SourceKind,
+    TransferFidelity, UpdateIntent,
 };
 use crate::storage::UpdateMode;
 
@@ -67,6 +67,7 @@ pub struct UpdateCandidate {
     pub compatibility_changed: bool,
     pub requires_acknowledgment: bool,
     pub intent: UpdateIntent,
+    pub acknowledgment_selectors: std::collections::BTreeSet<OperationSelector>,
 }
 
 /// Resolve one desired resource. Source-backed resources resolve once; native
@@ -175,6 +176,7 @@ pub fn candidate_for(
         compatibility_changed: request.compatibility_changed,
         requires_acknowledgment: request.requires_acknowledgment,
         intent: resource.update(),
+        acknowledgment_selectors: std::collections::BTreeSet::new(),
     }
 }
 
@@ -344,6 +346,7 @@ mod tests {
             compatibility_changed: false,
             requires_acknowledgment: false,
             intent: UpdateIntent::Track,
+            acknowledgment_selectors: BTreeSet::new(),
         }
     }
 

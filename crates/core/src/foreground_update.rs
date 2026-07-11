@@ -3,7 +3,7 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    domain::{DesiredResource, ResourceKey},
+    domain::{DesiredResource, OperationSelector, ResourceKey},
     storage::UpdateMode,
     updates::{UpdateCandidate, UpdateDecision, UpdateSafety, classify_update_with_mode},
 };
@@ -14,6 +14,7 @@ pub struct ForegroundUpdateEntry {
     current_revision: Option<crate::domain::ResolvedRevision>,
     available_revision: Option<crate::domain::ResolvedRevision>,
     decision: UpdateDecision,
+    acknowledgment_selectors: BTreeSet<OperationSelector>,
 }
 
 impl ForegroundUpdateEntry {
@@ -35,6 +36,10 @@ impl ForegroundUpdateEntry {
 
     pub const fn is_safe(&self) -> bool {
         matches!(self.decision.safety, UpdateSafety::Safe)
+    }
+
+    pub fn acknowledgment_selectors(&self) -> &BTreeSet<OperationSelector> {
+        &self.acknowledgment_selectors
     }
 }
 
@@ -100,6 +105,60 @@ pub struct ForegroundUpdateRequest<'a> {
     pub mode: UpdateMode,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ForegroundUpdateSelection {
+    entries: Vec<ForegroundUpdateEntry>,
+}
+
+impl ForegroundUpdateSelection {
+    pub fn entries(&self) -> &[ForegroundUpdateEntry] {
+        &self.entries
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ForegroundUpdateSelectionError {
+    Blocked {
+        resource: ResourceKey,
+    },
+    DecisionRequired {
+        resource: ResourceKey,
+    },
+    MissingAcknowledgment {
+        resource: ResourceKey,
+        selectors: BTreeSet<OperationSelector>,
+    },
+    UnexpectedAcknowledgment {
+        selector: OperationSelector,
+    },
+}
+
+impl std::fmt::Display for ForegroundUpdateSelectionError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Blocked { resource } => {
+                write!(formatter, "foreground update `{resource}` is blocked")
+            }
+            Self::DecisionRequired { resource } => {
+                write!(
+                    formatter,
+                    "foreground update `{resource}` needs a user decision"
+                )
+            }
+            Self::MissingAcknowledgment { resource, .. } => write!(
+                formatter,
+                "foreground update `{resource}` is missing exact consequence acknowledgment"
+            ),
+            Self::UnexpectedAcknowledgment { selector } => write!(
+                formatter,
+                "acknowledgment selector `{selector:?}` does not belong to the update plan"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ForegroundUpdateSelectionError {}
+
 /// Pair exact desired resources with resolved candidates and classify each
 /// candidate without performing any mutation or state I/O.
 pub fn plan_foreground_updates(
@@ -127,6 +186,7 @@ pub fn plan_foreground_updates(
             current_revision: candidate.current_revision.clone(),
             available_revision: candidate.available_revision.clone(),
             decision: classify_update_with_mode(candidate, request.mode),
+            acknowledgment_selectors: candidate.acknowledgment_selectors.clone(),
         });
     }
     if let Some(candidate) = request
@@ -140,6 +200,51 @@ pub fn plan_foreground_updates(
     }
     entries.sort_by(|left, right| left.resource.cmp(&right.resource));
     Ok(ForegroundUpdatePlan { entries })
+}
+
+/// Select safe and explicitly acknowledged entries. Exact selector equality
+/// is required; there is no generic bypass for a partial consequence.
+pub fn select_foreground_updates(
+    plan: &ForegroundUpdatePlan,
+    acknowledgments: &BTreeSet<OperationSelector>,
+) -> Result<ForegroundUpdateSelection, ForegroundUpdateSelectionError> {
+    let expected = plan
+        .entries
+        .iter()
+        .flat_map(|entry| entry.acknowledgment_selectors.iter().cloned())
+        .collect::<BTreeSet<_>>();
+    if let Some(selector) = acknowledgments.difference(&expected).next() {
+        return Err(ForegroundUpdateSelectionError::UnexpectedAcknowledgment {
+            selector: selector.clone(),
+        });
+    }
+    let mut selected = Vec::new();
+    for entry in &plan.entries {
+        match entry.decision.safety {
+            UpdateSafety::NoUpdate => {}
+            UpdateSafety::Safe => selected.push(entry.clone()),
+            UpdateSafety::Blocked => {
+                return Err(ForegroundUpdateSelectionError::Blocked {
+                    resource: entry.resource.clone(),
+                });
+            }
+            UpdateSafety::NeedsDecision => {
+                if entry.acknowledgment_selectors.is_empty() {
+                    return Err(ForegroundUpdateSelectionError::DecisionRequired {
+                        resource: entry.resource.clone(),
+                    });
+                }
+                if !entry.acknowledgment_selectors.is_subset(acknowledgments) {
+                    return Err(ForegroundUpdateSelectionError::MissingAcknowledgment {
+                        resource: entry.resource.clone(),
+                        selectors: entry.acknowledgment_selectors.clone(),
+                    });
+                }
+                selected.push(entry.clone());
+            }
+        }
+    }
+    Ok(ForegroundUpdateSelection { entries: selected })
 }
 
 #[cfg(test)]
@@ -189,6 +294,7 @@ mod tests {
             compatibility_changed: false,
             requires_acknowledgment: false,
             intent: UpdateIntent::Track,
+            acknowledgment_selectors: BTreeSet::new(),
         }
     }
 
@@ -238,6 +344,39 @@ mod tests {
         assert!(matches!(
             unexpected,
             Err(ForegroundUpdatePlanError::UnexpectedCandidate { .. })
+        ));
+    }
+
+    #[test]
+    fn partial_selection_requires_exact_acknowledgment_selectors() {
+        let selected = resource("alpha");
+        let selector = OperationSelector::Resource {
+            resource: selected.key().clone(),
+        };
+        let mut partial = candidate(&selected, 'a', 'b');
+        partial.requires_acknowledgment = true;
+        partial.acknowledgment_selectors = [selector.clone()].into_iter().collect();
+        let plan = plan_foreground_updates(ForegroundUpdateRequest {
+            resources: std::slice::from_ref(&selected),
+            candidates: &[partial],
+            mode: UpdateMode::ApplySafe,
+        })
+        .unwrap();
+        assert!(matches!(
+            select_foreground_updates(&plan, &BTreeSet::new()),
+            Err(ForegroundUpdateSelectionError::MissingAcknowledgment { .. })
+        ));
+        let acknowledgments = [selector.clone()].into_iter().collect();
+        let selection = select_foreground_updates(&plan, &acknowledgments).unwrap();
+        assert_eq!(selection.entries().len(), 1);
+        let unexpected = [OperationSelector::Resource {
+            resource: ResourceKey::new(ResourceId::new("skill:other").unwrap(), Scope::Global),
+        }]
+        .into_iter()
+        .collect();
+        assert!(matches!(
+            select_foreground_updates(&plan, &unexpected),
+            Err(ForegroundUpdateSelectionError::UnexpectedAcknowledgment { .. })
         ));
     }
 }
