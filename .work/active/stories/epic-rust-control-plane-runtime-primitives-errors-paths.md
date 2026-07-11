@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-errors-paths
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: []
@@ -45,3 +45,11 @@ create the configuration directory during resolution.
 - Adjacent issues parked: none.
 - Dispatch rationale: direct-read only; the runtime module did not exist and the story declared a bounded error/path surface.
 - Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace --all-targets`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace`, and `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps` all pass (66 workspace tests).
+
+## Review
+
+Approved. The injected environment boundary keeps resolution deterministic and
+side-effect-free; XDG fallback, strict path validation, supported-platform
+classification, and all typed error categories match the story. Invalid raw
+environment values are absent from both display and debug output. The focused
+eight-test runtime suite and warnings-denied workspace Clippy pass on review.
