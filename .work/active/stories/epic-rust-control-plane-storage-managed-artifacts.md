@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -78,3 +78,28 @@ backup storage beneath the resolved `managed/` root.
   from the existing path-based filesystem port, so the explicitly permitted
   narrow directory-tree runtime primitive was added.
 - Adjacent issues parked: none.
+
+## Review findings
+
+Fresh-context deep review requested corrections before approval:
+
+- use the Apple `__error()` errno location rather than Linux
+  `__errno_location()` under macOS cfg;
+- serialize directory namespace creation for cooperating skilltap writers and
+  verify created/opened/path identities before writing, after writing, and
+  before treating an inode as owned;
+- report exact destination presence and parent-directory durability, including
+  failures before destination open/identity and unlink-success/sync-failure;
+- make backup collisions retry rather than escape on the first mismatched stale
+  PID/sequence path;
+- re-check descriptor file type after open so raced FIFO/device/socket entries
+  are rejected before reading or removal; and
+- preserve the caller's publish/backup action when an occupied path cannot be
+  loaded or compared.
+
+Portable POSIX APIs cannot exclude a malicious same-UID process that ignores
+advisory locks and continuously replaces directory names. The supported safety
+contract is therefore the same as the configuration lock: exclusive parent
+advisory locking for cooperating skilltap CLI/daemon writers, descriptor-bound
+no-follow operations, and identity verification at every namespace boundary.
+Tests must deterministically exercise each former seam and every residual state.
