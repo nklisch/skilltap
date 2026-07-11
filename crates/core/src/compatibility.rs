@@ -143,7 +143,14 @@ pub fn analyze(
                 ComponentRequiredness::Required => TransferFidelity::Blocked,
                 ComponentRequiredness::Optional => TransferFidelity::Partial,
             };
-            if fidelity_rank(desired_fidelity) <= fidelity_rank(current.result.fidelity()) {
+            let dependency_evidence_present = current
+                .result
+                .evidence()
+                .iter()
+                .any(|item| item.code.as_str() == "component.dependency_unavailable");
+            let needs_promotion =
+                fidelity_rank(desired_fidelity) > fidelity_rank(current.result.fidelity());
+            if !needs_promotion && dependency_evidence_present {
                 continue;
             }
             let mut evidence_items = current
@@ -169,7 +176,12 @@ pub fn analyze(
                 id,
                 "The component's dependency behavior cannot be preserved.",
             ));
-            let compatibility = if desired_fidelity == TransferFidelity::Blocked {
+            let fidelity = if needs_promotion {
+                desired_fidelity
+            } else {
+                current.result.fidelity()
+            };
+            let compatibility = if fidelity == TransferFidelity::Blocked {
                 CompatibilityClass::Incompatible
             } else {
                 CompatibilityClass::TargetSpecific
@@ -177,7 +189,7 @@ pub fn analyze(
             let result = CompatibilityResult::new(
                 request.target.clone(),
                 compatibility,
-                desired_fidelity,
+                fidelity,
                 evidence_items,
                 consequence_items,
             )
