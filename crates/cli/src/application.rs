@@ -3282,10 +3282,27 @@ fn resolve_git_skill_source(
         if !output.status().success() {
             return Err(());
         }
+        if requested_revision.is_none() {
+            let set_head = NativeProcessRequest::new(
+                executable.clone(),
+                [
+                    OsString::from("-C"),
+                    OsString::from(checkout.as_str()),
+                    OsString::from("remote"),
+                    OsString::from("set-head"),
+                    OsString::from("origin"),
+                    OsString::from("--auto"),
+                ],
+                BTreeMap::new(),
+                None,
+                limits,
+            );
+            let _ = SystemNativeProcessRunner.run(&set_head);
+        }
     }
     let revision = requested_revision
         .map(|revision| revision.as_str())
-        .unwrap_or("HEAD");
+        .unwrap_or("origin/HEAD");
     let verify = NativeProcessRequest::new(
         executable.clone(),
         [

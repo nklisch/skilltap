@@ -715,6 +715,66 @@ fn git_skill_install_clones_a_bounded_source_and_records_the_commit() {
     let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(state.contains("installed_revision"));
     assert!(state.contains("git_commit"));
+
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: git-demo\ndescription: git skill v2\n---\nupdated\n",
+    )
+    .unwrap();
+    let add = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            "SKILL.md",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "update",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+    let new_sha = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repository)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_owned();
+    let update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "git-skill-source",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["summary"]["changed"], true);
+    let updated_state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(updated_state.contains(&new_sha));
 }
 
 #[test]
