@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-graph-contract
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-cross-harness-materialization-graph
 depends_on: []
@@ -25,3 +25,13 @@ Acceptance criteria:
   retained.
 - Unit tests cover all typed error branches and stable serialization-facing
   accessors.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/plugin_graph.rs`, `crates/core/src/lib.rs`.
+- Tests added: deterministic provenance ordering, dependency validation,
+  duplicate IDs, and declared-name boundary tests in `plugin_graph.rs`.
+- Discrepancies from design: `NativeId`'s existing opaque validation is used
+  for declared names, so valid native names may contain spaces; surrounding
+  whitespace and control characters still fail fast.
+- Adjacent issues parked: none.

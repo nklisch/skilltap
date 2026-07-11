@@ -7,6 +7,7 @@ pub mod marketplace;
 pub mod materialization;
 pub mod native_config;
 pub mod operation_graph;
+pub mod plugin_graph;
 pub mod reconciliation;
 pub mod runtime;
 pub mod skill;
