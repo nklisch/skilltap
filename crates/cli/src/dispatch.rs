@@ -1,7 +1,8 @@
 use crate::command::{
     AdoptArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
-    InstructionsCommand, MarketplaceCommand, OutputArgs, PlanArgs, PluginCommand, ScopedOutputArgs,
-    ScopedTargetArgs, SkillCommand, StatusArgs, SyncArgs,
+    InstructionsCommand, InstructionsSetupArgs, MarketplaceAddArgs, MarketplaceCommand, OutputArgs,
+    PlanArgs, PluginCommand, PluginInstallArgs, ScopedOutputArgs, ScopedTargetArgs, SkillCommand,
+    SkillInstallArgs, StatusArgs, SyncArgs,
 };
 
 pub(crate) enum Dispatch {
@@ -13,6 +14,10 @@ pub(crate) enum Dispatch {
     MarketplaceList(ScopedTargetArgs),
     PluginList(ScopedTargetArgs),
     InstructionStatus(ScopedOutputArgs),
+    MarketplaceAdd(MarketplaceAddArgs),
+    PluginInstall(PluginInstallArgs),
+    SkillInstall(SkillInstallArgs),
+    InstructionSetup(InstructionsSetupArgs),
     HarnessList(OutputArgs),
     HarnessEnable(HarnessEnableArgs),
     HarnessDisable(HarnessChangeArgs),
@@ -32,9 +37,7 @@ impl Dispatch {
                 HarnessCommand::Disable(args) => Self::HarnessDisable(args),
             },
             Command::Marketplace(args) => match args.command {
-                MarketplaceCommand::Add(args) => {
-                    unavailable("marketplace add", args.common.output.json)
-                }
+                MarketplaceCommand::Add(args) => Self::MarketplaceAdd(args),
                 MarketplaceCommand::Remove(args) => {
                     unavailable("marketplace remove", args.common.output.json)
                 }
@@ -44,7 +47,7 @@ impl Dispatch {
                 MarketplaceCommand::List(args) => Self::MarketplaceList(args),
             },
             Command::Plugin(args) => match args.command {
-                PluginCommand::Install(args) => unavailable("plugin install", args.output.json),
+                PluginCommand::Install(args) => Self::PluginInstall(args),
                 PluginCommand::Remove(args) => {
                     unavailable("plugin remove", args.common.output.json)
                 }
@@ -52,15 +55,13 @@ impl Dispatch {
                 PluginCommand::List(args) => Self::PluginList(args),
             },
             Command::Skill(args) => match args.command {
-                SkillCommand::Install(args) => unavailable("skill install", args.output.json),
+                SkillCommand::Install(args) => Self::SkillInstall(args),
                 SkillCommand::Remove(args) => unavailable("skill remove", args.common.output.json),
                 SkillCommand::Update(args) => unavailable("skill update", args.output.json),
                 SkillCommand::List(args) => Self::SkillList(args),
             },
             Command::Instructions(args) => match args.command {
-                InstructionsCommand::Setup(args) => {
-                    unavailable("instructions setup", args.output.json)
-                }
+                InstructionsCommand::Setup(args) => Self::InstructionSetup(args),
                 InstructionsCommand::Status(args) => Self::InstructionStatus(args),
                 InstructionsCommand::Repair(args) => {
                     unavailable("instructions repair", args.output.json)
@@ -85,6 +86,10 @@ impl Dispatch {
             Self::MarketplaceList(args) => args.output.json,
             Self::PluginList(args) => args.output.json,
             Self::InstructionStatus(args) => args.output.json,
+            Self::MarketplaceAdd(args) => args.common.output.json,
+            Self::PluginInstall(args) => args.output.json,
+            Self::SkillInstall(args) => args.output.json,
+            Self::InstructionSetup(args) => args.output.json,
             Self::HarnessList(args) => args.json,
             Self::HarnessEnable(args) => args.output.json,
             Self::HarnessDisable(args) => args.output.json,

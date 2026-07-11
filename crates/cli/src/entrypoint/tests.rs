@@ -10,11 +10,12 @@ fn plan_composes_as_an_attention_report_and_other_unavailable_commands_remain_ex
     assert!(plain.document.contains("Result: attention required"));
 
     let json = run_from(["skilltap", "plugin", "install", "format@team", "--json"]);
-    assert_eq!(json.exit_code, 1);
+    assert_eq!(json.exit_code, 2);
     assert_eq!(json.channel, OutputChannel::Stdout);
     let value: Value = serde_json::from_str(&json.document).unwrap();
     assert_eq!(value["command"], "plugin install");
-    assert_eq!(value["errors"][0]["code"], "capability_unavailable");
+    assert_eq!(value["result"], "attention_required");
+    assert_eq!(value["errors"][0]["code"], "no_enabled_harnesses");
 }
 
 #[test]

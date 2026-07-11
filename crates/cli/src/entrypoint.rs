@@ -102,6 +102,46 @@ where
             execute_system_instruction_status(&args),
             OutputChannel::Stdout,
         ),
+        Dispatch::MarketplaceAdd(args) => (
+            execute_system_lifecycle_preview(
+                "marketplace add",
+                &args.common.scope,
+                &args.common.target,
+                Some(args.source.as_str()),
+                args.name.as_ref().map(|value| value.as_str()),
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::PluginInstall(args) => (
+            execute_system_lifecycle_preview(
+                "plugin install",
+                &args.scope,
+                &args.target,
+                Some(args.plugin.as_str()),
+                None,
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::SkillInstall(args) => (
+            execute_system_lifecycle_preview(
+                "skill install",
+                &args.scope,
+                &args.target,
+                Some(args.source.as_str()),
+                args.name.as_ref().map(|value| value.as_str()),
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::InstructionSetup(args) => (
+            execute_system_lifecycle_preview(
+                "instructions setup",
+                &args.scope,
+                &crate::command::TargetArgs::default(),
+                None,
+                None,
+            ),
+            OutputChannel::Stdout,
+        ),
         Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessEnable(args) => {
             (execute_system_harness_enable(&args), OutputChannel::Stdout)
@@ -143,6 +183,18 @@ fn execute_system_resource_list(
 fn execute_system_instruction_status(args: &ScopedOutputArgs) -> Outcome {
     execute_system_reconciliation("instructions status", |application| {
         application.execute_instruction_status(args)
+    })
+}
+
+fn execute_system_lifecycle_preview(
+    command: &'static str,
+    scope: &crate::command::ScopeArgs,
+    target: &crate::command::TargetArgs,
+    source: Option<&str>,
+    name: Option<&str>,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        application.execute_lifecycle_preview(command, scope, target, source, name)
     })
 }
 

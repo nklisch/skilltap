@@ -209,6 +209,94 @@ impl StatusApplication<'_> {
             ))
     }
 
+    /// Render a deterministic lifecycle preview while the resource-specific
+    /// mutation adapter is unavailable. This keeps command output useful and
+    /// safe: it never claims a native action happened and never mutates state.
+    pub(crate) fn execute_lifecycle_preview(
+        &self,
+        command: &'static str,
+        requested_scope: &ScopeArgs,
+        target: &TargetArgs,
+        source: Option<&str>,
+        name: Option<&str>,
+    ) -> Outcome {
+        let documents = DocumentLoadPhase::execute(self);
+        let mut outcome = documents.project(Outcome::new(command, ResultClass::AttentionRequired));
+        let documents = match documents.finish() {
+            Ok(documents) => documents,
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                return outcome;
+            }
+        };
+        let status_args = StatusArgs {
+            target: target.clone(),
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let targets = match StatusTargets::resolve(&status_args, &documents) {
+            Ok(targets) => targets,
+            Err(StatusTargetError::NoneEnabled) => {
+                return outcome
+                    .with_error(ErrorDetail::new(
+                        "no_enabled_harnesses",
+                        "No harness is enabled in skilltap configuration.",
+                    ))
+                    .with_next_action(
+                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                            .with_command("skilltap harness enable <codex|claude>"),
+                    );
+            }
+            Err(StatusTargetError::NotEnabled) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "target_not_enabled",
+                    "The requested harness target is not enabled.",
+                ));
+            }
+        };
+        let source = source.unwrap_or("not supplied");
+        let name = name.unwrap_or("derived by lifecycle adapter");
+        let mut operation_count = 0_u64;
+        for concrete_scope in &scope.resolved {
+            for harness in targets.iter() {
+                operation_count += 1;
+                outcome = outcome.with_operation(
+                    crate::OperationOutcome::new(
+                        format!("{command}:{harness}:{}", scope_label(concrete_scope)),
+                        "planned",
+                    )
+                    .with_field("target", harness.as_str())
+                    .with_field("scope", scope_label(concrete_scope))
+                    .with_field("source", source)
+                    .with_field("name", name),
+                );
+            }
+        }
+        outcome
+            .with_summary("operations", operation_count)
+            .with_summary("changed", false)
+            .with_warning(Warning::new(
+                "mutation_adapter_pending",
+                "The lifecycle request is planned but not applied until its native or managed adapter is available.",
+            ))
+            .with_next_action(NextAction::new(
+                "inspect_plan",
+                "Review the planned operation before the lifecycle adapter is enabled.",
+            ))
+    }
+
     fn execute_reconciliation(
         &self,
         command: &'static str,

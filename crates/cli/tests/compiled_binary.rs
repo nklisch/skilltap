@@ -255,6 +255,10 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 | "marketplace list"
                 | "plugin list"
                 | "instructions status"
+                | "marketplace add"
+                | "plugin install"
+                | "skill install"
+                | "instructions setup"
         ) {
             assert_code(&output, 2);
             let value = json(&output);
