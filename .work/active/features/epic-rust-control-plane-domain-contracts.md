@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-workspace-reset]
@@ -210,3 +210,19 @@ class/fidelity combinations explicit, required executable affected surfaces,
 bound partial consent exactly to compatibility consequences, and kept adoption
 origin independent from current target selection. The integrated locked suite
 passes with 56 core tests.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep review used two fresh-context harness passes: domain invariants
+and downstream consumers. Initial blockers produced two corrective stories;
+both reviewers then approved current HEAD after semantic operations, layered
+observations, desired origin/choices/consequences, exact consent, result
+matrices, dependency propagation, and cycle diagnostics were corrected. Locked
+format/check/clippy/tests pass with 56 core tests. External cross-model review
+was unavailable by operator constraint.
