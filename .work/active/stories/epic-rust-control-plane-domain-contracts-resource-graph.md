@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-graph
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -21,9 +21,26 @@ namespacing, observation findings, and validated dependency graphs.
 
 ## Acceptance criteria
 
-- [ ] Desired and observed records remain distinct and use concrete scopes.
-- [ ] Harness-native metadata is namespaced and opaque to general domain code.
-- [ ] Graph construction rejects duplicates, dangling/self edges, and cycles.
-- [ ] Malformed unmanaged entries can be reported without fabricating resources.
-- [ ] Representative graphs serialize deterministically and round-trip.
-- [ ] Locked format, clippy, and workspace tests pass.
+- [x] Desired and observed records remain distinct and use concrete scopes.
+- [x] Harness-native metadata is namespaced and opaque to general domain code.
+- [x] Graph construction rejects duplicates, dangling/self edges, and cycles.
+- [x] Malformed unmanaged entries can be reported without fabricating resources.
+- [x] Representative graphs serialize deterministically and round-trip.
+- [x] Locked format, clippy, and workspace tests pass.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/domain/resource.rs`, `crates/core/Cargo.toml`.
+- Tests added: resource/component enum wire forms; desired/observed ID alignment;
+  duplicate, dangling, self, and multi-node cycle rejection; deterministic graph
+  round trips; opaque native metadata preservation; malformed unmanaged findings;
+  owned-envelope unknown-field rejection and finding-message validation.
+- Verification: `cargo fmt --all -- --check`, `cargo check --workspace --locked`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`,
+  `cargo test -p skilltap-core --locked`, and `cargo test --workspace --locked`.
+- Discrepancies from design: `serde_json` moved from a core dev dependency to a
+  production dependency because opaque adapter metadata is part of the public
+  resource contract; otherwise none.
+- Dispatch rationale: direct implementation within the resource module while a
+  sibling agent owned the disjoint capability/compatibility modules.
+- Adjacent issues parked: none.
