@@ -20,21 +20,52 @@ pub(super) struct FileIdentity {
 
 #[cfg(unix)]
 pub(super) fn open_read_no_follow(path: &AbsolutePath) -> Result<File, RuntimeError> {
+    open_read_no_follow_for(path, FileSystemAction::Copy)?.ok_or_else(|| {
+        filesystem_error(
+            FileSystemAction::Copy,
+            path,
+            io::Error::new(io::ErrorKind::NotFound, "source does not exist"),
+        )
+    })
+}
+
+#[cfg(unix)]
+pub(super) fn open_read_no_follow_for(
+    path: &AbsolutePath,
+    action: FileSystemAction,
+) -> Result<Option<File>, RuntimeError> {
     OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(path.as_str())
+        .map(Some)
         .map_err(|error| {
             if error.raw_os_error() == Some(libc::ELOOP) {
-                unsafe_symlink(FileSystemAction::Copy, path)
+                unsafe_symlink(action, path)
             } else {
-                filesystem_error(FileSystemAction::Copy, path, error)
+                filesystem_error(action, path, error)
             }
+        })
+        .or_else(|error| match &error {
+            RuntimeError::FileSystem { source, .. } if source.kind() == io::ErrorKind::NotFound => {
+                Ok(None)
+            }
+            _ => Err(error),
         })
 }
 
 #[cfg(not(unix))]
 pub(super) fn open_read_no_follow(_path: &AbsolutePath) -> Result<File, RuntimeError> {
+    Err(RuntimeError::UnsupportedPlatform {
+        platform: std::env::consts::OS.to_owned(),
+    })
+}
+
+#[cfg(not(unix))]
+pub(super) fn open_read_no_follow_for(
+    _path: &AbsolutePath,
+    _action: FileSystemAction,
+) -> Result<Option<File>, RuntimeError> {
     Err(RuntimeError::UnsupportedPlatform {
         platform: std::env::consts::OS.to_owned(),
     })

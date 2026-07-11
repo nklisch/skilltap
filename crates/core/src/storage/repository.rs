@@ -1,11 +1,14 @@
-use std::{fmt, marker::PhantomData, path::PathBuf};
+use std::{collections::BTreeSet, fmt, marker::PhantomData, path::PathBuf};
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{
+    Deserialize, Deserializer, Serialize,
+    de::{DeserializeOwned, IgnoredAny, MapAccess, Visitor},
+};
 
 use super::{ConfigDocument, InventoryDocument, SCHEMA_VERSION, StateDocument};
 use crate::{
     domain::AbsolutePath,
-    runtime::{FileKind, FileSystem, RuntimeError},
+    runtime::{FileSystem, RuntimeError},
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -62,15 +65,13 @@ pub enum StorageFailure {
     Malformed,
     Invalid,
     UnsupportedSchema { version: u32 },
-    UnexpectedFileKind { kind: FileKind },
 }
 
 enum StorageCause {
-    Runtime(RuntimeError),
+    Runtime,
     Malformed,
     Invalid,
     UnsupportedSchema { version: u32 },
-    UnexpectedFileKind { kind: FileKind },
 }
 
 pub struct StorageError {
@@ -95,14 +96,11 @@ impl StorageError {
 
     pub const fn failure(&self) -> StorageFailure {
         match self.cause {
-            StorageCause::Runtime(_) => StorageFailure::Runtime,
+            StorageCause::Runtime => StorageFailure::Runtime,
             StorageCause::Malformed => StorageFailure::Malformed,
             StorageCause::Invalid => StorageFailure::Invalid,
             StorageCause::UnsupportedSchema { version } => {
                 StorageFailure::UnsupportedSchema { version }
-            }
-            StorageCause::UnexpectedFileKind { kind } => {
-                StorageFailure::UnexpectedFileKind { kind }
             }
         }
     }
@@ -111,13 +109,13 @@ impl StorageError {
         document: DocumentKind,
         action: DocumentAction,
         path: &AbsolutePath,
-        source: RuntimeError,
+        _source: RuntimeError,
     ) -> Self {
         Self {
             document,
             action,
             path: path.clone(),
-            cause: StorageCause::Runtime(source),
+            cause: StorageCause::Runtime,
         }
     }
 
@@ -166,19 +164,13 @@ impl fmt::Display for StorageError {
             StorageFailure::UnsupportedSchema { version } => {
                 write!(formatter, "unsupported schema version {version}")
             }
-            StorageFailure::UnexpectedFileKind { kind } => {
-                write!(formatter, "unexpected file kind {kind:?}")
-            }
         }
     }
 }
 
 impl std::error::Error for StorageError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match &self.cause {
-            StorageCause::Runtime(source) => Some(source),
-            _ => None,
-        }
+        None
     }
 }
 
@@ -293,24 +285,15 @@ where
     }
 
     fn load(&self) -> Result<DocumentState<T>, StorageError> {
-        let metadata = self.filesystem.inspect(&self.path).map_err(|source| {
-            StorageError::runtime(self.kind, DocumentAction::Read, &self.path, source)
-        })?;
-        match metadata.kind() {
-            FileKind::Missing => return Ok(DocumentState::Missing),
-            FileKind::RegularFile => {}
-            kind => {
-                return Err(StorageError {
-                    document: self.kind,
-                    action: DocumentAction::Read,
-                    path: self.path.clone(),
-                    cause: StorageCause::UnexpectedFileKind { kind },
-                });
-            }
-        }
-        let contents = self.filesystem.read(&self.path).map_err(|source| {
-            StorageError::runtime(self.kind, DocumentAction::Read, &self.path, source)
-        })?;
+        let Some(contents) =
+            self.filesystem
+                .read_regular_no_follow(&self.path)
+                .map_err(|source| {
+                    StorageError::runtime(self.kind, DocumentAction::Read, &self.path, source)
+                })?
+        else {
+            return Ok(DocumentState::Missing);
+        };
         self.codec
             .decode(&contents)
             .map(DocumentState::Present)
@@ -379,9 +362,15 @@ where
     T: DeserializeOwned + Serialize,
 {
     fn decode(&self, contents: &[u8]) -> Result<T, CodecFailure> {
-        let value = serde_json::from_slice::<serde_json::Value>(contents)
+        serde_json::from_slice::<serde_json::Value>(contents)
             .map_err(|_| CodecFailure::Malformed)?;
-        validate_json_schema(&value)?;
+        let probe = serde_json::from_slice::<JsonSchemaProbe>(contents)
+            .map_err(|_| CodecFailure::Invalid)?;
+        if let Some(version) = probe.schema
+            && version != SCHEMA_VERSION
+        {
+            return Err(CodecFailure::UnsupportedSchema { version });
+        }
         serde_json::from_slice(contents).map_err(|_| CodecFailure::Invalid)
     }
 
@@ -405,19 +394,46 @@ fn validate_toml_schema(table: &toml::Table) -> Result<(), CodecFailure> {
     Ok(())
 }
 
-fn validate_json_schema(value: &serde_json::Value) -> Result<(), CodecFailure> {
-    if let Some(version) = value
-        .as_object()
-        .and_then(|object| object.get("schema"))
-        .and_then(serde_json::Value::as_u64)
-        && version <= u32::MAX as u64
-        && version as u32 != SCHEMA_VERSION
+struct JsonSchemaProbe {
+    schema: Option<u32>,
+}
+
+impl<'de> Deserialize<'de> for JsonSchemaProbe {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
     {
-        return Err(CodecFailure::UnsupportedSchema {
-            version: version as u32,
-        });
+        struct ProbeVisitor;
+
+        impl<'de> Visitor<'de> for ProbeVisitor {
+            type Value = JsonSchemaProbe;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str("a JSON object with unique top-level fields")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut seen = BTreeSet::new();
+                let mut schema = None;
+                while let Some(key) = map.next_key::<String>()? {
+                    if !seen.insert(key.clone()) {
+                        return Err(serde::de::Error::custom("duplicate top-level field"));
+                    }
+                    if key == "schema" {
+                        schema = Some(map.next_value::<u32>()?);
+                    } else {
+                        map.next_value::<IgnoredAny>()?;
+                    }
+                }
+                Ok(JsonSchemaProbe { schema })
+            }
+        }
+
+        deserializer.deserialize_map(ProbeVisitor)
     }
-    Ok(())
 }
 
 #[cfg(test)]

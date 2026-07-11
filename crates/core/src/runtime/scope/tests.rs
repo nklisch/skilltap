@@ -112,6 +112,13 @@ impl FileSystem for InspectOnlyFileSystem {
         unreachable!("Git metadata probing does not read contents")
     }
 
+    fn read_regular_no_follow(
+        &self,
+        _path: &AbsolutePath,
+    ) -> Result<Option<Vec<u8>>, RuntimeError> {
+        unreachable!("Git metadata probing does not read contents")
+    }
+
     fn atomic_write(&self, _path: &AbsolutePath, _contents: &[u8]) -> Result<(), RuntimeError> {
         unreachable!("Git metadata probing is read-only")
     }

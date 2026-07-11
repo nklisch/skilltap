@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -26,6 +26,7 @@ use locking::try_acquire_with;
 #[cfg(test)]
 use publication::Publication;
 use publication::{SystemPublication, copy_recoverable_with};
+use unix_identity::{descriptor_identity, open_read_no_follow_for, verify_path_identity};
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -47,16 +48,6 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
-    #[cfg(test)]
-    pub(crate) const fn for_test(kind: FileKind, length: u64) -> Self {
-        Self {
-            kind,
-            length,
-            link_target: None,
-            link_target_exists: None,
-        }
-    }
-
     pub const fn kind(&self) -> FileKind {
         self.kind
     }
@@ -133,6 +124,7 @@ pub trait FileSystem {
     fn canonicalize(&self, path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError>;
     fn create_directory_all(&self, path: &AbsolutePath) -> Result<(), RuntimeError>;
     fn read(&self, path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError>;
+    fn read_regular_no_follow(&self, path: &AbsolutePath) -> Result<Option<Vec<u8>>, RuntimeError>;
     fn atomic_write(&self, path: &AbsolutePath, contents: &[u8]) -> Result<(), RuntimeError>;
     fn copy_recoverable(
         &self,
@@ -172,6 +164,10 @@ impl FileSystem for SystemFileSystem {
     fn read(&self, path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError> {
         fs::read(path.as_str())
             .map_err(|source| filesystem_error(FileSystemAction::Read, path, source))
+    }
+
+    fn read_regular_no_follow(&self, path: &AbsolutePath) -> Result<Option<Vec<u8>>, RuntimeError> {
+        read_regular_no_follow_with(path, || {})
     }
 
     fn atomic_write(&self, path: &AbsolutePath, contents: &[u8]) -> Result<(), RuntimeError> {
@@ -232,6 +228,32 @@ impl FileSystem for SystemFileSystem {
         removed?;
         sync_parent(path, FileSystemAction::Remove)
     }
+}
+
+fn read_regular_no_follow_with(
+    path: &AbsolutePath,
+    after_open: impl FnOnce(),
+) -> Result<Option<Vec<u8>>, RuntimeError> {
+    let Some(mut file) = open_read_no_follow_for(path, FileSystemAction::Read)? else {
+        return Ok(None);
+    };
+    let identity = descriptor_identity(&file, FileSystemAction::Read, path)?;
+    let metadata = file
+        .metadata()
+        .map_err(|source| filesystem_error(FileSystemAction::Read, path, source))?;
+    if !metadata.is_file() {
+        return Err(filesystem_error(
+            FileSystemAction::Read,
+            path,
+            io::Error::new(io::ErrorKind::InvalidInput, "expected a regular file"),
+        ));
+    }
+    after_open();
+    verify_path_identity(path, identity, FileSystemAction::Read)?;
+    let mut contents = Vec::new();
+    file.read_to_end(&mut contents)
+        .map_err(|source| filesystem_error(FileSystemAction::Read, path, source))?;
+    Ok(Some(contents))
 }
 
 pub trait ConfigurationLock {

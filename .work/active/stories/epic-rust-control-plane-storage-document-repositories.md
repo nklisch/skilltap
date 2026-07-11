@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-document-repositories
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -77,3 +77,25 @@ Fresh-context review requested three corrections:
 The runtime filesystem port may gain the narrow descriptor-bound read primitive
 required by the first correction; ordinary link-following reads remain
 unchanged for callers that explicitly need them.
+
+## Review corrections
+
+- Added `FileSystem::read_regular_no_follow`, returning `None` for missing paths
+  or bytes from one no-follow regular-file descriptor. The system adapter opens
+  with `O_NOFOLLOW`, captures descriptor identity, verifies pathname identity,
+  and reads from that same descriptor. Ordinary `FileSystem::read` is unchanged.
+- Repository loading now calls the descriptor-bound method directly; there is
+  no inspect/read pathname race. Fake tests make both `inspect` and ordinary
+  `read` unreachable, while runtime tests deterministically cover missing,
+  regular, symlink-follow refusal, and a post-open pathname swap.
+- Replaced JSON `Value` schema lookup with a duplicate-aware raw top-level map
+  visitor after syntax parsing. Duplicate fields—including both schema orders
+  and duplicates alongside an unsupported version—are always `Invalid`; unique
+  unsupported versions remain `UnsupportedSchema`, and syntax errors remain
+  `Malformed`. Typed decoding still consumes the original bytes.
+- Storage runtime failures now discard the raw runtime error after assigning
+  safe document/action/path context. `Display`, `Debug`, and `Error::source()`
+  expose no runtime or I/O detail; regression tests assert the empty source chain.
+- Verification passed with 120 workspace tests across the full locked
+  format/check/Clippy/test/rustdoc ladder. No lock, managed-artifact, or resource
+  lifecycle behavior was added.

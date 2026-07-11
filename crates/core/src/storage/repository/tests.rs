@@ -13,7 +13,7 @@ use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::{
-    runtime::{FileMetadata, FileSystemAction, RelativeSymlinkTarget, SystemFileSystem},
+    runtime::{FileKind, FileMetadata, FileSystemAction, RelativeSymlinkTarget, SystemFileSystem},
     storage::SCHEMA_VERSION,
 };
 
@@ -46,20 +46,8 @@ impl FakeFileSystem {
 }
 
 impl FileSystem for FakeFileSystem {
-    fn inspect(&self, path: &AbsolutePath) -> Result<FileMetadata, RuntimeError> {
-        let kind = self.kinds.borrow().get(path).copied().unwrap_or_else(|| {
-            if self.files.borrow().contains_key(path) {
-                FileKind::RegularFile
-            } else {
-                FileKind::Missing
-            }
-        });
-        let length = self
-            .files
-            .borrow()
-            .get(path)
-            .map_or(0, |contents| contents.len() as u64);
-        Ok(FileMetadata::for_test(kind, length))
+    fn inspect(&self, _path: &AbsolutePath) -> Result<FileMetadata, RuntimeError> {
+        unreachable!("document repositories must not inspect before descriptor-bound reads")
     }
 
     fn canonicalize(&self, _path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError> {
@@ -74,12 +62,31 @@ impl FileSystem for FakeFileSystem {
         Ok(())
     }
 
-    fn read(&self, path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError> {
-        self.files
-            .borrow()
-            .get(path)
-            .cloned()
-            .ok_or_else(|| Self::error(FileSystemAction::Read, path))
+    fn read(&self, _path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError> {
+        unreachable!("document repositories use descriptor-bound reads")
+    }
+
+    fn read_regular_no_follow(&self, path: &AbsolutePath) -> Result<Option<Vec<u8>>, RuntimeError> {
+        let kind = self.kinds.borrow().get(path).copied().unwrap_or_else(|| {
+            if self.files.borrow().contains_key(path) {
+                FileKind::RegularFile
+            } else {
+                FileKind::Missing
+            }
+        });
+        match kind {
+            FileKind::Missing => Ok(None),
+            FileKind::RegularFile => self
+                .files
+                .borrow()
+                .get(path)
+                .cloned()
+                .map(Some)
+                .ok_or_else(|| Self::error(FileSystemAction::Read, path)),
+            FileKind::Directory | FileKind::Symlink | FileKind::Other => {
+                Err(Self::error(FileSystemAction::Read, path))
+            }
+        }
     }
 
     fn atomic_write(&self, path: &AbsolutePath, contents: &[u8]) -> Result<(), RuntimeError> {
@@ -247,16 +254,27 @@ fn state_json_and_inventory_toml_keep_their_own_codec_context() {
     assert_eq!(state.document(), DocumentKind::State);
     assert!(filesystem.writes.borrow().is_empty());
 
-    filesystem.put(
-        path("state.json"),
-        br#"{"schema":1,"schema":1,"harnesses":[],"resources":[]}"#.to_vec(),
-    );
-    let duplicate = FileStateRepository::new(&filesystem, root())
+    for duplicate in [
+        br#"{"schema":77,"schema":1,"harnesses":[],"resources":[]}"#.as_slice(),
+        br#"{"schema":1,"schema":77,"harnesses":[],"resources":[]}"#.as_slice(),
+        br#"{"schema":77,"harnesses":[],"harnesses":[],"resources":[]}"#.as_slice(),
+    ] {
+        filesystem.put(path("state.json"), duplicate);
+        let error = FileStateRepository::new(&filesystem, root())
+            .unwrap()
+            .load()
+            .unwrap_err();
+        assert_eq!(error.action(), DocumentAction::Validate);
+        assert_eq!(error.failure(), StorageFailure::Invalid);
+    }
+
+    filesystem.put(path("state.json"), br#"{"schema":1,"harnesses":["#.to_vec());
+    let malformed = FileStateRepository::new(&filesystem, root())
         .unwrap()
         .load()
         .unwrap_err();
-    assert_eq!(duplicate.action(), DocumentAction::Validate);
-    assert_eq!(duplicate.failure(), StorageFailure::Invalid);
+    assert_eq!(malformed.action(), DocumentAction::Decode);
+    assert_eq!(malformed.failure(), StorageFailure::Malformed);
 }
 
 #[test]
@@ -275,6 +293,7 @@ fn failed_publication_preserves_old_bytes_and_reports_safe_write_context() {
     assert_eq!(filesystem.bytes(&config_path), Some(old));
     assert!(!error.to_string().contains("secret-runtime-detail"));
     assert!(!format!("{error:?}").contains("secret-runtime-detail"));
+    assert!(std::error::Error::source(&error).is_none());
 }
 
 #[test]
@@ -304,12 +323,8 @@ fn non_regular_owned_documents_are_never_followed_or_decoded() {
     let error = repository.load().unwrap_err();
 
     assert_eq!(error.action(), DocumentAction::Read);
-    assert_eq!(
-        error.failure(),
-        StorageFailure::UnexpectedFileKind {
-            kind: FileKind::Symlink
-        }
-    );
+    assert_eq!(error.failure(), StorageFailure::Runtime);
+    assert!(std::error::Error::source(&error).is_none());
 }
 
 #[test]
