@@ -35,8 +35,8 @@ use skilltap_harnesses::{
 use crate::{
     ErrorDetail, NextAction, Outcome, OutputEntry, OutputScope, ResultClass, Warning,
     command::{
-        AdoptArgs, OutputArgs, PlanArgs, ScopeArgs, ScopeArgument, ScopedTargetArgs, StatusArgs,
-        SyncArgs, TargetArgs,
+        AdoptArgs, OutputArgs, PlanArgs, ScopeArgs, ScopeArgument, ScopedOutputArgs,
+        ScopedTargetArgs, StatusArgs, SyncArgs, TargetArgs,
     },
 };
 
@@ -160,6 +160,53 @@ impl StatusApplication<'_> {
             .with_summary("resources", count)
             .with_summary("scopes", scope.count)
             .with_summary("targets", targets.iter().len() as u64)
+    }
+
+    pub(crate) fn execute_instruction_status(&self, args: &ScopedOutputArgs) -> Outcome {
+        let documents = DocumentLoadPhase::execute(self);
+        let mut outcome = documents.project(Outcome::new(
+            "instructions status",
+            ResultClass::AttentionRequired,
+        ));
+        let documents = match documents.finish() {
+            Ok(documents) => documents,
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                return outcome;
+            }
+        };
+        let status_args = StatusArgs {
+            target: TargetArgs::default(),
+            scope: args.scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let path_count = if scope.resolved.is_empty() {
+            0
+        } else {
+            scope.resolved.len() * 2
+        } as u64;
+        outcome
+            .with_summary("scopes", scope.count)
+            .with_summary("instruction_paths", path_count)
+            .with_warning(Warning::new(
+                "instruction_observation_pending",
+                "Instruction locations are modeled, but native bridge probing is not yet composed.",
+            ))
+            .with_next_action(NextAction::new(
+                "inspect_instruction_bridges",
+                "Run status again after instruction bridge observation is enabled.",
+            ))
     }
 
     fn execute_reconciliation(

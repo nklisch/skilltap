@@ -249,7 +249,12 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
             assert!(stderr(&output).contains("capability_unavailable"));
         } else if matches!(
             *command,
-            "plan" | "sync" | "skill list" | "marketplace list" | "plugin list"
+            "plan"
+                | "sync"
+                | "skill list"
+                | "marketplace list"
+                | "plugin list"
+                | "instructions status"
         ) {
             assert_code(&output, 2);
             let value = json(&output);

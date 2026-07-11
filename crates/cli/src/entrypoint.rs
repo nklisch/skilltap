@@ -20,7 +20,7 @@ use crate::{
     application::{NativeObservationMode, StatusApplication},
     command::{
         AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
-        ScopedTargetArgs, SyncArgs,
+        ScopedOutputArgs, ScopedTargetArgs, SyncArgs,
     },
     dispatch::Dispatch,
 };
@@ -98,6 +98,10 @@ where
             ),
             OutputChannel::Stdout,
         ),
+        Dispatch::InstructionStatus(args) => (
+            execute_system_instruction_status(&args),
+            OutputChannel::Stdout,
+        ),
         Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessEnable(args) => {
             (execute_system_harness_enable(&args), OutputChannel::Stdout)
@@ -133,6 +137,12 @@ fn execute_system_resource_list(
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
         application.execute_resource_list(command, args, kind)
+    })
+}
+
+fn execute_system_instruction_status(args: &ScopedOutputArgs) -> Outcome {
+    execute_system_reconciliation("instructions status", |application| {
+        application.execute_instruction_status(args)
     })
 }
 
