@@ -3,6 +3,7 @@ pub mod domain;
 pub mod executor;
 pub mod instructions;
 pub mod marketplace;
+pub mod materialization;
 pub mod native_config;
 pub mod operation_graph;
 pub mod reconciliation;
@@ -12,5 +13,6 @@ pub mod skill_compatibility;
 pub mod skill_lifecycle;
 pub mod skill_source;
 pub mod storage;
+pub mod updates;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
