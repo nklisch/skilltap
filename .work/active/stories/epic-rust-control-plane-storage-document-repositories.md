@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-document-repositories
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -98,12 +98,20 @@ unchanged for callers that explicitly need them.
   expose no runtime or I/O detail; regression tests assert the empty source chain.
 - Verification passed with 120 workspace tests across the full locked
   format/check/Clippy/test/rustdoc ladder. No lock, managed-artifact, or resource
-  lifecycle behavior was added.
+lifecycle behavior was added.
 
 Re-review confirmed the three corrections but reproduced one special-file
 blocker: read-only `open` of a FIFO waits before descriptor type validation.
 The owned no-follow open must include nonblocking mode and a bounded FIFO
 regression must prove deterministic fail-fast behavior.
+
+## Final review
+
+Approved after the descriptor, JSON, error-chain, and FIFO corrections.
+Descriptor-bound reads refuse links, detect path swaps, reject special files
+without blocking, and preserve ordinary/publication reads. Duplicate fields are
+order-independently invalid and storage errors expose no raw source chain.
+Focused runtime/repository/atomic tests and the full locked 122-test ladder pass.
 
 ## Re-review correction
 
