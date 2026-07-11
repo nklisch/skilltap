@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-resolution-contract
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-safe-update-automation-resolution
 depends_on: []
@@ -23,3 +23,13 @@ Acceptance criteria:
 - Pinned, drifted, incompatible, and partial candidates cannot be classified
   as safe by accident.
 - Resolver errors are deterministic, bounded, and covered by unit tests.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/updates.rs`.
+- Tests added: typed revision safety, source resolution, and native target
+  disagreement tests in `updates.rs`.
+- Discrepancies from design: `ResolvedUpdate` retains the three planned fields
+  directly and `candidate_for` derives the policy candidate; unresolved results
+  remain explicit through `error` rather than being classified as no-update.
+- Adjacent issues parked: none.
