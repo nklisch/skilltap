@@ -134,6 +134,22 @@ where
     }
 }
 
+/// Resolve a deterministic batch without mutating any external resource.
+pub fn check_updates<'a, R, N>(
+    requests: impl IntoIterator<Item = UpdateResolutionRequest<'a>>,
+    source_resolver: &R,
+    native_resolver: &N,
+) -> Vec<ResolvedUpdate>
+where
+    R: ?Sized + SourceRevisionResolver,
+    N: ?Sized + NativeRevisionResolver,
+{
+    requests
+        .into_iter()
+        .map(|request| resolve_candidate(source_resolver, native_resolver, request))
+        .collect()
+}
+
 /// Build the safety-policy candidate from a successful or failed resolution.
 /// Callers must check `ResolvedUpdate::error` before treating the candidate as
 /// actionable; unresolved candidates intentionally carry no available value.

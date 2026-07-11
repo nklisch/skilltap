@@ -475,6 +475,48 @@ impl StateDocument {
         )
     }
 
+    /// Cache one freshly resolved available revision while preserving the
+    /// installed resource, ownership, fingerprint, and operation journal.
+    /// Callers can compose several returned documents and publish once through
+    /// `StateRepository` for an atomic multi-resource check.
+    pub fn with_available_revision(
+        &self,
+        resource: &ResourceKey,
+        available: Option<ResolvedRevision>,
+        checked_at: Timestamp,
+    ) -> Result<Self, SchemaError> {
+        let current =
+            self.resources
+                .get(resource)
+                .ok_or_else(|| SchemaError::StateResourceNotFound {
+                    resource: resource.clone(),
+                })?;
+        let updated = ResourceState::new(
+            current.key().clone(),
+            current.native_ids().clone(),
+            current.provenance(),
+            current.ownership(),
+            current.source().cloned(),
+            current.managed_artifact().cloned(),
+            current.fingerprint().cloned(),
+            current.installed_revision().cloned(),
+            available,
+            current.observed_at(),
+            current.last_apply().cloned(),
+        )?;
+        let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
+        resources.retain(|value| value.key() != resource);
+        resources.push(updated);
+        Self::new(
+            STATE_SCHEMA_VERSION,
+            self.harnesses.values().cloned(),
+            resources,
+            Some(checked_at),
+            self.last_successful_observation,
+            self.last_successful_application,
+        )
+    }
+
     /// Return a copy with a resource seed added idempotently.
     pub fn with_resource_state(&self, resource: ResourceState) -> Result<Self, SchemaError> {
         if let Some(existing) = self.resources.get(resource.key()) {

@@ -168,6 +168,33 @@ fn state_journal_updates_exact_resource_without_touching_siblings() {
 }
 
 #[test]
+fn available_revision_cache_preserves_apply_history_and_siblings() {
+    let first = managed_resource("skill:first");
+    let second = managed_resource("skill:second");
+    let document = StateDocument::new(
+        STATE_SCHEMA_VERSION,
+        [],
+        [first.clone(), second.clone()],
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    let available = crate::domain::ResolvedRevision::GitCommit(
+        crate::domain::GitCommit::new("b".repeat(40)).unwrap(),
+    );
+    let checked_at = Timestamp::new(300, 0).unwrap();
+    let updated = document
+        .with_available_revision(first.key(), Some(available.clone()), checked_at)
+        .unwrap();
+    let resource = updated.resources().get(first.key()).unwrap();
+    assert_eq!(resource.available_revision(), Some(&available));
+    assert_eq!(resource.last_apply(), first.last_apply());
+    assert_eq!(updated.resources().get(second.key()), Some(&second));
+    assert_eq!(updated.last_update_check(), Some(checked_at));
+}
+
+#[test]
 fn config_defaults_are_explicit_strict_and_golden() {
     let config = ConfigDocument::defaults();
     assert_eq!(config.schema(), CONFIG_SCHEMA_VERSION);

@@ -39,12 +39,16 @@ use skilltap_core::{
         InventoryDocument, InventoryRepository, ManagedArtifactRepository, ResourceState,
         StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
     },
+    updates::{
+        ResolutionError, SourceRevisionResolver, UpdateResolutionRequest, UpdateSafety,
+        candidate_for, classify_update, resolve_candidate,
+    },
 };
 use skilltap_harnesses::{
-    CanonicalObservation, HarnessKind, NativeLifecycleAction, NativeLifecyclePort,
-    NativeLifecycleRequest, detect_configured_installation, native_arguments,
-    normalize_observations, observe_claude_canonical_resources, observe_codex_canonical_resources,
-    select_profile,
+    CanonicalObservation, GitSourceRevisionResolver, HarnessKind, NativeLifecycleAction,
+    NativeLifecyclePort, NativeLifecycleRequest, ObservedNativeRevisionResolver,
+    detect_configured_installation, native_arguments, normalize_observations,
+    observe_claude_canonical_resources, observe_codex_canonical_resources, select_profile,
 };
 
 use crate::{
@@ -4538,10 +4542,18 @@ impl StatusProjection<'_> {
                 NativeObservation::run(self.documents, self.scope, self.targets)
             }
         };
-        for resource in observation.resources {
+        for resource in observation.resources.iter().cloned() {
             outcome = outcome.with_resource(resource);
         }
-        for warning in observation.warnings {
+        let (update_entries, update_warnings, available_updates) =
+            status_update_projection(self.documents, self.scope, self.targets, &observation);
+        for warning in observation.warnings.iter().cloned() {
+            outcome = outcome.with_warning(warning);
+        }
+        for entry in update_entries {
+            outcome = outcome.with_resource(entry);
+        }
+        for warning in update_warnings {
             outcome = outcome.with_warning(warning);
         }
         if observation.failed_targets == 0 {
@@ -4566,7 +4578,8 @@ impl StatusProjection<'_> {
             .with_summary("targets", self.targets.iter().len() as u64)
             .with_summary("observed_targets", observation.observed_targets as u64)
             .with_summary("failed_targets", observation.failed_targets as u64)
-            .with_summary("native_entries", observation.native_entries as u64);
+            .with_summary("native_entries", observation.native_entries as u64)
+            .with_summary("available_updates", available_updates as u64);
         let desired_keys = self
             .documents
             .inventory
@@ -4627,6 +4640,127 @@ impl StatusProjection<'_> {
             ));
         }
         outcome
+    }
+}
+
+struct UnavailableSourceRevisionResolver;
+
+impl SourceRevisionResolver for UnavailableSourceRevisionResolver {
+    fn resolve(
+        &self,
+        source: &skilltap_core::domain::Source,
+    ) -> Result<skilltap_core::domain::ResolvedRevision, ResolutionError> {
+        Err(ResolutionError::UnsupportedSourceKind(source.kind()))
+    }
+}
+
+fn status_update_projection(
+    documents: &StatusDocuments,
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    observation: &NativeObservation,
+) -> (Vec<OutputEntry>, Vec<Warning>, usize) {
+    let Some(inventory) = documents.inventory.as_ref() else {
+        return (Vec::new(), Vec::new(), 0);
+    };
+    let Some(environment) = observation.environment.as_ref() else {
+        return (Vec::new(), Vec::new(), 0);
+    };
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded update resolution process limits are valid");
+    let git_resolver = GitSourceRevisionResolver::system(process_limits).ok();
+    let native_resolver = ObservedNativeRevisionResolver::new(environment);
+    let fallback_resolver = UnavailableSourceRevisionResolver;
+    let mut entries = Vec::new();
+    let mut warnings = Vec::new();
+    let mut available_updates = 0;
+    for resource in inventory.resources().values().filter(|resource| {
+        scope.resolved.contains(resource.scope())
+            && resource
+                .targets()
+                .iter()
+                .any(|target| targets.resolved.contains(target))
+    }) {
+        let installed = documents
+            .state
+            .as_ref()
+            .and_then(|state| state.resources().get(resource.key()))
+            .and_then(|state| state.installed_revision());
+        let request = UpdateResolutionRequest {
+            resource,
+            installed,
+            drifted: false,
+            compatibility_changed: false,
+            requires_acknowledgment: false,
+        };
+        let resolved = if resource.source().is_some() {
+            match git_resolver.as_ref() {
+                Some(resolver) => resolve_candidate(resolver, &native_resolver, request),
+                None => resolve_candidate(&fallback_resolver, &native_resolver, request),
+            }
+        } else {
+            resolve_candidate(&fallback_resolver, &native_resolver, request)
+        };
+        if let Some(error) = resolved.error.as_ref() {
+            warnings.push(
+                Warning::new(
+                    "update_resolution_unavailable",
+                    "An available revision could not be resolved without mutation.",
+                )
+                .with_context("resource", resource.key().to_string())
+                .with_context("reason", resolution_error_label(error)),
+            );
+            continue;
+        }
+        let request = UpdateResolutionRequest {
+            resource,
+            installed,
+            drifted: false,
+            compatibility_changed: false,
+            requires_acknowledgment: false,
+        };
+        let candidate = candidate_for(resource, &request, &resolved);
+        let safety = classify_update(&candidate);
+        if safety != UpdateSafety::NoUpdate {
+            available_updates += 1;
+        }
+        let status = match safety {
+            UpdateSafety::NoUpdate => "up_to_date",
+            UpdateSafety::Safe => "safe",
+            UpdateSafety::NeedsDecision => "needs_decision",
+            UpdateSafety::Blocked => "blocked",
+        };
+        let mut entry = OutputEntry::new(format!("update:{}", resource.key()), status)
+            .with_field("resource", resource.key().to_string());
+        if let Some(current) = candidate.current_revision.as_ref() {
+            entry = entry.with_field("current", revision_label(current));
+        }
+        if let Some(available) = candidate.available_revision.as_ref() {
+            entry = entry.with_field("available", revision_label(available));
+        }
+        entries.push(entry);
+    }
+    (entries, warnings, available_updates)
+}
+
+fn resolution_error_label(error: &ResolutionError) -> &'static str {
+    match error {
+        ResolutionError::UnreachableSource => "unreachable_source",
+        ResolutionError::InvalidRequestedRevision => "invalid_requested_revision",
+        ResolutionError::UnsupportedSourceKind(_) => "unsupported_source_kind",
+        ResolutionError::NativeObservationUnavailable => "native_observation_unavailable",
+        ResolutionError::TargetDisagreement => "target_disagreement",
+    }
+}
+
+fn revision_label(revision: &skilltap_core::domain::ResolvedRevision) -> String {
+    match revision {
+        skilltap_core::domain::ResolvedRevision::GitCommit(commit) => {
+            format!("git:{}", commit.as_str())
+        }
+        skilltap_core::domain::ResolvedRevision::Native(native) => {
+            format!("native:{}", native.as_str())
+        }
     }
 }
 
