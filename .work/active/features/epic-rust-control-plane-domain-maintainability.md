@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-maintainability
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -183,3 +183,14 @@ non-cycle nodes and multiple cycles; full locked checks pass; no public export.
 ## Atomic steps acknowledged
 
 None. Every step is behavior-preserving and independently revertible.
+
+## Implementation summary (2026-07-11)
+
+Children complete. Resource and operation tests now live in dedicated child
+modules with the original 34 tests preserved. One private validated-newtype
+macro replaces exact constructor/display/serde boilerplate across 12 types while
+custom-normalized values remain bespoke. One private dependency-graph module
+shares reference and traversal machinery while preserving resource first-cycle
+and operation all-cycle diagnostics. Production newtype boilerplate fell by 134
+lines, primary production modules are substantially smaller, and the locked
+workspace suite now passes 58 core tests plus warnings-clean rustdoc.
