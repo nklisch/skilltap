@@ -21,6 +21,7 @@ pub enum ResolutionError {
 
 /// An explicit update-resolution request. Drift and compatibility evidence are
 /// supplied by the observation/planning layer rather than inferred here.
+#[derive(Clone, Copy)]
 pub struct UpdateResolutionRequest<'a> {
     pub resource: &'a DesiredResource,
     pub installed: Option<&'a ResolvedRevision>,

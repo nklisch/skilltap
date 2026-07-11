@@ -40,8 +40,9 @@ use skilltap_core::{
         StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
     },
     updates::{
-        ResolutionError, SourceRevisionResolver, UpdateResolutionRequest, UpdateSafety,
-        candidate_for, classify_update, resolve_candidate,
+        ResolutionError, SourceRevisionResolver, UpdateCandidate, UpdateDecision,
+        UpdateDecisionReason, UpdateResolutionRequest, UpdateSafety, candidate_for,
+        classify_update_with_mode, resolve_candidate,
     },
 };
 use skilltap_harnesses::{
@@ -4674,6 +4675,7 @@ fn status_update_projection(
     let mut entries = Vec::new();
     let mut warnings = Vec::new();
     let mut available_updates = 0;
+    let update_mode = documents.config.updates().mode;
     for resource in inventory.resources().values().filter(|resource| {
         scope.resolved.contains(resource.scope())
             && resource
@@ -4686,6 +4688,23 @@ fn status_update_projection(
             .as_ref()
             .and_then(|state| state.resources().get(resource.key()))
             .and_then(|state| state.installed_revision());
+        if update_mode == skilltap_core::storage::UpdateMode::Off
+            || resource.update() == UpdateIntent::Disabled
+        {
+            let candidate = UpdateCandidate {
+                current_revision: installed.cloned(),
+                available_revision: None,
+                resolution_error: None,
+                pinned: resource.update() == UpdateIntent::Pinned,
+                drifted: false,
+                compatibility_changed: false,
+                requires_acknowledgment: false,
+                intent: resource.update(),
+            };
+            let decision = classify_update_with_mode(&candidate, update_mode);
+            entries.push(update_projection_entry(resource, &candidate, decision));
+            continue;
+        }
         let request = UpdateResolutionRequest {
             resource,
             installed,
@@ -4710,37 +4729,57 @@ fn status_update_projection(
                 .with_context("resource", resource.key().to_string())
                 .with_context("reason", resolution_error_label(error)),
             );
-            continue;
         }
-        let request = UpdateResolutionRequest {
-            resource,
-            installed,
-            drifted: false,
-            compatibility_changed: false,
-            requires_acknowledgment: false,
-        };
         let candidate = candidate_for(resource, &request, &resolved);
-        let safety = classify_update(&candidate);
-        if safety != UpdateSafety::NoUpdate {
+        let decision = classify_update_with_mode(&candidate, update_mode);
+        if decision.safety != UpdateSafety::NoUpdate {
             available_updates += 1;
         }
-        let status = match safety {
-            UpdateSafety::NoUpdate => "up_to_date",
-            UpdateSafety::Safe => "safe",
-            UpdateSafety::NeedsDecision => "needs_decision",
-            UpdateSafety::Blocked => "blocked",
-        };
-        let mut entry = OutputEntry::new(format!("update:{}", resource.key()), status)
-            .with_field("resource", resource.key().to_string());
-        if let Some(current) = candidate.current_revision.as_ref() {
-            entry = entry.with_field("current", revision_label(current));
-        }
-        if let Some(available) = candidate.available_revision.as_ref() {
-            entry = entry.with_field("available", revision_label(available));
-        }
-        entries.push(entry);
+        entries.push(update_projection_entry(resource, &candidate, decision));
     }
     (entries, warnings, available_updates)
+}
+
+fn update_projection_entry(
+    resource: &DesiredResource,
+    candidate: &UpdateCandidate,
+    decision: UpdateDecision,
+) -> OutputEntry {
+    let status = match (decision.safety, decision.reason) {
+        (UpdateSafety::NoUpdate, Some(UpdateDecisionReason::DisabledResource)) => "disabled",
+        (UpdateSafety::Blocked, Some(UpdateDecisionReason::GlobalModeOff)) => "policy_off",
+        (UpdateSafety::NeedsDecision, Some(UpdateDecisionReason::CheckOnly)) => "check_only",
+        (UpdateSafety::NeedsDecision, Some(UpdateDecisionReason::PinnedResource)) => "pinned",
+        (UpdateSafety::NoUpdate, _) => "up_to_date",
+        (UpdateSafety::Safe, _) => "safe",
+        (UpdateSafety::NeedsDecision, _) => "needs_decision",
+        (UpdateSafety::Blocked, _) => "blocked",
+    };
+    let mut entry = OutputEntry::new(format!("update:{}", resource.key()), status)
+        .with_field("resource", resource.key().to_string());
+    if let Some(reason) = decision.reason {
+        entry = entry.with_field("reason", update_decision_reason_label(reason));
+    }
+    if let Some(current) = candidate.current_revision.as_ref() {
+        entry = entry.with_field("current", revision_label(current));
+    }
+    if let Some(available) = candidate.available_revision.as_ref() {
+        entry = entry.with_field("available", revision_label(available));
+    }
+    entry
+}
+
+fn update_decision_reason_label(reason: UpdateDecisionReason) -> &'static str {
+    match reason {
+        UpdateDecisionReason::DisabledResource => "disabled_resource",
+        UpdateDecisionReason::GlobalModeOff => "global_mode_off",
+        UpdateDecisionReason::CheckOnly => "check_only",
+        UpdateDecisionReason::PinnedResource => "pinned_resource",
+        UpdateDecisionReason::Drifted => "drifted",
+        UpdateDecisionReason::CompatibilityChanged => "compatibility_changed",
+        UpdateDecisionReason::AcknowledgmentRequired => "acknowledgment_required",
+        UpdateDecisionReason::ResolutionFailed => "resolution_failed",
+    }
 }
 
 fn resolution_error_label(error: &ResolutionError) -> &'static str {
