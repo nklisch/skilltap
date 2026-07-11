@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-skills-mcp-mcp
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization-skills-mcp
 depends_on: [epic-cross-harness-materialization-skills-mcp-skills]
@@ -39,3 +39,7 @@ Acceptance criteria:
 - `cargo test -p skilltap-harnesses materialization::tests --offline` — passed.
 - `cargo clippy -p skilltap-harnesses --all-targets --offline -- -D warnings`
   — passed.
+
+## Review
+
+Verdict: Approve — story verified by implement; fast-lane advance.
