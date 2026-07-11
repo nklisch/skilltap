@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives
 kind: feature
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -183,3 +183,13 @@ leading-parent form. Git probing now falls back only when the bounded ancestor
 chain contains no `.git` metadata; broken or inaccessible metadata is a typed
 safe error. The locked workspace passes 93 tests plus doctests and
 warnings-clean rustdoc.
+
+Re-review confirmed the four original findings closed but found that partial
+backup recovery still collapses two independent facts: residual artifact paths
+and parent-directory durability. A final corrective child makes both structured
+and attempts directory sync regardless of which removals fail.
+
+7. `epic-rust-control-plane-runtime-primitives-publication-residuals` — expose
+   exact temporary/destination residual paths and independent directory-sync
+   state after cleanup attempts — depends on
+   `[epic-rust-control-plane-runtime-primitives-filesystem-hardening]`.
