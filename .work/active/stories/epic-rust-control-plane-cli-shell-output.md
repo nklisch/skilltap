@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell-output
 kind: story
-stage: review
+stage: done
 tags: [cli]
 parent: epic-rust-control-plane-cli-shell
 depends_on: []
@@ -45,3 +45,9 @@ contract tests and run the locked ladder.
   `cargo test --locked --workspace` (157 tests),
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`, and
   `cargo build --locked --release -p skilltap`.
+
+## Review
+
+Approved. One typed outcome drives both renderers and the exact 0/1/2/3 exit
+mapping; JSON is a single stable schema-1 document, and plain/error rendering
+neutralizes control or line injection without serializing source/debug data.
