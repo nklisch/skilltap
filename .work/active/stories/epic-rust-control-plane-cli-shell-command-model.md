@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell-command-model
 kind: story
-stage: review
+stage: done
 tags: [cli]
 parent: epic-rust-control-plane-cli-shell
 depends_on: []
@@ -65,3 +65,9 @@ nested-command forms with tests. Run the locked ladder.
   both repeatable selection collections contain validated core `NativeId`
   values. The CLI continues to treat selector spelling as opaque because the
   foundation documents define no further selector grammar.
+
+## Review
+
+Approved after the test-sidecar correction. The complete documented grammar,
+scope/target/flag relevance, validated values, help/version/no-command behavior,
+and compiled smoke contract pass; parser test identities remain unchanged.
