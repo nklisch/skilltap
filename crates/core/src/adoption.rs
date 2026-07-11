@@ -320,7 +320,7 @@ pub fn apply_adoption<L, R, F>(
 ) -> Result<AdoptionApplyResult, AdoptionApplyError>
 where
     L: ConfigurationLock,
-    R: InventoryRepository,
+    R: InventoryRepository + ?Sized,
     F: FnOnce(&BTreeSet<AdoptionIdentity>) -> Result<ObservedEnvironment, AdoptionObservationError>,
 {
     let guard = lock
@@ -341,7 +341,7 @@ fn apply_adoption_locked<R, F>(
     reobserve: F,
 ) -> Result<AdoptionApplyResult, AdoptionApplyError>
 where
-    R: InventoryRepository,
+    R: InventoryRepository + ?Sized,
     F: FnOnce(&BTreeSet<AdoptionIdentity>) -> Result<ObservedEnvironment, AdoptionObservationError>,
 {
     let current = match inventory.load().map_err(AdoptionApplyError::Inventory)? {

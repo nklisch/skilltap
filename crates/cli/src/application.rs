@@ -4,18 +4,22 @@ use std::{
 };
 
 use skilltap_core::{
+    adoption::{
+        AdoptionApplyError, AdoptionDecision, AdoptionObservationError, AdoptionSelection,
+        apply_adoption, plan_adoption,
+    },
     domain::{
         AbsolutePath, CapabilitySupport, ComponentGraph, ConfiguredBinary, HarnessId,
         HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
         ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
         ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
-        ObservedResource, Ownership, ProfileAuthority, Provenance, ResourceHealth, ResourceId,
-        ResourceKey, ResourceKind, Scope,
+        ObservationTarget, ObservedResource, Ownership, ProfileAuthority, Provenance,
+        ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope,
     },
     runtime::{
         ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
-        ScopeRequest, ScopeResolver, WorkingDirectory, resolve_targets,
+        ScopeRequest, ScopeResolver, SystemConfigurationLock, WorkingDirectory, resolve_targets,
     },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, InventoryDocument, InventoryRepository,
@@ -29,7 +33,7 @@ use skilltap_harnesses::{
 
 use crate::{
     ErrorDetail, NextAction, Outcome, OutputEntry, OutputScope, ResultClass, Warning,
-    command::{ScopeArgument, StatusArgs},
+    command::{AdoptArgs, OutputArgs, ScopeArgument, StatusArgs, TargetArgs},
 };
 
 pub(crate) struct StatusApplication<'a> {
@@ -114,6 +118,163 @@ impl StatusApplication<'_> {
             native_observation: self.native_observation,
         }
         .apply(outcome)
+    }
+
+    pub(crate) fn execute_adopt(&self, args: &AdoptArgs) -> Outcome {
+        let documents = DocumentLoadPhase::execute(self);
+        let mut outcome = documents.project(Outcome::new("adopt", ResultClass::AttentionRequired));
+        let documents = match documents.finish() {
+            Ok(documents) => documents,
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                return outcome.with_next_action(NextAction::new(
+                    "repair_owned_documents",
+                    "Repair the reported skilltap-owned documents before retrying adoption.",
+                ));
+            }
+        };
+
+        let status_args = StatusArgs {
+            target: TargetArgs {
+                target: args.from.clone(),
+            },
+            scope: args.scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        let targets = match StatusTargets::resolve(&status_args, &documents) {
+            Ok(targets) => targets,
+            Err(StatusTargetError::NoneEnabled) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return outcome
+                    .with_error(ErrorDetail::new(
+                        "no_enabled_harnesses",
+                        "No harness is enabled in skilltap configuration.",
+                    ))
+                    .with_next_action(
+                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                            .with_command("skilltap harness enable <codex|claude>"),
+                    );
+            }
+            Err(StatusTargetError::NotEnabled) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "target_not_enabled",
+                    "The requested harness target is not enabled.",
+                ));
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+
+        let observation = NativeObservation::run(&documents, &scope, &targets);
+        let Some(environment) = observation.environment.clone() else {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome
+                .with_error(ErrorDetail::new(
+                    "native_observation_unavailable",
+                    "Native resources could not be observed safely; adoption did not write inventory.",
+                ))
+                .with_next_action(NextAction::new(
+                    "repair_native_observation",
+                    "Resolve the reported harness observation problem and retry adoption.",
+                ));
+        };
+        for warning in observation.warnings {
+            outcome = outcome.with_warning(warning);
+        }
+        outcome = outcome
+            .with_summary("scopes", scope.count)
+            .with_summary("targets", targets.iter().len() as u64)
+            .with_summary("observed_targets", observation.observed_targets as u64)
+            .with_summary("failed_targets", observation.failed_targets as u64)
+            .with_summary("native_entries", observation.native_entries as u64);
+        let selection = AdoptionSelection::new(targets.iter().flat_map(|harness| {
+            scope
+                .resolved
+                .iter()
+                .map(move |scope| ObservationTarget::new(harness.clone(), scope.clone()))
+        }));
+        let initial_plan =
+            match plan_adoption(documents.inventory.as_ref(), &environment, &selection) {
+                Ok(plan) => plan,
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "adoption_plan_invalid",
+                        "Native observations could not be converted into a safe adoption plan.",
+                    ));
+                }
+            };
+
+        if initial_plan.additions.is_empty() {
+            return project_adoption(outcome, &initial_plan, false, observation.failed_targets);
+        }
+
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                return outcome
+                    .with_error(ErrorDetail::new(
+                        "platform_paths_unavailable",
+                        "The skilltap configuration paths could not be resolved.",
+                    ))
+                    .with_next_action(NextAction::new(
+                        "repair_environment",
+                        "Repair the configured home and XDG paths before retrying adoption.",
+                    ));
+            }
+        };
+        let lock_path = match AbsolutePath::new(format!(
+            "{}/skilltap.lock",
+            paths.skilltap_config().as_str()
+        )) {
+            Ok(path) => path,
+            Err(_) => {
+                return outcome.with_error(ErrorDetail::new(
+                    "lock_path_invalid",
+                    "The skilltap configuration lock path is invalid.",
+                ));
+            }
+        };
+        let applied = apply_adoption(
+            &SystemConfigurationLock,
+            &lock_path,
+            self.inventory,
+            &initial_plan,
+            |evidence| {
+                let refreshed = NativeObservation::run(&documents, &scope, &targets);
+                if refreshed.environment.is_none() {
+                    return Err(AdoptionObservationError::Unavailable);
+                }
+                if refreshed.failed_targets > 0 {
+                    // The normalized environment still carries healthy sibling
+                    // observations; the core revalidation decides whether the
+                    // selected evidence itself is stale.
+                }
+                let _ = evidence;
+                Ok(refreshed.environment.expect("checked above"))
+            },
+        );
+        match applied {
+            Ok(result) => project_adoption(
+                outcome,
+                &result.plan,
+                result.changed,
+                observation.failed_targets,
+            ),
+            Err(error) => outcome
+                .with_error(adoption_apply_error(&error))
+                .with_next_action(adoption_next_action(&error)),
+        }
     }
 
     fn scope_request(
@@ -460,6 +621,7 @@ struct NativeObservation {
     observed_targets: usize,
     failed_targets: usize,
     native_entries: usize,
+    environment: Option<skilltap_core::domain::ObservedEnvironment>,
 }
 
 impl NativeObservation {
@@ -476,6 +638,7 @@ impl NativeObservation {
                     observed_targets: 0,
                     failed_targets: targets.iter().len() * scope.resolved.len(),
                     native_entries: 0,
+                    environment: None,
                 };
             }
         };
@@ -658,6 +821,7 @@ impl NativeObservation {
                 return result;
             }
         };
+        result.environment = Some(environment.clone());
         for (_, outcome) in environment.iter() {
             match outcome {
                 HarnessObservationOutcome::Observed { observation } => {
@@ -732,6 +896,108 @@ impl NativeObservation {
             }
         }
         result
+    }
+}
+
+fn project_adoption(
+    mut outcome: Outcome,
+    plan: &skilltap_core::adoption::AdoptionPlan,
+    changed: bool,
+    failed_targets: usize,
+) -> Outcome {
+    let mut adopted = 0_u64;
+    let mut coalesced = 0_u64;
+    let mut already_managed = 0_u64;
+    let mut attention = failed_targets > 0;
+    for decision in &plan.decisions {
+        let (key, status) = match decision {
+            AdoptionDecision::Adopted(candidate) => {
+                adopted += 1;
+                (candidate.desired.key(), "adopted")
+            }
+            AdoptionDecision::Coalesced(candidate) => {
+                coalesced += 1;
+                (candidate.desired.key(), "coalesced")
+            }
+            AdoptionDecision::AlreadyManaged { key } => {
+                already_managed += 1;
+                (key, "already_managed")
+            }
+            AdoptionDecision::Conflict { key, .. } => {
+                attention = true;
+                (key, "conflict")
+            }
+            AdoptionDecision::Unadoptable { key, .. } => {
+                attention = true;
+                (key, "unadoptable")
+            }
+            AdoptionDecision::Unchanged { key } => (key, "unchanged"),
+        };
+        outcome = outcome.with_resource(OutputEntry::new(key.to_string(), status));
+    }
+    outcome = outcome
+        .with_summary("adopted", adopted)
+        .with_summary("coalesced", coalesced)
+        .with_summary("already_managed", already_managed)
+        .with_summary("changed", changed);
+    if attention {
+        outcome.result = ResultClass::AttentionRequired;
+        if failed_targets > 0 {
+            outcome = outcome.with_warning(Warning::new(
+                "partial_native_observation",
+                "Some selected harness scopes could not be observed; only validated siblings were considered.",
+            ));
+        }
+    } else {
+        outcome.result = ResultClass::Completed;
+    }
+    outcome
+}
+
+fn adoption_apply_error(error: &AdoptionApplyError) -> ErrorDetail {
+    let code = match error {
+        AdoptionApplyError::Lock(_) => "configuration_locked",
+        AdoptionApplyError::Inventory(_) => "inventory_unavailable",
+        AdoptionApplyError::Observation(_) => "native_observation_unavailable",
+        AdoptionApplyError::StaleEvidence => "stale_observation",
+        AdoptionApplyError::Plan(_) => "adoption_plan_invalid",
+        AdoptionApplyError::Release(_) => "configuration_lock_release_failed",
+    };
+    let summary = match error {
+        AdoptionApplyError::Lock(_) => "Another skilltap mutation holds the configuration lock.",
+        AdoptionApplyError::Inventory(_) => {
+            "The skilltap inventory could not be safely loaded or published."
+        }
+        AdoptionApplyError::Observation(_) => {
+            "Native resources could not be re-observed safely before publication."
+        }
+        AdoptionApplyError::StaleEvidence => {
+            "Native adoption evidence changed before publication; no inventory was written."
+        }
+        AdoptionApplyError::Plan(_) => {
+            "The refreshed native observations no longer form a safe adoption plan."
+        }
+        AdoptionApplyError::Release(_) => {
+            "The configuration lock could not be released after adoption."
+        }
+    };
+    ErrorDetail::new(code, summary)
+}
+
+fn adoption_next_action(error: &AdoptionApplyError) -> NextAction {
+    match error {
+        AdoptionApplyError::Lock(_) => NextAction::new(
+            "retry_after_lock",
+            "Wait for the other skilltap mutation to finish, then retry adoption.",
+        ),
+        AdoptionApplyError::StaleEvidence => NextAction::new(
+            "reobserve_and_retry",
+            "Review native changes and retry adoption to use fresh evidence.",
+        ),
+        _ => NextAction::new(
+            "repair_and_retry",
+            "Resolve the reported adoption boundary error and retry.",
+        ),
     }
 }
 

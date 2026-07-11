@@ -1,10 +1,11 @@
 use crate::command::{
-    Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
+    AdoptArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
     InstructionsCommand, MarketplaceCommand, OutputArgs, PluginCommand, SkillCommand, StatusArgs,
 };
 
 pub(crate) enum Dispatch {
     Status(StatusArgs),
+    Adopt(AdoptArgs),
     HarnessList(OutputArgs),
     HarnessEnable(HarnessEnableArgs),
     HarnessDisable(HarnessChangeArgs),
@@ -15,7 +16,7 @@ impl Dispatch {
     pub(crate) fn from_command(command: Command) -> Self {
         match command {
             Command::Status(args) => Self::Status(args),
-            Command::Adopt(args) => unavailable("adopt", args.output.json),
+            Command::Adopt(args) => Self::Adopt(args),
             Command::Plan(args) => unavailable("plan", args.output.json),
             Command::Sync(args) => unavailable("sync", args.output.json),
             Command::Harness(args) => match args.command {
@@ -72,6 +73,7 @@ impl Dispatch {
     pub(crate) const fn json(&self) -> bool {
         match self {
             Self::Status(args) => args.output.json,
+            Self::Adopt(args) => args.output.json,
             Self::HarnessList(args) => args.json,
             Self::HarnessEnable(args) => args.output.json,
             Self::HarnessDisable(args) => args.output.json,

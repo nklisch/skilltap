@@ -18,7 +18,7 @@ use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
     ResultClass,
     application::{NativeObservationMode, StatusApplication},
-    command::{Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs},
+    command::{AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs},
     dispatch::Dispatch,
 };
 
@@ -75,6 +75,7 @@ where
     let json = dispatch.json();
     let (outcome, plain_channel) = match dispatch {
         Dispatch::Status(args) => (execute_system_status(&args), OutputChannel::Stdout),
+        Dispatch::Adopt(args) => (execute_system_adopt(&args), OutputChannel::Stdout),
         Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessEnable(args) => {
             (execute_system_harness_enable(&args), OutputChannel::Stdout)
@@ -87,6 +88,43 @@ where
         }
     };
     render(outcome, json, plain_channel)
+}
+
+fn execute_system_adopt(args: &AdoptArgs) -> Outcome {
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error("adopt"),
+    };
+    let filesystem = SystemFileSystem;
+    let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error("adopt"),
+    };
+    let inventory = match FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone())
+    {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error("adopt"),
+    };
+    let state = match FileStateRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error("adopt"),
+    };
+    let runner = SystemCommandRunner;
+    let git = CommandGitRoot::new(
+        &runner,
+        NativeId::new("git").expect("known command identifier"),
+    );
+    let working_directory = SystemWorkingDirectory;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+        native_observation: NativeObservationMode::System,
+    }
+    .execute_adopt(args)
 }
 
 fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
