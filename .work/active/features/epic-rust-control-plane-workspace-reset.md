@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset
 kind: feature
-stage: review
+stage: done
 tags: [infra, cleanup]
 parent: epic-rust-control-plane
 depends_on: []
@@ -251,3 +251,18 @@ standards remain; Rust-native patterns will be documented after they emerge.
 It also added release tag/version validation, locked Cargo CI, a pre-merge
 website build, and release-time synchronization of the embedded Homebrew
 formula into a pull request against the external tap.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep review used two fresh-context harness passes covering the Rust
+architecture/cleanup boundary and the CI/distribution/website boundary. Initial
+findings were fixed in `7b6dda7` and both reviewers approved the corrected tree.
+Integrated locked Cargo, binary smoke, workflow parse, shell/Ruby syntax,
+website clean-build, installer-equality, and Homebrew synchronization checks
+pass. External cross-model review was unavailable by operator constraint.
