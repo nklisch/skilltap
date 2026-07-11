@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization-findings
 kind: story
-stage: review
+stage: done
 tags: [correctness]
 parent: epic-harness-observation-adoption-normalization
 depends_on: [epic-harness-observation-adoption-normalization-graph]
@@ -30,3 +30,8 @@ into global failure or leak native payloads.
 ## Verification
 
 - Harness Clippy and the locked normalization tests pass.
+
+## Review
+
+- Fast-lane review approved the failure-preserving health summary and green
+  deterministic normalization tests.
