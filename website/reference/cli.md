@@ -64,6 +64,15 @@ configuration directory when necessary.
 Only commands for which a flag is meaningful accept it. `--project` and
 `--all-scopes` are mutually exclusive.
 
+Resource and component selectors begin as logical input. skilltap resolves
+them only within the command's selected scopes. Every planned operation then
+uses the exact resource key—the logical ID plus concrete global or project
+scope—and rejects any selector whose scope disagrees with the operation.
+
+When `config.toml` is missing, no harness is enabled. Read-only `status` remains
+available and creates nothing; a mutating command creates owned configuration
+only when that command requires it.
+
 ## Results and exit codes
 
 Plain output uses command-specific human result labels rather than exposing the

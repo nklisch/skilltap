@@ -34,6 +34,10 @@ Human-readable output is concise enough for an agent transcript. Inspection and 
 
 There is no TUI, setup wizard, or separate agent mode.
 
+Read-only `status` works before configuration exists and creates nothing. A
+missing `config.toml` means neither harness is enabled; skilltap never infers
+management policy merely because a Codex or Claude executable is installed.
+
 ## Quick Start
 
 Enable the harnesses you want skilltap to manage:
@@ -145,6 +149,12 @@ skilltap sync --project --target claude
 
 skilltap stores its own state outside repositories. It writes project files only when they are native harness resources or instruction files named in the reconciliation plan.
 
+Internally, every managed resource instance has a logical ID plus one concrete
+scope. That exact pair is its `ResourceKey`, so the same plugin or skill can
+exist independently in global scope and in multiple projects without
+colliding. Component selectors resolve within the scopes selected by the
+command and every resulting operation retains the exact scoped key.
+
 ## Instructions
 
 Global instructions use:
@@ -169,6 +179,11 @@ Project instructions use:
 
 Existing user-authored files are preserved. Conflicting content is reported for review rather than overwritten.
 
+Project-shared Claude declarations remain visible to `status` because they can
+affect the effective environment. They are not adoptable into skilltap's
+personal project scope; skilltap does not turn a repository's shared
+declaration into personal desired state.
+
 ## Compatibility
 
 Resources are classified as:
@@ -188,6 +203,15 @@ skilltap plugin install deploy@claude-tools --target codex --yes
 Optional `--include` and `--exclude` selectors control individual components.
 
 `--yes` acknowledges the reported partial result. It does not override missing required components, local drift, or invalid configuration.
+
+Mutation support comes only from capability profiles compiled into skilltap
+and matched to the exact observed harness executable and version. Runtime
+probes may narrow compiled support, never grant it. Unknown harness versions
+remain observable but receive no mutation authority.
+
+Fresh declared/effective observations and health findings are ephemeral.
+`status` and `adopt` do not persist those snapshots to `state.json`; state
+retains provenance and successful apply history instead.
 
 ## Updates
 

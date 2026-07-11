@@ -78,6 +78,10 @@ machine:
 skilltap status
 ```
 
+When `config.toml` is absent, neither Codex nor Claude is considered enabled.
+`status` may report what is installed, but it does not infer management policy,
+create the skilltap configuration directory, or write any harness file.
+
 ## Enable native harnesses
 
 Enable only the harnesses you want skilltap to manage:
@@ -116,6 +120,10 @@ skilltap plan --project ~/src/example
 Bare scoped commands operate globally. `--target codex`, `--target claude`, or
 `--target all` independently selects the harnesses involved.
 
+Each resource has a stable logical ID and one concrete global or project scope.
+Together they form its exact resource key. Equal logical IDs in global scope
+and different projects are separate managed instances.
+
 Next, see [Managing Environments](./managing-environments) and
 [Shared Instructions](./instructions).
 
@@ -140,6 +148,11 @@ Adoption preserves source and scope, coalesces resources only when identity and
 semantics match, and leaves conflicts for a caller to resolve. It never invokes
 native mutation.
 
+Claude project-shared declarations are still observed because they can affect
+the effective project environment. They are reported as visible,
+non-adoptable evidence: skilltap does not import them into its personal project
+scope, and there is no shared-scope adoption selector.
+
 ## Register explicit resources
 
 ```bash
@@ -150,6 +163,11 @@ skilltap skill install <source>
 
 Marketplace sources and resource identities come from the caller. skilltap
 does not browse or search their contents.
+
+A desired resource is identified by its logical ID plus its exact concrete
+scope. This scope-bearing resource key is used consistently by inventory,
+observations, dependencies, plans, and apply state. The same logical ID can
+therefore coexist globally and in multiple projects.
 
 A standalone skill is its whole directory, not only `SKILL.md`. Compatible
 skills use the standard `.agents/skills/<name>/` representation; adapters add
@@ -166,6 +184,15 @@ skilltap plan --all-scopes --json
 Plans classify operations as native, faithful equivalent, managed
 materialization, partial, unsupported, conflicting, or no-op. Every native
 project file that may change appears in the plan.
+
+Logical resource and component selectors are resolved only across the scopes
+selected by the command. Each resulting operation carries the exact scoped
+resource key, and the selector's scope must match the operation's scope.
+
+Mutation authority comes only from a verified capability profile compiled into
+skilltap for the exact observed harness executable and version. Runtime probes
+may preserve or narrow that authority; they never widen it. Unknown harness
+versions remain observable but receive no mutation authority.
 
 ## Apply and verify
 
@@ -316,6 +343,15 @@ configuration directory when necessary.
 Only commands for which a flag is meaningful accept it. `--project` and
 `--all-scopes` are mutually exclusive.
 
+Resource and component selectors begin as logical input. skilltap resolves
+them only within the command's selected scopes. Every planned operation then
+uses the exact resource key—the logical ID plus concrete global or project
+scope—and rejects any selector whose scope disagrees with the operation.
+
+When `config.toml` is missing, no harness is enabled. Read-only `status` remains
+available and creates nothing; a mutating command creates owned configuration
+only when that command requires it.
+
 ## Results and exit codes
 
 Plain output uses command-specific human result labels rather than exposing the
@@ -391,6 +427,10 @@ No skilltap metadata is written into managed projects.
 Policy includes enabled harnesses, binary overrides, instruction bridge mode,
 and update behavior. It does not list installed resources.
 
+If this file is missing, neither harness is enabled. Read-only inspection does
+not create it and does not infer enabled harnesses from binaries found on the
+machine.
+
 ```toml
 schema = 1
 
@@ -415,13 +455,21 @@ interval = "6h"
 Inventory is the human-readable desired state for registered marketplaces,
 plugins, standalone skills, instruction locations, target harnesses, project
 paths, component selections, update policy, and pins. Entries use stable
-skilltap identifiers and canonical absolute paths.
+skilltap identifiers and canonical absolute paths. A logical resource ID and
+its concrete scope form the exact resource key; equal IDs in global and
+different project scopes remain distinct.
 
 ## `state.json`
 
-State is machine-written provenance and observation: native identifiers,
+State is machine-written provenance and apply history: native identifiers,
 fingerprints, versions, Git revisions, last checks, native harness versions,
-and apply results. It is inspectable output, not desired configuration.
+timestamps, and apply results. It is inspectable output, not desired
+configuration.
+
+Fresh declared/effective observations, capability-profile evidence, and health
+findings are ephemeral. `status` and `adopt` do not persist their snapshots to
+`state.json`. A successful mutation may update provenance, fingerprints,
+revisions, versions, timestamps, and apply results after re-observation.
 
 ## `managed/`
 

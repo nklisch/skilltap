@@ -13,7 +13,7 @@
 ## Reference
 
 - [CLI Reference](https://skilltap.dev/reference/cli): Commands, selectors, output, and exit codes
-- [State and Configuration](https://skilltap.dev/reference/state): Policy, inventory, observations, and managed artifacts
+- [State and Configuration](https://skilltap.dev/reference/state): Policy, scoped inventory, provenance, and managed artifacts
 
 ## Optional
 

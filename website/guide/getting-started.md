@@ -33,6 +33,10 @@ machine:
 skilltap status
 ```
 
+When `config.toml` is absent, neither Codex nor Claude is considered enabled.
+`status` may report what is installed, but it does not infer management policy,
+create the skilltap configuration directory, or write any harness file.
+
 ## Enable native harnesses
 
 Enable only the harnesses you want skilltap to manage:
@@ -70,6 +74,10 @@ skilltap plan --project ~/src/example
 
 Bare scoped commands operate globally. `--target codex`, `--target claude`, or
 `--target all` independently selects the harnesses involved.
+
+Each resource has a stable logical ID and one concrete global or project scope.
+Together they form its exact resource key. Equal logical IDs in global scope
+and different projects are separate managed instances.
 
 Next, see [Managing Environments](./managing-environments) and
 [Shared Instructions](./instructions).

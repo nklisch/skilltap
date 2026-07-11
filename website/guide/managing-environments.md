@@ -19,6 +19,11 @@ Adoption preserves source and scope, coalesces resources only when identity and
 semantics match, and leaves conflicts for a caller to resolve. It never invokes
 native mutation.
 
+Claude project-shared declarations are still observed because they can affect
+the effective project environment. They are reported as visible,
+non-adoptable evidence: skilltap does not import them into its personal project
+scope, and there is no shared-scope adoption selector.
+
 ## Register explicit resources
 
 ```bash
@@ -29,6 +34,11 @@ skilltap skill install <source>
 
 Marketplace sources and resource identities come from the caller. skilltap
 does not browse or search their contents.
+
+A desired resource is identified by its logical ID plus its exact concrete
+scope. This scope-bearing resource key is used consistently by inventory,
+observations, dependencies, plans, and apply state. The same logical ID can
+therefore coexist globally and in multiple projects.
 
 A standalone skill is its whole directory, not only `SKILL.md`. Compatible
 skills use the standard `.agents/skills/<name>/` representation; adapters add
@@ -45,6 +55,15 @@ skilltap plan --all-scopes --json
 Plans classify operations as native, faithful equivalent, managed
 materialization, partial, unsupported, conflicting, or no-op. Every native
 project file that may change appears in the plan.
+
+Logical resource and component selectors are resolved only across the scopes
+selected by the command. Each resulting operation carries the exact scoped
+resource key, and the selector's scope must match the operation's scope.
+
+Mutation authority comes only from a verified capability profile compiled into
+skilltap for the exact observed harness executable and version. Runtime probes
+may preserve or narrow that authority; they never widen it. Unknown harness
+versions remain observable but receive no mutation authority.
 
 ## Apply and verify
 

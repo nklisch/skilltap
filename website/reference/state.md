@@ -21,6 +21,10 @@ No skilltap metadata is written into managed projects.
 Policy includes enabled harnesses, binary overrides, instruction bridge mode,
 and update behavior. It does not list installed resources.
 
+If this file is missing, neither harness is enabled. Read-only inspection does
+not create it and does not infer enabled harnesses from binaries found on the
+machine.
+
 ```toml
 schema = 1
 
@@ -45,13 +49,21 @@ interval = "6h"
 Inventory is the human-readable desired state for registered marketplaces,
 plugins, standalone skills, instruction locations, target harnesses, project
 paths, component selections, update policy, and pins. Entries use stable
-skilltap identifiers and canonical absolute paths.
+skilltap identifiers and canonical absolute paths. A logical resource ID and
+its concrete scope form the exact resource key; equal IDs in global and
+different project scopes remain distinct.
 
 ## `state.json`
 
-State is machine-written provenance and observation: native identifiers,
+State is machine-written provenance and apply history: native identifiers,
 fingerprints, versions, Git revisions, last checks, native harness versions,
-and apply results. It is inspectable output, not desired configuration.
+timestamps, and apply results. It is inspectable output, not desired
+configuration.
+
+Fresh declared/effective observations, capability-profile evidence, and health
+findings are ephemeral. `status` and `adopt` do not persist their snapshots to
+`state.json`. A successful mutation may update provenance, fingerprints,
+revisions, versions, timestamps, and apply results after re-observation.
 
 ## `managed/`
 
