@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-storage, epic-rust-control-plane-runtime-primitives]
@@ -132,3 +132,16 @@ mapping contract tests cover it for later mutation services.
   business logic.
 - Full locked format/check/Clippy/test/rustdoc and release-binary smoke ladders
   pass on supported local targets.
+
+## Implementation summary
+
+All four planned children and one integration-discovered correction are
+complete. The runnable Rust binary exposes the full non-interactive v3 grammar,
+validated scope/target/selector boundaries, stable schema-1 JSON and concise
+plain outcomes, exact exit mapping, read-only first-use status over real
+storage/runtime adapters, and explicit pre-mutation failures for later
+capabilities. Bare invocation prints normalized concise usage with exit `1`.
+The optimized compiled-binary suite covers every leaf command, scope/target and
+malformed-storage cases, output channels, JSON purity, no-create behavior, and
+exits `0`/`1`/`2`; renderer contracts cover `3`. The locked workspace passes
+191 tests, and CI/release runners test the optimized binary before publication.
