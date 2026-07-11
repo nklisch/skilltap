@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-layers
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -70,6 +70,20 @@ different representations never overwrite one another.
   the current target set. Remove the requirement that an adopted source harness
   remain targeted and add a round-trip case for “adopt from Claude, manage only
   Codex.”
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Feature-review findings were resolved across `6812756` and
+`c7bd009`; public exports/dead-type cleanup landed in `13329f0`. Fresh-context
+consumer review confirmed desired origin/choices/consequences and layered
+observation identity are consumable. Locked workspace checks pass with 56 core
+tests; fast-lane advance.
 - Resolution: removed the false adoption-source/current-target invariant and
   added a deterministic constructor and serde round trip for a resource adopted
   from Claude whose sole current target is Codex.
