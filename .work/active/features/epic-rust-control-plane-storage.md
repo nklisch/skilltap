@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -188,8 +188,12 @@ immutable owner/fingerprint-bound complete-tree publication, exact load/remove,
 unique backups, and structured partial recovery through descriptor-relative
 Unix operations; plus real-adapter machine-root integration tests. The
 implementation performs no harness observation, planning, locking policy,
-resource lifecycle, skill semantic validation, or discovery. The locked
-workspace passes 141 tests plus doctests and warnings-clean rustdoc.
+resource lifecycle, skill semantic validation, or discovery. The four
+fresh-context review findings are corrected: schema versions evolve
+independently, managed records share one canonical path contract, failed lock
+acquisition releases provisional locks explicitly, and partial removals report
+exact recovery state. The locked workspace passes 150 tests plus doctests and
+warnings-clean rustdoc.
 
 ## Feature review findings
 
