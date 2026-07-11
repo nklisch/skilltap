@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-layers
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -61,6 +61,13 @@ different representations never overwrite one another.
   name for source compatibility, but layered `ObservedResource` uses one opaque
   JSON value because its harness namespace is now carried by `ObservationKey`.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-11)
+
+- Important: adopted source harness is historical provenance, independent of
+  the current target set. Remove the requirement that an adopted source harness
+  remain targeted and add a round-trip case for “adopt from Claude, manage only
+  Codex.”
 - Verification: `cargo fmt --all -- --check`, `cargo check --workspace --locked`,
   `cargo clippy --workspace --all-targets --locked -- -D warnings`, and
   `cargo test --workspace --locked` pass with 52 core tests.
