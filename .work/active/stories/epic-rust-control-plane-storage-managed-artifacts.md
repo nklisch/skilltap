@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -109,6 +109,14 @@ compile blocker: Apple exposes signed `stat.st_dev` while `DirectoryIdentity`
 uses normalized `u64`. Raw stat device/inode values must use explicit checked
 conversion at construction and comparison; Linux-only source scanning is not a
 substitute for the platform type contract.
+
+That conversion is corrected, but final re-review reproduced a distinct
+parallel-suite failure: successful managed publication intermittently returns a
+generic runtime failure while isolated and serial runs pass. This must be
+root-caused rather than retried or hidden. Safe action/error-kind
+instrumentation is allowed for diagnosis; the fix needs a deterministic
+regression, at least 30 consecutive parallel full-core passes, and the complete
+locked ladder.
 
 ## Review corrections
 
