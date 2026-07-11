@@ -211,6 +211,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "skilltap-test-support",
 ]
 
 [[package]]

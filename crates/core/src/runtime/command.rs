@@ -150,30 +150,20 @@ impl CommandRunner for SystemCommandRunner {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        ffi::OsStr,
-        fs,
-        path::PathBuf,
-        sync::atomic::{AtomicU64, Ordering},
-    };
+    use std::{ffi::OsStr, fs};
+
+    use skilltap_test_support::TempRoot;
 
     use super::*;
 
-    static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
-
     struct Fixture {
-        root: PathBuf,
+        root: TempRoot,
         executable: NativeId,
     }
 
     impl Fixture {
         fn compile() -> Self {
-            let suffix = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
-            let root = std::env::temp_dir().join(format!(
-                "skilltap-command-fixture-{}-{suffix}",
-                std::process::id()
-            ));
-            fs::create_dir_all(&root).unwrap();
+            let root = TempRoot::new("skilltap-command-fixture").unwrap();
             let source = root.join("fixture.rs");
             let executable_path = root.join("fixture");
             fs::write(
@@ -200,12 +190,6 @@ mod tests {
 
         fn working_directory(&self) -> AbsolutePath {
             AbsolutePath::new(self.root.to_str().unwrap()).unwrap()
-        }
-    }
-
-    impl Drop for Fixture {
-        fn drop(&mut self) {
-            let _ = fs::remove_dir_all(&self.root);
         }
     }
 

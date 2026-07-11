@@ -1,30 +1,17 @@
-use std::{
-    cell::RefCell,
-    fs, io,
-    path::PathBuf,
-    process::Command,
-    sync::atomic::{AtomicU64, Ordering},
-    time::Duration,
-};
+use std::{cell::RefCell, fs, io, process::Command, time::Duration};
+
+use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::runtime::{
     CommandOutput, FileMetadata, RelativeSymlinkTarget, SystemCommandRunner, SystemFileSystem,
 };
 
-static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
-
-struct TempDirectory(PathBuf);
+struct TempDirectory(TempRoot);
 
 impl TempDirectory {
     fn new() -> Self {
-        let suffix = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "skilltap-scope-test-{}-{suffix}",
-            std::process::id()
-        ));
-        fs::create_dir(&path).unwrap();
-        Self(path)
+        Self(TempRoot::new("skilltap-scope-test").unwrap())
     }
 
     fn absolute(&self, child: &str) -> AbsolutePath {
@@ -33,12 +20,6 @@ impl TempDirectory {
 
     fn root(&self) -> AbsolutePath {
         AbsolutePath::new(self.0.to_str().unwrap()).unwrap()
-    }
-}
-
-impl Drop for TempDirectory {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 

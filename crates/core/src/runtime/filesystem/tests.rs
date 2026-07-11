@@ -2,8 +2,9 @@ use std::{
     cell::Cell,
     sync::{Arc, atomic::AtomicBool},
     thread,
-    time::{SystemTime, UNIX_EPOCH},
 };
+
+use skilltap_test_support::TempRoot;
 
 use super::*;
 
@@ -57,30 +58,15 @@ impl Publication for InjectedPublication {
     }
 }
 
-struct TempDirectory(PathBuf);
+struct TempDirectory(TempRoot);
 
 impl TempDirectory {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "skilltap-filesystem-test-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        fs::create_dir(&path).unwrap();
-        Self(path)
+        Self(TempRoot::new("skilltap-filesystem-test").unwrap())
     }
 
     fn path(&self, child: &str) -> AbsolutePath {
         AbsolutePath::new(self.0.join(child).to_str().unwrap()).unwrap()
-    }
-}
-
-impl Drop for TempDirectory {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
