@@ -52,14 +52,22 @@ where
                 channel: OutputChannel::Stdout,
             };
         }
-        Err(error) => return render(parse_error(error.kind()), json_requested),
+        Err(error) => {
+            return render(
+                parse_error(error.kind()),
+                json_requested,
+                OutputChannel::Stderr,
+            );
+        }
     };
     let json = dispatch.json();
-    let outcome = match dispatch {
-        Dispatch::Status(args) => execute_system_status(&args),
-        Dispatch::Unavailable { command, .. } => capability_unavailable(command),
+    let (outcome, plain_channel) = match dispatch {
+        Dispatch::Status(args) => (execute_system_status(&args), OutputChannel::Stdout),
+        Dispatch::Unavailable { command, .. } => {
+            (capability_unavailable(command), OutputChannel::Stderr)
+        }
     };
-    render(outcome, json)
+    render(outcome, json, plain_channel)
 }
 
 fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
@@ -139,8 +147,7 @@ fn parse_error(kind: ErrorKind) -> Outcome {
         )
 }
 
-fn render(outcome: Outcome, json: bool) -> CommandExecution {
-    let result = outcome.result;
+fn render(outcome: Outcome, json: bool, plain_channel: OutputChannel) -> CommandExecution {
     let rendered = if json {
         JsonRenderer.render(&outcome)
     } else {
@@ -162,10 +169,10 @@ fn render(outcome: Outcome, json: bool) -> CommandExecution {
     CommandExecution {
         document,
         exit_code,
-        channel: if json || result == ResultClass::Completed {
+        channel: if json {
             OutputChannel::Stdout
         } else {
-            OutputChannel::Stderr
+            plain_channel
         },
     }
 }

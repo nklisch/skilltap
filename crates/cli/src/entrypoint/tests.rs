@@ -18,6 +18,21 @@ fn unavailable_commands_fail_before_composition_in_plain_and_json() {
 }
 
 #[test]
+fn first_use_plain_status_is_an_attention_report_on_stdout() {
+    let outcome =
+        Outcome::new("status", ResultClass::AttentionRequired).with_warning(crate::Warning::new(
+            "native_observation_unavailable",
+            "Native harness observation is not available in this build.",
+        ));
+
+    let execution = render(outcome, false, OutputChannel::Stdout);
+
+    assert_eq!(execution.exit_code, 2);
+    assert_eq!(execution.channel, OutputChannel::Stdout);
+    assert!(execution.document.contains("Result: attention required"));
+}
+
+#[test]
 fn parse_failures_are_normalized_as_one_json_document_when_requested() {
     let execution = run_from(["skilltap", "status", "--target", "pi", "--json"]);
 

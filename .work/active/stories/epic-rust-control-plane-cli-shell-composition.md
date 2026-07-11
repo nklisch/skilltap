@@ -59,3 +59,21 @@ native-format/domain business logic and run the locked ladder.
 - Adjacent issues parked: none.
 - Dispatch rationale: one bounded composition surface with approved ports;
   direct implementation only, with no exploratory fanout.
+
+## Review corrections
+
+- Preserved the caller's `--all-scopes` selection as JSON/plain scope `all`
+  even when missing inventory resolves to only the global scope; the resolved
+  scope count remains an independent summary value.
+- Made output channel an explicit dispatch policy: successfully parsed status
+  reports use stdout in plain mode regardless of attention/invalid result,
+  unavailable commands and parser failures use stderr, and JSON always uses
+  stdout.
+- Added focused regression coverage for the first-use plain status channel and
+  the all-scopes JSON kind.
+- Re-ran the complete locked ladder after correction: format, workspace check,
+  Clippy with warnings denied, 183 workspace tests, rustdoc with warnings
+  denied, release build, and compiled-binary smoke all pass. Binary smoke
+  confirms first-use plain status writes only stdout with exit `2`, all-scopes
+  JSON retains scope kind `all` with one resolved scope, unavailable plain
+  commands write only stderr, and no configuration root is created.

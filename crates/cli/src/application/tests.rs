@@ -117,8 +117,10 @@ fn missing_inventory_makes_all_scopes_global_only() {
 
     let outcome = execute(&root, &args, cwd);
 
-    assert_eq!(outcome.scope, Some(OutputScope::Global));
+    assert_eq!(outcome.scope, Some(OutputScope::All));
     assert_eq!(outcome.summary.get("scopes"), Some(&1_u64.into()));
+    let value = serde_json::to_value(&outcome).unwrap();
+    assert_eq!(value["scope"]["kind"], "all");
 }
 
 #[test]

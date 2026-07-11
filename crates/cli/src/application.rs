@@ -86,7 +86,7 @@ impl StatusApplication<'_> {
         };
         let resolved_scopes = scopes.into_scopes();
         let scope_count = resolved_scopes.len() as u64;
-        outcome.scope = Some(output_scope(&resolved_scopes));
+        outcome.scope = Some(output_scope(&args.scope.argument(), &resolved_scopes));
 
         let enabled = enabled_harnesses(&config);
         if enabled.is_empty() {
@@ -222,13 +222,18 @@ fn enabled_harnesses(config: &ConfigDocument) -> Vec<HarnessId> {
     .collect()
 }
 
-fn output_scope(scopes: &[Scope]) -> OutputScope {
-    match scopes {
-        [Scope::Global] => OutputScope::Global,
-        [Scope::Project(path)] => OutputScope::Project {
-            path: path.as_str().to_owned(),
+fn output_scope(requested: &ScopeArgument, resolved: &[Scope]) -> OutputScope {
+    match requested {
+        ScopeArgument::Global => OutputScope::Global,
+        ScopeArgument::AllScopes => OutputScope::All,
+        ScopeArgument::Project(_) => OutputScope::Project {
+            path: match resolved {
+                [Scope::Project(path)] => path,
+                _ => unreachable!("a resolved project request contains one project scope"),
+            }
+            .as_str()
+            .to_owned(),
         },
-        _ => OutputScope::All,
     }
 }
 
