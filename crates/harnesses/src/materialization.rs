@@ -108,6 +108,18 @@ impl McpProjectionMapper for JsonMcpProjectionMapper {
                 });
             }
         };
+        if let Some(declared_type) = server.get("type").and_then(serde_json::Value::as_str) {
+            let type_matches = match transport {
+                McpTransport::Stdio => declared_type == "stdio",
+                McpTransport::Http => declared_type == "http",
+            };
+            if !type_matches {
+                return Err(ProjectionError::UnsupportedMcp {
+                    component: component.id.clone(),
+                    reason: "declared MCP transport type is not a faithful equivalent",
+                });
+            }
+        }
         let mut credential_references = BTreeSet::new();
         collect_references(server, "env", &component.id, &mut credential_references)?;
         collect_references(server, "headers", &component.id, &mut credential_references)?;
@@ -240,6 +252,28 @@ mod tests {
             .unwrap();
         assert!(matches!(
             mapper(root.path()).map(component, provenance, &HarnessId::new("claude").unwrap()),
+            Err(ProjectionError::UnsupportedMcp { .. })
+        ));
+    }
+
+    #[test]
+    fn non_http_declared_transport_is_not_treated_as_http() {
+        let root = TempRoot::new("skilltap-mcp-projection-transport").unwrap();
+        fs::write(
+            root.join(".mcp.json"),
+            br#"{"mcpServers":{"docs":{"type":"sse","url":"https://mcp.example"}}}"#,
+        )
+        .unwrap();
+        let graph = source_graph(root.path());
+        let component = graph
+            .components()
+            .get(&ComponentId::new("mcp:docs").unwrap())
+            .unwrap();
+        let provenance = graph
+            .provenance(&ComponentId::new("mcp:docs").unwrap())
+            .unwrap();
+        assert!(matches!(
+            mapper(root.path()).map(component, provenance, &HarnessId::new("codex").unwrap()),
             Err(ProjectionError::UnsupportedMcp { .. })
         ));
     }
