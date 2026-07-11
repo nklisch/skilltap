@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle
 kind: epic
-stage: review
+stage: done
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -76,6 +76,21 @@ realized lifecycle persists Git refs/SHA and subdirectories, filters repository
 metadata from complete skill trees, publishes canonical `.agents/skills`
 artifacts plus required Claude projections, and handles update-all, drift, and
 ownership safely.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep aggregate review completed inline in degraded fresh-context
+mode because this run intentionally uses no sub-agents. The realized children
+match the foundation's complete-directory skill model and preserve the
+faithfulness boundary: standalone lifecycle work stays separate from
+cross-harness plugin component materialization. Full workspace clippy and tests
+pass.
 
 ### Child features
 
