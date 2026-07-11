@@ -2,7 +2,10 @@
 
 use crate::{
     domain::{Fingerprint, HarnessId, ResourceKey},
-    storage::{ArtifactRole, ArtifactTree},
+    storage::{
+        ArtifactPublication, ArtifactRole, ArtifactTree, ManagedArtifactError,
+        ManagedArtifactRecord, ManagedArtifactRepository,
+    },
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -17,6 +20,172 @@ pub struct PublicationEntry {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationBatch {
     entries: Vec<PublicationEntry>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublishedArtifact {
+    resource: ResourceKey,
+    target: HarnessId,
+    record: ManagedArtifactRecord,
+    reused: bool,
+}
+
+impl PublishedArtifact {
+    fn new(
+        resource: ResourceKey,
+        target: HarnessId,
+        record: ManagedArtifactRecord,
+        reused: bool,
+    ) -> Self {
+        Self {
+            resource,
+            target,
+            record,
+            reused,
+        }
+    }
+
+    pub fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub fn record(&self) -> &ManagedArtifactRecord {
+        &self.record
+    }
+
+    pub const fn reused(&self) -> bool {
+        self.reused
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublicationReceipt {
+    published: Vec<PublishedArtifact>,
+}
+
+impl PublicationReceipt {
+    pub fn published(&self) -> &[PublishedArtifact] {
+        &self.published
+    }
+}
+
+pub trait PublicationSink {
+    type Error;
+
+    fn publish(&self, entry: &PublicationEntry) -> Result<PublishedArtifact, Self::Error>;
+}
+
+#[derive(Debug)]
+pub enum PublicationApplyError<E> {
+    Failed {
+        resource: ResourceKey,
+        target: HarnessId,
+        error: E,
+    },
+    Partial {
+        published: Vec<PublishedArtifact>,
+        resource: ResourceKey,
+        target: HarnessId,
+        error: E,
+    },
+}
+
+impl<E: std::fmt::Display> std::fmt::Display for PublicationApplyError<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed {
+                resource,
+                target,
+                error,
+            } => write!(
+                formatter,
+                "publication of `{resource}` for `{target}` failed: {error}"
+            ),
+            Self::Partial {
+                published,
+                resource,
+                target,
+                error,
+            } => write!(
+                formatter,
+                "publication partially completed ({} entries) before `{resource}` for `{target}` failed: {error}",
+                published.len()
+            ),
+        }
+    }
+}
+
+impl<E: std::fmt::Debug + std::fmt::Display> std::error::Error for PublicationApplyError<E> {}
+
+/// Apply a validated batch in deterministic order. The caller owns the
+/// configuration lock and state publication boundary; this function only
+/// invokes the supplied sink and retains exact completed-entry context.
+pub fn apply_publication<S: PublicationSink>(
+    batch: &PublicationBatch,
+    sink: &S,
+) -> Result<PublicationReceipt, PublicationApplyError<S::Error>> {
+    let mut published = Vec::with_capacity(batch.entries.len());
+    for entry in &batch.entries {
+        match sink.publish(entry) {
+            Ok(artifact) => published.push(artifact),
+            Err(error) if published.is_empty() => {
+                return Err(PublicationApplyError::Failed {
+                    resource: entry.resource.clone(),
+                    target: entry.target.clone(),
+                    error,
+                });
+            }
+            Err(error) => {
+                return Err(PublicationApplyError::Partial {
+                    published,
+                    resource: entry.resource.clone(),
+                    target: entry.target.clone(),
+                    error,
+                });
+            }
+        }
+    }
+    Ok(PublicationReceipt { published })
+}
+
+/// Adapter that stores each complete tree through the existing managed
+/// artifact repository. Target-specific projection and native registration
+/// remain separate operations owned by the harness/application layer.
+pub struct ManagedPublicationSink<'a, R: ManagedArtifactRepository + ?Sized> {
+    repository: &'a R,
+}
+
+impl<'a, R: ManagedArtifactRepository + ?Sized> ManagedPublicationSink<'a, R> {
+    pub const fn new(repository: &'a R) -> Self {
+        Self { repository }
+    }
+}
+
+impl<R: ManagedArtifactRepository + ?Sized> PublicationSink for ManagedPublicationSink<'_, R> {
+    type Error = ManagedArtifactError;
+
+    fn publish(&self, entry: &PublicationEntry) -> Result<PublishedArtifact, Self::Error> {
+        let publication = self.repository.publish(
+            &entry.resource,
+            entry.role,
+            &entry.fingerprint,
+            &entry.tree,
+        )?;
+        let (handle, reused) = match publication {
+            ArtifactPublication::Published(handle) => (handle, false),
+            ArtifactPublication::Existing(handle) => (handle, true),
+        };
+        Ok(PublishedArtifact::new(
+            entry.resource.clone(),
+            entry.target.clone(),
+            handle.record().clone(),
+            reused,
+        ))
+    }
 }
 
 impl PublicationBatch {
@@ -91,6 +260,8 @@ pub fn plan_publication(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
     use super::*;
     use crate::domain::{FingerprintAlgorithm, ResourceId, Scope};
 
@@ -162,5 +333,77 @@ mod tests {
     #[test]
     fn empty_batches_are_rejected() {
         assert_eq!(plan_publication([]), Err(PublicationPlanError::Empty));
+    }
+
+    struct FakeSink {
+        fail_target: Option<String>,
+        calls: RefCell<Vec<(ResourceKey, HarnessId)>>,
+    }
+
+    impl PublicationSink for FakeSink {
+        type Error = &'static str;
+
+        fn publish(&self, entry: &PublicationEntry) -> Result<PublishedArtifact, Self::Error> {
+            self.calls
+                .borrow_mut()
+                .push((entry.resource.clone(), entry.target.clone()));
+            if self
+                .fail_target
+                .as_deref()
+                .is_some_and(|target| target == entry.target.as_str())
+            {
+                return Err("forced publication failure");
+            }
+            let record = ManagedArtifactRecord::for_artifact(
+                entry.resource.clone(),
+                entry.role,
+                entry.fingerprint.clone(),
+            )
+            .unwrap();
+            Ok(PublishedArtifact::new(
+                entry.resource.clone(),
+                entry.target.clone(),
+                record,
+                false,
+            ))
+        }
+    }
+
+    #[test]
+    fn publication_failure_keeps_exact_completed_entries_and_target() {
+        let batch = plan_publication([
+            entry("plugin:a", "codex", 'a'),
+            entry("plugin:a", "claude", 'b'),
+        ])
+        .unwrap();
+        let sink = FakeSink {
+            fail_target: Some("claude".to_owned()),
+            calls: RefCell::new(Vec::new()),
+        };
+        let error = apply_publication(&batch, &sink).unwrap_err();
+        assert!(matches!(
+            error,
+            PublicationApplyError::Failed { ref target, .. } if target.as_str() == "claude"
+        ));
+
+        let sink = FakeSink {
+            fail_target: Some("codex".to_owned()),
+            calls: RefCell::new(Vec::new()),
+        };
+        let batch = plan_publication([
+            entry("plugin:a", "claude", 'a'),
+            entry("plugin:a", "codex", 'b'),
+        ])
+        .unwrap();
+        let error = apply_publication(&batch, &sink).unwrap_err();
+        assert!(matches!(
+            error,
+            PublicationApplyError::Partial {
+                ref published,
+                ref target,
+                ..
+            } if published.len() == 1 && target.as_str() == "codex"
+        ));
+        assert_eq!(sink.calls.borrow().len(), 2);
     }
 }
