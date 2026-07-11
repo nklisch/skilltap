@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-resource-graph
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-key]
@@ -20,3 +20,29 @@ dependencies use exact `ResourceKey`. Remove redundant observed scope, add
 typed optional source, and retain resolved/unresolved observed dependency
 evidence without aborting healthy siblings. Preserve deterministic wires and
 validate exact self/dangling/cycle contexts.
+
+## Implementation
+
+- Replaced desired resource `id`/`scope` storage and graph identity with one
+  strict nested `ResourceKey`; derived convenience accessors do not create a
+  second source of truth.
+- Migrated observation keys, dependency sets, graph maps, and graph diagnostics
+  to exact scope-bearing keys. Equal logical IDs coexist globally and in
+  multiple projects, and desired dependencies can resolve across scopes.
+- Removed redundant observed scope and arbitrary observation metadata. Added a
+  typed optional `Source` and strict resolved/unresolved observed dependency
+  evidence. Unresolved or absent observed siblings remain visible without
+  aborting the rest of the snapshot; exact self-edges and cycles still fail.
+- Added deterministic strict-serde coverage, rejection of legacy sibling
+  `id`/`scope` wires, exact diagnostic coverage, cross-scope cycle coverage,
+  source round trips, and scope-explicit `ResourceKey` display.
+
+## Verification
+
+- `cargo check -p skilltap-core --locked` — passed.
+- `cargo clippy -p skilltap-core --lib --locked -- -D warnings` — passed.
+- `cargo doc -p skilltap-core --no-deps --locked` — passed.
+- The workspace test/full release ladder is intentionally deferred to the
+  dependent storage-wire bridge: current storage unit/integration fixtures
+  still call the pre-migration constructors and therefore cannot compile until
+  that coordinated clean-break wire migration lands.

@@ -2,11 +2,23 @@ use serde_json::{Value, json};
 
 use super::*;
 use crate::domain::{
-    ConsequenceCode, ConsequenceSummary, FingerprintAlgorithm, GitCommit, SourceKind, SourceLocator,
+    ConsequenceCode, ConsequenceSummary, FingerprintAlgorithm, GitCommit, ResourceId, SourceKind,
+    SourceLocator,
 };
 
 fn id(value: &str) -> ResourceId {
     ResourceId::new(value).unwrap()
+}
+
+fn key(value: &str) -> ResourceKey {
+    ResourceKey::new(id(value), Scope::Global)
+}
+
+fn project_key(value: &str, path: &str) -> ResourceKey {
+    ResourceKey::new(
+        id(value),
+        Scope::Project(crate::domain::AbsolutePath::new(path).unwrap()),
+    )
 }
 
 fn component_id(value: &str) -> ComponentId {
@@ -62,9 +74,8 @@ fn desired_with(
     dependencies: &[&str],
 ) -> Result<DesiredResource, ResourceContractError> {
     DesiredResource::new(
-        id(value),
+        key(value),
         ResourceKind::Plugin,
-        Scope::Global,
         targets,
         origin,
         Some(
@@ -79,7 +90,7 @@ fn desired_with(
         components(),
         component_choices,
         accepted,
-        dependencies.iter().copied().map(id).collect(),
+        dependencies.iter().copied().map(key).collect(),
     )
 }
 
@@ -95,6 +106,25 @@ fn desired(value: &str, dependencies: &[&str]) -> DesiredResource {
     .unwrap()
 }
 
+fn desired_at(
+    resource: ResourceKey,
+    dependencies: impl IntoIterator<Item = ResourceKey>,
+) -> DesiredResource {
+    DesiredResource::new(
+        resource,
+        ResourceKind::Plugin,
+        HarnessSet::new([harness("claude"), harness("codex")]).unwrap(),
+        DesiredOrigin::Direct,
+        None,
+        UpdateIntent::Track,
+        components(),
+        choices(),
+        BTreeMap::new(),
+        dependencies.into_iter().collect(),
+    )
+    .unwrap()
+}
+
 fn observed(
     value: &str,
     harness_name: &str,
@@ -102,22 +132,33 @@ fn observed(
     dependencies: &[&str],
 ) -> ObservedResource {
     ObservedResource::new(
-        ObservationKey::new(id(value), harness(harness_name), layer),
+        ObservationKey::new(key(value), harness(harness_name), layer),
         ResourceKind::Plugin,
-        Scope::Global,
         Provenance::Native,
         Ownership::Harness,
         ResourceHealth::Healthy,
+        Some(
+            Source::new(
+                SourceKind::Git,
+                SourceLocator::new("https://example.test/plugin.git").unwrap(),
+                None,
+            )
+            .unwrap(),
+        ),
         components(),
-        dependencies.iter().copied().map(id).collect(),
+        dependencies
+            .iter()
+            .copied()
+            .map(|value| ObservedDependency::Resolved {
+                resource: key(value),
+            })
+            .collect(),
         NativeId::new(format!("{value}@native")).unwrap(),
         Some(ResolvedRevision::GitCommit(
             GitCommit::new("a".repeat(40)).unwrap(),
         )),
         Some(Fingerprint::new(FingerprintAlgorithm::Sha256, "b".repeat(64)).unwrap()),
-        json!({"unknown_native_field": {"preserved": true}}),
     )
-    .unwrap()
 }
 
 #[test]
@@ -229,26 +270,32 @@ fn serde_cannot_bypass_desired_context_validation_or_owned_wires() {
     let mut wire = serde_json::to_value(&valid).unwrap();
     wire["unexpected"] = Value::Bool(true);
     assert!(serde_json::from_value::<DesiredResource>(wire).is_err());
+
+    let mut legacy = serde_json::to_value(&valid).unwrap();
+    legacy.as_object_mut().unwrap().remove("key");
+    legacy["id"] = json!("plugin:a");
+    legacy["scope"] = json!({"kind":"global"});
+    assert!(serde_json::from_value::<DesiredResource>(legacy).is_err());
 }
 
 #[test]
 fn observation_key_preserves_resource_harness_and_layer() {
     let resource = id("plugin:a");
     let key = ObservationKey::new(
-        resource.clone(),
+        ResourceKey::new(resource.clone(), Scope::Global),
         harness("claude"),
         ObservationLayer::Effective,
     );
-    assert_eq!(key.resource(), &resource);
+    assert_eq!(key.resource().id(), &resource);
     assert_eq!(key.harness().as_str(), "claude");
     assert_eq!(key.layer(), ObservationLayer::Effective);
     assert_eq!(
         serde_json::to_string(&key).unwrap(),
-        r#"{"resource":"plugin:a","harness":"claude","layer":"effective"}"#
+        r#"{"resource":{"id":"plugin:a","scope":{"kind":"global"}},"harness":"claude","layer":"effective"}"#
     );
     assert!(
         serde_json::from_str::<ObservationKey>(
-            r#"{"resource":"plugin:a","harness":"claude","layer":"effective","extra":true}"#
+            r#"{"resource":{"id":"plugin:a","scope":{"kind":"global"}},"harness":"claude","layer":"effective","extra":true}"#
         )
         .is_err()
     );
@@ -280,15 +327,77 @@ fn graph_preserves_multi_harness_and_two_layer_observations_deterministically() 
     let observation = forward
         .observed()
         .get(&ObservationKey::new(
-            id("plugin:a"),
+            key("plugin:a"),
             harness("codex"),
             ObservationLayer::Effective,
         ))
         .unwrap();
     assert_eq!(observation.native_identity().as_str(), "plugin:a@native");
+    assert!(observation.source().is_some());
+}
+
+#[test]
+fn equal_ids_in_global_and_project_scopes_coexist_and_cross_scope_edges_resolve() {
+    let global = key("plugin:shared");
+    let project_a = project_key("plugin:shared", "/work/a");
+    let project_b = project_key("plugin:shared", "/work/b");
+    let graph = ResourceGraph::new(
+        [
+            desired_at(global.clone(), []),
+            desired_at(project_a.clone(), [global.clone()]),
+            desired_at(project_b.clone(), [project_a.clone()]),
+        ],
+        [],
+        [],
+    )
+    .unwrap();
+
+    assert_eq!(graph.desired().len(), 3);
     assert_eq!(
-        observation.metadata()["unknown_native_field"]["preserved"],
-        true
+        graph.desired()[&project_a].dependencies(),
+        &BTreeSet::from([global])
+    );
+    let json = serde_json::to_string(&graph).unwrap();
+    assert_eq!(
+        serde_json::to_string(&serde_json::from_str::<ResourceGraph>(&json).unwrap()).unwrap(),
+        json
+    );
+}
+
+#[test]
+fn exact_scope_is_preserved_in_dangling_self_and_cycle_diagnostics() {
+    let project = project_key("plugin:a", "/work/a");
+    let missing = project_key("plugin:missing", "/work/b");
+    assert_eq!(
+        ResourceGraph::new([desired_at(project.clone(), [missing.clone()])], [], []).unwrap_err(),
+        ResourceGraphError::DanglingDependency {
+            collection: GraphCollection::Desired,
+            resource: project.clone(),
+            dependency: missing,
+        }
+    );
+    assert_eq!(
+        ResourceGraph::new([desired_at(project.clone(), [project.clone()])], [], []).unwrap_err(),
+        ResourceGraphError::SelfDependency {
+            collection: GraphCollection::Desired,
+            key: project.clone()
+        }
+    );
+    let global = key("plugin:a");
+    assert_eq!(
+        ResourceGraph::new(
+            [
+                desired_at(global.clone(), [project.clone()]),
+                desired_at(project.clone(), [global.clone()])
+            ],
+            [],
+            [],
+        )
+        .unwrap_err(),
+        ResourceGraphError::DependencyCycle {
+            collection: GraphCollection::Desired,
+            resources: BTreeSet::from([global, project]),
+        }
     );
 }
 
@@ -310,7 +419,7 @@ fn representative_adopted_desired_state_round_trips_all_explicit_context() {
     let json = serde_json::to_string(&graph).unwrap();
     let decoded = serde_json::from_str::<ResourceGraph>(&json).unwrap();
     assert_eq!(decoded, graph);
-    let desired = decoded.desired().get(&id("plugin:a")).unwrap();
+    let desired = decoded.desired().get(&key("plugin:a")).unwrap();
     assert_eq!(desired.origin(), &DesiredOrigin::Adopted(harness("claude")));
     assert_eq!(
         desired
@@ -349,41 +458,37 @@ fn graph_rejects_only_duplicate_exact_observation_keys() {
 }
 
 #[test]
-fn observed_dependencies_resolve_only_within_the_same_harness_and_layer() {
-    let missing_same_context = ResourceGraph::new(
+fn unresolved_observed_dependencies_remain_evidence_without_aborting_siblings() {
+    let mut dependent = observed("plugin:b", "codex", ObservationLayer::Effective, &[]);
+    dependent
+        .dependencies
+        .insert(ObservedDependency::Unresolved {
+            native_identity: NativeId::new("native/missing").unwrap(),
+        });
+    let graph = ResourceGraph::new(
         [],
         [
-            observed("plugin:a", "codex", ObservationLayer::Declared, &[]),
-            observed(
-                "plugin:b",
-                "codex",
-                ObservationLayer::Effective,
-                &["plugin:a"],
-            ),
+            observed("plugin:a", "codex", ObservationLayer::Effective, &[]),
+            dependent,
         ],
         [],
     )
-    .unwrap_err();
-    assert!(matches!(
-        missing_same_context,
-        ResourceGraphError::DanglingObservedDependency { .. }
-    ));
+    .unwrap();
 
+    let dependency = graph
+        .observed()
+        .get(&ObservationKey::new(
+            key("plugin:b"),
+            harness("codex"),
+            ObservationLayer::Effective,
+        ))
+        .unwrap()
+        .dependencies()
+        .iter()
+        .next()
+        .unwrap();
     assert!(
-        ResourceGraph::new(
-            [],
-            [
-                observed("plugin:a", "codex", ObservationLayer::Effective, &[]),
-                observed(
-                    "plugin:b",
-                    "codex",
-                    ObservationLayer::Effective,
-                    &["plugin:a"],
-                ),
-            ],
-            [],
-        )
-        .is_ok()
+        matches!(dependency, ObservedDependency::Unresolved { native_identity } if native_identity.as_str() == "native/missing")
     );
 }
 
@@ -416,7 +521,7 @@ fn cycle_diagnostics_exclude_downstream_non_cycle_nodes() {
         desired_error,
         ResourceGraphError::DependencyCycle {
             collection: GraphCollection::Desired,
-            resources: BTreeSet::from([id("plugin:a"), id("plugin:b")]),
+            resources: BTreeSet::from([key("plugin:a"), key("plugin:b")]),
         }
     );
 }
@@ -452,7 +557,7 @@ fn resource_graphs_select_the_first_of_multiple_disjoint_cycles() {
         desired_error,
         ResourceGraphError::DependencyCycle {
             collection: GraphCollection::Desired,
-            resources: BTreeSet::from([id("plugin:a"), id("plugin:b")]),
+            resources: BTreeSet::from([key("plugin:a"), key("plugin:b")]),
         }
     );
 
@@ -492,36 +597,13 @@ fn resource_graphs_select_the_first_of_multiple_disjoint_cycles() {
         ResourceGraphError::ObservedDependencyCycle {
             harness: harness("claude"),
             layer: ObservationLayer::Effective,
-            resources: BTreeSet::from([id("plugin:a"), id("plugin:b")]),
+            resources: BTreeSet::from([key("plugin:a"), key("plugin:b")]),
         }
     );
 }
 
 #[test]
-fn observation_constructor_and_deserializer_reject_non_object_metadata() {
-    let key = ObservationKey::new(
-        id("plugin:a"),
-        harness("codex"),
-        ObservationLayer::Effective,
-    );
-    assert!(matches!(
-        ObservedResource::new(
-            key,
-            ResourceKind::Plugin,
-            Scope::Global,
-            Provenance::Native,
-            Ownership::Harness,
-            ResourceHealth::Healthy,
-            components(),
-            BTreeSet::new(),
-            NativeId::new("plugin:a@native").unwrap(),
-            None,
-            None,
-            json!("opaque-but-not-namespaced"),
-        ),
-        Err(ResourceContractError::ObservationMetadataNotObject)
-    ));
-
+fn observed_resources_reject_removed_scope_and_metadata_wires() {
     let mut wire = serde_json::to_value(observed(
         "plugin:a",
         "codex",
@@ -530,6 +612,16 @@ fn observation_constructor_and_deserializer_reject_non_object_metadata() {
     ))
     .unwrap();
     wire["metadata"] = json!(3);
+    assert!(serde_json::from_value::<ObservedResource>(wire).is_err());
+
+    let mut wire = serde_json::to_value(observed(
+        "plugin:a",
+        "codex",
+        ObservationLayer::Effective,
+        &[],
+    ))
+    .unwrap();
+    wire["scope"] = json!({"kind":"global"});
     assert!(serde_json::from_value::<ObservedResource>(wire).is_err());
 }
 
@@ -614,13 +706,13 @@ fn observed_cycle_diagnostics_are_contextual_and_exact() {
         ResourceGraphError::ObservedDependencyCycle {
             harness: harness("claude"),
             layer: ObservationLayer::Effective,
-            resources: BTreeSet::from([id("plugin:a"), id("plugin:b")]),
+            resources: BTreeSet::from([key("plugin:a"), key("plugin:b")]),
         }
     );
 }
 
 #[test]
-fn observed_dependency_validation_also_runs_during_graph_deserialization() {
+fn dangling_resolved_observed_edges_remain_visible_during_deserialization() {
     let graph = ResourceGraph::new(
         [],
         [
@@ -639,8 +731,9 @@ fn observed_dependency_validation_also_runs_during_graph_deserialization() {
     wire["observed"]
         .as_array_mut()
         .unwrap()
-        .retain(|observation| observation["key"]["resource"] != Value::String("plugin:a".into()));
-    assert!(serde_json::from_value::<ResourceGraph>(wire).is_err());
+        .retain(|observation| observation["key"]["resource"]["id"] != "plugin:a");
+    let decoded = serde_json::from_value::<ResourceGraph>(wire).unwrap();
+    assert_eq!(decoded.observed().len(), 1);
 }
 
 #[test]

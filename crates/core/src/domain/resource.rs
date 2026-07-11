@@ -10,7 +10,7 @@ use serde_json::Value;
 
 use super::{
     Fingerprint, HarnessId, HarnessSet, MaterialConsequence, NativeId, ResolvedRevision,
-    ResourceId, Scope, Source, ValidationError,
+    ResourceKey, Scope, Source, ValidationError,
     dependency_graph::{ReferenceError, find_exact_cycle, validate_references},
     validate_identifier, validate_text,
     validated_newtype::validated_string_newtype,
@@ -246,13 +246,13 @@ pub enum ObservationLayer {
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ObservationKey {
-    resource: ResourceId,
+    resource: ResourceKey,
     harness: HarnessId,
     layer: ObservationLayer,
 }
 
 impl ObservationKey {
-    pub fn new(resource: ResourceId, harness: HarnessId, layer: ObservationLayer) -> Self {
+    pub fn new(resource: ResourceKey, harness: HarnessId, layer: ObservationLayer) -> Self {
         Self {
             resource,
             harness,
@@ -260,7 +260,7 @@ impl ObservationKey {
         }
     }
 
-    pub fn resource(&self) -> &ResourceId {
+    pub const fn resource(&self) -> &ResourceKey {
         &self.resource
     }
 
@@ -291,7 +291,6 @@ pub enum ResourceContractError {
         target: HarnessId,
         component: ComponentId,
     },
-    ObservationMetadataNotObject,
 }
 
 impl fmt::Display for ResourceContractError {
@@ -318,12 +317,6 @@ impl fmt::Display for ResourceContractError {
                 formatter,
                 "accepted consequence for `{target}` references unknown component `{component}`"
             ),
-            Self::ObservationMetadataNotObject => {
-                write!(
-                    formatter,
-                    "observation metadata must be a JSON object or null"
-                )
-            }
         }
     }
 }
@@ -333,9 +326,8 @@ impl std::error::Error for ResourceContractError {}
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "DesiredResourceWire")]
 pub struct DesiredResource {
-    id: ResourceId,
+    key: ResourceKey,
     kind: ResourceKind,
-    scope: Scope,
     targets: HarnessSet,
     origin: DesiredOrigin,
     source: Option<Source>,
@@ -343,15 +335,14 @@ pub struct DesiredResource {
     components: ComponentGraph,
     component_choices: BTreeMap<ComponentId, ComponentChoice>,
     accepted_consequences: BTreeMap<HarnessId, BTreeSet<MaterialConsequence>>,
-    dependencies: BTreeSet<ResourceId>,
+    dependencies: BTreeSet<ResourceKey>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct DesiredResourceWire {
-    id: ResourceId,
+    key: ResourceKey,
     kind: ResourceKind,
-    scope: Scope,
     targets: HarnessSet,
     origin: DesiredOrigin,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -364,15 +355,14 @@ struct DesiredResourceWire {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     accepted_consequences: BTreeMap<HarnessId, BTreeSet<MaterialConsequence>>,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    dependencies: BTreeSet<ResourceId>,
+    dependencies: BTreeSet<ResourceKey>,
 }
 
 impl DesiredResource {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        id: ResourceId,
+        key: ResourceKey,
         kind: ResourceKind,
-        scope: Scope,
         targets: HarnessSet,
         origin: DesiredOrigin,
         source: Option<Source>,
@@ -380,7 +370,7 @@ impl DesiredResource {
         components: ComponentGraph,
         component_choices: BTreeMap<ComponentId, ComponentChoice>,
         accepted_consequences: BTreeMap<HarnessId, BTreeSet<MaterialConsequence>>,
-        dependencies: BTreeSet<ResourceId>,
+        dependencies: BTreeSet<ResourceKey>,
     ) -> Result<Self, ResourceContractError> {
         for component in components.0.keys() {
             if !component_choices.contains_key(component) {
@@ -419,9 +409,8 @@ impl DesiredResource {
             }
         }
         Ok(Self {
-            id,
+            key,
             kind,
-            scope,
             targets,
             origin,
             source,
@@ -433,14 +422,17 @@ impl DesiredResource {
         })
     }
 
-    pub fn id(&self) -> &ResourceId {
-        &self.id
+    pub const fn key(&self) -> &ResourceKey {
+        &self.key
+    }
+    pub const fn id(&self) -> &super::ResourceId {
+        self.key.id()
     }
     pub const fn kind(&self) -> ResourceKind {
         self.kind
     }
     pub const fn scope(&self) -> &Scope {
-        &self.scope
+        self.key.scope()
     }
     pub const fn targets(&self) -> &HarnessSet {
         &self.targets
@@ -465,7 +457,7 @@ impl DesiredResource {
     ) -> &BTreeMap<HarnessId, BTreeSet<MaterialConsequence>> {
         &self.accepted_consequences
     }
-    pub const fn dependencies(&self) -> &BTreeSet<ResourceId> {
+    pub const fn dependencies(&self) -> &BTreeSet<ResourceKey> {
         &self.dependencies
     }
 }
@@ -473,9 +465,8 @@ impl DesiredResource {
 impl From<DesiredResource> for DesiredResourceWire {
     fn from(value: DesiredResource) -> Self {
         Self {
-            id: value.id,
+            key: value.key,
             kind: value.kind,
-            scope: value.scope,
             targets: value.targets,
             origin: value.origin,
             source: value.source,
@@ -492,9 +483,8 @@ impl TryFrom<DesiredResourceWire> for DesiredResource {
     type Error = ResourceContractError;
     fn try_from(value: DesiredResourceWire) -> Result<Self, Self::Error> {
         Self::new(
-            value.id,
+            value.key,
             value.kind,
-            value.scope,
             value.targets,
             value.origin,
             value.source,
@@ -523,16 +513,22 @@ impl<'de> Deserialize<'de> for DesiredResource {
 pub struct ObservedResource {
     key: ObservationKey,
     kind: ResourceKind,
-    scope: Scope,
     provenance: Provenance,
     ownership: Ownership,
     health: ResourceHealth,
+    source: Option<Source>,
     components: ComponentGraph,
-    dependencies: BTreeSet<ResourceId>,
+    dependencies: BTreeSet<ObservedDependency>,
     native_identity: NativeId,
     revision: Option<ResolvedRevision>,
     fingerprint: Option<Fingerprint>,
-    metadata: Value,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "resolution", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ObservedDependency {
+    Resolved { resource: ResourceKey },
+    Unresolved { native_identity: NativeId },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -540,21 +536,20 @@ pub struct ObservedResource {
 struct ObservedResourceWire {
     key: ObservationKey,
     kind: ResourceKind,
-    scope: Scope,
     provenance: Provenance,
     ownership: Ownership,
     health: ResourceHealth,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<Source>,
     #[serde(default, skip_serializing_if = "ComponentGraph::is_empty")]
     components: ComponentGraph,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
-    dependencies: BTreeSet<ResourceId>,
+    dependencies: BTreeSet<ObservedDependency>,
     native_identity: NativeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     revision: Option<ResolvedRevision>,
     #[serde(skip_serializing_if = "Option::is_none")]
     fingerprint: Option<Fingerprint>,
-    #[serde(default, skip_serializing_if = "Value::is_null")]
-    metadata: Value,
 }
 
 impl ObservedResource {
@@ -562,34 +557,29 @@ impl ObservedResource {
     pub fn new(
         key: ObservationKey,
         kind: ResourceKind,
-        scope: Scope,
         provenance: Provenance,
         ownership: Ownership,
         health: ResourceHealth,
+        source: Option<Source>,
         components: ComponentGraph,
-        dependencies: BTreeSet<ResourceId>,
+        dependencies: BTreeSet<ObservedDependency>,
         native_identity: NativeId,
         revision: Option<ResolvedRevision>,
         fingerprint: Option<Fingerprint>,
-        metadata: Value,
-    ) -> Result<Self, ResourceContractError> {
-        if !metadata.is_null() && !metadata.is_object() {
-            return Err(ResourceContractError::ObservationMetadataNotObject);
-        }
-        Ok(Self {
+    ) -> Self {
+        Self {
             key,
             kind,
-            scope,
             provenance,
             ownership,
             health,
+            source,
             components,
             dependencies,
             native_identity,
             revision,
             fingerprint,
-            metadata,
-        })
+        }
     }
 
     pub const fn key(&self) -> &ObservationKey {
@@ -599,7 +589,7 @@ impl ObservedResource {
         self.kind
     }
     pub const fn scope(&self) -> &Scope {
-        &self.scope
+        self.key.resource().scope()
     }
     pub const fn provenance(&self) -> Provenance {
         self.provenance
@@ -613,7 +603,10 @@ impl ObservedResource {
     pub const fn components(&self) -> &ComponentGraph {
         &self.components
     }
-    pub const fn dependencies(&self) -> &BTreeSet<ResourceId> {
+    pub const fn source(&self) -> Option<&Source> {
+        self.source.as_ref()
+    }
+    pub const fn dependencies(&self) -> &BTreeSet<ObservedDependency> {
         &self.dependencies
     }
     pub const fn native_identity(&self) -> &NativeId {
@@ -625,9 +618,6 @@ impl ObservedResource {
     pub const fn fingerprint(&self) -> Option<&Fingerprint> {
         self.fingerprint.as_ref()
     }
-    pub const fn metadata(&self) -> &Value {
-        &self.metadata
-    }
 }
 
 impl From<ObservedResource> for ObservedResourceWire {
@@ -635,36 +625,33 @@ impl From<ObservedResource> for ObservedResourceWire {
         Self {
             key: value.key,
             kind: value.kind,
-            scope: value.scope,
             provenance: value.provenance,
             ownership: value.ownership,
             health: value.health,
+            source: value.source,
             components: value.components,
             dependencies: value.dependencies,
             native_identity: value.native_identity,
             revision: value.revision,
             fingerprint: value.fingerprint,
-            metadata: value.metadata,
         }
     }
 }
 
-impl TryFrom<ObservedResourceWire> for ObservedResource {
-    type Error = ResourceContractError;
-    fn try_from(value: ObservedResourceWire) -> Result<Self, Self::Error> {
+impl From<ObservedResourceWire> for ObservedResource {
+    fn from(value: ObservedResourceWire) -> Self {
         Self::new(
             value.key,
             value.kind,
-            value.scope,
             value.provenance,
             value.ownership,
             value.health,
+            value.source,
             value.components,
             value.dependencies,
             value.native_identity,
             value.revision,
             value.fingerprint,
-            value.metadata,
         )
     }
 }
@@ -674,9 +661,7 @@ impl<'de> Deserialize<'de> for ObservedResource {
     where
         D: Deserializer<'de>,
     {
-        ObservedResourceWire::deserialize(deserializer)?
-            .try_into()
-            .map_err(serde::de::Error::custom)
+        Ok(ObservedResourceWire::deserialize(deserializer)?.into())
     }
 }
 
@@ -815,27 +800,23 @@ impl fmt::Display for GraphCollection {
 pub enum ResourceGraphError {
     DuplicateResource {
         collection: GraphCollection,
-        id: ResourceId,
+        key: ResourceKey,
     },
     DuplicateObservation {
         key: ObservationKey,
     },
     DanglingDependency {
         collection: GraphCollection,
-        resource: ResourceId,
-        dependency: ResourceId,
+        resource: ResourceKey,
+        dependency: ResourceKey,
     },
     SelfDependency {
         collection: GraphCollection,
-        id: ResourceId,
+        key: ResourceKey,
     },
     DependencyCycle {
         collection: GraphCollection,
-        resources: BTreeSet<ResourceId>,
-    },
-    DanglingObservedDependency {
-        key: ObservationKey,
-        dependency: ResourceId,
+        resources: BTreeSet<ResourceKey>,
     },
     ObservedSelfDependency {
         key: ObservationKey,
@@ -843,20 +824,22 @@ pub enum ResourceGraphError {
     ObservedDependencyCycle {
         harness: HarnessId,
         layer: ObservationLayer,
-        resources: BTreeSet<ResourceId>,
+        resources: BTreeSet<ResourceKey>,
     },
 }
 
 impl fmt::Display for ResourceGraphError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::DuplicateResource { collection, id } => {
-                write!(formatter, "duplicate {collection} resource `{id}`")
+            Self::DuplicateResource { collection, key } => {
+                write!(formatter, "duplicate {collection} resource `{key}`")
             }
             Self::DuplicateObservation { key } => write!(
                 formatter,
                 "duplicate {:?} observation for `{}` in `{}`",
-                key.layer, key.resource, key.harness
+                key.layer,
+                key.resource.id(),
+                key.harness
             ),
             Self::DanglingDependency {
                 collection,
@@ -866,8 +849,8 @@ impl fmt::Display for ResourceGraphError {
                 formatter,
                 "{collection} resource `{resource}` depends on unknown resource `{dependency}`"
             ),
-            Self::SelfDependency { collection, id } => {
-                write!(formatter, "{collection} resource `{id}` depends on itself")
+            Self::SelfDependency { collection, key } => {
+                write!(formatter, "{collection} resource `{key}` depends on itself")
             }
             Self::DependencyCycle {
                 collection,
@@ -881,15 +864,12 @@ impl fmt::Display for ResourceGraphError {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            Self::DanglingObservedDependency { key, dependency } => write!(
-                formatter,
-                "{:?} observation for `{}` in `{}` depends on unknown resource `{dependency}` in the same context",
-                key.layer, key.resource, key.harness
-            ),
             Self::ObservedSelfDependency { key } => write!(
                 formatter,
                 "{:?} observation for `{}` in `{}` depends on itself",
-                key.layer, key.resource, key.harness
+                key.layer,
+                key.resource.id(),
+                key.harness
             ),
             Self::ObservedDependencyCycle {
                 harness,
@@ -913,7 +893,7 @@ impl std::error::Error for ResourceGraphError {}
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "ResourceGraphWire")]
 pub struct ResourceGraph {
-    desired: BTreeMap<ResourceId, DesiredResource>,
+    desired: BTreeMap<ResourceKey, DesiredResource>,
     observed: BTreeMap<ObservationKey, ObservedResource>,
     findings: Vec<ObservationFinding>,
 }
@@ -935,7 +915,7 @@ impl ResourceGraph {
         observed: impl IntoIterator<Item = ObservedResource>,
         findings: impl IntoIterator<Item = ObservationFinding>,
     ) -> Result<Self, ResourceGraphError> {
-        let desired = collect_unique(desired, GraphCollection::Desired, |resource| resource.id())?;
+        let desired = collect_unique(desired, GraphCollection::Desired, |resource| resource.key())?;
         let mut observed_map = BTreeMap::new();
         for observation in observed {
             let key = observation.key().clone();
@@ -959,7 +939,7 @@ impl ResourceGraph {
         })
     }
 
-    pub fn desired(&self) -> &BTreeMap<ResourceId, DesiredResource> {
+    pub fn desired(&self) -> &BTreeMap<ResourceKey, DesiredResource> {
         &self.desired
     }
 
@@ -975,15 +955,15 @@ impl ResourceGraph {
 fn collect_unique<T>(
     resources: impl IntoIterator<Item = T>,
     collection: GraphCollection,
-    id: impl Fn(&T) -> &ResourceId,
-) -> Result<BTreeMap<ResourceId, T>, ResourceGraphError> {
+    key: impl Fn(&T) -> &ResourceKey,
+) -> Result<BTreeMap<ResourceKey, T>, ResourceGraphError> {
     let mut collected = BTreeMap::new();
     for resource in resources {
-        let resource_id = id(&resource).clone();
-        if collected.insert(resource_id.clone(), resource).is_some() {
+        let resource_key = key(&resource).clone();
+        if collected.insert(resource_key.clone(), resource).is_some() {
             return Err(ResourceGraphError::DuplicateResource {
                 collection,
-                id: resource_id,
+                key: resource_key,
             });
         }
     }
@@ -992,7 +972,7 @@ fn collect_unique<T>(
 
 fn validate_dependencies<'a>(
     collection: GraphCollection,
-    resources: impl IntoIterator<Item = (&'a ResourceId, &'a BTreeSet<ResourceId>)>,
+    resources: impl IntoIterator<Item = (&'a ResourceKey, &'a BTreeSet<ResourceKey>)>,
 ) -> Result<(), ResourceGraphError> {
     let resources = resources.into_iter().collect::<BTreeMap<_, _>>();
     validate_references(
@@ -1003,7 +983,7 @@ fn validate_dependencies<'a>(
     .map_err(|error| match error {
         ReferenceError::SelfReference { node } => ResourceGraphError::SelfDependency {
             collection,
-            id: node,
+            key: node,
         },
         ReferenceError::UnknownReference { node, reference } => {
             ResourceGraphError::DanglingDependency {
@@ -1027,27 +1007,46 @@ fn validate_observed_dependencies(
 ) -> Result<(), ResourceGraphError> {
     let mut contexts: BTreeMap<
         (HarnessId, ObservationLayer),
-        BTreeMap<ResourceId, BTreeSet<ResourceId>>,
+        BTreeMap<ResourceKey, BTreeSet<ResourceKey>>,
     > = BTreeMap::new();
     for (key, resource) in observed {
+        let resolved = resource
+            .dependencies
+            .iter()
+            .filter_map(|dependency| match dependency {
+                ObservedDependency::Resolved { resource } => Some(resource.clone()),
+                ObservedDependency::Unresolved { .. } => None,
+            })
+            .collect();
         contexts
             .entry((key.harness.clone(), key.layer))
             .or_default()
-            .insert(key.resource.clone(), resource.dependencies.clone());
+            .insert(key.resource.clone(), resolved);
     }
     for ((harness, layer), resources) in contexts {
-        validate_references(resources.iter()).map_err(|error| match error {
-            ReferenceError::SelfReference { node } => ResourceGraphError::ObservedSelfDependency {
-                key: ObservationKey::new(node, harness.clone(), layer),
-            },
-            ReferenceError::UnknownReference { node, reference } => {
-                ResourceGraphError::DanglingObservedDependency {
-                    key: ObservationKey::new(node, harness.clone(), layer),
-                    dependency: reference,
-                }
+        for (resource, dependencies) in &resources {
+            if dependencies.contains(resource) {
+                return Err(ResourceGraphError::ObservedSelfDependency {
+                    key: ObservationKey::new(resource.clone(), harness.clone(), layer),
+                });
             }
-        })?;
-        if let Some(resources) = find_exact_cycle(resources.iter()) {
+        }
+        let known_edges = resources
+            .iter()
+            .map(|(resource, dependencies)| {
+                (
+                    resource,
+                    dependencies
+                        .iter()
+                        .filter(|dependency| resources.contains_key(*dependency))
+                        .cloned()
+                        .collect::<BTreeSet<_>>(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        if let Some(resources) =
+            find_exact_cycle(known_edges.iter().map(|(key, deps)| (*key, deps)))
+        {
             return Err(ResourceGraphError::ObservedDependencyCycle {
                 harness,
                 layer,

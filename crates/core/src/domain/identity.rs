@@ -1,3 +1,5 @@
+use std::fmt;
+
 use serde::{Deserialize, Serialize};
 
 use super::{Scope, ValidationError, validate_identifier, validate_text};
@@ -86,6 +88,15 @@ impl ResourceKey {
             }
         }
         encoded
+    }
+}
+
+impl fmt::Display for ResourceKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.scope {
+            Scope::Global => write!(formatter, "{} [global]", self.id),
+            Scope::Project(path) => write!(formatter, "{} [project:{}]", self.id, path.as_str()),
+        }
     }
 }
 
@@ -198,6 +209,23 @@ mod tests {
                 r#"{"id":"plugin:formatter","scope":{"kind":"global","path":"/work"}}"#
             )
             .is_err()
+        );
+    }
+
+    #[test]
+    fn resource_key_display_is_scope_explicit_and_unambiguous() {
+        let id = ResourceId::new("plugin:formatter@official").unwrap();
+        assert_eq!(
+            ResourceKey::new(id.clone(), Scope::Global).to_string(),
+            "plugin:formatter@official [global]"
+        );
+        assert_eq!(
+            ResourceKey::new(
+                id,
+                Scope::Project(AbsolutePath::new("/work/project").unwrap())
+            )
+            .to_string(),
+            "plugin:formatter@official [project:/work/project]"
         );
     }
 
