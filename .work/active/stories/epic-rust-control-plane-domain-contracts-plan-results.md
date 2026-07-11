@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-plan-results
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -65,6 +65,19 @@ attention reasons, and validated per-operation and final apply outcomes.
 - Important: failed outcomes require `OperationFailed` attention, while blocked
   outcomes accept only non-failure blocking reasons. Enforce at constructor and
   serde boundaries.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Initial inspectability, scope, reversibility, outcome, and plan/result
+binding findings were resolved in `0f7c988`. Story verified by implement,
+fresh-context adversarial contract review, and integrated locked workspace
+checks; fast-lane advance.
 
 ## Review corrections (2026-07-11)
 
