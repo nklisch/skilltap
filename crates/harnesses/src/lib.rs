@@ -62,10 +62,29 @@ pub fn detect_installation(
         NativeId::new(harness.id()).map_err(|_| DetectionError::InvalidVersion)?,
     )
     .map_err(|_| DetectionError::InvalidVersion)?;
+    detect_configured_installation(
+        harness,
+        configured,
+        Some(search_path),
+        process_limits,
+        json_limits,
+    )
+}
+
+/// Detects one harness using the configured binary policy. This is deliberately
+/// read-only: it resolves and invokes the executable's version command but does
+/// not create or update any native or skilltap-owned files.
+pub fn detect_configured_installation(
+    harness: HarnessKind,
+    configured: ConfiguredBinary,
+    search_path: Option<OsString>,
+    process_limits: ProcessLimits,
+    json_limits: JsonLimits,
+) -> Result<HarnessInstallation, DetectionError> {
     let resolved = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(
             configured.clone(),
-            Some(search_path),
+            search_path,
         ))
         .map_err(DetectionError::Runtime)?;
     let output = SystemNativeProcessRunner

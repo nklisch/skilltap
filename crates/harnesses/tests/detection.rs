@@ -9,8 +9,9 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    CodexConfigError, DetectionError, HarnessKind, ProbeError, detect_installation,
-    observe_codex_config, probe_profile, select_profile, unreachable_installation,
+    CodexConfigError, DetectionError, HarnessKind, ProbeError, detect_configured_installation,
+    detect_installation, observe_codex_config, probe_profile, select_profile,
+    unreachable_installation,
 };
 use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
 
@@ -76,6 +77,27 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
         }
         HarnessReachability::Unreachable { .. } => panic!("unknown fixture is reachable"),
     }
+}
+
+#[test]
+fn configured_absolute_binary_is_used_for_detection_without_path_lookup() {
+    let (root, _fixture) = install(FakeNativeMode::VersionKnown, "codex");
+    let (process_limits, json_limits) = limits();
+    let configured = ConfiguredBinary::absolute(
+        AbsolutePath::new(root.join("codex").to_str().unwrap()).unwrap(),
+    );
+    let installation = detect_configured_installation(
+        HarnessKind::Codex,
+        configured,
+        None,
+        process_limits,
+        json_limits,
+    )
+    .unwrap();
+    assert!(matches!(
+        installation.reachability(),
+        HarnessReachability::Reachable { .. }
+    ));
 }
 
 #[test]

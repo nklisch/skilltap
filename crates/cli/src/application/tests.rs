@@ -131,6 +131,12 @@ fn missing_inventory_makes_all_scopes_global_only() {
 
     assert_eq!(outcome.scope, Some(OutputScope::All));
     assert_eq!(outcome.summary.get("scopes"), Some(&1_u64.into()));
+    assert!(
+        outcome
+            .warnings
+            .iter()
+            .all(|warning| warning.code != "native_observation_unavailable")
+    );
     let value = serde_json::to_value(&outcome).unwrap();
     assert_eq!(value["scope"]["kind"], "all");
 }

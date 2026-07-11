@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status-observation
 kind: story
-stage: implementing
+stage: review
 tags: [cli,infra]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-policy]
@@ -19,3 +19,29 @@ Replace CLI status placeholders with exact scope/target resolution and
 normalized Codex/Claude environment results. Report reachability, version,
 profile authority, capabilities, resources, findings, and partial sibling
 success while expanding only requested scopes and never scanning or writing.
+
+## Implementation notes
+
+- Status now resolves every requested scope and enabled target into a bounded,
+  read-only native observation attempt. It reports target/scope entries with
+  reachability, native version, profile authority, capability support counts,
+  and bounded native-tree entry counts.
+- Configured harness binaries are honored for both `PATH` lookup and absolute
+  paths through the harness detection adapter. Detection and observation
+  failures remain sibling-local warnings and do not prevent other targets from
+  being reported.
+- Global native trees use the documented Codex/Claude observation adapters.
+  Project status deliberately does not recursively scan arbitrary project
+  content; documented project inputs are represented as an observation-limit
+  warning until a file-specific adapter exists.
+- Status never writes state or native configuration and no longer emits the
+  `native_observation_unavailable` placeholder.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo check -p skilltap --all-targets --offline`
+- `cargo test -p skilltap --all-targets --offline`
+- `cargo test -p skilltap-harnesses --test detection --offline`
+
+Stage: review

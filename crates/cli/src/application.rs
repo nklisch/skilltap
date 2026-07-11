@@ -1,12 +1,22 @@
 use std::path::{Component, Path, PathBuf};
 
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId, HarnessSet, Scope},
-    runtime::{ScopeRequest, ScopeResolver, WorkingDirectory, resolve_targets},
+    domain::{
+        AbsolutePath, CapabilitySupport, ConfiguredBinary, HarnessId, HarnessReachability,
+        HarnessSet, ProfileAuthority, Scope,
+    },
+    runtime::{
+        ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
+        ScopeRequest, ScopeResolver, WorkingDirectory, resolve_targets,
+    },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, InventoryDocument, InventoryRepository,
         StateDocument, StateRepository, StorageError, StorageFailure,
     },
+};
+use skilltap_harnesses::{
+    HarnessKind, detect_configured_installation, observe_claude_resources, observe_codex_resources,
+    select_profile,
 };
 
 use crate::{
@@ -174,6 +184,7 @@ struct StatusDocuments {
 struct StatusScope {
     output: OutputScope,
     count: u64,
+    resolved: Vec<Scope>,
 }
 
 impl StatusScope {
@@ -193,6 +204,7 @@ impl StatusScope {
         Ok(Self {
             output: output_scope(&args.scope.argument(), &resolved),
             count: resolved.len() as u64,
+            resolved,
         })
     }
 }
@@ -233,7 +245,17 @@ impl StatusProjection<'_> {
         for target in self.targets.iter() {
             outcome = outcome.with_resource(OutputEntry::new(target.as_str(), "selected"));
         }
-        outcome
+        let observation = NativeObservation::run(self.documents, self.scope, self.targets);
+        for resource in observation.resources {
+            outcome = outcome.with_resource(resource);
+        }
+        for warning in observation.warnings {
+            outcome = outcome.with_warning(warning);
+        }
+        if observation.failed_targets == 0 {
+            outcome.result = ResultClass::Completed;
+        }
+        let mut outcome = outcome
             .with_summary(
                 "desired_resources",
                 self.documents
@@ -250,15 +272,261 @@ impl StatusProjection<'_> {
             )
             .with_summary("scopes", self.scope.count)
             .with_summary("targets", self.targets.iter().len() as u64)
-            .with_warning(Warning::new(
-                "native_observation_unavailable",
-                "Native harness observation is not available in this build.",
-            ))
-            .with_next_action(NextAction::new(
-                "retry_after_native_observation",
-                "Retry status when native harness observation is available.",
-            ))
+            .with_summary("observed_targets", observation.observed_targets as u64)
+            .with_summary("failed_targets", observation.failed_targets as u64)
+            .with_summary("native_entries", observation.native_entries as u64);
+        if observation.failed_targets > 0 {
+            outcome = outcome.with_next_action(NextAction::new(
+                "inspect_native_observation",
+                "Inspect the reported native observation warnings before planning changes.",
+            ));
+        }
+        outcome
     }
+}
+
+struct NativeObservation {
+    resources: Vec<OutputEntry>,
+    warnings: Vec<Warning>,
+    observed_targets: usize,
+    failed_targets: usize,
+    native_entries: usize,
+}
+
+impl NativeObservation {
+    fn run(documents: &StatusDocuments, scope: &StatusScope, targets: &StatusTargets) -> Self {
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                return Self {
+                    resources: Vec::new(),
+                    warnings: vec![Warning::new(
+                        "native_paths_unavailable",
+                        "Native harness paths could not be resolved for read-only status.",
+                    )],
+                    observed_targets: 0,
+                    failed_targets: targets.iter().len() * scope.resolved.len(),
+                    native_entries: 0,
+                };
+            }
+        };
+
+        let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+            .expect("bounded status process limits are valid");
+        let json_limits =
+            JsonLimits::new(256 * 1024, 64).expect("bounded status JSON limits are valid");
+        let tree_limits =
+            ExternalTreeLimits::new(16, 10_000, 4 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024)
+                .expect("bounded status tree limits are valid");
+        let search_path = std::env::var_os("PATH");
+        let mut result = Self {
+            resources: Vec::new(),
+            warnings: Vec::new(),
+            observed_targets: 0,
+            failed_targets: 0,
+            native_entries: 0,
+        };
+
+        for target in targets.iter() {
+            let (kind, binary) = match target.as_str() {
+                "codex" => (
+                    HarnessKind::Codex,
+                    documents.config.harnesses().codex.binary.as_str(),
+                ),
+                "claude" => (
+                    HarnessKind::Claude,
+                    documents.config.harnesses().claude.binary.as_str(),
+                ),
+                _ => {
+                    result.failed_targets += scope.resolved.len();
+                    result.warnings.push(
+                        Warning::new(
+                            "unsupported_harness",
+                            "The selected harness is not supported.",
+                        )
+                        .with_context("harness", target.as_str()),
+                    );
+                    continue;
+                }
+            };
+            let configured = match configured_binary(binary) {
+                Ok(binary) => binary,
+                Err(_) => {
+                    result.failed_targets += scope.resolved.len();
+                    result.warnings.push(
+                        Warning::new(
+                            "invalid_harness_binary",
+                            "The configured harness binary could not be resolved.",
+                        )
+                        .with_context("harness", target.as_str()),
+                    );
+                    continue;
+                }
+            };
+            let installation = match detect_configured_installation(
+                kind,
+                configured,
+                search_path.clone(),
+                process_limits,
+                json_limits,
+            ) {
+                Ok(installation) => installation,
+                Err(error) => {
+                    result.failed_targets += scope.resolved.len();
+                    result.resources.extend(scope.resolved.iter().map(|scope| {
+                        OutputEntry::new(observation_id(target, scope), "unreachable")
+                            .with_field("harness", target.as_str())
+                            .with_field("scope", scope_label(scope))
+                    }));
+                    result.warnings.push(
+                        Warning::new(
+                            "native_detection_failed",
+                            "The configured harness could not be detected.",
+                        )
+                        .with_context("harness", target.as_str())
+                        .with_context("detail", error.to_string()),
+                    );
+                    continue;
+                }
+            };
+
+            let HarnessReachability::Reachable { native_version, .. } = installation.reachability()
+            else {
+                result.failed_targets += scope.resolved.len();
+                continue;
+            };
+            let profile = select_profile(kind, native_version);
+            for current_scope in &scope.resolved {
+                let id = observation_id(target, current_scope);
+                let mut entry = OutputEntry::new(id, "observed")
+                    .with_field("harness", target.as_str())
+                    .with_field("scope", scope_label(current_scope))
+                    .with_field("version", native_version.as_str())
+                    .with_field("profile_authority", profile_authority(profile.authority()))
+                    .with_field(
+                        "capabilities_supported",
+                        capability_count(&profile, current_scope, CapabilitySupport::Supported)
+                            as u64,
+                    )
+                    .with_field(
+                        "capabilities_unverified",
+                        capability_count(&profile, current_scope, CapabilitySupport::Unverified)
+                            as u64,
+                    )
+                    .with_field(
+                        "capabilities_unsupported",
+                        capability_count(&profile, current_scope, CapabilitySupport::Unsupported)
+                            as u64,
+                    );
+                if let Some(profile_id) = profile.profile_id() {
+                    entry = entry.with_field("profile", profile_id.as_str());
+                }
+                match observe_tree(kind, &paths, current_scope, tree_limits) {
+                    Ok(snapshot) => {
+                        result.observed_targets += 1;
+                        result.native_entries += snapshot.entries().len();
+                        entry = entry.with_field("native_entries", snapshot.entries().len() as u64);
+                    }
+                    Err(error) => {
+                        result.failed_targets += 1;
+                        entry.status = "observation_failed".to_owned();
+                        result.warnings.push(
+                            Warning::new(
+                                "native_observation_failed",
+                                "Native harness state could not be observed within the safety limits.",
+                            )
+                            .with_context("harness", target.as_str())
+                            .with_context("scope", scope_label(current_scope))
+                            .with_context("detail", error.to_string()),
+                        );
+                    }
+                }
+                result.resources.push(entry);
+            }
+        }
+        result
+    }
+}
+
+fn configured_binary(binary: &str) -> Result<ConfiguredBinary, ()> {
+    if Path::new(binary).is_absolute() {
+        AbsolutePath::new(binary)
+            .map(ConfiguredBinary::absolute)
+            .map_err(|_| ())
+    } else {
+        let id = skilltap_core::domain::NativeId::new(binary).map_err(|_| ())?;
+        ConfiguredBinary::path_lookup(id).map_err(|_| ())
+    }
+}
+
+fn observe_tree(
+    kind: HarnessKind,
+    paths: &PlatformPaths,
+    scope: &Scope,
+    limits: ExternalTreeLimits,
+) -> Result<
+    skilltap_core::runtime::ExternalTreeSnapshot,
+    skilltap_core::runtime::ObservationRuntimeError,
+> {
+    match kind {
+        HarnessKind::Codex => {
+            let inputs =
+                skilltap_harnesses::codex_observation_paths(paths, scope).map_err(|_| {
+                    skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
+                })?;
+            if matches!(scope, Scope::Global) {
+                observe_codex_resources(&inputs, limits)
+            } else {
+                // Project instruction files are single documented inputs. Do not
+                // recursively walk an arbitrary project root during status.
+                Err(skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable)
+            }
+        }
+        HarnessKind::Claude => {
+            let inputs =
+                skilltap_harnesses::claude_observation_paths(paths, scope).map_err(|_| {
+                    skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
+                })?;
+            if matches!(scope, Scope::Global) {
+                observe_claude_resources(&inputs, limits)
+            } else {
+                // Claude project settings are a documented file input; avoid a
+                // broad recursive walk of user project content.
+                Err(skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable)
+            }
+        }
+    }
+}
+
+fn capability_count(
+    profile: &skilltap_core::domain::CapabilityProfileSelection,
+    scope: &Scope,
+    support: CapabilitySupport,
+) -> usize {
+    profile
+        .observation_capabilities()
+        .for_scope(scope)
+        .iter()
+        .filter(|(_, value)| *value == support)
+        .count()
+}
+
+fn profile_authority(authority: ProfileAuthority) -> &'static str {
+    match authority {
+        ProfileAuthority::VerifiedCompiled => "verified_compiled",
+        ProfileAuthority::ObserveOnly => "observe_only",
+    }
+}
+
+fn scope_label(scope: &Scope) -> String {
+    match scope {
+        Scope::Global => "global".to_owned(),
+        Scope::Project(path) => path.as_str().to_owned(),
+    }
+}
+
+fn observation_id(harness: &HarnessId, scope: &Scope) -> String {
+    format!("{}:{}", harness, scope_label(scope))
 }
 
 fn document_result<T>(
