@@ -30,9 +30,9 @@ pub use operation::{
 pub use resource::{
     ComponentChoice, ComponentGraph, ComponentGraphError, ComponentId, ComponentKind,
     ComponentRequiredness, DesiredOrigin, DesiredResource, GraphCollection, ObservationFinding,
-    ObservationFindingKind, ObservationKey, ObservationLayer, ObservedResource, Ownership,
-    Provenance, ResourceComponent, ResourceContractError, ResourceGraph, ResourceGraphError,
-    ResourceHealth, ResourceKind, UpdateIntent,
+    ObservationFindingKind, ObservationKey, ObservationLayer, ObservedDependency, ObservedResource,
+    Ownership, Provenance, ResourceComponent, ResourceContractError, ResourceGraph,
+    ResourceGraphError, ResourceHealth, ResourceKind, UpdateIntent,
 };
 pub use scope::{
     AbsolutePath, HarnessSet, RelativeArtifactPath, Scope, ScopeSelection, TargetSelection,

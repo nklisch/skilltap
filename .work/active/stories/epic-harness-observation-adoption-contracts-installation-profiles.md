@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-installation-profiles
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-key]
@@ -41,3 +41,9 @@ authority and that probe results can only narrow existing support.
 - `cargo doc --locked --workspace --no-deps`
 - `cargo build --locked --release -p skilltap`
 - `scripts/verify-compiled-binary.sh /storage/cargo-target/release/skilltap`
+
+## Review
+
+Approved. Reachability binds opaque version evidence to one exact executable;
+capabilities vary by scope, narrowing is monotonic, and unknown versions are
+structurally observe-only with no mutation-capability accessor.
