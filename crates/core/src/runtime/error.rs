@@ -36,6 +36,7 @@ impl fmt::Display for EnvironmentVariable {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PathRole {
+    CanonicalPath,
     Home,
     ConfigHome,
     SkilltapConfig,
@@ -47,6 +48,7 @@ pub enum PathRole {
 impl fmt::Display for PathRole {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
+            Self::CanonicalPath => "canonical path",
             Self::Home => "home directory",
             Self::ConfigHome => "configuration home",
             Self::SkilltapConfig => "skilltap configuration directory",
@@ -113,6 +115,10 @@ pub enum RuntimeError {
         path: AbsolutePath,
         source: io::Error,
     },
+    UnsafeSymlink {
+        action: FileSystemAction,
+        path: AbsolutePath,
+    },
     LockContended {
         path: AbsolutePath,
     },
@@ -142,7 +148,7 @@ impl RuntimeError {
             | Self::NonUtf8Environment { .. }
             | Self::InvalidEnvironmentPath { .. } => RuntimeBoundary::Environment,
             Self::InvalidPath { .. } | Self::NonUtf8Path { .. } => RuntimeBoundary::Path,
-            Self::FileSystem { .. } => RuntimeBoundary::FileSystem,
+            Self::FileSystem { .. } | Self::UnsafeSymlink { .. } => RuntimeBoundary::FileSystem,
             Self::LockContended { .. } | Self::Lock { .. } => RuntimeBoundary::Lock,
             Self::Command { .. } => RuntimeBoundary::Command,
             Self::Clock { .. } => RuntimeBoundary::Clock,
@@ -184,6 +190,10 @@ impl fmt::Display for RuntimeError {
                 formatter,
                 "filesystem {action:?} failed for `{path}`: {source}"
             ),
+            Self::UnsafeSymlink { action, path } => write!(
+                formatter,
+                "filesystem {action:?} refused symlink path `{path}`"
+            ),
             Self::LockContended { path } => {
                 write!(formatter, "configuration lock `{path}` is already held")
             }
@@ -223,6 +233,7 @@ impl std::error::Error for RuntimeError {
             Self::MissingEnvironment { .. }
             | Self::NonUtf8Environment { .. }
             | Self::NonUtf8Path { .. }
+            | Self::UnsafeSymlink { .. }
             | Self::LockContended { .. }
             | Self::UnsupportedPlatform { .. } => None,
         }

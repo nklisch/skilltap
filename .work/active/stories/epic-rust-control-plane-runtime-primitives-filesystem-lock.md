@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-filesystem-lock
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-errors-paths]
@@ -34,3 +34,22 @@ machine-wide, fail-fast mutation lock.
 - Temp-home tests cover successful replacement, injected failure cleanup,
   backups, relative and dangling links, contention, and release.
 - Locked formatting, all-target check, Clippy, tests, and rustdoc pass.
+
+## Implementation notes
+
+- Files changed: new `crates/core/src/runtime/filesystem.rs`, runtime exports in
+  `crates/core/src/runtime/mod.rs`, and typed unsafe-symlink/canonical-path context in
+  `crates/core/src/runtime/error.rs`.
+- Public surface: synchronous `FileSystem` and `ConfigurationLock` ports; link-aware
+  `FileMetadata`; validated parent-capable `RelativeSymlinkTarget`; system filesystem and
+  nonblocking RAII lock adapters.
+- Tests added: seven isolated temp-directory tests covering regular/directory/live-link/dangling-
+  link inspection, whole-file visibility under a concurrent reader, injected atomic-write failure
+  cleanup, non-overwriting recoverable copies, parent-relative link validation, symlink-safe writes
+  and removal, and explicit/drop lock release after fail-fast contention.
+- Discrepancies from design: no external locking or temporary-file dependency was necessary because
+  pinned Rust 1.96 provides nonblocking file locks; the adapter uses exclusive same-directory files
+  and the standard filesystem APIs directly.
+- Verification: locked workspace format, all-target check, Clippy with warnings denied, tests (78
+  core tests), and rustdoc with warnings denied all pass.
+- Adjacent issues parked: none.
