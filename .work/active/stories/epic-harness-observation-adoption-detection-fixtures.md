@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-fixtures
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: []
@@ -35,3 +35,9 @@ safe process/runtime support.
 ## Verification
 
 - Test-support Clippy and all 16 fixture tests pass under the locked workspace.
+
+## Review
+
+- Fast-lane review approved the deterministic payload fixtures and green
+  warnings-denied test record; no production behavior or native state is
+  changed by this story.
