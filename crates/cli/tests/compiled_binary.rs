@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde_json::Value;
+use skilltap_core::VERSION;
 use skilltap_test_support::{IsolatedMachine, captured_stderr, captured_stdout, compiled_binary};
 
 fn machine() -> IsolatedMachine {
@@ -64,7 +65,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
     let machine = machine();
     let version = run(&machine, &["--version"]);
     assert_code(&version, 0);
-    assert_eq!(stdout(&version).trim(), "skilltap 3.0.0");
+    assert_eq!(stdout(&version).trim(), format!("skilltap {VERSION}"));
     assert!(version.stderr.is_empty());
 
     for arguments in [
