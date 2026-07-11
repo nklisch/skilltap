@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 
-use clap::{Parser, error::ErrorKind};
+use clap::{CommandFactory, Parser, error::ErrorKind};
 use skilltap_core::{
     domain::NativeId,
     runtime::{
@@ -53,11 +53,16 @@ where
             };
         }
         Err(error) => {
-            return render(
-                parse_error(error.kind()),
-                json_requested,
-                OutputChannel::Stderr,
-            );
+            let kind = error.kind();
+            let mut execution = render(parse_error(kind), json_requested, OutputChannel::Stderr);
+            if kind == ErrorKind::MissingSubcommand && !json_requested {
+                execution.document.push('\n');
+                execution
+                    .document
+                    .push_str(&Cli::command().render_usage().to_string());
+                execution.document.push('\n');
+            }
+            return execution;
         }
     };
     let json = dispatch.json();

@@ -52,6 +52,20 @@ fn missing_command_is_a_stable_input_error() {
     assert_eq!(execution.exit_code, 1);
     assert_eq!(execution.channel, OutputChannel::Stderr);
     assert!(execution.document.contains("Code: missing_command"));
+    assert!(execution.document.contains("Usage: skilltap <COMMAND>"));
+}
+
+#[test]
+fn json_requested_without_a_command_remains_one_normalized_document() {
+    let execution = run_from(["skilltap", "--json"]);
+
+    assert_eq!(execution.exit_code, 1);
+    assert_eq!(execution.channel, OutputChannel::Stdout);
+    assert_eq!(execution.document.lines().count(), 1);
+    let value: Value = serde_json::from_str(&execution.document).unwrap();
+    assert_eq!(value["command"], "skilltap");
+    assert_eq!(value["errors"][0]["code"], "invalid_arguments");
+    assert!(!execution.document.contains("--json"));
     assert!(!execution.document.contains("Usage:"));
 }
 
