@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-filesystem-hardening
 kind: story
-stage: review
+stage: done
 tags: [infra, correctness]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-filesystem-lock]
@@ -59,3 +59,13 @@ have one canonical parent-prefix form.
 - Verification: locked format, all-target check, warnings-denied Clippy, workspace tests (90 core
   tests), and warnings-denied rustdoc pass.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Recoverable copies now stage a synced inode and publish it with an
+atomic no-clobber hard link; all failure phases either prove cleanup or report
+the exact remaining partial state. No-follow descriptor opens and device/inode
+verification close source and lock check/use seams, while the held parent lock
+keeps cooperating skilltap writers on one namespace. Link targets accept only
+a canonical leading parent prefix. Twelve adversarial filesystem tests and
+warnings-denied workspace Clippy pass on review.
