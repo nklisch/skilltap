@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-website
 kind: story
-stage: review
+stage: done
 tags: [content, infra]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: [epic-rust-control-plane-workspace-reset-workspace]
@@ -41,3 +41,17 @@ Rust product build or reintroduce retired behavior.
   `cmp install.sh website/public/install.sh`, Ruby YAML parsing of the deploy
   workflow, `cargo metadata --no-deps --format-version 1`, retired-surface
   searches, and `git diff --check` all passed.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: `idea-vitepress-security-upgrade` tracks upstream VitePress,
+Vite, and esbuild development-server advisories for which npm currently offers
+no compatible fix.
+**Nits**: none
+
+**Notes**: The shipped site is static and the Rust binary is unaffected. Story
+verified by implement and integrated clean-install, deterministic-build,
+installer-equality, workflow, and stale-surface checks; fast-lane advance.
