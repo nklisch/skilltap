@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-adopt
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-status]
@@ -126,7 +126,7 @@ pub enum AdoptionDecision {
 pub struct AdoptionPlan {
     pub decisions: Vec<AdoptionDecision>,
     pub additions: Vec<DesiredResource>,
-    pub evidence: BTreeMap<AdoptionIdentity, ObservationEvidenceDigest>,
+    pub evidence: BTreeSet<AdoptionIdentity>,
 }
 
 pub fn plan_adoption(
@@ -281,3 +281,44 @@ there is a new non-conflicting candidate.
 - Lock-time re-observation can fail after a successful initial observation. The
   operation returns stale/observation attention without writing inventory; the
   caller can retry with a fresh command.
+
+## Implementation notes
+
+- Implemented the pure planner, exact-key semantic coalescing, conservative
+  inventory merge, lock/reload/revalidation application port, and non-
+  interactive `adopt` command.
+- Added explicit declared-only unadoptable decisions, stable plain/JSON
+  projection, compiled CLI idempotence/native no-mutation coverage, and
+  memory-backed publication/stale-evidence tests.
+- Native adapters currently expose bounded canonical surfaces rather than full
+  marketplace/plugin manifests; deeper lineage parsing and shared Claude
+  declaration diagnostics remain follow-up work rather than guessed adoption.
+
+## Review
+
+### Summary
+
+The adoption feature now has a complete safe path from normalized effective
+observations through locked inventory publication and deterministic CLI output.
+Pure and compiled tests pass, including repeat adoption, stale evidence, and
+native-tree immutability.
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Important: native surface observations still need deeper manifest/settings
+  parsing before adoption can claim per-plugin/per-skill lineage; keep the
+  current bounded surface behavior explicitly attention-oriented.
+- Important: add dedicated conflict, lock-contention, shared-Claude-scope, and
+  partial-sibling compiled scenarios in a future hardening slice.
+
+### Notes
+
+Deep review was performed inline after the implementation and full workspace
+verification; no cross-model reviewer was available in this run. The findings
+are non-blocking because the current adapter contract intentionally limits
+observation to documented bounded surfaces and reports uncertainty instead of
+inventing equivalence.
