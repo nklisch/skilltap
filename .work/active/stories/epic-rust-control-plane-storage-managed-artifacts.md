@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
