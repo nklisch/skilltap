@@ -21,6 +21,10 @@ impl AbsolutePath {
         {
             return Err(ValidationError::InvalidAbsolutePathComponent);
         }
+        let canonical = path.components().collect::<std::path::PathBuf>();
+        if canonical.to_str() != Some(value.as_str()) {
+            return Err(ValidationError::InvalidAbsolutePathComponent);
+        }
         Ok(Self(value))
     }
 
@@ -44,6 +48,10 @@ impl RelativeArtifactPath {
             .components()
             .any(|component| !matches!(component, Component::Normal(_)))
         {
+            return Err(ValidationError::InvalidRelativePathComponent);
+        }
+        let canonical = path.components().collect::<std::path::PathBuf>();
+        if canonical.to_str() != Some(value.as_str()) {
             return Err(ValidationError::InvalidRelativePathComponent);
         }
         Ok(Self(value))
@@ -87,14 +95,24 @@ path_serde!(AbsolutePath);
 path_serde!(RelativeArtifactPath);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "path", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    content = "path",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum Scope {
     Global,
     Project(AbsolutePath),
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "path", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    content = "path",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ScopeSelection {
     Global,
     Project(AbsolutePath),
@@ -142,7 +160,12 @@ impl<'de> Deserialize<'de> for HarnessSet {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "harness", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    content = "harness",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum TargetSelection {
     All,
     Only(HarnessId),
@@ -187,6 +210,26 @@ mod tests {
                 .to_string(),
             ValidationError::InvalidRelativePathComponent.to_string()
         );
+        for invalid in ["/tmp/project/", "/tmp//project"] {
+            let expected = AbsolutePath::new(invalid).unwrap_err();
+            assert_eq!(expected, ValidationError::InvalidAbsolutePathComponent);
+            assert!(
+                serde_json::from_str::<AbsolutePath>(&format!(r#""{invalid}""#))
+                    .unwrap_err()
+                    .to_string()
+                    .contains(&expected.to_string())
+            );
+        }
+        for invalid in ["assets/", "assets//icon.svg"] {
+            let expected = RelativeArtifactPath::new(invalid).unwrap_err();
+            assert_eq!(expected, ValidationError::InvalidRelativePathComponent);
+            assert!(
+                serde_json::from_str::<RelativeArtifactPath>(&format!(r#""{invalid}""#))
+                    .unwrap_err()
+                    .to_string()
+                    .contains(&expected.to_string())
+            );
+        }
     }
 
     #[test]
@@ -251,6 +294,10 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<TargetSelection>(&json).unwrap(),
             target
+        );
+        assert!(serde_json::from_str::<Scope>(r#"{"kind":"global","extra":true}"#).is_err());
+        assert!(
+            serde_json::from_str::<TargetSelection>(r#"{"kind":"all","harness":"codex"}"#).is_err()
         );
     }
 }

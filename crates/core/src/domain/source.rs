@@ -2,7 +2,7 @@ use std::{fmt, str::FromStr};
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{NativeId, ValidationError, validate_text};
+use super::{AbsolutePath, NativeId, ValidationError, validate_text};
 
 macro_rules! opaque_text_type {
     ($name:ident, $kind:literal, $max:expr) => {
@@ -56,15 +56,34 @@ opaque_text_type!(RequestedRevision, "requested revision", 512);
 pub enum SourceKind {
     Git,
     Local,
-    Native,
+    RemoteCatalog,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+impl fmt::Display for SourceKind {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Git => "Git",
+            Self::Local => "local",
+            Self::RemoteCatalog => "remote catalog",
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "SourceWire")]
 pub struct Source {
-    pub kind: SourceKind,
-    pub locator: SourceLocator,
+    kind: SourceKind,
+    locator: SourceLocator,
+    requested_revision: Option<RequestedRevision>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct SourceWire {
+    kind: SourceKind,
+    locator: SourceLocator,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub requested_revision: Option<RequestedRevision>,
+    requested_revision: Option<RequestedRevision>,
 }
 
 impl Source {
@@ -72,12 +91,65 @@ impl Source {
         kind: SourceKind,
         locator: SourceLocator,
         requested_revision: Option<RequestedRevision>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, ValidationError> {
+        match kind {
+            SourceKind::Git => {}
+            SourceKind::Local => {
+                AbsolutePath::new(locator.as_str())?;
+                if requested_revision.is_some() {
+                    return Err(ValidationError::RequestedRevisionNotAllowed { kind });
+                }
+            }
+            SourceKind::RemoteCatalog if requested_revision.is_some() => {
+                return Err(ValidationError::RequestedRevisionNotAllowed { kind });
+            }
+            SourceKind::RemoteCatalog => {}
+        }
+        Ok(Self {
             kind,
             locator,
             requested_revision,
+        })
+    }
+
+    pub const fn kind(&self) -> SourceKind {
+        self.kind
+    }
+
+    pub fn locator(&self) -> &SourceLocator {
+        &self.locator
+    }
+
+    pub fn requested_revision(&self) -> Option<&RequestedRevision> {
+        self.requested_revision.as_ref()
+    }
+}
+
+impl From<Source> for SourceWire {
+    fn from(value: Source) -> Self {
+        Self {
+            kind: value.kind,
+            locator: value.locator,
+            requested_revision: value.requested_revision,
         }
+    }
+}
+
+impl TryFrom<SourceWire> for Source {
+    type Error = ValidationError;
+
+    fn try_from(value: SourceWire) -> Result<Self, Self::Error> {
+        Self::new(value.kind, value.locator, value.requested_revision)
+    }
+}
+
+impl<'de> Deserialize<'de> for Source {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let wire = SourceWire::deserialize(deserializer)?;
+        Self::try_from(wire).map_err(serde::de::Error::custom)
     }
 }
 
@@ -129,7 +201,12 @@ impl<'de> Deserialize<'de> for GitCommit {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "kind", content = "value", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    content = "value",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
 pub enum ResolvedRevision {
     GitCommit(GitCommit),
     Native(NativeId),
@@ -168,6 +245,7 @@ pub struct Fingerprint {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 struct FingerprintWire {
     algorithm: FingerprintAlgorithm,
     digest: String,
@@ -264,7 +342,8 @@ mod tests {
             SourceKind::Git,
             SourceLocator::new("https://github.com/nklisch/skilltap.git").unwrap(),
             Some(RequestedRevision::new("main").unwrap()),
-        );
+        )
+        .unwrap();
         let json = serde_json::to_string(&source).unwrap();
         assert_eq!(
             json,
@@ -284,6 +363,81 @@ mod tests {
             serde_json::from_str::<ResolvedRevision>(&json).unwrap(),
             revision
         );
+        assert!(
+            serde_json::from_str::<ResolvedRevision>(
+                r#"{"kind":"native","value":"v1","extra":true}"#
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn source_kind_specific_invariants_apply_to_raw_and_persisted_values() {
+        let local_locator = SourceLocator::new("relative/path").unwrap();
+        let expected = Source::new(SourceKind::Local, local_locator, None).unwrap_err();
+        assert_eq!(expected, ValidationError::PathNotAbsolute);
+        assert!(
+            serde_json::from_str::<Source>(r#"{"kind":"local","locator":"relative/path"}"#)
+                .unwrap_err()
+                .to_string()
+                .contains(&expected.to_string())
+        );
+
+        for (kind, locator, persisted) in [
+            (
+                SourceKind::Local,
+                "/home/nathan/plugin",
+                r#"{"kind":"local","locator":"/home/nathan/plugin","requested_revision":"main"}"#,
+            ),
+            (
+                SourceKind::RemoteCatalog,
+                "https://catalog.example/plugins.json",
+                r#"{"kind":"remote_catalog","locator":"https://catalog.example/plugins.json","requested_revision":"main"}"#,
+            ),
+        ] {
+            let expected = Source::new(
+                kind,
+                SourceLocator::new(locator).unwrap(),
+                Some(RequestedRevision::new("main").unwrap()),
+            )
+            .unwrap_err();
+            assert_eq!(
+                expected,
+                ValidationError::RequestedRevisionNotAllowed { kind }
+            );
+            assert!(
+                serde_json::from_str::<Source>(persisted)
+                    .unwrap_err()
+                    .to_string()
+                    .contains(&expected.to_string())
+            );
+        }
+
+        let local = Source::new(
+            SourceKind::Local,
+            SourceLocator::new("/home/nathan/plugin").unwrap(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(local.kind(), SourceKind::Local);
+        assert_eq!(local.locator().as_str(), "/home/nathan/plugin");
+        assert!(local.requested_revision().is_none());
+    }
+
+    #[test]
+    fn owned_source_wires_reject_unknown_fields() {
+        assert!(
+            serde_json::from_str::<Source>(
+                r#"{"kind":"git","locator":"https://example.test/repo.git","extra":true}"#
+            )
+            .is_err()
+        );
+
+        let fingerprint = format!(
+            r#"{{"algorithm":"sha256","digest":"{}","extra":true}}"#,
+            "a".repeat(64)
+        );
+        assert!(serde_json::from_str::<Fingerprint>(&fingerprint).is_err());
     }
 
     #[test]

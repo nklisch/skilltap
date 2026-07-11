@@ -42,6 +42,9 @@ pub enum ValidationError {
     HarnessNotEnabled {
         harness: HarnessId,
     },
+    RequestedRevisionNotAllowed {
+        kind: SourceKind,
+    },
     GitCommitLength {
         actual: usize,
     },
@@ -89,6 +92,12 @@ impl fmt::Display for ValidationError {
             Self::EmptyHarnessSet => write!(formatter, "harness set must not be empty"),
             Self::HarnessNotEnabled { harness } => {
                 write!(formatter, "target harness `{harness}` is not enabled")
+            }
+            Self::RequestedRevisionNotAllowed { kind } => {
+                write!(
+                    formatter,
+                    "{kind} sources must not specify a requested revision"
+                )
             }
             Self::GitCommitLength { actual } => write!(
                 formatter,
