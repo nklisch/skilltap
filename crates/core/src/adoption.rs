@@ -159,6 +159,7 @@ pub fn plan_adoption(
     let existing = inventory.map(InventoryDocument::resources);
     let mut seen = HashSet::new();
     let mut candidates = BTreeMap::<ResourceKey, Vec<AdoptionCandidate>>::new();
+    let mut declared_only = BTreeSet::new();
 
     for (target, outcome) in environment.iter() {
         if !selection.contains(target) {
@@ -167,8 +168,17 @@ pub fn plan_adoption(
         let crate::domain::HarnessObservationOutcome::Observed { observation } = outcome else {
             continue;
         };
+        let effective_keys = observation
+            .resources()
+            .values()
+            .filter(|resource| resource.key().layer() == ObservationLayer::Effective)
+            .map(|resource| resource.key().resource().clone())
+            .collect::<BTreeSet<_>>();
         for resource in observation.resources().values() {
             if resource.key().layer() != ObservationLayer::Effective {
+                if !effective_keys.contains(resource.key().resource()) {
+                    declared_only.insert(resource.key().resource().clone());
+                }
                 continue;
             }
             if !seen.insert((target.clone(), resource.key().clone())) {
@@ -196,7 +206,13 @@ pub fn plan_adoption(
         .values()
         .flat_map(|values| values.iter().map(|candidate| candidate.identity.clone()))
         .collect();
-    let mut decisions = Vec::new();
+    let mut decisions = declared_only
+        .into_iter()
+        .map(|key| AdoptionDecision::Unadoptable {
+            key,
+            code: AdoptionUnadoptableCode::DeclaredOnly,
+        })
+        .collect::<Vec<_>>();
     let mut additions = Vec::new();
     for (key, candidates) in candidates {
         let Some(first) = candidates.first() else {
@@ -567,6 +583,10 @@ mod tests {
     }
 
     fn environment_with_harness(name: &str) -> ObservedEnvironment {
+        environment_with_layer(name, ObservationLayer::Effective)
+    }
+
+    fn environment_with_layer(name: &str, layer: ObservationLayer) -> ObservedEnvironment {
         let harness = HarnessId::new(name).unwrap();
         let installation = HarnessInstallation::new(
             harness.clone(),
@@ -589,7 +609,7 @@ mod tests {
             ObservationKey::new(
                 ResourceKey::new(ResourceId::new("plugin:demo").unwrap(), Scope::Global),
                 harness,
-                ObservationLayer::Effective,
+                layer,
             ),
             ResourceKind::Plugin,
             crate::domain::Provenance::Native,
@@ -626,6 +646,24 @@ mod tests {
         assert!(matches!(
             plan.additions[0].origin(),
             DesiredOrigin::Adopted(harness) if harness.as_str() == "codex"
+        ));
+    }
+
+    #[test]
+    fn declared_only_resource_is_explicitly_unadoptable() {
+        let plan = plan_adoption(
+            None,
+            &environment_with_layer("codex", ObservationLayer::Declared),
+            &AdoptionSelection::new([]),
+        )
+        .unwrap();
+        assert!(plan.additions.is_empty());
+        assert!(matches!(
+            plan.decisions.as_slice(),
+            [AdoptionDecision::Unadoptable {
+                code: AdoptionUnadoptableCode::DeclaredOnly,
+                ..
+            }]
         ));
     }
 
