@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-shell-bare-help
 kind: story
-stage: review
+stage: done
 tags: [bug, cli]
 parent: epic-rust-control-plane-cli-shell
 depends_on: [epic-rust-control-plane-cli-shell-composition]
@@ -47,3 +47,9 @@ in-process and compiled-binary regression coverage and run the locked ladder.
   regression all pass.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Plain bare invocation now preserves the safe normalized error while
+adding generated root usage on stderr with exit `1`; JSON and all other parse
+failures remain single-document/sanitized and unchanged.
