@@ -1,0 +1,27 @@
+---
+id: epic-cross-harness-materialization-graph-readers
+kind: story
+stage: implementing
+tags: []
+parent: epic-cross-harness-materialization-graph
+depends_on: [epic-cross-harness-materialization-graph-contract]
+release_binding: null
+gate_origin: null
+created: 2026-07-11
+updated: 2026-07-11
+---
+
+# Read Explicit Native Plugin Sources
+
+Implement `crates/harnesses/src/plugin_graph.rs` for Codex and Claude using
+the reader port and existing bounded filesystem/process adapters. Parse only
+the documented manifest and component paths of the explicitly supplied source.
+
+Acceptance criteria:
+
+- Fixture plugins produce complete normalized declarations for documented
+  skills, MCP servers, hooks, and target-specific components.
+- Missing or malformed manifests fail without returning a partial graph.
+- Cache and marketplace browsing are not used as write or discovery surfaces.
+- Tests assert bounded native arguments, explicit source scoping, and unknown
+  field preservation at the adapter boundary.
