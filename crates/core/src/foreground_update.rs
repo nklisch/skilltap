@@ -3,8 +3,8 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    domain::{DesiredResource, OperationSelector, ResourceKey},
-    storage::UpdateMode,
+    domain::{DesiredResource, HarnessId, OperationSelector, ResolvedRevision, ResourceKey},
+    storage::{ResourceState, SchemaError, StateDocument, Timestamp, UpdateMode},
     updates::{UpdateCandidate, UpdateDecision, UpdateSafety, classify_update_with_mode},
 };
 
@@ -15,6 +15,7 @@ pub struct ForegroundUpdateEntry {
     available_revision: Option<crate::domain::ResolvedRevision>,
     decision: UpdateDecision,
     acknowledgment_selectors: BTreeSet<OperationSelector>,
+    targets: BTreeSet<HarnessId>,
 }
 
 impl ForegroundUpdateEntry {
@@ -40,6 +41,10 @@ impl ForegroundUpdateEntry {
 
     pub fn acknowledgment_selectors(&self) -> &BTreeSet<OperationSelector> {
         &self.acknowledgment_selectors
+    }
+
+    pub fn targets(&self) -> &BTreeSet<HarnessId> {
+        &self.targets
     }
 }
 
@@ -159,6 +164,77 @@ impl std::fmt::Display for ForegroundUpdateSelectionError {
 
 impl std::error::Error for ForegroundUpdateSelectionError {}
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedUpdate {
+    resource: ResourceKey,
+    revision: ResolvedRevision,
+    targets: BTreeSet<HarnessId>,
+}
+
+impl VerifiedUpdate {
+    pub fn new(
+        resource: ResourceKey,
+        revision: ResolvedRevision,
+        targets: impl IntoIterator<Item = HarnessId>,
+    ) -> Self {
+        Self {
+            resource,
+            revision,
+            targets: targets.into_iter().collect(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum UpdateRecordingError {
+    MissingVerification { resource: ResourceKey },
+    UnexpectedVerification { resource: ResourceKey },
+    RevisionMismatch { resource: ResourceKey },
+    TargetMismatch { resource: ResourceKey },
+    State(SchemaError),
+}
+
+impl std::fmt::Display for UpdateRecordingError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingVerification { resource } => {
+                write!(
+                    formatter,
+                    "foreground update `{resource}` has no verification"
+                )
+            }
+            Self::UnexpectedVerification { resource } => {
+                write!(
+                    formatter,
+                    "verification `{resource}` is not in the foreground plan"
+                )
+            }
+            Self::RevisionMismatch { resource } => {
+                write!(
+                    formatter,
+                    "verified revision does not match update `{resource}`"
+                )
+            }
+            Self::TargetMismatch { resource } => {
+                write!(
+                    formatter,
+                    "verified targets do not match update `{resource}`"
+                )
+            }
+            Self::State(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for UpdateRecordingError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::State(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
 /// Pair exact desired resources with resolved candidates and classify each
 /// candidate without performing any mutation or state I/O.
 pub fn plan_foreground_updates(
@@ -187,6 +263,7 @@ pub fn plan_foreground_updates(
             available_revision: candidate.available_revision.clone(),
             decision: classify_update_with_mode(candidate, request.mode),
             acknowledgment_selectors: candidate.acknowledgment_selectors.clone(),
+            targets: resource.targets().iter().cloned().collect(),
         });
     }
     if let Some(candidate) = request
@@ -200,6 +277,84 @@ pub fn plan_foreground_updates(
     }
     entries.sort_by(|left, right| left.resource.cmp(&right.resource));
     Ok(ForegroundUpdatePlan { entries })
+}
+
+/// Advance installed revisions only after each selected resource has a fresh,
+/// target-complete verification. The returned document is pure; callers
+/// publish it atomically through the existing state repository.
+pub fn record_verified_updates(
+    state: &StateDocument,
+    selection: &ForegroundUpdateSelection,
+    verified: &[VerifiedUpdate],
+    at: Timestamp,
+) -> Result<StateDocument, UpdateRecordingError> {
+    let mut updated = state.clone();
+    for entry in selection.entries() {
+        let Some(observation) = verified
+            .iter()
+            .find(|value| value.resource == *entry.resource())
+        else {
+            return Err(UpdateRecordingError::MissingVerification {
+                resource: entry.resource.clone(),
+            });
+        };
+        let Some(expected) = entry.available_revision() else {
+            return Err(UpdateRecordingError::RevisionMismatch {
+                resource: entry.resource.clone(),
+            });
+        };
+        if expected != &observation.revision {
+            return Err(UpdateRecordingError::RevisionMismatch {
+                resource: entry.resource.clone(),
+            });
+        }
+        if entry.targets != observation.targets {
+            return Err(UpdateRecordingError::TargetMismatch {
+                resource: entry.resource.clone(),
+            });
+        }
+        let current = state.resources().get(entry.resource()).ok_or_else(|| {
+            UpdateRecordingError::State(SchemaError::StateResourceNotFound {
+                resource: entry.resource.clone(),
+            })
+        })?;
+        let refreshed = ResourceState::new(
+            current.key().clone(),
+            current.native_ids().clone(),
+            current.provenance(),
+            current.ownership(),
+            current.source().cloned(),
+            current.managed_artifact().cloned(),
+            current.fingerprint().cloned(),
+            Some(observation.revision.clone()),
+            None,
+            current.observed_at(),
+            current.last_apply().cloned(),
+        )
+        .map_err(UpdateRecordingError::State)?;
+        updated = updated
+            .refresh_resource_state(refreshed)
+            .map_err(UpdateRecordingError::State)?;
+    }
+    if let Some(extra) = verified.iter().find(|value| {
+        !selection
+            .entries()
+            .iter()
+            .any(|entry| entry.resource() == &value.resource)
+    }) {
+        return Err(UpdateRecordingError::UnexpectedVerification {
+            resource: extra.resource.clone(),
+        });
+    }
+    StateDocument::new(
+        updated.schema(),
+        updated.harnesses().values().cloned(),
+        updated.resources().values().cloned(),
+        updated.last_update_check(),
+        updated.last_successful_observation(),
+        Some(at),
+    )
+    .map_err(UpdateRecordingError::State)
 }
 
 /// Select safe and explicitly acknowledged entries. Exact selector equality
@@ -378,5 +533,51 @@ mod tests {
             select_foreground_updates(&plan, &unexpected),
             Err(ForegroundUpdateSelectionError::UnexpectedAcknowledgment { .. })
         ));
+    }
+
+    #[test]
+    fn verified_foreground_update_advances_revision_and_clears_available() {
+        let desired = resource("alpha");
+        let candidates = [candidate(&desired, 'a', 'b')];
+        let plan = plan_foreground_updates(ForegroundUpdateRequest {
+            resources: std::slice::from_ref(&desired),
+            candidates: &candidates,
+            mode: UpdateMode::ApplySafe,
+        })
+        .unwrap();
+        let selection = select_foreground_updates(&plan, &BTreeSet::new()).unwrap();
+        let current = ResourceState::new(
+            desired.key().clone(),
+            BTreeMap::new(),
+            crate::domain::Provenance::Direct,
+            crate::domain::Ownership::Skilltap,
+            None,
+            None,
+            None,
+            Some(revision('a')),
+            Some(revision('b')),
+            Timestamp::new(1, 0).unwrap(),
+            None,
+        )
+        .unwrap();
+        let state = StateDocument::new(1, [], [current], None, None, None).unwrap();
+        let next = record_verified_updates(
+            &state,
+            &selection,
+            &[VerifiedUpdate::new(
+                desired.key().clone(),
+                revision('b'),
+                [HarnessId::new("codex").unwrap()],
+            )],
+            Timestamp::new(2, 0).unwrap(),
+        )
+        .unwrap();
+        let updated = next.resources().get(desired.key()).unwrap();
+        assert_eq!(updated.installed_revision(), Some(&revision('b')));
+        assert_eq!(updated.available_revision(), None);
+        assert_eq!(
+            next.last_successful_application(),
+            Some(Timestamp::new(2, 0).unwrap())
+        );
     }
 }

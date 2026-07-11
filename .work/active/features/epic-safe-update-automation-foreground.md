@@ -78,10 +78,10 @@ pub fn plan_foreground_updates(
 **Story**: `epic-safe-update-automation-foreground-acknowledgment`
 
 ```rust
-pub fn select_foreground_operations(
+pub fn select_foreground_updates(
     plan: &ForegroundUpdatePlan,
     acknowledgments: &BTreeSet<OperationSelector>,
-) -> Result<Plan, ForegroundUpdateSelectionError>;
+) -> Result<ForegroundUpdateSelection, ForegroundUpdateSelectionError>;
 ```
 
 **Implementation Notes**:
