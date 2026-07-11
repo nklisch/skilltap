@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle-commands
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-native-marketplace-plugin-lifecycle
 depends_on: [epic-native-marketplace-plugin-lifecycle-preservation]
@@ -57,3 +57,18 @@ exact plugin identity parsing remains a future harness-observation refinement.
 Native removals now defer desired-inventory deletion until every planned native
 operation succeeds, preserving retryable intent after a failed or partial
 removal.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: exact native plugin identity correlation remains an observation-adapter refinement.
+
+**Notes**: Deep substrate review completed inline in degraded fresh-context
+mode because this run intentionally uses no sub-agents. Native direct-argument
+vectors, verified profiles, scope/target selectors, inventory/state journaling,
+update-all expansion, failure-safe removals, fresh observation output, and
+marketplace-content non-discovery were checked. Full workspace clippy and tests
+pass.
