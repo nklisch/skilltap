@@ -73,6 +73,8 @@ pub enum ObservationRuntimeError {
     ProcessSpawnFailed,
     ProcessIoFailed,
     ProcessWaitFailed,
+    ProcessTerminationFailed,
+    ProcessDrainFailed,
     ProcessDeadlineExceeded,
     ProcessOutputLimitExceeded { stream: OutputStream },
     JsonByteLimitExceeded,
@@ -111,6 +113,10 @@ impl fmt::Display for ObservationRuntimeError {
             Self::ProcessSpawnFailed => "the native process could not be started",
             Self::ProcessIoFailed => "native process output could not be read",
             Self::ProcessWaitFailed => "the native process could not be reaped",
+            Self::ProcessTerminationFailed => "the native process could not be terminated",
+            Self::ProcessDrainFailed => {
+                "native process output could not be drained after termination"
+            }
             Self::ProcessDeadlineExceeded => "the native process exceeded its deadline",
             Self::ProcessOutputLimitExceeded { .. } => {
                 "native process output exceeded a configured limit"
@@ -587,18 +593,54 @@ pub struct NativeProcessOutput {
 }
 
 impl NativeProcessOutput {
-    pub const fn new(
+    // Reserved for the bounded process adapter implemented by the next runtime story.
+    #[allow(dead_code)]
+    pub(crate) fn new(
         status: NativeProcessStatus,
         stdout: Vec<u8>,
         stderr: Vec<u8>,
         elapsed: Duration,
-    ) -> Self {
-        Self {
+        limits: ProcessLimits,
+    ) -> Result<Self, ObservationRuntimeError> {
+        let stdout_bytes = u64::try_from(stdout.len()).map_err(|_| {
+            ObservationRuntimeError::ProcessOutputLimitExceeded {
+                stream: OutputStream::StandardOutput,
+            }
+        })?;
+        if stdout_bytes > limits.stdout_bytes() {
+            return Err(ObservationRuntimeError::ProcessOutputLimitExceeded {
+                stream: OutputStream::StandardOutput,
+            });
+        }
+        let stderr_bytes = u64::try_from(stderr.len()).map_err(|_| {
+            ObservationRuntimeError::ProcessOutputLimitExceeded {
+                stream: OutputStream::StandardError,
+            }
+        })?;
+        if stderr_bytes > limits.stderr_bytes() {
+            return Err(ObservationRuntimeError::ProcessOutputLimitExceeded {
+                stream: OutputStream::StandardError,
+            });
+        }
+        let combined = stdout_bytes.checked_add(stderr_bytes).ok_or(
+            ObservationRuntimeError::ProcessOutputLimitExceeded {
+                stream: OutputStream::Combined,
+            },
+        )?;
+        if combined > limits.combined_output_bytes() {
+            return Err(ObservationRuntimeError::ProcessOutputLimitExceeded {
+                stream: OutputStream::Combined,
+            });
+        }
+        if elapsed > limits.deadline() {
+            return Err(ObservationRuntimeError::ProcessDeadlineExceeded);
+        }
+        Ok(Self {
             status,
             stdout,
             stderr,
             elapsed,
-        }
+        })
     }
     pub const fn status(&self) -> NativeProcessStatus {
         self.status
@@ -630,7 +672,9 @@ impl fmt::Debug for NativeProcessOutput {
 pub struct DecodedJson(serde_json::Value);
 
 impl DecodedJson {
-    pub const fn new(value: serde_json::Value) -> Self {
+    // Reserved for the strict decoder after it validates the complete source document.
+    #[allow(dead_code)]
+    pub(crate) const fn new(value: serde_json::Value) -> Self {
         Self(value)
     }
     pub const fn value(&self) -> &serde_json::Value {
@@ -661,36 +705,70 @@ fn json_kind(value: &serde_json::Value) -> &'static str {
     }
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExternalTreeEntryKind {
+    Directory,
+    File,
+    Symlink,
+}
+
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
-pub enum ExternalTreeEntry {
-    Directory {
-        path: RelativeArtifactPath,
-    },
-    File {
-        path: RelativeArtifactPath,
-        bytes: Vec<u8>,
-    },
-    Symlink {
-        path: RelativeArtifactPath,
-        target: Vec<u8>,
-    },
+#[allow(dead_code)]
+enum ExternalTreePayload {
+    Directory,
+    File(Vec<u8>),
+    Symlink(Vec<u8>),
+}
+
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ExternalTreeEntry {
+    path: RelativeArtifactPath,
+    payload: ExternalTreePayload,
 }
 
 impl ExternalTreeEntry {
+    // Reserved for the descriptor-relative tree adapter; callers only receive entries.
+    #[allow(dead_code)]
+    pub(crate) const fn directory(path: RelativeArtifactPath) -> Self {
+        Self {
+            path,
+            payload: ExternalTreePayload::Directory,
+        }
+    }
+    #[allow(dead_code)]
+    pub(crate) fn file(path: RelativeArtifactPath, bytes: Vec<u8>) -> Self {
+        Self {
+            path,
+            payload: ExternalTreePayload::File(bytes),
+        }
+    }
+    #[allow(dead_code)]
+    pub(crate) fn symlink(path: RelativeArtifactPath, target: Vec<u8>) -> Self {
+        Self {
+            path,
+            payload: ExternalTreePayload::Symlink(target),
+        }
+    }
     pub const fn path(&self) -> &RelativeArtifactPath {
-        match self {
-            Self::Directory { path } | Self::File { path, .. } | Self::Symlink { path, .. } => path,
+        &self.path
+    }
+    pub const fn kind(&self) -> ExternalTreeEntryKind {
+        match &self.payload {
+            ExternalTreePayload::Directory => ExternalTreeEntryKind::Directory,
+            ExternalTreePayload::File(_) => ExternalTreeEntryKind::File,
+            ExternalTreePayload::Symlink(_) => ExternalTreeEntryKind::Symlink,
         }
     }
     pub fn file_bytes(&self) -> Option<&[u8]> {
-        match self {
-            Self::File { bytes, .. } => Some(bytes),
+        match &self.payload {
+            ExternalTreePayload::File(bytes) => Some(bytes),
             _ => None,
         }
     }
     pub fn symlink_target(&self) -> Option<&[u8]> {
-        match self {
-            Self::Symlink { target, .. } => Some(target),
+        match &self.payload {
+            ExternalTreePayload::Symlink(target) => Some(target),
             _ => None,
         }
     }
@@ -698,13 +776,15 @@ impl ExternalTreeEntry {
 
 impl fmt::Debug for ExternalTreeEntry {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Directory { .. } => formatter.debug_struct("Directory").finish_non_exhaustive(),
-            Self::File { bytes, .. } => formatter
+        match &self.payload {
+            ExternalTreePayload::Directory => {
+                formatter.debug_struct("Directory").finish_non_exhaustive()
+            }
+            ExternalTreePayload::File(bytes) => formatter
                 .debug_struct("File")
                 .field("byte_count", &bytes.len())
                 .finish_non_exhaustive(),
-            Self::Symlink { target, .. } => formatter
+            ExternalTreePayload::Symlink(target) => formatter
                 .debug_struct("Symlink")
                 .field("target_bytes", &target.len())
                 .finish_non_exhaustive(),
@@ -718,14 +798,59 @@ pub struct ExternalTreeSnapshot {
 }
 
 impl ExternalTreeSnapshot {
-    pub fn new(
+    // Reserved for the descriptor-relative tree adapter implemented by a later story.
+    #[allow(dead_code)]
+    pub(crate) fn new(
         entries: impl IntoIterator<Item = ExternalTreeEntry>,
+        limits: ExternalTreeLimits,
     ) -> Result<Self, ObservationRuntimeError> {
         let mut entries = entries.into_iter().collect::<Vec<_>>();
+        let entry_count = u64::try_from(entries.len())
+            .map_err(|_| ObservationRuntimeError::TreeEntryLimitExceeded)?;
+        if entry_count > limits.entries() {
+            return Err(ObservationRuntimeError::TreeEntryLimitExceeded);
+        }
         entries.sort();
         let mut paths = BTreeSet::new();
         if entries.iter().any(|entry| !paths.insert(entry.path())) {
             return Err(ObservationRuntimeError::DuplicateTreeEntry);
+        }
+        let mut total_bytes = 0_u64;
+        for entry in &entries {
+            let depth = u32::try_from(
+                std::path::Path::new(entry.path().as_str())
+                    .components()
+                    .count(),
+            )
+            .map_err(|_| ObservationRuntimeError::TreeDepthLimitExceeded)?;
+            if depth > limits.depth() {
+                return Err(ObservationRuntimeError::TreeDepthLimitExceeded);
+            }
+            let payload_bytes = match &entry.payload {
+                ExternalTreePayload::Directory => 0,
+                ExternalTreePayload::File(bytes) => {
+                    let length = u64::try_from(bytes.len())
+                        .map_err(|_| ObservationRuntimeError::TreeFileLimitExceeded)?;
+                    if length > limits.file_bytes() {
+                        return Err(ObservationRuntimeError::TreeFileLimitExceeded);
+                    }
+                    length
+                }
+                ExternalTreePayload::Symlink(target) => {
+                    let length = u64::try_from(target.len())
+                        .map_err(|_| ObservationRuntimeError::TreeSymlinkTargetLimitExceeded)?;
+                    if length > limits.symlink_target_bytes() {
+                        return Err(ObservationRuntimeError::TreeSymlinkTargetLimitExceeded);
+                    }
+                    length
+                }
+            };
+            total_bytes = total_bytes
+                .checked_add(payload_bytes)
+                .ok_or(ObservationRuntimeError::TreeTotalLimitExceeded)?;
+            if total_bytes > limits.total_bytes() {
+                return Err(ObservationRuntimeError::TreeTotalLimitExceeded);
+            }
         }
         Ok(Self { entries })
     }
@@ -1009,18 +1134,23 @@ mod tests {
             SECRET.as_bytes().to_vec(),
             SECRET.as_bytes().to_vec(),
             Duration::from_millis(4),
-        );
+            ProcessLimits::new(100, 64, 64, 128).unwrap(),
+        )
+        .unwrap();
         let decoded = DecodedJson::new(serde_json::json!({"secret": SECRET}));
-        let tree = ExternalTreeSnapshot::new([
-            ExternalTreeEntry::File {
-                path: RelativeArtifactPath::new("secret.txt").unwrap(),
-                bytes: SECRET.as_bytes().to_vec(),
-            },
-            ExternalTreeEntry::Symlink {
-                path: RelativeArtifactPath::new("link").unwrap(),
-                target: SECRET.as_bytes().to_vec(),
-            },
-        ])
+        let tree = ExternalTreeSnapshot::new(
+            [
+                ExternalTreeEntry::file(
+                    RelativeArtifactPath::new("secret.txt").unwrap(),
+                    SECRET.as_bytes().to_vec(),
+                ),
+                ExternalTreeEntry::symlink(
+                    RelativeArtifactPath::new("link").unwrap(),
+                    SECRET.as_bytes().to_vec(),
+                ),
+            ],
+            tree_limits(),
+        )
         .unwrap();
         let tree_request = ExternalTreeRequest::new(
             AbsolutePath::new(format!("/tmp/{SECRET}")).unwrap(),
@@ -1056,25 +1186,103 @@ mod tests {
 
     #[test]
     fn tree_snapshots_sort_entries_reject_duplicate_paths_and_preserve_payloads() {
-        let first = ExternalTreeEntry::File {
-            path: RelativeArtifactPath::new("a/file").unwrap(),
-            bytes: b"content".to_vec(),
-        };
-        let second = ExternalTreeEntry::Directory {
-            path: RelativeArtifactPath::new("a").unwrap(),
-        };
-        let snapshot = ExternalTreeSnapshot::new([first.clone(), second]).unwrap();
+        let first = ExternalTreeEntry::file(
+            RelativeArtifactPath::new("a/file").unwrap(),
+            b"content".to_vec(),
+        );
+        let second = ExternalTreeEntry::directory(RelativeArtifactPath::new("a").unwrap());
+        let snapshot = ExternalTreeSnapshot::new([first.clone(), second], tree_limits()).unwrap();
         assert_eq!(snapshot.entries()[0].path().as_str(), "a");
+        assert_eq!(
+            snapshot.entries()[0].kind(),
+            ExternalTreeEntryKind::Directory
+        );
         assert_eq!(
             snapshot.entries()[1].file_bytes(),
             Some(b"content".as_slice())
         );
         assert_eq!(
-            ExternalTreeSnapshot::new([first.clone(), first]),
+            ExternalTreeSnapshot::new([first.clone(), first], tree_limits()),
             Err(ObservationRuntimeError::DuplicateTreeEntry)
         );
         assert!(!NativeProcessStatus::Exited { code: 17 }.success());
         assert!(NativeProcessStatus::Exited { code: 0 }.success());
+    }
+
+    #[test]
+    fn bounded_result_builders_reject_every_payload_bypass() {
+        let process_limits = ProcessLimits::new(10, 2, 2, 3).unwrap();
+        for (stdout, stderr, elapsed, expected) in [
+            (
+                vec![0; 3],
+                vec![],
+                Duration::from_millis(1),
+                ObservationRuntimeError::ProcessOutputLimitExceeded {
+                    stream: OutputStream::StandardOutput,
+                },
+            ),
+            (
+                vec![],
+                vec![0; 3],
+                Duration::from_millis(1),
+                ObservationRuntimeError::ProcessOutputLimitExceeded {
+                    stream: OutputStream::StandardError,
+                },
+            ),
+            (
+                vec![0; 2],
+                vec![0; 2],
+                Duration::from_millis(1),
+                ObservationRuntimeError::ProcessOutputLimitExceeded {
+                    stream: OutputStream::Combined,
+                },
+            ),
+            (
+                vec![],
+                vec![],
+                Duration::from_millis(11),
+                ObservationRuntimeError::ProcessDeadlineExceeded,
+            ),
+        ] {
+            assert_eq!(
+                NativeProcessOutput::new(
+                    NativeProcessStatus::Exited { code: 0 },
+                    stdout,
+                    stderr,
+                    elapsed,
+                    process_limits,
+                ),
+                Err(expected)
+            );
+        }
+
+        let limits = ExternalTreeLimits::new(2, 2, 2, 3, 2).unwrap();
+        let file = |path: &str, size| {
+            ExternalTreeEntry::file(RelativeArtifactPath::new(path).unwrap(), vec![0; size])
+        };
+        let link = |path: &str, size| {
+            ExternalTreeEntry::symlink(RelativeArtifactPath::new(path).unwrap(), vec![0; size])
+        };
+        assert_eq!(
+            ExternalTreeSnapshot::new([file("a", 1), file("b", 1), file("c", 1)], limits),
+            Err(ObservationRuntimeError::TreeEntryLimitExceeded)
+        );
+        assert_eq!(
+            ExternalTreeSnapshot::new([file("a/b/c", 1)], limits),
+            Err(ObservationRuntimeError::TreeDepthLimitExceeded)
+        );
+        assert_eq!(
+            ExternalTreeSnapshot::new([file("a", 3)], limits),
+            Err(ObservationRuntimeError::TreeFileLimitExceeded)
+        );
+        assert_eq!(
+            ExternalTreeSnapshot::new([link("a", 3)], limits),
+            Err(ObservationRuntimeError::TreeSymlinkTargetLimitExceeded)
+        );
+        assert_eq!(
+            ExternalTreeSnapshot::new([file("a", 2), link("b", 2)], limits),
+            Err(ObservationRuntimeError::TreeTotalLimitExceeded)
+        );
     }
 
     struct FakePorts;
@@ -1099,12 +1307,13 @@ mod tests {
             &self,
             _request: &NativeProcessRequest,
         ) -> Result<NativeProcessOutput, ObservationRuntimeError> {
-            Ok(NativeProcessOutput::new(
+            NativeProcessOutput::new(
                 NativeProcessStatus::Exited { code: 0 },
                 b"{}".to_vec(),
                 Vec::new(),
                 Duration::from_millis(1),
-            ))
+                process_limits(),
+            )
         }
     }
 
@@ -1123,7 +1332,7 @@ mod tests {
             &self,
             _request: &ExternalTreeRequest,
         ) -> Result<ExternalTreeSnapshot, ObservationRuntimeError> {
-            ExternalTreeSnapshot::new([])
+            ExternalTreeSnapshot::new([], _request.limits())
         }
     }
 

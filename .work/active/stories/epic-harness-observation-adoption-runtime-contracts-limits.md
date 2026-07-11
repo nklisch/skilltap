@@ -43,6 +43,12 @@ every limit at zero and maximum minus/at/plus one.
 - Tests cover every limit at zero and hard maximum minus/at/plus one,
   cross-field failures, strict serde validation, deterministic tree snapshots,
   secret canaries, non-zero exit status, and fake-port composition.
+- Review correction: bounded process, decoded JSON, tree entry, and tree
+  snapshot construction is crate-private. Process and tree builders enforce
+  their supplied limits before returning public read-only values, including
+  checked combined/total byte sums. Tree entries now expose a public kind and
+  accessors over private payload fields. Added distinct safe termination and
+  post-termination drain failure categories plus direct bypass regression tests.
 - Discrepancies from design: none after incorporating the coordinating design
   review's hard-ceiling correction before implementation completed.
 - Adjacent issues parked: none.
@@ -54,5 +60,5 @@ every limit at zero and maximum minus/at/plus one.
 - `cargo fmt --all -- --check`
 - `cargo check --locked --workspace --all-targets`
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`
-- `cargo test --locked --workspace` (232 tests across workspace suites)
+- `cargo test --locked --workspace` (243 tests across workspace suites after review correction)
 - `cargo doc --locked --workspace --no-deps`
