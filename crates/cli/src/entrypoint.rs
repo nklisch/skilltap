@@ -17,7 +17,7 @@ use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_pro
 use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
     ResultClass,
-    application::{NativeObservationMode, StatusApplication},
+    application::{NativeLifecycleKind, NativeObservationMode, StatusApplication},
     command::{
         AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
         ScopedOutputArgs, ScopedTargetArgs, SyncArgs,
@@ -103,8 +103,9 @@ where
             OutputChannel::Stdout,
         ),
         Dispatch::MarketplaceAdd(args) => (
-            execute_system_lifecycle_preview(
+            execute_system_native_lifecycle(
                 "marketplace add",
+                NativeLifecycleKind::MarketplaceAdd,
                 &args.common.scope,
                 &args.common.target,
                 Some(args.source.as_str()),
@@ -113,8 +114,9 @@ where
             OutputChannel::Stdout,
         ),
         Dispatch::PluginInstall(args) => (
-            execute_system_lifecycle_preview(
+            execute_system_native_lifecycle(
                 "plugin install",
+                NativeLifecycleKind::PluginInstall,
                 &args.scope,
                 &args.target,
                 Some(args.plugin.as_str()),
@@ -195,6 +197,19 @@ fn execute_system_lifecycle_preview(
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
         application.execute_lifecycle_preview(command, scope, target, source, name)
+    })
+}
+
+fn execute_system_native_lifecycle(
+    command: &'static str,
+    kind: NativeLifecycleKind,
+    scope: &crate::command::ScopeArgs,
+    target: &crate::command::TargetArgs,
+    source: Option<&str>,
+    name: Option<&str>,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        application.execute_native_lifecycle(command, kind, scope, target, source, name)
     })
 }
 

@@ -384,6 +384,70 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
 }
 
 #[test]
+fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/skills")).unwrap();
+
+    let output = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            "https://example.invalid/team.git",
+            "--name",
+            "team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&output, 0);
+    let value = json(&output);
+    assert_eq!(value["command"], "marketplace add");
+    assert_eq!(value["result"], "completed");
+    assert_eq!(value["summary"]["changed"], true);
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(inventory.contains("marketplace:team"));
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("lifecycle:codex:"));
+
+    let repeat = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            "https://example.invalid/team.git",
+            "--name",
+            "team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    let repeat_value = json(&repeat);
+    assert_eq!(repeat_value["summary"]["changed"], false);
+    assert_eq!(
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap(),
+        inventory
+    );
+    assert_eq!(
+        fs::read_to_string(config_root(&machine).join("state.json")).unwrap(),
+        state
+    );
+}
+
+#[test]
 fn bare_invocation_prints_concise_help_and_fails_as_input() {
     let machine = machine();
     let output = run(&machine, &[]);

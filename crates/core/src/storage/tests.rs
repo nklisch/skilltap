@@ -152,20 +152,15 @@ fn state_journal_updates_exact_resource_without_touching_siblings() {
         )
         .unwrap();
     assert_eq!(updated.resources().get(second.key()), Some(&second));
-    assert_eq!(
-        updated
-            .resources()
-            .get(first.key())
-            .unwrap()
-            .last_apply()
-            .unwrap()
-            .operations()
-            .keys()
-            .next()
-            .unwrap()
-            .as_str(),
-        "update:first"
-    );
+    let operations = updated
+        .resources()
+        .get(first.key())
+        .unwrap()
+        .last_apply()
+        .unwrap()
+        .operations();
+    assert!(operations.contains_key(&OperationId::new("install:skill").unwrap()));
+    assert!(operations.contains_key(&OperationId::new("update:first").unwrap()));
     assert_eq!(
         updated.last_successful_application(),
         Some(Timestamp::new(200, 0).unwrap())

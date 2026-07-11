@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     path::{Component, Path, PathBuf},
 };
 
@@ -9,15 +9,18 @@ use skilltap_core::{
         apply_adoption, plan_adoption,
     },
     domain::{
-        AbsolutePath, CapabilitySupport, ComponentGraph, ConfiguredBinary, HarnessId,
-        HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
+        AbsolutePath, CapabilityId, CapabilitySupport, CommandArgument, ComponentGraph,
+        ConfiguredBinary, DesiredOrigin, DesiredResource, HarnessId, HarnessObservation,
+        HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
         ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
         ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
-        ObservationTarget, ObservedResource, OperationResult, Ownership, Plan, ProfileAuthority,
-        Provenance, ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope,
+        ObservationTarget, ObservedResource, OperationAction, OperationId, OperationOutcome,
+        OperationResult, Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId,
+        ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
-    executor::{ExecutionError, ExecutionJournal},
+    executor::{ExecutionError, ExecutionJournal, execute_plan},
+    lifecycle_operation::native_operation,
     reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
         ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
@@ -25,12 +28,14 @@ use skilltap_core::{
     },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, InventoryDocument, InventoryRepository,
-        StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
+        ResourceState, StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
     },
 };
 use skilltap_harnesses::{
-    CanonicalObservation, HarnessKind, detect_configured_installation, normalize_observations,
-    observe_claude_canonical_resources, observe_codex_canonical_resources, select_profile,
+    CanonicalObservation, HarnessKind, NativeLifecycleAction, NativeLifecyclePort,
+    NativeLifecycleRequest, detect_configured_installation, native_arguments,
+    normalize_observations, observe_claude_canonical_resources, observe_codex_canonical_resources,
+    select_profile,
 };
 
 use crate::{
@@ -56,13 +61,20 @@ pub(crate) enum NativeObservationMode {
     System,
 }
 
-/// State-backed journal used by future mutating lifecycle composition. It
-/// resolves each result through the validated plan, updates only the exact
-/// resource record, and publishes atomically through the repository port.
-#[allow(dead_code)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum NativeLifecycleKind {
+    MarketplaceAdd,
+    PluginInstall,
+}
+
+/// State-backed journal for mutating lifecycle composition. It resolves each
+/// result through the validated plan, seeds only explicitly planned resources,
+/// updates exact resource records, and publishes atomically through the
+/// repository port.
 pub(crate) struct StateExecutionJournal<'a> {
     pub(crate) plan: &'a Plan,
     pub(crate) state: &'a dyn StateRepository,
+    pub(crate) seeds: BTreeMap<ResourceKey, ResourceState>,
 }
 
 impl ExecutionJournal for StateExecutionJournal<'_> {
@@ -88,12 +100,46 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                 .expect("static evidence detail is valid"),
             )
         })?;
-        let DocumentState::Present(current) = current else {
+        let current = match current {
+            DocumentState::Present(current) => current,
+            DocumentState::Missing => skilltap_core::storage::StateDocument::new(
+                skilltap_core::storage::STATE_SCHEMA_VERSION,
+                [],
+                [],
+                None,
+                None,
+                None,
+            )
+            .map_err(|_| {
+                ExecutionError::journal_failure(
+                    skilltap_core::domain::EvidenceCode::new("state.seed_invalid")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The seed state for the operation was invalid.",
+                    )
+                    .expect("static evidence detail is valid"),
+                )
+            })?,
+        };
+        let current = if current.resources().contains_key(resource) {
+            current
+        } else if let Some(seed) = self.seeds.get(resource) {
+            current.with_resource_state(seed.clone()).map_err(|_| {
+                ExecutionError::journal_failure(
+                    skilltap_core::domain::EvidenceCode::new("state.seed_conflict")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The operation resource could not be seeded in state.",
+                    )
+                    .expect("static evidence detail is valid"),
+                )
+            })?
+        } else {
             return Err(ExecutionError::journal_failure(
-                skilltap_core::domain::EvidenceCode::new("state.missing")
+                skilltap_core::domain::EvidenceCode::new("state.resource_missing")
                     .expect("static evidence code is valid"),
                 skilltap_core::domain::EvidenceDetail::new(
-                    "The state document is missing for a mutating operation.",
+                    "The operation resource is not present in state.",
                 )
                 .expect("static evidence detail is valid"),
             ));
@@ -345,6 +391,363 @@ impl StatusApplication<'_> {
             .with_next_action(NextAction::new(
                 "inspect_plan",
                 "Review the planned operation before the lifecycle adapter is enabled.",
+        ))
+    }
+
+    /// Apply one native marketplace/plugin lifecycle request through the core
+    /// lock, plan, bounded process, and state-journal boundaries.
+    pub(crate) fn execute_native_lifecycle(
+        &self,
+        command: &'static str,
+        kind: NativeLifecycleKind,
+        requested_scope: &ScopeArgs,
+        target: &TargetArgs,
+        source_value: Option<&str>,
+        name_value: Option<&str>,
+    ) -> Outcome {
+        let (documents, mut outcome) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
+        };
+        let status_args = StatusArgs {
+            target: target.clone(),
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let targets = match StatusTargets::resolve(&status_args, &documents) {
+            Ok(targets) => targets,
+            Err(StatusTargetError::NoneEnabled) => {
+                return outcome
+                    .with_error(ErrorDetail::new(
+                        "no_enabled_harnesses",
+                        "No harness is enabled in skilltap configuration.",
+                    ))
+                    .with_next_action(
+                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                            .with_command("skilltap harness enable <codex|claude>"),
+                    );
+            }
+            Err(StatusTargetError::NotEnabled) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "target_not_enabled",
+                    "The requested harness target is not enabled.",
+                ));
+            }
+        };
+
+        let request = match NativeLifecycleSpec::parse(kind, source_value, name_value) {
+            Ok(request) => request,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "platform_paths_unavailable",
+                    "The skilltap configuration paths could not be resolved.",
+                ));
+            }
+        };
+        let mut inventory = documents.inventory.clone().unwrap_or_else(|| {
+            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                .expect("empty inventory is valid")
+        });
+        let mut operations = Vec::new();
+        let mut requests = Vec::new();
+        let mut seeds = BTreeMap::new();
+        let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+            .expect("bounded lifecycle process limits are valid");
+        let json_limits =
+            JsonLimits::new(256 * 1024, 64).expect("bounded lifecycle JSON limits are valid");
+        let search_path = std::env::var_os("PATH");
+        let timestamp = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| ());
+
+        for concrete_scope in &scope.resolved {
+            let resource = match request.desired_resource(concrete_scope, &targets.resolved) {
+                Ok(resource) => resource,
+                Err(error) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(error);
+                }
+            };
+            match inventory.with_resource(resource.clone()) {
+                Ok(next) => inventory = next,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome
+                        .with_error(ErrorDetail::new(
+                            "inventory_resource_conflict",
+                            "The requested resource conflicts with an existing desired definition.",
+                        ))
+                        .with_next_action(NextAction::new(
+                            "inspect_inventory",
+                            "Inspect the existing resource definition before retrying.",
+                        ));
+                }
+            }
+
+            let mut native_ids = BTreeMap::new();
+            for target_id in targets.iter() {
+                let Some((harness, configured, executable, capability)) = configured_native_profile(
+                    &documents.config,
+                    target_id,
+                    concrete_scope,
+                    process_limits,
+                    json_limits,
+                    search_path.clone(),
+                    match kind {
+                        NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+                        NativeLifecycleKind::PluginInstall => "plugin.install",
+                    },
+                ) else {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome
+                        .with_resource(
+                            OutputEntry::new(
+                                format!("{}:{}", target_id, resource.key()),
+                                "mutation_unavailable",
+                            )
+                            .with_field("target", target_id.as_str())
+                            .with_field("scope", scope_label(concrete_scope)),
+                        )
+                        .with_warning(
+                            Warning::new(
+                                "native_profile_unavailable",
+                                "The selected harness is not mutation-authorized for this lifecycle action.",
+                            )
+                            .with_context("harness", target_id.as_str()),
+                        );
+                    continue;
+                };
+                if capability != CapabilitySupport::Supported {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "native_capability_unverified",
+                            "The selected harness capability is not verified for mutation.",
+                        )
+                        .with_context("harness", target_id.as_str())
+                        .with_context("scope", scope_label(concrete_scope)),
+                    );
+                    continue;
+                }
+                let native_request = request.native_request(harness, concrete_scope.clone());
+                let arguments = match native_arguments(&native_request) {
+                    Ok(arguments) => arguments,
+                    Err(_) => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome.with_warning(
+                            Warning::new(
+                                "native_scope_unsupported",
+                                "The selected harness has no verified lifecycle command for this scope.",
+                            )
+                            .with_context("harness", target_id.as_str())
+                            .with_context("scope", scope_label(concrete_scope)),
+                        );
+                        continue;
+                    }
+                };
+                let operation_id = lifecycle_operation_id(kind, target_id, resource.key());
+                native_ids.insert(target_id.clone(), request.native_name.clone());
+                if previously_applied(documents.state.as_ref(), resource.key(), &operation_id) {
+                    outcome = outcome.with_operation(
+                        crate::OperationOutcome::new(operation_id.to_string(), "no_change")
+                            .with_field("target", target_id.as_str())
+                            .with_field("scope", scope_label(concrete_scope)),
+                    );
+                    continue;
+                }
+                let command_arguments = match command_arguments(arguments) {
+                    Ok(arguments) => arguments,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "native_argument_encoding",
+                            "The native lifecycle arguments could not be represented safely.",
+                        ));
+                    }
+                };
+                let operation = match native_operation(
+                    operation_id.clone(),
+                    target_id.clone(),
+                    resource.key().clone(),
+                    request.operation_action(),
+                    executable,
+                    command_arguments,
+                ) {
+                    Ok(operation) => operation,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "operation_contract_invalid",
+                            "The native lifecycle operation could not be constructed safely.",
+                        ));
+                    }
+                };
+                operations.push(operation);
+                requests.push((
+                    operation_id,
+                    configured,
+                    search_path.clone(),
+                    process_limits,
+                    native_request,
+                ));
+            }
+            if !native_ids.is_empty() {
+                let observed_at = match timestamp {
+                    Ok(timestamp) => timestamp,
+                    Err(()) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "clock_unavailable",
+                            "The operation timestamp could not be recorded safely.",
+                        ));
+                    }
+                };
+                let native_state = match ResourceState::new(
+                    resource.key().clone(),
+                    native_ids,
+                    Provenance::Native,
+                    Ownership::Harness,
+                    request.source.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    observed_at,
+                    None,
+                ) {
+                    Ok(state) => state,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "state_seed_invalid",
+                            "The native lifecycle state seed was invalid.",
+                        ));
+                    }
+                };
+                seeds.insert(resource.key().clone(), native_state);
+            }
+        }
+
+        if inventory
+            != documents.inventory.clone().unwrap_or_else(|| {
+                InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                    .expect("empty inventory is valid")
+            })
+            && self.inventory.replace(&inventory).is_err()
+        {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "inventory_publish_failed",
+                "The desired inventory could not be published before the native operation.",
+            ));
+        }
+        if operations.is_empty() {
+            if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+                outcome.result = ResultClass::Completed;
+            }
+            let operation_count = outcome.operations.len() as u64;
+            return outcome
+                .with_summary("operations", operation_count)
+                .with_summary("changed", false)
+                .with_next_action(NextAction::new(
+                    "inspect_status",
+                    "Inspect status if the native resource may have drifted externally.",
+                ));
+        }
+
+        let plan = match Plan::new(operations) {
+            Ok(plan) => plan,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "operation_plan_invalid",
+                    "The native lifecycle operation plan was invalid.",
+                ));
+            }
+        };
+        let port = NativeLifecyclePort::new_per_operation(requests);
+        let journal = StateExecutionJournal {
+            plan: &plan,
+            state: self.state,
+            seeds,
+        };
+        let lock_path = match AbsolutePath::new(format!(
+            "{}/skilltap.lock",
+            paths.skilltap_config().as_str()
+        )) {
+            Ok(path) => path,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "lock_path_invalid",
+                    "The skilltap configuration lock path is invalid.",
+                ));
+            }
+        };
+        let report =
+            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
+                Ok(report) => report,
+                Err(error) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome
+                    .with_error(native_execution_error(&error))
+                    .with_next_action(NextAction::new(
+                        "reobserve_before_retry",
+                        "Re-observe the selected harness before retrying the lifecycle operation.",
+                    ));
+                }
+            };
+        let observation = NativeObservation::run(&documents, &scope, &targets);
+        for warning in observation.warnings.iter().cloned() {
+            outcome = outcome.with_warning(warning);
+        }
+        if observation.failed_targets > 0 {
+            outcome.result = ResultClass::AttentionRequired;
+            outcome = outcome.with_warning(Warning::new(
+                "post_mutation_observation_incomplete",
+                "The native operation completed, but fresh post-mutation observation was incomplete.",
+            ));
+        }
+        for result in report.result.operations().values() {
+            let status = operation_result_status(result.outcome());
+            outcome = outcome.with_operation(crate::OperationOutcome::new(
+                result.operation_id().to_string(),
+                status,
+            ));
+            if matches!(
+                result.outcome(),
+                OperationOutcome::Failed { .. }
+                    | OperationOutcome::Blocked { .. }
+                    | OperationOutcome::SkippedDependency { .. }
+                    | OperationOutcome::Pending
+            ) {
+                outcome.result = ResultClass::AttentionRequired;
+            }
+        }
+        if report.changed && observation.failed_targets == 0 {
+            outcome.result = ResultClass::Completed;
+        }
+        outcome
+            .with_summary("operations", report.result.operations().len() as u64)
+            .with_summary("changed", report.changed)
+            .with_next_action(NextAction::new(
+                "verify_status",
+                "Run status to verify the fresh native observation and recorded state.",
             ))
     }
 
@@ -730,6 +1133,279 @@ impl StatusApplication<'_> {
             }
         }
     }
+}
+
+struct NativeLifecycleSpec {
+    operation_action: OperationAction,
+    native_action: NativeLifecycleAction,
+    resource_kind: ResourceKind,
+    resource_prefix: &'static str,
+    native_name: NativeId,
+    source: Option<Source>,
+}
+
+impl NativeLifecycleSpec {
+    fn parse(
+        kind: NativeLifecycleKind,
+        source_value: Option<&str>,
+        name_value: Option<&str>,
+    ) -> Result<Self, ErrorDetail> {
+        match kind {
+            NativeLifecycleKind::MarketplaceAdd => {
+                let source_value = source_value.ok_or_else(|| {
+                    ErrorDetail::new(
+                        "source_required",
+                        "Marketplace registration requires an explicit source.",
+                    )
+                })?;
+                let locator = SourceLocator::new(source_value).map_err(|_| {
+                    ErrorDetail::new("invalid_source", "The marketplace source is invalid.")
+                })?;
+                let native_name = match name_value {
+                    Some(name) => NativeId::new(name).map_err(|_| {
+                        ErrorDetail::new("invalid_name", "The marketplace name is invalid.")
+                    })?,
+                    None => derive_marketplace_name(locator.as_str()).ok_or_else(|| {
+                        ErrorDetail::new(
+                            "name_required",
+                            "The marketplace name could not be derived; provide --name.",
+                        )
+                    })?,
+                };
+                let source = Source::new(SourceKind::Git, locator, None).map_err(|_| {
+                    ErrorDetail::new("invalid_source", "The marketplace source is invalid.")
+                })?;
+                Ok(Self {
+                    operation_action: OperationAction::MarketplaceRegister,
+                    native_action: NativeLifecycleAction::MarketplaceAdd,
+                    resource_kind: ResourceKind::Marketplace,
+                    resource_prefix: "marketplace",
+                    native_name,
+                    source: Some(source),
+                })
+            }
+            NativeLifecycleKind::PluginInstall => {
+                let selector = source_value.ok_or_else(|| {
+                    ErrorDetail::new(
+                        "plugin_required",
+                        "Plugin installation requires an exact plugin@marketplace selector.",
+                    )
+                })?;
+                skilltap_core::marketplace::PluginSelector::parse(selector).map_err(|_| {
+                    ErrorDetail::new(
+                        "invalid_plugin_selector",
+                        "The plugin selector must be an exact plugin@marketplace value.",
+                    )
+                })?;
+                let native_name = NativeId::new(selector).map_err(|_| {
+                    ErrorDetail::new("invalid_plugin_selector", "The plugin selector is invalid.")
+                })?;
+                Ok(Self {
+                    operation_action: OperationAction::PluginInstall,
+                    native_action: NativeLifecycleAction::PluginInstall,
+                    resource_kind: ResourceKind::Plugin,
+                    resource_prefix: "plugin",
+                    native_name,
+                    source: None,
+                })
+            }
+        }
+    }
+
+    fn desired_resource(
+        &self,
+        scope: &Scope,
+        targets: &HarnessSet,
+    ) -> Result<DesiredResource, ErrorDetail> {
+        let key = ResourceKey::new(
+            ResourceId::new(format!(
+                "{}:{}",
+                self.resource_prefix,
+                self.native_name.as_str()
+            ))
+            .map_err(|_| {
+                ErrorDetail::new(
+                    "resource_id_invalid",
+                    "The requested native resource identifier is invalid.",
+                )
+            })?,
+            scope.clone(),
+        );
+        DesiredResource::new(
+            key,
+            self.resource_kind,
+            targets.clone(),
+            DesiredOrigin::Direct,
+            self.source.clone(),
+            UpdateIntent::Track,
+            ComponentGraph::new([]).expect("empty component graph is valid"),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeSet::new(),
+        )
+        .map_err(|_| {
+            ErrorDetail::new(
+                "resource_contract_invalid",
+                "The requested native resource could not be represented safely.",
+            )
+        })
+    }
+
+    fn native_request(&self, harness: HarnessKind, scope: Scope) -> NativeLifecycleRequest {
+        NativeLifecycleRequest {
+            harness,
+            action: self.native_action,
+            scope,
+            name: self.native_name.clone(),
+            source: self.source.as_ref().map(|source| source.locator().clone()),
+        }
+    }
+
+    const fn operation_action(&self) -> OperationAction {
+        self.operation_action
+    }
+}
+
+fn derive_marketplace_name(locator: &str) -> Option<NativeId> {
+    let trimmed = locator.trim_end_matches('/');
+    let segment = trimmed
+        .rsplit('/')
+        .next()?
+        .strip_suffix(".git")
+        .unwrap_or(trimmed.rsplit('/').next()?);
+    NativeId::new(segment).ok()
+}
+
+fn configured_native_profile(
+    config: &ConfigDocument,
+    target: &HarnessId,
+    scope: &Scope,
+    process_limits: ProcessLimits,
+    json_limits: JsonLimits,
+    search_path: Option<std::ffi::OsString>,
+    capability_name: &str,
+) -> Option<(HarnessKind, ConfiguredBinary, NativeId, CapabilitySupport)> {
+    let (harness, binary) = match target.as_str() {
+        "codex" => (HarnessKind::Codex, config.harnesses().codex.binary.as_str()),
+        "claude" => (
+            HarnessKind::Claude,
+            config.harnesses().claude.binary.as_str(),
+        ),
+        _ => return None,
+    };
+    let configured = configured_binary(binary).ok()?;
+    let executable = NativeId::new(binary).ok()?;
+    let installation = detect_configured_installation(
+        harness,
+        configured.clone(),
+        search_path,
+        process_limits,
+        json_limits,
+    )
+    .ok()?;
+    let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
+        return None;
+    };
+    let profile = select_profile(harness, native_version);
+    let capability_id = CapabilityId::new(capability_name).ok()?;
+    let capability = profile
+        .mutation_capabilities()
+        .and_then(|capabilities| capabilities.for_scope(scope).support(&capability_id))
+        .unwrap_or(CapabilitySupport::Unverified);
+    Some((harness, configured, executable, capability))
+}
+
+fn command_arguments(arguments: Vec<std::ffi::OsString>) -> Result<Vec<CommandArgument>, ()> {
+    arguments
+        .into_iter()
+        .map(|argument| {
+            let value = argument.into_string().map_err(|_| ())?;
+            Ok(CommandArgument::literal(
+                NativeId::new(value).map_err(|_| ())?,
+            ))
+        })
+        .collect()
+}
+
+fn lifecycle_operation_id(
+    kind: NativeLifecycleKind,
+    target: &HarnessId,
+    resource: &ResourceKey,
+) -> OperationId {
+    let label = format!("{kind:?}:{target}:{}", resource.id().as_str());
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in label.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    OperationId::new(format!("lifecycle:{}:{hash:016x}", target.as_str()))
+        .expect("lifecycle operation id is valid")
+}
+
+fn previously_applied(
+    state: Option<&StateDocument>,
+    resource: &ResourceKey,
+    operation: &OperationId,
+) -> bool {
+    state
+        .and_then(|state| state.resources().get(resource))
+        .and_then(|state| state.last_apply())
+        .and_then(|apply| apply.operations().get(operation))
+        .is_some_and(|result| {
+            matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            )
+        })
+}
+
+fn operation_result_status(outcome: &OperationOutcome) -> &'static str {
+    match outcome {
+        OperationOutcome::Applied => "applied",
+        OperationOutcome::NoChange => "no_change",
+        OperationOutcome::Failed { .. } => "failed",
+        OperationOutcome::Blocked { .. } => "blocked",
+        OperationOutcome::SkippedDependency { .. } => "skipped_dependency",
+        OperationOutcome::Pending => "pending",
+    }
+}
+
+fn native_execution_error(error: &ExecutionError) -> ErrorDetail {
+    let (code, summary) = match error {
+        ExecutionError::Lock(_) => (
+            "configuration_locked",
+            "Another skilltap mutation holds the configuration lock.",
+        ),
+        ExecutionError::Release(_) => (
+            "configuration_lock_release_failed",
+            "The configuration lock could not be released safely.",
+        ),
+        ExecutionError::Revalidation { .. } => (
+            "stale_native_evidence",
+            "Native lifecycle evidence changed before mutation.",
+        ),
+        ExecutionError::Apply { .. } => (
+            "native_command_failed",
+            "The native lifecycle command failed.",
+        ),
+        ExecutionError::Journal { after_apply, .. } if *after_apply => (
+            "state_journal_failed_after_apply",
+            "Native work may have completed but state journaling failed; re-observe before retrying.",
+        ),
+        ExecutionError::Journal { .. } | ExecutionError::JournalBoundary { .. } => (
+            "state_journal_failed",
+            "The native operation result could not be recorded safely.",
+        ),
+        ExecutionError::InvalidOutcome { .. } => (
+            "native_outcome_invalid",
+            "The native lifecycle adapter returned an invalid operation outcome.",
+        ),
+        ExecutionError::Graph(_) | ExecutionError::Contract(_) => (
+            "operation_plan_invalid",
+            "The native lifecycle operation plan was invalid.",
+        ),
+    };
+    ErrorDetail::new(code, summary)
 }
 
 fn first_use_harness_report(

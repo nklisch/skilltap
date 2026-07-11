@@ -56,6 +56,9 @@ pub enum SchemaError {
         path: AbsolutePath,
     },
     ResourceGraph(ResourceGraphError),
+    InventoryResourceConflict {
+        resource: ResourceKey,
+    },
     DuplicateHarness {
         harness: crate::domain::HarnessId,
     },
@@ -63,6 +66,9 @@ pub enum SchemaError {
         resource: ResourceKey,
     },
     StateResourceNotFound {
+        resource: ResourceKey,
+    },
+    StateResourceConflict {
         resource: ResourceKey,
     },
     DuplicateOperation {
@@ -118,6 +124,9 @@ impl fmt::Display for SchemaError {
                 "resource `{resource}` uses undeclared project root `{path}`"
             ),
             Self::ResourceGraph(source) => source.fmt(formatter),
+            Self::InventoryResourceConflict { resource } => {
+                write!(formatter, "inventory resource `{resource}` conflicts with the requested definition")
+            }
             Self::DuplicateHarness { harness } => {
                 write!(formatter, "duplicate harness state `{harness}`")
             }
@@ -126,6 +135,9 @@ impl fmt::Display for SchemaError {
             }
             Self::StateResourceNotFound { resource } => {
                 write!(formatter, "state resource `{resource}` was not found")
+            }
+            Self::StateResourceConflict { resource } => {
+                write!(formatter, "state resource `{resource}` conflicts with the seed")
             }
             Self::DuplicateOperation { operation } => {
                 write!(formatter, "duplicate apply operation `{operation}`")

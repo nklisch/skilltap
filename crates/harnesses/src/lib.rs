@@ -578,6 +578,10 @@ fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
             CapabilityId::new("plugin.install").expect("compiled capability is valid"),
             CapabilitySupport::Supported,
         ),
+        (
+            CapabilityId::new("marketplace.register").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
     ]);
     let project = CapabilitySet::new([
         (
@@ -586,6 +590,14 @@ fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
         ),
         (
             CapabilityId::new("plugin.install").expect("compiled capability is valid"),
+            if matches!(harness, HarnessKind::Codex) {
+                CapabilitySupport::Unverified
+            } else {
+                CapabilitySupport::Supported
+            },
+        ),
+        (
+            CapabilityId::new("marketplace.register").expect("compiled capability is valid"),
             if matches!(harness, HarnessKind::Codex) {
                 CapabilitySupport::Unverified
             } else {

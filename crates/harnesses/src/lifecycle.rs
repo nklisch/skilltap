@@ -112,10 +112,14 @@ pub fn run_native_lifecycle(
 /// must target the operation's harness/scope, and native execution is bounded
 /// and direct-argument only.
 pub struct NativeLifecyclePort {
+    entries: BTreeMap<OperationId, NativeLifecycleEntry>,
+}
+
+struct NativeLifecycleEntry {
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     limits: ProcessLimits,
-    requests: BTreeMap<OperationId, NativeLifecycleRequest>,
+    request: NativeLifecycleRequest,
 }
 
 impl NativeLifecyclePort {
@@ -125,11 +129,39 @@ impl NativeLifecyclePort {
         limits: ProcessLimits,
         requests: impl IntoIterator<Item = (OperationId, NativeLifecycleRequest)>,
     ) -> Self {
+        Self::new_per_operation(
+            requests.into_iter().map(|(id, request)| {
+                (id, configured.clone(), search_path.clone(), limits, request)
+            }),
+        )
+    }
+
+    pub fn new_per_operation(
+        entries: impl IntoIterator<
+            Item = (
+                OperationId,
+                ConfiguredBinary,
+                Option<OsString>,
+                ProcessLimits,
+                NativeLifecycleRequest,
+            ),
+        >,
+    ) -> Self {
         Self {
-            configured,
-            search_path,
-            limits,
-            requests: requests.into_iter().collect(),
+            entries: entries
+                .into_iter()
+                .map(|(id, configured, search_path, limits, request)| {
+                    (
+                        id,
+                        NativeLifecycleEntry {
+                            configured,
+                            search_path,
+                            limits,
+                            request,
+                        },
+                    )
+                })
+                .collect(),
         }
     }
 }
@@ -148,7 +180,7 @@ impl ExecutionPort for NativeLifecyclePort {
             ) {
                 continue;
             }
-            let Some(request) = self.requests.get(operation.id()) else {
+            let Some(entry) = self.entries.get(operation.id()) else {
                 return Err(ExecutionError::revalidation(
                     EvidenceCode::new("native.request_missing")
                         .expect("static evidence code is valid"),
@@ -158,9 +190,10 @@ impl ExecutionPort for NativeLifecyclePort {
                     .expect("static evidence detail is valid"),
                 ));
             };
-            if request.scope != *operation.scope()
-                || !action_matches(operation.action(), request.action)
-                || HarnessId::new(request.harness.id()).expect("harness kind identifier is valid")
+            if entry.request.scope != *operation.scope()
+                || !action_matches(operation.action(), entry.request.action)
+                || HarnessId::new(entry.request.harness.id())
+                    .expect("harness kind identifier is valid")
                     != *operation.target()
             {
                 return Err(ExecutionError::revalidation(
@@ -177,7 +210,7 @@ impl ExecutionPort for NativeLifecyclePort {
     }
 
     fn apply(&self, operation: &Operation) -> Result<OperationOutcome, ExecutionError> {
-        let Some(request) = self.requests.get(operation.id()) else {
+        let Some(entry) = self.entries.get(operation.id()) else {
             return Err(ExecutionError::revalidation(
                 EvidenceCode::new("native.request_missing")
                     .expect("static evidence code is valid"),
@@ -188,10 +221,10 @@ impl ExecutionPort for NativeLifecyclePort {
             ));
         };
         let output = run_native_lifecycle(
-            self.configured.clone(),
-            self.search_path.clone(),
-            request,
-            self.limits,
+            entry.configured.clone(),
+            entry.search_path.clone(),
+            &entry.request,
+            entry.limits,
         )
         .map_err(|_| native_apply_failure("The native lifecycle command could not be run."))?;
         if output.status().success() {

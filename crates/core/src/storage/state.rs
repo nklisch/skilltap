@@ -443,7 +443,12 @@ impl StateDocument {
                 .ok_or_else(|| SchemaError::StateResourceNotFound {
                     resource: resource.clone(),
                 })?;
-        let apply = ApplyRecord::new(at, [operation])?;
+        let mut operations = current
+            .last_apply()
+            .map(|record| record.operations().clone())
+            .unwrap_or_default();
+        operations.insert(operation.operation_id().clone(), operation);
+        let apply = ApplyRecord::new(at, operations.into_values())?;
         let updated = ResourceState::new(
             current.key().clone(),
             current.native_ids().clone(),
@@ -467,6 +472,29 @@ impl StateDocument {
             self.last_update_check,
             self.last_successful_observation,
             Some(at),
+        )
+    }
+
+    /// Return a copy with a resource seed added idempotently.
+    pub fn with_resource_state(&self, resource: ResourceState) -> Result<Self, SchemaError> {
+        if let Some(existing) = self.resources.get(resource.key()) {
+            if existing == &resource {
+                return Ok(self.clone());
+            }
+            return Err(SchemaError::StateResourceConflict {
+                resource: resource.key().clone(),
+            });
+        }
+        Self::new(
+            STATE_SCHEMA_VERSION,
+            self.harnesses.values().cloned(),
+            self.resources
+                .values()
+                .cloned()
+                .chain(std::iter::once(resource)),
+            self.last_update_check,
+            self.last_successful_observation,
+            self.last_successful_application,
         )
     }
 }

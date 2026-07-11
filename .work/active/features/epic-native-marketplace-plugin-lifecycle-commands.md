@@ -42,8 +42,10 @@ Marketplace/plugin list commands are inventory-backed and read-only. Add and
 install now expose deterministic operation previews with scope, target, source,
 and name fields. The harness crate supplies bounded native lifecycle vectors
 and an execution boundary. Core now has one validated constructor for faithful
-native operations, and state journaling is atomic and resource-exact; the
-remaining gap is composing these pieces into the mutating CLI adapter with
-fresh post-mutation observation. The harness layer now exposes a typed
-`NativeLifecyclePort` that enforces exact operation/request identity and maps
-bounded native failures to operation failures.
+native operations, and state journaling is atomic and resource-exact. The
+harness layer exposes a typed `NativeLifecyclePort` that enforces exact
+operation/request identity and maps bounded native failures to operation
+failures. Marketplace add and plugin install now compose desired inventory,
+verified profiles, native execution, journaling, and fresh observation; remove
+and update verbs, native exact-resource observation, and full adapter coverage
+remain open.

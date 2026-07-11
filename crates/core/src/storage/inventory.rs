@@ -66,6 +66,27 @@ impl InventoryDocument {
     pub const fn resources(&self) -> &BTreeMap<ResourceKey, DesiredResource> {
         &self.resources
     }
+
+    /// Return a copy with one desired resource added idempotently.
+    pub fn with_resource(&self, resource: DesiredResource) -> Result<Self, SchemaError> {
+        if let Some(existing) = self.resources.get(resource.key()) {
+            if existing == &resource {
+                return Ok(self.clone());
+            }
+            return Err(SchemaError::InventoryResourceConflict {
+                resource: resource.key().clone(),
+            });
+        }
+        let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
+        resources.push(resource);
+        let mut projects = self.projects.clone();
+        if let crate::domain::Scope::Project(path) =
+            resources.last().expect("resource was appended").scope()
+        {
+            projects.insert(path.clone());
+        }
+        Self::new(INVENTORY_SCHEMA_VERSION, projects, resources)
+    }
 }
 
 impl From<InventoryDocument> for InventoryWire {
