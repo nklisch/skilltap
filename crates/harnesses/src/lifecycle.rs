@@ -2,7 +2,14 @@
 
 use std::{ffi::OsString, fmt};
 
-use skilltap_core::domain::{NativeId, Scope, SourceLocator};
+use skilltap_core::{
+    domain::{ConfiguredBinary, NativeId, Scope, SourceLocator},
+    runtime::{
+        ExecutableResolutionRequest, ExecutableResolver, NativeProcessOutput, NativeProcessRequest,
+        NativeProcessRunner, ObservationRuntimeError, ProcessLimits, SystemExecutableResolver,
+        SystemNativeProcessRunner,
+    },
+};
 
 use crate::HarnessKind;
 
@@ -29,6 +36,7 @@ pub struct NativeLifecycleRequest {
 pub enum NativeLifecycleError {
     MissingSource,
     UnsupportedProjectScope,
+    Runtime(ObservationRuntimeError),
 }
 
 impl fmt::Display for NativeLifecycleError {
@@ -38,11 +46,18 @@ impl fmt::Display for NativeLifecycleError {
             Self::UnsupportedProjectScope => {
                 "the native harness has no verified project-scoped lifecycle command"
             }
+            Self::Runtime(error) => return error.fmt(formatter),
         })
     }
 }
 
 impl std::error::Error for NativeLifecycleError {}
+
+impl From<ObservationRuntimeError> for NativeLifecycleError {
+    fn from(error: ObservationRuntimeError) -> Self {
+        Self::Runtime(error)
+    }
+}
 
 /// Build a direct native argument vector. The caller still owns executable
 /// resolution, profile authority, bounded execution, and post-mutation
@@ -59,6 +74,30 @@ pub fn native_arguments(
         }
         HarnessKind::Codex => Ok(codex_arguments(request)),
     }
+}
+
+/// Execute one already-authorized lifecycle vector through the bounded native
+/// process boundary. Profile selection and post-mutation observation remain
+/// caller responsibilities.
+pub fn run_native_lifecycle(
+    configured: ConfiguredBinary,
+    search_path: Option<OsString>,
+    request: &NativeLifecycleRequest,
+    limits: ProcessLimits,
+) -> Result<NativeProcessOutput, NativeLifecycleError> {
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
+    let working_directory = match &request.scope {
+        Scope::Global => None,
+        Scope::Project(path) => Some(path.clone()),
+    };
+    Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
+        executable,
+        native_arguments(request)?,
+        std::collections::BTreeMap::new(),
+        working_directory,
+        limits,
+    ))?)
 }
 
 fn codex_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {

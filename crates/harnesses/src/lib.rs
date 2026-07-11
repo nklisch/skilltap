@@ -18,6 +18,7 @@ use skilltap_core::{
 mod lifecycle;
 pub use lifecycle::{
     NativeLifecycleAction, NativeLifecycleError, NativeLifecycleRequest, native_arguments,
+    run_native_lifecycle,
 };
 
 pub use skilltap_core::VERSION;
