@@ -3,6 +3,7 @@ pub mod compatibility;
 mod dependency_graph;
 pub mod identity;
 pub mod installation;
+pub mod observation;
 pub mod operation;
 pub mod resource;
 pub mod scope;
@@ -20,6 +21,11 @@ pub use installation::{
     CapabilityProfileId, CapabilityProfileSelection, CapabilityScope, ConfiguredBinary,
     ExecutableFileIdentity, ExecutableIdentity, HarnessInstallation, HarnessReachability,
     NativeVersion, ProfileAuthority, ProfileContractError, ScopedCapabilitySets, UnreachableReason,
+};
+pub use observation::{
+    HarnessObservation, HarnessObservationAdapter, HarnessObservationOutcome,
+    ObservationAdapterError, ObservationBatch, ObservationContractError, ObservationCoordinator,
+    ObservationEvidence, ObservationRequest, ObservationTarget, ObservedEnvironment,
 };
 pub use operation::{
     AcknowledgmentRequirement, AffectedSurface, ApplyOutcome, ApplyResult, AttentionKind,
