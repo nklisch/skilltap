@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-registry
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: [epic-harness-observation-adoption-runtime, epic-harness-observation-adoption-contracts, epic-harness-observation-adoption-detection-fixtures]
@@ -41,3 +41,9 @@ state, or expose CLI commands.
 
 - Harness detection Clippy and all three detection integration tests pass in
   the locked/offline workspace.
+
+## Review
+
+- Fast-lane review approved the green implementation record. The registry is
+  read-only, uses the completed runtime boundaries, and keeps failure output
+  closed and sibling-safe.
