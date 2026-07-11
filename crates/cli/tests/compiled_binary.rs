@@ -233,10 +233,17 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         }
         let output = run(&machine, &arguments);
         if command.starts_with("harness ") {
-            assert_code(&output, 0);
+            assert_code(&output, if *command == "harness list" { 2 } else { 0 });
             let value = json(&output);
             assert_eq!(value["command"], *command, "arguments: {arguments:?}");
-            assert_eq!(value["result"], "completed");
+            assert_eq!(
+                value["result"],
+                if *command == "harness list" {
+                    "attention_required"
+                } else {
+                    "completed"
+                }
+            );
         } else if *command == "daemon run" {
             assert!(stdout(&output).is_empty());
             assert!(stderr(&output).contains("capability_unavailable"));
@@ -255,10 +262,10 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
 
     let first_list = run(&machine, &["harness", "list", "--json"]);
-    assert_code(&first_list, 0);
+    assert_code(&first_list, 2);
     let first_value = json(&first_list);
     assert_eq!(first_value["command"], "harness list");
-    assert_eq!(first_value["result"], "completed");
+    assert_eq!(first_value["result"], "attention_required");
     assert!(
         first_value["resources"]
             .as_array()
@@ -319,11 +326,11 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     );
 
     let list_plain = run(&machine, &["harness", "list"]);
-    assert_code(&list_plain, 0);
+    assert_code(&list_plain, 2);
     assert!(list_plain.stderr.is_empty());
     assert!(stdout(&list_plain).contains("codex  enabled"));
     assert!(stdout(&list_plain).contains("claude  disabled"));
-    assert!(stdout(&list_plain).contains("Result: completed"));
+    assert!(stdout(&list_plain).contains("Result: attention required"));
 
     let disable = run(&machine, &["harness", "disable", "codex"]);
     assert_code(&disable, 0);
@@ -334,8 +341,9 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     assert!(String::from_utf8_lossy(&final_bytes).contains("enabled = false"));
 
     let final_list = run(&machine, &["harness", "list", "--json"]);
-    assert_code(&final_list, 0);
+    assert_code(&final_list, 2);
     let final_value = json(&final_list);
+    assert_eq!(final_value["result"], "attention_required");
     assert!(
         final_value["resources"]
             .as_array()

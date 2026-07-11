@@ -2,7 +2,7 @@ use std::ffi::{OsStr, OsString};
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use skilltap_core::{
-    domain::NativeId,
+    domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, NativeId},
     runtime::{
         CommandGitRoot, PlatformPaths, ProcessEnvironment, ScopeResolver, SystemCommandRunner,
         SystemFileSystem, SystemWorkingDirectory,
@@ -12,6 +12,7 @@ use skilltap_core::{
         FileInventoryRepository, FileStateRepository,
     },
 };
+use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_profile};
 
 use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
@@ -153,23 +154,107 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
             Ok(DocumentState::Present(value)) => value,
             Err(_) => return repository_composition_error("harness list"),
         };
-        Outcome::new("harness list", ResultClass::Completed)
-            .with_resource(OutputEntry::new(
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => return repository_composition_error("harness list"),
+        };
+        let process_limits =
+            skilltap_core::runtime::ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+                .expect("bounded list process limits are valid");
+        let json_limits = skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
+            .expect("bounded list JSON limits are valid");
+        let search_path = std::env::var_os("PATH");
+        let mut outcome = Outcome::new("harness list", ResultClass::Completed);
+        for (id, kind, policy, native_root) in [
+            (
                 "codex",
-                if config.harnesses().codex.enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                },
-            ))
-            .with_resource(OutputEntry::new(
+                HarnessKind::Codex,
+                &config.harnesses().codex,
+                paths.codex_home().as_str(),
+            ),
+            (
                 "claude",
-                if config.harnesses().claude.enabled {
+                HarnessKind::Claude,
+                &config.harnesses().claude,
+                paths.claude_home().as_str(),
+            ),
+        ] {
+            let mut entry = OutputEntry::new(
+                id,
+                if policy.enabled {
                     "enabled"
                 } else {
                     "disabled"
                 },
-            ))
+            )
+            .with_field("enabled", policy.enabled)
+            .with_field("binary", policy.binary.as_str())
+            .with_field("native_root", native_root);
+            let configured = if std::path::Path::new(policy.binary.as_str()).is_absolute() {
+                AbsolutePath::new(policy.binary.as_str())
+                    .map(ConfiguredBinary::absolute)
+                    .map_err(|_| ())
+            } else {
+                NativeId::new(policy.binary.as_str())
+                    .map_err(|_| ())
+                    .and_then(|id| ConfiguredBinary::path_lookup(id).map_err(|_| ()))
+            };
+            match configured.and_then(|configured| {
+                detect_configured_installation(
+                    kind,
+                    configured,
+                    search_path.clone(),
+                    process_limits,
+                    json_limits,
+                )
+                .map_err(|_| ())
+            }) {
+                Ok(installation) => {
+                    if let HarnessReachability::Reachable { native_version, .. } =
+                        installation.reachability()
+                    {
+                        let profile = select_profile(kind, native_version);
+                        entry = entry
+                            .with_field("reachable", true)
+                            .with_field("version", native_version.as_str())
+                            .with_field(
+                                "profile_authority",
+                                match profile.authority() {
+                                    skilltap_core::domain::ProfileAuthority::VerifiedCompiled => {
+                                        "verified_compiled"
+                                    }
+                                    skilltap_core::domain::ProfileAuthority::ObserveOnly => {
+                                        "observe_only"
+                                    }
+                                },
+                            );
+                        if profile.mutation_capabilities().is_none() {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome.with_warning(
+                                crate::Warning::new(
+                                    "harness_profile_observe_only",
+                                    "The detected harness version is observable but not mutation-authorized.",
+                                )
+                                .with_context("harness", id),
+                            );
+                        }
+                    }
+                }
+                Err(_) => {
+                    entry = entry.with_field("reachable", false);
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        crate::Warning::new(
+                            "native_detection_failed",
+                            "The configured harness could not be detected.",
+                        )
+                        .with_context("harness", id),
+                    );
+                }
+            }
+            outcome = outcome.with_resource(entry);
+        }
+        outcome
     })
 }
 
