@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-unix-identity
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: [epic-rust-control-plane-runtime-maintainability-sidecar-tests]
@@ -39,3 +39,10 @@ the adversarial filesystem suite and full locked ladder.
 - Discrepancies from design: the current core baseline is 98 tests rather than
   the stale 99-test context; the exact live inventory was preserved.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. The move is private and mechanical: cfg pairs remain adjacent,
+visibility is limited to the filesystem parent, and flags, call order, error
+mapping, public exports, and the exact 98-name core inventory are unchanged.
+All 17 filesystem tests and the full locked ladder pass.
