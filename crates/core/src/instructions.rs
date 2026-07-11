@@ -1,6 +1,20 @@
 //! Pure instruction bridge health model.
 
-use crate::domain::{AbsolutePath, Fingerprint};
+use sha2::{Digest, Sha256};
+
+use crate::domain::{AbsolutePath, Fingerprint, FingerprintAlgorithm};
+
+/// Fingerprint instruction bytes using the same stable SHA-256 representation
+/// as other managed text resources.
+pub fn fingerprint_contents(contents: &[u8]) -> Fingerprint {
+    let digest = Sha256::digest(contents);
+    let hex = digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    Fingerprint::new(FingerprintAlgorithm::Sha256, hex)
+        .expect("SHA-256 digest always has the required length")
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstructionPaths {

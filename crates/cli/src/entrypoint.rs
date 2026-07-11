@@ -136,12 +136,14 @@ where
             OutputChannel::Stdout,
         ),
         Dispatch::InstructionSetup(args) => (
-            execute_system_lifecycle_preview(
+            execute_system_instruction_setup(
                 "instructions setup",
                 &args.scope,
                 &crate::command::TargetArgs::default(),
                 None,
                 None,
+                args.mode,
+                args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
@@ -189,6 +191,7 @@ fn execute_system_instruction_status(args: &ScopedOutputArgs) -> Outcome {
     })
 }
 
+#[allow(dead_code)]
 fn execute_system_lifecycle_preview(
     command: &'static str,
     scope: &crate::command::ScopeArgs,
@@ -217,6 +220,20 @@ fn execute_system_skill_install(
             ));
         };
         application.execute_skill_install(command, scope, target, source, name, acknowledged)
+    })
+}
+
+fn execute_system_instruction_setup(
+    command: &'static str,
+    scope: &crate::command::ScopeArgs,
+    _target: &crate::command::TargetArgs,
+    _source: Option<&str>,
+    _name: Option<&str>,
+    mode: Option<skilltap_core::storage::ClaudeInstructionMode>,
+    acknowledged: bool,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        application.execute_instruction_setup(command, scope, mode, acknowledged)
     })
 }
 

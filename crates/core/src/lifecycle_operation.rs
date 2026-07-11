@@ -71,6 +71,19 @@ pub fn faithful_file_operation(
     action: OperationAction,
     path: crate::domain::AbsolutePath,
 ) -> Result<Operation, crate::domain::OperationContractError> {
+    faithful_file_operation_with_dependencies(id, target, resource, action, path, [])
+}
+
+/// Variant of [`faithful_file_operation`] that declares exact operation
+/// dependencies for multi-file setup workflows.
+pub fn faithful_file_operation_with_dependencies(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    path: crate::domain::AbsolutePath,
+    dependencies: impl IntoIterator<Item = crate::domain::OperationDependency>,
+) -> Result<Operation, crate::domain::OperationContractError> {
     let compatibility = CompatibilityResult::new(
         target.clone(),
         CompatibilityClass::Compatible,
@@ -98,7 +111,7 @@ pub fn faithful_file_operation(
         semantics,
         OperationClass::SafeFaithfulEquivalent,
         Reversibility::Reversible,
-        [],
+        dependencies,
         AcknowledgmentRequirement::not_required(),
         None,
     )

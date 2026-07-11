@@ -516,6 +516,39 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
 }
 
 #[test]
+fn instruction_setup_creates_canonical_global_file_and_bridges() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+
+    let output = run(&machine, &["instructions", "setup", "--json"]);
+    assert_code(&output, 0);
+    assert_eq!(json(&output)["result"], "completed");
+    assert!(machine.home().join("AGENTS.md").is_file());
+    assert_eq!(
+        fs::read_link(machine.home().join(".codex/AGENTS.md")).unwrap(),
+        PathBuf::from("../AGENTS.md")
+    );
+    assert_eq!(
+        fs::read_link(machine.home().join(".claude/CLAUDE.md")).unwrap(),
+        PathBuf::from("../AGENTS.md")
+    );
+    assert!(
+        fs::read_to_string(config_root(&machine).join("inventory.toml"))
+            .unwrap()
+            .contains("instructions:global")
+    );
+    assert!(
+        fs::read_to_string(config_root(&machine).join("state.json"))
+            .unwrap()
+            .contains("instructions:")
+    );
+
+    let repeat = run(&machine, &["instructions", "setup", "--json"]);
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+}
+
+#[test]
 fn bare_invocation_prints_concise_help_and_fails_as_input() {
     let machine = machine();
     let output = run(&machine, &[]);

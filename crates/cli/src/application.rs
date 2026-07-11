@@ -20,20 +20,21 @@ use skilltap_core::{
         ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
     executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
+    instructions::fingerprint_contents,
     lifecycle_operation::native_operation,
     reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
         DirectoryTreeFileSystem, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
-        JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits, ScopeRequest, ScopeResolver,
-        SystemConfigurationLock, SystemExternalTreeObserver, SystemFileSystem, WorkingDirectory,
-        resolve_targets,
+        FileKind, FileSystem, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
+        RelativeSymlinkTarget, ScopeRequest, ScopeResolver, SystemConfigurationLock,
+        SystemExternalTreeObserver, SystemFileSystem, WorkingDirectory, resolve_targets,
     },
     skill::ValidatedSkillTree,
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
     storage::{
-        ArtifactTree, ConfigDocument, ConfigRepository, DocumentState, InventoryDocument,
-        InventoryRepository, ResourceState, StateDocument, StateRepository, StorageError,
-        StorageFailure, Timestamp,
+        ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DocumentState,
+        InventoryDocument, InventoryRepository, ResourceState, StateDocument, StateRepository,
+        StorageError, StorageFailure, Timestamp,
     },
 };
 use skilltap_harnesses::{
@@ -307,6 +308,116 @@ fn managed_skill_apply_failure(detail: &'static str) -> ExecutionError {
     ))
 }
 
+enum InstructionWrite {
+    Canonical,
+    Symlink { target: RelativeSymlinkTarget },
+    Import { contents: Vec<u8> },
+}
+
+struct InstructionPort<'a> {
+    filesystem: &'a dyn FileSystem,
+    entries: BTreeMap<OperationId, InstructionEntry>,
+}
+
+struct InstructionEntry {
+    path: AbsolutePath,
+    write: InstructionWrite,
+}
+
+impl ExecutionPort for InstructionPort<'_> {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        for (_, operation) in plan.iter() {
+            if operation.action() != OperationAction::InstructionSetup {
+                continue;
+            }
+            let Some(entry) = self.entries.get(operation.id()) else {
+                return Err(ExecutionError::revalidation(
+                    skilltap_core::domain::EvidenceCode::new("instructions.request_missing")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The instruction adapter did not receive a request for a planned operation.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            };
+            if !operation
+                .affected_surfaces()
+                .iter()
+                .any(|surface| surface.path() == Some(&entry.path))
+            {
+                return Err(ExecutionError::revalidation(
+                    skilltap_core::domain::EvidenceCode::new("instructions.surface_mismatch")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The instruction destination no longer matches the validated operation.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply(
+        &self,
+        operation: &skilltap_core::domain::Operation,
+    ) -> Result<OperationOutcome, ExecutionError> {
+        let Some(entry) = self.entries.get(operation.id()) else {
+            return Err(ExecutionError::revalidation(
+                skilltap_core::domain::EvidenceCode::new("instructions.request_missing")
+                    .expect("static evidence code is valid"),
+                skilltap_core::domain::EvidenceDetail::new(
+                    "The instruction adapter did not receive a request for a planned operation.",
+                )
+                .expect("static evidence detail is valid"),
+            ));
+        };
+        let parent = entry
+            .path
+            .as_str()
+            .rsplit_once('/')
+            .map(|(parent, _)| parent)
+            .and_then(|parent| AbsolutePath::new(parent).ok())
+            .ok_or_else(|| instruction_apply_failure("The instruction parent path is invalid."))?;
+        self.filesystem.create_directory_all(&parent).map_err(|_| {
+            instruction_apply_failure("The instruction parent directory could not be created.")
+        })?;
+        match &entry.write {
+            InstructionWrite::Canonical => {
+                self.filesystem
+                    .atomic_write(&entry.path, &[])
+                    .map_err(|_| {
+                        instruction_apply_failure(
+                            "The canonical instruction file could not be created.",
+                        )
+                    })?
+            }
+            InstructionWrite::Symlink { target } => self
+                .filesystem
+                .create_relative_symlink(target, &entry.path)
+                .map_err(|_| {
+                    instruction_apply_failure("The instruction bridge could not be created.")
+                })?,
+            InstructionWrite::Import { contents } => self
+                .filesystem
+                .atomic_write(&entry.path, contents)
+                .map_err(|_| {
+                    instruction_apply_failure("The instruction import bridge could not be created.")
+                })?,
+        }
+        Ok(OperationOutcome::Applied)
+    }
+}
+
+fn instruction_apply_failure(detail: &'static str) -> ExecutionError {
+    ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
+        skilltap_core::domain::EvidenceCode::new("instructions.publish_failed")
+            .expect("static evidence code is valid"),
+        skilltap_core::domain::EvidenceDetail::new(detail)
+            .expect("static evidence detail is valid"),
+    ))
+}
+
 impl StatusApplication<'_> {
     /// Build a fresh, adapter-neutral reconciliation plan from the current
     /// documents and bounded native observation. Lifecycle adapters add
@@ -445,6 +556,7 @@ impl StatusApplication<'_> {
     /// Render a deterministic lifecycle preview while the resource-specific
     /// mutation adapter is unavailable. This keeps command output useful and
     /// safe: it never claims a native action happened and never mutates state.
+    #[allow(dead_code)]
     pub(crate) fn execute_lifecycle_preview(
         &self,
         command: &'static str,
@@ -785,6 +897,13 @@ impl StatusApplication<'_> {
             ));
         }
         if operations.is_empty() {
+            if let Err(()) = seed_state_if_missing(self.state, &seeds) {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_seed_publish_failed",
+                    "The native lifecycle state could not be recorded safely.",
+                ));
+            }
             if outcome.errors.is_empty() && outcome.warnings.is_empty() {
                 outcome.result = ResultClass::Completed;
             }
@@ -1241,6 +1360,13 @@ impl StatusApplication<'_> {
             ));
         }
         if operations.is_empty() {
+            if let Err(()) = seed_state_if_missing(self.state, &seeds) {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_seed_publish_failed",
+                    "The standalone skill state could not be recorded safely.",
+                ));
+            }
             if outcome.errors.is_empty() && outcome.warnings.is_empty() {
                 outcome.result = ResultClass::Completed;
             }
@@ -1261,6 +1387,401 @@ impl StatusApplication<'_> {
         };
         let filesystem = SystemFileSystem;
         let port = ManagedSkillPort {
+            filesystem: &filesystem,
+            entries,
+        };
+        let journal = StateExecutionJournal {
+            plan: &plan,
+            state: self.state,
+            seeds,
+        };
+        let lock_path = match AbsolutePath::new(format!(
+            "{}/skilltap.lock",
+            paths.skilltap_config().as_str()
+        )) {
+            Ok(path) => path,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "lock_path_invalid",
+                    "The skilltap configuration lock path is invalid.",
+                ));
+            }
+        };
+        let report =
+            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
+                Ok(report) => report,
+                Err(error) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(native_execution_error(&error));
+                }
+            };
+        for result in report.result.operations().values() {
+            outcome = outcome.with_operation(crate::OperationOutcome::new(
+                result.operation_id().to_string(),
+                operation_result_status(result.outcome()),
+            ));
+            if !matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            ) {
+                outcome.result = ResultClass::AttentionRequired;
+            }
+        }
+        if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
+            outcome.result = ResultClass::Completed;
+        }
+        outcome
+            .with_summary("operations", report.result.operations().len() as u64)
+            .with_summary("changed", report.changed)
+    }
+
+    pub(crate) fn execute_instruction_setup(
+        &self,
+        command: &'static str,
+        requested_scope: &ScopeArgs,
+        mode: Option<ClaudeInstructionMode>,
+        acknowledged: bool,
+    ) -> Outcome {
+        let (documents, mut outcome) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
+        };
+        let status_args = StatusArgs {
+            target: TargetArgs::default(),
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let enabled = enabled_harnesses(&documents.config);
+        if enabled.is_empty() {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_error(ErrorDetail::new(
+                "no_enabled_harnesses",
+                "No harness is enabled in skilltap configuration.",
+            ));
+        }
+        let mode = mode.unwrap_or(documents.config.instructions().claude_mode);
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "platform_paths_unavailable",
+                    "The skilltap configuration paths could not be resolved.",
+                ));
+            }
+        };
+        let filesystem = SystemFileSystem;
+        let mut inventory = documents.inventory.clone().unwrap_or_else(|| {
+            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                .expect("empty inventory is valid")
+        });
+        let mut operations = Vec::new();
+        let mut entries = BTreeMap::new();
+        let mut seeds = BTreeMap::new();
+        let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
+            Ok(timestamp) => timestamp,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "clock_unavailable",
+                    "The instruction operation timestamp could not be recorded safely.",
+                ));
+            }
+        };
+        for concrete_scope in &scope.resolved {
+            let (canonical, bridges) = instruction_locations(&paths, concrete_scope, &enabled);
+            let canonical_id = instruction_operation_id(concrete_scope, "canonical", "root");
+            let canonical_resource =
+                match instruction_resource_key(concrete_scope, "canonical", "root") {
+                    Some(key) => key,
+                    None => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "instruction_resource_invalid",
+                            "The instruction resource identifier could not be represented safely.",
+                        ));
+                    }
+                };
+            let canonical_missing = match filesystem.inspect(&canonical) {
+                Ok(metadata) => match metadata.kind() {
+                    FileKind::Missing => true,
+                    FileKind::RegularFile => false,
+                    _ => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome.with_warning(Warning::new(
+                            "instruction_canonical_conflict",
+                            "The canonical AGENTS.md path is not a regular file; no change was made.",
+                        ));
+                        false
+                    }
+                },
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(Warning::new(
+                        "instruction_canonical_unreadable",
+                        "The canonical AGENTS.md path could not be inspected safely.",
+                    ));
+                    false
+                }
+            };
+            let mut canonical_dependency = None;
+            if canonical_missing {
+                let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
+                    canonical_id.clone(),
+                    enabled.first().expect("enabled set is non-empty").clone(),
+                    canonical_resource.clone(),
+                    OperationAction::InstructionSetup,
+                    canonical.clone(),
+                ) {
+                    Ok(operation) => operation,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "operation_contract_invalid",
+                            "The canonical instruction operation was invalid.",
+                        ));
+                    }
+                };
+                operations.push(operation);
+                entries.insert(
+                    canonical_id.clone(),
+                    InstructionEntry {
+                        path: canonical.clone(),
+                        write: InstructionWrite::Canonical,
+                    },
+                );
+                canonical_dependency = Some(canonical_id);
+            }
+            let canonical_desired = instruction_desired_resource(
+                canonical_resource.clone(),
+                enabled.first().expect("enabled set is non-empty").clone(),
+            );
+            inventory = match inventory.with_resource(canonical_desired) {
+                Ok(inventory) => inventory,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_resource_conflict",
+                        "The canonical instruction resource conflicts with desired state.",
+                    ));
+                }
+            };
+            let canonical_state = ResourceState::new(
+                canonical_resource,
+                BTreeMap::from([(
+                    enabled.first().expect("enabled set is non-empty").clone(),
+                    NativeId::new(canonical.as_str()).expect("absolute path is valid native id"),
+                )]),
+                Provenance::Direct,
+                Ownership::Skilltap,
+                None,
+                None,
+                Some(fingerprint_contents(&[])),
+                None,
+                None,
+                timestamp,
+                None,
+            )
+            .map_err(|_| ())
+            .ok();
+            if let Some(state) = canonical_state {
+                seeds.insert(state.key().clone(), state);
+            }
+
+            for (target, bridge) in bridges {
+                let expected_symlink = match concrete_scope {
+                    Scope::Global => RelativeSymlinkTarget::new("../AGENTS.md"),
+                    Scope::Project(_) => RelativeSymlinkTarget::new("AGENTS.md"),
+                };
+                let (write, expected_bytes) = match mode {
+                    ClaudeInstructionMode::Symlink => (
+                        InstructionWrite::Symlink {
+                            target: expected_symlink.clone().expect("static link target valid"),
+                        },
+                        Vec::new(),
+                    ),
+                    ClaudeInstructionMode::Import => {
+                        let bytes = match concrete_scope {
+                            Scope::Global => b"@~/AGENTS.md\n".to_vec(),
+                            Scope::Project(_) => b"@AGENTS.md\n".to_vec(),
+                        };
+                        (
+                            InstructionWrite::Import {
+                                contents: bytes.clone(),
+                            },
+                            bytes,
+                        )
+                    }
+                };
+                let bridge_health = match filesystem.inspect(&bridge) {
+                    Ok(metadata) => match metadata.kind() {
+                        FileKind::Missing => InstructionBridgeHealth::Missing,
+                        FileKind::Symlink => {
+                            if mode == ClaudeInstructionMode::Symlink
+                                && metadata.link_target()
+                                    == expected_symlink.as_ref().ok().map(|value| value.as_path())
+                            {
+                                InstructionBridgeHealth::Managed
+                            } else {
+                                InstructionBridgeHealth::Conflict
+                            }
+                        }
+                        FileKind::RegularFile => {
+                            if mode == ClaudeInstructionMode::Import
+                                && filesystem.read(&bridge).ok().as_deref()
+                                    == Some(expected_bytes.as_slice())
+                            {
+                                InstructionBridgeHealth::Managed
+                            } else {
+                                InstructionBridgeHealth::Conflict
+                            }
+                        }
+                        _ => InstructionBridgeHealth::Conflict,
+                    },
+                    Err(_) => InstructionBridgeHealth::Conflict,
+                };
+                let bridge_resource =
+                    match instruction_resource_key(concrete_scope, "bridge", target.as_str()) {
+                        Some(key) => key,
+                        None => continue,
+                    };
+                let desired = instruction_desired_resource(bridge_resource.clone(), target.clone());
+                inventory = match inventory.with_resource(desired) {
+                    Ok(inventory) => inventory,
+                    Err(_) => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        return outcome.with_error(ErrorDetail::new(
+                            "inventory_resource_conflict",
+                            "The instruction bridge conflicts with desired state.",
+                        ));
+                    }
+                };
+                let observed_bytes = match &write {
+                    InstructionWrite::Import { contents } => contents.clone(),
+                    InstructionWrite::Canonical | InstructionWrite::Symlink { .. } => Vec::new(),
+                };
+                let bridge_state = ResourceState::new(
+                    bridge_resource.clone(),
+                    BTreeMap::from([(
+                        target.clone(),
+                        NativeId::new(bridge.as_str()).expect("absolute path is valid native id"),
+                    )]),
+                    Provenance::Direct,
+                    Ownership::Skilltap,
+                    None,
+                    None,
+                    Some(fingerprint_contents(&observed_bytes)),
+                    None,
+                    None,
+                    timestamp,
+                    None,
+                )
+                .map_err(|_| ())
+                .ok();
+                if let Some(state) = bridge_state {
+                    seeds.insert(state.key().clone(), state);
+                }
+                if bridge_health == InstructionBridgeHealth::Managed {
+                    outcome = outcome.with_operation(crate::OperationOutcome::new(
+                        format!("instruction:{}:{}", target, scope_label(concrete_scope)),
+                        "no_change",
+                    ));
+                    continue;
+                }
+                if bridge_health == InstructionBridgeHealth::Conflict {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "instruction_bridge_conflict",
+                            if acknowledged {
+                                "The bridge differs from the managed form; replacement remains blocked pending backup composition."
+                            } else {
+                                "The bridge contains existing content; setup requires an explicit repair plan."
+                            },
+                        )
+                        .with_context("target", target.as_str()),
+                    );
+                    continue;
+                }
+                let operation_id =
+                    instruction_operation_id(concrete_scope, "bridge", target.as_str());
+                let operation = match skilltap_core::lifecycle_operation::faithful_file_operation_with_dependencies(
+                    operation_id.clone(),
+                    target.clone(),
+                    bridge_resource,
+                    OperationAction::InstructionSetup,
+                    bridge.clone(),
+                    canonical_dependency
+                        .clone()
+                        .into_iter()
+                        .map(skilltap_core::domain::OperationDependency::new),
+                ) {
+                    Ok(operation) => operation,
+                    Err(_) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "operation_contract_invalid",
+                            "The instruction bridge operation was invalid.",
+                        ));
+                    }
+                };
+                operations.push(operation);
+                entries.insert(
+                    operation_id,
+                    InstructionEntry {
+                        path: bridge.clone(),
+                        write,
+                    },
+                );
+            }
+        }
+        let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
+            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                .expect("empty inventory is valid")
+        });
+        if inventory != empty_inventory && self.inventory.replace(&inventory).is_err() {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "inventory_publish_failed",
+                "The instruction inventory could not be published safely.",
+            ));
+        }
+        if operations.is_empty() {
+            if let Err(()) = seed_state_if_missing(self.state, &seeds) {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_seed_publish_failed",
+                    "The instruction state could not be recorded safely.",
+                ));
+            }
+            if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+                outcome.result = ResultClass::Completed;
+            }
+            let operation_count = outcome.operations.len() as u64;
+            return outcome
+                .with_summary("operations", operation_count)
+                .with_summary("changed", false);
+        }
+        let plan = match Plan::new(operations) {
+            Ok(plan) => plan,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "operation_plan_invalid",
+                    "The instruction operation plan was invalid.",
+                ));
+            }
+        };
+        let port = InstructionPort {
             filesystem: &filesystem,
             entries,
         };
@@ -1700,6 +2221,100 @@ fn skill_relative_destination(
     skilltap_core::domain::RelativeArtifactPath::new(format!("skills/{}", name.as_str())).ok()
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InstructionBridgeHealth {
+    Missing,
+    Managed,
+    Conflict,
+}
+
+fn instruction_locations(
+    paths: &PlatformPaths,
+    scope: &Scope,
+    enabled: &[HarnessId],
+) -> (AbsolutePath, Vec<(HarnessId, AbsolutePath)>) {
+    match scope {
+        Scope::Global => {
+            let canonical = paths.global_agents().clone();
+            let mut bridges = Vec::new();
+            if enabled.iter().any(|target| target.as_str() == "codex") {
+                bridges.push((
+                    HarnessId::new("codex").expect("known harness id is valid"),
+                    AbsolutePath::new(format!("{}/AGENTS.md", paths.codex_home().as_str()))
+                        .expect("codex bridge path is valid"),
+                ));
+            }
+            if enabled.iter().any(|target| target.as_str() == "claude") {
+                bridges.push((
+                    HarnessId::new("claude").expect("known harness id is valid"),
+                    AbsolutePath::new(format!("{}/CLAUDE.md", paths.claude_home().as_str()))
+                        .expect("claude bridge path is valid"),
+                ));
+            }
+            (canonical, bridges)
+        }
+        Scope::Project(project) => {
+            let canonical = AbsolutePath::new(format!("{}/AGENTS.md", project.as_str()))
+                .expect("project canonical path is valid");
+            let bridges = if enabled.iter().any(|target| target.as_str() == "claude") {
+                vec![(
+                    HarnessId::new("claude").expect("known harness id is valid"),
+                    AbsolutePath::new(format!("{}/CLAUDE.md", project.as_str()))
+                        .expect("project Claude bridge path is valid"),
+                )]
+            } else {
+                Vec::new()
+            };
+            (canonical, bridges)
+        }
+    }
+}
+
+fn instruction_resource_key(scope: &Scope, role: &str, target: &str) -> Option<ResourceKey> {
+    let scope_label = match scope {
+        Scope::Global => "global".to_owned(),
+        Scope::Project(path) => {
+            let mut hash = 0xcbf29ce484222325_u64;
+            for byte in path.as_str().bytes() {
+                hash ^= u64::from(byte);
+                hash = hash.wrapping_mul(0x100000001b3);
+            }
+            format!("project-{hash:016x}")
+        }
+    };
+    ResourceId::new(format!("instructions:{scope_label}:{role}:{target}"))
+        .ok()
+        .map(|id| ResourceKey::new(id, scope.clone()))
+}
+
+fn instruction_operation_id(scope: &Scope, role: &str, target: &str) -> OperationId {
+    let resource = instruction_resource_key(scope, role, target)
+        .expect("instruction resource identity is valid");
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in resource.id().as_str().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    OperationId::new(format!("instructions:{hash:016x}"))
+        .expect("instruction operation id is valid")
+}
+
+fn instruction_desired_resource(resource: ResourceKey, target: HarnessId) -> DesiredResource {
+    DesiredResource::new(
+        resource,
+        ResourceKind::InstructionLocation,
+        HarnessSet::new([target]).expect("instruction target set is non-empty"),
+        DesiredOrigin::Direct,
+        None,
+        UpdateIntent::Pinned,
+        ComponentGraph::new([]).expect("empty component graph is valid"),
+        BTreeMap::new(),
+        BTreeMap::new(),
+        BTreeSet::new(),
+    )
+    .expect("instruction desired resource is valid")
+}
+
 fn skill_destination(
     paths: &PlatformPaths,
     scope: &Scope,
@@ -2004,6 +2619,34 @@ fn native_execution_error(error: &ExecutionError) -> ErrorDetail {
         ),
     };
     ErrorDetail::new(code, summary)
+}
+
+fn seed_state_if_missing(
+    repository: &dyn StateRepository,
+    seeds: &BTreeMap<ResourceKey, ResourceState>,
+) -> Result<(), ()> {
+    if seeds.is_empty() {
+        return Ok(());
+    }
+    let mut document = match repository.load().map_err(|_| ())? {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => StateDocument::new(
+            skilltap_core::storage::STATE_SCHEMA_VERSION,
+            [],
+            [],
+            None,
+            None,
+            None,
+        )
+        .map_err(|_| ())?,
+    };
+    for (key, seed) in seeds {
+        if document.resources().contains_key(key) {
+            continue;
+        }
+        document = document.with_resource_state(seed.clone()).map_err(|_| ())?;
+    }
+    repository.replace(&document).map_err(|_| ())
 }
 
 fn first_use_harness_report(
