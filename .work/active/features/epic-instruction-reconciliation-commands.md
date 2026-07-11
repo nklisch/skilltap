@@ -1,7 +1,7 @@
 ---
 id: epic-instruction-reconciliation-commands
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-instruction-reconciliation
 depends_on: [epic-instruction-reconciliation-repair]
