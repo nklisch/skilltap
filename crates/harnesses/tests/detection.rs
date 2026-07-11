@@ -9,8 +9,8 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    DetectionError, HarnessKind, ProbeError, detect_installation, probe_profile, select_profile,
-    unreachable_installation,
+    CodexConfigError, DetectionError, HarnessKind, ProbeError, detect_installation,
+    observe_codex_config, probe_profile, select_profile, unreachable_installation,
 };
 use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
 
@@ -237,5 +237,24 @@ fn codex_paths_preserve_global_and_project_instruction_inputs() {
     assert_eq!(
         inputs.project_override.as_ref().unwrap().as_str(),
         "/workspace/project/AGENTS.override.md"
+    );
+}
+
+#[test]
+fn codex_config_observation_is_bounded_unknown_field_tolerant_and_redacted() {
+    let observed = observe_codex_config(
+        br#"marketplaces = ["secret-marketplace"]
+plugins = ["one"]
+trust = true
+"#,
+    )
+    .unwrap();
+    assert_eq!(observed.marketplace_count, 1);
+    assert_eq!(observed.plugin_count, 1);
+    assert!(observed.trust_policy_present);
+    assert!(!format!("{observed:?}").contains("example.invalid"));
+    assert_eq!(
+        observe_codex_config(b"not = [valid"),
+        Err(CodexConfigError::Malformed)
     );
 }

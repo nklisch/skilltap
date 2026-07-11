@@ -8,6 +8,7 @@ repository.workspace = true
 [dependencies]
 skilltap-core.workspace = true
 serde_json.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 skilltap-test-support.workspace = true

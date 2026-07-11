@@ -146,6 +146,53 @@ pub fn codex_observation_paths(
     })
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct CodexConfigObservation {
+    pub marketplace_count: usize,
+    pub plugin_count: usize,
+    pub trust_policy_present: bool,
+}
+
+impl std::fmt::Debug for CodexConfigObservation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("CodexConfigObservation")
+            .field("marketplace_count", &self.marketplace_count)
+            .field("plugin_count", &self.plugin_count)
+            .field("trust_policy_present", &self.trust_policy_present)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CodexConfigError {
+    Malformed,
+    UnsupportedShape,
+}
+
+/// Parses documented Codex config evidence while preserving unknown fields by
+/// counting only known tables/arrays and never returning raw native values.
+pub fn observe_codex_config(input: &[u8]) -> Result<CodexConfigObservation, CodexConfigError> {
+    let source = std::str::from_utf8(input).map_err(|_| CodexConfigError::Malformed)?;
+    let value = toml::from_str::<toml::Value>(source).map_err(|_| CodexConfigError::Malformed)?;
+    let table = value.as_table().ok_or(CodexConfigError::UnsupportedShape)?;
+    let marketplace_count = table.get("marketplaces").map_or(0, |value| {
+        value
+            .as_table()
+            .map_or_else(|| value.as_array().map_or(0, Vec::len), toml::map::Map::len)
+    });
+    let plugin_count = table
+        .get("plugins")
+        .and_then(toml::Value::as_array)
+        .map_or(0, Vec::len);
+    let trust_policy_present = table.get("trust").is_some();
+    Ok(CodexConfigObservation {
+        marketplace_count,
+        plugin_count,
+        trust_policy_present,
+    })
+}
+
 fn absolute_child(
     root: &skilltap_core::domain::AbsolutePath,
     child: &str,

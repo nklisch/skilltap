@@ -322,6 +322,7 @@ dependencies = [
  "serde_json",
  "skilltap-core",
  "skilltap-test-support",
+ "toml",
 ]
 
 [[package]]
