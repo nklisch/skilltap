@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-maintainability-dependency-graphs
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-domain-maintainability
 depends_on: [epic-rust-control-plane-domain-maintainability-validated-newtypes]
@@ -32,3 +32,15 @@ cycles. Export no generic graph API; run the full locked workspace ladder.
 - Verification: locked workspace format, all-target check, Clippy with warnings denied, tests, and
   rustdoc with warnings denied all pass (58 core tests).
 - Adjacent issues parked: none.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Private shared primitives preserve validation order, resource-family
+first-cycle diagnostics, and operation all-cycle diagnostics. Added equivalence
+tests pass with the locked 58-test suite and rustdoc; fast-lane advance.
