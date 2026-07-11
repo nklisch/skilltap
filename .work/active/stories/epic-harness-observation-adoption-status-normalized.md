@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status-normalized
 kind: story
-stage: review
+stage: done
 tags: [cli,infra]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-integration]
@@ -71,3 +71,7 @@ The focused canonical-root test verifies that unrelated home files are not
 observed and that named roots remain deterministic. Full status integration
 coverage verifies sibling partial failure, typed output, and native-tree
 read-only behavior.
+
+## Review
+
+Verdict: Approve - story verified by implement; fast-lane advance.

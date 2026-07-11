@@ -340,6 +340,7 @@ fn observe_named_roots(
     limits: skilltap_core::runtime::ExternalTreeLimits,
 ) -> Result<Vec<CanonicalObservation>, ObservationRuntimeError> {
     let mut observed = Vec::new();
+    let mut aggregate_entries = 0_u64;
     for (name, root) in roots
         .into_iter()
         .filter_map(|(name, root)| root.map(|root| (name, root)))
@@ -347,10 +348,18 @@ fn observe_named_roots(
         match SystemExternalTreeObserver.observe(&skilltap_core::runtime::ExternalTreeRequest::new(
             root, limits,
         )) {
-            Ok(snapshot) => observed.push(CanonicalObservation {
-                root: name.to_owned(),
-                snapshot,
-            }),
+            Ok(snapshot) => {
+                aggregate_entries = aggregate_entries
+                    .checked_add(snapshot.entries().len() as u64)
+                    .ok_or(ObservationRuntimeError::TreeEntryLimitExceeded)?;
+                if aggregate_entries > limits.entries() {
+                    return Err(ObservationRuntimeError::TreeEntryLimitExceeded);
+                }
+                observed.push(CanonicalObservation {
+                    root: name.to_owned(),
+                    snapshot,
+                });
+            }
             Err(ObservationRuntimeError::TreeRootUnavailable) => {}
             Err(error) => return Err(error),
         }
