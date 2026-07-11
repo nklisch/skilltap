@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset
 kind: feature
-stage: implementing
+stage: review
 tags: [infra, cleanup]
 parent: epic-rust-control-plane
 depends_on: []
@@ -235,3 +235,12 @@ native contracts when a foundation link suffices.
 - The destructive story deletes most of the repository. Its acceptance search
   and explicit preservation list are the guard against removing research,
   substrate, or distribution assets needed by later stories.
+
+## Implementation summary (2026-07-11)
+
+Children complete. The repository now has the pinned four-crate Rust workspace,
+Rust-native CI and release workflows, aligned installer/Homebrew distribution,
+and an isolated Node/npm VitePress site containing only the v3 control-plane
+model. All four child stories are done and the integrated quality, binary,
+shell, workflow, Ruby, website-build, installer-equality, and stale-surface
+checks pass.
