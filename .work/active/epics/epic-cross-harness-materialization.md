@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization
 kind: epic
-stage: drafting
+stage: implementing
 tags: []
 parent: null
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle]
@@ -61,6 +61,14 @@ write surfaces.
 - Partial plans, required-component blocking, and selector acknowledgments
 
 <!-- The design pass on each child feature will fill in real specifics. -->
+
+## Decomposition note
+
+Decomposition pre-existed — 5 child features, listed below. The capability
+boundaries are coherent: the graph establishes source identity and dependency
+truth, compatibility consumes that graph, component materialization follows
+classification, and publication is last so managed ownership is applied only
+after target projections are known.
 
 ## Decomposition
 
