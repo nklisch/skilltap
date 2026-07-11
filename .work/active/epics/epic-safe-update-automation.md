@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation
 kind: epic
-stage: drafting
+stage: implementing
 tags: [infra]
 parent: null
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle, epic-cross-harness-materialization]
@@ -84,3 +84,11 @@ materialization contract.
 5. `epic-safe-update-automation-diagnostics` — daemon status, contention,
    recovery, logs, and idempotent lifecycle commands — depends on
    `[epic-safe-update-automation-service]`.
+
+## Decomposition note
+
+Decomposition pre-existed — five child features already define the dependency
+chain from revision resolution through policy, foreground application, service
+integration, and diagnostics. The ordering is coherent because no automatic
+update can be classified before a concrete upstream revision is resolved, and
+daemon behavior must reuse the foreground safety boundary.
