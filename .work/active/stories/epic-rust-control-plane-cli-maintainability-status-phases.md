@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-maintainability-status-phases
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-cli-maintainability
 depends_on: []
@@ -43,3 +43,9 @@ run the locked/binary ladders.
   module with existing focused and binary-level coverage.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Typed private phases preserve document/resource/error ordering,
+scope-before-target sequencing, early returns, output bytes, exits, and effects
+while leaving the crate-visible application boundary unchanged.
