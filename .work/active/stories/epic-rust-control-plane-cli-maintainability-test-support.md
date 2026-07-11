@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-maintainability-test-support
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-cli-maintainability
 depends_on: []
@@ -42,3 +42,9 @@ after its compiled-suite assertion remains. Run the locked and binary ladders.
   compiled contract against the optimized binary all pass.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. Test support now owns domain-agnostic process/environment isolation,
+binary override resolution, and captured bytes; all compiled/application
+contracts remain, with only the explicitly redundant bare test removed.
