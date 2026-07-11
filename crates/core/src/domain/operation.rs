@@ -8,9 +8,191 @@ use std::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{
-    ComponentId, EvidenceCode, EvidenceDetail, HarnessId, MaterialConsequence, OperationId,
-    ResourceId,
+    AbsolutePath, CompatibilityResult, ComponentId, ConsequenceCode, EvidenceCode, EvidenceDetail,
+    HarnessId, MaterialConsequence, NativeId, OperationId, Provenance, ResourceId, Scope,
 };
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OperationAction {
+    MarketplaceRegister,
+    MarketplaceRemove,
+    MarketplaceUpdate,
+    PluginInstall,
+    PluginRemove,
+    PluginEnable,
+    PluginDisable,
+    PluginUpdate,
+    SkillInstall,
+    SkillRemove,
+    SkillUpdate,
+    Materialize,
+    InstructionSetup,
+    InstructionRepair,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperationReason {
+    code: EvidenceCode,
+    detail: EvidenceDetail,
+}
+
+impl OperationReason {
+    pub fn new(code: EvidenceCode, detail: EvidenceDetail) -> Self {
+        Self { code, detail }
+    }
+
+    pub fn code(&self) -> &EvidenceCode {
+        &self.code
+    }
+
+    pub fn detail(&self) -> &EvidenceDetail {
+        &self.detail
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum CommandArgument {
+    Literal { value: NativeId },
+    Redacted {},
+}
+
+impl CommandArgument {
+    pub fn literal(value: NativeId) -> Self {
+        Self::Literal { value }
+    }
+
+    pub const fn redacted() -> Self {
+        Self::Redacted {}
+    }
+
+    pub fn literal_value(&self) -> Option<&NativeId> {
+        match self {
+            Self::Literal { value } => Some(value),
+            Self::Redacted {} => None,
+        }
+    }
+
+    pub const fn is_redacted(&self) -> bool {
+        matches!(self, Self::Redacted {})
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum AffectedSurface {
+    File {
+        path: AbsolutePath,
+    },
+    NativeCommand {
+        target: HarnessId,
+        executable: NativeId,
+        arguments: Vec<CommandArgument>,
+    },
+}
+
+impl AffectedSurface {
+    pub const fn file(path: AbsolutePath) -> Self {
+        Self::File { path }
+    }
+
+    pub fn native_command(
+        target: HarnessId,
+        executable: NativeId,
+        arguments: impl IntoIterator<Item = CommandArgument>,
+    ) -> Self {
+        Self::NativeCommand {
+            target,
+            executable,
+            arguments: arguments.into_iter().collect(),
+        }
+    }
+
+    pub const fn path(&self) -> Option<&AbsolutePath> {
+        match self {
+            Self::File { path } => Some(path),
+            Self::NativeCommand { .. } => None,
+        }
+    }
+
+    pub const fn target(&self) -> Option<&HarnessId> {
+        match self {
+            Self::File { .. } => None,
+            Self::NativeCommand { target, .. } => Some(target),
+        }
+    }
+
+    pub const fn executable(&self) -> Option<&NativeId> {
+        match self {
+            Self::File { .. } => None,
+            Self::NativeCommand { executable, .. } => Some(executable),
+        }
+    }
+
+    pub fn arguments(&self) -> Option<&[CommandArgument]> {
+        match self {
+            Self::File { .. } => None,
+            Self::NativeCommand { arguments, .. } => Some(arguments),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct OperationSemantics {
+    action: OperationAction,
+    scope: Scope,
+    reason: OperationReason,
+    compatibility: CompatibilityResult,
+    provenance: Provenance,
+    affected_surfaces: BTreeSet<AffectedSurface>,
+}
+
+impl OperationSemantics {
+    pub fn new(
+        action: OperationAction,
+        scope: Scope,
+        reason: OperationReason,
+        compatibility: CompatibilityResult,
+        provenance: Provenance,
+        affected_surfaces: impl IntoIterator<Item = AffectedSurface>,
+    ) -> Self {
+        Self {
+            action,
+            scope,
+            reason,
+            compatibility,
+            provenance,
+            affected_surfaces: affected_surfaces.into_iter().collect(),
+        }
+    }
+
+    pub const fn action(&self) -> OperationAction {
+        self.action
+    }
+
+    pub const fn scope(&self) -> &Scope {
+        &self.scope
+    }
+
+    pub const fn reason(&self) -> &OperationReason {
+        &self.reason
+    }
+
+    pub const fn compatibility(&self) -> &CompatibilityResult {
+        &self.compatibility
+    }
+
+    pub const fn provenance(&self) -> Provenance {
+        self.provenance
+    }
+
+    pub fn affected_surfaces(&self) -> &BTreeSet<AffectedSurface> {
+        &self.affected_surfaces
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -315,6 +497,7 @@ pub struct Operation {
     id: OperationId,
     target: HarnessId,
     selector: OperationSelector,
+    semantics: OperationSemantics,
     class: OperationClass,
     reversibility: Reversibility,
     dependencies: BTreeSet<OperationDependency>,
@@ -328,6 +511,13 @@ struct OperationWire {
     id: OperationId,
     target: HarnessId,
     selector: OperationSelector,
+    action: OperationAction,
+    scope: Scope,
+    reason: OperationReason,
+    compatibility: CompatibilityResult,
+    provenance: Provenance,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    affected_surfaces: BTreeSet<AffectedSurface>,
     class: OperationClass,
     reversibility: Reversibility,
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
@@ -343,6 +533,7 @@ impl Operation {
         id: OperationId,
         target: HarnessId,
         selector: OperationSelector,
+        semantics: OperationSemantics,
         class: OperationClass,
         reversibility: Reversibility,
         dependencies: impl IntoIterator<Item = OperationDependency>,
@@ -350,6 +541,30 @@ impl Operation {
         attention: Option<AttentionReason>,
     ) -> Result<Self, OperationContractError> {
         let dependencies = dependencies.into_iter().collect::<BTreeSet<_>>();
+        if semantics.compatibility.target() != &target {
+            return Err(OperationContractError::CompatibilityTargetMismatch {
+                id,
+                target,
+                compatibility_target: semantics.compatibility.target().clone(),
+            });
+        }
+        if let Some(surface_target) = semantics.affected_surfaces.iter().find_map(|surface| {
+            if let AffectedSurface::NativeCommand {
+                target: surface_target,
+                ..
+            } = surface
+                && surface_target != &target
+            {
+                return Some(surface_target.clone());
+            }
+            None
+        }) {
+            return Err(OperationContractError::AffectedSurfaceTargetMismatch {
+                id,
+                target,
+                surface_target,
+            });
+        }
         let acknowledgment_required = acknowledgment.is_required();
         let attention_kind = attention.as_ref().map(AttentionReason::kind);
 
@@ -412,11 +627,17 @@ impl Operation {
                 },
             );
         }
+        if let (Some(selectors), Some(consequences)) =
+            (acknowledgment.selectors(), acknowledgment.consequences())
+        {
+            validate_consequence_coverage(&id, selectors, consequences)?;
+        }
 
         Ok(Self {
             id,
             target,
             selector,
+            semantics,
             class,
             reversibility,
             dependencies,
@@ -435,6 +656,34 @@ impl Operation {
 
     pub const fn selector(&self) -> &OperationSelector {
         &self.selector
+    }
+
+    pub const fn semantics(&self) -> &OperationSemantics {
+        &self.semantics
+    }
+
+    pub const fn action(&self) -> OperationAction {
+        self.semantics.action()
+    }
+
+    pub const fn scope(&self) -> &Scope {
+        self.semantics.scope()
+    }
+
+    pub const fn reason(&self) -> &OperationReason {
+        self.semantics.reason()
+    }
+
+    pub const fn compatibility(&self) -> &CompatibilityResult {
+        self.semantics.compatibility()
+    }
+
+    pub const fn provenance(&self) -> Provenance {
+        self.semantics.provenance()
+    }
+
+    pub fn affected_surfaces(&self) -> &BTreeSet<AffectedSurface> {
+        self.semantics.affected_surfaces()
     }
 
     pub const fn class(&self) -> OperationClass {
@@ -484,12 +733,53 @@ fn selector_contains(operation: &OperationSelector, candidate: &OperationSelecto
     }
 }
 
+fn validate_consequence_coverage(
+    operation: &OperationId,
+    selectors: &BTreeSet<OperationSelector>,
+    consequences: &BTreeSet<MaterialConsequence>,
+) -> Result<(), OperationContractError> {
+    for consequence in consequences {
+        if consequence.affected_components.is_empty() {
+            if !selectors
+                .iter()
+                .any(|selector| matches!(selector, OperationSelector::Resource { .. }))
+            {
+                return Err(OperationContractError::UncoveredResourceConsequence {
+                    operation: operation.clone(),
+                    code: consequence.code.clone(),
+                });
+            }
+            continue;
+        }
+        for component in &consequence.affected_components {
+            let covered = selectors.iter().any(|selector| match selector {
+                OperationSelector::Resource { .. } => true,
+                OperationSelector::Component { component_id, .. } => component_id == component,
+            });
+            if !covered {
+                return Err(OperationContractError::UncoveredComponentConsequence {
+                    operation: operation.clone(),
+                    code: consequence.code.clone(),
+                    component: component.clone(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
 impl From<Operation> for OperationWire {
     fn from(value: Operation) -> Self {
         Self {
             id: value.id,
             target: value.target,
             selector: value.selector,
+            action: value.semantics.action,
+            scope: value.semantics.scope,
+            reason: value.semantics.reason,
+            compatibility: value.semantics.compatibility,
+            provenance: value.semantics.provenance,
+            affected_surfaces: value.semantics.affected_surfaces,
             class: value.class,
             reversibility: value.reversibility,
             dependencies: value.dependencies,
@@ -507,6 +797,14 @@ impl TryFrom<OperationWire> for Operation {
             value.id,
             value.target,
             value.selector,
+            OperationSemantics::new(
+                value.action,
+                value.scope,
+                value.reason,
+                value.compatibility,
+                value.provenance,
+                value.affected_surfaces,
+            ),
             value.class,
             value.reversibility,
             value.dependencies,
@@ -625,15 +923,48 @@ fn validate_operation_graph(
         }
     }
     if visited != operations.len() {
+        let unresolved = remaining
+            .into_iter()
+            .filter(|(_, count)| *count > 0)
+            .map(|(id, _)| id.clone())
+            .collect::<BTreeSet<_>>();
         return Err(OperationContractError::DependencyCycle {
-            operations: remaining
-                .into_iter()
-                .filter(|(_, count)| *count > 0)
-                .map(|(id, _)| id.clone())
+            operations: unresolved
+                .iter()
+                .filter(|id| {
+                    operation_reaches(id, id, operations, &unresolved, &mut BTreeSet::new())
+                })
+                .cloned()
                 .collect(),
         });
     }
     Ok(())
+}
+
+fn operation_reaches(
+    current: &OperationId,
+    target: &OperationId,
+    operations: &BTreeMap<OperationId, Operation>,
+    allowed: &BTreeSet<OperationId>,
+    visited: &mut BTreeSet<OperationId>,
+) -> bool {
+    for dependency in &operations
+        .get(current)
+        .expect("cycle search only visits known operations")
+        .dependencies
+    {
+        let dependency = dependency.operation_id();
+        if dependency == target {
+            return true;
+        }
+        if allowed.contains(dependency)
+            && visited.insert(dependency.clone())
+            && operation_reaches(dependency, target, operations, allowed, visited)
+        {
+            return true;
+        }
+    }
+    false
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -878,10 +1209,31 @@ impl ApplyResult {
         }
 
         for result in collected.values() {
+            let operation = plan
+                .get(&result.operation_id)
+                .expect("result ids were validated against the plan");
+            let class_outcome_valid = match (operation.class(), &result.outcome) {
+                (OperationClass::Unsupported, OperationOutcome::Blocked { reason }) => {
+                    reason.kind() == AttentionKind::Unsupported
+                }
+                (OperationClass::Conflict, OperationOutcome::Blocked { reason }) => {
+                    reason.kind() == AttentionKind::Conflict
+                }
+                (OperationClass::NoOp, OperationOutcome::NoChange) => true,
+                (
+                    OperationClass::Unsupported | OperationClass::Conflict | OperationClass::NoOp,
+                    _,
+                ) => false,
+                _ => true,
+            };
+            if !class_outcome_valid {
+                return Err(OperationContractError::InvalidOutcomeForOperationClass {
+                    operation: result.operation_id.clone(),
+                    class: operation.class(),
+                });
+            }
+
             if let OperationOutcome::SkippedDependency { dependencies } = &result.outcome {
-                let operation = plan
-                    .get(&result.operation_id)
-                    .expect("result ids were validated against the plan");
                 for dependency in dependencies {
                     if !operation
                         .dependencies()
@@ -901,6 +1253,7 @@ impl ApplyResult {
                         OperationOutcome::Failed { .. }
                             | OperationOutcome::Blocked { .. }
                             | OperationOutcome::SkippedDependency { .. }
+                            | OperationOutcome::Pending
                     ) {
                         return Err(OperationContractError::InvalidSkippedDependencyOutcome {
                             operation: result.operation_id.clone(),
@@ -908,6 +1261,41 @@ impl ApplyResult {
                         });
                     }
                 }
+            }
+
+            let actual_blockers = operation
+                .dependencies()
+                .iter()
+                .filter_map(|dependency| {
+                    let dependency_id = dependency.operation_id();
+                    let result = collected
+                        .get(dependency_id)
+                        .expect("every planned operation has an exact result");
+                    (!matches!(
+                        result.outcome,
+                        OperationOutcome::Applied | OperationOutcome::NoChange
+                    ))
+                    .then(|| dependency_id.clone())
+                })
+                .collect::<BTreeSet<_>>();
+            match &result.outcome {
+                OperationOutcome::SkippedDependency { dependencies }
+                    if dependencies != &actual_blockers =>
+                {
+                    return Err(OperationContractError::DependencySkipMismatch {
+                        operation: result.operation_id.clone(),
+                        expected: actual_blockers,
+                        actual: dependencies.clone(),
+                    });
+                }
+                OperationOutcome::SkippedDependency { .. } => {}
+                _ if !actual_blockers.is_empty() => {
+                    return Err(OperationContractError::DependencyBlockersRequireSkip {
+                        operation: result.operation_id.clone(),
+                        blockers: actual_blockers,
+                    });
+                }
+                _ => {}
             }
         }
 
@@ -981,6 +1369,16 @@ pub enum OperationContractError {
     EmptyAcknowledgmentConsequences,
     InvalidAcknowledgmentShape,
     EmptyDependencyBlockers,
+    CompatibilityTargetMismatch {
+        id: OperationId,
+        target: HarnessId,
+        compatibility_target: HarnessId,
+    },
+    AffectedSurfaceTargetMismatch {
+        id: OperationId,
+        target: HarnessId,
+        surface_target: HarnessId,
+    },
     InvalidOperationClassification {
         id: OperationId,
         class: OperationClass,
@@ -997,6 +1395,15 @@ pub enum OperationContractError {
     },
     AcknowledgmentAttentionMismatch {
         id: OperationId,
+    },
+    UncoveredResourceConsequence {
+        operation: OperationId,
+        code: ConsequenceCode,
+    },
+    UncoveredComponentConsequence {
+        operation: OperationId,
+        code: ConsequenceCode,
+        component: ComponentId,
     },
     DuplicateOperation {
         id: OperationId,
@@ -1041,6 +1448,19 @@ pub enum OperationContractError {
         operation: OperationId,
         dependency: OperationId,
     },
+    InvalidOutcomeForOperationClass {
+        operation: OperationId,
+        class: OperationClass,
+    },
+    DependencyBlockersRequireSkip {
+        operation: OperationId,
+        blockers: BTreeSet<OperationId>,
+    },
+    DependencySkipMismatch {
+        operation: OperationId,
+        expected: BTreeSet<OperationId>,
+        actual: BTreeSet<OperationId>,
+    },
     InconsistentApplyOutcome {
         outcome: ApplyOutcome,
         has_failure: bool,
@@ -1073,6 +1493,22 @@ impl fmt::Display for OperationContractError {
                     "dependency-blocked attention requires a dependency"
                 )
             }
+            Self::CompatibilityTargetMismatch {
+                id,
+                target,
+                compatibility_target,
+            } => write!(
+                formatter,
+                "operation `{id}` targets `{target}` but compatibility targets `{compatibility_target}`"
+            ),
+            Self::AffectedSurfaceTargetMismatch {
+                id,
+                target,
+                surface_target,
+            } => write!(
+                formatter,
+                "operation `{id}` targets `{target}` but command preview targets `{surface_target}`"
+            ),
             Self::InvalidOperationClassification {
                 id,
                 class,
@@ -1093,6 +1529,18 @@ impl fmt::Display for OperationContractError {
             Self::AcknowledgmentAttentionMismatch { id } => write!(
                 formatter,
                 "operation `{id}` acknowledgment and attention details must match exactly"
+            ),
+            Self::UncoveredResourceConsequence { operation, code } => write!(
+                formatter,
+                "operation `{operation}` consequence `{code}` requires an acknowledged resource selector"
+            ),
+            Self::UncoveredComponentConsequence {
+                operation,
+                code,
+                component,
+            } => write!(
+                formatter,
+                "operation `{operation}` consequence `{code}` component `{component}` is not acknowledged"
             ),
             Self::DuplicateOperation { id } => write!(formatter, "duplicate operation `{id}`"),
             Self::UnknownDependency {
@@ -1153,7 +1601,41 @@ impl fmt::Display for OperationContractError {
                 dependency,
             } => write!(
                 formatter,
-                "operation `{operation}` was skipped by operation `{dependency}` that did not fail or block"
+                "operation `{operation}` was skipped by operation `{dependency}` that did not block execution"
+            ),
+            Self::InvalidOutcomeForOperationClass { operation, class } => write!(
+                formatter,
+                "operation `{operation}` result is invalid for {class:?}"
+            ),
+            Self::DependencyBlockersRequireSkip {
+                operation,
+                blockers,
+            } => write!(
+                formatter,
+                "operation `{operation}` must be skipped because dependencies are blocked: {}",
+                blockers
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::DependencySkipMismatch {
+                operation,
+                expected,
+                actual,
+            } => write!(
+                formatter,
+                "operation `{operation}` skip dependencies mismatch (expected {}, got {})",
+                expected
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                actual
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
             Self::InconsistentApplyOutcome {
                 outcome,
@@ -1172,7 +1654,7 @@ impl std::error::Error for OperationContractError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{ConsequenceCode, ConsequenceSummary};
+    use crate::domain::{CompatibilityClass, ConsequenceSummary, TransferFidelity};
 
     fn operation_id(value: &str) -> OperationId {
         OperationId::new(value).unwrap()
@@ -1199,6 +1681,35 @@ mod tests {
         )
     }
 
+    fn semantics(target: &str) -> OperationSemantics {
+        semantics_with(target, [])
+    }
+
+    fn semantics_with(
+        target: &str,
+        affected_surfaces: impl IntoIterator<Item = AffectedSurface>,
+    ) -> OperationSemantics {
+        let target = HarnessId::new(target).unwrap();
+        OperationSemantics::new(
+            OperationAction::PluginInstall,
+            Scope::Global,
+            OperationReason::new(
+                EvidenceCode::new("desired.plugin.missing").unwrap(),
+                EvidenceDetail::new("The desired plugin is not installed").unwrap(),
+            ),
+            CompatibilityResult::new(
+                target,
+                CompatibilityClass::Compatible,
+                TransferFidelity::Faithful,
+                [],
+                [],
+            )
+            .unwrap(),
+            Provenance::Native,
+            affected_surfaces,
+        )
+    }
+
     fn partial_operation(id: &str, dependencies: &[&str]) -> Operation {
         let selectors = [component_selector("plugin:tools", "hook:format")];
         let consequences = [consequence()];
@@ -1206,6 +1717,7 @@ mod tests {
             operation_id(id),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
+            semantics("codex"),
             OperationClass::Partial,
             Reversibility::Reversible,
             dependencies
@@ -1222,11 +1734,53 @@ mod tests {
             operation_id(id),
             HarnessId::new("claude").unwrap(),
             resource_selector("plugin:tools"),
+            semantics("claude"),
             OperationClass::SafeNative,
             Reversibility::Reversible,
             dependencies
                 .iter()
                 .map(|id| OperationDependency::new(operation_id(id))),
+            AcknowledgmentRequirement::not_required(),
+            None,
+        )
+        .unwrap()
+    }
+
+    fn blocked_operation(id: &str, class: OperationClass) -> Operation {
+        let attention = match class {
+            OperationClass::Unsupported => AttentionReason::unsupported(
+                EvidenceCode::new("native.unsupported").unwrap(),
+                EvidenceDetail::new("No native operation is available").unwrap(),
+            ),
+            OperationClass::Conflict => AttentionReason::conflict(
+                EvidenceCode::new("native.conflict").unwrap(),
+                EvidenceDetail::new("An unmanaged native resource conflicts").unwrap(),
+            ),
+            _ => panic!("blocked_operation requires unsupported or conflict"),
+        };
+        Operation::new(
+            operation_id(id),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics("codex"),
+            class,
+            Reversibility::NotApplicable,
+            [],
+            AcknowledgmentRequirement::not_required(),
+            Some(attention),
+        )
+        .unwrap()
+    }
+
+    fn no_op(id: &str) -> Operation {
+        Operation::new(
+            operation_id(id),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics("codex"),
+            OperationClass::NoOp,
+            Reversibility::NotApplicable,
+            [],
             AcknowledgmentRequirement::not_required(),
             None,
         )
@@ -1254,14 +1808,24 @@ mod tests {
                 id: operation_id("one")
             }
         );
-        assert!(matches!(
+        assert_eq!(
             Plan::new([
                 safe_operation("one", &["three"]),
                 safe_operation("two", &["one"]),
                 safe_operation("three", &["two"]),
-            ]),
-            Err(OperationContractError::DependencyCycle { .. })
-        ));
+                safe_operation("downstream", &["one"]),
+            ])
+            .unwrap_err(),
+            OperationContractError::DependencyCycle {
+                operations: [
+                    operation_id("one"),
+                    operation_id("two"),
+                    operation_id("three")
+                ]
+                .into_iter()
+                .collect()
+            }
+        );
     }
 
     #[test]
@@ -1280,6 +1844,7 @@ mod tests {
             operation_id("partial"),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
+            semantics("codex"),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1296,6 +1861,7 @@ mod tests {
             operation_id("partial"),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
+            semantics("codex"),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1324,6 +1890,7 @@ mod tests {
             operation_id("component-partial"),
             HarnessId::new("codex").unwrap(),
             component_selector("plugin:tools", "hook:format"),
+            semantics("codex"),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1348,11 +1915,110 @@ mod tests {
     }
 
     #[test]
+    fn material_consequences_require_matching_acknowledged_components() {
+        let resource_wide = MaterialConsequence::new(
+            ConsequenceCode::new("component.omitted").unwrap(),
+            [ComponentId::new("hook:other").unwrap()],
+            ConsequenceSummary::new("Another hook will be omitted").unwrap(),
+        );
+        let selectors = [resource_selector("plugin:tools")];
+        assert!(
+            Operation::new(
+                operation_id("resource-partial"),
+                HarnessId::new("codex").unwrap(),
+                resource_selector("plugin:tools"),
+                semantics("codex"),
+                OperationClass::Partial,
+                Reversibility::Irreversible,
+                [],
+                AcknowledgmentRequirement::required(selectors.clone(), [resource_wide.clone()])
+                    .unwrap(),
+                Some(AttentionReason::acknowledgment_required(selectors, [resource_wide]).unwrap()),
+            )
+            .is_ok()
+        );
+
+        let uncovered = MaterialConsequence::new(
+            ConsequenceCode::new("component.omitted").unwrap(),
+            [ComponentId::new("hook:other").unwrap()],
+            ConsequenceSummary::new("Another hook will be omitted").unwrap(),
+        );
+        let selectors = [component_selector("plugin:tools", "hook:format")];
+        let error = Operation::new(
+            operation_id("partial"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics("codex"),
+            OperationClass::Partial,
+            Reversibility::Irreversible,
+            [],
+            AcknowledgmentRequirement::required(selectors.clone(), [uncovered.clone()]).unwrap(),
+            Some(AttentionReason::acknowledgment_required(selectors, [uncovered]).unwrap()),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            OperationContractError::UncoveredComponentConsequence { .. }
+        ));
+
+        let resource_consequence = MaterialConsequence::new(
+            ConsequenceCode::new("resource.materialized").unwrap(),
+            [],
+            ConsequenceSummary::new("The plugin will become skilltap-owned").unwrap(),
+        );
+        let selectors = [component_selector("plugin:tools", "hook:format")];
+        let error = Operation::new(
+            operation_id("partial"),
+            HarnessId::new("codex").unwrap(),
+            component_selector("plugin:tools", "hook:format"),
+            semantics("codex"),
+            OperationClass::Partial,
+            Reversibility::Irreversible,
+            [],
+            AcknowledgmentRequirement::required(selectors.clone(), [resource_consequence.clone()])
+                .unwrap(),
+            Some(
+                AttentionReason::acknowledgment_required(selectors, [resource_consequence])
+                    .unwrap(),
+            ),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            OperationContractError::UncoveredResourceConsequence { .. }
+        ));
+
+        let mut raw = serde_json::to_value(partial_operation("partial", &[]))
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .clone();
+        for field in ["acknowledgment", "attention"] {
+            raw.get_mut(field)
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+                .get_mut("consequences")
+                .unwrap()
+                .as_array_mut()
+                .unwrap()[0]
+                .as_object_mut()
+                .unwrap()
+                .insert(
+                    "affected_components".into(),
+                    serde_json::json!(["hook:other"]),
+                );
+        }
+        assert!(serde_json::from_value::<Operation>(raw.into()).is_err());
+    }
+
+    #[test]
     fn operation_class_attention_and_reversibility_combinations_are_validated() {
         let safe_with_attention = Operation::new(
             operation_id("safe"),
             HarnessId::new("codex").unwrap(),
             resource_selector("skill:portable"),
+            semantics("codex"),
             OperationClass::SafeFaithfulEquivalent,
             Reversibility::Reversible,
             [],
@@ -1372,6 +2038,7 @@ mod tests {
             operation_id("noop"),
             HarnessId::new("codex").unwrap(),
             resource_selector("skill:portable"),
+            semantics("codex"),
             OperationClass::NoOp,
             Reversibility::Reversible,
             [],
@@ -1391,6 +2058,7 @@ mod tests {
             operation_id("unsupported"),
             HarnessId::new("codex").unwrap(),
             resource_selector("skill:portable"),
+            semantics("codex"),
             OperationClass::Unsupported,
             Reversibility::Reversible,
             [],
@@ -1446,9 +2114,142 @@ mod tests {
     }
 
     #[test]
+    fn semantic_payloads_are_target_bound_redactable_and_deterministic() {
+        let surfaces = [
+            AffectedSurface::native_command(
+                HarnessId::new("codex").unwrap(),
+                NativeId::new("codex").unwrap(),
+                [
+                    CommandArgument::literal(NativeId::new("plugin").unwrap()),
+                    CommandArgument::redacted(),
+                ],
+            ),
+            AffectedSurface::file(AbsolutePath::new("/home/user/.codex/config.toml").unwrap()),
+        ];
+        let operation = Operation::new(
+            operation_id("install"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics_with("codex", surfaces),
+            OperationClass::SafeNative,
+            Reversibility::Reversible,
+            [],
+            AcknowledgmentRequirement::not_required(),
+            None,
+        )
+        .unwrap();
+
+        assert_eq!(operation.action(), OperationAction::PluginInstall);
+        assert_eq!(operation.scope(), &Scope::Global);
+        assert_eq!(operation.reason().code().as_str(), "desired.plugin.missing");
+        assert_eq!(operation.compatibility().target(), operation.target());
+        assert_eq!(operation.provenance(), Provenance::Native);
+        let command = operation
+            .affected_surfaces()
+            .iter()
+            .find(|surface| surface.executable().is_some())
+            .unwrap();
+        assert_eq!(command.target(), Some(operation.target()));
+        assert_eq!(command.executable().unwrap().as_str(), "codex");
+        assert!(command.arguments().unwrap()[1].is_redacted());
+        assert!(command.arguments().unwrap()[1].literal_value().is_none());
+
+        let json = serde_json::to_string(&operation).unwrap();
+        assert_eq!(serde_json::from_str::<Operation>(&json).unwrap(), operation);
+        assert!(json.contains(r#""action":"plugin_install""#));
+        assert!(json.contains(r#"{"kind":"redacted"}"#));
+        assert!(
+            json.find(r#""kind":"file""#).unwrap()
+                < json.find(r#""kind":"native_command""#).unwrap()
+        );
+        assert!(
+            serde_json::from_str::<CommandArgument>(
+                r#"{"kind":"redacted","value":"must-not-survive"}"#
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn semantic_targets_are_validated_by_constructor_and_serde() {
+        let mismatch = Operation::new(
+            operation_id("install"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics("claude"),
+            OperationClass::SafeNative,
+            Reversibility::Reversible,
+            [],
+            AcknowledgmentRequirement::not_required(),
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            mismatch,
+            OperationContractError::CompatibilityTargetMismatch { .. }
+        ));
+
+        let command_mismatch = Operation::new(
+            operation_id("install"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics_with(
+                "codex",
+                [AffectedSurface::native_command(
+                    HarnessId::new("claude").unwrap(),
+                    NativeId::new("claude").unwrap(),
+                    [],
+                )],
+            ),
+            OperationClass::SafeNative,
+            Reversibility::Reversible,
+            [],
+            AcknowledgmentRequirement::not_required(),
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            command_mismatch,
+            OperationContractError::AffectedSurfaceTargetMismatch { .. }
+        ));
+
+        let raw = serde_json::to_value(safe_operation("install", &[])).unwrap();
+        let mut raw = raw.as_object().unwrap().clone();
+        raw.get_mut("compatibility")
+            .unwrap()
+            .as_object_mut()
+            .unwrap()
+            .insert("target".into(), serde_json::json!("codex"));
+        assert!(serde_json::from_value::<Operation>(raw.into()).is_err());
+
+        let command = AffectedSurface::native_command(
+            HarnessId::new("codex").unwrap(),
+            NativeId::new("codex").unwrap(),
+            [],
+        );
+        let operation = Operation::new(
+            operation_id("install"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics_with("codex", [command]),
+            OperationClass::SafeNative,
+            Reversibility::Reversible,
+            [],
+            AcknowledgmentRequirement::not_required(),
+            None,
+        )
+        .unwrap();
+        let mut raw = serde_json::to_value(operation).unwrap();
+        raw["affected_surfaces"][0]["target"] = serde_json::json!("claude");
+        assert!(serde_json::from_value::<Operation>(raw).is_err());
+    }
+
+    #[test]
     fn constructor_and_deserialization_enforce_plan_invariants() {
-        let invalid = r#"{"operations":[{"id":"one","target":"codex","selector":{"kind":"resource","resource_id":"skill:one"},"class":"safe_native","reversibility":"reversible","dependencies":[{"operation_id":"missing"}],"acknowledgment":{"kind":"not_required"}}]}"#;
-        let error = serde_json::from_str::<Plan>(invalid).unwrap_err();
+        let mut invalid =
+            serde_json::to_value(Plan::new([safe_operation("one", &[])]).unwrap()).unwrap();
+        invalid["operations"][0]["dependencies"] = serde_json::json!([{"operation_id": "missing"}]);
+        let error = serde_json::from_value::<Plan>(invalid).unwrap_err();
         assert!(error.to_string().contains("unknown operation `missing`"));
 
         let empty_ack = r#"{"kind":"required","selectors":[],"consequences":[]}"#;
@@ -1457,11 +2258,27 @@ mod tests {
         let unknown_field = r#"{"kind":"not_required","yes":true}"#;
         assert!(serde_json::from_str::<AcknowledgmentRequirement>(unknown_field).is_err());
 
-        let invalid_reversibility = r#"{"id":"unsupported","target":"codex","selector":{"kind":"resource","resource_id":"skill:one"},"class":"unsupported","reversibility":"reversible","acknowledgment":{"kind":"not_required"},"attention":{"kind":"unsupported","code":"native.unsupported","detail":"No native mutation exists"}}"#;
-        assert!(serde_json::from_str::<Operation>(invalid_reversibility).is_err());
+        let mut invalid_reversibility = serde_json::to_value(blocked_operation(
+            "unsupported",
+            OperationClass::Unsupported,
+        ))
+        .unwrap();
+        invalid_reversibility["reversibility"] = serde_json::json!("reversible");
+        assert!(serde_json::from_value::<Operation>(invalid_reversibility).is_err());
 
-        let outside_selector = r#"{"id":"partial","target":"codex","selector":{"kind":"component","resource_id":"plugin:tools","component_id":"hook:format"},"class":"partial","reversibility":"irreversible","acknowledgment":{"kind":"required","selectors":[{"kind":"resource","resource_id":"plugin:tools"}],"consequences":[{"code":"component.omitted","affected_components":["hook:format"],"summary":"The formatting hook will not be installed"}]},"attention":{"kind":"acknowledgment_required","selectors":[{"kind":"resource","resource_id":"plugin:tools"}],"consequences":[{"code":"component.omitted","affected_components":["hook:format"],"summary":"The formatting hook will not be installed"}]}}"#;
-        assert!(serde_json::from_str::<Operation>(outside_selector).is_err());
+        let mut outside_selector = serde_json::to_value(partial_operation("partial", &[])).unwrap();
+        outside_selector["selector"] = serde_json::json!({
+            "kind": "component",
+            "resource_id": "plugin:tools",
+            "component_id": "hook:format"
+        });
+        for field in ["acknowledgment", "attention"] {
+            outside_selector[field]["selectors"] = serde_json::json!([{
+                "kind": "resource",
+                "resource_id": "plugin:tools"
+            }]);
+        }
+        assert!(serde_json::from_value::<Operation>(outside_selector).is_err());
     }
 
     #[test]
@@ -1569,6 +2386,168 @@ mod tests {
     }
 
     #[test]
+    fn apply_results_enforce_plan_class_outcomes() {
+        for class in [OperationClass::Unsupported, OperationClass::Conflict] {
+            let operation = blocked_operation("blocked", class);
+            let error = ApplyResult::new(
+                Plan::new([operation.clone()]).unwrap(),
+                ApplyOutcome::Succeeded,
+                [
+                    OperationResult::new(operation_id("blocked"), OperationOutcome::Applied)
+                        .unwrap(),
+                ],
+            )
+            .unwrap_err();
+            assert_eq!(
+                error,
+                OperationContractError::InvalidOutcomeForOperationClass {
+                    operation: operation_id("blocked"),
+                    class,
+                }
+            );
+
+            let wrong_reason = match class {
+                OperationClass::Unsupported => AttentionReason::conflict(
+                    EvidenceCode::new("native.conflict").unwrap(),
+                    EvidenceDetail::new("An unmanaged resource conflicts").unwrap(),
+                ),
+                OperationClass::Conflict => AttentionReason::unsupported(
+                    EvidenceCode::new("native.unsupported").unwrap(),
+                    EvidenceDetail::new("No native operation exists").unwrap(),
+                ),
+                _ => unreachable!(),
+            };
+            assert!(matches!(
+                ApplyResult::new(
+                    Plan::new([operation]).unwrap(),
+                    ApplyOutcome::AttentionRequired,
+                    [OperationResult::new(
+                        operation_id("blocked"),
+                        OperationOutcome::Blocked {
+                            reason: wrong_reason
+                        }
+                    )
+                    .unwrap()]
+                ),
+                Err(OperationContractError::InvalidOutcomeForOperationClass { .. })
+            ));
+        }
+
+        let error = ApplyResult::new(
+            Plan::new([no_op("noop")]).unwrap(),
+            ApplyOutcome::Succeeded,
+            [OperationResult::new(operation_id("noop"), OperationOutcome::Applied).unwrap()],
+        )
+        .unwrap_err();
+        assert_eq!(
+            error,
+            OperationContractError::InvalidOutcomeForOperationClass {
+                operation: operation_id("noop"),
+                class: OperationClass::NoOp,
+            }
+        );
+
+        let valid = ApplyResult::new(
+            Plan::new([no_op("noop")]).unwrap(),
+            ApplyOutcome::Succeeded,
+            [OperationResult::new(operation_id("noop"), OperationOutcome::NoChange).unwrap()],
+        )
+        .unwrap();
+        let mut raw = serde_json::to_value(valid).unwrap();
+        raw["operations"][0]["outcome"] = serde_json::json!({"status": "applied"});
+        assert!(serde_json::from_value::<ApplyResult>(raw).is_err());
+    }
+
+    #[test]
+    fn dependency_blockers_require_an_exact_skip_set() {
+        let plan = Plan::new([
+            safe_operation("pending", &[]),
+            safe_operation("failed", &[]),
+            safe_operation("dependent", &["pending", "failed"]),
+        ])
+        .unwrap();
+        let pending =
+            OperationResult::new(operation_id("pending"), OperationOutcome::Pending).unwrap();
+        let failed = OperationResult::new(
+            operation_id("failed"),
+            OperationOutcome::Failed {
+                reason: AttentionReason::operation_failed(
+                    EvidenceCode::new("native.command.failed").unwrap(),
+                    EvidenceDetail::new("Native command failed").unwrap(),
+                ),
+            },
+        )
+        .unwrap();
+
+        let error = ApplyResult::new(
+            plan.clone(),
+            ApplyOutcome::PartialFailure,
+            [
+                pending.clone(),
+                failed.clone(),
+                OperationResult::new(operation_id("dependent"), OperationOutcome::Applied).unwrap(),
+            ],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            OperationContractError::DependencyBlockersRequireSkip { .. }
+        ));
+
+        let error = ApplyResult::new(
+            plan.clone(),
+            ApplyOutcome::PartialFailure,
+            [
+                pending.clone(),
+                failed.clone(),
+                OperationResult::new(
+                    operation_id("dependent"),
+                    OperationOutcome::SkippedDependency {
+                        dependencies: [operation_id("failed")].into_iter().collect(),
+                    },
+                )
+                .unwrap(),
+            ],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            OperationContractError::DependencySkipMismatch { .. }
+        ));
+
+        let result = ApplyResult::new(
+            plan,
+            ApplyOutcome::PartialFailure,
+            [
+                pending,
+                failed,
+                OperationResult::new(
+                    operation_id("dependent"),
+                    OperationOutcome::SkippedDependency {
+                        dependencies: [operation_id("failed"), operation_id("pending")]
+                            .into_iter()
+                            .collect(),
+                    },
+                )
+                .unwrap(),
+            ],
+        )
+        .unwrap();
+        let json = serde_json::to_string(&result).unwrap();
+        assert_eq!(serde_json::from_str::<ApplyResult>(&json).unwrap(), result);
+
+        let mut raw = serde_json::to_value(result).unwrap();
+        let dependent = raw["operations"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|result| result["operation_id"] == "dependent")
+            .unwrap();
+        dependent["outcome"] = serde_json::json!({"status": "applied"});
+        assert!(serde_json::from_value::<ApplyResult>(raw).is_err());
+    }
+
+    #[test]
     fn partial_apply_result_is_deterministic_and_round_trips() {
         let plan = Plan::new([
             safe_operation("z-pending", &[]),
@@ -1607,8 +2586,15 @@ mod tests {
 
     #[test]
     fn result_deserialization_rejects_invalid_summaries_and_skips() {
-        let false_success = r#"{"plan":{"operations":[{"id":"one","target":"codex","selector":{"kind":"resource","resource_id":"skill:one"},"class":"safe_native","reversibility":"reversible","acknowledgment":{"kind":"not_required"}}]},"outcome":"succeeded","operations":[{"operation_id":"one","outcome":{"status":"pending"}}]}"#;
-        assert!(serde_json::from_str::<ApplyResult>(false_success).is_err());
+        let pending = ApplyResult::new(
+            Plan::new([safe_operation("one", &[])]).unwrap(),
+            ApplyOutcome::AttentionRequired,
+            [OperationResult::new(operation_id("one"), OperationOutcome::Pending).unwrap()],
+        )
+        .unwrap();
+        let mut false_success = serde_json::to_value(pending).unwrap();
+        false_success["outcome"] = serde_json::json!("succeeded");
+        assert!(serde_json::from_value::<ApplyResult>(false_success).is_err());
 
         let empty_skip =
             r#"{"operation_id":"one","outcome":{"status":"skipped_dependency","dependencies":[]}}"#;
@@ -1664,7 +2650,12 @@ mod tests {
             }
         );
 
-        let missing_persisted = r#"{"plan":{"operations":[{"id":"one","target":"codex","selector":{"kind":"resource","resource_id":"skill:one"},"class":"safe_native","reversibility":"reversible","acknowledgment":{"kind":"not_required"}}]},"outcome":"succeeded","operations":[]}"#;
-        assert!(serde_json::from_str::<ApplyResult>(missing_persisted).is_err());
+        let missing_persisted = serde_json::json!({
+            "plan": serde_json::to_value(Plan::new([safe_operation("one", &[])]).unwrap())
+                .unwrap(),
+            "outcome": "succeeded",
+            "operations": []
+        });
+        assert!(serde_json::from_value::<ApplyResult>(missing_persisted).is_err());
     }
 }
