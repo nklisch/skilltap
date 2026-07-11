@@ -5,7 +5,7 @@ use skilltap_core::{
     runtime::{JsonLimits, ObservationRuntimeError, ProcessLimits},
 };
 use skilltap_harnesses::{
-    DetectionError, HarnessKind, detect_installation, unreachable_installation,
+    DetectionError, HarnessKind, detect_installation, select_profile, unreachable_installation,
 };
 use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
 
@@ -99,4 +99,17 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
         }
     ));
     assert!(!Path::new("/tmp/skilltap").exists());
+}
+
+#[test]
+fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
+    let known = skilltap_core::domain::NativeVersion::new("3.0.0").unwrap();
+    let unknown = skilltap_core::domain::NativeVersion::new("99.0.0").unwrap();
+    let known_profile = select_profile(HarnessKind::Codex, &known);
+    assert!(known_profile.mutation_capabilities().is_some());
+    assert_eq!(known_profile.profile_id().unwrap().as_str(), "codex-v3");
+
+    let unknown_profile = select_profile(HarnessKind::Codex, &unknown);
+    assert!(unknown_profile.mutation_capabilities().is_none());
+    assert!(unknown_profile.profile_id().is_none());
 }

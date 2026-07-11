@@ -2,8 +2,9 @@ use std::{collections::BTreeMap, ffi::OsString};
 
 use skilltap_core::{
     domain::{
-        ConfiguredBinary, HarnessId, HarnessInstallation, HarnessReachability, NativeId,
-        NativeVersion, UnreachableReason,
+        CapabilityId, CapabilityProfileId, CapabilityProfileSelection, CapabilitySet,
+        CapabilitySupport, ConfiguredBinary, HarnessId, HarnessInstallation, HarnessReachability,
+        NativeId, NativeVersion, ScopedCapabilitySets, UnreachableReason,
     },
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, JsonLimits, NativeProcessRequest,
@@ -108,5 +109,68 @@ pub fn unreachable_installation(
         HarnessId::new(harness.id()).expect("static harness id"),
         configured,
         HarnessReachability::Unreachable { reason },
+    )
+}
+
+/// Selects one immutable compiled profile, or an observe-only unknown-version profile.
+pub fn select_profile(harness: HarnessKind, version: &NativeVersion) -> CapabilityProfileSelection {
+    let capabilities = compiled_capabilities(harness);
+    let known = matches!(
+        (harness, version.as_str()),
+        (HarnessKind::Codex, "3.0.0") | (HarnessKind::Claude, "3.0.0")
+    );
+    if known {
+        CapabilityProfileSelection::verified(
+            CapabilityProfileId::new(match harness {
+                HarnessKind::Codex => "codex-v3",
+                HarnessKind::Claude => "claude-v3",
+            })
+            .expect("compiled profile identifiers are valid"),
+            capabilities,
+        )
+    } else {
+        CapabilityProfileSelection::unknown_version(unknown_capabilities(harness))
+    }
+}
+
+fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
+    let global = CapabilitySet::new([
+        (
+            CapabilityId::new("harness.observe").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+        (
+            CapabilityId::new("plugin.install").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+    ]);
+    let project = CapabilitySet::new([
+        (
+            CapabilityId::new("harness.observe").expect("compiled capability is valid"),
+            CapabilitySupport::Supported,
+        ),
+        (
+            CapabilityId::new("plugin.install").expect("compiled capability is valid"),
+            if matches!(harness, HarnessKind::Codex) {
+                CapabilitySupport::Unverified
+            } else {
+                CapabilitySupport::Supported
+            },
+        ),
+    ]);
+    ScopedCapabilitySets::new(global, project)
+}
+
+fn unknown_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
+    let baseline = compiled_capabilities(harness);
+    let unverified = |set: &CapabilitySet| {
+        CapabilitySet::new(
+            set.iter()
+                .map(|(id, _)| (id.clone(), CapabilitySupport::Unverified)),
+        )
+    };
+    ScopedCapabilitySets::new(
+        unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Global)),
+        unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Project)),
     )
 }
