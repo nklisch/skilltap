@@ -123,6 +123,57 @@ pub struct CodexObservationPaths {
     pub project_override: Option<skilltap_core::domain::AbsolutePath>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClaudeObservationPaths {
+    pub claude_home: skilltap_core::domain::AbsolutePath,
+    pub global_settings: skilltap_core::domain::AbsolutePath,
+    pub global_plugins: skilltap_core::domain::AbsolutePath,
+    pub global_skills: skilltap_core::domain::AbsolutePath,
+    pub project_root: Option<skilltap_core::domain::AbsolutePath>,
+    pub project_settings: Option<skilltap_core::domain::AbsolutePath>,
+}
+
+/// Derives only documented Claude user/global and one personal project inputs.
+pub fn claude_observation_paths(
+    paths: &skilltap_core::runtime::PlatformPaths,
+    scope: &Scope,
+) -> Result<ClaudeObservationPaths, skilltap_core::domain::ValidationError> {
+    let claude_home = paths.claude_home().clone();
+    let global_settings = absolute_child(&claude_home, "settings.json").ok_or(
+        skilltap_core::domain::ValidationError::InvalidFormat {
+            kind: "Claude settings path",
+            expected: "a valid absolute path",
+        },
+    )?;
+    let global_plugins = absolute_child(&claude_home, "plugins").ok_or(
+        skilltap_core::domain::ValidationError::InvalidFormat {
+            kind: "Claude plugins path",
+            expected: "a valid absolute path",
+        },
+    )?;
+    let global_skills = absolute_child(&claude_home, "skills").ok_or(
+        skilltap_core::domain::ValidationError::InvalidFormat {
+            kind: "Claude skills path",
+            expected: "a valid absolute path",
+        },
+    )?;
+    let project_root = match scope {
+        Scope::Global => None,
+        Scope::Project(root) => Some(root.clone()),
+    };
+    let project_settings = project_root
+        .as_ref()
+        .and_then(|root| absolute_child(root, ".claude/settings.json"));
+    Ok(ClaudeObservationPaths {
+        claude_home,
+        global_settings,
+        global_plugins,
+        global_skills,
+        project_root,
+        project_settings,
+    })
+}
+
 /// Derives only the documented Codex observation inputs for one exact scope.
 pub fn codex_observation_paths(
     paths: &skilltap_core::runtime::PlatformPaths,

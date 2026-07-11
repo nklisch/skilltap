@@ -288,3 +288,24 @@ fn codex_resource_observation_reads_complete_skill_trees_without_writing() {
         b"name: example\n"
     );
 }
+
+#[test]
+fn claude_paths_keep_global_and_personal_project_inputs_separate() {
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, "/home/user")
+        .with(EnvironmentVariable::XdgConfigHome, "/config/user");
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let project = Scope::Project(AbsolutePath::new("/workspace/personal").unwrap());
+    let inputs = skilltap_harnesses::claude_observation_paths(&platform, &project).unwrap();
+    assert_eq!(inputs.claude_home.as_str(), "/home/user/.claude");
+    assert_eq!(
+        inputs.global_settings.as_str(),
+        "/home/user/.claude/settings.json"
+    );
+    assert_eq!(inputs.global_plugins.as_str(), "/home/user/.claude/plugins");
+    assert_eq!(inputs.global_skills.as_str(), "/home/user/.claude/skills");
+    assert_eq!(
+        inputs.project_settings.as_ref().unwrap().as_str(),
+        "/workspace/personal/.claude/settings.json"
+    );
+}
