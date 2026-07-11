@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-macos-ci
 kind: story
-stage: implementing
+stage: review
 tags: [infra, testing]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-cli-shell]
@@ -21,3 +21,15 @@ binary verification wrapper. Ensure Apple-specific unsafe filesystem, errno,
 locking, managed-artifact, and recovery tests run on every push and pull
 request. Keep release-matrix verification unchanged and avoid duplicating
 website work.
+
+## Implementation notes
+
+- Files changed: `.github/workflows/ci.yml` and this story.
+- Tests added: a native `macos-14` pre-merge job runs the locked full workspace
+  tests, optimized `skilltap` build, and compiled-binary verification wrapper.
+- Discrepancies from design: none. The job follows the existing pinned-toolchain
+  and release-runner conventions while leaving Ubuntu quality, website, and the
+  release workflow unchanged.
+- Dispatch: direct-read implementation; the integration surface was limited to
+  the existing CI and release workflow conventions.
+- Adjacent issues parked: none.

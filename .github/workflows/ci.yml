@@ -31,6 +31,23 @@ jobs:
       - name: Verify compiled binary
         run: scripts/verify-compiled-binary.sh target/release/skilltap
 
+  macos-contracts:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Test workspace on native macOS
+        run: cargo test --locked --workspace
+
+      - name: Build release binary
+        run: cargo build --locked --release -p skilltap
+
+      - name: Verify compiled binary
+        run: scripts/verify-compiled-binary.sh target/release/skilltap
+
   website:
     runs-on: ubuntu-latest
     steps:
