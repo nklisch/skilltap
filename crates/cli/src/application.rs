@@ -437,11 +437,16 @@ impl StatusProjection<'_> {
             .inventory
             .as_ref()
             .map_or(0, |value| value.resources().len());
-        if observation.failed_targets == 0 && desired_resources > observation.native_entries {
+        let recorded_resources = self
+            .documents
+            .state
+            .as_ref()
+            .map_or(0, |value| value.resources().len());
+        if observation.failed_targets == 0 && (desired_resources > 0 || recorded_resources > 0) {
             outcome.result = ResultClass::AttentionRequired;
             outcome = outcome.with_warning(Warning::new(
-                "status_resource_incomplete",
-                "Desired resources exceed the resources observed in native roots.",
+                "status_comparison_unavailable",
+                "Resource-level desired comparison is not available for the observed native surfaces; review is required before planning changes.",
             ));
         }
         outcome
