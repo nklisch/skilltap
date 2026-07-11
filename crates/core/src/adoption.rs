@@ -1,6 +1,6 @@
 //! Pure adoption planning over ephemeral normalized observations.
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use crate::{
     domain::{
@@ -46,6 +46,7 @@ pub struct AdoptionCandidate {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AdoptionConflictCode {
     ExistingDifferentResource,
+    CandidateSemanticsDiffer,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,6 +58,7 @@ pub enum AdoptionUnadoptableCode {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AdoptionDecision {
     Adopted(Box<AdoptionCandidate>),
+    Coalesced(Box<AdoptionCandidate>),
     AlreadyManaged {
         key: ResourceKey,
     },
@@ -67,6 +69,9 @@ pub enum AdoptionDecision {
     Unadoptable {
         key: ResourceKey,
         code: AdoptionUnadoptableCode,
+    },
+    Unchanged {
+        key: ResourceKey,
     },
 }
 
@@ -80,6 +85,7 @@ pub struct AdoptionPlan {
 pub enum AdoptionError {
     InvalidCandidate,
     DuplicateCandidate,
+    ConflictingInventory,
 }
 
 impl std::fmt::Display for AdoptionError {
@@ -87,6 +93,7 @@ impl std::fmt::Display for AdoptionError {
         formatter.write_str(match self {
             Self::InvalidCandidate => "an observed resource could not become a desired resource",
             Self::DuplicateCandidate => "duplicate adoption candidates were observed",
+            Self::ConflictingInventory => "adoption additions contain conflicting resources",
         })
     }
 }
@@ -101,8 +108,7 @@ pub fn plan_adoption(
 ) -> Result<AdoptionPlan, AdoptionError> {
     let existing = inventory.map(InventoryDocument::resources);
     let mut seen = HashSet::new();
-    let mut decisions = Vec::new();
-    let mut additions = Vec::new();
+    let mut candidates = BTreeMap::<ResourceKey, Vec<AdoptionCandidate>>::new();
 
     for (target, outcome) in environment.iter() {
         if !selection.contains(target) {
@@ -132,25 +138,191 @@ pub fn plan_adoption(
                 source_harnesses: HarnessSet::new([target.harness().clone()])
                     .map_err(|_| AdoptionError::InvalidCandidate)?,
             };
-            match existing.and_then(|resources| resources.get(&key)) {
-                Some(value) if value == &desired => {
-                    decisions.push(AdoptionDecision::AlreadyManaged { key });
-                }
-                Some(_) => decisions.push(AdoptionDecision::Conflict {
+            candidates.entry(key).or_default().push(candidate);
+        }
+    }
+
+    let mut decisions = Vec::new();
+    let mut additions = Vec::new();
+    for (key, candidates) in candidates {
+        let Some(first) = candidates.first() else {
+            continue;
+        };
+        if candidates
+            .iter()
+            .skip(1)
+            .any(|candidate| !equivalent_candidates(first, candidate))
+        {
+            decisions.extend(candidates.into_iter().map(|_| AdoptionDecision::Conflict {
+                key: key.clone(),
+                code: AdoptionConflictCode::CandidateSemanticsDiffer,
+            }));
+            continue;
+        }
+
+        let coalesced = coalesce_candidates(candidates)?;
+        if let Some(value) = existing.and_then(|resources| resources.get(&key)) {
+            if desired_semantically_equivalent(value, &coalesced.desired) {
+                decisions.push(AdoptionDecision::AlreadyManaged { key });
+            } else {
+                decisions.push(AdoptionDecision::Conflict {
                     key,
                     code: AdoptionConflictCode::ExistingDifferentResource,
-                }),
-                None => {
-                    additions.push(desired);
-                    decisions.push(AdoptionDecision::Adopted(Box::new(candidate)));
-                }
+                });
             }
+            continue;
         }
+
+        let decision = if coalesced.source_harnesses.iter().count() > 1 {
+            AdoptionDecision::Coalesced(Box::new(coalesced.clone()))
+        } else {
+            AdoptionDecision::Adopted(Box::new(coalesced.clone()))
+        };
+        additions.push(coalesced.desired);
+        decisions.push(decision);
     }
     Ok(AdoptionPlan {
         decisions,
         additions,
     })
+}
+
+/// Returns whether two fresh observations describe the same logical resource.
+///
+/// Native identities and fingerprints intentionally do not participate: they are
+/// evidence for the locked revalidation step, not proof of semantic equivalence.
+pub fn equivalent_candidates(left: &AdoptionCandidate, right: &AdoptionCandidate) -> bool {
+    left.desired.key() == right.desired.key()
+        && left.desired.kind() == right.desired.kind()
+        && left.desired.source() == right.desired.source()
+        && left.desired.components() == right.desired.components()
+        && left.desired.dependencies() == right.desired.dependencies()
+}
+
+/// Merge planned additions into an inventory while preserving existing policy.
+///
+/// Existing entries are never rewritten, even when an equivalent addition has a
+/// different target set or adopted origin. Equivalent new additions are merged
+/// into one target set; a semantic disagreement at one key aborts the merge.
+pub fn merge_inventory(
+    inventory: &InventoryDocument,
+    additions: impl IntoIterator<Item = DesiredResource>,
+) -> Result<InventoryDocument, AdoptionError> {
+    let mut projects = inventory.projects().clone();
+    let mut resources = inventory.resources().clone();
+    let mut pending = BTreeMap::new();
+
+    for addition in additions {
+        if let Scope::Project(path) = addition.scope() {
+            projects.insert(path.clone());
+        }
+        let key = addition.key().clone();
+        if let Some(existing) = resources.get(&key) {
+            if !desired_semantically_equivalent(existing, &addition) {
+                return Err(AdoptionError::ConflictingInventory);
+            }
+            continue;
+        }
+        if let Some(existing) = pending.get(&key) {
+            if !desired_semantically_equivalent(existing, &addition) {
+                return Err(AdoptionError::ConflictingInventory);
+            }
+            let merged = merge_desired_additions(existing, &addition)?;
+            pending.insert(key, merged);
+        } else {
+            pending.insert(key, addition);
+        }
+    }
+
+    // Inventory entries already under management are intentionally immutable;
+    // only fresh additions can be coalesced across harnesses.
+    for (key, addition) in pending {
+        if let Some(existing) = resources.get_mut(&key) {
+            if !desired_semantically_equivalent(existing, &addition) {
+                return Err(AdoptionError::ConflictingInventory);
+            }
+            continue;
+        }
+        resources.insert(key, addition);
+    }
+
+    InventoryDocument::new(inventory.schema(), projects, resources.into_values())
+        .map_err(|_| AdoptionError::InvalidCandidate)
+}
+
+fn coalesce_candidates(
+    candidates: Vec<AdoptionCandidate>,
+) -> Result<AdoptionCandidate, AdoptionError> {
+    let mut iter = candidates.into_iter();
+    let mut merged = iter.next().ok_or(AdoptionError::InvalidCandidate)?;
+    for candidate in iter {
+        let mut harnesses = merged
+            .source_harnesses
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        harnesses.extend(candidate.source_harnesses.iter().cloned());
+        let source_harness = harnesses
+            .iter()
+            .next()
+            .cloned()
+            .ok_or(AdoptionError::InvalidCandidate)?;
+        merged.source_harnesses =
+            HarnessSet::new(harnesses).map_err(|_| AdoptionError::InvalidCandidate)?;
+        merged.desired = rebuild_desired(
+            &merged.desired,
+            merged.source_harnesses.clone(),
+            DesiredOrigin::Adopted(source_harness),
+        )?;
+    }
+    Ok(merged)
+}
+
+fn desired_semantically_equivalent(left: &DesiredResource, right: &DesiredResource) -> bool {
+    left.key() == right.key()
+        && left.kind() == right.kind()
+        && left.source() == right.source()
+        && left.components() == right.components()
+        && left.dependencies() == right.dependencies()
+}
+
+fn merge_desired_additions(
+    left: &DesiredResource,
+    right: &DesiredResource,
+) -> Result<DesiredResource, AdoptionError> {
+    let mut targets = left.targets().iter().cloned().collect::<BTreeSet<_>>();
+    targets.extend(right.targets().iter().cloned());
+    let origin = match (left.origin(), right.origin()) {
+        (DesiredOrigin::Adopted(left), DesiredOrigin::Adopted(right)) => {
+            DesiredOrigin::Adopted(left.min(right).clone())
+        }
+        (origin, _) => origin.clone(),
+    };
+    rebuild_desired(
+        left,
+        HarnessSet::new(targets).map_err(|_| AdoptionError::InvalidCandidate)?,
+        origin,
+    )
+}
+
+fn rebuild_desired(
+    resource: &DesiredResource,
+    targets: HarnessSet,
+    origin: DesiredOrigin,
+) -> Result<DesiredResource, AdoptionError> {
+    DesiredResource::new(
+        resource.key().clone(),
+        resource.kind(),
+        targets,
+        origin,
+        resource.source().cloned(),
+        resource.update(),
+        resource.components().clone(),
+        resource.component_choices().clone(),
+        resource.accepted_consequences().clone(),
+        resource.dependencies().clone(),
+    )
+    .map_err(|_| AdoptionError::InvalidCandidate)
 }
 
 fn desired_from_observed(
@@ -204,7 +376,11 @@ mod tests {
     };
 
     fn environment() -> ObservedEnvironment {
-        let harness = HarnessId::new("codex").unwrap();
+        environment_with_harness("codex")
+    }
+
+    fn environment_with_harness(name: &str) -> ObservedEnvironment {
+        let harness = HarnessId::new(name).unwrap();
         let installation = HarnessInstallation::new(
             harness.clone(),
             ConfiguredBinary::absolute(AbsolutePath::new("/opt/codex").unwrap()),
@@ -284,5 +460,74 @@ mod tests {
             AdoptionDecision::AlreadyManaged { .. }
         ));
         assert!(plan.additions.is_empty());
+    }
+
+    #[test]
+    fn equivalent_candidates_ignore_native_identity_and_fingerprint() {
+        let plan = plan_adoption(None, &environment(), &AdoptionSelection::new([])).unwrap();
+        let AdoptionDecision::Adopted(candidate) = &plan.decisions[0] else {
+            panic!("expected an adopted candidate");
+        };
+        let mut other = (**candidate).clone();
+        other.identity.native_identity = crate::domain::NativeId::new("different").unwrap();
+        assert!(equivalent_candidates(candidate, &other));
+    }
+
+    #[test]
+    fn equivalent_candidates_coalesce_targets_and_use_stable_origin() {
+        let plan = plan_adoption(None, &environment(), &AdoptionSelection::new([])).unwrap();
+        let AdoptionDecision::Adopted(first) = &plan.decisions[0] else {
+            panic!("expected an adopted candidate");
+        };
+        let mut second = (**first).clone();
+        let claude = HarnessId::new("claude").unwrap();
+        second.source_harnesses = HarnessSet::new([claude.clone()]).unwrap();
+        let merged = coalesce_candidates(vec![(**first).clone(), second]).unwrap();
+        assert_eq!(merged.source_harnesses.iter().count(), 2);
+        assert!(merged.desired.targets().contains(&claude));
+        assert!(matches!(
+            merged.desired.origin(),
+            DesiredOrigin::Adopted(harness) if harness.as_str() == "claude"
+        ));
+    }
+
+    #[test]
+    fn merge_inventory_preserves_existing_entries_and_records_project_scope() {
+        let first = plan_adoption(None, &environment(), &AdoptionSelection::new([]))
+            .unwrap()
+            .additions
+            .remove(0);
+        let inventory = InventoryDocument::new(1, [], []).unwrap();
+        let merged = merge_inventory(&inventory, [first.clone()]).unwrap();
+        assert_eq!(merged.resources().len(), 1);
+        assert!(merged.projects().is_empty());
+        let unchanged = merge_inventory(&merged, [first]).unwrap();
+        assert_eq!(merged, unchanged);
+    }
+
+    #[test]
+    fn merge_inventory_rejects_conflicting_same_key_additions() {
+        let first = plan_adoption(None, &environment(), &AdoptionSelection::new([]))
+            .unwrap()
+            .additions
+            .remove(0);
+        let different = DesiredResource::new(
+            first.key().clone(),
+            ResourceKind::StandaloneSkill,
+            first.targets().clone(),
+            DesiredOrigin::Direct,
+            first.source().cloned(),
+            first.update(),
+            first.components().clone(),
+            first.component_choices().clone(),
+            first.accepted_consequences().clone(),
+            first.dependencies().clone(),
+        )
+        .unwrap();
+        let inventory = InventoryDocument::new(1, [], []).unwrap();
+        assert_eq!(
+            merge_inventory(&inventory, [first, different]).unwrap_err(),
+            AdoptionError::ConflictingInventory
+        );
     }
 }
