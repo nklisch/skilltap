@@ -1,7 +1,7 @@
 ---
 id: epic-reconciliation-execution
 kind: epic
-stage: drafting
+stage: implementing
 tags: []
 parent: null
 depends_on: [epic-harness-observation-adoption]
@@ -46,13 +46,63 @@ marketplace, plugin, skill, and instruction operations arrive in later epics.
 - **Does this epic require UI mockups?** No. Plans and apply results are
   non-interactive plain-text and JSON CLI surfaces.
 
-## Anticipated child features
+## Decomposition
 
-- Pure desired/observed/last-applied planner
-- Operation graph, selectors, and acknowledgment rules
-- Ownership, drift, conflict, and no-op classification
-- Locked executor with fingerprint revalidation and result journal
-- Partial-failure recovery and idempotency enforcement
-- `plan` and `sync` command surfaces with stable output
+The epic is split by capability rather than crate layer. The planner owns the
+pure desired/observed/state decision model; the graph feature owns dependency
+and selector invariants; the executor owns lock/revalidation/journal/recovery;
+and the CLI feature composes those ports into `plan` and `sync`. This keeps the
+pure core independently testable while allowing later lifecycle epics to add
+resource-specific adapters without changing execution safety.
 
-<!-- The design pass on each child feature will fill in real specifics. -->
+### Child features
+
+- `epic-reconciliation-execution-planner` — classify desired resources against
+  fresh observations and last-applied state into explainable safe, partial,
+  unsupported, conflict, drift, and no-op operations — depends on: `[]`.
+- `epic-reconciliation-execution-graph` — enforce operation dependencies,
+  exact scope-bearing selectors, piecewise include/exclude selection, and
+  acknowledgment semantics — depends on:
+  `[epic-reconciliation-execution-planner]`.
+- `epic-reconciliation-execution-executor` — safely apply dependency-ordered
+  operations under the process lock, revalidate fingerprints, journal state,
+  and recover after partial failure — depends on:
+  `[epic-reconciliation-execution-graph]`.
+- `epic-reconciliation-execution-cli` — expose deterministic `plan` and `sync`
+  commands with shared plain/JSON output, exit classes, and idempotency
+  coverage — depends on: `[epic-reconciliation-execution-executor]`.
+
+### Design decisions
+
+- **Plan representation**: use the existing validated `Plan`, `Operation`,
+  selector, compatibility, and attention contracts as the single wire model;
+  planner helpers return those types rather than introducing a parallel
+  application-only plan shape.
+- **Execution policy**: safe independent operations may proceed when another
+  operation is blocked, but dependent operations are skipped with explicit
+  dependency blockers. No operation is applied after its affected observation
+  or executable identity fails revalidation.
+- **State journaling**: update `state.json` atomically at operation boundaries
+  through the existing repository; a fresh observation and plan is the recovery
+  mechanism, not a second journal format.
+- **Acknowledgment**: only exact partial consequences shown by the plan may be
+  acknowledged; there is no generic bypass. Include/exclude selectors narrow
+  operations by exact scope-bearing resource or component identity.
+- **Native boundary**: this epic supplies generic operation ports and safety;
+  marketplace, plugin, standalone skill, instruction, and materialization
+  adapters remain in their later epics.
+
+### Decomposition risks
+
+- The current operation contracts are extensive; planner helpers must preserve
+  their constructor invariants instead of bypassing them with ad hoc structs.
+- State journaling after each operation can expose a publication failure after
+  native success; recovery must report uncertainty and never claim completion.
+- Resource-specific adapters are not yet present, so initial integration tests
+  use deterministic fake operation ports and must not imply native lifecycle
+  support prematurely.
+
+## UI alignment deferred
+
+This epic has no visual surface. `plan` and `sync` are non-interactive CLI
+commands rendered through the existing plain/JSON output contract.
