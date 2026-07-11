@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-resolution-contract
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-safe-update-automation-resolution
 depends_on: []
@@ -33,3 +33,14 @@ Acceptance criteria:
   directly and `candidate_for` derives the policy candidate; unresolved results
   remain explicit through `error` rather than being classified as no-update.
 - Adjacent issues parked: none.
+
+## Verification
+
+- `cargo test --workspace --all-targets --offline` — passed (all workspace
+  tests).
+- `cargo clippy --workspace --all-targets --offline -- -D warnings` — passed
+  for the touched core crate before the workspace verification pass.
+
+## Review
+
+Verdict: Approve — story verified by implement; fast-lane advance.

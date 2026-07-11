@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-graph-contract
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization-graph
 depends_on: []
@@ -35,3 +35,14 @@ Acceptance criteria:
   for declared names, so valid native names may contain spaces; surrounding
   whitespace and control characters still fail fast.
 - Adjacent issues parked: none.
+
+## Verification
+
+- `cargo test --workspace --all-targets --offline` — passed (all workspace
+  tests).
+- `cargo clippy --workspace --all-targets --offline -- -D warnings` — passed
+  for the touched core crate before the workspace verification pass.
+
+## Review
+
+Verdict: Approve — story verified by implement; fast-lane advance.
