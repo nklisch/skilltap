@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-maintainability-validated-newtypes
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-domain-maintainability
 depends_on: [epic-rust-control-plane-domain-maintainability-resource-tests, epic-rust-control-plane-domain-maintainability-operation-tests]
@@ -31,3 +31,16 @@ bespoke. Full golden and locked workspace tests must remain unchanged.
 - Adjacent issues parked: none.
 - Dispatch rationale: direct-read only; the repeated implementations and their exact trait differences were locally enumerable.
 - Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace`, and rustdoc with warnings denied all pass.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Crate-private support preserves exact public traits, validators,
+errors, and wire forms across 12 types while reducing production code by 134
+lines. Custom-normalized types remain bespoke. Locked tests/clippy/rustdoc pass;
+fast-lane advance.
