@@ -1,7 +1,7 @@
 ---
 id: epic-instruction-reconciliation
 kind: epic
-stage: drafting
+stage: implementing
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -61,3 +61,38 @@ recoverable backups.
 - Instruction status, setup, and managed repair commands
 
 <!-- The design pass on each child feature will fill in real specifics. -->
+
+## Decomposition
+
+Instruction work is split into canonical location/bridge modeling, global and
+project materialization, conflict-safe repair, and CLI composition.
+
+### Child features
+
+1. `epic-instruction-reconciliation-model` — scope-aware instruction
+   locations, fingerprints, ownership, bridge modes, and health findings
+   — depends on `[]`.
+2. `epic-instruction-reconciliation-global` — canonical `~/AGENTS.md` setup
+   and Codex/Claude global bridges — depends on
+   `[epic-instruction-reconciliation-model]`.
+3. `epic-instruction-reconciliation-project` — project-root and explicitly
+   adopted nested instruction handling, including one-entry-point detection
+   — depends on `[epic-instruction-reconciliation-model]`.
+4. `epic-instruction-reconciliation-repair` — canonical-wins conflict plans,
+   backups, symlink/import modes, and locked atomic repair — depends on
+   `[epic-instruction-reconciliation-global,
+   epic-instruction-reconciliation-project]`.
+5. `epic-instruction-reconciliation-commands` — setup/status/repair command
+   output, exact acknowledgment, and idempotent health checks — depends on
+   `[epic-instruction-reconciliation-repair]`.
+
+## Design review
+
+### Verdict
+
+Approved for implementation.
+
+### Notes
+
+Canonical `AGENTS.md` is the source of truth. A divergent native file blocks
+ordinary repair; approved replacement creates a recoverable backup first.

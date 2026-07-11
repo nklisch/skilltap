@@ -6,6 +6,7 @@ pub mod reconciliation;
 pub mod runtime;
 pub mod skill;
 pub mod skill_compatibility;
+pub mod skill_lifecycle;
 pub mod skill_source;
 pub mod storage;
 

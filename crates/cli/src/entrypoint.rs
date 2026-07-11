@@ -19,7 +19,8 @@ use crate::{
     ResultClass,
     application::{NativeObservationMode, StatusApplication},
     command::{
-        AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs, SyncArgs,
+        AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
+        ScopedTargetArgs, SyncArgs,
     },
     dispatch::Dispatch,
 };
@@ -80,6 +81,7 @@ where
         Dispatch::Adopt(args) => (execute_system_adopt(&args), OutputChannel::Stdout),
         Dispatch::Plan(args) => (execute_system_plan(&args), OutputChannel::Stdout),
         Dispatch::Sync(args) => (execute_system_sync(&args), OutputChannel::Stdout),
+        Dispatch::SkillList(args) => (execute_system_skill_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessEnable(args) => {
             (execute_system_harness_enable(&args), OutputChannel::Stdout)
@@ -100,6 +102,12 @@ fn execute_system_plan(args: &PlanArgs) -> Outcome {
 
 fn execute_system_sync(args: &SyncArgs) -> Outcome {
     execute_system_reconciliation("sync", |application| application.execute_sync(args))
+}
+
+fn execute_system_skill_list(args: &ScopedTargetArgs) -> Outcome {
+    execute_system_reconciliation("skill list", |application| {
+        application.execute_skill_list(args)
+    })
 }
 
 fn execute_system_reconciliation(

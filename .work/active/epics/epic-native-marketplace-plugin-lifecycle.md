@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle
 kind: epic
-stage: drafting
+stage: implementing
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -60,3 +60,41 @@ materialization are deliberately deferred to their own epic.
 - Marketplace and plugin list/install/remove command families
 
 <!-- The design pass on each child feature will fill in real specifics. -->
+
+## Decomposition
+
+Native lifecycle work is split by source identity, harness adapters, document
+preservation, and command composition. No child may enumerate marketplace
+contents or write undocumented caches.
+
+### Child features
+
+1. `epic-native-marketplace-plugin-lifecycle-identity` — validate explicit
+   marketplace locators, plugin selectors, source association, and scope-aware
+   logical resource identity — depends on `[]`.
+2. `epic-native-marketplace-plugin-lifecycle-codex` — compose verified Codex
+   native marketplace/plugin lifecycle commands and post-mutation observation
+   — depends on `[epic-native-marketplace-plugin-lifecycle-identity]`.
+3. `epic-native-marketplace-plugin-lifecycle-claude` — compose verified Claude
+   Code marketplace/plugin lifecycle commands and post-mutation observation
+   — depends on `[epic-native-marketplace-plugin-lifecycle-identity]`.
+4. `epic-native-marketplace-plugin-lifecycle-preservation` — edit documented
+   config surfaces while preserving unknown fields and exact scope boundaries
+   — depends on `[epic-native-marketplace-plugin-lifecycle-codex,
+   epic-native-marketplace-plugin-lifecycle-claude]`.
+5. `epic-native-marketplace-plugin-lifecycle-commands` — expose explicit
+   add/remove/update/list/install commands, operation plans, ownership, and
+   idempotent verification without discovery — depends on
+   `[epic-native-marketplace-plugin-lifecycle-preservation]`.
+
+## Design review
+
+### Verdict
+
+Approved for implementation.
+
+### Notes
+
+Native harness lifecycle commands remain authoritative when available. A
+missing native capability produces a typed attention result and never falls
+back to cache mutation or guessed configuration edits.

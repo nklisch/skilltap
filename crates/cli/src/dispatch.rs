@@ -1,7 +1,7 @@
 use crate::command::{
     AdoptArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
-    InstructionsCommand, MarketplaceCommand, OutputArgs, PlanArgs, PluginCommand, SkillCommand,
-    StatusArgs, SyncArgs,
+    InstructionsCommand, MarketplaceCommand, OutputArgs, PlanArgs, PluginCommand, ScopedTargetArgs,
+    SkillCommand, StatusArgs, SyncArgs,
 };
 
 pub(crate) enum Dispatch {
@@ -9,6 +9,7 @@ pub(crate) enum Dispatch {
     Adopt(AdoptArgs),
     Plan(PlanArgs),
     Sync(SyncArgs),
+    SkillList(ScopedTargetArgs),
     HarnessList(OutputArgs),
     HarnessEnable(HarnessEnableArgs),
     HarnessDisable(HarnessChangeArgs),
@@ -51,7 +52,7 @@ impl Dispatch {
                 SkillCommand::Install(args) => unavailable("skill install", args.output.json),
                 SkillCommand::Remove(args) => unavailable("skill remove", args.common.output.json),
                 SkillCommand::Update(args) => unavailable("skill update", args.output.json),
-                SkillCommand::List(args) => unavailable("skill list", args.output.json),
+                SkillCommand::List(args) => Self::SkillList(args),
             },
             Command::Instructions(args) => match args.command {
                 InstructionsCommand::Setup(args) => {
@@ -79,6 +80,7 @@ impl Dispatch {
             Self::Adopt(args) => args.output.json,
             Self::Plan(args) => args.output.json,
             Self::Sync(args) => args.output.json,
+            Self::SkillList(args) => args.output.json,
             Self::HarnessList(args) => args.json,
             Self::HarnessEnable(args) => args.output.json,
             Self::HarnessDisable(args) => args.output.json,

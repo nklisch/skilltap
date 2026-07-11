@@ -35,7 +35,8 @@ use skilltap_harnesses::{
 use crate::{
     ErrorDetail, NextAction, Outcome, OutputEntry, OutputScope, ResultClass, Warning,
     command::{
-        AdoptArgs, OutputArgs, PlanArgs, ScopeArgs, ScopeArgument, StatusArgs, SyncArgs, TargetArgs,
+        AdoptArgs, OutputArgs, PlanArgs, ScopeArgs, ScopeArgument, ScopedTargetArgs, StatusArgs,
+        SyncArgs, TargetArgs,
     },
 };
 
@@ -73,6 +74,84 @@ impl StatusApplication<'_> {
             &args.selection.exclude,
             args.acknowledgment.yes,
         )
+    }
+
+    /// List desired standalone skills only. This is deliberately inventory
+    /// backed and never scans source directories or marketplace contents.
+    pub(crate) fn execute_skill_list(&self, args: &ScopedTargetArgs) -> Outcome {
+        let documents = DocumentLoadPhase::execute(self);
+        let mut outcome =
+            documents.project(Outcome::new("skill list", ResultClass::AttentionRequired));
+        let documents = match documents.finish() {
+            Ok(documents) => documents,
+            Err(errors) => {
+                outcome.result = ResultClass::Invalid;
+                for error in errors {
+                    outcome = outcome.with_error(error);
+                }
+                return outcome;
+            }
+        };
+        let status_args = StatusArgs {
+            target: args.target.clone(),
+            scope: args.scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let targets = match StatusTargets::resolve(&status_args, &documents) {
+            Ok(targets) => targets,
+            Err(StatusTargetError::NoneEnabled) => {
+                return outcome
+                    .with_error(ErrorDetail::new(
+                        "no_enabled_harnesses",
+                        "No harness is enabled in skilltap configuration.",
+                    ))
+                    .with_next_action(
+                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                            .with_command("skilltap harness enable <codex|claude>"),
+                    );
+            }
+            Err(StatusTargetError::NotEnabled) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "target_not_enabled",
+                    "The requested harness target is not enabled.",
+                ));
+            }
+        };
+        let mut count = 0_u64;
+        if let Some(inventory) = &documents.inventory {
+            for resource in inventory.resources().values() {
+                if resource.kind() != ResourceKind::StandaloneSkill
+                    || !scope.resolved.iter().any(|value| value == resource.scope())
+                    || !resource
+                        .targets()
+                        .iter()
+                        .any(|target| targets.resolved.contains(target))
+                {
+                    continue;
+                }
+                count += 1;
+                outcome = outcome.with_resource(
+                    OutputEntry::new(resource.key().to_string(), "desired")
+                        .with_field("kind", "standalone_skill")
+                        .with_field("scope", scope_label(resource.scope()))
+                        .with_field("targets", resource.targets().iter().count() as u64),
+                );
+            }
+        }
+        outcome.result = ResultClass::Completed;
+        outcome
+            .with_summary("skills", count)
+            .with_summary("scopes", scope.count)
+            .with_summary("targets", targets.iter().len() as u64)
     }
 
     fn execute_reconciliation(

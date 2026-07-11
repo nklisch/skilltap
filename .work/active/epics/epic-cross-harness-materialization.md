@@ -61,3 +61,29 @@ write surfaces.
 - Partial plans, required-component blocking, and selector acknowledgments
 
 <!-- The design pass on each child feature will fill in real specifics. -->
+
+## Decomposition
+
+This epic stays gated until native plugin and standalone skill lifecycle
+adapters are complete. Its children are pure compatibility/materialization
+stages followed by managed artifact publication.
+
+### Child features
+
+1. `epic-cross-harness-materialization-graph` — normalize source plugin
+   components, dependencies, requiredness, and source provenance — depends on
+   `[epic-native-marketplace-plugin-lifecycle,
+   epic-standalone-skill-lifecycle]`.
+2. `epic-cross-harness-materialization-compatibility` — classify target
+   capabilities, faithful equivalents, optional omissions, and exact partial
+   consequences — depends on `[epic-cross-harness-materialization-graph]`.
+3. `epic-cross-harness-materialization-skills-mcp` — project portable skills
+   and conditional MCP components through documented target paths — depends on
+   `[epic-cross-harness-materialization-compatibility]`.
+4. `epic-cross-harness-materialization-hooks` — map hooks and target-specific
+   components, blocking unsupported required behavior — depends on
+   `[epic-cross-harness-materialization-compatibility]`.
+5. `epic-cross-harness-materialization-publish` — publish managed target
+   artifacts, preserve source ownership, and verify native load paths —
+   depends on `[epic-cross-harness-materialization-skills-mcp,
+   epic-cross-harness-materialization-hooks]`.
