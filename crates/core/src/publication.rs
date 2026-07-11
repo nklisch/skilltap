@@ -1,7 +1,10 @@
 //! Pure publication batching for target materializations.
 
 use crate::{
-    domain::{Fingerprint, HarnessId, ResourceKey},
+    domain::{
+        Fingerprint, HarnessId, NativeId, ObservationLayer, ObservedResource, ResourceHealth,
+        ResourceKey,
+    },
     storage::{
         ArtifactPublication, ArtifactRole, ArtifactTree, ManagedArtifactError,
         ManagedArtifactRecord, ManagedArtifactRepository,
@@ -31,7 +34,7 @@ pub struct PublishedArtifact {
 }
 
 impl PublishedArtifact {
-    fn new(
+    pub fn new(
         resource: ResourceKey,
         target: HarnessId,
         record: ManagedArtifactRecord,
@@ -65,11 +68,45 @@ impl PublishedArtifact {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PublicationReceipt {
     published: Vec<PublishedArtifact>,
+    verified: Vec<VerifiedTarget>,
 }
 
 impl PublicationReceipt {
     pub fn published(&self) -> &[PublishedArtifact] {
         &self.published
+    }
+
+    pub fn verified(&self) -> &[VerifiedTarget] {
+        &self.verified
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedTarget {
+    resource: ResourceKey,
+    target: HarnessId,
+    native_identity: NativeId,
+}
+
+impl VerifiedTarget {
+    fn new(resource: ResourceKey, target: HarnessId, native_identity: NativeId) -> Self {
+        Self {
+            resource,
+            target,
+            native_identity,
+        }
+    }
+
+    pub fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub fn native_identity(&self) -> &NativeId {
+        &self.native_identity
     }
 }
 
@@ -77,6 +114,148 @@ pub trait PublicationSink {
     type Error;
 
     fn publish(&self, entry: &PublicationEntry) -> Result<PublishedArtifact, Self::Error>;
+}
+
+pub trait LoadVerifier {
+    fn verify_loaded(
+        &self,
+        entry: &PublicationEntry,
+        artifact: &PublishedArtifact,
+    ) -> Result<VerifiedTarget, LoadVerificationError>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LoadVerificationError {
+    ResourceMismatch,
+    TargetMismatch,
+    MissingEffectiveObservation,
+    Unhealthy(ResourceHealth),
+    MissingFingerprint,
+    FingerprintMismatch,
+}
+
+impl std::fmt::Display for LoadVerificationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::ResourceMismatch => {
+                "the observed resource identity does not match the publication"
+            }
+            Self::TargetMismatch => "the observed harness does not match the publication target",
+            Self::MissingEffectiveObservation => "the target has no effective load observation",
+            Self::Unhealthy(_) => "the target loaded the resource in an unhealthy state",
+            Self::MissingFingerprint => "the target observation has no resource fingerprint",
+            Self::FingerprintMismatch => "the target fingerprint does not match the publication",
+        })
+    }
+}
+
+impl std::error::Error for LoadVerificationError {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PublicationVerificationError {
+    MissingEntry {
+        resource: ResourceKey,
+        target: HarnessId,
+    },
+    Failed {
+        resource: ResourceKey,
+        target: HarnessId,
+        error: LoadVerificationError,
+    },
+}
+
+impl std::fmt::Display for PublicationVerificationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingEntry { resource, target } => write!(
+                formatter,
+                "publication receipt contains an unknown `{resource}` for `{target}`"
+            ),
+            Self::Failed {
+                resource,
+                target,
+                error,
+            } => write!(
+                formatter,
+                "load verification for `{resource}` on `{target}` failed: {error}"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for PublicationVerificationError {}
+
+/// Verify all managed publications against fresh effective observations. The
+/// verifier is supplied by the harness adapter and must not inspect caches.
+pub fn verify_publication<V: LoadVerifier>(
+    batch: &PublicationBatch,
+    receipt: PublicationReceipt,
+    verifier: &V,
+) -> Result<PublicationReceipt, PublicationVerificationError> {
+    let mut verified = Vec::with_capacity(receipt.published.len());
+    for artifact in &receipt.published {
+        let Some(entry) = batch.entries.iter().find(|entry| {
+            entry.resource == *artifact.resource() && entry.target == *artifact.target()
+        }) else {
+            return Err(PublicationVerificationError::MissingEntry {
+                resource: artifact.resource().clone(),
+                target: artifact.target().clone(),
+            });
+        };
+        let target = verifier.verify_loaded(entry, artifact).map_err(|error| {
+            PublicationVerificationError::Failed {
+                resource: entry.resource.clone(),
+                target: entry.target.clone(),
+                error,
+            }
+        })?;
+        verified.push(target);
+    }
+    Ok(PublicationReceipt {
+        published: receipt.published,
+        verified,
+    })
+}
+
+/// Compare one fresh effective observation to the exact publication entry.
+/// Harness adapters can use this after obtaining a bounded native snapshot.
+pub fn verify_observed_load(
+    entry: &PublicationEntry,
+    artifact: &PublishedArtifact,
+    observed: Option<&ObservedResource>,
+) -> Result<VerifiedTarget, LoadVerificationError> {
+    if artifact.resource() != &entry.resource {
+        return Err(LoadVerificationError::ResourceMismatch);
+    }
+    if artifact.target() != &entry.target {
+        return Err(LoadVerificationError::TargetMismatch);
+    }
+    let Some(observed) = observed else {
+        return Err(LoadVerificationError::MissingEffectiveObservation);
+    };
+    if observed.key().resource() != &entry.resource {
+        return Err(LoadVerificationError::ResourceMismatch);
+    }
+    if observed.key().harness() != &entry.target {
+        return Err(LoadVerificationError::TargetMismatch);
+    }
+    if observed.key().layer() != ObservationLayer::Effective {
+        return Err(LoadVerificationError::MissingEffectiveObservation);
+    }
+    if observed.health() != ResourceHealth::Healthy {
+        return Err(LoadVerificationError::Unhealthy(observed.health()));
+    }
+    let Some(fingerprint) = observed.fingerprint() else {
+        return Err(LoadVerificationError::MissingFingerprint);
+    };
+    if fingerprint != &entry.fingerprint {
+        return Err(LoadVerificationError::FingerprintMismatch);
+    }
+    Ok(VerifiedTarget::new(
+        entry.resource.clone(),
+        entry.target.clone(),
+        observed.native_identity().clone(),
+    ))
 }
 
 #[derive(Debug)]
@@ -149,7 +328,10 @@ pub fn apply_publication<S: PublicationSink>(
             }
         }
     }
-    Ok(PublicationReceipt { published })
+    Ok(PublicationReceipt {
+        published,
+        verified: Vec::new(),
+    })
 }
 
 /// Adapter that stores each complete tree through the existing managed
@@ -263,7 +445,10 @@ mod tests {
     use std::cell::RefCell;
 
     use super::*;
-    use crate::domain::{FingerprintAlgorithm, ResourceId, Scope};
+    use crate::domain::{
+        ComponentGraph, FingerprintAlgorithm, ObservationKey, Ownership, Provenance, ResourceId,
+        ResourceKind, Scope,
+    };
 
     fn resource(value: &str) -> ResourceKey {
         ResourceKey::new(ResourceId::new(value).unwrap(), Scope::Global)
@@ -405,5 +590,66 @@ mod tests {
             } if published.len() == 1 && target.as_str() == "codex"
         ));
         assert_eq!(sink.calls.borrow().len(), 2);
+    }
+
+    fn observed(
+        entry: &PublicationEntry,
+        health: ResourceHealth,
+        fingerprint: Option<Fingerprint>,
+    ) -> ObservedResource {
+        ObservedResource::new(
+            ObservationKey::new(
+                entry.resource.clone(),
+                entry.target.clone(),
+                ObservationLayer::Effective,
+            ),
+            ResourceKind::Plugin,
+            Provenance::Materialized,
+            Ownership::Skilltap,
+            health,
+            None,
+            ComponentGraph::new([]).unwrap(),
+            [].into(),
+            NativeId::new("native-demo").unwrap(),
+            None,
+            fingerprint,
+        )
+    }
+
+    #[test]
+    fn effective_load_verification_requires_healthy_matching_fingerprint() {
+        let entry = entry("plugin:a", "codex", 'a');
+        let record = ManagedArtifactRecord::for_artifact(
+            entry.resource.clone(),
+            entry.role,
+            entry.fingerprint.clone(),
+        )
+        .unwrap();
+        let artifact =
+            PublishedArtifact::new(entry.resource.clone(), entry.target.clone(), record, false);
+        let loaded = observed(
+            &entry,
+            ResourceHealth::Healthy,
+            Some(entry.fingerprint.clone()),
+        );
+        let verified = verify_observed_load(&entry, &artifact, Some(&loaded)).unwrap();
+        assert_eq!(verified.resource(), &entry.resource);
+        assert_eq!(verified.target(), &entry.target);
+        assert_eq!(verified.native_identity().as_str(), "native-demo");
+
+        let mismatch = observed(&entry, ResourceHealth::Healthy, Some(fingerprint('b')));
+        assert_eq!(
+            verify_observed_load(&entry, &artifact, Some(&mismatch)),
+            Err(LoadVerificationError::FingerprintMismatch)
+        );
+        let unhealthy = observed(
+            &entry,
+            ResourceHealth::Degraded,
+            Some(entry.fingerprint.clone()),
+        );
+        assert_eq!(
+            verify_observed_load(&entry, &artifact, Some(&unhealthy)),
+            Err(LoadVerificationError::Unhealthy(ResourceHealth::Degraded))
+        );
     }
 }

@@ -19,6 +19,8 @@ mod plugin_graph;
 pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader};
 mod materialization;
 pub use materialization::JsonMcpProjectionMapper;
+mod load_verification;
+pub use load_verification::EffectiveObservationVerifier;
 mod update_resolution;
 pub use update_resolution::{GitSourceRevisionResolver, ObservedNativeRevisionResolver};
 
