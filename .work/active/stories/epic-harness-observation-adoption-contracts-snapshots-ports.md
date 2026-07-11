@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-snapshots-ports
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-storage-wires, epic-harness-observation-adoption-contracts-findings, epic-harness-observation-adoption-contracts-installation-profiles]
@@ -55,3 +55,14 @@ CLI dependency enters core.
 - `cargo build --workspace --release --locked` — passed.
 - `scripts/verify-compiled-binary.sh /storage/cargo-target/release/skilltap` —
   passed, including 6 compiled-binary integration tests.
+
+## Review
+
+- Approved after a fresh-context review of the complete snapshot and port
+  boundary.
+- Confirmed unreachable evidence is unrepresentable, unknown versions remain
+  observe-only, every resource/finding matches its exact request context, and
+  environments require one request-identical outcome for every batch target.
+- Confirmed deterministic strict wires, retained mixed success/failure
+  siblings, source-free adapter errors, and no I/O, native DTO, persistence,
+  runtime, or CLI dependency in the core port surface.
