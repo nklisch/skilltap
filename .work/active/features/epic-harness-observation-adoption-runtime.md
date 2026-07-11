@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime
 kind: feature
-stage: drafting
+stage: implementing
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-contracts]
@@ -24,3 +24,119 @@ depth/size rejection; `CODEX_HOME`-aware paths; and bounded descriptor-relative
 external directory observation that reports links and rejects non-regular or
 raced entries without following them. Include adversarial process/filesystem
 fixtures. This feature performs no harness-specific interpretation.
+
+## Design
+
+### Boundary and limits
+
+The runtime is a set of harness-neutral adapters behind core observation
+contracts. Every external boundary receives explicit non-zero limits and
+returns a closed error category whose Debug/Display forms contain no argv,
+environment values, native output, file bytes, parser excerpts, or raw paths.
+Limits cover process deadline, stdout/stderr and combined output, JSON bytes
+and nesting depth, tree depth and entries, per-file bytes, total tree bytes,
+and symlink-target bytes.
+
+The runtime accepts a configured binary plus an explicit PATH value, resolves
+one canonical executable identity, and revalidates that identity immediately
+before every spawn. Empty PATH components are invalid rather than implicitly
+meaning the current directory. Final executable symlinks may resolve to a
+canonical regular executable so Homebrew and version-manager installations
+work. Revalidation narrows the race window but is not described as proving the
+executed inode; an fd-based execution mechanism would require a later explicit
+cross-platform design.
+
+### Process and structured-data safety
+
+Native commands use direct argument vectors, null stdin, an explicit cleared
+environment, optional canonical working directory, and the previously resolved
+absolute executable. Stdout and stderr are drained concurrently while limits
+are enforced. Timeout or overflow terminates the dedicated Unix process group
+and always reaps the child, including when descendants retain inherited pipe
+descriptors. Non-zero native exit is a bounded result, not an infrastructure
+error.
+
+JSON decoding first applies a byte cap and UTF-8 boundary, then accepts exactly
+one document. A custom recursive visitor rejects duplicate keys at every depth,
+trailing documents/garbage, and depth overflow before typed deserialization.
+Errors expose only category and configured limits.
+
+### External paths and trees
+
+Codex-native paths honor a non-empty normalized absolute `CODEX_HOME`; absent or
+empty falls back to `$HOME/.codex`. XDG continues to control only skilltap state,
+and the canonical global instruction remains `~/AGENTS.md`. Resolution creates
+nothing.
+
+External harness trees are observed separately from skilltap-managed artifact
+trees. Traversal is descriptor-relative and no-follow, deterministic, and
+bounded while walking. Regular files are read only after identity checks;
+directories are traversed; symlinks are reported with bounded opaque targets
+but never followed. FIFO, socket, device, non-UTF-8, raced, over-depth,
+over-entry, and over-byte entries fail with safe typed context.
+
+### Pre-mortem
+
+- **A child keeps pipes open after timeout.** Put the native process in its own
+  group, drain both streams concurrently, kill the group, and always reap.
+- **A large output is buffered before the cap.** Enforce per-stream and total
+  caps during reads rather than after `wait_with_output`.
+- **JSON silently accepts duplicate keys.** Parse through a duplicate-aware
+  recursive visitor before typed decoding; do not rely on `serde_json::Value`.
+- **A file changes between metadata and read/spawn.** Bind identities to opened
+  descriptors where available and revalidate at the last boundary; report
+  replacement rather than continuing.
+- **Tree traversal follows a link or blocks on a FIFO.** Use descriptor-relative
+  no-follow opens, classify before reading, and reject special files.
+- **Environment inheritance leaks secrets or changes behavior.** Clear the
+  child environment and pass an explicit allowlist supplied by the adapter.
+- **Linux-only behavior lands accidentally.** Keep errno/process-group and
+  descriptor primitives portable across Linux and macOS and retain the macOS
+  compile gate.
+
+## Implementation units
+
+1. `epic-harness-observation-adoption-runtime-contracts-limits` — define
+   bounded runtime requests, statuses, limits, ports, and safe errors — depends
+   on `[]`.
+2. `epic-harness-observation-adoption-runtime-adversarial-fixtures` — add
+   process and external-tree fixtures for timeout, overflow, descendants,
+   special files, bounds, and races — depends on `[]`.
+3. `epic-harness-observation-adoption-runtime-executable-resolution` — resolve
+   configured binaries to canonical executable identities and revalidate them
+   — depends on `[runtime-contracts-limits, runtime-adversarial-fixtures]`.
+4. `epic-harness-observation-adoption-runtime-bounded-process` — execute direct
+   bounded native processes with process-group termination and reaping —
+   depends on `[runtime-contracts-limits, runtime-adversarial-fixtures,
+   runtime-executable-resolution]`.
+5. `epic-harness-observation-adoption-runtime-strict-json` — implement the
+   bounded duplicate-aware one-document JSON boundary — depends on
+   `[runtime-contracts-limits]`.
+6. `epic-harness-observation-adoption-runtime-codex-home` — add safe
+   `CODEX_HOME` resolution without moving `~/AGENTS.md` — depends on
+   `[runtime-contracts-limits]`.
+7. `epic-harness-observation-adoption-runtime-external-tree` — implement
+   bounded descriptor-relative no-follow external tree observation — depends
+   on `[runtime-contracts-limits, runtime-adversarial-fixtures]`.
+8. `epic-harness-observation-adoption-runtime-integration` — verify the whole
+   resolve/run/decode/path/tree pipeline, determinism, safety, and platform
+   gates — depends on all five concrete runtime adapters.
+
+## Acceptance criteria
+
+- Executable resolution is deterministic, scope-free, canonical, and bound to
+  file identity; unsafe PATH and replacement cases fail explicitly.
+- Processes receive direct argv, null stdin, exact environment and cwd, enforce
+  deadline and all output caps during concurrent reads, terminate descendants,
+  and always reap.
+- JSON rejects over-limit bytes/depth, invalid UTF-8, duplicate keys, trailing
+  documents, and trailing garbage without echoing source bytes.
+- Codex paths honor `CODEX_HOME` fallback/override rules, create nothing, and do
+  not relocate global `~/AGENTS.md`.
+- External trees are deterministic and bounded, report but never follow links,
+  reject special/non-UTF-8/raced entries, and never reuse managed write APIs.
+- Adversarial fixtures cover boundary minus/at/plus one, both-pipe pressure,
+  descendant pipe holders, executable replacement, tree swaps, and secret
+  canaries.
+- Full locked format/check/Clippy/test/rustdoc, release/compiled-binary, Linux
+  execution, and macOS compile gates pass.
