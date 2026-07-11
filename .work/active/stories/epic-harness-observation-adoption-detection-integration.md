@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-integration
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: [epic-harness-observation-adoption-detection-fixtures, epic-harness-observation-adoption-detection-registry, epic-harness-observation-adoption-detection-profiles, epic-harness-observation-adoption-detection-probes]
@@ -37,3 +37,9 @@ composition corrections here.
 
 - Harness detection Clippy and all six detection integration tests pass in the
   locked offline workspace.
+
+## Review
+
+- Fast-lane review approved the deterministic sibling-isolation suite and
+  green warnings-denied verification. Detection remains read-only and
+  harness-neutral.
