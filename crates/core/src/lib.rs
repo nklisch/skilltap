@@ -1,3 +1,4 @@
+pub mod adoption;
 pub mod domain;
 pub mod runtime;
 pub mod storage;
