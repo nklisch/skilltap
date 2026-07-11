@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-maintainability-output-tests
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-cli-maintainability
 depends_on: []
@@ -37,3 +37,8 @@ Run the full locked ladder.
   pass.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. The normal sidecar move preserves the byte-identical CLI test list,
+fully qualified identities, bodies, assertions, and locked verification.
