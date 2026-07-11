@@ -1,7 +1,7 @@
 ---
 id: epic-reconciliation-execution-executor
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-reconciliation-execution
 depends_on: [epic-reconciliation-execution-graph]
@@ -116,3 +116,34 @@ successful no-op plan must produce no additional apply calls.
   failure result and leave recovery to fresh observation rather than guessing.
 - The executor must not reinterpret compatibility or selectors; those are
   validated by planner/graph contracts and carried through unchanged.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/executor.rs`, `crates/core/src/lib.rs`.
+- Added synchronous `ExecutionPort` and `ExecutionJournal` ports plus
+  `execute_plan`, `ExecutionReport`, and typed lock/revalidation/apply/journal
+  errors.
+- Execution acquires the cooperative configuration lock before revalidation,
+  records `Pending` before executable actions, journals terminal outcomes at
+  each boundary, and marks post-action journal failures explicitly for fresh
+  recovery observation.
+- Stable dependency waves continue independent operations, skip dependents of
+  failed/blocked/skipped results, and classify the complete result through the
+  existing `ApplyResult` contract. No resource-specific native mutation was
+  added.
+- Partial, unsupported, and conflict classes remain blocked in this core entry
+  point; the existing operation contract has no separate accepted-acknowledgment
+  bit, so a later CLI composition layer must pass only an explicitly accepted
+  plan into execution.
+- Tests added: lock contention, revalidation-before-mutation, stable waves,
+  pending/terminal journal ordering, independent failure with dependent skip,
+  attention blocking, post-action journal failure, and repeated no-op execution.
+- Discrepancies from design: no concrete native adapter or state repository was
+  added; those remain composition work for later lifecycle and CLI features.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap-core executor --offline`
+- `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings`

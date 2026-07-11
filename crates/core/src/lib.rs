@@ -1,5 +1,6 @@
 pub mod adoption;
 pub mod domain;
+pub mod executor;
 pub mod operation_graph;
 pub mod reconciliation;
 pub mod runtime;
