@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-profiles
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: [epic-harness-observation-adoption-detection-registry]
@@ -35,3 +35,8 @@ Debug output at every constructor and deserialization boundary.
 
 - Harness detection Clippy and all four detection tests pass in the locked
   offline workspace.
+
+## Review
+
+- Fast-lane review approved the deterministic profile selection and green
+  warnings-denied tests. Unknown versions cannot acquire mutation authority.
