@@ -62,6 +62,21 @@ pub struct CommandOutput {
 }
 
 impl CommandOutput {
+    #[cfg(test)]
+    pub(crate) const fn for_test(
+        status: ExitStatus,
+        stdout: Vec<u8>,
+        stderr: Vec<u8>,
+        elapsed: Duration,
+    ) -> Self {
+        Self {
+            status,
+            stdout,
+            stderr,
+            elapsed,
+        }
+    }
+
     pub const fn status(&self) -> ExitStatus {
         self.status
     }

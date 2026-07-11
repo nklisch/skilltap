@@ -4,7 +4,11 @@ use crate::domain::{
     AbsolutePath, HarnessId, HarnessSet, NativeId, Scope, TargetSelection, ValidationError,
 };
 
-use super::{CommandRequest, CommandRunner, FileKind, FileSystem, PathRole, RuntimeError};
+use super::{
+    CommandRequest, CommandRunner, FileKind, FileSystem, PathRole, RuntimeError, SystemFileSystem,
+};
+
+static SYSTEM_FILE_SYSTEM: SystemFileSystem = SystemFileSystem;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScopeRequest {
@@ -63,12 +67,25 @@ pub trait GitRoot {
 
 pub struct CommandGitRoot<'a> {
     runner: &'a dyn CommandRunner,
+    filesystem: &'a dyn FileSystem,
     executable: NativeId,
 }
 
 impl<'a> CommandGitRoot<'a> {
-    pub const fn new(runner: &'a dyn CommandRunner, executable: NativeId) -> Self {
-        Self { runner, executable }
+    pub fn new(runner: &'a dyn CommandRunner, executable: NativeId) -> Self {
+        Self::with_filesystem(runner, &SYSTEM_FILE_SYSTEM, executable)
+    }
+
+    pub const fn with_filesystem(
+        runner: &'a dyn CommandRunner,
+        filesystem: &'a dyn FileSystem,
+        executable: NativeId,
+    ) -> Self {
+        Self {
+            runner,
+            filesystem,
+            executable,
+        }
     }
 }
 
@@ -89,6 +106,13 @@ impl GitRoot for CommandGitRoot<'_> {
         );
         let output = self.runner.run(&request)?;
         if !output.status().success() {
+            let status = output.status().code();
+            if self.contains_git_metadata(directory, status)? {
+                return Err(RuntimeError::GitRootProbe {
+                    directory: directory.clone(),
+                    status,
+                });
+            }
             return Ok(None);
         }
 
@@ -103,6 +127,39 @@ impl GitRoot for CommandGitRoot<'_> {
                 role: PathRole::GitRoot,
                 source,
             })
+    }
+}
+
+impl CommandGitRoot<'_> {
+    fn contains_git_metadata(
+        &self,
+        directory: &AbsolutePath,
+        status: Option<i32>,
+    ) -> Result<bool, RuntimeError> {
+        for ancestor in Path::new(directory.as_str()).ancestors() {
+            let marker = ancestor.join(".git");
+            let marker = marker
+                .to_str()
+                .ok_or(RuntimeError::NonUtf8Path {
+                    role: PathRole::GitRoot,
+                })?
+                .to_owned();
+            let marker = AbsolutePath::new(marker).map_err(|source| RuntimeError::InvalidPath {
+                role: PathRole::GitRoot,
+                source,
+            })?;
+            match self.filesystem.inspect(&marker) {
+                Ok(metadata) if metadata.kind() == FileKind::Missing => {}
+                Ok(_) => return Ok(true),
+                Err(_) => {
+                    return Err(RuntimeError::GitRootProbe {
+                        directory: directory.clone(),
+                        status,
+                    });
+                }
+            }
+        }
+        Ok(false)
     }
 }
 
@@ -188,14 +245,18 @@ fn parent(path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError> {
 #[cfg(test)]
 mod tests {
     use std::{
-        fs,
+        cell::RefCell,
+        fs, io,
         path::PathBuf,
         process::Command,
         sync::atomic::{AtomicU64, Ordering},
+        time::Duration,
     };
 
     use super::*;
-    use crate::runtime::{SystemCommandRunner, SystemFileSystem};
+    use crate::runtime::{
+        CommandOutput, FileMetadata, RelativeSymlinkTarget, SystemCommandRunner, SystemFileSystem,
+    };
 
     static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 
@@ -243,6 +304,101 @@ mod tests {
             _directory: &AbsolutePath,
         ) -> Result<Option<AbsolutePath>, RuntimeError> {
             Ok(None)
+        }
+    }
+
+    struct RejectedRunner {
+        output: CommandOutput,
+    }
+
+    impl RejectedRunner {
+        fn new(stderr: impl Into<Vec<u8>>) -> Self {
+            let status = Command::new("git")
+                .args(["rev-parse", "--verify", "refs/heads/definitely-missing"])
+                .output()
+                .unwrap()
+                .status;
+            assert!(!status.success());
+            Self {
+                output: CommandOutput::for_test(status, Vec::new(), stderr.into(), Duration::ZERO),
+            }
+        }
+    }
+
+    impl CommandRunner for RejectedRunner {
+        fn run(&self, _request: &CommandRequest) -> Result<CommandOutput, RuntimeError> {
+            Ok(self.output.clone())
+        }
+    }
+
+    struct InspectOnlyFileSystem {
+        inspected: RefCell<Vec<AbsolutePath>>,
+        fail: bool,
+    }
+
+    impl InspectOnlyFileSystem {
+        fn recording() -> Self {
+            Self {
+                inspected: RefCell::new(Vec::new()),
+                fail: false,
+            }
+        }
+
+        fn failing() -> Self {
+            Self {
+                inspected: RefCell::new(Vec::new()),
+                fail: true,
+            }
+        }
+    }
+
+    impl FileSystem for InspectOnlyFileSystem {
+        fn inspect(&self, path: &AbsolutePath) -> Result<FileMetadata, RuntimeError> {
+            self.inspected.borrow_mut().push(path.clone());
+            if self.fail {
+                return Err(RuntimeError::FileSystem {
+                    action: super::super::FileSystemAction::Inspect,
+                    path: path.clone(),
+                    source: io::Error::new(io::ErrorKind::PermissionDenied, "secret-source-text"),
+                });
+            }
+            SystemFileSystem.inspect(path)
+        }
+
+        fn canonicalize(&self, _path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError> {
+            unreachable!("Git metadata probing only inspects marker paths")
+        }
+
+        fn create_directory_all(&self, _path: &AbsolutePath) -> Result<(), RuntimeError> {
+            unreachable!("Git metadata probing is read-only")
+        }
+
+        fn read(&self, _path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError> {
+            unreachable!("Git metadata probing does not read contents")
+        }
+
+        fn atomic_write(&self, _path: &AbsolutePath, _contents: &[u8]) -> Result<(), RuntimeError> {
+            unreachable!("Git metadata probing is read-only")
+        }
+
+        fn copy_recoverable(
+            &self,
+            _source: &AbsolutePath,
+            _destination: &AbsolutePath,
+        ) -> Result<(), RuntimeError> {
+            unreachable!("Git metadata probing is read-only")
+        }
+
+        fn create_relative_symlink(
+            &self,
+            _target: &RelativeSymlinkTarget,
+            _link: &AbsolutePath,
+        ) -> Result<(), RuntimeError> {
+            unreachable!("Git metadata probing is read-only")
+        }
+
+        fn remove(&self, _path: &AbsolutePath) -> Result<(), RuntimeError> {
+            unreachable!("Git metadata probing is read-only")
         }
     }
 
@@ -354,6 +510,79 @@ mod tests {
             ),
             spelling
         );
+    }
+
+    #[test]
+    fn corrupt_git_file_and_directory_are_typed_probe_errors() {
+        for as_directory in [false, true] {
+            let temporary = TempDirectory::new();
+            let marker = temporary.0.join(".git");
+            if as_directory {
+                fs::create_dir(&marker).unwrap();
+            } else {
+                fs::write(&marker, b"gitdir: missing-target\n").unwrap();
+            }
+            let runner = SystemCommandRunner;
+            let git = CommandGitRoot::new(&runner, NativeId::new("git").unwrap());
+
+            let error = git.containing_root(&temporary.root()).unwrap_err();
+
+            assert!(matches!(
+                error,
+                RuntimeError::GitRootProbe {
+                    directory,
+                    status: Some(_)
+                } if directory == temporary.root()
+            ));
+        }
+    }
+
+    #[test]
+    fn nested_candidate_detects_only_metadata_on_its_ancestor_chain() {
+        let temporary = TempDirectory::new();
+        fs::create_dir(temporary.0.join(".git")).unwrap();
+        let nested = temporary.0.join("nested/deep");
+        fs::create_dir_all(&nested).unwrap();
+        let candidate = AbsolutePath::new(nested.to_str().unwrap()).unwrap();
+        let runner = RejectedRunner::new(b"ignored-stderr".to_vec());
+        let filesystem = InspectOnlyFileSystem::recording();
+        let git =
+            CommandGitRoot::with_filesystem(&runner, &filesystem, NativeId::new("git").unwrap());
+
+        assert!(matches!(
+            git.containing_root(&candidate),
+            Err(RuntimeError::GitRootProbe { .. })
+        ));
+        let inspected = filesystem.inspected.borrow();
+        assert_eq!(
+            inspected[0].as_str(),
+            format!("{}/.git", candidate.as_str())
+        );
+        assert_eq!(
+            inspected.last().unwrap().as_str(),
+            format!("{}/.git", temporary.root().as_str())
+        );
+        assert_eq!(inspected.len(), 3);
+    }
+
+    #[test]
+    fn rejected_and_inaccessible_probe_details_are_not_rendered() {
+        let secret = "secret-stderr-or-environment-value";
+        let temporary = TempDirectory::new();
+        fs::write(temporary.0.join(".git"), b"broken").unwrap();
+        let runner = RejectedRunner::new(secret.as_bytes().to_vec());
+        let git = CommandGitRoot::new(&runner, NativeId::new("git").unwrap());
+        let error = git.containing_root(&temporary.root()).unwrap_err();
+        assert!(!error.to_string().contains(secret));
+        assert!(!format!("{error:?}").contains(secret));
+
+        let filesystem = InspectOnlyFileSystem::failing();
+        let git =
+            CommandGitRoot::with_filesystem(&runner, &filesystem, NativeId::new("git").unwrap());
+        let error = git.containing_root(&temporary.root()).unwrap_err();
+        assert!(matches!(error, RuntimeError::GitRootProbe { .. }));
+        assert!(!error.to_string().contains("secret-source-text"));
+        assert!(!format!("{error:?}").contains("secret-source-text"));
     }
 
     #[test]

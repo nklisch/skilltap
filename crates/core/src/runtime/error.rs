@@ -128,6 +128,10 @@ pub enum RuntimeError {
     UnsuitableProjectPath {
         path: AbsolutePath,
     },
+    GitRootProbe {
+        directory: AbsolutePath,
+        status: Option<i32>,
+    },
     FileSystem {
         action: FileSystemAction,
         path: AbsolutePath,
@@ -181,7 +185,8 @@ impl RuntimeError {
             Self::InvalidPath { .. }
             | Self::NonUtf8Path { .. }
             | Self::WorkingDirectory { .. }
-            | Self::UnsuitableProjectPath { .. } => RuntimeBoundary::Path,
+            | Self::UnsuitableProjectPath { .. }
+            | Self::GitRootProbe { .. } => RuntimeBoundary::Path,
             Self::FileSystem { .. }
             | Self::UnsafeSymlink { .. }
             | Self::FileIdentityChanged { .. }
@@ -233,6 +238,16 @@ impl fmt::Display for RuntimeError {
                     "project path `{path}` is not a file or directory"
                 )
             }
+            Self::GitRootProbe { directory, status } => match status {
+                Some(status) => write!(
+                    formatter,
+                    "Git root probe failed for `{directory}` with status {status} despite containing Git metadata"
+                ),
+                None => write!(
+                    formatter,
+                    "Git root probe failed for `{directory}` without an exit code despite containing Git metadata"
+                ),
+            },
             Self::FileSystem {
                 action,
                 path,
@@ -306,6 +321,7 @@ impl std::error::Error for RuntimeError {
             | Self::NonUtf8Environment { .. }
             | Self::NonUtf8Path { .. }
             | Self::UnsuitableProjectPath { .. }
+            | Self::GitRootProbe { .. }
             | Self::UnsafeSymlink { .. }
             | Self::FileIdentityChanged { .. }
             | Self::LockContended { .. }
