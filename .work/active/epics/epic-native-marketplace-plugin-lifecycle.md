@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle
 kind: epic
-stage: review
+stage: done
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -106,3 +106,17 @@ Approved for implementation.
 Native harness lifecycle commands remain authoritative when available. A
 missing native capability produces a typed attention result and never falls
 back to cache mutation or guessed configuration edits.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: exact native identity correlation can be strengthened by a future observation adapter without changing lifecycle authority.
+
+**Notes**: Deep aggregate review completed inline in degraded fresh-context
+mode because this run intentionally uses no sub-agents. The children match the
+native-first, no-discovery brief and preserve the documented separation between
+native lifecycle and later cross-harness materialization. Full workspace clippy
+and tests pass.
