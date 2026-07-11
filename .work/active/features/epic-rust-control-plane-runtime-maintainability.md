@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -92,3 +92,13 @@ or new behavior enters this feature.
   test; its scenarios and assertions are preserved individually.
 - No production runtime module exceeds roughly 400 lines after the split.
 - Full locked format/check/Clippy/test/rustdoc ladder passes after every step.
+
+## Implementation summary
+
+All seven children are complete. Filesystem and scope tests live in sidecars;
+three suites share the domain-agnostic `TempRoot`; publication recovery has six
+focused scenario tests; five identical path conversions share one private
+helper; and filesystem production is separated into a 370-line parent plus
+269-line publication, 166-line Unix identity, and 151-line locking children.
+Public runtime exports and behavior remain unchanged. The workspace passes 99
+tests plus doctests and warnings-clean rustdoc.
