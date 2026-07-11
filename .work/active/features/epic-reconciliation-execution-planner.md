@@ -1,7 +1,7 @@
 ---
 id: epic-reconciliation-execution-planner
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-reconciliation-execution
 depends_on: []
@@ -143,3 +143,26 @@ does not mutate inventory, state, or native fixtures.
 - Native resource-specific adapters are not yet implemented. Candidate fixtures
   must remain explicit and must not claim marketplace/plugin/skill lifecycle
   support before their later epics land.
+
+## Implementation notes
+
+- Added `skilltap_core::reconciliation` with adapter-neutral candidate,
+  disposition, finding, and plan types.
+- Classification validates exact selector/scope identity, detects native
+  identity/fingerprint drift, unmanaged ownership conflicts, degraded/unknown
+  health, missing evidence, and preserves validated no-op operations.
+- Plan assembly is deterministic, duplicate-resource rejecting, and delegates
+  operation graph validation to the existing `Plan` contract; no external I/O
+  is performed.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap-core reconciliation --offline`
+- `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings`
+
+## Review
+
+Verdict: Approve with comments - pure planner contract is implemented and
+verified; richer candidate fixtures and graph/executor integration remain in
+the dependent features.
