@@ -1,6 +1,7 @@
 mod clock;
 mod command;
 mod error;
+mod executable;
 mod filesystem;
 mod observation;
 mod path_value;
@@ -16,6 +17,7 @@ pub use error::{
     PublicationResidual, PublicationResidualRole, PublicationResiduals, RuntimeBoundary,
     RuntimeError,
 };
+pub use executable::SystemExecutableResolver;
 pub use filesystem::{
     ConfigurationLock, ConfigurationLockGuard, DirectoryPublishOutcome, DirectoryTreeFileSystem,
     FileKind, FileMetadata, FileSystem, RelativeSymlinkTarget, SystemConfigurationLock,
