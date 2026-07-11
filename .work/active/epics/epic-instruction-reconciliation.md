@@ -1,7 +1,7 @@
 ---
 id: epic-instruction-reconciliation
 kind: epic
-stage: implementing
+stage: review
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
@@ -96,3 +96,10 @@ Approved for implementation.
 
 Canonical `AGENTS.md` is the source of truth. A divergent native file blocks
 ordinary repair; approved replacement creates a recoverable backup first.
+
+## Children complete
+
+All instruction model, global, project, repair, and command features are now
+done. The command surface covers canonical setup, bridge health, nested-project
+location preservation, duplicate consolidation with backups, and deterministic
+plain/JSON outcomes.
