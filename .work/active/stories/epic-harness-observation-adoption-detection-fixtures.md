@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-fixtures
 kind: story
-stage: implementing
+stage: review
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: []
@@ -22,3 +22,16 @@ identity replacement. Preserve exact argv/environment/cwd capture, avoid
 inherited environment, and coordinate all races with barriers rather than
 timing. Keep fixtures harness-neutral so Codex and Claude adapters use the same
 safe process/runtime support.
+
+## Implementation
+
+- Added deterministic fake-native payload modes for known and unknown
+  versions, valid probe narrowing, probe drift, malformed JSON, and duplicate
+  keys. Existing barrier-driven hang, flood, replacement, and executable
+  identity fixtures remain reusable by detection adapters.
+- Added exact-output regression coverage for every payload mode with no
+  inherited environment or timing assumptions.
+
+## Verification
+
+- Test-support Clippy and all 16 fixture tests pass under the locked workspace.

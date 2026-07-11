@@ -22,6 +22,12 @@ pub enum PipeHolder {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FakeNativeMode {
     Exit(u8),
+    VersionKnown,
+    VersionUnknown,
+    ProbeNarrow,
+    ProbeDrift,
+    MalformedJson,
+    DuplicateJson,
     Hang,
     Flood {
         stdout_bytes: u64,
@@ -320,6 +326,29 @@ fn render_script(
     }
     match mode {
         FakeNativeMode::Exit(code) => script.push_str(&format!("exit {code}\n")),
+        FakeNativeMode::VersionKnown => {
+            script.push_str("printf '%s' '{\"version\":\"3.0.0\"}'\nexit 0\n");
+        }
+        FakeNativeMode::VersionUnknown => {
+            script.push_str("printf '%s' '{\"version\":\"99.0.0\"}'\nexit 0\n");
+        }
+        FakeNativeMode::ProbeNarrow => {
+            script.push_str(
+                "printf '%s' '{\"scope\":\"project\",\"capabilities\":{\"plugin.install\":\"unsupported\"}}'\nexit 0\n",
+            );
+        }
+        FakeNativeMode::ProbeDrift => {
+            script.push_str(
+                "printf '%s' '{\"scope\":\"project\",\"capabilities\":{\"future.capability\":\"supported\"}}'\nexit 0\n",
+            );
+        }
+        FakeNativeMode::MalformedJson => {
+            script.push_str("printf '%s' '{malformed'\nexit 0\n");
+        }
+        FakeNativeMode::DuplicateJson => {
+            script
+                .push_str("printf '%s' '{\"version\":\"3.0.0\",\"version\":\"3.0.1\"}'\nexit 0\n");
+        }
         FakeNativeMode::Hang => {
             let barrier = hang_barrier.expect("hang mode has a readiness barrier");
             script.push_str(&format!(
@@ -474,6 +503,41 @@ mod tests {
         assert!(output.status.success());
         assert_eq!(output.stdout, vec![b'x'; 4097]);
         assert_eq!(output.stderr, vec![b'y'; 3073]);
+    }
+
+    #[test]
+    fn detection_payload_modes_are_exact_and_deterministic() {
+        for (mode, expected) in [
+            (
+                FakeNativeMode::VersionKnown,
+                b"{\"version\":\"3.0.0\"}".as_slice(),
+            ),
+            (
+                FakeNativeMode::VersionUnknown,
+                b"{\"version\":\"99.0.0\"}".as_slice(),
+            ),
+            (
+                FakeNativeMode::ProbeNarrow,
+                b"{\"scope\":\"project\",\"capabilities\":{\"plugin.install\":\"unsupported\"}}"
+                    .as_slice(),
+            ),
+            (
+                FakeNativeMode::ProbeDrift,
+                b"{\"scope\":\"project\",\"capabilities\":{\"future.capability\":\"supported\"}}"
+                    .as_slice(),
+            ),
+            (FakeNativeMode::MalformedJson, b"{malformed".as_slice()),
+            (
+                FakeNativeMode::DuplicateJson,
+                b"{\"version\":\"3.0.0\",\"version\":\"3.0.1\"}".as_slice(),
+            ),
+        ] {
+            let native = FakeNativeProcess::new(mode).unwrap();
+            let output = native.command().output().unwrap();
+            assert!(output.status.success());
+            assert_eq!(output.stdout, expected);
+            assert!(output.stderr.is_empty());
+        }
     }
 
     #[test]
