@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection
 kind: feature
-stage: implementing
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-contracts, epic-harness-observation-adoption-runtime]
@@ -107,3 +107,25 @@ composition remain downstream features.
   replacement without relying on timing or inherited environment.
 - All focused and workspace verification remains locked, deterministic, and
   safe across Linux and native macOS behavior jobs.
+
+## Implementation
+
+- Completed all five detection stories: deterministic fake-native fixtures,
+  Codex/Claude registry detection, compiled profile selection, monotonic JSON
+  probes, and sibling-isolated end-to-end tests.
+- `skilltap-harnesses` now composes the runtime ports without resource
+  observation or mutation APIs. Known v3 profiles grant only compiled
+  capabilities; unknown versions remain observe-only.
+
+## Verification
+
+- Harness detection tests (6), fixture tests (16), workspace Clippy, and the
+  locked workspace suite pass. Detection errors and probe payloads remain
+  closed and secret-safe.
+
+## Review
+
+- Aggregate review approved after the locked workspace ladder: 211 core tests,
+  six harness detection tests, 16 fixture tests, warnings-denied Clippy, and
+  the existing CLI/integration suites all pass. Detection remains read-only,
+  sibling-isolated, and authority-safe for unknown versions.
