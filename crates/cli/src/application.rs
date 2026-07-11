@@ -777,12 +777,26 @@ fn instruction_surface_labels(
                 Err(_) => return Vec::new(),
             };
             match scope {
-                Scope::Global => path_exists(inputs.global_agents.as_str())
-                    .then_some("codex.global.instructions")
-                    .into_iter()
-                    .collect(),
+                Scope::Global => {
+                    let mut labels = Vec::new();
+                    if path_exists(inputs.global_agents.as_str()) {
+                        labels.push("codex.global.instructions");
+                    }
+                    if child_path_exists(paths.home().as_str(), ".agents/plugins/marketplace.json")
+                    {
+                        labels.push("codex.global.marketplace");
+                    }
+                    if child_path_exists(paths.codex_home().as_str(), "config.toml") {
+                        labels.push("codex.global.config");
+                    }
+                    labels
+                }
                 Scope::Project(_) => {
                     let mut labels = Vec::new();
+                    let project = match scope {
+                        Scope::Project(project) => project,
+                        Scope::Global => unreachable!(),
+                    };
                     if inputs
                         .project_agents
                         .as_ref()
@@ -797,6 +811,12 @@ fn instruction_surface_labels(
                     {
                         labels.push("project.agents.override");
                     }
+                    if child_path_exists(project.as_str(), ".agents/plugins/marketplace.json") {
+                        labels.push("project.marketplace");
+                    }
+                    if child_path_exists(project.as_str(), ".codex/config.toml") {
+                        labels.push("project.codex.config");
+                    }
                     labels
                 }
             }
@@ -807,17 +827,38 @@ fn instruction_surface_labels(
                 Err(_) => return Vec::new(),
             };
             match scope {
-                Scope::Global => path_exists(inputs.global_settings.as_str())
-                    .then_some("claude.settings")
-                    .into_iter()
-                    .collect(),
-                Scope::Project(_) => inputs
-                    .project_settings
-                    .as_ref()
-                    .filter(|path| path_exists(path.as_str()))
-                    .map(|_| "project.claude.settings")
-                    .into_iter()
-                    .collect(),
+                Scope::Global => {
+                    let mut labels = Vec::new();
+                    if path_exists(inputs.global_settings.as_str()) {
+                        labels.push("claude.settings");
+                    }
+                    if child_path_exists(
+                        paths.claude_home().as_str(),
+                        "plugins/known_marketplaces.json",
+                    ) {
+                        labels.push("claude.marketplace");
+                    }
+                    if child_path_exists(paths.claude_home().as_str(), "CLAUDE.md") {
+                        labels.push("claude.instructions");
+                    }
+                    labels
+                }
+                Scope::Project(project) => {
+                    let mut labels = Vec::new();
+                    if inputs
+                        .project_settings
+                        .as_ref()
+                        .is_some_and(|path| path_exists(path.as_str()))
+                    {
+                        labels.push("project.claude.settings");
+                    }
+                    if child_path_exists(project.as_str(), "CLAUDE.md")
+                        || child_path_exists(project.as_str(), ".claude/CLAUDE.md")
+                    {
+                        labels.push("project.claude.instructions");
+                    }
+                    labels
+                }
             }
         }
     }
@@ -825,6 +866,10 @@ fn instruction_surface_labels(
 
 fn path_exists(path: &str) -> bool {
     std::fs::symlink_metadata(path).is_ok()
+}
+
+fn child_path_exists(root: &str, child: &str) -> bool {
+    path_exists(Path::new(root).join(child).to_string_lossy().as_ref())
 }
 
 fn native_surface_resource(
@@ -872,6 +917,8 @@ fn stable_resource_id(harness: &HarnessId, root: &str) -> String {
 fn native_surface_kind(root: &str) -> ResourceKind {
     if root.ends_with("skills") {
         ResourceKind::StandaloneSkill
+    } else if root.contains("marketplace") {
+        ResourceKind::Marketplace
     } else if root.ends_with("plugins") || root.ends_with("claude") {
         ResourceKind::Plugin
     } else {
