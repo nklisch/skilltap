@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization-correlation
 kind: story
-stage: implementing
+stage: review
 tags: [correctness]
 parent: epic-harness-observation-adoption-normalization
 depends_on: [epic-harness-observation-adoption-normalization-graph]
@@ -19,3 +19,13 @@ Associate declared/effective instances only from a common declared source plus
 compatible semantics or an explicit mapping. Preserve qualified identities and
 layers; names, URLs, copied fingerprints, and cache coincidence must remain
 non-equivalent without source evidence.
+
+## Implementation
+
+- Added `conservatively_equivalent`, requiring a common declared source,
+  matching resource kind, and matching component semantics. Missing sources,
+  copied fingerprints, names, and URLs never correlate resources.
+
+## Verification
+
+- Harness Clippy and the locked normalization/runtime suites pass.

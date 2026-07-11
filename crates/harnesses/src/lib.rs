@@ -236,6 +236,18 @@ pub fn normalize_observations(
     ObservedEnvironment::new(batch, outcomes)
 }
 
+/// Returns true only when two observations share a declared source and the
+/// same resource semantics; names, URLs, and fingerprints alone never match.
+pub fn conservatively_equivalent(
+    left: &skilltap_core::domain::ObservedResource,
+    right: &skilltap_core::domain::ObservedResource,
+) -> bool {
+    left.source().is_some()
+        && left.source() == right.source()
+        && left.kind() == right.kind()
+        && left.components() == right.components()
+}
+
 impl std::fmt::Debug for CodexConfigObservation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
