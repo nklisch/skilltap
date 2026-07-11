@@ -166,7 +166,7 @@ Global instructions use:
 Native global bridges normally use:
 
 ```text
-~/.codex/AGENTS.md -> ~/AGENTS.md
+${CODEX_HOME:-$HOME/.codex}/AGENTS.md -> ~/AGENTS.md
 ~/.claude/CLAUDE.md -> ~/AGENTS.md
 ```
 

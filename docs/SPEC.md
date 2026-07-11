@@ -440,7 +440,7 @@ Without a scope flag, instruction commands operate on global instructions. `--pr
 
 Global canonical instructions live at `~/AGENTS.md`. Project canonical instructions live in `AGENTS.md` at the selected project root. Nested `AGENTS.md` files may be tracked when explicitly adopted.
 
-Enabled harnesses bridge from their native global instruction locations to `~/AGENTS.md` when they do not load it directly. The default bridges are `~/.codex/AGENTS.md -> ~/AGENTS.md` and `~/.claude/CLAUDE.md -> ~/AGENTS.md`.
+Enabled harnesses bridge from their native global instruction locations to `~/AGENTS.md` when they do not load it directly. The bridges are `${CODEX_HOME:-$HOME/.codex}/AGENTS.md -> ~/AGENTS.md` and `~/.claude/CLAUDE.md -> ~/AGENTS.md`. `CODEX_HOME` relocates Codex-native state only; it never relocates canonical global instructions.
 
 Claude integration uses the configured mode:
 

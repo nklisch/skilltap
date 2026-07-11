@@ -414,7 +414,7 @@ Bare instruction commands operate globally:
 $ skilltap instructions setup
 
 Canonical  /home/user/AGENTS.md
-Codex      /home/user/.codex/AGENTS.md -> ../AGENTS.md
+Codex      ${CODEX_HOME:-/home/user/.codex}/AGENTS.md -> /home/user/AGENTS.md
 Claude     /home/user/.claude/CLAUDE.md -> ../AGENTS.md
 
 Result: healthy

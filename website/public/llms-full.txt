@@ -137,6 +137,10 @@ skilltap separates desired inventory from fresh native observations. That makes
 the direction explicit: `adopt` brings native configuration into inventory;
 `sync` applies inventory to managed harnesses.
 
+Codex-native global paths resolve under
+`${CODEX_HOME:-$HOME/.codex}`. This override does not move skilltap state and
+never moves the canonical global instruction file at `~/AGENTS.md`.
+
 ## Adopt native state
 
 ```bash

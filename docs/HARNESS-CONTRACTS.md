@@ -101,7 +101,7 @@ The canonical global instruction file is:
 Harness-native global instruction files bridge to the canonical file when the harness does not load it directly:
 
 ```text
-~/.codex/AGENTS.md -> ../AGENTS.md
+${CODEX_HOME:-$HOME/.codex}/AGENTS.md -> ~/AGENTS.md
 ~/.claude/CLAUDE.md -> ../AGENTS.md
 ```
 
@@ -146,12 +146,12 @@ If an installed Codex release lacks one of these commands, the corresponding cap
 Codex uses documented locations including:
 
 ```text
-~/.codex/config.toml
-~/.codex/AGENTS.md
+${CODEX_HOME:-$HOME/.codex}/config.toml
+${CODEX_HOME:-$HOME/.codex}/AGENTS.md
 ~/.agents/skills/<skill>/SKILL.md
 ~/.agents/plugins/marketplace.json
-~/.codex/plugins/
-~/.codex/plugins/cache/
+${CODEX_HOME:-$HOME/.codex}/plugins/
+${CODEX_HOME:-$HOME/.codex}/plugins/cache/
 ```
 
 Project resources use documented locations including:
@@ -199,13 +199,13 @@ When the canonical managed skill already occupies the Codex load path, no additi
 
 ### Instructions
 
-Codex's native global instruction path is `~/.codex/AGENTS.md`. skilltap bridges that path to canonical `~/AGENTS.md`.
+Codex's native global instruction path is `${CODEX_HOME:-$HOME/.codex}/AGENTS.md`. skilltap bridges that path to canonical `~/AGENTS.md`; changing `CODEX_HOME` never relocates the canonical file.
 
 Project and nested instructions use `AGENTS.md` at their natural directory scope and require no Codex-specific bridge.
 
 ### Configuration editing
 
-User configuration lives in `~/.codex/config.toml`. Project configuration may live in `<project>/.codex/config.toml`.
+User configuration lives in `${CODEX_HOME:-$HOME/.codex}/config.toml`. Project configuration may live in `<project>/.codex/config.toml`.
 
 Direct TOML editing is used only for documented settings without a native lifecycle command. Unknown keys and tables are preserved.
 
