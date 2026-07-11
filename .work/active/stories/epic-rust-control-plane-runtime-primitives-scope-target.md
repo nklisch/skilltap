@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-scope-target
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on:
@@ -47,3 +47,13 @@ the shared runtime boundaries.
 - Adjacent issues parked: none.
 - Dispatch rationale: direct-read only; the completed runtime ports and domain selection types fully defined the integration points.
 - Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace --all-targets`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace`, and `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps` all pass (85 workspace tests).
+
+## Review
+
+Approved. Scope requests make project and all-scopes mutually exclusive by
+construction. Current and explicit inputs canonicalize, files resolve through
+their parent, containing Git roots win, and ordinary non-repository results
+fall back to the canonical directory. Global/all-scopes avoid working-directory,
+filesystem, and Git discovery; recorded projects sort and deduplicate. Target
+resolution preserves the domain contract for omitted, all, named, disabled,
+and empty sets. All seven focused tests pass on review.
