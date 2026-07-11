@@ -1,7 +1,7 @@
 ---
 id: epic-safe-update-automation-diagnostics
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-safe-update-automation
 depends_on: [epic-safe-update-automation-service]
@@ -138,5 +138,6 @@ boundary.
 
 ## Review Record
 
-- Inline deep review: **pass pending full workspace gate**. Optional state
-  fields preserve old documents and all recovery suggestions remain advisory.
+- Inline deep review: **pass**. Optional state fields preserve old documents,
+  full workspace tests and clippy pass, and all recovery suggestions remain
+  advisory.

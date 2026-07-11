@@ -1,14 +1,14 @@
 ---
 id: epic-safe-update-automation
 kind: epic
-stage: implementing
+stage: done
 tags: [infra]
 parent: null
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle, epic-cross-harness-materialization]
 release_binding: null
 gate_origin: null
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-11
 ---
 
 # Safe Update Automation
@@ -92,3 +92,19 @@ chain from revision resolution through policy, foreground application, service
 integration, and diagnostics. The ordering is coherent because no automatic
 update can be classified before a concrete upstream revision is resolved, and
 daemon behavior must reuse the foreground safety boundary.
+
+## Implementation Notes
+
+- Resolution, policy, foreground planning, exact acknowledgment, and verified
+  state recording are complete.
+- Optional launchd/systemd user-service definitions, bounded manager lifecycle,
+  and one finite `daemon run` cycle are complete. Daemon execution delegates to
+  the existing native-plugin and Git-backed skill lifecycle paths.
+- Typed daemon run records, ordinary/daemon status projections, and advisory
+  recovery actions are complete. No daemon path acknowledges partial work,
+  overwrites drift, or writes unmanaged resources.
+
+## Review Record
+
+- Inline deep review: **pass**. All five child features are done; the full
+  workspace test suite and clippy with `-D warnings` pass.
