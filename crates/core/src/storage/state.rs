@@ -497,6 +497,40 @@ impl StateDocument {
             self.last_successful_application,
         )
     }
+
+    /// Refresh mutable provenance fields for an already-known resource while
+    /// preserving its existing operation journal. Lifecycle updates use this
+    /// to record a new source fingerprint or resolved revision atomically with
+    /// the operation result.
+    pub fn refresh_resource_state(&self, resource: ResourceState) -> Result<Self, SchemaError> {
+        let Some(existing) = self.resources.get(resource.key()) else {
+            return self.with_resource_state(resource);
+        };
+        let refreshed = ResourceState::new(
+            resource.key().clone(),
+            resource.native_ids().clone(),
+            resource.provenance(),
+            resource.ownership(),
+            resource.source().cloned(),
+            resource.managed_artifact().cloned(),
+            resource.fingerprint().cloned(),
+            resource.installed_revision().cloned(),
+            resource.available_revision().cloned(),
+            resource.observed_at(),
+            existing.last_apply().cloned(),
+        )?;
+        let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
+        resources.retain(|value| value.key() != resource.key());
+        resources.push(refreshed);
+        Self::new(
+            STATE_SCHEMA_VERSION,
+            self.harnesses.values().cloned(),
+            resources,
+            self.last_update_check,
+            self.last_successful_observation,
+            self.last_successful_application,
+        )
+    }
 }
 
 impl From<StateDocument> for StateWire {

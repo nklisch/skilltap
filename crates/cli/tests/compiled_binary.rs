@@ -263,6 +263,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 | "plugin update"
                 | "skill install"
                 | "skill remove"
+                | "skill update"
                 | "instructions setup"
                 | "instructions repair"
         ) {
@@ -519,6 +520,52 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     );
     assert_code(&repeat, 0);
     assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: demo\ndescription: updated skill\n---\nupdated\n",
+    )
+    .unwrap();
+    let replace = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--target",
+            "codex",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&replace, 0);
+    assert_eq!(json(&replace)["summary"]["changed"], true);
+    assert!(
+        fs::read_dir(config_root(&machine).join("managed"))
+            .unwrap()
+            .next()
+            .is_some()
+    );
+
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: demo\ndescription: updated again\n---\nupdated again\n",
+    )
+    .unwrap();
+    let update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "source-skill",
+            "--target",
+            "codex",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["summary"]["changed"], true);
 
     let remove = run(
         &machine,

@@ -198,6 +198,16 @@ where
             ),
             OutputChannel::Stdout,
         ),
+        Dispatch::SkillUpdate(args) => (
+            execute_system_skill_update(
+                "skill update",
+                &args.scope,
+                &args.target,
+                args.skill.as_ref().map(|value| value.as_str()),
+                args.acknowledgment.yes,
+            ),
+            OutputChannel::Stdout,
+        ),
         Dispatch::InstructionSetup(args) => (
             execute_system_instruction_setup(
                 "instructions setup",
@@ -295,6 +305,18 @@ fn execute_system_skill_remove(
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
         application.execute_skill_remove(command, scope, target, skill, acknowledged)
+    })
+}
+
+fn execute_system_skill_update(
+    command: &'static str,
+    scope: &crate::command::ScopeArgs,
+    target: &crate::command::TargetArgs,
+    skill: Option<&str>,
+    acknowledged: bool,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        application.execute_skill_update(command, scope, target, skill, acknowledged)
     })
 }
 

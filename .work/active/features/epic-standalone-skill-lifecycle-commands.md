@@ -45,8 +45,11 @@ ownership record and current complete-tree fingerprint, removes only an exact
 owned tree through descriptor-checked deletion, and drops the desired inventory
 entry. Git-backed install now uses the bounded direct Git resolver, supports
 requested refs and subdirectories, and records the resolved commit SHA in
-state. Safe replacement/update, drift acknowledgment, and ownership backup
-retention remain open.
+state. Explicit `--yes` replacement and `skill update <name>` now back up the
+complete prior tree into skilltap-managed storage, replace it through the
+descriptor-checked directory boundary, refresh the recorded fingerprint, and
+remain idempotent. Drift acknowledgment is still generic at the CLI boundary;
+operation-scoped consequence flags and update-all planning remain open.
 
 ## Review
 

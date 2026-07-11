@@ -36,8 +36,8 @@ use skilltap_core::{
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
     storage::{
         ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DocumentState,
-        InventoryDocument, InventoryRepository, ResourceState, StateDocument, StateRepository,
-        StorageError, StorageFailure, Timestamp,
+        InventoryDocument, InventoryRepository, ManagedArtifactRepository, ResourceState,
+        StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
     },
 };
 use skilltap_harnesses::{
@@ -143,7 +143,20 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
             })?,
         };
         let current = if current.resources().contains_key(resource) {
-            current
+            if let Some(seed) = self.seeds.get(resource) {
+                current.refresh_resource_state(seed.clone()).map_err(|_| {
+                    ExecutionError::journal_failure(
+                        skilltap_core::domain::EvidenceCode::new("state.seed_refresh_failed")
+                            .expect("static evidence code is valid"),
+                        skilltap_core::domain::EvidenceDetail::new(
+                            "The existing resource metadata could not be refreshed safely.",
+                        )
+                        .expect("static evidence detail is valid"),
+                    )
+                })?
+            } else {
+                current
+            }
         } else if let Some(seed) = self.seeds.get(resource) {
             current.with_resource_state(seed.clone()).map_err(|_| {
                 ExecutionError::journal_failure(
@@ -209,13 +222,17 @@ struct ManagedSkillEntry {
     root: AbsolutePath,
     destination: skilltap_core::domain::RelativeArtifactPath,
     tree: ArtifactTree,
+    backup_tree: Option<ArtifactTree>,
     action: ManagedSkillAction,
     expected_identity: Option<skilltap_core::runtime::DirectoryIdentity>,
+    owner: Option<ResourceKey>,
+    config_root: Option<AbsolutePath>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ManagedSkillAction {
     Install,
+    Replace,
     Remove,
 }
 
@@ -291,50 +308,115 @@ impl ExecutionPort for ManagedSkillPort<'_> {
                     "The managed skill removal did not include an owned directory identity.",
                 ));
             };
-            return self
-                .filesystem
+            self.filesystem
                 .remove_tree_no_follow(&entry.root, &entry.destination, expected)
                 .map(|_| OperationOutcome::Applied)
                 .map_err(|_| {
                     managed_skill_apply_failure(
                         "The managed skill tree could not be removed safely.",
                     )
-                });
-        }
-        match self
-            .filesystem
-            .publish_tree_no_follow(&entry.root, &entry.destination, entry.tree.files())
+                })
+        } else if entry.action == ManagedSkillAction::Replace {
+            let Some(expected) = entry.expected_identity else {
+                return Err(managed_skill_apply_failure(
+                    "The managed skill replacement did not include an owned directory identity.",
+                ));
+            };
+            let Some(owner) = &entry.owner else {
+                return Err(managed_skill_apply_failure(
+                    "The managed skill replacement did not include an ownership record.",
+                ));
+            };
+            let Some(config_root) = &entry.config_root else {
+                return Err(managed_skill_apply_failure(
+                    "The managed skill replacement did not include a backup root.",
+                ));
+            };
+            let repository = skilltap_core::storage::FileManagedArtifactRepository::new(
+                self.filesystem,
+                config_root.clone(),
+            )
             .map_err(|_| {
-                managed_skill_apply_failure("The managed skill tree could not be published.")
-            })? {
-            skilltap_core::runtime::DirectoryPublishOutcome::Published(_) => {
-                Ok(OperationOutcome::Applied)
-            }
-            skilltap_core::runtime::DirectoryPublishOutcome::AlreadyExists => {
-                let (_, files) = self
-                    .filesystem
-                    .load_tree_no_follow(&entry.root, &entry.destination)
-                    .map_err(|_| {
-                        managed_skill_apply_failure(
-                            "The existing managed skill tree could not be re-read safely.",
-                        )
-                    })?;
-                let current = ArtifactTree::new(
-                    files
-                        .into_iter()
-                        .map(|(path, bytes)| (path.as_str().to_owned(), bytes)),
+                managed_skill_apply_failure(
+                    "The managed skill backup repository could not be opened.",
                 )
+            })?;
+            let Some(backup_tree) = &entry.backup_tree else {
+                return Err(managed_skill_apply_failure(
+                    "The managed skill replacement did not include the previous tree.",
+                ));
+            };
+            let backup = repository.backup(owner, backup_tree).map_err(|_| {
+                managed_skill_apply_failure(
+                    "The existing skill tree could not be backed up safely.",
+                )
+            })?;
+            self.filesystem
+                .remove_tree_no_follow(&entry.root, &entry.destination, expected)
                 .map_err(|_| {
                     managed_skill_apply_failure(
-                        "The existing managed skill tree had an invalid shape.",
+                        "The existing skill tree could not be removed safely.",
                     )
                 })?;
-                if current == entry.tree {
+            match self.filesystem.publish_tree_no_follow(
+                &entry.root,
+                &entry.destination,
+                entry.tree.files(),
+            ) {
+                Ok(skilltap_core::runtime::DirectoryPublishOutcome::Published(_)) => {
+                    Ok(OperationOutcome::Applied)
+                }
+                Ok(skilltap_core::runtime::DirectoryPublishOutcome::AlreadyExists) => {
                     Ok(OperationOutcome::NoChange)
-                } else {
+                }
+                Err(_) => {
+                    let _ = self.filesystem.publish_tree_no_follow(
+                        &entry.root,
+                        &entry.destination,
+                        backup_tree.files(),
+                    );
+                    let _ = backup;
                     Err(managed_skill_apply_failure(
-                        "The managed skill destination changed before publication.",
+                        "The replacement skill tree could not be published after backup.",
                     ))
+                }
+            }
+        } else {
+            match self
+                .filesystem
+                .publish_tree_no_follow(&entry.root, &entry.destination, entry.tree.files())
+                .map_err(|_| {
+                    managed_skill_apply_failure("The managed skill tree could not be published.")
+                })? {
+                skilltap_core::runtime::DirectoryPublishOutcome::Published(_) => {
+                    Ok(OperationOutcome::Applied)
+                }
+                skilltap_core::runtime::DirectoryPublishOutcome::AlreadyExists => {
+                    let (_, files) = self
+                        .filesystem
+                        .load_tree_no_follow(&entry.root, &entry.destination)
+                        .map_err(|_| {
+                            managed_skill_apply_failure(
+                                "The existing managed skill tree could not be re-read safely.",
+                            )
+                        })?;
+                    let current = ArtifactTree::new(
+                        files
+                            .into_iter()
+                            .map(|(path, bytes)| (path.as_str().to_owned(), bytes)),
+                    )
+                    .map_err(|_| {
+                        managed_skill_apply_failure(
+                            "The existing managed skill tree had an invalid shape.",
+                        )
+                    })?;
+                    if current == entry.tree {
+                        Ok(OperationOutcome::NoChange)
+                    } else {
+                        Err(managed_skill_apply_failure(
+                            "The managed skill destination changed before publication.",
+                        ))
+                    }
                 }
             }
         }
@@ -1293,6 +1375,7 @@ impl StatusApplication<'_> {
         let limits =
             ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
                 .expect("bounded skill tree limits are valid");
+        let filesystem = SystemFileSystem;
         let source_snapshot = match SystemExternalTreeObserver
             .observe(&ExternalTreeRequest::new(source_root.clone(), limits))
         {
@@ -1494,14 +1577,49 @@ impl StatusApplication<'_> {
                         );
                         continue;
                     }
-                    outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome.with_warning(
-                        Warning::new(
-                            "skill_replace_pending",
-                            "Explicit replacement acknowledgment was supplied, but safe backup/removal composition is still pending.",
-                        )
-                        .with_context("target", target_id.as_str()),
+                    let (identity, _) = match filesystem.load_tree_no_follow(&root, &destination) {
+                        Ok(value) => value,
+                        Err(_) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            return outcome.with_warning(Warning::new(
+                                "skill_destination_changed",
+                                "The skill destination changed before a safe replacement could be planned.",
+                            ));
+                        }
+                    };
+                    let operation_id = skill_operation_id(target_id, &key);
+                    let operation =
+                        match skilltap_core::lifecycle_operation::faithful_file_operation(
+                            operation_id.clone(),
+                            target_id.clone(),
+                            key.clone(),
+                            OperationAction::SkillInstall,
+                            full_path,
+                        ) {
+                            Ok(operation) => operation,
+                            Err(_) => {
+                                outcome.result = ResultClass::Invalid;
+                                return outcome.with_error(ErrorDetail::new(
+                                "operation_contract_invalid",
+                                "The managed skill replacement operation could not be constructed safely.",
+                            ));
+                            }
+                        };
+                    operations.push(operation);
+                    entries.insert(
+                        operation_id,
+                        ManagedSkillEntry {
+                            root,
+                            destination: destination.clone(),
+                            tree: skill.tree().clone(),
+                            backup_tree: Some(current.tree().clone()),
+                            action: ManagedSkillAction::Replace,
+                            expected_identity: Some(identity),
+                            owner: Some(key.clone()),
+                            config_root: Some(paths.skilltap_config().clone()),
+                        },
                     );
+                    native_ids.insert(target_id.clone(), name.clone());
                     continue;
                 }
                 let operation_id = skill_operation_id(target_id, &key);
@@ -1536,8 +1654,11 @@ impl StatusApplication<'_> {
                         root,
                         destination: destination.clone(),
                         tree: skill.tree().clone(),
+                        backup_tree: None,
                         action: ManagedSkillAction::Install,
                         expected_identity: None,
+                        owner: None,
+                        config_root: None,
                     },
                 );
                 native_ids.insert(target_id.clone(), name.clone());
@@ -1607,7 +1728,6 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let filesystem = SystemFileSystem;
         let port = ManagedSkillPort {
             filesystem: &filesystem,
             entries,
@@ -1656,6 +1776,89 @@ impl StatusApplication<'_> {
         outcome
             .with_summary("operations", report.result.operations().len() as u64)
             .with_summary("changed", report.changed)
+    }
+
+    /// Refresh a managed skill from the source recorded in state. The normal
+    /// install path performs the bounded resolution and replacement planning;
+    /// this command only supplies the recorded source identity.
+    pub(crate) fn execute_skill_update(
+        &self,
+        command: &'static str,
+        requested_scope: &ScopeArgs,
+        target: &TargetArgs,
+        skill_name: Option<&str>,
+        acknowledged: bool,
+    ) -> Outcome {
+        let (documents, _) = match self.load_documents(command) {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
+        };
+        let Some(skill_name) = skill_name else {
+            return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                Warning::new(
+                    "skill_update_selector_required",
+                    "Updating all managed skills is not enabled until each source can be planned independently; provide an exact skill name.",
+                ),
+            );
+        };
+        let name = match NativeId::new(skill_name) {
+            Ok(name) => name,
+            Err(_) => {
+                return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                    "skill_name_invalid",
+                    "The skill name is not a valid managed resource identifier.",
+                ));
+            }
+        };
+        let status_args = StatusArgs {
+            target: target.clone(),
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                return Outcome::new(command, ResultClass::Invalid).with_error(error);
+            }
+        };
+        let mut source = None;
+        for concrete_scope in &scope.resolved {
+            let Some(key) = ResourceId::new(format!("skill:{}", name.as_str()))
+                .ok()
+                .map(|id| ResourceKey::new(id, concrete_scope.clone()))
+            else {
+                continue;
+            };
+            if let Some(value) = documents
+                .state
+                .as_ref()
+                .and_then(|state| state.resources().get(&key))
+                .and_then(|state| state.source())
+            {
+                source = Some(value.clone());
+                break;
+            }
+        }
+        let Some(source) = source else {
+            return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                Warning::new(
+                    "skill_source_unavailable",
+                    "The selected skill has no recorded source; adopt or install it before updating.",
+                ),
+            );
+        };
+        self.execute_skill_install(
+            command,
+            requested_scope,
+            target,
+            SkillInstallRequest {
+                source: source.locator().as_str(),
+                name: Some(name.as_str()),
+                requested_revision: source.requested_revision().map(|value| value.as_str()),
+                subdirectory: None,
+                acknowledged,
+            },
+        )
     }
 
     /// Remove a skill only when skilltap owns the exact current tree. An
@@ -1868,8 +2071,11 @@ impl StatusApplication<'_> {
                         root,
                         destination: destination.clone(),
                         tree,
+                        backup_tree: None,
                         action: ManagedSkillAction::Remove,
                         expected_identity: Some(identity),
+                        owner: None,
+                        config_root: None,
                     },
                 );
             }
