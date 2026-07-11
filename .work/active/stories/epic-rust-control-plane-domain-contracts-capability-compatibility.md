@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-capability-compatibility
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -36,18 +36,15 @@ classifications carrying target-specific evidence and consequences.
 - Tests added: constructor and serde boundary parity; open dotted capability-id
   validation; all three capability support states; deterministic capability-set
   and partial-result JSON; independent compatibility/fidelity axes; mandatory
-  evidence and consequences for every non-faithful fidelity; unknown-field and
-  invalid persisted-value rejection.
+  evidence and consequences for every non-faithful fidelity; result/evidence
+  target agreement; unknown-field and invalid persisted-value rejection.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
 - Dispatch rationale: direct implementation in the two isolated domain modules;
   integration boundaries were already established by the completed identity,
   scope, and source story.
-- Verification: owned files pass pinned `rustfmt --check`; locked workspace
-  check and clippy passed with warnings denied; locked workspace tests pass (27
-  core tests plus all workspace/doc-test targets). A parallel resource-graph
-  edit introduced a transient unrelated warning after the clippy snapshot; it
-  does not affect these owned modules and is being handled in that story.
+- Verification: locked workspace format, check, clippy with warnings denied,
+  and tests pass (32 core tests plus all workspace/doc-test targets).
 
 ## Review findings (2026-07-11)
 
@@ -58,3 +55,12 @@ classifications carrying target-specific evidence and consequences.
 - Blocker: affected components currently use `ResourceId` values that do not
   identify the new resource-local component graph. After the resource story
   lands `ComponentId`, use it consistently in evidence and consequences.
+
+## Review resolution (2026-07-11)
+
+- Added an explicit `HarnessId` target to `CompatibilityResult`, its validated
+  constructor, serde wire, accessor, and deterministic JSON representation.
+- Added typed `EvidenceTargetMismatch` rejection before other result invariants;
+  raw construction and deserialization tests prove identical enforcement.
+- Replaced affected-component `ResourceId` values with the resource graph's
+  validated `ComponentId` in both evidence and material consequences.
