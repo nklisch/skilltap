@@ -1,14 +1,14 @@
 ---
 id: epic-rust-control-plane
 kind: epic
-stage: drafting
+stage: implementing
 tags: [infra, cleanup]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-11
 ---
 
 # Rust Control Plane
@@ -45,12 +45,41 @@ or resource lifecycle behavior; those capabilities build on this foundation.
   and daemon with no visual UI surface; do not install project mockup rules or
   create mockups for this epic.
 
-## Anticipated child features
+## Decomposition
 
-- Destructive legacy removal and Rust workspace bootstrap
-- Validated domain identities and resource graph
-- Configuration, inventory, state, and managed-artifact repositories
-- Scope, target, typed-error, locking, and command-runner primitives
-- Thin CLI shell with stable plain and JSON output contracts
+The epic is split by capability boundary rather than crate or implementation
+layer. Repository reset establishes the buildable workspace; domain contracts
+then give storage and runtime infrastructure one shared vocabulary. Storage and
+runtime primitives can proceed in parallel before the CLI composes both into a
+stable executable surface.
 
-<!-- The design pass on each child feature will fill in real specifics. -->
+### Child features
+
+- `epic-rust-control-plane-workspace-reset` — remove the retired product and
+  establish the pinned Rust workspace, test-support skeleton, and rewritten
+  build/distribution foundations — depends on: `[]`
+- `epic-rust-control-plane-domain-contracts` — define validated identities,
+  scopes, sources, resources, capabilities, compatibility, and result types —
+  depends on: `[epic-rust-control-plane-workspace-reset]`
+- `epic-rust-control-plane-storage` — implement versioned configuration,
+  inventory, state, and managed-artifact repositories with strict validation
+  and atomic writes — depends on: `[epic-rust-control-plane-domain-contracts]`
+- `epic-rust-control-plane-runtime-primitives` — provide scope and target
+  resolution, typed boundary errors, filesystem and locking abstractions, and
+  direct-argument command execution — depends on:
+  `[epic-rust-control-plane-domain-contracts]`
+- `epic-rust-control-plane-cli-shell` — compose the repositories and runtime
+  ports behind the non-interactive command tree, stable plain/JSON envelopes,
+  and exit-code contract — depends on:
+  `[epic-rust-control-plane-storage, epic-rust-control-plane-runtime-primitives]`
+
+### Decomposition risks
+
+The destructive reset is intentionally first but must preserve the website,
+Homebrew, installer, and release experience as surfaces while removing their
+v2 implementation assumptions. Storage and runtime primitives share domain
+errors and canonical-path types; keeping those contracts in the preceding
+domain feature avoids circular ownership. The CLI shell is the integration
+point and therefore the likeliest place to expose an omitted primitive; any
+such discovery belongs in the producing feature contract rather than being
+reimplemented in the CLI crate.
