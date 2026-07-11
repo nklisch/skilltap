@@ -455,6 +455,27 @@ mod tests {
     }
 
     #[test]
+    fn top_level_source_control_metadata_can_be_excluded_without_touching_siblings() {
+        let tree = ExternalTreeFixture::new().unwrap();
+        fs::create_dir(tree.root().join(".git")).unwrap();
+        fs::write(tree.root().join(".git/HEAD"), b"ref: refs/heads/main").unwrap();
+        fs::write(tree.root().join("SKILL.md"), b"skill").unwrap();
+
+        let limits = limits(4, 16, 128, 512, 64);
+        let snapshot = SystemExternalTreeObserver
+            .observe(&request(&tree, limits))
+            .unwrap()
+            .without_top_level_directory(".git", limits)
+            .unwrap();
+        let paths = snapshot
+            .entries()
+            .iter()
+            .map(|entry| entry.path().as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(paths, ["SKILL.md"]);
+    }
+
+    #[test]
     fn rejects_depth_entry_file_total_and_link_boundaries() {
         let tree = ExternalTreeFixture::new().unwrap();
         fs::create_dir(tree.root().join("dir")).unwrap();

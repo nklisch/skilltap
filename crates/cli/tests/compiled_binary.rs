@@ -247,6 +247,12 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         } else if *command == "daemon run" {
             assert!(stdout(&output).is_empty());
             assert!(stderr(&output).contains("capability_unavailable"));
+        } else if *command == "skill update" {
+            assert_code(&output, 0);
+            let value = json(&output);
+            assert_eq!(value["command"], *command, "arguments: {arguments:?}");
+            assert_eq!(value["result"], "completed");
+            assert_eq!(value["summary"]["changed"], false);
         } else if matches!(
             *command,
             "plan"
@@ -263,7 +269,6 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 | "plugin update"
                 | "skill install"
                 | "skill remove"
-                | "skill update"
                 | "instructions setup"
                 | "instructions repair"
         ) {
@@ -801,6 +806,15 @@ fn git_skill_install_clones_a_bounded_source_and_records_the_commit() {
     assert_eq!(json(&update)["summary"]["changed"], true);
     let updated_state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(updated_state.contains(&new_sha));
+
+    let update_all = run(
+        &machine,
+        &["skill", "update", "--target", "codex", "--json"],
+    );
+    assert_code(&update_all, 0);
+    assert_eq!(json(&update_all)["result"], "completed");
+    assert_eq!(json(&update_all)["summary"]["changed"], false);
+    assert_eq!(json(&update_all)["summary"]["operations"], 1);
 }
 
 #[test]

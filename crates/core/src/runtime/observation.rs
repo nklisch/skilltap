@@ -859,6 +859,29 @@ impl ExternalTreeSnapshot {
     pub fn entries(&self) -> &[ExternalTreeEntry] {
         &self.entries
     }
+
+    /// Return a bounded snapshot without one top-level metadata entry and its
+    /// descendants. Source-control metadata is not part of a managed skill or
+    /// other complete resource tree, so adapters can exclude it before
+    /// fingerprinting and publication without weakening the filesystem
+    /// observer's general-purpose behavior.
+    pub fn without_top_level_directory(
+        &self,
+        name: &str,
+        limits: ExternalTreeLimits,
+    ) -> Result<Self, ObservationRuntimeError> {
+        let prefix = format!("{name}/");
+        Self::new(
+            self.entries
+                .iter()
+                .filter(|entry| {
+                    let path = entry.path().as_str();
+                    path != name && !path.starts_with(&prefix)
+                })
+                .cloned(),
+            limits,
+        )
+    }
 }
 
 impl fmt::Debug for ExternalTreeSnapshot {
