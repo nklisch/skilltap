@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-publication-tests
 kind: story
-stage: review
+stage: done
 tags: [refactor, testing]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on: [epic-rust-control-plane-runtime-maintainability-sidecar-tests]
@@ -41,3 +41,11 @@ and run the full locked verification ladder.
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. The broad test became six independently diagnosable scenarios while
+retaining every injected failure and assertion; the only helper is shared by
+all six cases. No production code changed, unrelated identities are unchanged,
+and the expected inventory rises from 94 to 99 with the full locked ladder
+green.
