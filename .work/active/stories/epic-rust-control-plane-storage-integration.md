@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-integration
 kind: story
-stage: review
+stage: done
 tags: [infra, testing]
 parent: epic-rust-control-plane-storage
 depends_on:
@@ -55,3 +55,11 @@ Compose all owned repositories against one isolated machine configuration root.
 - The three integration tests passed three consecutive parallel runs. The full
   locked format/check/Clippy/test/rustdoc ladder passes with 141 workspace tests.
 - Discrepancies from design: none. Adjacent issues parked: none.
+
+## Review
+
+Approved. The three real-adapter tests cover no-create first use and exact
+surfaces, byte-stable reload/idempotence, independent corruption, complete-tree
+publication before atomic state reference under a concurrent observer, and
+conflicting publication preserving prior state/tree. Production code is
+unchanged; three repeated focused runs and the full locked 141-test ladder pass.
