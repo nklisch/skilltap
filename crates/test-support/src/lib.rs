@@ -27,6 +27,9 @@ use std::{
 
 static NEXT_TEMP_ROOT: AtomicU64 = AtomicU64::new(0);
 
+mod integration;
+pub use integration::{NativeTreeSnapshot, snapshot_native_roots, snapshot_tree};
+
 /// A uniquely named temporary directory removed on a best-effort basis.
 #[derive(Debug)]
 pub struct TempRoot(PathBuf);
