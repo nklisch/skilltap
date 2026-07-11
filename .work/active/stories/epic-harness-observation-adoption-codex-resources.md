@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex-resources
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-codex-config]
@@ -33,3 +33,8 @@ without reading outside bounded native trees or emitting raw bytes.
 
 - Harness Clippy and all nine detection/Codex path/config/resource tests pass
   in the locked offline workspace.
+
+## Review
+
+- Fast-lane review approved the no-mutation complete-tree observation and green
+  warnings-denied test record.
