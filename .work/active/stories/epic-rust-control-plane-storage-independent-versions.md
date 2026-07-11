@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-independent-versions
 kind: story
-stage: review
+stage: done
 tags: [correctness]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-document-repositories]
@@ -40,3 +40,10 @@ full locked ladder.
 - Verification passed: locked format, all-target check, warnings-denied Clippy,
   142 workspace tests, and warnings-denied rustdoc.
 - Discrepancies from design: none. Adjacent issues parked: none.
+
+## Review
+
+Approved. Each document now owns its public version constant and binds both
+schema serde and repository probing to it. The mixed-version regression advances
+only config's expected codec while inventory/state validation and bytes remain
+exact; all schema-1 goldens and the locked 142-test ladder pass.
