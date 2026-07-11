@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-workspace
 kind: story
-stage: review
+stage: done
 tags: [infra, cleanup]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: []
@@ -48,3 +48,13 @@ agent configuration, and work substrate for their owning stories.
   documented release command `cargo build --release -p skilltap` succeeds. The
   binary and crate boundary remain unchanged.
 - Adjacent issues parked: none.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Story verified by implement; fast-lane advance.
