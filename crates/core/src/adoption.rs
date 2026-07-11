@@ -8,7 +8,11 @@ use crate::{
         ObservationKey, ObservationLayer, ObservationTarget, ObservedEnvironment, ObservedResource,
         ResourceKey, Scope, UpdateIntent,
     },
-    storage::InventoryDocument,
+    runtime::{ConfigurationLock, ConfigurationLockGuard, RuntimeError},
+    storage::{
+        DocumentState, INVENTORY_SCHEMA_VERSION, InventoryDocument, InventoryRepository,
+        StorageError,
+    },
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -28,7 +32,7 @@ impl AdoptionSelection {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct AdoptionIdentity {
     pub target: ObservationTarget,
     pub observation: ObservationKey,
@@ -79,6 +83,7 @@ pub enum AdoptionDecision {
 pub struct AdoptionPlan {
     pub decisions: Vec<AdoptionDecision>,
     pub additions: Vec<DesiredResource>,
+    pub evidence: BTreeSet<AdoptionIdentity>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -86,6 +91,51 @@ pub enum AdoptionError {
     InvalidCandidate,
     DuplicateCandidate,
     ConflictingInventory,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AdoptionObservationError {
+    Unavailable,
+}
+
+impl std::fmt::Display for AdoptionObservationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("native adoption evidence could not be re-observed")
+    }
+}
+
+impl std::error::Error for AdoptionObservationError {}
+
+#[derive(Debug)]
+pub enum AdoptionApplyError {
+    Lock(RuntimeError),
+    Inventory(StorageError),
+    Observation(AdoptionObservationError),
+    StaleEvidence,
+    Plan(AdoptionError),
+    Release(RuntimeError),
+}
+
+impl std::fmt::Display for AdoptionApplyError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Lock(_) => "skilltap configuration is locked by another operation",
+            Self::Inventory(_) => "skilltap inventory could not be loaded or written",
+            Self::Observation(error) => return error.fmt(formatter),
+            Self::StaleEvidence => "native adoption evidence changed before publication",
+            Self::Plan(error) => return error.fmt(formatter),
+            Self::Release(_) => "skilltap configuration lock could not be released",
+        })
+    }
+}
+
+impl std::error::Error for AdoptionApplyError {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AdoptionApplyResult {
+    pub plan: AdoptionPlan,
+    pub inventory: InventoryDocument,
+    pub changed: bool,
 }
 
 impl std::fmt::Display for AdoptionError {
@@ -142,6 +192,10 @@ pub fn plan_adoption(
         }
     }
 
+    let evidence = candidates
+        .values()
+        .flat_map(|values| values.iter().map(|candidate| candidate.identity.clone()))
+        .collect();
     let mut decisions = Vec::new();
     let mut additions = Vec::new();
     for (key, candidates) in candidates {
@@ -184,6 +238,7 @@ pub fn plan_adoption(
     Ok(AdoptionPlan {
         decisions,
         additions,
+        evidence,
     })
 }
 
@@ -248,6 +303,97 @@ pub fn merge_inventory(
 
     InventoryDocument::new(inventory.schema(), projects, resources.into_values())
         .map_err(|_| AdoptionError::InvalidCandidate)
+}
+
+/// Publishes an adoption plan through the cooperative configuration lock.
+///
+/// The repository is loaded after the lock is acquired, selected native
+/// identities are revalidated from a fresh read-only observation, and the
+/// pure planner is rerun before the single inventory replacement. Native
+/// configuration, state, and managed artifacts are outside this port.
+pub fn apply_adoption<L, R, F>(
+    lock: &L,
+    lock_path: &crate::domain::AbsolutePath,
+    inventory: &R,
+    plan: &AdoptionPlan,
+    reobserve: F,
+) -> Result<AdoptionApplyResult, AdoptionApplyError>
+where
+    L: ConfigurationLock,
+    R: InventoryRepository,
+    F: FnOnce(&BTreeSet<AdoptionIdentity>) -> Result<ObservedEnvironment, AdoptionObservationError>,
+{
+    let guard = lock
+        .try_acquire(lock_path)
+        .map_err(AdoptionApplyError::Lock)?;
+    let result = apply_adoption_locked(inventory, plan, reobserve);
+    let release = guard.release();
+    match (result, release) {
+        (Err(error), _) => Err(error),
+        (Ok(result), Ok(())) => Ok(result),
+        (Ok(_), Err(error)) => Err(AdoptionApplyError::Release(error)),
+    }
+}
+
+fn apply_adoption_locked<R, F>(
+    inventory: &R,
+    plan: &AdoptionPlan,
+    reobserve: F,
+) -> Result<AdoptionApplyResult, AdoptionApplyError>
+where
+    R: InventoryRepository,
+    F: FnOnce(&BTreeSet<AdoptionIdentity>) -> Result<ObservedEnvironment, AdoptionObservationError>,
+{
+    let current = match inventory.load().map_err(AdoptionApplyError::Inventory)? {
+        DocumentState::Missing => InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [])
+            .map_err(|_| AdoptionApplyError::Plan(AdoptionError::InvalidCandidate))?,
+        DocumentState::Present(value) => value,
+    };
+
+    if plan.evidence.is_empty() {
+        return Ok(AdoptionApplyResult {
+            plan: plan.clone(),
+            inventory: current,
+            changed: false,
+        });
+    }
+
+    let observed = reobserve(&plan.evidence).map_err(AdoptionApplyError::Observation)?;
+    if !evidence_matches(&plan.evidence, &observed) {
+        return Err(AdoptionApplyError::StaleEvidence);
+    }
+    let selection =
+        AdoptionSelection::new(plan.evidence.iter().map(|identity| identity.target.clone()));
+    let fresh_plan =
+        plan_adoption(Some(&current), &observed, &selection).map_err(AdoptionApplyError::Plan)?;
+    let merged = merge_inventory(&current, fresh_plan.additions.clone())
+        .map_err(AdoptionApplyError::Plan)?;
+    let changed = merged != current;
+    if changed {
+        inventory
+            .replace(&merged)
+            .map_err(AdoptionApplyError::Inventory)?;
+    }
+    Ok(AdoptionApplyResult {
+        plan: fresh_plan,
+        inventory: merged,
+        changed,
+    })
+}
+
+fn evidence_matches(expected: &BTreeSet<AdoptionIdentity>, observed: &ObservedEnvironment) -> bool {
+    expected.iter().all(|identity| {
+        let Some(crate::domain::HarnessObservationOutcome::Observed { observation }) =
+            observed.get(&identity.target)
+        else {
+            return false;
+        };
+        let Some(resource) = observation.resources().get(&identity.observation) else {
+            return false;
+        };
+        resource.native_identity() == &identity.native_identity
+            && resource.fingerprint() == identity.fingerprint.as_ref()
+    })
 }
 
 fn coalesce_candidates(
@@ -366,6 +512,8 @@ fn scope_clone(scope: &Scope) -> Scope {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::{Cell, RefCell};
+
     use super::*;
     use crate::domain::{
         AbsolutePath, CapabilityProfileId, CapabilityProfileSelection, CapabilitySet,
@@ -374,6 +522,45 @@ mod tests {
         ObservationRequest, ObservedDependency, ResourceHealth, ResourceId, ResourceKind,
         ScopedCapabilitySets,
     };
+
+    struct TestLock;
+
+    struct TestGuard(AbsolutePath);
+
+    impl ConfigurationLock for TestLock {
+        type Guard = TestGuard;
+
+        fn try_acquire(&self, path: &AbsolutePath) -> Result<Self::Guard, RuntimeError> {
+            Ok(TestGuard(path.clone()))
+        }
+    }
+
+    impl ConfigurationLockGuard for TestGuard {
+        fn path(&self) -> &AbsolutePath {
+            &self.0
+        }
+
+        fn release(self) -> Result<(), RuntimeError> {
+            Ok(())
+        }
+    }
+
+    struct MemoryInventory {
+        value: RefCell<DocumentState<InventoryDocument>>,
+        replacements: Cell<usize>,
+    }
+
+    impl InventoryRepository for MemoryInventory {
+        fn load(&self) -> Result<DocumentState<InventoryDocument>, StorageError> {
+            Ok(self.value.borrow().clone())
+        }
+
+        fn replace(&self, value: &InventoryDocument) -> Result<(), StorageError> {
+            *self.value.borrow_mut() = DocumentState::Present(value.clone());
+            self.replacements.set(self.replacements.get() + 1);
+            Ok(())
+        }
+    }
 
     fn environment() -> ObservedEnvironment {
         environment_with_harness("codex")
@@ -529,5 +716,53 @@ mod tests {
             merge_inventory(&inventory, [first, different]).unwrap_err(),
             AdoptionError::ConflictingInventory
         );
+    }
+
+    #[test]
+    fn apply_reloads_revalidates_and_publishes_once() {
+        let plan = plan_adoption(None, &environment(), &AdoptionSelection::new([])).unwrap();
+        let repository = MemoryInventory {
+            value: RefCell::new(DocumentState::Missing),
+            replacements: Cell::new(0),
+        };
+        let lock_path = AbsolutePath::new("/tmp/skilltap-adoption.lock").unwrap();
+        let result = apply_adoption(&TestLock, &lock_path, &repository, &plan, |evidence| {
+            assert_eq!(evidence, &plan.evidence);
+            Ok(environment())
+        })
+        .unwrap();
+        assert!(result.changed);
+        assert_eq!(result.inventory.resources().len(), 1);
+        assert_eq!(repository.replacements.get(), 1);
+
+        let repeated = apply_adoption(&TestLock, &lock_path, &repository, &result.plan, |_| {
+            Ok(environment())
+        })
+        .unwrap();
+        assert!(!repeated.changed);
+        assert_eq!(repository.replacements.get(), 1);
+    }
+
+    #[test]
+    fn apply_rejects_stale_observation_before_write() {
+        let plan = plan_adoption(None, &environment(), &AdoptionSelection::new([])).unwrap();
+        let repository = MemoryInventory {
+            value: RefCell::new(DocumentState::Missing),
+            replacements: Cell::new(0),
+        };
+        let lock_path = AbsolutePath::new("/tmp/skilltap-adoption.lock").unwrap();
+        let stale = {
+            let current = environment();
+            let request = current.batch().iter().next().unwrap().1.clone();
+            let outcome = crate::domain::HarnessObservationOutcome::failed(
+                request,
+                crate::domain::ObservationAdapterError::NativeStateUnreadable {},
+            );
+            crate::domain::ObservedEnvironment::new(current.batch().clone(), [outcome]).unwrap()
+        };
+        let error =
+            apply_adoption(&TestLock, &lock_path, &repository, &plan, |_| Ok(stale)).unwrap_err();
+        assert!(matches!(error, AdoptionApplyError::StaleEvidence));
+        assert_eq!(repository.replacements.get(), 0);
     }
 }
