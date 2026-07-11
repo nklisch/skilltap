@@ -17,6 +17,8 @@ use skilltap_core::{
 
 mod plugin_graph;
 pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader};
+mod update_resolution;
+pub use update_resolution::{GitSourceRevisionResolver, ObservedNativeRevisionResolver};
 
 mod lifecycle;
 pub use lifecycle::{
