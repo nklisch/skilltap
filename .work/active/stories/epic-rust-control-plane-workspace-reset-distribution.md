@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-distribution
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: [epic-rust-control-plane-workspace-reset-workspace]
@@ -42,3 +42,14 @@ unchanged artifact naming contract.
 - Adjacent issues parked: none.
 - Dispatch rationale: implemented as one bounded distribution surface with
   exclusive file ownership under the active autopilot wave.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Story verified by implement and integrated asset, workflow, shell,
+Ruby, and Rust checks; fast-lane advance.
