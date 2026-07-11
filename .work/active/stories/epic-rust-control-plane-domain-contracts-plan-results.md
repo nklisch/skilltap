@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-plan-results
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -46,3 +46,22 @@ attention reasons, and validated per-operation and final apply outcomes.
   reexports.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-11)
+
+- Blocker: public `Operation` and `AttentionReason` values hide payloads needed
+  by executors/renderers. Add read-only accessors for all operation fields and
+  typed access to every attention payload.
+- Blocker: `ApplyResult` is not bound to a `Plan`, so it can omit failed planned
+  work or add unknown ids and still claim success. Make it own the exact plan,
+  require one result per planned operation with no extras, persist that plan in
+  its strict wire form, and expose it read-only.
+- Blocker: dependency-skipped results must name declared dependencies of that
+  exact plan operation, not merely any failed result.
+- Blocker: partial acknowledgment selectors must remain within the operation's
+  resource/component selector scope.
+- Important: `Unsupported`, `Conflict`, and `NoOp` are non-actionable and must
+  use `NotApplicable`; executable safe/partial classes must not.
+- Important: failed outcomes require `OperationFailed` attention, while blocked
+  outcomes accept only non-failure blocking reasons. Enforce at constructor and
+  serde boundaries.
