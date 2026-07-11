@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -178,3 +178,15 @@ secrets.
 - Corruption in one repository does not rewrite or mask another; no storage
   file contains authentication material.
 - Full locked format/check/Clippy/test/rustdoc ladder passes.
+
+## Implementation summary
+
+All four children are complete. Storage now provides strict schema-1 config,
+inventory, state, timestamp/apply, and artifact records; typed missing/present
+TOML/JSON document repositories with descriptor-bound reads and atomic writes;
+immutable owner/fingerprint-bound complete-tree publication, exact load/remove,
+unique backups, and structured partial recovery through descriptor-relative
+Unix operations; plus real-adapter machine-root integration tests. The
+implementation performs no harness observation, planning, locking policy,
+resource lifecycle, skill semantic validation, or discovery. The locked
+workspace passes 141 tests plus doctests and warnings-clean rustdoc.
