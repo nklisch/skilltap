@@ -63,7 +63,8 @@ stable executable surface.
   depends on: `[epic-rust-control-plane-workspace-reset]`
 - `epic-rust-control-plane-storage` — implement versioned configuration,
   inventory, state, and managed-artifact repositories with strict validation
-  and atomic writes — depends on: `[epic-rust-control-plane-domain-contracts]`
+  and atomic writes through the runtime filesystem port — depends on:
+  `[epic-rust-control-plane-runtime-primitives]`
 - `epic-rust-control-plane-runtime-primitives` — provide scope and target
   resolution, typed boundary errors, filesystem and locking abstractions, and
   direct-argument command execution — depends on:
@@ -77,9 +78,10 @@ stable executable surface.
 
 The destructive reset is intentionally first but must preserve the website,
 Homebrew, installer, and release experience as surfaces while removing their
-v2 implementation assumptions. Storage and runtime primitives share domain
-errors and canonical-path types; keeping those contracts in the preceding
-domain feature avoids circular ownership. The CLI shell is the integration
+v2 implementation assumptions. Runtime primitives own the canonical atomic
+filesystem implementation; storage follows them so document repositories do
+not grow a second writer. Both share domain errors and canonical-path types
+from the preceding domain feature. The CLI shell is the integration
 point and therefore the likeliest place to expose an omitted primitive; any
 such discovery belongs in the producing feature contract rather than being
 reimplemented in the CLI crate.

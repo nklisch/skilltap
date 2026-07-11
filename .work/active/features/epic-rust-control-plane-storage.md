@@ -4,7 +4,7 @@ kind: feature
 stage: drafting
 tags: [infra]
 parent: epic-rust-control-plane
-depends_on: [epic-rust-control-plane-domain-contracts]
+depends_on: [epic-rust-control-plane-runtime-primitives]
 release_binding: null
 gate_origin: null
 created: 2026-07-11
@@ -29,8 +29,9 @@ or perform resource lifecycle operations.
 ## Epic context
 
 - Parent epic: `epic-rust-control-plane`
-- Position in epic: independent infrastructure consumer of the shared domain
-  contracts; can proceed in parallel with runtime primitives
+- Position in epic: repository and schema consumer of the shared domain and
+  runtime filesystem contracts; follows runtime primitives so atomic
+  publication has one implementation
 
 ## Foundation references
 
