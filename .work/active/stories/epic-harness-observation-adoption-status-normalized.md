@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status-normalized
 kind: story
-stage: implementing
+stage: review
 tags: [cli,infra]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-integration]
@@ -40,3 +40,34 @@ attention findings. Keep status read-only and repeatable.
   mutation authority.
 - Plain/JSON output and exit classes remain derived from one typed result, and
   repeated status leaves bytes, types, links, and mtimes unchanged.
+
+## Implementation notes
+
+- Added named, bounded canonical-root adapters for the global `.agents/skills`
+  directory, Codex skills/plugins, and Claude skills/plugins. Project
+  observations remain limited to `.agents`,
+  `.codex`, or `.claude`; no parent-directory scan is used for `~/AGENTS.md`.
+- Reworked CLI native status projection to build one
+  `ObservationRequest`/`HarnessObservationOutcome` per reachable harness and
+  exact scope, then compose them through `ObservationBatch` and
+  `normalize_observations`. A failed outcome does not discard successful
+  siblings.
+- Typed observed surfaces now expose stable resource identities, resource
+  kinds, native-entry counts, profile authority, and observe-only health. The
+  unknown-profile finding is surfaced as `capability.unverified` and keeps the
+  aggregate at attention-required. Desired and recorded key-set differences
+  produce a conservative `resource.drifted` warning without mutation.
+- Canonical instruction/settings locations are represented as read-only typed
+  instruction resources; their content is not copied or written by status.
+
+## Verification
+
+- `cargo test -p skilltap --all-targets --offline`
+- `cargo test -p skilltap-harnesses --all-targets --offline`
+- `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
+- `cargo fmt --all`
+
+The focused canonical-root test verifies that unrelated home files are not
+observed and that named roots remain deterministic. Full status integration
+coverage verifies sibling partial failure, typed output, and native-tree
+read-only behavior.

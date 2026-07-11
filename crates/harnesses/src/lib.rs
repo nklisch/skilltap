@@ -135,6 +135,7 @@ pub fn unreachable_installation(
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CodexObservationPaths {
+    pub home: skilltap_core::domain::AbsolutePath,
     pub codex_home: skilltap_core::domain::AbsolutePath,
     pub global_agents: skilltap_core::domain::AbsolutePath,
     pub project_root: Option<skilltap_core::domain::AbsolutePath>,
@@ -150,6 +151,15 @@ pub struct ClaudeObservationPaths {
     pub global_skills: skilltap_core::domain::AbsolutePath,
     pub project_root: Option<skilltap_core::domain::AbsolutePath>,
     pub project_settings: Option<skilltap_core::domain::AbsolutePath>,
+}
+
+/// One bounded snapshot rooted at a documented native location.  The root
+/// label is stable and intentionally does not expose arbitrary filesystem
+/// paths as resource identity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CanonicalObservation {
+    pub root: String,
+    pub snapshot: skilltap_core::runtime::ExternalTreeSnapshot,
 }
 
 /// Derives only documented Claude user/global and one personal project inputs.
@@ -209,6 +219,7 @@ pub fn codex_observation_paths(
         )
     });
     Ok(CodexObservationPaths {
+        home: paths.home().clone(),
         codex_home: paths.codex_home().clone(),
         global_agents: paths.global_agents().clone(),
         project_root,
@@ -278,6 +289,77 @@ pub fn observe_claude_project_resources(
         .as_ref()
         .ok_or(ObservationRuntimeError::TreeRootUnavailable)?;
     observe_project_roots([absolute_child(project, ".claude")], limits)
+}
+
+/// Observes only documented Codex roots. Missing optional roots are omitted;
+/// callers receive an unavailable error only when none of the roots exists.
+pub fn observe_codex_canonical_resources(
+    paths: &CodexObservationPaths,
+    scope: &Scope,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<Vec<CanonicalObservation>, ObservationRuntimeError> {
+    let roots = match scope {
+        Scope::Global => vec![
+            (
+                "agents.skills",
+                absolute_child(&paths.home, ".agents/skills"),
+            ),
+            ("codex.skills", absolute_child(&paths.codex_home, "skills")),
+            (
+                "codex.plugins",
+                absolute_child(&paths.codex_home, "plugins"),
+            ),
+        ],
+        Scope::Project(project) => vec![
+            ("project.agents", absolute_child(project, ".agents")),
+            ("project.codex", absolute_child(project, ".codex")),
+        ],
+    };
+    observe_named_roots(roots, limits)
+}
+
+/// Observes only documented Claude roots. Settings are parsed separately by
+/// the settings adapter; this function is limited to plugin/skill trees.
+pub fn observe_claude_canonical_resources(
+    paths: &ClaudeObservationPaths,
+    scope: &Scope,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<Vec<CanonicalObservation>, ObservationRuntimeError> {
+    let roots = match scope {
+        Scope::Global => vec![
+            ("claude.plugins", Some(paths.global_plugins.clone())),
+            ("claude.skills", Some(paths.global_skills.clone())),
+        ],
+        Scope::Project(project) => vec![("project.claude", absolute_child(project, ".claude"))],
+    };
+    observe_named_roots(roots, limits)
+}
+
+fn observe_named_roots(
+    roots: impl IntoIterator<Item = (&'static str, Option<skilltap_core::domain::AbsolutePath>)>,
+    limits: skilltap_core::runtime::ExternalTreeLimits,
+) -> Result<Vec<CanonicalObservation>, ObservationRuntimeError> {
+    let mut observed = Vec::new();
+    for (name, root) in roots
+        .into_iter()
+        .filter_map(|(name, root)| root.map(|root| (name, root)))
+    {
+        match SystemExternalTreeObserver.observe(&skilltap_core::runtime::ExternalTreeRequest::new(
+            root, limits,
+        )) {
+            Ok(snapshot) => observed.push(CanonicalObservation {
+                root: name.to_owned(),
+                snapshot,
+            }),
+            Err(ObservationRuntimeError::TreeRootUnavailable) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    if observed.is_empty() {
+        Err(ObservationRuntimeError::TreeRootUnavailable)
+    } else {
+        Ok(observed)
+    }
 }
 
 fn observe_project_roots(

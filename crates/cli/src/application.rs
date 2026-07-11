@@ -1,9 +1,17 @@
-use std::path::{Component, Path, PathBuf};
+use std::{
+    collections::BTreeSet,
+    path::{Component, Path, PathBuf},
+};
 
 use skilltap_core::{
     domain::{
-        AbsolutePath, CapabilitySupport, ConfiguredBinary, HarnessId, HarnessReachability,
-        HarnessSet, ProfileAuthority, Scope,
+        AbsolutePath, ComponentGraph, ConfiguredBinary, HarnessId, HarnessObservation,
+        HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
+        ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
+        ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
+        ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
+        ObservedResource, Ownership, ProfileAuthority, Provenance, ResourceHealth, ResourceId,
+        ResourceKey, ResourceKind, Scope,
     },
     runtime::{
         ExternalTreeLimits, JsonLimits, PlatformPaths, ProcessEnvironment, ProcessLimits,
@@ -15,9 +23,8 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    HarnessKind, detect_configured_installation, observe_claude_project_resources,
-    observe_claude_resources, observe_codex_project_resources, observe_codex_resources,
-    select_profile,
+    CanonicalObservation, HarnessKind, detect_configured_installation, normalize_observations,
+    observe_claude_canonical_resources, observe_codex_canonical_resources, select_profile,
 };
 
 use crate::{
@@ -370,6 +377,42 @@ impl StatusProjection<'_> {
             .with_summary("observed_targets", observation.observed_targets as u64)
             .with_summary("failed_targets", observation.failed_targets as u64)
             .with_summary("native_entries", observation.native_entries as u64);
+        let desired_keys = self
+            .documents
+            .inventory
+            .as_ref()
+            .map(|inventory| {
+                inventory
+                    .resources()
+                    .keys()
+                    .collect::<std::collections::BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        let recorded_keys = self
+            .documents
+            .state
+            .as_ref()
+            .map(|state| {
+                state
+                    .resources()
+                    .keys()
+                    .collect::<std::collections::BTreeSet<_>>()
+            })
+            .unwrap_or_default();
+        if desired_keys != recorded_keys {
+            outcome.result = ResultClass::AttentionRequired;
+            outcome = outcome.with_warning(Warning::new(
+                "resource.drifted",
+                "Desired inventory and recorded state differ; no mutation is implied by status.",
+            ));
+        }
+        if outcome
+            .warnings
+            .iter()
+            .any(|warning| warning.code == "capability.unverified")
+        {
+            outcome.result = ResultClass::AttentionRequired;
+        }
         if observation.failed_targets > 0 {
             outcome = outcome.with_next_action(NextAction::new(
                 "inspect_native_observation",
@@ -415,13 +458,10 @@ impl NativeObservation {
             ExternalTreeLimits::new(16, 10_000, 4 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024)
                 .expect("bounded status tree limits are valid");
         let search_path = std::env::var_os("PATH");
-        let mut result = Self {
-            resources: Vec::new(),
-            warnings: Vec::new(),
-            observed_targets: 0,
-            failed_targets: 0,
-            native_entries: 0,
-        };
+        let mut result = Self::default();
+        let mut requests = Vec::new();
+        let mut outcomes = Vec::new();
+        let mut metadata = Vec::new();
 
         for target in targets.iter() {
             let (kind, binary) = match target.as_str() {
@@ -493,51 +533,156 @@ impl NativeObservation {
             };
             let profile = select_profile(kind, native_version);
             for current_scope in &scope.resolved {
-                let id = observation_id(target, current_scope);
-                let mut entry = OutputEntry::new(id, "observed")
-                    .with_field("harness", target.as_str())
-                    .with_field("scope", scope_label(current_scope))
-                    .with_field("version", native_version.as_str())
-                    .with_field("profile_authority", profile_authority(profile.authority()))
-                    .with_field(
-                        "capabilities_supported",
-                        capability_count(&profile, current_scope, CapabilitySupport::Supported)
-                            as u64,
-                    )
-                    .with_field(
-                        "capabilities_unverified",
-                        capability_count(&profile, current_scope, CapabilitySupport::Unverified)
-                            as u64,
-                    )
-                    .with_field(
-                        "capabilities_unsupported",
-                        capability_count(&profile, current_scope, CapabilitySupport::Unsupported)
-                            as u64,
-                    );
-                if let Some(profile_id) = profile.profile_id() {
-                    entry = entry.with_field("profile", profile_id.as_str());
-                }
-                match observe_tree(kind, &paths, current_scope, tree_limits) {
-                    Ok(entry_count) => {
-                        result.observed_targets += 1;
-                        result.native_entries += entry_count;
-                        entry = entry.with_field("native_entries", entry_count as u64);
-                    }
-                    Err(error) => {
+                let evidence = match ObservationEvidence::new(&installation, profile.clone()) {
+                    Ok(value) => value,
+                    Err(_) => {
                         result.failed_targets += 1;
-                        entry.status = "observation_failed".to_owned();
-                        result.warnings.push(
-                            Warning::new(
-                                "native_observation_failed",
-                                "Native harness state could not be observed within the safety limits.",
-                            )
-                            .with_context("harness", target.as_str())
-                            .with_context("scope", scope_label(current_scope))
-                            .with_context("detail", error.to_string()),
+                        continue;
+                    }
+                };
+                let request = ObservationRequest::new(current_scope.clone(), evidence);
+                requests.push(request.clone());
+                metadata.push((
+                    target.clone(),
+                    current_scope.clone(),
+                    native_version.clone(),
+                    profile.clone(),
+                ));
+                match observe_trees(kind, &paths, current_scope, tree_limits) {
+                    Ok(snapshots) => {
+                        let mut resources = snapshots
+                            .iter()
+                            .map(|snapshot| {
+                                native_surface_resource(
+                                    target,
+                                    current_scope,
+                                    &snapshot.root,
+                                    profile.authority(),
+                                    snapshot.snapshot.entries().len(),
+                                )
+                            })
+                            .collect::<Vec<_>>();
+                        resources.extend(
+                            instruction_surface_labels(kind, &paths, current_scope)
+                                .into_iter()
+                                .map(|root| {
+                                    native_surface_resource(
+                                        target,
+                                        current_scope,
+                                        root,
+                                        profile.authority(),
+                                        0,
+                                    )
+                                }),
                         );
+                        let findings = if profile.authority() == ProfileAuthority::ObserveOnly {
+                            vec![ObservationFinding::new(
+                                ObservationFindingCode::CapabilityUnverified,
+                                ObservationSummary::CapabilityUnverified,
+                                ObservationSeverity::Warning,
+                                ObservationSubject::Harness {
+                                    harness: target.clone(),
+                                    scope: current_scope.clone(),
+                                },
+                                ObservationFields::default(),
+                            )]
+                        } else {
+                            Vec::new()
+                        };
+                        match HarnessObservation::new(request.clone(), resources, findings) {
+                            Ok(observation) => {
+                                outcomes.push(HarnessObservationOutcome::observed(observation));
+                            }
+                            Err(_) => outcomes.push(HarnessObservationOutcome::failed(
+                                request,
+                                ObservationAdapterError::NativeShapeUnsupported {},
+                            )),
+                        }
+                    }
+                    Err(error) => outcomes.push(HarnessObservationOutcome::failed(
+                        request,
+                        observation_error(error),
+                    )),
+                }
+            }
+        }
+        let batch = match ObservationBatch::new(requests) {
+            Ok(batch) => batch,
+            Err(_) => {
+                result.warnings.push(Warning::new(
+                    "native_observation_contract",
+                    "Native observations could not be normalized safely.",
+                ));
+                result.failed_targets += metadata.len();
+                return result;
+            }
+        };
+        let environment = match normalize_observations(batch, outcomes) {
+            Ok(environment) => environment,
+            Err(_) => {
+                result.warnings.push(Warning::new(
+                    "native_observation_contract",
+                    "Native observations could not be normalized safely.",
+                ));
+                result.failed_targets += metadata.len();
+                return result;
+            }
+        };
+        for (_, outcome) in environment.iter() {
+            match outcome {
+                HarnessObservationOutcome::Observed { observation } => {
+                    result.observed_targets += 1;
+                    result.resources.push(
+                        OutputEntry::new(
+                            observation_id(
+                                observation.target().harness(),
+                                observation.target().scope(),
+                            ),
+                            "observed",
+                        )
+                        .with_field("harness", observation.target().harness().as_str())
+                        .with_field("scope", scope_label(observation.target().scope()))
+                        .with_field("typed", true),
+                    );
+                    for resource in observation.resources().values() {
+                        let mut entry = OutputEntry::new(
+                            resource_identity(resource),
+                            resource_health(resource.health()),
+                        )
+                        .with_field("harness", observation.target().harness().as_str())
+                        .with_field("scope", scope_label(resource.scope()))
+                        .with_field("kind", resource_kind(resource.kind()))
+                        .with_field("native_identity", resource.native_identity().as_str());
+                        if resource.native_identity().as_str().contains(".") {
+                            entry = entry.with_field("native_entries", 0_u64);
+                        }
+                        result.resources.push(entry);
+                        result.native_entries += 1;
+                    }
+                    for finding in observation.findings() {
+                        result.warnings.push(finding_warning(finding));
                     }
                 }
-                result.resources.push(entry);
+                HarnessObservationOutcome::Failed { request, error } => {
+                    result.failed_targets += 1;
+                    result.resources.push(
+                        OutputEntry::new(
+                            observation_id(request.target().harness(), request.scope()),
+                            "observation_failed",
+                        )
+                        .with_field("harness", request.target().harness().as_str())
+                        .with_field("scope", scope_label(request.scope())),
+                    );
+                    result.warnings.push(
+                        Warning::new(
+                            "native_observation_failed",
+                            "Native harness state could not be observed within the safety limits.",
+                        )
+                        .with_context("harness", request.target().harness().as_str())
+                        .with_context("scope", scope_label(request.scope()))
+                        .with_context("detail", error.to_string()),
+                    );
+                }
             }
         }
         result
@@ -555,56 +700,161 @@ fn configured_binary(binary: &str) -> Result<ConfiguredBinary, ()> {
     }
 }
 
-fn observe_tree(
+fn observe_trees(
     kind: HarnessKind,
     paths: &PlatformPaths,
     scope: &Scope,
     limits: ExternalTreeLimits,
-) -> Result<usize, skilltap_core::runtime::ObservationRuntimeError> {
+) -> Result<Vec<CanonicalObservation>, skilltap_core::runtime::ObservationRuntimeError> {
     match kind {
         HarnessKind::Codex => {
             let inputs =
                 skilltap_harnesses::codex_observation_paths(paths, scope).map_err(|_| {
                     skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
                 })?;
-            if matches!(scope, Scope::Global) {
-                observe_codex_resources(&inputs, limits).map(|snapshot| snapshot.entries().len())
-            } else {
-                observe_codex_project_resources(&inputs, limits)
-            }
+            observe_codex_canonical_resources(&inputs, scope, limits)
         }
         HarnessKind::Claude => {
             let inputs =
                 skilltap_harnesses::claude_observation_paths(paths, scope).map_err(|_| {
                     skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
                 })?;
-            if matches!(scope, Scope::Global) {
-                observe_claude_resources(&inputs, limits).map(|snapshot| snapshot.entries().len())
-            } else {
-                observe_claude_project_resources(&inputs, limits)
+            observe_claude_canonical_resources(&inputs, scope, limits)
+        }
+    }
+}
+
+fn instruction_surface_labels(
+    kind: HarnessKind,
+    paths: &PlatformPaths,
+    scope: &Scope,
+) -> Vec<&'static str> {
+    match kind {
+        HarnessKind::Codex => {
+            let _ = skilltap_harnesses::codex_observation_paths(paths, scope);
+            match scope {
+                Scope::Global => vec!["codex.global.instructions"],
+                Scope::Project(_) => vec!["project.agents.instructions", "project.agents.override"],
+            }
+        }
+        HarnessKind::Claude => {
+            let _ = skilltap_harnesses::claude_observation_paths(paths, scope);
+            match scope {
+                Scope::Global => vec!["claude.settings"],
+                Scope::Project(_) => vec!["project.claude.settings"],
             }
         }
     }
 }
 
-fn capability_count(
-    profile: &skilltap_core::domain::CapabilityProfileSelection,
+fn native_surface_resource(
+    harness: &HarnessId,
     scope: &Scope,
-    support: CapabilitySupport,
-) -> usize {
-    profile
-        .observation_capabilities()
-        .for_scope(scope)
-        .iter()
-        .filter(|(_, value)| *value == support)
-        .count()
+    root: &str,
+    authority: ProfileAuthority,
+    entries: usize,
+) -> ObservedResource {
+    let id = ResourceId::new(stable_resource_id(harness, root))
+        .expect("stable native surface identifier is valid");
+    let key = ResourceKey::new(id, scope.clone());
+    let observation_key = ObservationKey::new(key, harness.clone(), ObservationLayer::Effective);
+    let kind = native_surface_kind(root);
+    let native_identity = NativeId::new(format!("{harness}:{root}:entries-{entries}"))
+        .expect("native surface identity is valid");
+    ObservedResource::new(
+        observation_key,
+        kind,
+        Provenance::Native,
+        Ownership::Unmanaged,
+        if authority == ProfileAuthority::ObserveOnly {
+            ResourceHealth::Unknown
+        } else {
+            ResourceHealth::Healthy
+        },
+        None,
+        ComponentGraph::new([]).expect("empty component graph is valid"),
+        BTreeSet::new(),
+        native_identity,
+        None,
+        None,
+    )
 }
 
-fn profile_authority(authority: ProfileAuthority) -> &'static str {
-    match authority {
-        ProfileAuthority::VerifiedCompiled => "verified_compiled",
-        ProfileAuthority::ObserveOnly => "observe_only",
+fn stable_resource_id(harness: &HarnessId, root: &str) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in format!("{harness}:{root}").bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
     }
+    format!("native-{hash:016x}")
+}
+
+fn native_surface_kind(root: &str) -> ResourceKind {
+    if root.ends_with("skills") {
+        ResourceKind::StandaloneSkill
+    } else if root.ends_with("plugins") || root.ends_with("claude") {
+        ResourceKind::Plugin
+    } else {
+        ResourceKind::InstructionLocation
+    }
+}
+
+fn observation_error(
+    error: skilltap_core::runtime::ObservationRuntimeError,
+) -> ObservationAdapterError {
+    use skilltap_core::runtime::ObservationRuntimeError as RuntimeError;
+    match error {
+        RuntimeError::TreeDepthLimitExceeded
+        | RuntimeError::TreeEntryLimitExceeded
+        | RuntimeError::TreeFileLimitExceeded
+        | RuntimeError::TreeTotalLimitExceeded
+        | RuntimeError::TreeSymlinkTargetLimitExceeded => {
+            ObservationAdapterError::ResourceLimitExceeded {}
+        }
+        RuntimeError::ProcessDeadlineExceeded => ObservationAdapterError::DeadlineExceeded {},
+        RuntimeError::TreeEntryUnsupported
+        | RuntimeError::TreeEntryNonUtf8
+        | RuntimeError::DuplicateTreeEntry => ObservationAdapterError::NativeShapeUnsupported {},
+        _ => ObservationAdapterError::NativeStateUnreadable {},
+    }
+}
+
+fn resource_identity(resource: &ObservedResource) -> String {
+    format!(
+        "{}:{}:{}",
+        resource.key().harness(),
+        resource.key().resource().id(),
+        match resource.key().layer() {
+            ObservationLayer::Declared => "declared",
+            ObservationLayer::Effective => "effective",
+        }
+    )
+}
+
+fn resource_health(health: ResourceHealth) -> &'static str {
+    match health {
+        ResourceHealth::Healthy => "healthy",
+        ResourceHealth::Drifted => "drifted",
+        ResourceHealth::Degraded => "degraded",
+        ResourceHealth::Unknown => "unknown",
+    }
+}
+
+fn resource_kind(kind: ResourceKind) -> &'static str {
+    match kind {
+        ResourceKind::Harness => "harness",
+        ResourceKind::Marketplace => "marketplace",
+        ResourceKind::Plugin => "plugin",
+        ResourceKind::StandaloneSkill => "standalone_skill",
+        ResourceKind::InstructionLocation => "instruction_location",
+    }
+}
+
+fn finding_warning(finding: &ObservationFinding) -> Warning {
+    Warning::new(finding.code().as_str(), finding.summary().as_str()).with_context(
+        "severity",
+        format!("{:?}", finding.severity()).to_lowercase(),
+    )
 }
 
 fn scope_label(scope: &Scope) -> String {

@@ -10,8 +10,8 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     CodexConfigError, DetectionError, HarnessKind, ProbeError, detect_configured_installation,
-    detect_installation, observe_codex_config, probe_profile, select_profile,
-    unreachable_installation,
+    detect_installation, observe_codex_canonical_resources, observe_codex_config, probe_profile,
+    select_profile, unreachable_installation,
 };
 use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
 
@@ -312,6 +312,47 @@ fn codex_resource_observation_reads_complete_skill_trees_without_writing() {
 }
 
 #[test]
+fn canonical_codex_observation_names_only_documented_roots() {
+    let root = TempRoot::new("skilltap-codex-canonical").unwrap();
+    let home = root.join("home");
+    let codex_home = root.join("codex");
+    fs::create_dir_all(home.join(".agents/skills/shared")).unwrap();
+    fs::create_dir_all(codex_home.join("skills/example")).unwrap();
+    fs::create_dir_all(codex_home.join("plugins/sample")).unwrap();
+    fs::write(
+        codex_home.join("skills/example/SKILL.md"),
+        b"name: example\n",
+    )
+    .unwrap();
+    fs::write(codex_home.join("unrelated.txt"), b"must not be observed").unwrap();
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, home.to_str().unwrap())
+        .with(EnvironmentVariable::CodexHome, codex_home.to_str().unwrap());
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let paths = skilltap_harnesses::codex_observation_paths(&platform, &Scope::Global).unwrap();
+    let roots = observe_codex_canonical_resources(
+        &paths,
+        &Scope::Global,
+        ExternalTreeLimits::new(8, 64, 4096, 8192, 1024).unwrap(),
+    )
+    .unwrap();
+    let names = roots
+        .iter()
+        .map(|root| root.root.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        vec!["agents.skills", "codex.skills", "codex.plugins"]
+    );
+    assert!(roots.iter().all(|root| {
+        root.snapshot
+            .entries()
+            .iter()
+            .all(|entry| !entry.path().as_str().contains("unrelated"))
+    }));
+}
+
+#[test]
 fn project_resource_observation_stays_inside_documented_native_roots() {
     let root = TempRoot::new("skilltap-project-resources").unwrap();
     let home = root.join("home");
@@ -335,6 +376,37 @@ fn project_resource_observation_stays_inside_documented_native_roots() {
     .unwrap();
     let count = skilltap_harnesses::observe_codex_project_resources(&paths, limits).unwrap();
     assert!(count >= 2);
+}
+
+#[test]
+fn codex_canonical_global_observation_stays_inside_codex_roots() {
+    let root = TempRoot::new("skilltap-codex-canonical").unwrap();
+    let home = root.join("home");
+    let codex_home = root.join("codex");
+    std::fs::create_dir_all(home.join(".agents/skills/example")).unwrap();
+    std::fs::create_dir_all(codex_home.join("skills")).unwrap();
+    std::fs::write(
+        home.join(".agents/skills/example/SKILL.md"),
+        b"---\nname: example\n---\n",
+    )
+    .unwrap();
+    std::fs::write(home.join("AGENTS.md"), b"instructions\n").unwrap();
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, home.to_str().unwrap())
+        .with(EnvironmentVariable::CodexHome, codex_home.to_str().unwrap());
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let paths = skilltap_harnesses::codex_observation_paths(&platform, &Scope::Global).unwrap();
+    let observations = skilltap_harnesses::observe_codex_canonical_resources(
+        &paths,
+        &Scope::Global,
+        ExternalTreeLimits::new(8, 64, 4096, 8192, 1024).unwrap(),
+    )
+    .unwrap();
+    assert!(observations.iter().all(|value| {
+        value.root == "agents.skills"
+            || value.root == "codex.skills"
+            || value.root == "codex.plugins"
+    }));
 }
 
 #[test]
