@@ -4,7 +4,7 @@
 # Usage:
 #   scripts/install-local.sh              # build + copy to ~/.local/bin/skilltap
 #   scripts/install-local.sh --link       # build + symlink (live updates on rebuild)
-#   scripts/install-local.sh --no-build   # use existing ./skilltap, skip rebuild
+#   scripts/install-local.sh --no-build   # use existing release binary, skip rebuild
 #   SKILLTAP_INSTALL=/usr/local/bin scripts/install-local.sh
 set -e
 
@@ -43,28 +43,27 @@ info() { printf "${CYAN}%s${RESET}\n" "$1"; }
 ok()   { printf "${GREEN}%s${RESET}\n" "$1"; }
 err()  { printf "${RED}error:${RESET} %s\n" "$1" >&2; }
 
-# --- Sanity checks ---
-
-if ! command -v bun >/dev/null 2>&1; then
-  err "bun is not on PATH — required to build skilltap"
-  exit 1
-fi
-
 cd "$REPO_ROOT"
 
 # --- Build ---
 
 if [ "$BUILD" -eq 1 ]; then
-  info "Building skilltap from $REPO_ROOT ..."
-  bun run build
-  ok "Built ./skilltap"
-else
-  if [ ! -x "$REPO_ROOT/skilltap" ]; then
-    err "no ./skilltap binary found and --no-build was passed"
+  if ! command -v cargo >/dev/null 2>&1; then
+    err "cargo is not on PATH — required to build skilltap"
     exit 1
   fi
-  info "Using existing ./skilltap (skipping build)"
+  info "Building skilltap from $REPO_ROOT ..."
+  cargo build --locked --release -p skilltap --target-dir "$REPO_ROOT/target"
+  ok "Built target/release/skilltap"
+else
+  if [ ! -x "$REPO_ROOT/target/release/skilltap" ]; then
+    err "no target/release/skilltap binary found and --no-build was passed"
+    exit 1
+  fi
+  info "Using existing target/release/skilltap (skipping build)"
 fi
+
+SOURCE="$REPO_ROOT/target/release/skilltap"
 
 # --- Install ---
 
@@ -78,11 +77,11 @@ if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
 fi
 
 if [ "$MODE" = "link" ]; then
-  ln -s "$REPO_ROOT/skilltap" "$TARGET"
-  ok "Symlinked $TARGET → $REPO_ROOT/skilltap"
-  info "Future 'bun run build' rebuilds will be picked up automatically."
+  ln -s "$SOURCE" "$TARGET"
+  ok "Symlinked $TARGET → $SOURCE"
+  info "Future release builds will be picked up automatically."
 else
-  cp "$REPO_ROOT/skilltap" "$TARGET"
+  cp "$SOURCE" "$TARGET"
   chmod +x "$TARGET"
   ok "Installed $TARGET"
 fi
@@ -91,7 +90,7 @@ fi
 
 VERSION="$("$TARGET" --version 2>/dev/null || true)"
 if [ -n "$VERSION" ]; then
-  ok "skilltap $VERSION is ready"
+  ok "$VERSION is ready"
 else
   err "binary installed but '--version' did not respond — check $TARGET"
   exit 1

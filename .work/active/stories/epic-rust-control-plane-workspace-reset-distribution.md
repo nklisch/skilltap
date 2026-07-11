@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-distribution
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: [epic-rust-control-plane-workspace-reset-workspace]
@@ -22,7 +22,23 @@ unchanged artifact naming contract.
 
 ## Acceptance criteria
 
-- [ ] Release workflow builds and verifies Linux/macOS x64/arm64 binaries.
-- [ ] Installer and formula use the same four asset names as the workflow.
-- [ ] Shell scripts pass syntax checks and preserve configurable install paths.
-- [ ] No release job publishes or requires the retired npm packages.
+- [x] Release workflow builds and verifies Linux/macOS x64/arm64 binaries.
+- [x] Installer and formula use the same four asset names as the workflow.
+- [x] Shell scripts pass syntax checks and preserve configurable install paths.
+- [x] No release job publishes or requires the retired npm packages.
+
+## Implementation notes
+
+- Files changed: `.github/workflows/release.yml`, `scripts/install-local.sh`,
+  `homebrew-skilltap/Formula/skilltap.rb`, and
+  `homebrew-skilltap/scripts/update-formula.sh`.
+- Tests added: none; verified workflow YAML parsing, Ruby formula syntax, POSIX
+  shell syntax, workspace tests, a real locked Rust release build and isolated
+  local install, formula updates from representative checksums, rejection of
+  invalid checksum input, and exact asset-name parity across release and
+  Homebrew surfaces.
+- Discrepancies from design: `install.sh` already derived the exact four asset
+  names and honored `SKILLTAP_INSTALL`, so it required verification but no edit.
+- Adjacent issues parked: none.
+- Dispatch rationale: implemented as one bounded distribution surface with
+  exclusive file ownership under the active autopilot wave.

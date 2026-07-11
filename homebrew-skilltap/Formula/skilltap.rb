@@ -1,7 +1,7 @@
 class Skilltap < Formula
-  desc "CLI for installing agent skills from any git host"
+  desc "Personal control plane for Codex and Claude Code environments"
   homepage "https://github.com/nklisch/skilltap"
-  version "0.1.0"
+  version "3.0.0"
   license "MIT"
 
   on_macos do

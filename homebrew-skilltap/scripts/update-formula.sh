@@ -3,7 +3,7 @@
 # Usage: ./scripts/update-formula.sh <version> <checksums-file>
 set -e
 
-VERSION="$1"
+VERSION="${1#v}"
 CHECKSUMS_FILE="$2"
 
 if [ -z "$VERSION" ] || [ -z "$CHECKSUMS_FILE" ]; then
@@ -15,13 +15,26 @@ FORMULA="Formula/skilltap.rb"
 
 # Extract checksums for each platform
 get_checksum() {
-  grep "$1" "$CHECKSUMS_FILE" | awk '{print $1}'
+  awk -v asset="$1" '$2 == asset || $2 == "*" asset { print $1 }' "$CHECKSUMS_FILE"
 }
 
 DARWIN_ARM64="$(get_checksum 'skilltap-darwin-arm64')"
 DARWIN_X64="$(get_checksum 'skilltap-darwin-x64')"
 LINUX_ARM64="$(get_checksum 'skilltap-linux-arm64')"
 LINUX_X64="$(get_checksum 'skilltap-linux-x64')"
+
+for CHECKSUM in "$DARWIN_ARM64" "$DARWIN_X64" "$LINUX_ARM64" "$LINUX_X64"; do
+  case "$CHECKSUM" in
+    ''|*[!0-9a-fA-F]* )
+      echo "error: missing or invalid asset checksum in $CHECKSUMS_FILE" >&2
+      exit 1
+      ;;
+  esac
+  if [ "${#CHECKSUM}" -ne 64 ]; then
+    echo "error: asset checksum must contain 64 hexadecimal characters" >&2
+    exit 1
+  fi
+done
 
 # Update version
 sed -i "s/version \"[^\"]*\"/version \"${VERSION}\"/" "$FORMULA"
