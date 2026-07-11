@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-findings
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-graph]
@@ -56,3 +56,14 @@ findings or their Debug/Display/serde forms.
 - `cargo doc --locked --workspace --no-deps`
 - `cargo build --locked --release -p skilltap`
 - `scripts/verify-compiled-binary.sh /storage/cargo-target/release/skilltap`
+
+## Review
+
+- Approved after a fresh-context review identified and the implementation
+  corrected two safety gaps: identifier-valid secrets in runtime-open codes
+  and last-wins duplicate field keys.
+- Re-review confirmed source-registered vocabularies, fixed non-echoing parse
+  errors, statically typed fields, constructor and raw-serde duplicate
+  rejection, deterministic ordering, and malformed/unmanaged expressibility.
+- Focused findings and graph tests, workspace formatting, and the complete
+  locked verification ladder pass after the correction.
