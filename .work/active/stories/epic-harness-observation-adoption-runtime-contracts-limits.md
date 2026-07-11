@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-contracts-limits
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: []
@@ -62,3 +62,13 @@ every limit at zero and maximum minus/at/plus one.
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`
 - `cargo test --locked --workspace` (243 tests across workspace suites after review correction)
 - `cargo doc --locked --workspace --no-deps`
+
+## Review
+
+- Initial review found public construction paths that could forge unbounded
+  process, JSON, and tree results plus missing termination/drain categories.
+- Correction `5167b63` made bounded payload construction crate-private and
+  limit-validating, privatized tree payloads, added direct bypass regressions,
+  and split termination from post-termination drain failure.
+- Fresh re-review approved the corrected contracts; focused tests pass 7/7 and
+  the coordinated workspace passes 243 tests, formatting, and strict Clippy.
