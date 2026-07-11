@@ -179,6 +179,16 @@ where
             ),
             OutputChannel::Stdout,
         ),
+        Dispatch::SkillRemove(args) => (
+            execute_system_skill_remove(
+                "skill remove",
+                &args.common.scope,
+                &args.common.target,
+                args.skill.as_str(),
+                false,
+            ),
+            OutputChannel::Stdout,
+        ),
         Dispatch::InstructionSetup(args) => (
             execute_system_instruction_setup(
                 "instructions setup",
@@ -264,6 +274,18 @@ fn execute_system_skill_install(
             ));
         };
         application.execute_skill_install(command, scope, target, source, name, acknowledged)
+    })
+}
+
+fn execute_system_skill_remove(
+    command: &'static str,
+    scope: &crate::command::ScopeArgs,
+    target: &crate::command::TargetArgs,
+    skill: &str,
+    acknowledged: bool,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        application.execute_skill_remove(command, scope, target, skill, acknowledged)
     })
 }
 

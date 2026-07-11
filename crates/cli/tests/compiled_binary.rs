@@ -262,6 +262,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
                 | "plugin remove"
                 | "plugin update"
                 | "skill install"
+                | "skill remove"
                 | "instructions setup"
         ) {
             assert_code(&output, 2);
@@ -517,6 +518,26 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     );
     assert_code(&repeat, 0);
     assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    let remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "source-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 0);
+    assert_eq!(json(&remove)["result"], "completed");
+    assert!(!machine.home().join(".agents/skills/source-skill").exists());
+    assert!(
+        !fs::read_to_string(config_root(&machine).join("inventory.toml"))
+            .unwrap()
+            .contains("skill:source-skill")
+    );
 }
 
 #[test]

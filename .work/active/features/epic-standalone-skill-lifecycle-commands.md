@@ -40,8 +40,11 @@ Added the pure SHA/fingerprint lifecycle decision model and exposed an
 inventory-backed `skill list` command. Explicit local-directory install now
 validates the complete tree, checks target frontmatter compatibility, publishes
 the canonical `.agents/skills/<name>` tree through the core lock/plan/journal
-path, and is idempotent. Git-backed resolution, safe replacement/update, and
-ownership-checked remove remain open.
+path, and is idempotent. Local `skill remove` now verifies the skilltap
+ownership record and current complete-tree fingerprint, removes only an exact
+owned tree through descriptor-checked deletion, and drops the desired inventory
+entry. Git-backed resolution, safe replacement/update, drift acknowledgment,
+and ownership backup retention remain open.
 
 ## Review
 
