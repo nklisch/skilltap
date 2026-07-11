@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-operation-semantics
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-plan-results]
@@ -70,6 +70,20 @@ without introducing adapter-internal actions or execution algorithms.
   consequences. Enforce the class/fidelity matrix and exact consequence equality
   for partial operations. `NoOp` may represent already-satisfied faithful,
   materializable, or previously accepted partial state, but never blocked state.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Feature-review findings were resolved across `67815bd` and
+`6c61c1b`; public exports/dead-type cleanup landed in `13329f0`. Two
+fresh-context reviewers confirmed semantic completeness, consent binding,
+result matrices, dependency propagation, and exact cycle diagnostics. Locked
+workspace checks pass with 56 core tests; fast-lane advance.
 
 ## Review corrections (2026-07-11)
 
