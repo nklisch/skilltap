@@ -47,3 +47,6 @@ a nested managed bridge from a duplicate root/nested configuration so repair
 does not silently choose one. Setup preserves a supported nested bridge when
 the project root bridge is absent and validates its `../AGENTS.md` relative
 target or import form.
+Repair with explicit acknowledgment now consolidates a duplicate root/nested
+project Claude setup to the root bridge, backing up and removing the nested
+entry through the same locked journal path.

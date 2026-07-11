@@ -435,6 +435,7 @@ enum InstructionWrite {
     Canonical,
     Symlink { target: RelativeSymlinkTarget },
     Import { contents: Vec<u8> },
+    Remove,
 }
 
 struct InstructionPort<'a> {
@@ -510,6 +511,38 @@ impl ExecutionPort for InstructionPort<'_> {
                 .expect("static evidence detail is valid"),
             ));
         };
+        if matches!(&entry.write, InstructionWrite::Remove) {
+            if let Some(backup) = &entry.backup {
+                let backup_parent = backup
+                    .as_str()
+                    .rsplit_once('/')
+                    .map(|(parent, _)| parent)
+                    .and_then(|parent| AbsolutePath::new(parent).ok())
+                    .ok_or_else(|| {
+                        instruction_apply_failure("The instruction backup path is invalid.")
+                    })?;
+                self.filesystem
+                    .create_directory_all(&backup_parent)
+                    .map_err(|_| {
+                        instruction_apply_failure(
+                            "The existing instruction bridge could not be backed up safely.",
+                        )
+                    })?;
+                self.filesystem
+                    .copy_recoverable(&entry.path, backup)
+                    .map_err(|_| {
+                        instruction_apply_failure(
+                            "The existing instruction bridge could not be backed up safely.",
+                        )
+                    })?;
+            }
+            self.filesystem.remove(&entry.path).map_err(|_| {
+                instruction_apply_failure(
+                    "The duplicate instruction bridge could not be removed safely.",
+                )
+            })?;
+            return Ok(OperationOutcome::Applied);
+        }
         let parent = entry
             .path
             .as_str()
@@ -571,6 +604,7 @@ impl ExecutionPort for InstructionPort<'_> {
                 .map_err(|_| {
                     instruction_apply_failure("The instruction import bridge could not be created.")
                 })?,
+            InstructionWrite::Remove => unreachable!("remove entries return before publication"),
         }
         Ok(OperationOutcome::Applied)
     }
@@ -2467,6 +2501,7 @@ impl StatusApplication<'_> {
         };
         for concrete_scope in &scope.resolved {
             let (canonical, mut bridges) = instruction_locations(&paths, concrete_scope, &enabled);
+            let mut duplicate_nested = None;
             if let Scope::Project(project) = concrete_scope
                 && enabled.iter().any(|target| target.as_str() == "claude")
             {
@@ -2482,7 +2517,25 @@ impl StatusApplication<'_> {
                     .inspect(&nested)
                     .map(|metadata| metadata.kind() != FileKind::Missing)
                     .unwrap_or(false);
-                if root_missing && nested_present {
+                if !root_missing && nested_present {
+                    duplicate_nested = Some(nested.clone());
+                    if !(repair && acknowledged) {
+                        outcome.result = ResultClass::AttentionRequired;
+                        outcome = outcome
+                            .with_warning(
+                                Warning::new(
+                                    "instruction_duplicate_claude_bridge",
+                                    "Both project Claude instruction locations exist; use repair with --yes to consolidate to the root bridge.",
+                                )
+                                .with_context("scope", scope_label(concrete_scope)),
+                            )
+                            .with_next_action(NextAction::new(
+                                "repair_duplicate_bridge",
+                                "Run instructions repair --project --yes to keep the root Claude bridge and remove the nested duplicate.",
+                            ));
+                        continue;
+                    }
+                } else if root_missing && nested_present {
                     bridges = vec![(
                         HarnessId::new("claude").expect("known harness id is valid"),
                         nested,
@@ -2589,16 +2642,96 @@ impl StatusApplication<'_> {
                 seeds.insert(state.key().clone(), state);
             }
 
+            if let Some(nested) = duplicate_nested {
+                let nested_resource = match instruction_resource_key(
+                    concrete_scope,
+                    "bridge-nested",
+                    "claude",
+                ) {
+                    Some(key) => key,
+                    None => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "instruction_resource_invalid",
+                            "The duplicate instruction resource identifier could not be represented safely.",
+                        ));
+                    }
+                };
+                let nested_id = instruction_operation_id(concrete_scope, "bridge-nested", "claude");
+                let nested_operation =
+                    match skilltap_core::lifecycle_operation::faithful_file_operation(
+                        nested_id.clone(),
+                        HarnessId::new("claude").expect("known harness id is valid"),
+                        nested_resource.clone(),
+                        OperationAction::InstructionRepair,
+                        nested.clone(),
+                    ) {
+                        Ok(operation) => operation,
+                        Err(_) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "operation_contract_invalid",
+                                "The duplicate instruction removal operation was invalid.",
+                            ));
+                        }
+                    };
+                let nested_metadata = filesystem.inspect(&nested).ok();
+                let backup = nested_metadata
+                    .as_ref()
+                    .filter(|metadata| metadata.kind() == FileKind::RegularFile)
+                    .map(|_| instruction_backup_path(&paths, &nested));
+                let nested_bytes = nested_metadata
+                    .as_ref()
+                    .filter(|metadata| metadata.kind() == FileKind::RegularFile)
+                    .and_then(|_| filesystem.read(&nested).ok())
+                    .unwrap_or_default();
+                let nested_state = ResourceState::new(
+                    nested_resource,
+                    BTreeMap::from([(
+                        HarnessId::new("claude").expect("known harness id is valid"),
+                        NativeId::new(nested.as_str()).expect("absolute path is valid native id"),
+                    )]),
+                    Provenance::Direct,
+                    Ownership::Skilltap,
+                    None,
+                    None,
+                    Some(fingerprint_contents(&nested_bytes)),
+                    None,
+                    None,
+                    timestamp,
+                    None,
+                )
+                .map_err(|_| ())
+                .ok();
+                operations.push(nested_operation);
+                entries.insert(
+                    nested_id,
+                    InstructionEntry {
+                        path: nested,
+                        write: InstructionWrite::Remove,
+                        action: OperationAction::InstructionRepair,
+                        backup,
+                    },
+                );
+                if let Some(state) = nested_state {
+                    seeds.insert(state.key().clone(), state);
+                }
+                outcome = outcome.with_warning(Warning::new(
+                    "instruction_bridge_consolidation",
+                    "The root project Claude bridge is canonical; the nested duplicate will be backed up and removed.",
+                ));
+            }
+
             for (target, bridge) in bridges {
                 let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
                     && bridge.as_str().ends_with("/.claude/CLAUDE.md");
-                let expected_symlink = RelativeSymlinkTarget::new(if nested_project_bridge {
-                    "../AGENTS.md"
-                } else if matches!(concrete_scope, Scope::Global) {
-                    "../AGENTS.md"
-                } else {
-                    "AGENTS.md"
-                });
+                let expected_symlink = RelativeSymlinkTarget::new(
+                    if nested_project_bridge || matches!(concrete_scope, Scope::Global) {
+                        "../AGENTS.md"
+                    } else {
+                        "AGENTS.md"
+                    },
+                );
                 let (write, expected_bytes) = match mode {
                     ClaudeInstructionMode::Symlink => (
                         InstructionWrite::Symlink {
@@ -2656,6 +2789,7 @@ impl StatusApplication<'_> {
                 let observed_bytes = match &write {
                     InstructionWrite::Import { contents } => contents.clone(),
                     InstructionWrite::Canonical | InstructionWrite::Symlink { .. } => Vec::new(),
+                    InstructionWrite::Remove => Vec::new(),
                 };
                 let bridge_state = ResourceState::new(
                     bridge_resource.clone(),

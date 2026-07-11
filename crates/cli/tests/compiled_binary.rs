@@ -1092,6 +1092,48 @@ fn instruction_setup_preserves_existing_nested_project_claude_bridge() {
 }
 
 #[test]
+fn instruction_repair_consolidates_duplicate_project_claude_bridges() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    fs::write(
+        machine.working_directory().join("AGENTS.md"),
+        b"canonical\n",
+    )
+    .unwrap();
+    fs::write(
+        machine.working_directory().join("CLAUDE.md"),
+        b"root drift\n",
+    )
+    .unwrap();
+    fs::create_dir_all(machine.working_directory().join(".claude")).unwrap();
+    fs::write(
+        machine.working_directory().join(".claude/CLAUDE.md"),
+        b"nested drift\n",
+    )
+    .unwrap();
+
+    let output = run(
+        &machine,
+        &["instructions", "repair", "--project", "--yes", "--json"],
+    );
+    assert_code(&output, 2);
+    assert_eq!(json(&output)["result"], "attention_required");
+    assert_eq!(
+        fs::read_link(machine.working_directory().join("CLAUDE.md")).unwrap(),
+        PathBuf::from("AGENTS.md")
+    );
+    assert!(
+        !machine
+            .working_directory()
+            .join(".claude/CLAUDE.md")
+            .exists()
+    );
+    let backups = config_root(&machine).join("managed/backups/instructions");
+    assert!(backups.is_dir());
+    assert!(fs::read_dir(backups).unwrap().next().is_some());
+}
+
+#[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
