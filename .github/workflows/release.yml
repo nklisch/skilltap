@@ -60,6 +60,9 @@ jobs:
       - name: Build release binary
         run: cargo build --locked --release -p skilltap
 
+      - name: Test compiled binary contract
+        run: SKILLTAP_TEST_BIN="$PWD/target/release/skilltap" cargo test --locked -p skilltap --test compiled_binary
+
       - name: Prepare artifact
         run: |
           cp target/release/skilltap "${{ matrix.asset }}"

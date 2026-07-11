@@ -31,6 +31,9 @@ jobs:
       - name: Verify compiled binary
         run: scripts/verify-binary.sh target/release/skilltap
 
+      - name: Test compiled binary contract
+        run: SKILLTAP_TEST_BIN="$PWD/target/release/skilltap" cargo test --locked -p skilltap --test compiled_binary
+
   website:
     runs-on: ubuntu-latest
     steps:

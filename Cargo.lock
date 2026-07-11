@@ -300,6 +300,7 @@ dependencies = [
  "serde_json",
  "skilltap-core",
  "skilltap-harnesses",
+ "skilltap-test-support",
 ]
 
 [[package]]

@@ -12,6 +12,9 @@ serde_json.workspace = true
 skilltap-core.workspace = true
 skilltap-harnesses.workspace = true
 
+[dev-dependencies]
+skilltap-test-support.workspace = true
+
 [[bin]]
 name = "skilltap"
 path = "src/main.rs"
