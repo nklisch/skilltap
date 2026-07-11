@@ -105,6 +105,9 @@ until the normalized observation and comparison work is delivered.
    diagnostics — depends on
    `[epic-harness-observation-adoption-status-policy,
    epic-harness-observation-adoption-status-observation]`.
+4. `epic-harness-observation-adoption-status-normalized` — complete typed
+   normalized resource/finding projection and desired-vs-observed comparison —
+   depends on `[epic-harness-observation-adoption-status-integration]`.
 
 ## Acceptance criteria
 
