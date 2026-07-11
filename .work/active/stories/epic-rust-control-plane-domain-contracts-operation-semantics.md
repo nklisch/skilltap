@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-operation-semantics
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-plan-results]
@@ -70,3 +70,16 @@ without introducing adapter-internal actions or execution algorithms.
   consequences. Enforce the class/fidelity matrix and exact consequence equality
   for partial operations. `NoOp` may represent already-satisfied faithful,
   materializable, or previously accepted partial state, but never blocked state.
+
+## Review corrections (2026-07-11)
+
+- Executable safe and partial operations now require at least one deterministic
+  affected surface through both construction and deserialization.
+- Every operation class now enforces its complete transfer-fidelity matrix;
+  no-op accepts faithful, materializable, and partial state but rejects blocked.
+- Partial acknowledgment and attention consequences must exactly equal the
+  authoritative compatibility consequences, preventing both invented and
+  omitted consent disclosures.
+- Added exhaustive constructor and strict-wire coverage for all 28
+  class/fidelity combinations, empty safe/partial surfaces, and both directions
+  of partial consequence mismatch.

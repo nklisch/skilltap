@@ -10,6 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::{
     AbsolutePath, CompatibilityResult, ComponentId, ConsequenceCode, EvidenceCode, EvidenceDetail,
     HarnessId, MaterialConsequence, NativeId, OperationId, Provenance, ResourceId, Scope,
+    TransferFidelity,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -600,6 +601,28 @@ impl Operation {
                 | OperationClass::SafeMaterialization
                 | OperationClass::Partial
         );
+        if executable && semantics.affected_surfaces.is_empty() {
+            return Err(OperationContractError::EmptyAffectedSurfaces { id, class });
+        }
+        let fidelity = semantics.compatibility.fidelity();
+        let valid_fidelity = match class {
+            OperationClass::SafeNative | OperationClass::SafeFaithfulEquivalent => {
+                fidelity == TransferFidelity::Faithful
+            }
+            OperationClass::SafeMaterialization => fidelity == TransferFidelity::Materializable,
+            OperationClass::Partial => fidelity == TransferFidelity::Partial,
+            OperationClass::Unsupported | OperationClass::Conflict => {
+                fidelity == TransferFidelity::Blocked
+            }
+            OperationClass::NoOp => fidelity != TransferFidelity::Blocked,
+        };
+        if !valid_fidelity {
+            return Err(OperationContractError::InvalidFidelityForOperationClass {
+                id,
+                class,
+                fidelity,
+            });
+        }
         if executable == (reversibility == Reversibility::NotApplicable) {
             return Err(OperationContractError::InvalidReversibility { id, class });
         }
@@ -630,6 +653,15 @@ impl Operation {
         if let (Some(selectors), Some(consequences)) =
             (acknowledgment.selectors(), acknowledgment.consequences())
         {
+            if class == OperationClass::Partial
+                && consequences != semantics.compatibility.consequences()
+            {
+                return Err(OperationContractError::PartialConsequenceMismatch {
+                    id,
+                    acknowledged: consequences.clone(),
+                    compatibility: semantics.compatibility.consequences().clone(),
+                });
+            }
             validate_consequence_coverage(&id, selectors, consequences)?;
         }
 
@@ -1369,6 +1401,15 @@ pub enum OperationContractError {
     EmptyAcknowledgmentConsequences,
     InvalidAcknowledgmentShape,
     EmptyDependencyBlockers,
+    EmptyAffectedSurfaces {
+        id: OperationId,
+        class: OperationClass,
+    },
+    InvalidFidelityForOperationClass {
+        id: OperationId,
+        class: OperationClass,
+        fidelity: TransferFidelity,
+    },
     CompatibilityTargetMismatch {
         id: OperationId,
         target: HarnessId,
@@ -1404,6 +1445,11 @@ pub enum OperationContractError {
         operation: OperationId,
         code: ConsequenceCode,
         component: ComponentId,
+    },
+    PartialConsequenceMismatch {
+        id: OperationId,
+        acknowledged: BTreeSet<MaterialConsequence>,
+        compatibility: BTreeSet<MaterialConsequence>,
     },
     DuplicateOperation {
         id: OperationId,
@@ -1493,6 +1539,18 @@ impl fmt::Display for OperationContractError {
                     "dependency-blocked attention requires a dependency"
                 )
             }
+            Self::EmptyAffectedSurfaces { id, class } => write!(
+                formatter,
+                "executable operation `{id}` with class {class:?} requires an affected surface"
+            ),
+            Self::InvalidFidelityForOperationClass {
+                id,
+                class,
+                fidelity,
+            } => write!(
+                formatter,
+                "operation `{id}` class {class:?} is incompatible with {fidelity:?} fidelity"
+            ),
             Self::CompatibilityTargetMismatch {
                 id,
                 target,
@@ -1541,6 +1599,16 @@ impl fmt::Display for OperationContractError {
             } => write!(
                 formatter,
                 "operation `{operation}` consequence `{code}` component `{component}` is not acknowledged"
+            ),
+            Self::PartialConsequenceMismatch {
+                id,
+                acknowledged,
+                compatibility,
+            } => write!(
+                formatter,
+                "partial operation `{id}` acknowledgment consequences differ from compatibility consequences (acknowledged={}, compatibility={})",
+                acknowledged.len(),
+                compatibility.len()
             ),
             Self::DuplicateOperation { id } => write!(formatter, "duplicate operation `{id}`"),
             Self::UnknownDependency {
@@ -1654,7 +1722,7 @@ impl std::error::Error for OperationContractError {}
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::domain::{CompatibilityClass, ConsequenceSummary, TransferFidelity};
+    use crate::domain::{CompatibilityClass, CompatibilityEvidence, ConsequenceSummary};
 
     fn operation_id(value: &str) -> OperationId {
         OperationId::new(value).unwrap()
@@ -1682,7 +1750,61 @@ mod tests {
     }
 
     fn semantics(target: &str) -> OperationSemantics {
-        semantics_with(target, [])
+        semantics_with(
+            target,
+            [AffectedSurface::file(
+                AbsolutePath::new("/tmp/skilltap-operation-test").unwrap(),
+            )],
+        )
+    }
+
+    fn semantics_for_fidelity(
+        target: &str,
+        fidelity: TransferFidelity,
+        consequences: impl IntoIterator<Item = MaterialConsequence>,
+        affected_surfaces: impl IntoIterator<Item = AffectedSurface>,
+    ) -> OperationSemantics {
+        let target = HarnessId::new(target).unwrap();
+        let evidence = (!fidelity.is_faithful()).then(|| {
+            CompatibilityEvidence::new(
+                EvidenceCode::new("target.transfer.non_faithful").unwrap(),
+                target.clone(),
+                [],
+                EvidenceDetail::new("The target cannot preserve the resource faithfully").unwrap(),
+            )
+        });
+        OperationSemantics::new(
+            OperationAction::Materialize,
+            Scope::Global,
+            OperationReason::new(
+                EvidenceCode::new("desired.plugin.missing").unwrap(),
+                EvidenceDetail::new("The desired plugin is not installed").unwrap(),
+            ),
+            CompatibilityResult::new(
+                target,
+                CompatibilityClass::TargetSpecific,
+                fidelity,
+                evidence,
+                consequences,
+            )
+            .unwrap(),
+            Provenance::Materialized,
+            affected_surfaces,
+        )
+    }
+
+    fn partial_semantics(
+        target: &str,
+        consequences: impl IntoIterator<Item = MaterialConsequence>,
+    ) -> OperationSemantics {
+        semantics_for_fidelity(
+            target,
+            TransferFidelity::Partial,
+            consequences,
+            [AffectedSurface::file(
+                AbsolutePath::new("/tmp/skilltap-operation-test").unwrap(),
+            )],
+        )
     }
 
     fn semantics_with(
@@ -1717,7 +1839,7 @@ mod tests {
             operation_id(id),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
-            semantics("codex"),
+            partial_semantics("codex", consequences.clone()),
             OperationClass::Partial,
             Reversibility::Reversible,
             dependencies
@@ -1762,7 +1884,7 @@ mod tests {
             operation_id(id),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
-            semantics("codex"),
+            semantics_for_fidelity("codex", TransferFidelity::Blocked, [consequence()], []),
             class,
             Reversibility::NotApplicable,
             [],
@@ -1785,6 +1907,71 @@ mod tests {
             None,
         )
         .unwrap()
+    }
+
+    fn operation_with_class_and_fidelity(
+        id: &str,
+        class: OperationClass,
+        fidelity: TransferFidelity,
+    ) -> Result<Operation, OperationContractError> {
+        let consequences = (!fidelity.is_faithful()).then(consequence);
+        let surfaces = matches!(
+            class,
+            OperationClass::SafeNative
+                | OperationClass::SafeFaithfulEquivalent
+                | OperationClass::SafeMaterialization
+                | OperationClass::Partial
+        )
+        .then(|| AffectedSurface::file(AbsolutePath::new("/tmp/skilltap-matrix").unwrap()));
+        let semantics = semantics_for_fidelity("codex", fidelity, consequences.clone(), surfaces);
+        let (acknowledgment, attention) = match class {
+            OperationClass::Partial => {
+                let consequences = consequences.clone().unwrap_or_else(consequence);
+                let selectors = [resource_selector("plugin:tools")];
+                (
+                    AcknowledgmentRequirement::required(selectors.clone(), [consequences.clone()])
+                        .unwrap(),
+                    Some(
+                        AttentionReason::acknowledgment_required(selectors, [consequences])
+                            .unwrap(),
+                    ),
+                )
+            }
+            OperationClass::Unsupported => (
+                AcknowledgmentRequirement::not_required(),
+                Some(AttentionReason::unsupported(
+                    EvidenceCode::new("native.unsupported").unwrap(),
+                    EvidenceDetail::new("No native operation exists").unwrap(),
+                )),
+            ),
+            OperationClass::Conflict => (
+                AcknowledgmentRequirement::not_required(),
+                Some(AttentionReason::conflict(
+                    EvidenceCode::new("native.conflict").unwrap(),
+                    EvidenceDetail::new("An unmanaged resource conflicts").unwrap(),
+                )),
+            ),
+            _ => (AcknowledgmentRequirement::not_required(), None),
+        };
+        let reversibility = if matches!(
+            class,
+            OperationClass::Unsupported | OperationClass::Conflict | OperationClass::NoOp
+        ) {
+            Reversibility::NotApplicable
+        } else {
+            Reversibility::Reversible
+        };
+        Operation::new(
+            operation_id(id),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics,
+            class,
+            reversibility,
+            [],
+            acknowledgment,
+            attention,
+        )
     }
 
     #[test]
@@ -1844,7 +2031,7 @@ mod tests {
             operation_id("partial"),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
-            semantics("codex"),
+            partial_semantics("codex", [consequence()]),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1861,7 +2048,7 @@ mod tests {
             operation_id("partial"),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
-            semantics("codex"),
+            partial_semantics("codex", [consequence()]),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1890,7 +2077,7 @@ mod tests {
             operation_id("component-partial"),
             HarnessId::new("codex").unwrap(),
             component_selector("plugin:tools", "hook:format"),
-            semantics("codex"),
+            partial_semantics("codex", [consequence()]),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1927,7 +2114,7 @@ mod tests {
                 operation_id("resource-partial"),
                 HarnessId::new("codex").unwrap(),
                 resource_selector("plugin:tools"),
-                semantics("codex"),
+                partial_semantics("codex", [resource_wide.clone()]),
                 OperationClass::Partial,
                 Reversibility::Irreversible,
                 [],
@@ -1948,7 +2135,7 @@ mod tests {
             operation_id("partial"),
             HarnessId::new("codex").unwrap(),
             resource_selector("plugin:tools"),
-            semantics("codex"),
+            partial_semantics("codex", [uncovered.clone()]),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -1971,7 +2158,7 @@ mod tests {
             operation_id("partial"),
             HarnessId::new("codex").unwrap(),
             component_selector("plugin:tools", "hook:format"),
-            semantics("codex"),
+            partial_semantics("codex", [resource_consequence.clone()]),
             OperationClass::Partial,
             Reversibility::Irreversible,
             [],
@@ -2058,7 +2245,7 @@ mod tests {
             operation_id("unsupported"),
             HarnessId::new("codex").unwrap(),
             resource_selector("skill:portable"),
-            semantics("codex"),
+            semantics_for_fidelity("codex", TransferFidelity::Blocked, [consequence()], []),
             OperationClass::Unsupported,
             Reversibility::Reversible,
             [],
@@ -2076,6 +2263,181 @@ mod tests {
                 class: OperationClass::Unsupported,
             }
         );
+    }
+
+    #[test]
+    fn executable_operations_require_affected_surfaces_at_both_boundaries() {
+        let safe = Operation::new(
+            operation_id("safe-empty"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics_with("codex", []),
+            OperationClass::SafeNative,
+            Reversibility::Reversible,
+            [],
+            AcknowledgmentRequirement::not_required(),
+            None,
+        )
+        .unwrap_err();
+        assert!(matches!(
+            safe,
+            OperationContractError::EmptyAffectedSurfaces {
+                class: OperationClass::SafeNative,
+                ..
+            }
+        ));
+
+        let selectors = [component_selector("plugin:tools", "hook:format")];
+        let consequences = [consequence()];
+        let partial = Operation::new(
+            operation_id("partial-empty"),
+            HarnessId::new("codex").unwrap(),
+            resource_selector("plugin:tools"),
+            semantics_for_fidelity("codex", TransferFidelity::Partial, consequences.clone(), []),
+            OperationClass::Partial,
+            Reversibility::Reversible,
+            [],
+            AcknowledgmentRequirement::required(selectors.clone(), consequences.clone()).unwrap(),
+            Some(AttentionReason::acknowledgment_required(selectors, consequences).unwrap()),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            partial,
+            OperationContractError::EmptyAffectedSurfaces {
+                class: OperationClass::Partial,
+                ..
+            }
+        ));
+
+        for mut raw in [
+            serde_json::to_value(safe_operation("safe-wire", &[])).unwrap(),
+            serde_json::to_value(partial_operation("partial-wire", &[])).unwrap(),
+        ] {
+            raw.as_object_mut().unwrap().remove("affected_surfaces");
+            assert!(serde_json::from_value::<Operation>(raw).is_err());
+        }
+    }
+
+    #[test]
+    fn every_operation_class_enforces_its_transfer_fidelity() {
+        let classes = [
+            OperationClass::SafeNative,
+            OperationClass::SafeFaithfulEquivalent,
+            OperationClass::SafeMaterialization,
+            OperationClass::Partial,
+            OperationClass::Unsupported,
+            OperationClass::Conflict,
+            OperationClass::NoOp,
+        ];
+        let fidelities = [
+            TransferFidelity::Faithful,
+            TransferFidelity::Materializable,
+            TransferFidelity::Partial,
+            TransferFidelity::Blocked,
+        ];
+        let valid = |class, fidelity| match class {
+            OperationClass::SafeNative | OperationClass::SafeFaithfulEquivalent => {
+                fidelity == TransferFidelity::Faithful
+            }
+            OperationClass::SafeMaterialization => fidelity == TransferFidelity::Materializable,
+            OperationClass::Partial => fidelity == TransferFidelity::Partial,
+            OperationClass::Unsupported | OperationClass::Conflict => {
+                fidelity == TransferFidelity::Blocked
+            }
+            OperationClass::NoOp => fidelity != TransferFidelity::Blocked,
+        };
+
+        for class in classes {
+            for fidelity in fidelities {
+                let result = operation_with_class_and_fidelity("matrix", class, fidelity);
+                assert_eq!(
+                    result.is_ok(),
+                    valid(class, fidelity),
+                    "{class:?}/{fidelity:?}"
+                );
+
+                if !valid(class, fidelity) {
+                    let valid_fidelity = match class {
+                        OperationClass::SafeNative
+                        | OperationClass::SafeFaithfulEquivalent
+                        | OperationClass::NoOp => TransferFidelity::Faithful,
+                        OperationClass::SafeMaterialization => TransferFidelity::Materializable,
+                        OperationClass::Partial => TransferFidelity::Partial,
+                        OperationClass::Unsupported | OperationClass::Conflict => {
+                            TransferFidelity::Blocked
+                        }
+                    };
+                    let mut raw = serde_json::to_value(
+                        operation_with_class_and_fidelity("matrix-wire", class, valid_fidelity)
+                            .unwrap(),
+                    )
+                    .unwrap();
+                    raw["compatibility"] = serde_json::to_value(
+                        semantics_for_fidelity(
+                            "codex",
+                            fidelity,
+                            (!fidelity.is_faithful()).then(consequence),
+                            [],
+                        )
+                        .compatibility(),
+                    )
+                    .unwrap();
+                    assert!(serde_json::from_value::<Operation>(raw).is_err());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn partial_acknowledgment_exactly_matches_compatibility_consequences() {
+        let extra = MaterialConsequence::new(
+            ConsequenceCode::new("component.behavior.changed").unwrap(),
+            [ComponentId::new("hook:format").unwrap()],
+            ConsequenceSummary::new("The formatting hook behavior will change").unwrap(),
+        );
+        let selectors = [component_selector("plugin:tools", "hook:format")];
+
+        for (compatibility, acknowledged) in [
+            (vec![consequence()], vec![consequence(), extra.clone()]),
+            (vec![consequence(), extra.clone()], vec![consequence()]),
+        ] {
+            let error = Operation::new(
+                operation_id("partial-mismatch"),
+                HarnessId::new("codex").unwrap(),
+                resource_selector("plugin:tools"),
+                partial_semantics("codex", compatibility),
+                OperationClass::Partial,
+                Reversibility::Reversible,
+                [],
+                AcknowledgmentRequirement::required(selectors.clone(), acknowledged.clone())
+                    .unwrap(),
+                Some(
+                    AttentionReason::acknowledgment_required(selectors.clone(), acknowledged)
+                        .unwrap(),
+                ),
+            )
+            .unwrap_err();
+            assert!(matches!(
+                error,
+                OperationContractError::PartialConsequenceMismatch { .. }
+            ));
+        }
+
+        let mut invented = serde_json::to_value(partial_operation("invented", &[])).unwrap();
+        for field in ["acknowledgment", "attention"] {
+            invented[field]["consequences"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::to_value(&extra).unwrap());
+        }
+        assert!(serde_json::from_value::<Operation>(invented).is_err());
+
+        let mut omitted = serde_json::to_value(partial_operation("omitted", &[])).unwrap();
+        omitted["compatibility"]["consequences"]
+            .as_array_mut()
+            .unwrap()
+            .push(serde_json::to_value(extra).unwrap());
+        assert!(serde_json::from_value::<Operation>(omitted).is_err());
     }
 
     #[test]
