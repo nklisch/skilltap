@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-scope-target
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on:
@@ -35,3 +35,15 @@ the shared runtime boundaries.
 - Fake-port and temporary-Git tests cover nested roots, non-Git directories,
   explicit paths, failures, ordering, and target selection.
 - Locked formatting, all-target check, Clippy, tests, and rustdoc pass.
+
+## Implementation notes
+
+- Files changed: new `crates/core/src/runtime/scope.rs`, runtime exports in `runtime/mod.rs`, and path-specific additions to the shared typed error contract in `runtime/error.rs`.
+- Public surface: mutually exclusive `ScopeRequest`, deterministic `ResolvedScopes`, `WorkingDirectory`/`SystemWorkingDirectory`, `GitRoot`/`CommandGitRoot`, composed `ScopeResolver`, and `resolve_targets` over enabled harness identifiers.
+- Tests added: 7 tests covering current nested Git roots, explicit file-to-parent Git resolution, concrete non-Git fallback, missing/unsuitable inputs, global/all-scopes ordering and deduplication without scans, mutually exclusive request variants, and omitted/all/named/disabled/empty target selection.
+- Git behavior: `CommandGitRoot` invokes `git -C <canonical-directory> rev-parse --show-toplevel` through `CommandRunner`; a non-zero Git result means no containing repository and falls back to the canonical directory, while spawn/wait and malformed-output failures remain typed.
+- Scope behavior: project paths canonicalize through `FileSystem`; regular-file inputs use their containing directory; global/all-scopes avoid filesystem, working-directory, and Git access; all-scopes consumes only caller-supplied recorded project roots.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
+- Dispatch rationale: direct-read only; the completed runtime ports and domain selection types fully defined the integration points.
+- Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace --all-targets`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace`, and `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps` all pass (85 workspace tests).

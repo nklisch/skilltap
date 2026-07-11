@@ -37,6 +37,9 @@ impl fmt::Display for EnvironmentVariable {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PathRole {
     CanonicalPath,
+    WorkingDirectory,
+    ProjectPath,
+    GitRoot,
     Home,
     ConfigHome,
     SkilltapConfig,
@@ -49,6 +52,9 @@ impl fmt::Display for PathRole {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::CanonicalPath => "canonical path",
+            Self::WorkingDirectory => "working directory",
+            Self::ProjectPath => "project path",
+            Self::GitRoot => "Git root",
             Self::Home => "home directory",
             Self::ConfigHome => "configuration home",
             Self::SkilltapConfig => "skilltap configuration directory",
@@ -110,6 +116,12 @@ pub enum RuntimeError {
     NonUtf8Path {
         role: PathRole,
     },
+    WorkingDirectory {
+        source: io::Error,
+    },
+    UnsuitableProjectPath {
+        path: AbsolutePath,
+    },
     FileSystem {
         action: FileSystemAction,
         path: AbsolutePath,
@@ -147,7 +159,10 @@ impl RuntimeError {
             Self::MissingEnvironment { .. }
             | Self::NonUtf8Environment { .. }
             | Self::InvalidEnvironmentPath { .. } => RuntimeBoundary::Environment,
-            Self::InvalidPath { .. } | Self::NonUtf8Path { .. } => RuntimeBoundary::Path,
+            Self::InvalidPath { .. }
+            | Self::NonUtf8Path { .. }
+            | Self::WorkingDirectory { .. }
+            | Self::UnsuitableProjectPath { .. } => RuntimeBoundary::Path,
             Self::FileSystem { .. } | Self::UnsafeSymlink { .. } => RuntimeBoundary::FileSystem,
             Self::LockContended { .. } | Self::Lock { .. } => RuntimeBoundary::Lock,
             Self::Command { .. } => RuntimeBoundary::Command,
@@ -182,6 +197,18 @@ impl fmt::Display for RuntimeError {
                 write!(formatter, "could not resolve {role}: {source}")
             }
             Self::NonUtf8Path { role } => write!(formatter, "resolved {role} is not valid UTF-8"),
+            Self::WorkingDirectory { source } => {
+                write!(
+                    formatter,
+                    "could not read the current working directory: {source}"
+                )
+            }
+            Self::UnsuitableProjectPath { path } => {
+                write!(
+                    formatter,
+                    "project path `{path}` is not a file or directory"
+                )
+            }
             Self::FileSystem {
                 action,
                 path,
@@ -228,11 +255,13 @@ impl std::error::Error for RuntimeError {
             }
             Self::FileSystem { source, .. }
             | Self::Lock { source, .. }
-            | Self::Command { source, .. } => Some(source),
+            | Self::Command { source, .. }
+            | Self::WorkingDirectory { source } => Some(source),
             Self::Clock { source, .. } => Some(source),
             Self::MissingEnvironment { .. }
             | Self::NonUtf8Environment { .. }
             | Self::NonUtf8Path { .. }
+            | Self::UnsuitableProjectPath { .. }
             | Self::UnsafeSymlink { .. }
             | Self::LockContended { .. }
             | Self::UnsupportedPlatform { .. } => None,
