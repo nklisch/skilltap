@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude-resources
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-claude
 depends_on: [epic-harness-observation-adoption-claude-settings]
@@ -31,3 +31,8 @@ native bytes or mutate settings/cache.
 
 - Harness Clippy and all twelve detection/Codex/Claude path/settings/resource
   tests pass in the locked offline workspace.
+
+## Review
+
+- Fast-lane review approved the bounded complete-tree observation and green
+  no-mutation test record.
