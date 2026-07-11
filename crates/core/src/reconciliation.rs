@@ -10,6 +10,7 @@ use crate::{
         Fingerprint, NativeId, ObservationKey, Operation, OperationClass, OperationContractError,
         Ownership, Plan, ResourceHealth, ResourceKey, Scope,
     },
+    hook_mapping::{HookContract, HookMappingError, HookTargetContract, analyze_hook},
     storage::ResourceState,
 };
 
@@ -19,6 +20,19 @@ pub fn compatibility_for_target(
     request: CompatibilityRequest<'_>,
 ) -> Result<CompatibilityAnalysis, CompatibilityAnalysisError> {
     analyze(request)
+}
+
+/// Expose normalized hook equivalence through the reconciliation boundary.
+/// Adapters provide the source and target contracts; this layer remains pure
+/// and does not materialize files or invoke native harness commands.
+pub fn hook_compatibility_for_target(
+    source: &HookContract,
+    target: &HookTargetContract,
+    requiredness: crate::domain::ComponentRequiredness,
+    target_harness: &crate::domain::HarnessId,
+    resource: &ResourceKey,
+) -> Result<crate::domain::CompatibilityResult, HookMappingError> {
+    analyze_hook(source, target, requiredness, target_harness, resource)
 }
 
 #[derive(Clone, Debug)]
@@ -248,10 +262,10 @@ fn _scope_of_observation(key: &ObservationKey) -> &Scope {
 mod tests {
     use super::*;
     use crate::domain::{
-        AffectedSurface, CompatibilityClass, CompatibilityResult, ComponentGraph, EvidenceCode,
-        EvidenceDetail, HarnessId, ObservationLayer, OperationAction, OperationId, OperationReason,
-        OperationSelector, OperationSemantics, Provenance, ResourceId, ResourceKind,
-        TransferFidelity,
+        AffectedSurface, CompatibilityClass, CompatibilityResult, ComponentGraph, ComponentId,
+        ComponentRequiredness, EvidenceCode, EvidenceDetail, HarnessId, ObservationLayer,
+        OperationAction, OperationId, OperationReason, OperationSelector, OperationSemantics,
+        Provenance, ResourceId, ResourceKind, TransferFidelity,
     };
 
     fn resource() -> ResourceKey {
@@ -434,5 +448,36 @@ mod tests {
                     component_id: crate::domain::ComponentId::new("hook:optional").unwrap(),
                 })
         );
+    }
+
+    #[test]
+    fn reconciliation_exposes_hook_equivalence_without_materialization() {
+        let source = HookContract {
+            component: ComponentId::new("hook:notify").unwrap(),
+            event: "session_start".to_owned(),
+            payload: crate::hook_mapping::HookPayload::Json,
+            failure: crate::hook_mapping::HookFailure::Block,
+            working_directory: crate::hook_mapping::HookWorkingDirectory::Plugin,
+            environment_references: ["env:HOME".to_owned()].into_iter().collect(),
+            executable: true,
+        };
+        let target = HookTargetContract {
+            event: "session_start".to_owned(),
+            payload: crate::hook_mapping::HookPayload::Json,
+            failure: crate::hook_mapping::HookFailure::Block,
+            working_directory: crate::hook_mapping::HookWorkingDirectory::Plugin,
+            environment_references: ["env:HOME".to_owned()].into_iter().collect(),
+            executable: true,
+        };
+        let result = hook_compatibility_for_target(
+            &source,
+            &target,
+            ComponentRequiredness::Required,
+            &HarnessId::new("codex").unwrap(),
+            &resource(),
+        )
+        .unwrap();
+        assert_eq!(result.fidelity(), TransferFidelity::Faithful);
+        assert!(result.evidence().is_empty());
     }
 }

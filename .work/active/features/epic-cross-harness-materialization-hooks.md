@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-hooks
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-compatibility]
@@ -158,3 +158,17 @@ adapter contract is updated with fixture evidence; the mapper never guesses.
 
 - Direct-read design only; no peer advisory pass was run because this autopilot
   run is intentionally single-agent and no different model was selected.
+
+## Implementation Notes
+
+- All three hook stories are implemented. Core owns normalized contracts and
+  pure equivalence analysis; adapters remain observation-only; reconciliation
+  exposes the handoff before publication.
+- Verification: `cargo test -p skilltap-core --offline` and
+  `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings`.
+
+## Review Record
+
+- Inline deep review: **pass**. Required mismatches block, optional mismatches
+  remain partial, and no hook mapping path performs native or filesystem work.
+- No follow-up item filed.
