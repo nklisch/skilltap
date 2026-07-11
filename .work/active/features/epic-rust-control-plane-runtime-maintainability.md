@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability
 kind: feature
-stage: review
+stage: implementing
 tags: [refactor]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-runtime-primitives]
@@ -102,3 +102,15 @@ helper; and filesystem production is separated into a 370-line parent plus
 269-line publication, 166-line Unix identity, and 151-line locking children.
 Public runtime exports and behavior remain unchanged. The workspace passes 99
 tests plus doctests and warnings-clean rustdoc.
+
+## Review finding
+
+Fresh-context review found one observable pure-refactor regression: re-exporting
+the four public lock declarations preserved import paths but changed their
+canonical rustdoc and `type_name` identities to the private child module. A
+corrective child restores the declarations/storage to `filesystem.rs` while
+keeping implementations and acquisition helpers split.
+
+8. `epic-rust-control-plane-runtime-maintainability-lock-identities` — restore
+   canonical parent-module identities for public lock types — depends on
+   `[epic-rust-control-plane-runtime-maintainability-locking-module]`.
