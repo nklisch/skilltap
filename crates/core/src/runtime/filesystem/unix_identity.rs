@@ -36,7 +36,7 @@ pub(super) fn open_read_no_follow_for(
 ) -> Result<Option<File>, RuntimeError> {
     OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
         .open(path.as_str())
         .map(Some)
         .map_err(|error| {

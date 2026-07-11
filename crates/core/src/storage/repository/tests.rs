@@ -1,12 +1,15 @@
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
+    ffi::CString,
     io,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
+        mpsc,
     },
     thread,
+    time::Duration,
 };
 
 use skilltap_test_support::TempRoot;
@@ -345,6 +348,35 @@ fn system_adapter_missing_read_creates_nothing_then_round_trips_first_replace() 
         std::fs::read(temporary.join("skilltap/config.toml")).unwrap(),
         include_bytes!("../fixtures/config.toml")
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn repository_load_rejects_fifo_documents_without_hanging() {
+    let temporary = TempRoot::new("skilltap-document-repository-fifo-test").unwrap();
+    let config_root = temporary.join("skilltap");
+    std::fs::create_dir(&config_root).unwrap();
+    let fifo = config_root.join("config.toml");
+    let fifo_path = CString::new(fifo.to_str().unwrap()).unwrap();
+    // SAFETY: `fifo_path` is a live NUL-terminated path and the mode is valid.
+    assert_eq!(unsafe { libc::mkfifo(fifo_path.as_ptr(), 0o600) }, 0);
+    let config_root = AbsolutePath::new(config_root.to_str().unwrap()).unwrap();
+    let (sender, receiver) = mpsc::channel();
+
+    thread::spawn(move || {
+        let result = FileConfigRepository::new(&SystemFileSystem, config_root)
+            .unwrap()
+            .load();
+        sender.send(result).unwrap();
+    });
+
+    let error = receiver
+        .recv_timeout(Duration::from_secs(2))
+        .expect("repository FIFO load must not wait for a writer")
+        .unwrap_err();
+    assert_eq!(error.action(), DocumentAction::Read);
+    assert_eq!(error.failure(), StorageFailure::Runtime);
+    assert!(std::error::Error::source(&error).is_none());
 }
 
 #[test]

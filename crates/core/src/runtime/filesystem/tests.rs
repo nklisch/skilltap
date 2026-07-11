@@ -1,7 +1,9 @@
 use std::{
     cell::Cell,
-    sync::{Arc, atomic::AtomicBool},
+    ffi::CString,
+    sync::{Arc, atomic::AtomicBool, mpsc},
     thread,
+    time::Duration,
 };
 
 use skilltap_test_support::TempRoot;
@@ -173,6 +175,34 @@ fn descriptor_bound_read_rejects_path_swaps_after_open() {
         }
     ));
     assert_eq!(filesystem.read(&attacker).unwrap(), b"attacker");
+}
+
+#[cfg(unix)]
+#[test]
+fn descriptor_bound_read_rejects_fifos_without_waiting_for_a_writer() {
+    let temporary = TempDirectory::new();
+    let fifo = temporary.path("document-fifo");
+    let fifo_path = CString::new(fifo.as_str()).unwrap();
+    // SAFETY: `fifo_path` is a live NUL-terminated path and the mode is valid.
+    assert_eq!(unsafe { libc::mkfifo(fifo_path.as_ptr(), 0o600) }, 0);
+    let (sender, receiver) = mpsc::channel();
+
+    thread::spawn(move || {
+        sender
+            .send(SystemFileSystem.read_regular_no_follow(&fifo))
+            .unwrap();
+    });
+
+    let result = receiver
+        .recv_timeout(Duration::from_secs(2))
+        .expect("FIFO read must fail without waiting for a writer");
+    assert!(matches!(
+        result,
+        Err(RuntimeError::FileSystem {
+            action: FileSystemAction::Read,
+            ..
+        })
+    ));
 }
 
 #[test]
