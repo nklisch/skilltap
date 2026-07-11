@@ -1,10 +1,11 @@
 use std::{collections::BTreeMap, ffi::OsString, fs, path::Path};
 
 use skilltap_core::{
-    domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, UnreachableReason},
+    domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, Scope, UnreachableReason},
     runtime::{
-        ExecutableResolutionRequest, ExecutableResolver, JsonLimits, NativeProcessRequest,
-        ObservationRuntimeError, ProcessLimits, SystemExecutableResolver,
+        Environment, EnvironmentVariable, ExecutableResolutionRequest, ExecutableResolver,
+        JsonLimits, NativeProcessRequest, ObservationRuntimeError, PlatformPaths, ProcessLimits,
+        SupportedPlatform, SystemExecutableResolver,
     },
 };
 use skilltap_harnesses::{
@@ -12,6 +13,22 @@ use skilltap_harnesses::{
     unreachable_installation,
 };
 use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
+
+#[derive(Default)]
+struct TestEnvironment(BTreeMap<&'static str, OsString>);
+
+impl TestEnvironment {
+    fn with(mut self, variable: EnvironmentVariable, value: &str) -> Self {
+        self.0.insert(variable.as_str(), OsString::from(value));
+        self
+    }
+}
+
+impl Environment for TestEnvironment {
+    fn value(&self, variable: EnvironmentVariable) -> Option<OsString> {
+        self.0.get(variable.as_str()).cloned()
+    }
+}
 
 fn limits() -> (ProcessLimits, JsonLimits) {
     (
@@ -200,4 +217,25 @@ fn detection_pipeline_is_repeatable_and_keeps_sibling_failures_isolated() {
     );
     assert!(matches!(claude, Err(DetectionError::Runtime(_))));
     assert_eq!(first.harness().as_str(), "codex");
+}
+
+#[test]
+fn codex_paths_preserve_global_and_project_instruction_inputs() {
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, "/home/user")
+        .with(EnvironmentVariable::XdgConfigHome, "/config/user")
+        .with(EnvironmentVariable::CodexHome, "/opt/codex");
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let project = Scope::Project(AbsolutePath::new("/workspace/project").unwrap());
+    let inputs = skilltap_harnesses::codex_observation_paths(&platform, &project).unwrap();
+    assert_eq!(inputs.codex_home.as_str(), "/opt/codex");
+    assert_eq!(inputs.global_agents.as_str(), "/home/user/AGENTS.md");
+    assert_eq!(
+        inputs.project_agents.as_ref().unwrap().as_str(),
+        "/workspace/project/AGENTS.md"
+    );
+    assert_eq!(
+        inputs.project_override.as_ref().unwrap().as_str(),
+        "/workspace/project/AGENTS.override.md"
+    );
 }

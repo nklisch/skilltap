@@ -4,7 +4,8 @@ use skilltap_core::{
     domain::{
         CapabilityId, CapabilityProfileId, CapabilityProfileSelection, CapabilitySet,
         CapabilitySupport, ConfiguredBinary, HarnessId, HarnessInstallation, HarnessReachability,
-        NativeId, NativeVersion, ProfileContractError, ScopedCapabilitySets, UnreachableReason,
+        NativeId, NativeVersion, ProfileContractError, Scope, ScopedCapabilitySets,
+        UnreachableReason,
     },
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, JsonLimits, NativeProcessRequest,
@@ -110,6 +111,46 @@ pub fn unreachable_installation(
         configured,
         HarnessReachability::Unreachable { reason },
     )
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CodexObservationPaths {
+    pub codex_home: skilltap_core::domain::AbsolutePath,
+    pub global_agents: skilltap_core::domain::AbsolutePath,
+    pub project_root: Option<skilltap_core::domain::AbsolutePath>,
+    pub project_agents: Option<skilltap_core::domain::AbsolutePath>,
+    pub project_override: Option<skilltap_core::domain::AbsolutePath>,
+}
+
+/// Derives only the documented Codex observation inputs for one exact scope.
+pub fn codex_observation_paths(
+    paths: &skilltap_core::runtime::PlatformPaths,
+    scope: &Scope,
+) -> Result<CodexObservationPaths, skilltap_core::domain::ValidationError> {
+    let project_root = match scope {
+        Scope::Global => None,
+        Scope::Project(root) => Some(root.clone()),
+    };
+    let (project_agents, project_override) = project_root.as_ref().map_or((None, None), |root| {
+        (
+            absolute_child(root, "AGENTS.md"),
+            absolute_child(root, "AGENTS.override.md"),
+        )
+    });
+    Ok(CodexObservationPaths {
+        codex_home: paths.codex_home().clone(),
+        global_agents: paths.global_agents().clone(),
+        project_root,
+        project_agents,
+        project_override,
+    })
+}
+
+fn absolute_child(
+    root: &skilltap_core::domain::AbsolutePath,
+    child: &str,
+) -> Option<skilltap_core::domain::AbsolutePath> {
+    skilltap_core::domain::AbsolutePath::new(format!("{}/{}", root.as_str(), child)).ok()
 }
 
 /// Selects one immutable compiled profile, or an observe-only unknown-version profile.
