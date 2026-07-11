@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -10,7 +11,10 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 
 use crate::domain::{AbsolutePath, ValidationError};
 
-use super::{FileSystemAction, LockAction, PathRole, PublicationState, RuntimeError};
+use super::{
+    DirectorySyncState, FileSystemAction, LockAction, PathRole, PublicationResidual,
+    PublicationResidualRole, PublicationResiduals, RuntimeError,
+};
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -298,7 +302,13 @@ fn copy_recoverable_with(
             drop(temporary_file);
             return Err(RuntimeError::PartialPublication {
                 path: destination.clone(),
-                state: PublicationState::TemporaryLeft,
+                residuals: PublicationResiduals::new(
+                    [publication_residual(
+                        PublicationResidualRole::Temporary,
+                        &temporary_path,
+                    )],
+                    DirectorySyncState::NotRequired,
+                ),
                 source,
                 cleanup: io::Error::other(
                     "temporary identity unavailable; cleanup could not be proven safe",
@@ -383,7 +393,13 @@ fn clean_prepublication_failure(
         Ok(()) => filesystem_error(FileSystemAction::Copy, destination, source),
         Err(cleanup) => RuntimeError::PartialPublication {
             path: destination.clone(),
-            state: PublicationState::TemporaryLeft,
+            residuals: PublicationResiduals::new(
+                [publication_residual(
+                    PublicationResidualRole::Temporary,
+                    temporary,
+                )],
+                DirectorySyncState::NotRequired,
+            ),
             source,
             cleanup,
         },
@@ -399,37 +415,51 @@ fn rollback_publication(
 ) -> RuntimeError {
     let destination_path = Path::new(destination.as_str());
     let mut failures = Vec::new();
-    let mut destination_rollback_failed = false;
-    let mut temporary_cleanup_failed = false;
+    let mut residual_paths = BTreeSet::new();
     if let Err(error) = remove_if_identity(destination_path, identity, publication) {
-        destination_rollback_failed = true;
+        residual_paths.insert(PublicationResidual::new(
+            PublicationResidualRole::Destination,
+            destination.clone(),
+        ));
         failures.push(format!("destination rollback: {error}"));
     }
     if let Some((temporary_path, temporary_identity)) = temporary
         && let Err(error) = remove_if_identity(temporary_path, temporary_identity, publication)
     {
-        temporary_cleanup_failed = true;
+        residual_paths.insert(publication_residual(
+            PublicationResidualRole::Temporary,
+            temporary_path,
+        ));
         failures.push(format!("temporary cleanup: {error}"));
     }
-    if failures.is_empty()
-        && let Err(error) = publication.sync_parent(destination_path)
-    {
-        failures.push(format!("rollback directory sync: {error}"));
-    }
-    if failures.is_empty() {
+    let directory_sync = match publication.sync_parent(destination_path) {
+        Ok(()) => DirectorySyncState::Synced,
+        Err(error) => {
+            failures.push(format!("rollback directory sync: {error}"));
+            DirectorySyncState::Uncertain
+        }
+    };
+    if residual_paths.is_empty() && directory_sync == DirectorySyncState::Synced {
         filesystem_error(FileSystemAction::Copy, destination, source)
     } else {
         RuntimeError::PartialPublication {
             path: destination.clone(),
-            state: if destination_rollback_failed || !temporary_cleanup_failed {
-                PublicationState::RollbackUnproven
-            } else {
-                PublicationState::TemporaryLeft
-            },
+            residuals: PublicationResiduals::new(residual_paths, directory_sync),
             source,
             cleanup: io::Error::other(failures.join("; ")),
         }
     }
+}
+
+fn publication_residual(role: PublicationResidualRole, path: &Path) -> PublicationResidual {
+    let value = path
+        .to_str()
+        .expect("owned publication paths originate from validated UTF-8 paths");
+    PublicationResidual::new(
+        role,
+        AbsolutePath::new(value)
+            .expect("owned publication paths remain lexically normalized and absolute"),
+    )
 }
 
 fn remove_if_identity(
@@ -889,8 +919,8 @@ mod tests {
 
     struct InjectedPublication {
         fail_publish: bool,
-        fail_remove_call: Option<usize>,
-        fail_sync_call: Option<usize>,
+        fail_remove_calls: BTreeSet<usize>,
+        fail_sync_calls: BTreeSet<usize>,
         remove_calls: Cell<usize>,
         sync_calls: Cell<usize>,
     }
@@ -899,8 +929,8 @@ mod tests {
         fn new() -> Self {
             Self {
                 fail_publish: false,
-                fail_remove_call: None,
-                fail_sync_call: None,
+                fail_remove_calls: BTreeSet::new(),
+                fail_sync_calls: BTreeSet::new(),
                 remove_calls: Cell::new(0),
                 sync_calls: Cell::new(0),
             }
@@ -919,7 +949,7 @@ mod tests {
         fn remove(&self, path: &Path) -> io::Result<()> {
             let call = self.remove_calls.get() + 1;
             self.remove_calls.set(call);
-            if self.fail_remove_call == Some(call) {
+            if self.fail_remove_calls.contains(&call) {
                 Err(io::Error::other("injected removal failure"))
             } else {
                 fs::remove_file(path)
@@ -929,7 +959,7 @@ mod tests {
         fn sync_parent(&self, destination: &Path) -> io::Result<()> {
             let call = self.sync_calls.get() + 1;
             self.sync_calls.set(call);
-            if self.fail_sync_call == Some(call) {
+            if self.fail_sync_calls.contains(&call) {
                 Err(io::Error::other("injected directory sync failure"))
             } else {
                 sync_parent_io(destination)
@@ -1106,7 +1136,7 @@ mod tests {
     }
 
     #[test]
-    fn backup_failures_cleanup_or_report_precise_partial_state() {
+    fn backup_failures_report_exact_residual_paths_and_independent_sync_state() {
         let temporary = TempDirectory::new();
         let filesystem = SystemFileSystem;
         let source = temporary.path("source");
@@ -1114,7 +1144,7 @@ mod tests {
 
         let cleaned_destination = temporary.path("cleaned-backup");
         let mut cleaned = InjectedPublication::new();
-        cleaned.fail_sync_call = Some(1);
+        cleaned.fail_sync_calls.insert(1);
         let cleaned_error =
             copy_recoverable_with(&source, &cleaned_destination, &cleaned, || {}).unwrap_err();
         assert!(matches!(cleaned_error, RuntimeError::FileSystem { .. }));
@@ -1123,42 +1153,118 @@ mod tests {
             FileKind::Missing
         );
 
-        let partial_destination = temporary.path("partial-backup");
-        let mut partial = InjectedPublication::new();
-        partial.fail_sync_call = Some(1);
-        partial.fail_remove_call = Some(2);
-        let partial_error =
-            copy_recoverable_with(&source, &partial_destination, &partial, || {}).unwrap_err();
-        assert!(matches!(
-            partial_error,
-            RuntimeError::PartialPublication {
-                state: PublicationState::RollbackUnproven,
-                ..
-            }
-        ));
-        assert_eq!(filesystem.read(&partial_destination).unwrap(), b"complete");
-
-        let temporary_left_destination = temporary.path("never-published");
-        let mut temporary_left = InjectedPublication::new();
-        temporary_left.fail_publish = true;
-        temporary_left.fail_remove_call = Some(1);
-        let temporary_left_error =
-            copy_recoverable_with(&source, &temporary_left_destination, &temporary_left, || {})
+        let prepublication_destination = temporary.path("prepublication-backup");
+        let mut prepublication = InjectedPublication::new();
+        prepublication.fail_publish = true;
+        prepublication.fail_remove_calls.insert(1);
+        let prepublication_error =
+            copy_recoverable_with(&source, &prepublication_destination, &prepublication, || {})
                 .unwrap_err();
-        assert!(matches!(
-            temporary_left_error,
-            RuntimeError::PartialPublication {
-                state: PublicationState::TemporaryLeft,
-                ..
-            }
-        ));
+        let prepublication_residuals = partial_residuals(&prepublication_error);
         assert_eq!(
-            filesystem
-                .inspect(&temporary_left_destination)
-                .unwrap()
-                .kind(),
-            FileKind::Missing
+            residual_roles(prepublication_residuals),
+            BTreeSet::from([PublicationResidualRole::Temporary])
         );
+        assert_eq!(
+            prepublication_residuals.directory_sync(),
+            DirectorySyncState::NotRequired
+        );
+        assert_residual_paths_exist(prepublication_residuals);
+
+        let destination_only_path = temporary.path("destination-only-backup");
+        let mut destination_only = InjectedPublication::new();
+        destination_only.fail_sync_calls.insert(1);
+        destination_only.fail_remove_calls.insert(2);
+        let destination_only_error =
+            copy_recoverable_with(&source, &destination_only_path, &destination_only, || {})
+                .unwrap_err();
+        let destination_only_residuals = partial_residuals(&destination_only_error);
+        assert_eq!(
+            destination_only_residuals.paths(),
+            &BTreeSet::from([PublicationResidual::new(
+                PublicationResidualRole::Destination,
+                destination_only_path.clone(),
+            )])
+        );
+        assert_eq!(
+            destination_only_residuals.directory_sync(),
+            DirectorySyncState::Synced
+        );
+        assert_residual_paths_exist(destination_only_residuals);
+
+        let temp_only_path = temporary.path("temp-only-backup");
+        let mut temp_only = InjectedPublication::new();
+        temp_only.fail_remove_calls.extend([1, 3]);
+        let temp_only_error =
+            copy_recoverable_with(&source, &temp_only_path, &temp_only, || {}).unwrap_err();
+        let temp_only_residuals = partial_residuals(&temp_only_error);
+        assert_eq!(
+            residual_roles(temp_only_residuals),
+            BTreeSet::from([PublicationResidualRole::Temporary])
+        );
+        assert_eq!(
+            temp_only_residuals.directory_sync(),
+            DirectorySyncState::Synced
+        );
+        assert_residual_paths_exist(temp_only_residuals);
+
+        let both_path = temporary.path("both-backup");
+        let mut both = InjectedPublication::new();
+        both.fail_remove_calls.extend([1, 2, 3]);
+        let both_error = copy_recoverable_with(&source, &both_path, &both, || {}).unwrap_err();
+        let both_residuals = partial_residuals(&both_error);
+        assert_eq!(
+            residual_roles(both_residuals),
+            BTreeSet::from([
+                PublicationResidualRole::Temporary,
+                PublicationResidualRole::Destination,
+            ])
+        );
+        assert_eq!(both_residuals.directory_sync(), DirectorySyncState::Synced);
+        assert_residual_paths_exist(both_residuals);
+
+        let uncertain_path = temporary.path("uncertain-sync-backup");
+        let mut uncertain = InjectedPublication::new();
+        uncertain.fail_sync_calls.extend([1, 2]);
+        let uncertain_error =
+            copy_recoverable_with(&source, &uncertain_path, &uncertain, || {}).unwrap_err();
+        let uncertain_residuals = partial_residuals(&uncertain_error);
+        assert!(uncertain_residuals.paths().is_empty());
+        assert_eq!(
+            uncertain_residuals.directory_sync(),
+            DirectorySyncState::Uncertain
+        );
+
+        let rendered = both_error.to_string();
+        assert!(rendered.contains("temporary `"));
+        assert!(rendered.contains("destination `"));
+        assert!(rendered.contains("directory sync: synced"));
+        assert!(!rendered.contains("complete"));
+    }
+
+    fn partial_residuals(error: &RuntimeError) -> &PublicationResiduals {
+        match error {
+            RuntimeError::PartialPublication { residuals, .. } => residuals,
+            error => panic!("expected partial publication error, got {error}"),
+        }
+    }
+
+    fn residual_roles(residuals: &PublicationResiduals) -> BTreeSet<PublicationResidualRole> {
+        residuals
+            .paths()
+            .iter()
+            .map(PublicationResidual::role)
+            .collect()
+    }
+
+    fn assert_residual_paths_exist(residuals: &PublicationResiduals) {
+        for residual in residuals.paths() {
+            let metadata = fs::symlink_metadata(residual.path().as_str()).unwrap();
+            assert!(
+                !metadata.file_type().is_symlink(),
+                "owned residual must identify the generated inode without following a link"
+            );
+        }
     }
 
     #[test]

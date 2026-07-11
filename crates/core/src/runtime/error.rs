@@ -1,4 +1,4 @@
-use std::{fmt, io, time::SystemTimeError};
+use std::{collections::BTreeSet, fmt, io, time::SystemTimeError};
 
 use crate::domain::{AbsolutePath, NativeId, ValidationError};
 
@@ -79,10 +79,82 @@ pub enum FileSystemAction {
     ReadLink,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum PublicationResidualRole {
+    Temporary,
+    Destination,
+}
+
+impl fmt::Display for PublicationResidualRole {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Temporary => "temporary",
+            Self::Destination => "destination",
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PublicationResidual {
+    role: PublicationResidualRole,
+    path: AbsolutePath,
+}
+
+impl PublicationResidual {
+    pub const fn new(role: PublicationResidualRole, path: AbsolutePath) -> Self {
+        Self { role, path }
+    }
+
+    pub const fn role(&self) -> PublicationResidualRole {
+        self.role
+    }
+
+    pub const fn path(&self) -> &AbsolutePath {
+        &self.path
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum PublicationState {
-    TemporaryLeft,
-    RollbackUnproven,
+pub enum DirectorySyncState {
+    NotRequired,
+    Synced,
+    Uncertain,
+}
+
+impl fmt::Display for DirectorySyncState {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::NotRequired => "not required",
+            Self::Synced => "synced",
+            Self::Uncertain => "uncertain",
+        })
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PublicationResiduals {
+    paths: BTreeSet<PublicationResidual>,
+    directory_sync: DirectorySyncState,
+}
+
+impl PublicationResiduals {
+    pub(super) fn new(
+        paths: impl IntoIterator<Item = PublicationResidual>,
+        directory_sync: DirectorySyncState,
+    ) -> Self {
+        Self {
+            paths: paths.into_iter().collect(),
+            directory_sync,
+        }
+    }
+
+    pub const fn paths(&self) -> &BTreeSet<PublicationResidual> {
+        &self.paths
+    }
+
+    pub const fn directory_sync(&self) -> DirectorySyncState {
+        self.directory_sync
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -147,7 +219,7 @@ pub enum RuntimeError {
     },
     PartialPublication {
         path: AbsolutePath,
-        state: PublicationState,
+        residuals: PublicationResiduals,
         source: io::Error,
         cleanup: io::Error,
     },
@@ -266,13 +338,26 @@ impl fmt::Display for RuntimeError {
             ),
             Self::PartialPublication {
                 path,
-                state,
+                residuals,
                 source,
                 cleanup,
-            } => write!(
-                formatter,
-                "backup publication for `{path}` failed ({source}); state is {state:?} because cleanup failed ({cleanup})"
-            ),
+            } => {
+                let paths = if residuals.paths().is_empty() {
+                    "none".to_owned()
+                } else {
+                    residuals
+                        .paths()
+                        .iter()
+                        .map(|residual| format!("{} `{}`", residual.role(), residual.path()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                };
+                write!(
+                    formatter,
+                    "backup publication for `{path}` failed ({source}); residual paths: {paths}; directory sync: {}; cleanup failed ({cleanup})",
+                    residuals.directory_sync()
+                )
+            }
             Self::LockContended { path } => {
                 write!(formatter, "configuration lock `{path}` is already held")
             }
