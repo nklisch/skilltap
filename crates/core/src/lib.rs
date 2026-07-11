@@ -1,5 +1,6 @@
 pub mod adoption;
 pub mod compatibility;
+pub mod daemon;
 pub mod domain;
 pub mod executor;
 pub mod foreground_update;
