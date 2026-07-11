@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-publish-batch
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-cross-harness-materialization-publish
 depends_on: []
@@ -23,3 +23,17 @@ Acceptance criteria:
 - Entries sort deterministically by scope-bearing resource and target.
 - A skill publication retains the complete directory including top-level
   `SKILL.md`.
+
+## Implementation Notes
+
+- Added `PublicationEntry`, `PublicationBatch`, and `plan_publication` in
+  `crates/core/src/publication.rs`.
+- Batches reject empty input, backup-role entries, and duplicate
+  resource/target pairs before any side effect; entries are sorted by exact
+  scope-bearing resource and target.
+- Verification: targeted publication tests and core clippy passed.
+
+## Review Record
+
+- Inline review: **pass**. The contract is pure, deterministic, and reuses the
+  existing complete-tree `ArtifactTree` boundary.
