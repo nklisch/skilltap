@@ -33,6 +33,19 @@ marketplace, plugin, skill, and instruction operations arrive in later epics.
 - `docs/ARCH.md` — Planning, Apply Flow, Concurrency, Error Model
 - `docs/UX.md` — Planning and Synchronization, JSON Output, Errors
 
+## Design decisions
+
+- **What happens when another process holds the mutation lock?** Fail fast
+  with an attention result, available lock-owner context, and an actionable
+  retry instruction. The daemon skips a contended cycle and records the
+  contention instead of waiting.
+- **How is partial execution made crash-recoverable?** Atomically update
+  `state.json` as each operation moves through planned, running, completed, or
+  failed state. On interruption, re-observe native state and compute a fresh
+  recovery plan; do not add a separate append-only journal file.
+- **Does this epic require UI mockups?** No. Plans and apply results are
+  non-interactive plain-text and JSON CLI surfaces.
+
 ## Anticipated child features
 
 - Pure desired/observed/last-applied planner
