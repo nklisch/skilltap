@@ -6,6 +6,7 @@ use crate::domain::{
 
 use super::{
     CommandRequest, CommandRunner, FileKind, FileSystem, PathRole, RuntimeError, SystemFileSystem,
+    path_value::absolute_path,
 };
 
 static SYSTEM_FILE_SYSTEM: SystemFileSystem = SystemFileSystem;
@@ -45,16 +46,7 @@ impl WorkingDirectory for SystemWorkingDirectory {
     fn current_directory(&self) -> Result<AbsolutePath, RuntimeError> {
         let path =
             std::env::current_dir().map_err(|source| RuntimeError::WorkingDirectory { source })?;
-        let value = path
-            .into_os_string()
-            .into_string()
-            .map_err(|_| RuntimeError::NonUtf8Path {
-                role: PathRole::WorkingDirectory,
-            })?;
-        AbsolutePath::new(value).map_err(|source| RuntimeError::InvalidPath {
-            role: PathRole::WorkingDirectory,
-            source,
-        })
+        absolute_path(&path, PathRole::WorkingDirectory)
     }
 }
 
@@ -138,16 +130,7 @@ impl CommandGitRoot<'_> {
     ) -> Result<bool, RuntimeError> {
         for ancestor in Path::new(directory.as_str()).ancestors() {
             let marker = ancestor.join(".git");
-            let marker = marker
-                .to_str()
-                .ok_or(RuntimeError::NonUtf8Path {
-                    role: PathRole::GitRoot,
-                })?
-                .to_owned();
-            let marker = AbsolutePath::new(marker).map_err(|source| RuntimeError::InvalidPath {
-                role: PathRole::GitRoot,
-                source,
-            })?;
+            let marker = absolute_path(&marker, PathRole::GitRoot)?;
             match self.filesystem.inspect(&marker) {
                 Ok(metadata) if metadata.kind() == FileKind::Missing => {}
                 Ok(_) => return Ok(true),
@@ -230,16 +213,7 @@ fn parent(path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError> {
     let parent = Path::new(path.as_str())
         .parent()
         .ok_or_else(|| RuntimeError::UnsuitableProjectPath { path: path.clone() })?;
-    let value = parent
-        .to_str()
-        .ok_or(RuntimeError::NonUtf8Path {
-            role: PathRole::ProjectPath,
-        })?
-        .to_owned();
-    AbsolutePath::new(value).map_err(|source| RuntimeError::InvalidPath {
-        role: PathRole::ProjectPath,
-        source,
-    })
+    absolute_path(parent, PathRole::ProjectPath)
 }
 
 #[cfg(test)]

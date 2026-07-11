@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use crate::domain::AbsolutePath;
 
-use super::{EnvironmentVariable, PathRole, RuntimeError};
+use super::{EnvironmentVariable, PathRole, RuntimeError, path_value::absolute_path};
 
 pub trait Environment {
     fn value(&self, variable: EnvironmentVariable) -> Option<OsString>;
@@ -139,11 +139,7 @@ fn parse_environment_path(
 
 fn join(base: &AbsolutePath, child: &str, role: PathRole) -> Result<AbsolutePath, RuntimeError> {
     let path = PathBuf::from(base.as_str()).join(child);
-    let value = path
-        .into_os_string()
-        .into_string()
-        .map_err(|_| RuntimeError::NonUtf8Path { role })?;
-    AbsolutePath::new(value).map_err(|source| RuntimeError::InvalidPath { role, source })
+    absolute_path(&path, role)
 }
 
 #[cfg(test)]

@@ -2,6 +2,7 @@ mod clock;
 mod command;
 mod error;
 mod filesystem;
+mod path_value;
 mod paths;
 mod scope;
 

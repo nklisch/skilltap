@@ -13,7 +13,7 @@ use crate::domain::{AbsolutePath, ValidationError};
 
 use super::{
     DirectorySyncState, FileSystemAction, LockAction, PathRole, PublicationResidual,
-    PublicationResidualRole, PublicationResiduals, RuntimeError,
+    PublicationResidualRole, PublicationResiduals, RuntimeError, path_value::absolute_path,
 };
 
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -137,17 +137,7 @@ impl FileSystem for SystemFileSystem {
     fn canonicalize(&self, path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError> {
         let canonical = fs::canonicalize(path.as_str())
             .map_err(|source| filesystem_error(FileSystemAction::Canonicalize, path, source))?;
-        let value =
-            canonical
-                .into_os_string()
-                .into_string()
-                .map_err(|_| RuntimeError::NonUtf8Path {
-                    role: PathRole::CanonicalPath,
-                })?;
-        AbsolutePath::new(value).map_err(|source| RuntimeError::InvalidPath {
-            role: PathRole::CanonicalPath,
-            source,
-        })
+        absolute_path(&canonical, PathRole::CanonicalPath)
     }
 
     fn create_directory_all(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
