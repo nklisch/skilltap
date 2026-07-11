@@ -1576,15 +1576,29 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let source = Source::new(source_kind, locator, requested_revision)
-            .map_err(|_| ())
-            .ok();
+        let source = Source::new_with_subdirectory(
+            source_kind,
+            locator,
+            requested_revision,
+            subdirectory.clone(),
+        )
+        .map_err(|_| ())
+        .ok();
         let Some(source) = source else {
             outcome.result = ResultClass::Invalid;
             return outcome.with_error(ErrorDetail::new(
                 "invalid_skill_source",
                 "The local skill source could not be represented safely.",
             ));
+        };
+        let update_intent = if source
+            .requested_revision()
+            .and_then(|revision| GitCommit::new(revision.as_str()).ok())
+            .is_some()
+        {
+            UpdateIntent::Pinned
+        } else {
+            UpdateIntent::Track
         };
         let mut inventory = documents.inventory.clone().unwrap_or_else(|| {
             InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
@@ -1623,7 +1637,7 @@ impl StatusApplication<'_> {
                 targets.resolved.clone(),
                 DesiredOrigin::Direct,
                 Some(source.clone()),
-                UpdateIntent::Track,
+                update_intent,
                 ComponentGraph::new([]).expect("empty component graph is valid"),
                 BTreeMap::new(),
                 BTreeMap::new(),
@@ -2082,7 +2096,7 @@ impl StatusApplication<'_> {
                 source: source.locator().as_str(),
                 name: None,
                 requested_revision: source.requested_revision().map(|value| value.as_str()),
-                subdirectory: None,
+                subdirectory: source.subdirectory().map(|value| value.as_str()),
             },
         )
     }

@@ -3,7 +3,7 @@ use std::{fmt, str::FromStr};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{
-    AbsolutePath, NativeId, ValidationError, validate_text,
+    AbsolutePath, NativeId, RelativeArtifactPath, ValidationError, validate_text,
     validated_newtype::validated_string_newtype,
 };
 
@@ -34,6 +34,7 @@ pub struct Source {
     kind: SourceKind,
     locator: SourceLocator,
     requested_revision: Option<RequestedRevision>,
+    subdirectory: Option<RelativeArtifactPath>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -43,6 +44,8 @@ struct SourceWire {
     locator: SourceLocator,
     #[serde(skip_serializing_if = "Option::is_none")]
     requested_revision: Option<RequestedRevision>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    subdirectory: Option<RelativeArtifactPath>,
 }
 
 impl Source {
@@ -50,6 +53,15 @@ impl Source {
         kind: SourceKind,
         locator: SourceLocator,
         requested_revision: Option<RequestedRevision>,
+    ) -> Result<Self, ValidationError> {
+        Self::new_with_subdirectory(kind, locator, requested_revision, None)
+    }
+
+    pub fn new_with_subdirectory(
+        kind: SourceKind,
+        locator: SourceLocator,
+        requested_revision: Option<RequestedRevision>,
+        subdirectory: Option<RelativeArtifactPath>,
     ) -> Result<Self, ValidationError> {
         match kind {
             SourceKind::Git => {}
@@ -68,6 +80,7 @@ impl Source {
             kind,
             locator,
             requested_revision,
+            subdirectory,
         })
     }
 
@@ -82,6 +95,10 @@ impl Source {
     pub fn requested_revision(&self) -> Option<&RequestedRevision> {
         self.requested_revision.as_ref()
     }
+
+    pub const fn subdirectory(&self) -> Option<&RelativeArtifactPath> {
+        self.subdirectory.as_ref()
+    }
 }
 
 impl From<Source> for SourceWire {
@@ -90,6 +107,7 @@ impl From<Source> for SourceWire {
             kind: value.kind,
             locator: value.locator,
             requested_revision: value.requested_revision,
+            subdirectory: value.subdirectory,
         }
     }
 }
@@ -98,7 +116,12 @@ impl TryFrom<SourceWire> for Source {
     type Error = ValidationError;
 
     fn try_from(value: SourceWire) -> Result<Self, Self::Error> {
-        Self::new(value.kind, value.locator, value.requested_revision)
+        Self::new_with_subdirectory(
+            value.kind,
+            value.locator,
+            value.requested_revision,
+            value.subdirectory,
+        )
     }
 }
 

@@ -24,8 +24,13 @@ impl SkillSourceRequest {
         subdirectory: Option<RelativeArtifactPath>,
         expected_name: Option<NativeId>,
     ) -> Result<Self, SkillSourceError> {
-        Source::new(kind, locator.clone(), requested_revision.clone())
-            .map_err(SkillSourceError::InvalidSource)?;
+        Source::new_with_subdirectory(
+            kind,
+            locator.clone(),
+            requested_revision.clone(),
+            subdirectory.clone(),
+        )
+        .map_err(SkillSourceError::InvalidSource)?;
         Ok(Self {
             locator,
             kind,
@@ -61,8 +66,13 @@ pub struct ResolvedSkillSource {
 
 impl ResolvedSkillSource {
     pub fn from_request(request: SkillSourceRequest) -> Result<Self, SkillSourceError> {
-        let source = Source::new(request.kind, request.locator, request.requested_revision)
-            .map_err(SkillSourceError::InvalidSource)?;
+        let source = Source::new_with_subdirectory(
+            request.kind,
+            request.locator,
+            request.requested_revision,
+            request.subdirectory.clone(),
+        )
+        .map_err(SkillSourceError::InvalidSource)?;
         Ok(Self {
             source,
             subdirectory: request.subdirectory,
@@ -134,6 +144,7 @@ mod tests {
             resolved.local_root().unwrap().unwrap().as_str(),
             "/tmp/skills/demo/nested"
         );
+        assert_eq!(resolved.source().subdirectory().unwrap().as_str(), "nested");
         assert_eq!(resolved.expected_name().unwrap().as_str(), "demo");
     }
 

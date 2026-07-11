@@ -55,6 +55,10 @@ source independently, preserving exact project/global scope and continuing
 past unrelated source gaps. Git metadata is excluded from the complete skill
 tree before fingerprinting, so refreshing an unchanged commit remains
 idempotent. Operation-scoped consequence flags and pin enforcement remain open.
+An explicit Git commit supplied through `--ref` is recorded as a pinned desired
+resource, so update-all does not reinterpret it as a tracking branch.
+Explicit Git subdirectories are persisted in the source record and reused by
+named and unnamed updates.
 
 ## Review
 

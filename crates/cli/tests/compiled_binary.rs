@@ -818,6 +818,113 @@ fn git_skill_install_clones_a_bounded_source_and_records_the_commit() {
 }
 
 #[test]
+fn git_skill_subdirectory_is_reused_by_unnamed_update() {
+    let machine = machine();
+    let repository = machine.home().join("nested-repository");
+    fs::create_dir_all(repository.join("skills/demo")).unwrap();
+    fs::write(
+        repository.join("skills/demo/SKILL.md"),
+        "---\nname: subdir-demo\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    let init = Command::new("git")
+        .args(["init", "--quiet", "--initial-branch", "main"])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(init.status.success());
+    for args in [
+        &[
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ][..],
+        &[
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ][..],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+    }
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source = format!("file://{}", repository.to_str().unwrap());
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            &source,
+            "--path",
+            "skills/demo",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["result"], "completed");
+
+    fs::write(
+        repository.join("skills/demo/SKILL.md"),
+        "---\nname: subdir-demo\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+    let add = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "update",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+
+    let update = run(
+        &machine,
+        &["skill", "update", "--target", "codex", "--json"],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(machine.home().join(".agents/skills/demo/SKILL.md")).unwrap(),
+        "---\nname: subdir-demo\ndescription: v2\n---\nv2\n"
+    );
+}
+
+#[test]
 fn instruction_setup_creates_canonical_global_file_and_bridges() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
