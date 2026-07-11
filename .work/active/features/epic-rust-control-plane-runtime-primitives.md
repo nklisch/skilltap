@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives
 kind: feature
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-domain-contracts]
@@ -156,3 +156,21 @@ enabled-target resolution. The implementation is terminal-free, performs no
 resource discovery, and retains storage, harness, and reconciliation semantics
 outside the runtime layer. The locked workspace passes 85 tests plus doctests
 and warnings-clean rustdoc.
+
+## Review findings
+
+Fresh-context review requested changes. Recoverable copies must publish a
+complete no-clobber destination and clean all reported failures; source and
+lock opens need no-follow and identity verification rather than inspect/open
+check-use gaps. Git probing must distinguish an ordinary non-repository from a
+broken or inaccessible repository, and relative link targets may contain only
+a leading parent prefix rather than parent traversal after a normal component.
+The corrective children below cover these findings before re-review.
+
+5. `epic-rust-control-plane-runtime-primitives-filesystem-hardening` — atomic
+   no-clobber backup publication, no-follow descriptor opens, lock identity
+   verification, and normalized parent-relative link targets — depends on
+   `[epic-rust-control-plane-runtime-primitives-filesystem-lock]`.
+6. `epic-rust-control-plane-runtime-primitives-git-probe-errors` — distinguish
+   genuine non-repository fallback from existing-but-broken Git metadata —
+   depends on `[epic-rust-control-plane-runtime-primitives-scope-target]`.
