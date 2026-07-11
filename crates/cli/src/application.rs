@@ -419,6 +419,18 @@ impl StatusProjection<'_> {
                 "Inspect the reported native observation warnings before planning changes.",
             ));
         }
+        let desired_resources = self
+            .documents
+            .inventory
+            .as_ref()
+            .map_or(0, |value| value.resources().len());
+        if observation.failed_targets == 0 && desired_resources > observation.native_entries {
+            outcome.result = ResultClass::AttentionRequired;
+            outcome = outcome.with_warning(Warning::new(
+                "status_resource_incomplete",
+                "Desired resources exceed the resources observed in native roots.",
+            ));
+        }
         outcome
     }
 }
