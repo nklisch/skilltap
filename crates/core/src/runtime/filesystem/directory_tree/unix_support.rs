@@ -184,9 +184,17 @@ pub(super) fn create_dir_at_verified(parent: &File, name: &CStr) -> io::Result<F
     Ok(directory)
 }
 
-pub(super) fn lock_exclusive(directory: &File) -> io::Result<()> {
+pub(super) struct ExclusiveLock<'a>(&'a File);
+
+impl Drop for ExclusiveLock<'_> {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
+pub(super) fn lock_exclusive(directory: &File) -> io::Result<ExclusiveLock<'_>> {
     match directory.try_lock() {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(ExclusiveLock(directory)),
         Err(TryLockError::WouldBlock) => Err(io::Error::new(
             io::ErrorKind::WouldBlock,
             "managed directory is locked by another writer",

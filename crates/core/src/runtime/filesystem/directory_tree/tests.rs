@@ -31,6 +31,25 @@ fn cooperating_writer_lock_serializes_managed_namespace_publication() {
 }
 
 #[test]
+fn successful_publication_explicitly_releases_writer_lock_before_return() {
+    let temporary = TempRoot::new("skilltap-directory-lock-release-test").unwrap();
+    let managed = temporary.join("managed");
+    let managed_path = AbsolutePath::new(managed.to_str().unwrap()).unwrap();
+    let files = BTreeMap::from([(RelativeArtifactPath::new("file").unwrap(), vec![1])]);
+
+    for sequence in 0..128 {
+        let destination = RelativeArtifactPath::new(format!("artifact-{sequence}")).unwrap();
+        assert!(matches!(
+            publish_tree(&managed_path, &destination, &files).unwrap(),
+            DirectoryPublishOutcome::Published(_)
+        ));
+        let probe = File::open(&managed).unwrap();
+        probe.try_lock().unwrap();
+        probe.unlock().unwrap();
+    }
+}
+
+#[test]
 fn post_stat_fifo_swap_is_rejected_before_reading() {
     let temporary = TempRoot::new("skilltap-directory-read-race-test").unwrap();
     let path = temporary.join("file");

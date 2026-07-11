@@ -94,7 +94,7 @@ fn publish_tree(
     let root = open_absolute_directory(managed_root, true).map_err(|source| {
         filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
     })?;
-    lock_exclusive(&root).map_err(|source| {
+    let _lock = lock_exclusive(&root).map_err(|source| {
         filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
     })?;
     let (parent, name) = open_relative_parent(&root, destination, true).map_err(|source| {
@@ -234,7 +234,7 @@ fn remove_tree(
 ) -> Result<DirectoryIdentity, RuntimeError> {
     let root = open_absolute_directory(managed_root, false)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
-    lock_exclusive(&root)
+    let _lock = lock_exclusive(&root)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;
     let (parent, name) = open_relative_parent(&root, destination, false)
         .map_err(|source| filesystem_error(FileSystemAction::Remove, managed_root, source))?;

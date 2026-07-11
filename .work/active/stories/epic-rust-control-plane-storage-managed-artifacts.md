@@ -164,3 +164,21 @@ locked ladder.
 - All 136 pre-correction workspace identities remain; one typed portability
   identity was added and 137 tests pass. The full locked ladder and three
   additional consecutive full workspace test runs pass.
+
+## Writer-lock lifetime correction
+
+- Root cause: publication relied on implicit advisory-lock release when the
+  last duplicated managed-root file descriptor closed. Under the parallel core
+  suite, an immediately following backup could observe the lock as still held
+  and fail with a generic runtime error.
+- Fix: `lock_exclusive` now returns an RAII guard bound across the complete
+  publish/remove operation. The guard explicitly calls `File::unlock()` before
+  the root descriptor and its duplicates are dropped; error paths receive the
+  same deterministic release.
+- Regression: a deterministic test performs 128 publications and, after each
+  return, immediately acquires and releases the managed-root lock through a new
+  descriptor. The complete parallel core suite then passed 30 consecutive
+  fail-fast runs.
+- All 137 pre-fix workspace identities remain; one lock-lifetime regression was
+  added and 138 tests pass. Safe public error rendering is unchanged and no
+  generic runtime failure is retried or masked.
