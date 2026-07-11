@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-schemas
 kind: story
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: []
@@ -62,3 +62,11 @@ artifact records described by the parent design.
   `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review finding
+
+Fresh-context review requested one correction: `HarnessPolicy.binary` used
+opaque `NativeId`, allowing undocumented relative paths such as
+`relative/path/codex`. The config boundary must accept either one normal PATH
+executable name or a validated absolute path, with the same constructor and
+TOML behavior. All other schema surfaces were approved.
