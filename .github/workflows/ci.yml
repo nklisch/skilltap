@@ -1,34 +1,32 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  quality:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.10"
+      - name: Install pinned Rust toolchain
+        run: rustup show active-toolchain
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
+      - name: Check formatting
+        run: cargo fmt --all -- --check
 
-      - name: Run tests (source mode)
-        run: bun test
+      - name: Lint workspace
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Build compiled binary
-        run: bun run build
+      - name: Test workspace
+        run: cargo test --workspace
 
-      - name: Verify binary smoke (--version, --help, doctor)
-        run: scripts/verify-binary.sh ./skilltap
+      - name: Build release binary
+        run: cargo build --release -p skilltap
 
-      # Re-run the CLI test suite with subprocess calls routed to the compiled
-      # binary instead of `bun run --bun src/index.ts`. Catches behavioral
-      # regressions specific to the --compile path (externals, dynamic imports,
-      # bunfs resolution) that source-mode tests can't see.
-      - name: Run CLI tests against compiled binary
-        env:
-          SKILLTAP_TEST_BIN: ${{ github.workspace }}/skilltap
-        run: bun test packages/cli/
+      - name: Verify compiled binary
+        run: scripts/verify-binary.sh target/release/skilltap

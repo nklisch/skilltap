@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-workspace-reset-ci
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-workspace-reset
 depends_on: [epic-rust-control-plane-workspace-reset-workspace]
@@ -21,7 +21,15 @@ script for the Rust artifact and keep it extensible for later CLI commands.
 
 ## Acceptance criteria
 
-- [ ] Every CI command passes locally.
-- [ ] CI has no Bun/npm product dependency.
-- [ ] Binary verification checks `--version` and `--help` and fails clearly for
+- [x] Every CI command passes locally.
+- [x] CI has no Bun/npm product dependency.
+- [x] Binary verification checks `--version` and `--help` and fails clearly for
   a missing or broken executable.
+
+## Implementation notes
+
+- Files changed: `.github/workflows/ci.yml`, `scripts/verify-binary.sh`.
+- Tests added: no persistent test files; locally executed every CI command and
+  negative smoke cases using a missing path, `/bin/true`, and `/bin/false`.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
