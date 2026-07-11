@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts
 kind: feature
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: []
@@ -154,6 +154,17 @@ remain downstream.
 - The workspace has 226 passing Rust tests, including 3 cross-layer foundation
   tests and 6 compiled-binary tests.
 - Website build and repeated byte-identical LLM documentation generation pass.
+
+## Review
+
+- Approved after a same-harness fresh-context review across all nine child
+  stories and their cross-layer seams; no actionable findings remained.
+- Confirmed exact-key identity, evidence-only revisions, strict legacy-wire
+  rejection, compiled-only mutation authority, safe typed diagnostics,
+  complete ephemeral snapshots, and disabled first-use defaults.
+- Clean-tree verification passed all 226 Rust tests, warnings-denied Clippy and
+  rustdoc, release and compiled-binary checks, website build, and deterministic
+  generated documentation.
 
 ## Acceptance criteria
 
