@@ -30,7 +30,9 @@ use std::fmt;
 
 use crate::domain::{AbsolutePath, OperationId, ResourceGraphError, ResourceId, ValidationError};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub const CONFIG_SCHEMA_VERSION: u32 = 1;
+pub const INVENTORY_SCHEMA_VERSION: u32 = 1;
+pub const STATE_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug)]
 pub enum SchemaError {

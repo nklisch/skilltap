@@ -7,7 +7,7 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{SCHEMA_VERSION, SchemaError};
+use super::{CONFIG_SCHEMA_VERSION, SchemaError};
 use crate::domain::{AbsolutePath, NativeId};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -226,7 +226,7 @@ struct ConfigWire {
 
 impl ConfigDocument {
     pub const fn schema(&self) -> u32 {
-        SCHEMA_VERSION
+        CONFIG_SCHEMA_VERSION
     }
 
     pub fn new(
@@ -235,7 +235,7 @@ impl ConfigDocument {
         instructions: InstructionPolicy,
         updates: UpdatePolicy,
     ) -> Result<Self, SchemaError> {
-        if schema != SCHEMA_VERSION {
+        if schema != CONFIG_SCHEMA_VERSION {
             return Err(SchemaError::UnsupportedVersion {
                 document: "config",
                 version: schema,
@@ -285,7 +285,7 @@ impl ConfigDocument {
 impl From<ConfigDocument> for ConfigWire {
     fn from(value: ConfigDocument) -> Self {
         Self {
-            schema: SCHEMA_VERSION,
+            schema: CONFIG_SCHEMA_VERSION,
             harnesses: value.harnesses,
             instructions: value.instructions,
             updates: value.updates,

@@ -5,7 +5,10 @@ use serde::{
     de::{DeserializeOwned, IgnoredAny, MapAccess, Visitor},
 };
 
-use super::{ConfigDocument, InventoryDocument, SCHEMA_VERSION, StateDocument};
+use super::{
+    CONFIG_SCHEMA_VERSION, ConfigDocument, INVENTORY_SCHEMA_VERSION, InventoryDocument,
+    STATE_SCHEMA_VERSION, StateDocument,
+};
 use crate::{
     domain::AbsolutePath,
     runtime::{FileSystem, RuntimeError},
@@ -227,21 +230,21 @@ repository_adapter!(
     ConfigRepository,
     ConfigDocument,
     DocumentKind::Config,
-    TomlCodec
+    TomlCodec::new(CONFIG_SCHEMA_VERSION)
 );
 repository_adapter!(
     FileInventoryRepository,
     InventoryRepository,
     InventoryDocument,
     DocumentKind::Inventory,
-    TomlCodec
+    TomlCodec::new(INVENTORY_SCHEMA_VERSION)
 );
 repository_adapter!(
     FileStateRepository,
     StateRepository,
     StateDocument,
     DocumentKind::State,
-    JsonCodec
+    JsonCodec::new(STATE_SCHEMA_VERSION)
 );
 
 struct DocumentEngine<'a, T, C> {
@@ -334,7 +337,15 @@ trait DocumentCodec<T> {
 }
 
 #[derive(Clone, Copy)]
-struct TomlCodec;
+struct TomlCodec {
+    expected_schema: u32,
+}
+
+impl TomlCodec {
+    const fn new(expected_schema: u32) -> Self {
+        Self { expected_schema }
+    }
+}
 
 impl<T> DocumentCodec<T> for TomlCodec
 where
@@ -343,7 +354,7 @@ where
     fn decode(&self, contents: &[u8]) -> Result<T, CodecFailure> {
         let contents = std::str::from_utf8(contents).map_err(|_| CodecFailure::Malformed)?;
         let table = toml::from_str::<toml::Table>(contents).map_err(|_| CodecFailure::Malformed)?;
-        validate_toml_schema(&table)?;
+        validate_toml_schema(&table, self.expected_schema)?;
         toml::from_str(contents).map_err(|_| CodecFailure::Invalid)
     }
 
@@ -355,7 +366,15 @@ where
 }
 
 #[derive(Clone, Copy)]
-struct JsonCodec;
+struct JsonCodec {
+    expected_schema: u32,
+}
+
+impl JsonCodec {
+    const fn new(expected_schema: u32) -> Self {
+        Self { expected_schema }
+    }
+}
 
 impl<T> DocumentCodec<T> for JsonCodec
 where
@@ -367,7 +386,7 @@ where
         let probe = serde_json::from_slice::<JsonSchemaProbe>(contents)
             .map_err(|_| CodecFailure::Invalid)?;
         if let Some(version) = probe.schema
-            && version != SCHEMA_VERSION
+            && version != self.expected_schema
         {
             return Err(CodecFailure::UnsupportedSchema { version });
         }
@@ -381,11 +400,11 @@ where
     }
 }
 
-fn validate_toml_schema(table: &toml::Table) -> Result<(), CodecFailure> {
+fn validate_toml_schema(table: &toml::Table, expected_schema: u32) -> Result<(), CodecFailure> {
     if let Some(version) = table.get("schema").and_then(toml::Value::as_integer)
         && version >= 0
         && version as u64 <= u32::MAX as u64
-        && version as u32 != SCHEMA_VERSION
+        && version as u32 != expected_schema
     {
         return Err(CodecFailure::UnsupportedSchema {
             version: version as u32,

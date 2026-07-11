@@ -23,9 +23,10 @@ use skilltap_core::{
     storage::{
         ArtifactPublication, ArtifactRole, ArtifactTree, ConfigDocument, ConfigRepository,
         DocumentKind, DocumentState, FileConfigRepository, FileInventoryRepository,
-        FileManagedArtifactRepository, FileStateRepository, InventoryDocument, InventoryRepository,
-        ManagedArtifactFailure, ManagedArtifactRepository, ResourceState, SCHEMA_VERSION,
-        StateDocument, StateRepository, StorageFailure, Timestamp,
+        FileManagedArtifactRepository, FileStateRepository, INVENTORY_SCHEMA_VERSION,
+        InventoryDocument, InventoryRepository, ManagedArtifactFailure, ManagedArtifactRepository,
+        ResourceState, STATE_SCHEMA_VERSION, StateDocument, StateRepository, StorageFailure,
+        Timestamp,
     },
 };
 use skilltap_test_support::TempRoot;
@@ -68,7 +69,7 @@ impl Fixture {
             BTreeSet::new(),
         )
         .unwrap();
-        let inventory = InventoryDocument::new(SCHEMA_VERSION, [], [desired]).unwrap();
+        let inventory = InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [desired]).unwrap();
         Self {
             _temporary: temporary,
             root,
@@ -97,7 +98,7 @@ impl Fixture {
     }
 
     fn empty_state(&self) -> StateDocument {
-        StateDocument::new(SCHEMA_VERSION, [], [], None, None, None).unwrap()
+        StateDocument::new(STATE_SCHEMA_VERSION, [], [], None, None, None).unwrap()
     }
 
     fn initialize_documents(&self) -> StateDocument {
@@ -146,7 +147,7 @@ impl Fixture {
         )
         .unwrap();
         StateDocument::new(
-            SCHEMA_VERSION,
+            STATE_SCHEMA_VERSION,
             [],
             [resource],
             None,

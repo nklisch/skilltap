@@ -17,7 +17,7 @@ use skilltap_test_support::TempRoot;
 use super::*;
 use crate::{
     runtime::{FileKind, FileMetadata, FileSystemAction, RelativeSymlinkTarget, SystemFileSystem},
-    storage::SCHEMA_VERSION,
+    storage::{CONFIG_SCHEMA_VERSION, INVENTORY_SCHEMA_VERSION, STATE_SCHEMA_VERSION},
 };
 
 #[derive(Default)]
@@ -135,11 +135,11 @@ fn path(name: &str) -> AbsolutePath {
 }
 
 fn empty_inventory() -> InventoryDocument {
-    InventoryDocument::new(SCHEMA_VERSION, [], []).unwrap()
+    InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], []).unwrap()
 }
 
 fn empty_state() -> StateDocument {
-    StateDocument::new(SCHEMA_VERSION, [], [], None, None, None).unwrap()
+    StateDocument::new(STATE_SCHEMA_VERSION, [], [], None, None, None).unwrap()
 }
 
 #[test]
@@ -281,6 +281,56 @@ fn state_json_and_inventory_toml_keep_their_own_codec_context() {
 }
 
 #[test]
+fn hypothetical_config_version_does_not_change_inventory_or_state_contracts() {
+    let config = ConfigDocument::defaults();
+    let inventory = empty_inventory();
+    let state = empty_state();
+    let config_bytes = include_bytes!("../fixtures/config.toml");
+    let inventory_bytes = toml::to_string_pretty(&inventory).unwrap().into_bytes();
+    let state_bytes = (serde_json::to_string_pretty(&state).unwrap() + "\n").into_bytes();
+    let future_config = TomlCodec::new(CONFIG_SCHEMA_VERSION + 1);
+    let current_inventory = TomlCodec::new(INVENTORY_SCHEMA_VERSION);
+    let current_state = JsonCodec::new(STATE_SCHEMA_VERSION);
+
+    assert!(matches!(
+        <TomlCodec as DocumentCodec<ConfigDocument>>::decode(&future_config, config_bytes),
+        Err(CodecFailure::UnsupportedSchema {
+            version: CONFIG_SCHEMA_VERSION
+        })
+    ));
+    assert!(matches!(
+        <TomlCodec as DocumentCodec<InventoryDocument>>::decode(
+            &current_inventory,
+            &inventory_bytes
+        ),
+        Ok(document) if document == inventory
+    ));
+    assert!(matches!(
+        <JsonCodec as DocumentCodec<StateDocument>>::decode(&current_state, &state_bytes),
+        Ok(document) if document == state
+    ));
+
+    let Ok(encoded_config) =
+        <TomlCodec as DocumentCodec<ConfigDocument>>::encode(&future_config, &config)
+    else {
+        panic!("valid config must encode")
+    };
+    let Ok(encoded_inventory) =
+        <TomlCodec as DocumentCodec<InventoryDocument>>::encode(&current_inventory, &inventory)
+    else {
+        panic!("valid inventory must encode")
+    };
+    let Ok(encoded_state) =
+        <JsonCodec as DocumentCodec<StateDocument>>::encode(&current_state, &state)
+    else {
+        panic!("valid state must encode")
+    };
+    assert_eq!(encoded_config, config_bytes);
+    assert_eq!(encoded_inventory, inventory_bytes);
+    assert_eq!(encoded_state, state_bytes);
+}
+
+#[test]
 fn failed_publication_preserves_old_bytes_and_reports_safe_write_context() {
     let filesystem = FakeFileSystem::default();
     let config_path = path("config.toml");
@@ -389,7 +439,7 @@ fn system_adapter_readers_observe_only_old_or_new_complete_documents() {
     let mut harnesses = old.harnesses().clone();
     harnesses.codex.binary = super::super::HarnessBinary::new("/usr/local/bin/codex").unwrap();
     let new = ConfigDocument::new(
-        SCHEMA_VERSION,
+        CONFIG_SCHEMA_VERSION,
         harnesses,
         old.instructions().clone(),
         old.updates().clone(),

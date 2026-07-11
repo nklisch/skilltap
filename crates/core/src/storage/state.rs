@@ -5,7 +5,7 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::{SCHEMA_VERSION, SchemaError};
+use super::{STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
     Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership, Provenance,
     RelativeArtifactPath, ResolvedRevision, ResourceId, Source,
@@ -420,7 +420,7 @@ struct StateWire {
 
 impl StateDocument {
     pub const fn schema(&self) -> u32 {
-        SCHEMA_VERSION
+        STATE_SCHEMA_VERSION
     }
 
     pub fn new(
@@ -431,7 +431,7 @@ impl StateDocument {
         last_successful_observation: Option<Timestamp>,
         last_successful_application: Option<Timestamp>,
     ) -> Result<Self, SchemaError> {
-        if schema != SCHEMA_VERSION {
+        if schema != STATE_SCHEMA_VERSION {
             return Err(SchemaError::UnsupportedVersion {
                 document: "state",
                 version: schema,
@@ -487,7 +487,7 @@ impl StateDocument {
 impl From<StateDocument> for StateWire {
     fn from(value: StateDocument) -> Self {
         Self {
-            schema: SCHEMA_VERSION,
+            schema: STATE_SCHEMA_VERSION,
             harnesses: value.harnesses.into_values().collect(),
             resources: value.resources.into_values().collect(),
             last_update_check: value.last_update_check,

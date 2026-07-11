@@ -60,7 +60,7 @@ fn representative_inventory() -> InventoryDocument {
         [skill.id().clone()],
     );
     InventoryDocument::new(
-        SCHEMA_VERSION,
+        INVENTORY_SCHEMA_VERSION,
         [project],
         [instructions, skill, plugin, marketplace, harness],
     )
@@ -106,7 +106,7 @@ fn managed_resource(id: &str, path: &str) -> ResourceState {
 
 fn representative_state() -> StateDocument {
     StateDocument::new(
-        SCHEMA_VERSION,
+        STATE_SCHEMA_VERSION,
         [HarnessState {
             harness: HarnessId::new("codex").unwrap(),
             native_version: Some(NativeId::new("1.2.3").unwrap()),
@@ -123,6 +123,7 @@ fn representative_state() -> StateDocument {
 #[test]
 fn config_defaults_are_explicit_strict_and_golden() {
     let config = ConfigDocument::defaults();
+    assert_eq!(config.schema(), CONFIG_SCHEMA_VERSION);
     assert_eq!(config.harnesses().codex.binary.as_str(), "codex");
     assert_eq!(config.harnesses().claude.binary.as_str(), "claude");
     assert_eq!(
@@ -207,6 +208,7 @@ fn harness_binaries_reject_non_utf8_os_values_without_rendering_bytes() {
 #[test]
 fn complete_inventory_is_readable_deterministic_golden_and_round_trips() {
     let inventory = representative_inventory();
+    assert_eq!(inventory.schema(), INVENTORY_SCHEMA_VERSION);
     let encoded = toml::to_string_pretty(&inventory).unwrap();
     assert_eq!(encoded, include_str!("fixtures/inventory.toml"));
     assert_eq!(
@@ -227,18 +229,25 @@ fn inventory_constructor_and_toml_reject_graph_and_project_violations() {
         [],
     );
     assert!(matches!(
-        InventoryDocument::new(SCHEMA_VERSION, [], [standalone.clone()]),
+        InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [standalone.clone()]),
         Err(SchemaError::UndeclaredProject { .. })
     ));
     assert!(
         InventoryDocument::new(
-            SCHEMA_VERSION,
+            INVENTORY_SCHEMA_VERSION,
             [project.clone(), project],
             [standalone.clone()]
         )
         .is_err()
     );
-    assert!(InventoryDocument::new(SCHEMA_VERSION, [], [standalone.clone(), standalone]).is_err());
+    assert!(
+        InventoryDocument::new(
+            INVENTORY_SCHEMA_VERSION,
+            [],
+            [standalone.clone(), standalone]
+        )
+        .is_err()
+    );
 
     let dangling = resource(
         "plugin:dangling",
@@ -246,7 +255,7 @@ fn inventory_constructor_and_toml_reject_graph_and_project_violations() {
         Scope::Global,
         [ResourceId::new("missing").unwrap()],
     );
-    assert!(InventoryDocument::new(SCHEMA_VERSION, [], [dangling]).is_err());
+    assert!(InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [dangling]).is_err());
     let left = resource(
         "plugin:left",
         ResourceKind::Plugin,
@@ -259,7 +268,7 @@ fn inventory_constructor_and_toml_reject_graph_and_project_violations() {
         Scope::Global,
         [ResourceId::new("plugin:left").unwrap()],
     );
-    assert!(InventoryDocument::new(SCHEMA_VERSION, [], [left, right]).is_err());
+    assert!(InventoryDocument::new(INVENTORY_SCHEMA_VERSION, [], [left, right]).is_err());
 
     let encoded = toml::to_string_pretty(&representative_inventory()).unwrap();
     assert!(toml::from_str::<InventoryDocument>(&format!("unknown = true\n{encoded}")).is_err());
@@ -295,6 +304,7 @@ fn timestamps_round_trip_system_time_and_reject_invalid_values() {
 #[test]
 fn state_is_strict_golden_and_excludes_desired_policy() {
     let state = representative_state();
+    assert_eq!(state.schema(), STATE_SCHEMA_VERSION);
     let encoded = serde_json::to_string_pretty(&state).unwrap() + "\n";
     assert_eq!(encoded, include_str!("fixtures/state.json"));
     assert_eq!(
@@ -331,7 +341,7 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
     let second = managed_resource("skill:second", "skills/shared");
     assert!(matches!(
         StateDocument::new(
-            SCHEMA_VERSION,
+            STATE_SCHEMA_VERSION,
             [],
             [first.clone(), second],
             None,
@@ -341,7 +351,15 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
         Err(SchemaError::DuplicateManagedPath { .. })
     ));
     assert!(
-        StateDocument::new(SCHEMA_VERSION, [], [first.clone(), first], None, None, None).is_err()
+        StateDocument::new(
+            STATE_SCHEMA_VERSION,
+            [],
+            [first.clone(), first],
+            None,
+            None,
+            None
+        )
+        .is_err()
     );
 
     let operation = OperationResult::new(
@@ -422,7 +440,7 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
     assert!(RelativeArtifactPath::new("../escape").is_err());
 
     let state = StateDocument::new(
-        SCHEMA_VERSION,
+        STATE_SCHEMA_VERSION,
         [],
         [managed_resource("skill:first", "skills/first")],
         None,

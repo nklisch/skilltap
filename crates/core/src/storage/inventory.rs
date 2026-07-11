@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::{SCHEMA_VERSION, SchemaError};
+use super::{INVENTORY_SCHEMA_VERSION, SchemaError};
 use crate::domain::{AbsolutePath, DesiredResource, ResourceGraph, ResourceId, Scope};
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -22,7 +22,7 @@ struct InventoryWire {
 
 impl InventoryDocument {
     pub const fn schema(&self) -> u32 {
-        SCHEMA_VERSION
+        INVENTORY_SCHEMA_VERSION
     }
 
     pub fn new(
@@ -30,7 +30,7 @@ impl InventoryDocument {
         projects: impl IntoIterator<Item = AbsolutePath>,
         resources: impl IntoIterator<Item = DesiredResource>,
     ) -> Result<Self, SchemaError> {
-        if schema != SCHEMA_VERSION {
+        if schema != INVENTORY_SCHEMA_VERSION {
             return Err(SchemaError::UnsupportedVersion {
                 document: "inventory",
                 version: schema,
@@ -71,7 +71,7 @@ impl InventoryDocument {
 impl From<InventoryDocument> for InventoryWire {
     fn from(value: InventoryDocument) -> Self {
         Self {
-            schema: SCHEMA_VERSION,
+            schema: INVENTORY_SCHEMA_VERSION,
             projects: value.projects.into_iter().collect(),
             resources: value.resources.into_values().collect(),
         }
