@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-external-tree
 kind: story
-stage: review
+stage: done
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits, epic-harness-observation-adoption-runtime-adversarial-fixtures]
@@ -47,3 +47,13 @@ natively on Linux and macOS.
   bounded module was completed inline after its patch collided with a
   concurrent runtime export.
 - Adjacent issues parked: none.
+
+## Review
+
+- Approved after fresh-context review.
+- Confirmed root/component `openat(O_NOFOLLOW)` traversal, sorted bounded
+  enumeration, descriptor-relative stat/open/readlink, before/opened/after
+  identity checks, incremental file/link/total limits, and special/non-UTF8
+  rejection without blocking.
+- Confirmed non-serializable redacted payloads, fixed safe errors, and the five
+  focused adversarial tests. Core Clippy and workspace formatting pass.
