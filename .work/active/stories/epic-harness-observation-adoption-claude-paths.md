@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude-paths
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-claude
 depends_on: [epic-harness-observation-adoption-detection, epic-harness-observation-adoption-runtime]
@@ -31,3 +31,7 @@ unconfigured directories.
 
 - Harness Clippy and all ten detection/Codex/Claude path tests pass in the
   locked offline workspace.
+
+## Review
+
+- Fast-lane review approved the bounded read-only Claude path derivation.
