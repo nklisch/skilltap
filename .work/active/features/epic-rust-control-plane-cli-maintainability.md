@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-cli-maintainability
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor, testing]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-cli-shell]
@@ -98,3 +98,15 @@ calling the same verification contract.
   verification contract.
 - Full locked format/check/Clippy/test/rustdoc plus optimized binary ladder
   passes.
+
+## Implementation summary
+
+All four children are complete. `skilltap-test-support` owns isolated
+HOME/XDG/cwd process fixtures, binary override resolution, and captured bytes;
+the redundant bare-help test is removed while its compiled assertion remains.
+Foundation status is decomposed into typed load/scope/target/projection phases
+with representative pre/post binary bytes identical. Output tests use a normal
+sidecar with an unchanged test list. CI and release call one explicit optimized
+binary verification script, and version expectations use the workspace
+constant. The locked workspace passes 192 tests plus rustdoc and the optimized
+six-test binary contract.
