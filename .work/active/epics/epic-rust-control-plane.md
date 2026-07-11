@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane
 kind: epic
-stage: review
+stage: done
 tags: [infra, cleanup]
 parent: null
 depends_on: []
@@ -123,3 +123,13 @@ Additional children:
 - `epic-rust-control-plane-macos-ci` — add a native macOS pre-merge locked
   workspace and optimized binary contract — depends on
   `[epic-rust-control-plane-cli-shell]`.
+
+## Final review
+
+Approved after both completion findings were corrected. The public website and
+generated ingestion artifact now preserve foundation human labels while
+documenting exact schema-1 JSON fields and exits `0`–`3`. Native `macos-14`
+pre-merge CI runs the locked full workspace, optimized build, and compiled
+binary wrapper without weakening Ubuntu, website, or release gates. The final
+focused YAML, 192-test, optimized binary, website generation/build, and clean
+tree checks pass; the epic is complete.
