@@ -115,6 +115,49 @@ pub trait McpProjectionMapper {
     ) -> Result<McpProjection, ProjectionError>;
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProjectionPlan {
+    pub skills: Vec<ComponentProjection>,
+    pub mcp: Vec<McpProjection>,
+}
+
+/// Compose skill and MCP projections from an already classified inclusion set.
+/// This function remains pure; managed publication is a downstream operation.
+pub fn plan_component_projections(
+    graph: &SourceComponentGraph,
+    materialization: &MaterializationPlan,
+    target: &HarnessId,
+    mcp: &impl McpProjectionMapper,
+) -> Result<ProjectionPlan, ProjectionError> {
+    let skills = plan_skill_projections(graph, materialization, target)?;
+    let mut mcp_projections = Vec::new();
+    for component_id in &materialization.included {
+        let Some(component) = graph.components().get(component_id) else {
+            return Err(ProjectionError::ComponentNotFound {
+                component: component_id.clone(),
+            });
+        };
+        if component.kind != crate::domain::ComponentKind::McpServer {
+            continue;
+        }
+        let Some(provenance) = graph.provenance(component_id) else {
+            return Err(ProjectionError::MissingProvenance {
+                component: component_id.clone(),
+            });
+        };
+        mcp_projections.push(mcp.map(component, provenance, target)?);
+    }
+    mcp_projections.sort_by(|left, right| {
+        left.component
+            .cmp(&right.component)
+            .then(left.destination.cmp(&right.destination))
+    });
+    Ok(ProjectionPlan {
+        skills,
+        mcp: mcp_projections,
+    })
+}
+
 /// Plan complete portable skill directories for one target. Publication is a
 /// later transaction and is intentionally absent from this function.
 pub fn plan_skill_projections(
@@ -466,5 +509,66 @@ mod tests {
             plan_skill_projections(&graph, &materialization, &HarnessId::new("codex").unwrap())
                 .unwrap();
         assert!(projections.is_empty());
+    }
+
+    struct FixtureMcpMapper;
+
+    impl McpProjectionMapper for FixtureMcpMapper {
+        fn map(
+            &self,
+            component: &crate::domain::ResourceComponent,
+            _provenance: &crate::plugin_graph::ComponentProvenance,
+            target: &HarnessId,
+        ) -> Result<McpProjection, ProjectionError> {
+            Ok(McpProjection {
+                component: component.id.clone(),
+                target: target.clone(),
+                destination: crate::domain::RelativeArtifactPath::new(".mcp.json").unwrap(),
+                transport: McpTransport::Http,
+                credential_references: BTreeSet::new(),
+            })
+        }
+    }
+
+    #[test]
+    fn component_projection_plan_consumes_only_included_skills_and_mcp() {
+        let graph = normalize(
+            Source::new(
+                SourceKind::Git,
+                SourceLocator::new("https://example.test/plugin.git").unwrap(),
+                None,
+            )
+            .unwrap(),
+            [
+                ComponentDeclaration {
+                    id: id("skill:demo"),
+                    kind: ComponentKind::Skill,
+                    requiredness: ComponentRequiredness::Required,
+                    dependencies: BTreeSet::new(),
+                    relative_path: crate::domain::RelativeArtifactPath::new("skills/demo").unwrap(),
+                    declared_name: Some("demo".to_owned()),
+                },
+                ComponentDeclaration {
+                    id: id("mcp:docs"),
+                    kind: ComponentKind::McpServer,
+                    requiredness: ComponentRequiredness::Optional,
+                    dependencies: BTreeSet::new(),
+                    relative_path: crate::domain::RelativeArtifactPath::new(".mcp.json").unwrap(),
+                    declared_name: Some("docs".to_owned()),
+                },
+            ],
+        )
+        .unwrap();
+        let support = MaterializationSupport {
+            target: HarnessId::new("claude").unwrap(),
+            supported: [id("skill:demo"), id("mcp:docs")].into_iter().collect(),
+        };
+        let materialization = plan_materialization(graph.components(), &support);
+        let target = HarnessId::new("claude").unwrap();
+        let plan = plan_component_projections(&graph, &materialization, &target, &FixtureMcpMapper)
+            .unwrap();
+        assert_eq!(plan.skills.len(), 2);
+        assert_eq!(plan.mcp.len(), 1);
+        assert_eq!(plan.mcp[0].component, id("mcp:docs"));
     }
 }
