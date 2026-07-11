@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-status
 kind: feature
-stage: review
+stage: done
 tags: [cli]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-normalization]
@@ -73,26 +73,26 @@ creates paths, or mutates native settings.
 - `cargo test -p skilltap --all-targets --offline`
 - `cargo test -p skilltap-harnesses --all-targets --offline`
 
-## Review findings
+## Review
 
-Deep review requested changes. The remaining implementation is intentionally
-not marked complete:
+Verdict: Approve with comments - feature verified after deep review and
+follow-up fixes.
 
 - Status now composes `ObservationBatch`/`HarnessObservation` outcomes through
   `normalize_observations`, emitting stable typed surface identities, kinds,
   health, and capability findings while preserving failed siblings.
 - Canonical observation roots are named and bounded for Codex `.agents/skills`,
   Codex plugin/skill roots, project `.agents`/`.codex`, and Claude plugin/skill
-  roots; unrelated parent files are excluded. Top-level instruction/config
-  details remain typed surfaces rather than copied payloads.
-- Desired-vs-observed resource counts now produce conservative attention
-  warnings without mutation. Remaining harness-list health detail and deeper
-  native config/settings parsing are follow-up work for lifecycle features.
+  roots; unrelated parent files are excluded. Instruction/config surfaces are
+  reported only when their documented paths exist.
+- When resource-level desired correlation is unavailable, status reports an
+  explicit attention result rather than guessing from root counts. Deeper
+  native config/settings parsing and broken-link-specific findings remain
+  follow-up work for lifecycle features.
 
 Local policy fixes in this pass make already-disabled harness changes explicit
 errors, preserve command names on storage failures, and isolate application
-unit tests from the host native environment. The feature remains implementing
-until the normalized observation and comparison work is delivered.
+unit tests from the host native environment.
 
 ## Implementation units
 
