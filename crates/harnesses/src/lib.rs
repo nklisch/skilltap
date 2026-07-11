@@ -3,9 +3,9 @@ use std::{collections::BTreeMap, ffi::OsString};
 use skilltap_core::{
     domain::{
         CapabilityId, CapabilityProfileId, CapabilityProfileSelection, CapabilitySet,
-        CapabilitySupport, ConfiguredBinary, HarnessId, HarnessInstallation, HarnessReachability,
-        NativeId, NativeVersion, ProfileContractError, Scope, ScopedCapabilitySets,
-        UnreachableReason,
+        CapabilitySupport, ConfiguredBinary, HarnessId, HarnessInstallation,
+        HarnessObservationOutcome, HarnessReachability, NativeId, NativeVersion, ObservationBatch,
+        ObservedEnvironment, ProfileContractError, Scope, ScopedCapabilitySets, UnreachableReason,
     },
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, ExternalTreeObserver, JsonLimits,
@@ -226,6 +226,14 @@ pub fn observe_claude_resources(
         paths.claude_home.clone(),
         limits,
     ))
+}
+
+/// Composes successful and failed harness siblings without dropping any target.
+pub fn normalize_observations(
+    batch: ObservationBatch,
+    outcomes: impl IntoIterator<Item = HarnessObservationOutcome>,
+) -> Result<ObservedEnvironment, skilltap_core::domain::ObservationContractError> {
+    ObservedEnvironment::new(batch, outcomes)
 }
 
 impl std::fmt::Debug for CodexConfigObservation {
