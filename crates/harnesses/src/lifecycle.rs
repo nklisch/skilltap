@@ -1,9 +1,13 @@
 //! Native lifecycle command vectors for verified Codex and Claude contracts.
 
-use std::{ffi::OsString, fmt};
+use std::{collections::BTreeMap, ffi::OsString, fmt};
 
 use skilltap_core::{
-    domain::{ConfiguredBinary, NativeId, Scope, SourceLocator},
+    domain::{
+        ConfiguredBinary, EvidenceCode, EvidenceDetail, HarnessId, NativeId, Operation,
+        OperationId, OperationOutcome, Plan, Scope, SourceLocator,
+    },
+    executor::{ExecutionError, ExecutionPort},
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, NativeProcessOutput, NativeProcessRequest,
         NativeProcessRunner, ObservationRuntimeError, ProcessLimits, SystemExecutableResolver,
@@ -98,6 +102,141 @@ pub fn run_native_lifecycle(
         working_directory,
         limits,
     ))?)
+}
+
+/// Execution adapter for a validated set of native lifecycle requests.
+///
+/// The CLI/application layer chooses the requests only after profile and
+/// scope validation. This adapter then enforces the smaller boundary: every
+/// executable operation in the plan must have an exact request, every request
+/// must target the operation's harness/scope, and native execution is bounded
+/// and direct-argument only.
+pub struct NativeLifecyclePort {
+    configured: ConfiguredBinary,
+    search_path: Option<OsString>,
+    limits: ProcessLimits,
+    requests: BTreeMap<OperationId, NativeLifecycleRequest>,
+}
+
+impl NativeLifecyclePort {
+    pub fn new(
+        configured: ConfiguredBinary,
+        search_path: Option<OsString>,
+        limits: ProcessLimits,
+        requests: impl IntoIterator<Item = (OperationId, NativeLifecycleRequest)>,
+    ) -> Self {
+        Self {
+            configured,
+            search_path,
+            limits,
+            requests: requests.into_iter().collect(),
+        }
+    }
+}
+
+impl ExecutionPort for NativeLifecyclePort {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        for (_, operation) in plan.iter() {
+            if !matches!(
+                operation.action(),
+                skilltap_core::domain::OperationAction::MarketplaceRegister
+                    | skilltap_core::domain::OperationAction::MarketplaceRemove
+                    | skilltap_core::domain::OperationAction::MarketplaceUpdate
+                    | skilltap_core::domain::OperationAction::PluginInstall
+                    | skilltap_core::domain::OperationAction::PluginRemove
+                    | skilltap_core::domain::OperationAction::PluginUpdate
+            ) {
+                continue;
+            }
+            let Some(request) = self.requests.get(operation.id()) else {
+                return Err(ExecutionError::revalidation(
+                    EvidenceCode::new("native.request_missing")
+                        .expect("static evidence code is valid"),
+                    EvidenceDetail::new(
+                        "The native lifecycle adapter did not receive a request for a planned operation.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            };
+            if request.scope != *operation.scope()
+                || !action_matches(operation.action(), request.action)
+                || HarnessId::new(request.harness.id()).expect("harness kind identifier is valid")
+                    != *operation.target()
+            {
+                return Err(ExecutionError::revalidation(
+                    EvidenceCode::new("native.request_mismatch")
+                        .expect("static evidence code is valid"),
+                    EvidenceDetail::new(
+                        "The native lifecycle request no longer matches the validated operation.",
+                    )
+                    .expect("static evidence detail is valid"),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply(&self, operation: &Operation) -> Result<OperationOutcome, ExecutionError> {
+        let Some(request) = self.requests.get(operation.id()) else {
+            return Err(ExecutionError::revalidation(
+                EvidenceCode::new("native.request_missing")
+                    .expect("static evidence code is valid"),
+                EvidenceDetail::new(
+                    "The native lifecycle adapter did not receive a request for a planned operation.",
+                )
+                .expect("static evidence detail is valid"),
+            ));
+        };
+        let output = run_native_lifecycle(
+            self.configured.clone(),
+            self.search_path.clone(),
+            request,
+            self.limits,
+        )
+        .map_err(|_| native_apply_failure("The native lifecycle command could not be run."))?;
+        if output.status().success() {
+            Ok(OperationOutcome::Applied)
+        } else {
+            Err(native_apply_failure(
+                "The native lifecycle command returned a nonzero status.",
+            ))
+        }
+    }
+}
+
+fn native_apply_failure(detail: &'static str) -> ExecutionError {
+    ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
+        EvidenceCode::new("native.command_failed").expect("static evidence code is valid"),
+        EvidenceDetail::new(detail).expect("static evidence detail is valid"),
+    ))
+}
+
+fn action_matches(
+    action: skilltap_core::domain::OperationAction,
+    native: NativeLifecycleAction,
+) -> bool {
+    matches!(
+        (action, native),
+        (
+            skilltap_core::domain::OperationAction::MarketplaceRegister,
+            NativeLifecycleAction::MarketplaceAdd
+        ) | (
+            skilltap_core::domain::OperationAction::MarketplaceRemove,
+            NativeLifecycleAction::MarketplaceRemove
+        ) | (
+            skilltap_core::domain::OperationAction::MarketplaceUpdate,
+            NativeLifecycleAction::MarketplaceUpdate
+        ) | (
+            skilltap_core::domain::OperationAction::PluginInstall,
+            NativeLifecycleAction::PluginInstall
+        ) | (
+            skilltap_core::domain::OperationAction::PluginRemove,
+            NativeLifecycleAction::PluginRemove
+        ) | (
+            skilltap_core::domain::OperationAction::PluginUpdate,
+            NativeLifecycleAction::PluginUpdate
+        )
+    )
 }
 
 fn codex_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {

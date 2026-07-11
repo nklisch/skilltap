@@ -44,4 +44,6 @@ and name fields. The harness crate supplies bounded native lifecycle vectors
 and an execution boundary. Core now has one validated constructor for faithful
 native operations, and state journaling is atomic and resource-exact; the
 remaining gap is composing these pieces into the mutating CLI adapter with
-fresh post-mutation observation.
+fresh post-mutation observation. The harness layer now exposes a typed
+`NativeLifecyclePort` that enforces exact operation/request identity and maps
+bounded native failures to operation failures.
