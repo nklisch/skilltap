@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-contracts-operation-selectors
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-resource-graph]
@@ -45,3 +45,12 @@ operation semantic scope and preserve all partial/blocked dependency behavior.
   integration, and compiled-binary suites.
 - `cargo doc --workspace --no-deps --locked` — passed.
 - `cargo build --workspace --release --locked` — passed.
+
+## Review
+
+- Approved after a fresh-context exact-key contract review.
+- Confirmed constructor and serde enforce selector/semantic scope equality,
+  containment never crosses scope, and acknowledgment, attention, and
+  consequence coverage retain the exact key.
+- Confirmed partial and blocked dependency behavior is unchanged; focused
+  operation tests pass 21/21 and the committed diff is clean.
