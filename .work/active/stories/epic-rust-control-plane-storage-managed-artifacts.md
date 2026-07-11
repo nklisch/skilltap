@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-managed-artifacts
 kind: story
-stage: review
+stage: implementing
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
@@ -103,6 +103,12 @@ contract is therefore the same as the configuration lock: exclusive parent
 advisory locking for cooperating skilltap CLI/daemon writers, descriptor-bound
 no-follow operations, and identity verification at every namespace boundary.
 Tests must deterministically exercise each former seam and every residual state.
+
+Re-review confirmed all semantic findings closed but found one remaining macOS
+compile blocker: Apple exposes signed `stat.st_dev` while `DirectoryIdentity`
+uses normalized `u64`. Raw stat device/inode values must use explicit checked
+conversion at construction and comparison; Linux-only source scanning is not a
+substitute for the platform type contract.
 
 ## Review corrections
 
