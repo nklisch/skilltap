@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-external-tree
 kind: story
-stage: implementing
+stage: review
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits, epic-harness-observation-adoption-runtime-adversarial-fixtures]
@@ -25,3 +25,25 @@ and total-byte cases while walking. Verify parent/name/file identity before and
 after open/read using deterministic barriers/fault injection, add an
 identifier-valid secret target canary, and execute portable errno behavior
 natively on Linux and macOS.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/runtime/external_tree.rs`,
+  `crates/core/src/runtime/mod.rs`.
+- Added `SystemExternalTreeObserver`, a read-only Unix adapter that opens the
+  absolute root component-by-component and every descendant descriptor-relative
+  with no-follow flags. It bounds directory enumeration before allocation,
+  bounds file and link reads during I/O, and revalidates descriptor and path
+  identities after reads and recursive traversal.
+- Tests cover deterministic directory/file/live-and-dangling-link snapshots;
+  depth, entry, file, total, and link limits; FIFO/socket and non-UTF-8
+  rejection; missing/file/link roots; injected permission failure; pre-open,
+  post-read, and root replacement races; and secret-safe Debug/error output.
+- Linux and macOS errno and filesystem identity shapes are selected with native
+  cfgs; native CI remains the portability execution gate.
+- Discrepancies from design: deterministic private hook points inject boundary
+  failures and replacements directly rather than relying on timing or chmod.
+- Dispatch: one highest-effort implementation worker was attempted, then the
+  bounded module was completed inline after its patch collided with a
+  concurrent runtime export.
+- Adjacent issues parked: none.
