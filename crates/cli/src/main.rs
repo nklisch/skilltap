@@ -1,9 +1,21 @@
-use clap::Parser;
+use std::process::ExitCode;
 
-#[derive(Debug, Parser)]
-#[command(name = "skilltap", version = skilltap_core::VERSION, about = "Manage local agent environments")]
-struct Cli {}
+use clap::{Parser, error::ErrorKind};
 
-fn main() {
-    Cli::parse();
+fn main() -> ExitCode {
+    match skilltap::command::Cli::try_parse() {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => {
+            let exit = if matches!(
+                error.kind(),
+                ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
+            ) {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            };
+            let _ = error.print();
+            exit
+        }
+    }
 }
