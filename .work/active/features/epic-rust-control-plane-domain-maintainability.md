@@ -194,3 +194,6 @@ shares reference and traversal machinery while preserving resource first-cycle
 and operation all-cycle diagnostics. Production newtype boilerplate fell by 134
 lines, primary production modules are substantially smaller, and the locked
 workspace suite now passes 58 core tests plus warnings-clean rustdoc.
+
+Feature review restored the original `domain::resource::layered_tests::*`
+identities after extraction so filtered test invocations remain stable.
