@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization-findings
 kind: story
-stage: implementing
+stage: review
 tags: [correctness]
 parent: epic-harness-observation-adoption-normalization
 depends_on: [epic-harness-observation-adoption-normalization-graph]
@@ -19,3 +19,14 @@ Retain malformed siblings, unresolved dependencies, partial harness failures,
 unsupported/ambiguous lineage, and health evidence as deterministic typed
 findings attached to surviving observations. Never collapse a partial snapshot
 into global failure or leak native payloads.
+
+## Implementation
+
+- Added `normalization_health` to summarize observed versus failed sibling
+  outcomes while retaining every typed failure in the ephemeral environment.
+- Added deterministic health coverage for empty and partial normalization
+  batches; domain contracts continue to reject missing/unexpected outcomes.
+
+## Verification
+
+- Harness Clippy and the locked normalization tests pass.

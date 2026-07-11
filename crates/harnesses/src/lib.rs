@@ -248,6 +248,27 @@ pub fn conservatively_equivalent(
         && left.components() == right.components()
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NormalizationHealth {
+    pub observed_targets: usize,
+    pub failed_targets: usize,
+}
+
+/// Summarizes partial normalization without dropping failed sibling evidence.
+pub fn normalization_health(environment: &ObservedEnvironment) -> NormalizationHealth {
+    let mut health = NormalizationHealth {
+        observed_targets: 0,
+        failed_targets: 0,
+    };
+    for (_, outcome) in environment.iter() {
+        match outcome {
+            HarnessObservationOutcome::Observed { .. } => health.observed_targets += 1,
+            HarnessObservationOutcome::Failed { .. } => health.failed_targets += 1,
+        }
+    }
+    health
+}
+
 impl std::fmt::Debug for CodexConfigObservation {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
