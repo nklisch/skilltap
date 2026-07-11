@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-contracts]
@@ -151,3 +151,23 @@ over-entry, and over-byte entries fail with safe typed context.
   canaries.
 - Full locked format/check/Clippy/test/rustdoc, release/compiled-binary, and
   native Linux and macOS runtime behavior gates pass.
+
+## Implementation
+
+- Completed all eight runtime stories: bounded contracts, adversarial native
+  and filesystem fixtures, executable identity resolution, direct bounded
+  process execution, strict JSON, Codex-home-aware paths, descriptor-relative
+  external trees, and end-to-end composition tests.
+- The runtime remains harness-neutral and read-only. Native process cleanup
+  uses group plus direct-child termination with bounded reaping; external trees
+  never follow links or reuse managed write APIs; all sensitive payloads stay
+  behind redacted Debug/error boundaries.
+
+## Verification
+
+- 211 core tests, CLI/integration suites, 15 fixture tests, workspace Clippy,
+  rustdoc, release build, and compiled-binary verification pass under the
+  locked workspace. The runtime composition suite adds three repeatable,
+  read-only resolver/process/JSON/path/tree checks.
+- Linux behavior is exercised in CI and the fixture contracts are cfg-gated for
+  native macOS execution; no platform-specific production fallback was added.
