@@ -119,6 +119,33 @@ fn malformed_native_output_is_typed_and_secret_safe() {
 }
 
 #[test]
+fn flood_native_output_is_bounded_and_secret_safe() {
+    let (root, _fixture) = install(
+        FakeNativeMode::Flood {
+            stdout_bytes: 32_768,
+            stderr_bytes: 32_768,
+        },
+        "codex",
+    );
+    let (process_limits, json_limits) = limits();
+    let error = detect_installation(
+        HarnessKind::Codex,
+        root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        DetectionError::Runtime(ObservationRuntimeError::ProcessOutputLimitExceeded { .. })
+            | DetectionError::Runtime(ObservationRuntimeError::ProcessDeadlineExceeded)
+    ));
+    let rendered = format!("{error:?}");
+    assert!(!rendered.contains("xxxxxxxx"));
+    assert!(!rendered.contains("yyyyyyyy"));
+}
+
+#[test]
 fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
     let (process_limits, json_limits) = limits();
     let missing = TempRoot::new("skilltap-detection-missing").unwrap();
