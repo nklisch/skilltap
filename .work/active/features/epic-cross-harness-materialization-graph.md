@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-graph
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle]
@@ -208,3 +208,17 @@ an equivalent kind.
   readers, provenance, and pure graph-to-materialization planning handoff.
 - Verification: targeted core and harness tests plus clippy passed; the full
   workspace suite remains the final feature review gate.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep feature review completed inline in degraded fresh-context mode
+because this run is intentionally single-agent. The completeness pass found
+and fixed missing MCP declarations before this verdict. The adversarial pass
+confirmed explicit-source bounds, strict JSON parsing, dependency validation,
+and no-write graph handoff. Full workspace tests and clippy passed.
