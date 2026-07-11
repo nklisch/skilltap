@@ -129,45 +129,46 @@ fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
     .execute(args)
 }
 
-fn harness_repository()
--> Result<(FileConfigRepository<'static>, &'static SystemFileSystem), Outcome> {
-    // Harness command execution is routed through the same system-owned config root
-    // as status; the leaked zero-sized filesystem is process-lifetime infrastructure.
-    let paths =
-        PlatformPaths::resolve(&ProcessEnvironment).map_err(|_| repository_composition_error())?;
-    let filesystem: &'static SystemFileSystem = Box::leak(Box::new(SystemFileSystem));
-    let repository = FileConfigRepository::new(filesystem, paths.skilltap_config().clone())
-        .map_err(|_| repository_composition_error())?;
-    Ok((repository, filesystem))
+fn with_harness_repository(
+    operation: impl FnOnce(&FileConfigRepository<'_>) -> Outcome,
+) -> Outcome {
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(),
+    };
+    let filesystem = SystemFileSystem;
+    let repository = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(),
+    };
+    operation(&repository)
 }
 
 fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
-    let (repository, _) = match harness_repository() {
-        Ok(value) => value,
-        Err(outcome) => return outcome,
-    };
-    let config = match repository.load() {
-        Ok(DocumentState::Missing) => ConfigDocument::defaults(),
-        Ok(DocumentState::Present(value)) => value,
-        Err(_) => return repository_composition_error(),
-    };
-    Outcome::new("harness list", ResultClass::Completed)
-        .with_resource(OutputEntry::new(
-            "codex",
-            if config.harnesses().codex.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            },
-        ))
-        .with_resource(OutputEntry::new(
-            "claude",
-            if config.harnesses().claude.enabled {
-                "enabled"
-            } else {
-                "disabled"
-            },
-        ))
+    with_harness_repository(|repository| {
+        let config = match repository.load() {
+            Ok(DocumentState::Missing) => ConfigDocument::defaults(),
+            Ok(DocumentState::Present(value)) => value,
+            Err(_) => return repository_composition_error(),
+        };
+        Outcome::new("harness list", ResultClass::Completed)
+            .with_resource(OutputEntry::new(
+                "codex",
+                if config.harnesses().codex.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                },
+            ))
+            .with_resource(OutputEntry::new(
+                "claude",
+                if config.harnesses().claude.enabled {
+                    "enabled"
+                } else {
+                    "disabled"
+                },
+            ))
+    })
 }
 
 fn execute_system_harness_enable(args: &HarnessEnableArgs) -> Outcome {
@@ -184,37 +185,35 @@ fn execute_harness_change(
     enabled: bool,
     binary: Option<&skilltap_core::storage::HarnessBinary>,
 ) -> Outcome {
-    let (repository, _) = match harness_repository() {
-        Ok(value) => value,
-        Err(outcome) => return outcome,
-    };
-    let current = match repository.load() {
-        Ok(DocumentState::Missing) => ConfigDocument::defaults(),
-        Ok(DocumentState::Present(value)) => value,
-        Err(_) => return repository_composition_error(),
-    };
-    let next = match current.with_harness_policy(harness, enabled, binary) {
-        Ok(value) => value,
-        Err(_) => {
-            return Outcome::new("harness", ResultClass::Invalid).with_error(ErrorDetail::new(
-                "invalid_harness",
-                "The requested harness is not supported.",
+    with_harness_repository(|repository| {
+        let current = match repository.load() {
+            Ok(DocumentState::Missing) => ConfigDocument::defaults(),
+            Ok(DocumentState::Present(value)) => value,
+            Err(_) => return repository_composition_error(),
+        };
+        let next = match current.with_harness_policy(harness, enabled, binary) {
+            Ok(value) => value,
+            Err(_) => {
+                return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                    "invalid_harness",
+                    "The requested harness is not supported.",
+                ));
+            }
+        };
+        if next == current {
+            return Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
+                harness.as_str(),
+                if enabled { "enabled" } else { "disabled" },
             ));
         }
-    };
-    if next == current {
-        return Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
+        if repository.replace(&next).is_err() {
+            return repository_composition_error();
+        }
+        Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
             harness.as_str(),
             if enabled { "enabled" } else { "disabled" },
-        ));
-    }
-    if repository.replace(&next).is_err() {
-        return repository_composition_error();
-    }
-    Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
-        harness.as_str(),
-        if enabled { "enabled" } else { "disabled" },
-    ))
+        ))
+    })
 }
 
 fn repository_composition_error() -> Outcome {
