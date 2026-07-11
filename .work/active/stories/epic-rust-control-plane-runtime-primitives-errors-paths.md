@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-errors-paths
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: []
@@ -34,3 +34,14 @@ resolution used by all later runtime adapters.
 
 Use injected environment access in tests. Do not mutate global environment or
 create the configuration directory during resolution.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/lib.rs` and new `crates/core/src/runtime/{mod,error,paths}.rs` modules.
+- Public surface: category-preserving `RuntimeError` variants and context enums; `Environment` port with `ProcessEnvironment`; supported-platform detection; immutable `PlatformPaths` resolution for home, XDG config home, skilltap config, global `AGENTS.md`, Codex home, and Claude home.
+- Tests added: 8 unit tests covering all seven runtime boundary categories, safe error rendering, XDG override and empty/absent fallback, missing/relative/noncanonical paths, non-UTF-8 environment values, unsupported platforms, required home-relative locations, and resolution without filesystem creation.
+- Design details: invalid environment values are discarded before constructing errors, so display/debug output retains the variable and typed cause but not raw input; empty `XDG_CONFIG_HOME` follows `${XDG_CONFIG_HOME:-$HOME/.config}` semantics while empty `HOME` is missing.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
+- Dispatch rationale: direct-read only; the runtime module did not exist and the story declared a bounded error/path surface.
+- Verification: `cargo fmt --all -- --check`, `cargo check --locked --workspace --all-targets`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, `cargo test --locked --workspace`, and `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps` all pass (66 workspace tests).
