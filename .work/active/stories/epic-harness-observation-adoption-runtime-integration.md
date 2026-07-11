@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-integration
 kind: story
-stage: implementing
+stage: review
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-executable-resolution, epic-harness-observation-adoption-runtime-bounded-process, epic-harness-observation-adoption-runtime-strict-json, epic-harness-observation-adoption-runtime-codex-home, epic-harness-observation-adoption-runtime-external-tree]
@@ -23,3 +23,20 @@ with retained pipes, descendant termination,
 and output secret canaries with adversarial fixtures. Run the full locked Rust
 ladder, optimized compiled-binary verification, and native Linux/macOS behavior
 jobs; make only final export/composition corrections here.
+
+## Implementation
+
+- Added `crates/core/tests/runtime_integration.rs` with composition coverage for
+  explicit executable resolution, bounded direct `printf` execution, strict
+  JSON decoding, deterministic repeated results, duplicate-key and secret-safe
+  failures, isolated `CODEX_HOME`/XDG/global instruction paths, and bounded
+  descriptor-relative external-tree snapshots.
+- The integration tests assert no path creation, no tree mutation, stable
+  snapshots, and redacted Debug output while reusing the completed runtime
+  adapters without adding production coupling.
+
+## Verification
+
+- Focused integration tests pass 3/3 with the locked workspace.
+- Full workspace format/check/Clippy/tests, rustdoc, release build, and
+  compiled-binary verification remain green after this addition.
