@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle-commands
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-standalone-skill-lifecycle
 depends_on: [epic-standalone-skill-lifecycle-storage, epic-standalone-skill-lifecycle-compatibility]
@@ -63,6 +63,10 @@ created even for Claude-only targeting, with the Claude-native complete-tree
 projection managed alongside it and removed atomically on skill removal.
 Missing managed destinations are re-published even when an earlier apply record
 exists, so status drift can be repaired by repeating the explicit install.
+
+The standalone lifecycle is ready for review; partial-operation selectors remain
+owned by the downstream cross-harness materialization epic rather than this
+faithful standalone path.
 
 ## Review
 
