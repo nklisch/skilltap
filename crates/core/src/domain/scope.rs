@@ -94,7 +94,7 @@ macro_rules! path_serde {
 path_serde!(AbsolutePath);
 path_serde!(RelativeArtifactPath);
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(
     tag = "kind",
     content = "path",

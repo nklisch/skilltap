@@ -14,7 +14,7 @@ pub use compatibility::{
     ConsequenceCode, ConsequenceSummary, EvidenceCode, EvidenceDetail, MaterialConsequence,
     TransferFidelity,
 };
-pub use identity::{HarnessId, NativeId, OperationId, ResourceId};
+pub use identity::{HarnessId, NativeId, OperationId, ResourceId, ResourceKey};
 pub use operation::{
     AcknowledgmentRequirement, AffectedSurface, ApplyOutcome, ApplyResult, AttentionKind,
     AttentionReason, CommandArgument, Operation, OperationAction, OperationClass,
