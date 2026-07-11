@@ -28,11 +28,25 @@ pub struct ComponentProjection {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ProjectionError {
-    MissingProvenance { component: ComponentId },
-    InvalidSkillPath { component: ComponentId },
-    UnsupportedTarget { target: HarnessId },
-    ComponentNotFound { component: ComponentId },
-    ComponentKindMismatch { component: ComponentId },
+    MissingProvenance {
+        component: ComponentId,
+    },
+    InvalidSkillPath {
+        component: ComponentId,
+    },
+    UnsupportedTarget {
+        target: HarnessId,
+    },
+    ComponentNotFound {
+        component: ComponentId,
+    },
+    ComponentKindMismatch {
+        component: ComponentId,
+    },
+    UnsupportedMcp {
+        component: ComponentId,
+        reason: &'static str,
+    },
 }
 
 impl std::fmt::Display for ProjectionError {
@@ -65,11 +79,41 @@ impl std::fmt::Display for ProjectionError {
             Self::ComponentKindMismatch { component } => {
                 write!(formatter, "component `{component}` is not a skill")
             }
+            Self::UnsupportedMcp { component, reason } => {
+                write!(
+                    formatter,
+                    "MCP component `{component}` cannot be projected: {reason}"
+                )
+            }
         }
     }
 }
 
 impl std::error::Error for ProjectionError {}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub enum McpTransport {
+    Stdio,
+    Http,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct McpProjection {
+    pub component: ComponentId,
+    pub target: HarnessId,
+    pub destination: crate::domain::RelativeArtifactPath,
+    pub transport: McpTransport,
+    pub credential_references: BTreeSet<String>,
+}
+
+pub trait McpProjectionMapper {
+    fn map(
+        &self,
+        component: &crate::domain::ResourceComponent,
+        provenance: &crate::plugin_graph::ComponentProvenance,
+        target: &HarnessId,
+    ) -> Result<McpProjection, ProjectionError>;
+}
 
 /// Plan complete portable skill directories for one target. Publication is a
 /// later transaction and is intentionally absent from this function.
