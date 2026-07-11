@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization-correlation
 kind: story
-stage: review
+stage: done
 tags: [correctness]
 parent: epic-harness-observation-adoption-normalization
 depends_on: [epic-harness-observation-adoption-normalization-graph]
@@ -29,3 +29,7 @@ non-equivalent without source evidence.
 ## Verification
 
 - Harness Clippy and the locked normalization/runtime suites pass.
+
+## Review
+
+- Fast-lane review approved the source-and-semantics-only equivalence rule.
