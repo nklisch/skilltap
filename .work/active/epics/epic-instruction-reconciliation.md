@@ -34,6 +34,23 @@ recoverable backups.
 - `docs/HARNESS-CONTRACTS.md` — Global Instructions, Codex Instructions, Claude Instructions
 - `docs/UX.md` — Instructions
 
+## Design decisions
+
+- **What wins when canonical and native instruction content diverge?** The
+  canonical `AGENTS.md` wins only when the operation includes explicit
+  `--yes` acknowledgment. Without acknowledgment the plan blocks. An approved
+  replacement backs up the divergent native file before establishing the
+  bridge. Effective Codex override content is treated as the divergent native
+  source under the same rule.
+- **Which Claude project instruction location is managed?** Preserve whichever
+  single supported bridge already exists: root `CLAUDE.md` or
+  `.claude/CLAUDE.md`. When neither exists, default to root `CLAUDE.md`. When
+  both exist, report a warning and block ordinary repair; with explicit
+  approval, back up divergent content and consolidate to the root bridge so a
+  project ends with only one managed Claude instruction entry point.
+- **Does this epic require UI mockups?** No. Instruction health and
+  reconciliation decisions are non-interactive CLI and JSON surfaces.
+
 ## Anticipated child features
 
 - Instruction location, bridge, ownership, and fingerprint model
