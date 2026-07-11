@@ -56,6 +56,7 @@ pub struct ResolvedUpdate {
 pub struct UpdateCandidate {
     pub current_revision: Option<ResolvedRevision>,
     pub available_revision: Option<ResolvedRevision>,
+    pub resolution_error: Option<ResolutionError>,
     pub pinned: bool,
     pub drifted: bool,
     pub compatibility_changed: bool,
@@ -161,6 +162,7 @@ pub fn candidate_for(
     UpdateCandidate {
         current_revision: resolved.current.clone(),
         available_revision: resolved.available.clone(),
+        resolution_error: resolved.error.clone(),
         pinned: resource.update() == UpdateIntent::Pinned,
         drifted: request.drifted,
         compatibility_changed: request.compatibility_changed,
@@ -177,6 +179,9 @@ pub enum UpdateSafety {
 }
 
 pub fn classify_update(candidate: &UpdateCandidate) -> UpdateSafety {
+    if candidate.resolution_error.is_some() {
+        return UpdateSafety::Blocked;
+    }
     if candidate.available_revision.is_none()
         || candidate.current_revision == candidate.available_revision
     {
@@ -210,6 +215,7 @@ mod tests {
         UpdateCandidate {
             current_revision: Some(commit('a')),
             available_revision: Some(commit('b')),
+            resolution_error: None,
             pinned: false,
             drifted: false,
             compatibility_changed: false,
@@ -266,6 +272,10 @@ mod tests {
         let mut drift = candidate();
         drift.drifted = true;
         assert_eq!(classify_update(&drift), UpdateSafety::Blocked);
+        let mut unresolved = candidate();
+        unresolved.available_revision = None;
+        unresolved.resolution_error = Some(ResolutionError::UnreachableSource);
+        assert_eq!(classify_update(&unresolved), UpdateSafety::Blocked);
     }
 
     #[test]
