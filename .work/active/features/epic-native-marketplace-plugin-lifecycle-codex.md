@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle-codex
 kind: feature
-stage: drafting
+stage: done
 tags: []
 parent: epic-native-marketplace-plugin-lifecycle
 depends_on: [epic-native-marketplace-plugin-lifecycle-identity]
@@ -22,3 +22,24 @@ operations, with bounded direct arguments and fresh observation after mutation.
 
 Supported operations preserve native output as typed evidence, unknown versions
 remain observe-only, and unavailable operations block without cache writes.
+
+## Implementation notes
+
+Added verified Codex native argument vectors for marketplace and plugin add,
+remove, upgrade, and update actions. Project scope deliberately returns a typed
+unsupported result when Codex lacks a verified native project lifecycle.
+
+## Review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Execution still requires the compiled profile, bounded process runner, and
+  post-mutation observation at the CLI composition boundary.
+
+### Verification
+
+Harness lifecycle vector tests and strict clippy pass.

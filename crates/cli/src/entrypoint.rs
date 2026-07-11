@@ -82,6 +82,22 @@ where
         Dispatch::Plan(args) => (execute_system_plan(&args), OutputChannel::Stdout),
         Dispatch::Sync(args) => (execute_system_sync(&args), OutputChannel::Stdout),
         Dispatch::SkillList(args) => (execute_system_skill_list(&args), OutputChannel::Stdout),
+        Dispatch::MarketplaceList(args) => (
+            execute_system_resource_list(
+                "marketplace list",
+                &args,
+                skilltap_core::domain::ResourceKind::Marketplace,
+            ),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::PluginList(args) => (
+            execute_system_resource_list(
+                "plugin list",
+                &args,
+                skilltap_core::domain::ResourceKind::Plugin,
+            ),
+            OutputChannel::Stdout,
+        ),
         Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
         Dispatch::HarnessEnable(args) => {
             (execute_system_harness_enable(&args), OutputChannel::Stdout)
@@ -107,6 +123,16 @@ fn execute_system_sync(args: &SyncArgs) -> Outcome {
 fn execute_system_skill_list(args: &ScopedTargetArgs) -> Outcome {
     execute_system_reconciliation("skill list", |application| {
         application.execute_skill_list(args)
+    })
+}
+
+fn execute_system_resource_list(
+    command: &'static str,
+    args: &ScopedTargetArgs,
+    kind: skilltap_core::domain::ResourceKind,
+) -> Outcome {
+    execute_system_reconciliation(command, |application| {
+        application.execute_resource_list(command, args, kind)
     })
 }
 

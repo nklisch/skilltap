@@ -1,7 +1,7 @@
 ---
 id: epic-instruction-reconciliation-model
 kind: feature
-stage: drafting
+stage: done
 tags: []
 parent: epic-instruction-reconciliation
 depends_on: []
@@ -22,3 +22,24 @@ bridge mode, and health findings for global and project resources.
 
 The model distinguishes missing, managed, divergent, broken, duplicate, and
 unmanaged instructions without reading raw authored content into findings.
+
+## Implementation notes
+
+Added `skilltap_core::instructions` with scope-neutral bridge mode, fingerprint,
+and explicit health classification for missing, managed, divergent, and
+unmanaged states.
+
+## Review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Native path probing and duplicate-entry detection remain in the global and
+  project adapter features.
+
+### Verification
+
+Focused instruction model tests and strict core clippy pass.

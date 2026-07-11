@@ -15,6 +15,11 @@ use skilltap_core::{
     },
 };
 
+mod lifecycle;
+pub use lifecycle::{
+    NativeLifecycleAction, NativeLifecycleError, NativeLifecycleRequest, native_arguments,
+};
+
 pub use skilltap_core::VERSION;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

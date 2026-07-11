@@ -79,9 +79,17 @@ impl StatusApplication<'_> {
     /// List desired standalone skills only. This is deliberately inventory
     /// backed and never scans source directories or marketplace contents.
     pub(crate) fn execute_skill_list(&self, args: &ScopedTargetArgs) -> Outcome {
+        self.execute_resource_list("skill list", args, ResourceKind::StandaloneSkill)
+    }
+
+    pub(crate) fn execute_resource_list(
+        &self,
+        command: &'static str,
+        args: &ScopedTargetArgs,
+        kind: ResourceKind,
+    ) -> Outcome {
         let documents = DocumentLoadPhase::execute(self);
-        let mut outcome =
-            documents.project(Outcome::new("skill list", ResultClass::AttentionRequired));
+        let mut outcome = documents.project(Outcome::new(command, ResultClass::AttentionRequired));
         let documents = match documents.finish() {
             Ok(documents) => documents,
             Err(errors) => {
@@ -129,7 +137,7 @@ impl StatusApplication<'_> {
         let mut count = 0_u64;
         if let Some(inventory) = &documents.inventory {
             for resource in inventory.resources().values() {
-                if resource.kind() != ResourceKind::StandaloneSkill
+                if resource.kind() != kind
                     || !scope.resolved.iter().any(|value| value == resource.scope())
                     || !resource
                         .targets()
@@ -141,7 +149,7 @@ impl StatusApplication<'_> {
                 count += 1;
                 outcome = outcome.with_resource(
                     OutputEntry::new(resource.key().to_string(), "desired")
-                        .with_field("kind", "standalone_skill")
+                        .with_field("kind", format!("{:?}", kind).to_lowercase())
                         .with_field("scope", scope_label(resource.scope()))
                         .with_field("targets", resource.targets().iter().count() as u64),
                 );
@@ -149,7 +157,7 @@ impl StatusApplication<'_> {
         }
         outcome.result = ResultClass::Completed;
         outcome
-            .with_summary("skills", count)
+            .with_summary("resources", count)
             .with_summary("scopes", scope.count)
             .with_summary("targets", targets.iter().len() as u64)
     }

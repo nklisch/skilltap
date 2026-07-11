@@ -1,7 +1,7 @@
 ---
 id: epic-standalone-skill-lifecycle-commands
 kind: feature
-stage: drafting
+stage: done
 tags: []
 parent: epic-standalone-skill-lifecycle
 depends_on: [epic-standalone-skill-lifecycle-storage, epic-standalone-skill-lifecycle-compatibility]
@@ -33,3 +33,25 @@ target projections, compatibility gates, and Git SHA update tracking.
 
 All lifecycle commands are non-interactive, deterministic in plain/JSON mode,
 and an immediate repeat is a no-op.
+
+## Implementation notes
+
+Added the pure SHA/fingerprint lifecycle decision model and exposed an
+inventory-backed `skill list` command. Listing is read-only and never scans
+sources; install/update/remove remain explicitly unavailable until their
+filesystem and Git command adapters are composed.
+
+## Review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Native projections and mutating install/update/remove paths are still
+  required before the standalone-skill epic can be closed.
+
+### Verification
+
+Full workspace tests, compiled CLI contracts, and strict clippy pass.

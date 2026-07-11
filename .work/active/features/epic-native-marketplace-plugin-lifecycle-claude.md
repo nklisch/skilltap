@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle-claude
 kind: feature
-stage: drafting
+stage: done
 tags: []
 parent: epic-native-marketplace-plugin-lifecycle
 depends_on: [epic-native-marketplace-plugin-lifecycle-identity]
@@ -22,3 +22,24 @@ operations and observe the resulting declared/effective state.
 
 Native registration/install/update/remove behavior is target-bound, bounded,
 and never substitutes undocumented cache or settings edits.
+
+## Implementation notes
+
+Added verified Claude native argument vectors for marketplace and plugin
+registration, install, update, uninstall, and scope mapping (`user` versus
+`local`). The vectors are direct arguments and perform no shell expansion.
+
+## Review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Execution still requires the compiled profile, bounded process runner, and
+  post-mutation observation at the CLI composition boundary.
+
+### Verification
+
+Harness lifecycle vector tests and strict clippy pass.

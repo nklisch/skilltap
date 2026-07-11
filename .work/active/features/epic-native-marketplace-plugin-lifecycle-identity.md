@@ -1,7 +1,7 @@
 ---
 id: epic-native-marketplace-plugin-lifecycle-identity
 kind: feature
-stage: drafting
+stage: done
 tags: []
 parent: epic-native-marketplace-plugin-lifecycle
 depends_on: []
@@ -29,3 +29,24 @@ logical identity, native identity, and source association kept separate.
 
 Identity values round-trip deterministically and equal names in distinct scopes
 remain distinct resources.
+
+## Implementation notes
+
+Added `skilltap_core::marketplace` with exact `plugin@marketplace` parsing and
+scope-bearing marketplace identity values. Source, logical identity, and
+native association remain separate.
+
+## Review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- Harness adapters must supply native lifecycle capability checks and preserve
+  explicit source association; matching names alone remain insufficient.
+
+### Verification
+
+Focused identity tests and strict core clippy pass.

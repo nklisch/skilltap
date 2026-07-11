@@ -1,6 +1,9 @@
 pub mod adoption;
 pub mod domain;
 pub mod executor;
+pub mod instructions;
+pub mod marketplace;
+pub mod native_config;
 pub mod operation_graph;
 pub mod reconciliation;
 pub mod runtime;
