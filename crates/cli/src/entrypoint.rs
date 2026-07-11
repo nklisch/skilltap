@@ -1,11 +1,16 @@
-use std::ffi::{OsStr, OsString};
+use std::{
+    collections::BTreeMap,
+    ffi::{OsStr, OsString},
+};
 
 use clap::{CommandFactory, Parser, error::ErrorKind};
 use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, NativeId},
     runtime::{
-        CommandGitRoot, PlatformPaths, ProcessEnvironment, ScopeResolver, SystemCommandRunner,
-        SystemFileSystem, SystemWorkingDirectory,
+        CommandGitRoot, ExecutableResolutionRequest, ExecutableResolver, FileKind, FileSystem,
+        NativeProcessRequest, NativeProcessRunner, PlatformPaths, ProcessEnvironment,
+        ProcessLimits, ScopeResolver, SystemCommandRunner, SystemExecutableResolver,
+        SystemFileSystem, SystemNativeProcessRunner, SystemWorkingDirectory,
     },
     storage::{
         ConfigDocument, ConfigRepository, DocumentState, FileConfigRepository,
@@ -16,7 +21,7 @@ use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_pro
 
 use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
-    ResultClass,
+    ResultClass, Warning,
     application::{
         NativeLifecycleKind, NativeObservationMode, SkillInstallRequest, StatusApplication,
     },
@@ -233,9 +238,16 @@ where
         Dispatch::HarnessDisable(args) => {
             (execute_system_harness_disable(&args), OutputChannel::Stdout)
         }
-        Dispatch::Unavailable { command, .. } => {
-            (capability_unavailable(command), OutputChannel::Stderr)
+        Dispatch::DaemonEnable(args) => {
+            (execute_system_daemon_enable(&args), OutputChannel::Stdout)
         }
+        Dispatch::DaemonDisable(args) => {
+            (execute_system_daemon_disable(&args), OutputChannel::Stdout)
+        }
+        Dispatch::DaemonStatus(args) => {
+            (execute_system_daemon_status(&args), OutputChannel::Stdout)
+        }
+        Dispatch::DaemonRun => (capability_unavailable("daemon run"), OutputChannel::Stderr),
     };
     render(outcome, json, plain_channel)
 }
@@ -246,6 +258,309 @@ fn execute_system_plan(args: &PlanArgs) -> Outcome {
 
 fn execute_system_sync(args: &SyncArgs) -> Outcome {
     execute_system_reconciliation("sync", |application| application.execute_sync(args))
+}
+
+fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outcome {
+    let command = "daemon enable";
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let filesystem = SystemFileSystem;
+    let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone())
+        .and_then(|repository| match repository.load() {
+            Ok(DocumentState::Present(config)) => Ok(config),
+            Ok(DocumentState::Missing) => Ok(ConfigDocument::defaults()),
+            Err(error) => Err(error),
+        }) {
+        Ok(config) => config,
+        Err(_) => return repository_composition_error(command),
+    };
+    let interval = args.interval.unwrap_or(config.updates().interval);
+    let platform = crate::daemon::platform(&paths);
+    let executable = match std::env::current_exe()
+        .ok()
+        .and_then(|path| path.to_str().map(str::to_owned))
+        .and_then(|path| AbsolutePath::new(path).ok())
+    {
+        Some(path) => path,
+        None => {
+            return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                "daemon_executable_unavailable",
+                "The skilltap executable path could not be represented safely.",
+            ));
+        }
+    };
+    let definition =
+        match skilltap_core::daemon::render_service(&skilltap_core::daemon::DaemonServiceSpec {
+            platform,
+            interval,
+            executable,
+        }) {
+            Ok(definition) => definition,
+            Err(_) => {
+                return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                    "daemon_definition_invalid",
+                    "The daemon service definition could not be validated.",
+                ));
+            }
+        };
+    let files = crate::daemon::files(&paths, &definition);
+    let root = crate::daemon::root(&paths, platform);
+    if let Err(error) = filesystem.create_directory_all(&root) {
+        return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+            Warning::new(
+                "daemon_definition_write_failed",
+                "The daemon service directory could not be created.",
+            )
+            .with_context("path", root.as_str())
+            .with_context("detail", error.to_string()),
+        );
+    }
+    for (path, file) in &files {
+        match filesystem.read_regular_no_follow(path) {
+            Ok(Some(existing)) if !crate::daemon::owns(platform, &existing) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "conflict"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_conflict",
+                        "An unmanaged service definition already occupies the skilltap path.",
+                    ));
+            }
+            Ok(_) => {}
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_unreadable",
+                        "The existing daemon service definition could not be read safely.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+        }
+        if let Err(error) = filesystem.atomic_write(path, file.contents().as_bytes()) {
+            return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                Warning::new(
+                    "daemon_definition_write_failed",
+                    "The daemon service definition could not be published atomically.",
+                )
+                .with_context("path", path.as_str())
+                .with_context("detail", error.to_string()),
+            );
+        }
+    }
+    if run_service_manager(platform, ServiceManagerAction::Enable, &files[0].0).is_err() {
+        return Outcome::new(command, ResultClass::AttentionRequired)
+            .with_warning(Warning::new(
+                "daemon_manager_unavailable",
+                "The service definition was written, but the user service manager did not activate it.",
+            ))
+            .with_next_action(NextAction::new(
+                "retry_daemon_enable",
+                "Retry daemon enable after checking the user service manager.",
+            ))
+            .with_resource(OutputEntry::new(files[0].0.as_str(), "installed"));
+    }
+    Outcome::new(command, ResultClass::Completed)
+        .with_resource(
+            OutputEntry::new(files[0].0.as_str(), "enabled")
+                .with_field("interval", interval.to_string())
+                .with_field("platform", format!("{platform:?}").to_lowercase()),
+        )
+        .with_summary("changed", true)
+}
+
+fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
+    let command = "daemon disable";
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let platform = crate::daemon::platform(&paths);
+    let root = crate::daemon::root(&paths, platform);
+    let names = match platform {
+        skilltap_core::daemon::ServicePlatform::Launchd => {
+            vec![format!("{}.plist", skilltap_core::daemon::SERVICE_LABEL)]
+        }
+        skilltap_core::daemon::ServicePlatform::SystemdUser => vec![
+            skilltap_core::daemon::SYSTEMD_UNIT.to_owned(),
+            skilltap_core::daemon::SYSTEMD_TIMER.to_owned(),
+        ],
+    };
+    let files = names
+        .iter()
+        .map(|name| AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap())
+        .collect::<Vec<_>>();
+    for path in &files {
+        match SystemFileSystem.read_regular_no_follow(path) {
+            Ok(Some(contents)) if !crate::daemon::owns(platform, &contents) => {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_conflict",
+                        "An unmanaged service definition occupies the skilltap path; it was not removed.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+            Ok(_) => {}
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_unreadable",
+                        "The daemon service definition could not be inspected safely.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+        }
+    }
+    if run_service_manager(platform, ServiceManagerAction::Disable, &files[0]).is_err() {
+        return Outcome::new(command, ResultClass::AttentionRequired).with_warning(Warning::new(
+            "daemon_manager_unavailable",
+            "The user service manager did not disable the daemon; owned definitions were retained.",
+        ));
+    }
+    let mut changed = false;
+    for path in &files {
+        if let Ok(metadata) = SystemFileSystem.inspect(path)
+            && metadata.kind() != FileKind::Missing
+        {
+            if SystemFileSystem.remove(path).is_err() {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_remove_failed",
+                        "The owned daemon service definition could not be removed safely.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+            changed = true;
+        }
+    }
+    Outcome::new(command, ResultClass::Completed)
+        .with_resource(OutputEntry::new(root.as_str(), "disabled"))
+        .with_summary("changed", changed)
+}
+
+fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
+    let command = "daemon status";
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let platform = crate::daemon::platform(&paths);
+    let root = crate::daemon::root(&paths, platform);
+    let names = match platform {
+        skilltap_core::daemon::ServicePlatform::Launchd => {
+            vec![format!("{}.plist", skilltap_core::daemon::SERVICE_LABEL)]
+        }
+        skilltap_core::daemon::ServicePlatform::SystemdUser => vec![
+            skilltap_core::daemon::SYSTEMD_UNIT.to_owned(),
+            skilltap_core::daemon::SYSTEMD_TIMER.to_owned(),
+        ],
+    };
+    let mut installed = true;
+    for name in &names {
+        let path = AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap();
+        match SystemFileSystem.read_regular_no_follow(&path) {
+            Ok(Some(contents)) if crate::daemon::owns(platform, &contents) => {}
+            Ok(None) => installed = false,
+            Ok(Some(_)) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "conflict"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_conflict",
+                        "An unmanaged service definition occupies the skilltap path.",
+                    ));
+            }
+            Err(_) => installed = false,
+        }
+    }
+    if !installed {
+        return Outcome::new(command, ResultClass::Completed)
+            .with_resource(OutputEntry::new(root.as_str(), "disabled"));
+    }
+    let manager = run_service_manager(
+        platform,
+        ServiceManagerAction::Status,
+        &AbsolutePath::new(format!("{}/{}", root.as_str(), names[0])).unwrap(),
+    );
+    if manager.is_err() {
+        return Outcome::new(command, ResultClass::AttentionRequired)
+            .with_resource(OutputEntry::new(root.as_str(), "installed"))
+            .with_warning(Warning::new(
+                "daemon_manager_unavailable",
+                "The owned daemon definition exists, but manager state could not be confirmed.",
+            ));
+    }
+    Outcome::new(command, ResultClass::Completed)
+        .with_resource(OutputEntry::new(root.as_str(), "enabled"))
+}
+
+#[derive(Clone, Copy)]
+enum ServiceManagerAction {
+    Enable,
+    Disable,
+    Status,
+}
+
+fn run_service_manager(
+    platform: skilltap_core::daemon::ServicePlatform,
+    action: ServiceManagerAction,
+    definition: &AbsolutePath,
+) -> Result<(), ()> {
+    let (binary, arguments) = match (platform, action) {
+        (skilltap_core::daemon::ServicePlatform::Launchd, ServiceManagerAction::Enable) => {
+            ("launchctl", vec!["load", "-w", definition.as_str()])
+        }
+        (skilltap_core::daemon::ServicePlatform::Launchd, ServiceManagerAction::Disable) => {
+            ("launchctl", vec!["unload", "-w", definition.as_str()])
+        }
+        (skilltap_core::daemon::ServicePlatform::Launchd, ServiceManagerAction::Status) => (
+            "launchctl",
+            vec!["list", skilltap_core::daemon::SERVICE_LABEL],
+        ),
+        (skilltap_core::daemon::ServicePlatform::SystemdUser, ServiceManagerAction::Enable) => (
+            "systemctl",
+            vec![
+                "--user",
+                "enable",
+                "--now",
+                skilltap_core::daemon::SYSTEMD_TIMER,
+            ],
+        ),
+        (skilltap_core::daemon::ServicePlatform::SystemdUser, ServiceManagerAction::Disable) => (
+            "systemctl",
+            vec![
+                "--user",
+                "disable",
+                "--now",
+                skilltap_core::daemon::SYSTEMD_TIMER,
+            ],
+        ),
+        (skilltap_core::daemon::ServicePlatform::SystemdUser, ServiceManagerAction::Status) => (
+            "systemctl",
+            vec!["--user", "is-enabled", skilltap_core::daemon::SYSTEMD_TIMER],
+        ),
+    };
+    let configured =
+        ConfiguredBinary::path_lookup(NativeId::new(binary).map_err(|_| ())?).map_err(|_| ())?;
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(
+            configured,
+            std::env::var_os("PATH"),
+        ))
+        .map_err(|_| ())?;
+    let limits = ProcessLimits::new(5_000, 64 * 1024, 64 * 1024, 128 * 1024).map_err(|_| ())?;
+    let request = NativeProcessRequest::new(
+        executable,
+        arguments.into_iter().map(OsString::from),
+        BTreeMap::new(),
+        None,
+        limits,
+    );
+    let output = SystemNativeProcessRunner.run(&request).map_err(|_| ())?;
+    output.status().success().then_some(()).ok_or(())
 }
 
 fn execute_system_skill_list(args: &ScopedTargetArgs) -> Outcome {

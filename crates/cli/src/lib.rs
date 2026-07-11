@@ -1,5 +1,6 @@
 mod application;
 pub mod command;
+mod daemon;
 mod dispatch;
 mod entrypoint;
 pub mod outcome;

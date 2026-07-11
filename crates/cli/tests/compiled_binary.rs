@@ -247,6 +247,13 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         } else if *command == "daemon run" {
             assert!(stdout(&output).is_empty());
             assert!(stderr(&output).contains("capability_unavailable"));
+        } else if command.starts_with("daemon ") {
+            let value = json(&output);
+            assert_eq!(value["command"], *command, "arguments: {arguments:?}");
+            assert!(
+                value["result"] == "completed" || value["result"] == "attention_required",
+                "arguments: {arguments:?}, output: {value}"
+            );
         } else if *command == "skill update" {
             assert_code(&output, 0);
             let value = json(&output);

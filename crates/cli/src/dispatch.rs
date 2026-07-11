@@ -30,7 +30,10 @@ pub(crate) enum Dispatch {
     HarnessList(OutputArgs),
     HarnessEnable(HarnessEnableArgs),
     HarnessDisable(HarnessChangeArgs),
-    Unavailable { command: &'static str, json: bool },
+    DaemonEnable(crate::command::DaemonEnableArgs),
+    DaemonDisable(OutputArgs),
+    DaemonStatus(OutputArgs),
+    DaemonRun,
 }
 
 impl Dispatch {
@@ -69,10 +72,10 @@ impl Dispatch {
                 InstructionsCommand::Repair(args) => Self::InstructionRepair(args),
             },
             Command::Daemon(args) => match args.command {
-                DaemonCommand::Enable(args) => unavailable("daemon enable", args.output.json),
-                DaemonCommand::Disable(args) => unavailable("daemon disable", args.json),
-                DaemonCommand::Status(args) => unavailable("daemon status", args.json),
-                DaemonCommand::Run => unavailable("daemon run", false),
+                DaemonCommand::Enable(args) => Self::DaemonEnable(args),
+                DaemonCommand::Disable(args) => Self::DaemonDisable(args),
+                DaemonCommand::Status(args) => Self::DaemonStatus(args),
+                DaemonCommand::Run => Self::DaemonRun,
             },
         }
     }
@@ -101,11 +104,9 @@ impl Dispatch {
             Self::HarnessList(args) => args.json,
             Self::HarnessEnable(args) => args.output.json,
             Self::HarnessDisable(args) => args.output.json,
-            Self::Unavailable { json, .. } => *json,
+            Self::DaemonEnable(args) => args.output.json,
+            Self::DaemonDisable(args) | Self::DaemonStatus(args) => args.json,
+            Self::DaemonRun => false,
         }
     }
-}
-
-const fn unavailable(command: &'static str, json: bool) -> Dispatch {
-    Dispatch::Unavailable { command, json }
 }
