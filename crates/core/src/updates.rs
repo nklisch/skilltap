@@ -4,6 +4,7 @@
 use crate::domain::{
     DesiredResource, HarnessId, ResolvedRevision, Source, SourceKind, UpdateIntent,
 };
+use crate::storage::UpdateMode;
 
 /// A typed failure at the revision-resolution boundary. Native output and
 /// process details never cross this contract.
@@ -61,6 +62,7 @@ pub struct UpdateCandidate {
     pub drifted: bool,
     pub compatibility_changed: bool,
     pub requires_acknowledgment: bool,
+    pub intent: UpdateIntent,
 }
 
 /// Resolve one desired resource. Source-backed resources resolve once; native
@@ -167,6 +169,7 @@ pub fn candidate_for(
         drifted: request.drifted,
         compatibility_changed: request.compatibility_changed,
         requires_acknowledgment: request.requires_acknowledgment,
+        intent: resource.update(),
     }
 }
 
@@ -178,22 +181,88 @@ pub enum UpdateSafety {
     Blocked,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UpdateDecisionReason {
+    DisabledResource,
+    GlobalModeOff,
+    CheckOnly,
+    PinnedResource,
+    Drifted,
+    CompatibilityChanged,
+    AcknowledgmentRequired,
+    ResolutionFailed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct UpdateDecision {
+    pub safety: UpdateSafety,
+    pub reason: Option<UpdateDecisionReason>,
+}
+
+impl UpdateDecision {
+    const fn new(safety: UpdateSafety, reason: Option<UpdateDecisionReason>) -> Self {
+        Self { safety, reason }
+    }
+}
+
 pub fn classify_update(candidate: &UpdateCandidate) -> UpdateSafety {
+    classify_update_with_mode(candidate, UpdateMode::ApplySafe).safety
+}
+
+/// Classify whether an update may be applied automatically under the global
+/// policy. This is deliberately independent of revision distance or semver.
+pub fn classify_update_with_mode(candidate: &UpdateCandidate, mode: UpdateMode) -> UpdateDecision {
     if candidate.resolution_error.is_some() {
-        return UpdateSafety::Blocked;
+        return UpdateDecision::new(
+            UpdateSafety::Blocked,
+            Some(UpdateDecisionReason::ResolutionFailed),
+        );
+    }
+    if candidate.intent == UpdateIntent::Disabled {
+        return UpdateDecision::new(
+            UpdateSafety::NoUpdate,
+            Some(UpdateDecisionReason::DisabledResource),
+        );
     }
     if candidate.available_revision.is_none()
         || candidate.current_revision == candidate.available_revision
     {
-        return UpdateSafety::NoUpdate;
+        return UpdateDecision::new(UpdateSafety::NoUpdate, None);
+    }
+    if mode == UpdateMode::Off {
+        return UpdateDecision::new(
+            UpdateSafety::Blocked,
+            Some(UpdateDecisionReason::GlobalModeOff),
+        );
     }
     if candidate.drifted {
-        return UpdateSafety::Blocked;
+        return UpdateDecision::new(UpdateSafety::Blocked, Some(UpdateDecisionReason::Drifted));
     }
-    if candidate.pinned || candidate.compatibility_changed || candidate.requires_acknowledgment {
-        return UpdateSafety::NeedsDecision;
+    if candidate.pinned || candidate.intent == UpdateIntent::Pinned {
+        return UpdateDecision::new(
+            UpdateSafety::NeedsDecision,
+            Some(UpdateDecisionReason::PinnedResource),
+        );
     }
-    UpdateSafety::Safe
+    if candidate.compatibility_changed {
+        return UpdateDecision::new(
+            UpdateSafety::NeedsDecision,
+            Some(UpdateDecisionReason::CompatibilityChanged),
+        );
+    }
+    if candidate.requires_acknowledgment {
+        return UpdateDecision::new(
+            UpdateSafety::NeedsDecision,
+            Some(UpdateDecisionReason::AcknowledgmentRequired),
+        );
+    }
+    if mode == UpdateMode::Check {
+        return UpdateDecision::new(
+            UpdateSafety::NeedsDecision,
+            Some(UpdateDecisionReason::CheckOnly),
+        );
+    }
+    UpdateDecision::new(UpdateSafety::Safe, None)
 }
 
 #[cfg(test)]
@@ -220,6 +289,7 @@ mod tests {
             drifted: false,
             compatibility_changed: false,
             requires_acknowledgment: false,
+            intent: UpdateIntent::Track,
         }
     }
 
@@ -276,6 +346,63 @@ mod tests {
         unresolved.available_revision = None;
         unresolved.resolution_error = Some(ResolutionError::UnreachableSource);
         assert_eq!(classify_update(&unresolved), UpdateSafety::Blocked);
+    }
+
+    #[test]
+    fn policy_modes_and_intents_never_upgrade_a_decision_to_safe() {
+        let mut disabled = candidate();
+        disabled.intent = UpdateIntent::Disabled;
+        assert_eq!(
+            classify_update_with_mode(&disabled, UpdateMode::ApplySafe),
+            UpdateDecision::new(
+                UpdateSafety::NoUpdate,
+                Some(UpdateDecisionReason::DisabledResource)
+            )
+        );
+
+        let mut pinned = candidate();
+        pinned.intent = UpdateIntent::Pinned;
+        assert_eq!(
+            classify_update_with_mode(&pinned, UpdateMode::ApplySafe),
+            UpdateDecision::new(
+                UpdateSafety::NeedsDecision,
+                Some(UpdateDecisionReason::PinnedResource)
+            )
+        );
+        assert_eq!(
+            classify_update_with_mode(&candidate(), UpdateMode::Check),
+            UpdateDecision::new(
+                UpdateSafety::NeedsDecision,
+                Some(UpdateDecisionReason::CheckOnly)
+            )
+        );
+        assert_eq!(
+            classify_update_with_mode(&candidate(), UpdateMode::Off),
+            UpdateDecision::new(
+                UpdateSafety::Blocked,
+                Some(UpdateDecisionReason::GlobalModeOff)
+            )
+        );
+    }
+
+    #[test]
+    fn policy_reason_precedence_preserves_drift_and_resolution_failures() {
+        let mut drifted = candidate();
+        drifted.drifted = true;
+        drifted.compatibility_changed = true;
+        assert_eq!(
+            classify_update_with_mode(&drifted, UpdateMode::ApplySafe),
+            UpdateDecision::new(UpdateSafety::Blocked, Some(UpdateDecisionReason::Drifted))
+        );
+        let mut unresolved = candidate();
+        unresolved.resolution_error = Some(ResolutionError::TargetDisagreement);
+        assert_eq!(
+            classify_update_with_mode(&unresolved, UpdateMode::ApplySafe),
+            UpdateDecision::new(
+                UpdateSafety::Blocked,
+                Some(UpdateDecisionReason::ResolutionFailed)
+            )
+        );
     }
 
     #[test]
