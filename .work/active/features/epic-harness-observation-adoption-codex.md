@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex
 kind: feature
-stage: implementing
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-detection]
@@ -75,3 +75,22 @@ malformed, and partially unreadable siblings are retained independently.
   shared typed observations without native payload leakage.
 - No cache/config/marketplace write or resource scanning occurs; focused and
   workspace tests pass on Linux and native macOS behavior jobs.
+
+## Implementation
+
+- Completed all four Codex stories: bounded path derivation, config evidence,
+  complete skill/instruction tree observation, and integration verification.
+- `skilltap-harnesses` now exposes read-only Codex inputs and snapshots over
+  the shared runtime contracts while preserving global/project precedence and
+  safe native boundaries.
+
+## Verification
+
+- Nine harness detection/Codex tests, 16 fixtures, 211 core tests, workspace
+  Clippy, and locked integration suites pass. No native config/cache/state
+  writes occur.
+
+## Review
+
+- Aggregate review approved from the green child records and locked workspace
+  ladder; fresh macOS execution remains CI-gated by the project contract.
