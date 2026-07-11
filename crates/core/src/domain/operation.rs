@@ -9,7 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{
     AbsolutePath, CompatibilityResult, ComponentId, ConsequenceCode, EvidenceCode, EvidenceDetail,
-    HarnessId, MaterialConsequence, NativeId, OperationId, Provenance, ResourceId, Scope,
+    HarnessId, MaterialConsequence, NativeId, OperationId, Provenance, ResourceKey, Scope,
     TransferFidelity,
     dependency_graph::{ReferenceError, cyclic_members, validate_references},
 };
@@ -200,12 +200,20 @@ impl OperationSemantics {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum OperationSelector {
     Resource {
-        resource_id: ResourceId,
+        resource: ResourceKey,
     },
     Component {
-        resource_id: ResourceId,
+        resource: ResourceKey,
         component_id: ComponentId,
     },
+}
+
+impl OperationSelector {
+    pub const fn resource(&self) -> &ResourceKey {
+        match self {
+            Self::Resource { resource } | Self::Component { resource, .. } => resource,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -543,6 +551,13 @@ impl Operation {
         attention: Option<AttentionReason>,
     ) -> Result<Self, OperationContractError> {
         let dependencies = dependencies.into_iter().collect::<BTreeSet<_>>();
+        if selector.resource().scope() != semantics.scope() {
+            return Err(OperationContractError::SelectorScopeMismatch {
+                id,
+                resource: selector.resource().clone(),
+                semantic_scope: semantics.scope().clone(),
+            });
+        }
         if semantics.compatibility.target() != &target {
             return Err(OperationContractError::CompatibilityTargetMismatch {
                 id,
@@ -663,7 +678,7 @@ impl Operation {
                     compatibility: semantics.compatibility.consequences().clone(),
                 });
             }
-            validate_consequence_coverage(&id, selectors, consequences)?;
+            validate_consequence_coverage(&id, selector.resource(), selectors, consequences)?;
         }
 
         Ok(Self {
@@ -743,31 +758,32 @@ impl Operation {
 fn selector_contains(operation: &OperationSelector, candidate: &OperationSelector) -> bool {
     match (operation, candidate) {
         (
-            OperationSelector::Resource { resource_id },
+            OperationSelector::Resource { resource },
             OperationSelector::Resource {
-                resource_id: candidate_resource,
+                resource: candidate_resource,
             }
             | OperationSelector::Component {
-                resource_id: candidate_resource,
+                resource: candidate_resource,
                 ..
             },
-        ) => resource_id == candidate_resource,
+        ) => resource == candidate_resource,
         (
             OperationSelector::Component {
-                resource_id,
+                resource,
                 component_id,
             },
             OperationSelector::Component {
-                resource_id: candidate_resource,
+                resource: candidate_resource,
                 component_id: candidate_component,
             },
-        ) => resource_id == candidate_resource && component_id == candidate_component,
+        ) => resource == candidate_resource && component_id == candidate_component,
         (OperationSelector::Component { .. }, OperationSelector::Resource { .. }) => false,
     }
 }
 
 fn validate_consequence_coverage(
     operation: &OperationId,
+    resource: &ResourceKey,
     selectors: &BTreeSet<OperationSelector>,
     consequences: &BTreeSet<MaterialConsequence>,
 ) -> Result<(), OperationContractError> {
@@ -779,6 +795,7 @@ fn validate_consequence_coverage(
             {
                 return Err(OperationContractError::UncoveredResourceConsequence {
                     operation: operation.clone(),
+                    resource: resource.clone(),
                     code: consequence.code.clone(),
                 });
             }
@@ -792,6 +809,7 @@ fn validate_consequence_coverage(
             if !covered {
                 return Err(OperationContractError::UncoveredComponentConsequence {
                     operation: operation.clone(),
+                    resource: resource.clone(),
                     code: consequence.code.clone(),
                     component: component.clone(),
                 });
@@ -1405,6 +1423,11 @@ pub enum OperationContractError {
         target: HarnessId,
         surface_target: HarnessId,
     },
+    SelectorScopeMismatch {
+        id: OperationId,
+        resource: ResourceKey,
+        semantic_scope: Scope,
+    },
     InvalidOperationClassification {
         id: OperationId,
         class: OperationClass,
@@ -1424,10 +1447,12 @@ pub enum OperationContractError {
     },
     UncoveredResourceConsequence {
         operation: OperationId,
+        resource: ResourceKey,
         code: ConsequenceCode,
     },
     UncoveredComponentConsequence {
         operation: OperationId,
+        resource: ResourceKey,
         code: ConsequenceCode,
         component: ComponentId,
     },
@@ -1552,6 +1577,14 @@ impl fmt::Display for OperationContractError {
                 formatter,
                 "operation `{id}` targets `{target}` but command preview targets `{surface_target}`"
             ),
+            Self::SelectorScopeMismatch {
+                id,
+                resource,
+                semantic_scope,
+            } => write!(
+                formatter,
+                "operation `{id}` selector `{resource}` does not match semantic scope {semantic_scope:?}"
+            ),
             Self::InvalidOperationClassification {
                 id,
                 class,
@@ -1573,17 +1606,22 @@ impl fmt::Display for OperationContractError {
                 formatter,
                 "operation `{id}` acknowledgment and attention details must match exactly"
             ),
-            Self::UncoveredResourceConsequence { operation, code } => write!(
+            Self::UncoveredResourceConsequence {
+                operation,
+                resource,
+                code,
+            } => write!(
                 formatter,
-                "operation `{operation}` consequence `{code}` requires an acknowledged resource selector"
+                "operation `{operation}` consequence `{code}` for `{resource}` requires an acknowledged resource selector"
             ),
             Self::UncoveredComponentConsequence {
                 operation,
+                resource,
                 code,
                 component,
             } => write!(
                 formatter,
-                "operation `{operation}` consequence `{code}` component `{component}` is not acknowledged"
+                "operation `{operation}` consequence `{code}` component `{component}` for `{resource}` is not acknowledged"
             ),
             Self::PartialConsequenceMismatch {
                 id,

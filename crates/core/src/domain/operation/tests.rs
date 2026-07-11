@@ -1,19 +1,31 @@
 use super::*;
-use crate::domain::{CompatibilityClass, CompatibilityEvidence, ConsequenceSummary};
+use crate::domain::{CompatibilityClass, CompatibilityEvidence, ConsequenceSummary, ResourceId};
 
 fn operation_id(value: &str) -> OperationId {
     OperationId::new(value).unwrap()
 }
 
+fn resource_key(value: &str, scope: Scope) -> ResourceKey {
+    ResourceKey::new(ResourceId::new(value).unwrap(), scope)
+}
+
 fn resource_selector(value: &str) -> OperationSelector {
+    resource_selector_at(value, Scope::Global)
+}
+
+fn resource_selector_at(value: &str, scope: Scope) -> OperationSelector {
     OperationSelector::Resource {
-        resource_id: ResourceId::new(value).unwrap(),
+        resource: resource_key(value, scope),
     }
 }
 
 fn component_selector(resource: &str, component: &str) -> OperationSelector {
+    component_selector_at(resource, component, Scope::Global)
+}
+
+fn component_selector_at(resource: &str, component: &str, scope: Scope) -> OperationSelector {
     OperationSelector::Component {
-        resource_id: ResourceId::new(resource).unwrap(),
+        resource: resource_key(resource, scope),
         component_id: ComponentId::new(component).unwrap(),
     }
 }
@@ -106,6 +118,30 @@ fn semantics_with(
         .unwrap(),
         Provenance::Native,
         affected_surfaces,
+    )
+}
+
+fn semantics_at(target: &str, scope: Scope) -> OperationSemantics {
+    let target = HarnessId::new(target).unwrap();
+    OperationSemantics::new(
+        OperationAction::PluginInstall,
+        scope,
+        OperationReason::new(
+            EvidenceCode::new("desired.plugin.missing").unwrap(),
+            EvidenceDetail::new("The desired plugin is not installed").unwrap(),
+        ),
+        CompatibilityResult::new(
+            target,
+            CompatibilityClass::Compatible,
+            TransferFidelity::Faithful,
+            [],
+            [],
+        )
+        .unwrap(),
+        Provenance::Native,
+        [AffectedSurface::file(
+            AbsolutePath::new("/tmp/skilltap-operation-test").unwrap(),
+        )],
     )
 }
 
@@ -894,6 +930,81 @@ fn semantic_targets_are_validated_by_constructor_and_serde() {
 }
 
 #[test]
+fn selector_identity_is_scope_exact_and_must_match_operation_semantics() {
+    let project_scope = Scope::Project(AbsolutePath::new("/work/project").unwrap());
+    let project = Operation::new(
+        operation_id("project-install"),
+        HarnessId::new("codex").unwrap(),
+        resource_selector_at("plugin:tools", project_scope.clone()),
+        semantics_at("codex", project_scope.clone()),
+        OperationClass::SafeNative,
+        Reversibility::Reversible,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+    .unwrap();
+    let global = safe_operation("global-install", &[]);
+    let plan = Plan::new([project.clone(), global]).unwrap();
+    assert_eq!(plan.iter().count(), 2);
+    assert_ne!(
+        project.selector().resource(),
+        resource_selector("plugin:tools").resource()
+    );
+
+    let mismatch = Operation::new(
+        operation_id("mismatch"),
+        HarnessId::new("codex").unwrap(),
+        resource_selector_at("plugin:tools", project_scope.clone()),
+        semantics("codex"),
+        OperationClass::SafeNative,
+        Reversibility::Reversible,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(
+        mismatch,
+        OperationContractError::SelectorScopeMismatch {
+            id: operation_id("mismatch"),
+            resource: resource_key("plugin:tools", project_scope),
+            semantic_scope: Scope::Global,
+        }
+    );
+
+    let mut wire = serde_json::to_value(project).unwrap();
+    wire["scope"] = serde_json::json!({"kind":"global"});
+    assert!(serde_json::from_value::<Operation>(wire).is_err());
+}
+
+#[test]
+fn same_id_acknowledgments_do_not_cross_scope_boundaries() {
+    let project_scope = Scope::Project(AbsolutePath::new("/work/project").unwrap());
+    let selectors = [component_selector_at(
+        "plugin:tools",
+        "hook:format",
+        project_scope,
+    )];
+    let error = Operation::new(
+        operation_id("partial"),
+        HarnessId::new("codex").unwrap(),
+        resource_selector("plugin:tools"),
+        partial_semantics("codex", [consequence()]),
+        OperationClass::Partial,
+        Reversibility::Irreversible,
+        [],
+        AcknowledgmentRequirement::required(selectors.clone(), [consequence()]).unwrap(),
+        Some(AttentionReason::acknowledgment_required(selectors, [consequence()]).unwrap()),
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        OperationContractError::AcknowledgmentSelectorOutsideOperation { .. }
+    ));
+}
+
+#[test]
 fn constructor_and_deserialization_enforce_plan_invariants() {
     let mut invalid =
         serde_json::to_value(Plan::new([safe_operation("one", &[])]).unwrap()).unwrap();
@@ -918,13 +1029,13 @@ fn constructor_and_deserialization_enforce_plan_invariants() {
     let mut outside_selector = serde_json::to_value(partial_operation("partial", &[])).unwrap();
     outside_selector["selector"] = serde_json::json!({
         "kind": "component",
-        "resource_id": "plugin:tools",
+        "resource": {"id":"plugin:tools","scope":{"kind":"global"}},
         "component_id": "hook:format"
     });
     for field in ["acknowledgment", "attention"] {
         outside_selector[field]["selectors"] = serde_json::json!([{
             "kind": "resource",
-            "resource_id": "plugin:tools"
+            "resource": {"id":"plugin:tools","scope":{"kind":"global"}}
         }]);
     }
     assert!(serde_json::from_value::<Operation>(outside_selector).is_err());
@@ -985,7 +1096,13 @@ fn representative_plan_serializes_deterministically_and_round_trips() {
     );
     assert_eq!(
         serde_json::to_string(&component_selector("plugin:tools", "hook:format")).unwrap(),
-        r#"{"kind":"component","resource_id":"plugin:tools","component_id":"hook:format"}"#
+        r#"{"kind":"component","resource":{"id":"plugin:tools","scope":{"kind":"global"}},"component_id":"hook:format"}"#
+    );
+    assert!(
+        serde_json::from_str::<OperationSelector>(
+            r#"{"kind":"component","resource_id":"plugin:tools","component_id":"hook:format"}"#
+        )
+        .is_err()
     );
 }
 
