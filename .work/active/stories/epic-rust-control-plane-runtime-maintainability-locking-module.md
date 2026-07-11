@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-maintainability-locking-module
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-runtime-maintainability
 depends_on:
@@ -52,3 +52,11 @@ the full locked ladder.
   `RUSTDOCFLAGS='-D warnings' cargo doc --workspace --no-deps --locked`.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review
+
+Approved. The lock port, adapter, guard, acquisition, and release code moved as
+one private responsibility; the parent preserves every public re-export and the
+test-only seam. Directory/file ordering, identity verification, error/release
+precedence, all 17 filesystem tests, and the exact 99-test inventory remain
+unchanged. Every production filesystem module is now below 400 lines.
