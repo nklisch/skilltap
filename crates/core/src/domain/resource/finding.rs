@@ -1,30 +1,84 @@
 use std::{collections::BTreeMap, fmt};
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-
-use crate::domain::{
-    CapabilityId, HarnessId, ResourceKey, Scope, validate_identifier,
-    validated_newtype::validated_string_newtype,
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
+    de::{MapAccess, Visitor},
+    ser::SerializeMap,
 };
+
+use crate::domain::{CapabilityId, HarnessId, ResourceKey, Scope};
 
 use super::{ObservationLayer, ResourceKind};
 
 const MAX_FINDING_FIELDS: usize = 32;
 
-validated_string_newtype!(
-    ObservationFindingCode,
-    "observation finding code",
-    128,
-    validate_identifier,
-    try_from
-);
-validated_string_newtype!(
-    ObservationFieldCode,
-    "observation field code",
-    64,
-    validate_identifier,
-    try_from
-);
+macro_rules! registered_vocabulary {
+    ($name:ident, $error:literal, { $($variant:ident => $wire:literal),+ $(,)? }) => {
+        #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+        pub enum $name { $($variant),+ }
+
+        impl $name {
+            pub const fn as_str(self) -> &'static str {
+                match self { $(Self::$variant => $wire),+ }
+            }
+
+            pub fn from_registered(value: &str) -> Option<Self> {
+                match value { $($wire => Some(Self::$variant),)+ _ => None }
+            }
+        }
+
+        impl fmt::Display for $name {
+            fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+                formatter.write_str(self.as_str())
+            }
+        }
+
+        impl Serialize for $name {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where S: Serializer {
+                serializer.serialize_str(self.as_str())
+            }
+        }
+
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where D: Deserializer<'de> {
+                let value = String::deserialize(deserializer)?;
+                Self::from_registered(&value).ok_or_else(|| serde::de::Error::custom($error))
+            }
+        }
+    };
+}
+
+registered_vocabulary!(ObservationFindingCode, "unregistered observation finding code", {
+    NativeEntryMalformed => "native.entry.malformed",
+    NativeStateUnreadable => "native.state.unreadable",
+    NativeShapeUnsupported => "native.shape.unsupported",
+    NativeStateConflict => "native.state.conflict",
+    NativeStateIncomplete => "native.state.incomplete",
+    ResourceUnmanaged => "resource.unmanaged",
+    ResourceDrifted => "resource.drifted",
+    CapabilityUnverified => "capability.unverified",
+    HigherPrecedenceConfiguration => "configuration.higher-precedence",
+    TrustRequired => "trust.required",
+    ConsentRequired => "consent.required",
+    ScopeUnsupported => "scope.unsupported",
+    UnsafeFilesystemEntry => "filesystem.entry.unsafe",
+});
+
+registered_vocabulary!(ObservationFieldCode, "unregistered observation field code", {
+    AffectedCount => "affected_count",
+    ExpectedResourceKind => "expected_resource_kind",
+    ObservedResourceKind => "observed_resource_kind",
+    Capability => "capability",
+    Layer => "layer",
+    RelatedHarness => "related_harness",
+    RelatedResource => "related_resource",
+    Enabled => "enabled",
+    Reachable => "reachable",
+    Required => "required",
+    Adoptable => "adoptable",
+});
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -73,7 +127,29 @@ impl ObservationSummary {
             Self::UnsafeFilesystemEntry => "A native filesystem entry is unsafe to inspect.",
         }
     }
+
+    fn from_authored(value: &str) -> Option<Self> {
+        ALL_SUMMARIES
+            .into_iter()
+            .find(|summary| summary.as_str() == value)
+    }
 }
+
+const ALL_SUMMARIES: [ObservationSummary; 13] = [
+    ObservationSummary::MalformedNativeEntry,
+    ObservationSummary::NativeStateUnreadable,
+    ObservationSummary::NativeShapeUnsupported,
+    ObservationSummary::NativeStateConflict,
+    ObservationSummary::NativeStateIncomplete,
+    ObservationSummary::ResourceUnmanaged,
+    ObservationSummary::ResourceDrifted,
+    ObservationSummary::CapabilityUnverified,
+    ObservationSummary::HigherPrecedenceConfiguration,
+    ObservationSummary::TrustRequired,
+    ObservationSummary::ConsentRequired,
+    ObservationSummary::ScopeUnsupported,
+    ObservationSummary::UnsafeFilesystemEntry,
+];
 
 impl fmt::Display for ObservationSummary {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -96,28 +172,10 @@ impl<'de> Deserialize<'de> for ObservationSummary {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        ALL_SUMMARIES
-            .into_iter()
-            .find(|summary| summary.as_str() == value)
+        Self::from_authored(&value)
             .ok_or_else(|| serde::de::Error::custom("unknown authored observation summary"))
     }
 }
-
-const ALL_SUMMARIES: [ObservationSummary; 13] = [
-    ObservationSummary::MalformedNativeEntry,
-    ObservationSummary::NativeStateUnreadable,
-    ObservationSummary::NativeShapeUnsupported,
-    ObservationSummary::NativeStateConflict,
-    ObservationSummary::NativeStateIncomplete,
-    ObservationSummary::ResourceUnmanaged,
-    ObservationSummary::ResourceDrifted,
-    ObservationSummary::CapabilityUnverified,
-    ObservationSummary::HigherPrecedenceConfiguration,
-    ObservationSummary::TrustRequired,
-    ObservationSummary::ConsentRequired,
-    ObservationSummary::ScopeUnsupported,
-    ObservationSummary::UnsafeFilesystemEntry,
-];
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -138,14 +196,12 @@ impl ObservationSubject {
             Self::Harness { harness, .. } | Self::Resource { harness, .. } => harness,
         }
     }
-
     pub const fn scope(&self) -> &Scope {
         match self {
             Self::Harness { scope, .. } => scope,
             Self::Resource { resource, .. } => resource.scope(),
         }
     }
-
     pub const fn resource(&self) -> Option<&ResourceKey> {
         match self {
             Self::Harness { .. } => None,
@@ -154,47 +210,70 @@ impl ObservationSubject {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(
-    tag = "kind",
-    content = "value",
-    rename_all = "snake_case",
-    deny_unknown_fields
-)]
-pub enum ObservationFieldValue {
-    Boolean(bool),
-    Count(u64),
-    Harness(HarnessId),
-    Resource(ResourceKey),
-    ResourceKind(ResourceKind),
+/// Registered field names and their only valid scalar type.
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum ObservationField {
+    AffectedCount(u64),
+    ExpectedResourceKind(ResourceKind),
+    ObservedResourceKind(ResourceKind),
     Capability(CapabilityId),
     Layer(ObservationLayer),
+    RelatedHarness(HarnessId),
+    RelatedResource(ResourceKey),
+    Enabled(bool),
+    Reachable(bool),
+    Required(bool),
+    Adoptable(bool),
+}
+
+impl ObservationField {
+    pub const fn code(&self) -> ObservationFieldCode {
+        match self {
+            Self::AffectedCount(_) => ObservationFieldCode::AffectedCount,
+            Self::ExpectedResourceKind(_) => ObservationFieldCode::ExpectedResourceKind,
+            Self::ObservedResourceKind(_) => ObservationFieldCode::ObservedResourceKind,
+            Self::Capability(_) => ObservationFieldCode::Capability,
+            Self::Layer(_) => ObservationFieldCode::Layer,
+            Self::RelatedHarness(_) => ObservationFieldCode::RelatedHarness,
+            Self::RelatedResource(_) => ObservationFieldCode::RelatedResource,
+            Self::Enabled(_) => ObservationFieldCode::Enabled,
+            Self::Reachable(_) => ObservationFieldCode::Reachable,
+            Self::Required(_) => ObservationFieldCode::Required,
+            Self::Adoptable(_) => ObservationFieldCode::Adoptable,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct ObservationFields(BTreeMap<ObservationFieldCode, ObservationFieldValue>);
+pub struct ObservationFields(BTreeMap<ObservationFieldCode, ObservationField>);
 
 impl ObservationFields {
     pub fn new(
-        fields: impl IntoIterator<Item = (ObservationFieldCode, ObservationFieldValue)>,
+        fields: impl IntoIterator<Item = ObservationField>,
     ) -> Result<Self, ObservationFindingError> {
-        let fields = fields.into_iter().collect::<BTreeMap<_, _>>();
-        if fields.len() > MAX_FINDING_FIELDS {
-            return Err(ObservationFindingError::TooManyFields {
-                max: MAX_FINDING_FIELDS,
-                actual: fields.len(),
-            });
+        let mut collected = BTreeMap::new();
+        for field in fields {
+            let code = field.code();
+            if collected.insert(code, field).is_some() {
+                return Err(ObservationFindingError::DuplicateField { code });
+            }
+            if collected.len() > MAX_FINDING_FIELDS {
+                return Err(ObservationFindingError::TooManyFields {
+                    max: MAX_FINDING_FIELDS,
+                    actual: collected.len(),
+                });
+            }
         }
-        Ok(Self(fields))
+        Ok(Self(collected))
     }
 
     pub fn iter(
         &self,
-    ) -> impl ExactSizeIterator<Item = (&ObservationFieldCode, &ObservationFieldValue)> {
+    ) -> impl ExactSizeIterator<Item = (&ObservationFieldCode, &ObservationField)> {
         self.0.iter()
     }
-    pub fn get(&self, code: &ObservationFieldCode) -> Option<&ObservationFieldValue> {
-        self.0.get(code)
+    pub fn get(&self, code: ObservationFieldCode) -> Option<&ObservationField> {
+        self.0.get(&code)
     }
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -206,7 +285,74 @@ impl Serialize for ObservationFields {
     where
         S: Serializer,
     {
-        self.0.serialize(serializer)
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (code, field) in &self.0 {
+            match field {
+                ObservationField::AffectedCount(value) => map.serialize_entry(code, value)?,
+                ObservationField::ExpectedResourceKind(value)
+                | ObservationField::ObservedResourceKind(value) => {
+                    map.serialize_entry(code, value)?;
+                }
+                ObservationField::Capability(value) => map.serialize_entry(code, value)?,
+                ObservationField::Layer(value) => map.serialize_entry(code, value)?,
+                ObservationField::RelatedHarness(value) => map.serialize_entry(code, value)?,
+                ObservationField::RelatedResource(value) => map.serialize_entry(code, value)?,
+                ObservationField::Enabled(value)
+                | ObservationField::Reachable(value)
+                | ObservationField::Required(value)
+                | ObservationField::Adoptable(value) => map.serialize_entry(code, value)?,
+            }
+        }
+        map.end()
+    }
+}
+
+struct ObservationFieldsVisitor;
+
+impl<'de> Visitor<'de> for ObservationFieldsVisitor {
+    type Value = ObservationFields;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a bounded map of registered observation fields")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut fields = BTreeMap::new();
+        while let Some(code) = map.next_key::<ObservationFieldCode>()? {
+            let field = match code {
+                ObservationFieldCode::AffectedCount => {
+                    ObservationField::AffectedCount(map.next_value()?)
+                }
+                ObservationFieldCode::ExpectedResourceKind => {
+                    ObservationField::ExpectedResourceKind(map.next_value()?)
+                }
+                ObservationFieldCode::ObservedResourceKind => {
+                    ObservationField::ObservedResourceKind(map.next_value()?)
+                }
+                ObservationFieldCode::Capability => ObservationField::Capability(map.next_value()?),
+                ObservationFieldCode::Layer => ObservationField::Layer(map.next_value()?),
+                ObservationFieldCode::RelatedHarness => {
+                    ObservationField::RelatedHarness(map.next_value()?)
+                }
+                ObservationFieldCode::RelatedResource => {
+                    ObservationField::RelatedResource(map.next_value()?)
+                }
+                ObservationFieldCode::Enabled => ObservationField::Enabled(map.next_value()?),
+                ObservationFieldCode::Reachable => ObservationField::Reachable(map.next_value()?),
+                ObservationFieldCode::Required => ObservationField::Required(map.next_value()?),
+                ObservationFieldCode::Adoptable => ObservationField::Adoptable(map.next_value()?),
+            };
+            if fields.insert(code, field).is_some() {
+                return Err(serde::de::Error::custom("duplicate observation field"));
+            }
+            if fields.len() > MAX_FINDING_FIELDS {
+                return Err(serde::de::Error::custom("too many observation fields"));
+            }
+        }
+        Ok(ObservationFields(fields))
     }
 }
 
@@ -215,10 +361,7 @@ impl<'de> Deserialize<'de> for ObservationFields {
     where
         D: Deserializer<'de>,
     {
-        Self::new(
-            BTreeMap::<ObservationFieldCode, ObservationFieldValue>::deserialize(deserializer)?,
-        )
-        .map_err(serde::de::Error::custom)
+        deserializer.deserialize_map(ObservationFieldsVisitor)
     }
 }
 
@@ -249,8 +392,8 @@ impl ObservationFinding {
             fields,
         }
     }
-    pub fn code(&self) -> &ObservationFindingCode {
-        &self.code
+    pub const fn code(&self) -> ObservationFindingCode {
+        self.code
     }
     pub const fn summary(&self) -> ObservationSummary {
         self.summary
@@ -274,16 +417,22 @@ impl fmt::Display for ObservationFinding {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ObservationFindingError {
+    DuplicateField { code: ObservationFieldCode },
     TooManyFields { max: usize, actual: usize },
 }
 
 impl fmt::Display for ObservationFindingError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::TooManyFields { max, actual } => write!(
-                formatter,
-                "observation finding allows at most {max} fields, got {actual}"
-            ),
+            Self::DuplicateField { code } => {
+                write!(formatter, "duplicate observation field `{code}`")
+            }
+            Self::TooManyFields { max, actual } => {
+                write!(
+                    formatter,
+                    "observation finding allows at most {max} fields, got {actual}"
+                )
+            }
         }
     }
 }
@@ -295,7 +444,8 @@ mod tests {
     use crate::domain::{AbsolutePath, ResourceId};
     use serde_json::json;
 
-    const SECRET: &str = "sk-test-auth=must-not-enter\n--token raw-secret";
+    const RAW_SECRET: &str = "sk-test-auth=must-not-enter\n--token raw-secret";
+    const IDENTIFIER_SECRET: &str = "native.secret.valid-identifier";
 
     fn subject() -> ObservationSubject {
         ObservationSubject::Resource {
@@ -308,7 +458,7 @@ mod tests {
     }
     fn finding(fields: ObservationFields) -> ObservationFinding {
         ObservationFinding::new(
-            ObservationFindingCode::new("native.entry.malformed").unwrap(),
+            ObservationFindingCode::NativeEntryMalformed,
             ObservationSummary::MalformedNativeEntry,
             ObservationSeverity::Warning,
             subject(),
@@ -319,14 +469,8 @@ mod tests {
     #[test]
     fn authored_finding_round_trips_with_deterministic_typed_fields() {
         let fields = ObservationFields::new([
-            (
-                ObservationFieldCode::new("expected-kind").unwrap(),
-                ObservationFieldValue::ResourceKind(ResourceKind::Plugin),
-            ),
-            (
-                ObservationFieldCode::new("affected-count").unwrap(),
-                ObservationFieldValue::Count(2),
-            ),
+            ObservationField::ExpectedResourceKind(ResourceKind::Plugin),
+            ObservationField::AffectedCount(2),
         ])
         .unwrap();
         let finding = finding(fields);
@@ -335,11 +479,45 @@ mod tests {
             serde_json::from_str::<ObservationFinding>(&encoded).unwrap(),
             finding
         );
-        assert!(encoded.find("affected-count").unwrap() < encoded.find("expected-kind").unwrap());
+        assert!(
+            encoded.find("affected_count").unwrap()
+                < encoded.find("expected_resource_kind").unwrap()
+        );
         assert_eq!(
             finding.subject().scope(),
             &Scope::Project(AbsolutePath::new("/work/project").unwrap())
         );
+    }
+
+    #[test]
+    fn identifier_valid_secrets_are_not_registered_codes() {
+        assert_eq!(
+            ObservationFindingCode::from_registered(IDENTIFIER_SECRET),
+            None
+        );
+        assert_eq!(
+            ObservationFieldCode::from_registered(IDENTIFIER_SECRET),
+            None
+        );
+
+        let mut payload = serde_json::to_value(finding(ObservationFields::default())).unwrap();
+        payload["code"] = json!(IDENTIFIER_SECRET);
+        let error = serde_json::from_value::<ObservationFinding>(payload).unwrap_err();
+        assert!(!error.to_string().contains(IDENTIFIER_SECRET));
+
+        let fields_error = serde_json::from_str::<ObservationFields>(&format!(
+            r#"{{"{IDENTIFIER_SECRET}":true}}"#
+        ))
+        .unwrap_err();
+        assert!(!fields_error.to_string().contains(IDENTIFIER_SECRET));
+
+        for value in [
+            serde_json::to_string(&finding(ObservationFields::default())).unwrap(),
+            format!("{:?}", finding(ObservationFields::default())),
+            finding(ObservationFields::default()).to_string(),
+        ] {
+            assert!(!value.contains(IDENTIFIER_SECRET));
+        }
     }
 
     #[test]
@@ -349,59 +527,40 @@ mod tests {
             "argv", "stdout", "stderr", "settings", "metadata", "message",
         ] {
             let mut payload = base.clone();
-            payload[field] = json!(SECRET);
-            assert!(
-                serde_json::from_value::<ObservationFinding>(payload).is_err(),
-                "accepted raw `{field}` channel"
-            );
+            payload[field] = json!(RAW_SECRET);
+            assert!(serde_json::from_value::<ObservationFinding>(payload).is_err());
         }
         let mut dynamic_summary = base.clone();
-        dynamic_summary["summary"] = json!(SECRET);
+        dynamic_summary["summary"] = json!(RAW_SECRET);
         assert!(serde_json::from_value::<ObservationFinding>(dynamic_summary).is_err());
         let mut raw_field = base;
-        raw_field["fields"] = json!({"native-output":{"kind":"string","value":SECRET}});
+        raw_field["fields"] = json!({"stdout":RAW_SECRET});
         assert!(serde_json::from_value::<ObservationFinding>(raw_field).is_err());
     }
 
     #[test]
-    fn secret_canary_never_appears_in_safe_forms() {
-        for value in [
-            serde_json::to_string(&finding(ObservationFields::default())).unwrap(),
-            format!("{:?}", finding(ObservationFields::default())),
-            finding(ObservationFields::default()).to_string(),
-        ] {
-            assert!(!value.contains(SECRET));
-            assert!(!value.contains("raw-secret"));
-        }
-        assert!(ObservationFindingCode::new(SECRET).is_err());
-        assert!(ObservationFieldCode::new(SECRET).is_err());
+    fn duplicate_semantic_fields_are_rejected_by_constructor_and_serde() {
+        assert!(matches!(
+            ObservationFields::new([
+                ObservationField::AffectedCount(1),
+                ObservationField::AffectedCount(2),
+            ]),
+            Err(ObservationFindingError::DuplicateField {
+                code: ObservationFieldCode::AffectedCount
+            })
+        ));
+        let error =
+            serde_json::from_str::<ObservationFields>(r#"{"affected_count":1,"affected_count":2}"#)
+                .unwrap_err();
+        assert!(error.to_string().contains("duplicate observation field"));
     }
 
     #[test]
-    fn fields_are_bounded_and_owned_shapes_are_strict() {
-        let fields = (0..=MAX_FINDING_FIELDS).map(|index| {
-            (
-                ObservationFieldCode::new(format!("field-{index}")).unwrap(),
-                ObservationFieldValue::Count(index as u64),
-            )
-        });
-        assert!(matches!(
-            ObservationFields::new(fields),
-            Err(ObservationFindingError::TooManyFields { .. })
-        ));
+    fn typed_fields_reject_wrong_scalar_types_and_owned_shapes_are_strict() {
+        assert!(serde_json::from_str::<ObservationFields>(r#"{"affected_count":"two"}"#).is_err());
         assert!(serde_json::from_value::<ObservationFinding>(json!({
             "code":"native.entry.malformed", "summary":"A native entry is malformed.", "severity":"warning",
             "subject":{"kind":"harness","harness":"codex","scope":{"kind":"global"}}, "future":true
         })).is_err());
-    }
-
-    #[test]
-    fn open_codes_are_validated_without_closing_the_vocabulary() {
-        for code in ["native.entry.malformed", "vendor7.future-shape.warning"] {
-            assert_eq!(ObservationFindingCode::new(code).unwrap().as_str(), code);
-        }
-        for invalid in ["Native.entry", "native entry", ".native", "native/entry"] {
-            assert!(ObservationFindingCode::new(invalid).is_err(), "{invalid}");
-        }
     }
 }

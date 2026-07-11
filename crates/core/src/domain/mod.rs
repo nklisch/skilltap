@@ -29,8 +29,8 @@ pub use operation::{
 };
 pub use resource::{
     ComponentChoice, ComponentGraph, ComponentGraphError, ComponentId, ComponentKind,
-    ComponentRequiredness, DesiredOrigin, DesiredResource, GraphCollection, ObservationFieldCode,
-    ObservationFieldValue, ObservationFields, ObservationFinding, ObservationFindingCode,
+    ComponentRequiredness, DesiredOrigin, DesiredResource, GraphCollection, ObservationField,
+    ObservationFieldCode, ObservationFields, ObservationFinding, ObservationFindingCode,
     ObservationFindingError, ObservationKey, ObservationLayer, ObservationSeverity,
     ObservationSubject, ObservationSummary, ObservedDependency, ObservedResource, Ownership,
     Provenance, ResourceComponent, ResourceContractError, ResourceGraph, ResourceGraphError,

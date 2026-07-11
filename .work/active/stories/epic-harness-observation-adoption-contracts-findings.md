@@ -28,18 +28,24 @@ findings or their Debug/Display/serde forms.
   `crates/core/src/domain/resource/layered_tests.rs`, and
   `crates/core/src/domain/mod.rs`.
 - Replaced coarse finding kinds, dynamic messages, and arbitrary JSON metadata
-  with validated open finding/field codes, exact authored static summaries,
-  severity, harness-or-resource subjects, and a maximum of 32 typed scalar
+  with source-registered finding codes, exact authored static summaries,
+  severity, harness-or-resource subjects, and a maximum of 32 registered typed
   fields.
-- Allowed field values are limited to booleans, counts, harness IDs, exact
-  resource keys, resource kinds, capability IDs, and observation layers. No
-  string, byte, path, collection, or arbitrary JSON value variant exists.
+- Each field name is bound to one scalar type by the `ObservationField` enum:
+  booleans, counts, harness IDs, exact resource keys, resource kinds,
+  capability IDs, or observation layers. No string, byte, path, collection,
+  arbitrary JSON, or key/value type mismatch can be represented.
 - Findings now have a total typed order, so resource graph output remains
   deterministic without canonicalizing arbitrary JSON.
 - Tests added: authored round-trip/order, raw payload ingress rejection,
-  Debug/Display/serde secret canaries, field-count and owned-wire strictness,
-  and validated open-code behavior.
-- Discrepancies from design: none.
+  Debug/Display/serde secret canaries, owned-wire strictness, identifier-valid
+  secret rejection, typed scalar enforcement, and duplicate-key rejection at
+  both constructor and serde map boundaries.
+- Design correction after review: runtime-open validated codes were still a
+  channel for identifier-shaped native secrets. Finding and field vocabularies
+  are now closed at runtime and extended only in source; unknown parsing errors
+  are fixed text and never echo rejected input. Safe-by-construction takes
+  precedence over runtime-open codes.
 - Adjacent issues parked: none.
 
 ## Verification

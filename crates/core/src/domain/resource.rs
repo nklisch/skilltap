@@ -16,7 +16,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 mod finding;
 pub use finding::{
-    ObservationFieldCode, ObservationFieldValue, ObservationFields, ObservationFinding,
+    ObservationField, ObservationFieldCode, ObservationFields, ObservationFinding,
     ObservationFindingCode, ObservationFindingError, ObservationSeverity, ObservationSubject,
     ObservationSummary,
 };

@@ -767,18 +767,14 @@ fn dangling_resolved_observed_edges_remain_visible_during_deserialization() {
 fn findings_remain_separate_and_deterministically_ordered_by_typed_fields() {
     let finding = |count| {
         ObservationFinding::new(
-            ObservationFindingCode::new("native.entry.malformed").unwrap(),
+            ObservationFindingCode::NativeEntryMalformed,
             ObservationSummary::MalformedNativeEntry,
             ObservationSeverity::Warning,
             ObservationSubject::Harness {
                 harness: harness("codex"),
                 scope: Scope::Global,
             },
-            ObservationFields::new([(
-                ObservationFieldCode::new("affected-count").unwrap(),
-                ObservationFieldValue::Count(count),
-            )])
-            .unwrap(),
+            ObservationFields::new([ObservationField::AffectedCount(count)]).unwrap(),
         )
     };
     let first = finding(2);
