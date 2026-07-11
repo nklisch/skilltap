@@ -684,6 +684,105 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
 }
 
 #[test]
+fn claude_only_skill_install_keeps_canonical_and_harness_projection() {
+    let machine = machine();
+    let source = machine.home().join("claude-only-skill");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: claude-only\ndescription: test\n---\nbody\n",
+    )
+    .unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source_text = source.to_str().unwrap();
+
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "claude-only",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["result"], "completed");
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/claude-only/SKILL.md")
+            .is_file(),
+        "{}",
+        stdout(&install)
+    );
+    assert!(
+        machine
+            .home()
+            .join(".claude/skills/claude-only/SKILL.md")
+            .is_file()
+    );
+
+    let repeat = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "claude-only",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    fs::remove_dir_all(machine.home().join(".agents/skills/claude-only")).unwrap();
+    let restore = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "claude-only",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&restore, 0);
+    assert_eq!(json(&restore)["summary"]["changed"], true);
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/claude-only/SKILL.md")
+            .is_file()
+    );
+
+    let remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "claude-only",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 0);
+    assert_eq!(json(&remove)["result"], "completed");
+    assert!(!machine.home().join(".agents/skills/claude-only").exists());
+    assert!(!machine.home().join(".claude/skills/claude-only").exists());
+}
+
+#[test]
 fn git_skill_install_clones_a_bounded_source_and_records_the_commit() {
     let machine = machine();
     let repository = machine.home().join("git-skill-source");

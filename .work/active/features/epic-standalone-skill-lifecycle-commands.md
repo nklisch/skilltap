@@ -58,7 +58,11 @@ idempotent. Operation-scoped consequence flags and pin enforcement remain open.
 An explicit Git commit supplied through `--ref` is recorded as a pinned desired
 resource, so update-all does not reinterpret it as a tracking branch.
 Explicit Git subdirectories are persisted in the source record and reused by
-named and unnamed updates.
+named and unnamed updates. The `.agents/skills/<name>` canonical tree is now
+created even for Claude-only targeting, with the Claude-native complete-tree
+projection managed alongside it and removed atomically on skill removal.
+Missing managed destinations are re-published even when an earlier apply record
+exists, so status drift can be repaired by repeating the explicit install.
 
 ## Review
 

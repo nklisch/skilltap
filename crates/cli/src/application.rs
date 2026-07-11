@@ -1697,16 +1697,25 @@ impl StatusApplication<'_> {
                 }
             };
             let mut native_ids = BTreeMap::new();
-            for target_id in targets.iter() {
-                let Some((root, full_path)) =
-                    skill_destination(&paths, concrete_scope, target_id, &destination)
-                else {
-                    outcome.result = ResultClass::Invalid;
-                    return outcome.with_error(ErrorDetail::new(
-                        "skill_destination_invalid",
-                        "The selected harness skill destination could not be resolved.",
-                    ));
+            let destinations =
+                match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
+                    Some(destinations) => destinations,
+                    None => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "skill_destination_invalid",
+                            "The selected harness skill destination could not be resolved.",
+                        ));
+                    }
                 };
+            for destination_entry in destinations {
+                let SkillDestination {
+                    target,
+                    canonical,
+                    root,
+                    full_path,
+                } = destination_entry;
+                let target_id = &target;
                 let current = match SystemExternalTreeObserver
                     .observe(&ExternalTreeRequest::new(full_path.clone(), limits))
                 {
@@ -1775,7 +1784,11 @@ impl StatusApplication<'_> {
                             ));
                         }
                     };
-                    let operation_id = skill_operation_id(target_id, &key);
+                    let operation_id = if canonical {
+                        skill_canonical_operation_id(&key)
+                    } else {
+                        skill_operation_id(target_id, &key)
+                    };
                     let operation =
                         match skilltap_core::lifecycle_operation::faithful_file_operation(
                             operation_id.clone(),
@@ -1810,15 +1823,11 @@ impl StatusApplication<'_> {
                     native_ids.insert(target_id.clone(), name.clone());
                     continue;
                 }
-                let operation_id = skill_operation_id(target_id, &key);
-                if previously_applied(documents.state.as_ref(), &key, &operation_id) {
-                    outcome = outcome.with_operation(crate::OperationOutcome::new(
-                        operation_id.to_string(),
-                        "no_change",
-                    ));
-                    native_ids.insert(target_id.clone(), name.clone());
-                    continue;
-                }
+                let operation_id = if canonical {
+                    skill_canonical_operation_id(&key)
+                } else {
+                    skill_operation_id(target_id, &key)
+                };
                 let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
                     operation_id.clone(),
                     target_id.clone(),
@@ -2257,16 +2266,25 @@ impl StatusApplication<'_> {
                 );
                 continue;
             }
-            for target_id in targets.iter() {
-                let Some((root, full_path)) =
-                    skill_destination(&paths, concrete_scope, target_id, &destination)
-                else {
-                    outcome.result = ResultClass::Invalid;
-                    return outcome.with_error(ErrorDetail::new(
-                        "skill_destination_invalid",
-                        "The selected harness skill destination could not be resolved.",
-                    ));
+            let destinations =
+                match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
+                    Some(destinations) => destinations,
+                    None => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "skill_destination_invalid",
+                            "The selected harness skill destination could not be resolved.",
+                        ));
+                    }
                 };
+            for destination_entry in destinations {
+                let SkillDestination {
+                    target,
+                    canonical,
+                    root,
+                    full_path,
+                } = destination_entry;
+                let target_id = &target;
                 let snapshot = match SystemExternalTreeObserver
                     .observe(&ExternalTreeRequest::new(full_path.clone(), limits))
                 {
@@ -2321,7 +2339,11 @@ impl StatusApplication<'_> {
                     Ok(tree) => tree,
                     Err(_) => continue,
                 };
-                let operation_id = skill_remove_operation_id(target_id, &key);
+                let operation_id = if canonical {
+                    skill_canonical_remove_operation_id(&key)
+                } else {
+                    skill_remove_operation_id(target_id, &key)
+                };
                 let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
                     operation_id.clone(),
                     target_id.clone(),
@@ -3600,9 +3622,61 @@ fn skill_destination(
     Some((root, full))
 }
 
+fn canonical_skill_destination(
+    paths: &PlatformPaths,
+    scope: &Scope,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+) -> Option<(AbsolutePath, AbsolutePath)> {
+    let root = match scope {
+        Scope::Global => AbsolutePath::new(format!("{}/.agents", paths.home().as_str())).ok()?,
+        Scope::Project(project) => {
+            AbsolutePath::new(format!("{}/.agents", project.as_str())).ok()?
+        }
+    };
+    let full = AbsolutePath::new(format!("{}/{}", root.as_str(), destination.as_str())).ok()?;
+    Some((root, full))
+}
+
+fn skill_destinations(
+    paths: &PlatformPaths,
+    scope: &Scope,
+    targets: &HarnessSet,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+) -> Option<Vec<SkillDestination>> {
+    let mut destinations = Vec::new();
+    let codex_selected = targets.iter().any(|target| target.as_str() == "codex");
+    if !codex_selected {
+        let target = targets.iter().next()?.clone();
+        let (root, full_path) = canonical_skill_destination(paths, scope, destination)?;
+        destinations.push(SkillDestination {
+            target,
+            canonical: true,
+            root,
+            full_path,
+        });
+    }
+    for target in targets.iter() {
+        let (root, full_path) = skill_destination(paths, scope, target, destination)?;
+        destinations.push(SkillDestination {
+            target: target.clone(),
+            canonical: false,
+            root,
+            full_path,
+        });
+    }
+    Some(destinations)
+}
+
 struct ResolvedGitSkill {
     root: AbsolutePath,
     commit: GitCommit,
+}
+
+struct SkillDestination {
+    target: HarnessId,
+    canonical: bool,
+    root: AbsolutePath,
+    full_path: AbsolutePath,
 }
 
 /// Resolve a Git source into skilltap's private managed cache using bounded,
@@ -3765,6 +3839,17 @@ fn skill_operation_id(target: &HarnessId, resource: &ResourceKey) -> OperationId
     OperationId::new(format!("skill:{target}:{hash:016x}")).expect("skill operation id is valid")
 }
 
+fn skill_canonical_operation_id(resource: &ResourceKey) -> OperationId {
+    let label = format!("skill-canonical:{}", resource.id().as_str());
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in label.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    OperationId::new(format!("skill-canonical:{hash:016x}"))
+        .expect("canonical skill operation id is valid")
+}
+
 fn skill_remove_operation_id(target: &HarnessId, resource: &ResourceKey) -> OperationId {
     let label = format!("skill-remove:{target}:{}", resource.id().as_str());
     let mut hash = 0xcbf29ce484222325_u64;
@@ -3774,6 +3859,17 @@ fn skill_remove_operation_id(target: &HarnessId, resource: &ResourceKey) -> Oper
     }
     OperationId::new(format!("skill-remove:{target}:{hash:016x}"))
         .expect("skill removal operation id is valid")
+}
+
+fn skill_canonical_remove_operation_id(resource: &ResourceKey) -> OperationId {
+    let label = format!("skill-remove-canonical:{}", resource.id().as_str());
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in label.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    OperationId::new(format!("skill-remove-canonical:{hash:016x}"))
+        .expect("canonical skill removal operation id is valid")
 }
 
 #[derive(Clone)]
