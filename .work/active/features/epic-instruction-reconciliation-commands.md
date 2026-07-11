@@ -1,7 +1,7 @@
 ---
 id: epic-instruction-reconciliation-commands
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-instruction-reconciliation
 depends_on: [epic-instruction-reconciliation-repair]
@@ -52,3 +52,17 @@ project Claude setup to the root bridge, backing up and removing the nested
 entry through the same locked journal path.
 Consolidation refuses broken directory or special-file entries rather than
 recursively deleting them, even with acknowledgment.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: status uses one nested-bridge warning code for both nested-only and duplicate states; the structured resource status distinguishes them.
+
+**Notes**: Deep substrate review completed inline in degraded fresh-context
+mode because this run intentionally uses no sub-agents. Correctness, tests,
+design alignment, filesystem safety, CLI contract, and foundation-doc lenses
+were checked. Full workspace clippy and tests pass. The active parent remains
+open for its other lifecycle command work.
