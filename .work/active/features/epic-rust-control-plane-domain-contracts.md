@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-workspace-reset]
@@ -174,3 +174,17 @@ This is contract validation only; no planner or executor algorithm is added.
 - Premature storage-document types would couple this feature to TOML/JSON file
   versions. This feature supplies reusable serializable values; the storage
   feature owns document schemas and migration policy.
+
+## Implementation summary (2026-07-11)
+
+Children complete. `skilltap-core` now exports validated identity, scope,
+source, revision, fingerprint, desired/observed resource, identifiable component
+graph, capability, compatibility/fidelity, plan, acknowledgment, attention, and
+apply-result contracts. Constructor and serde boundaries share invariants;
+resource, component, and operation DAGs reject invalid edges; partial consent
+is exact and operation-scoped; apply results are bound to their complete plan.
+
+Story reviews corrected canonical path/source invariants, component identity and
+deterministic finding order, target-bound compatibility, and plan/result
+truthfulness before approval. Locked format, check, warnings-as-errors clippy,
+and all workspace tests pass with 42 core tests.
