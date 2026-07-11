@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-skills-mcp
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-compatibility]
@@ -180,3 +180,28 @@ not receive an ambiguous projection.
 
 - Direct-read design only; no peer advisory pass was run because this autopilot
   run is intentionally single-agent and no different model was selected.
+
+## Implementation notes
+
+- Completed child stories: `epic-cross-harness-materialization-skills-mcp-skills`,
+  `epic-cross-harness-materialization-skills-mcp-mcp`, and
+  `epic-cross-harness-materialization-skills-mcp-integration`.
+- Delivered complete-tree canonical/Claude skill projections, strict MCP
+  transport/auth mapping, credential-reference redaction, and pure composed
+  projection plans.
+- Verification: full workspace tests and clippy passed.
+
+## Review (2026-07-11)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep feature review completed inline in degraded fresh-context mode
+because this run is intentionally single-agent. The completeness pass verified
+complete skill directories, canonical-vs-target roots, MCP references, and
+excluded-component filtering. The adversarial pass rejected literal credentials
+and non-equivalent transport types, confirming no secret or cache write path.
+Full workspace tests and clippy passed.
