@@ -1,7 +1,7 @@
 ---
 id: epic-reconciliation-execution
 kind: epic
-stage: implementing
+stage: done
 tags: []
 parent: null
 depends_on: [epic-harness-observation-adoption]
@@ -106,3 +106,34 @@ resource-specific adapters without changing execution safety.
 
 This epic has no visual surface. `plan` and `sync` are non-interactive CLI
 commands rendered through the existing plain/JSON output contract.
+
+## Implementation summary
+
+The reconciliation execution foundation is complete. Core now provides a pure
+planner for drift, ownership, and evidence findings; deterministic operation
+graph traversal with exact selectors and acknowledgment validation; and a
+locked executor with revalidation, pending/terminal journaling, independent
+failure continuation, and dependency skips. The CLI exposes deterministic
+`plan` and `sync` command envelopes with scope/target resolution and stable
+plain/JSON exit classes. Resource-specific lifecycle adapters intentionally
+remain in the dependent marketplace, plugin, skill, instruction, and
+materialization epics.
+
+## Completion review
+
+### Verdict
+
+Approve with comments.
+
+### Findings
+
+- The generic executor is fully tested, but the current CLI composition uses an
+  empty candidate bridge and remains read-only for populated inventory until
+  resource lifecycle adapters arrive.
+- Exact consequence acknowledgments still need to replace the legacy `--yes`
+  spelling before any partial operation can be applied.
+
+### Verification
+
+Full workspace tests, compiled-binary contracts, formatting, and strict clippy
+pass.
