@@ -49,6 +49,49 @@ creates paths, or mutates native settings.
 - **Output**: every plain/JSON field is derived from one redacted result model;
   exit code depends only on result class.
 
+## Implementation notes
+
+- Harness policy commands now load missing config as read-only defaults, create
+  config only on explicit enable, preserve binary overrides, and make repeated
+  transitions byte/mtime stable.
+- Status resolves exact scopes and enabled targets, detects configured native
+  binaries, selects observe-only or verified profiles, and reports bounded
+  native-tree observations with sibling-local warnings.
+- First-use status now performs read-only detection of both known harnesses and
+  reports their disabled/reachable state without creating configuration.
+- Project observations are limited to documented `.agents`, `.codex`, and
+  `.claude` roots; status never recursively walks arbitrary project content or
+  writes native/state files.
+- Compiled CLI coverage verifies plain/JSON output, scope/target selection,
+  first-use no-create, partial sibling success, idempotence, and native
+  byte/type/symlink/mtime preservation.
+
+## Verification
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets --offline -- -D warnings`
+- `cargo test -p skilltap --all-targets --offline`
+- `cargo test -p skilltap-harnesses --all-targets --offline`
+
+## Review findings
+
+Deep review requested changes. The remaining implementation is intentionally
+not marked complete:
+
+- Status still projects aggregate native-tree counts rather than normalized
+  `ObservationBatch`/`HarnessObservation` resources and typed findings.
+- Codex observation does not yet include all canonical `~/AGENTS.md`,
+  `~/.agents/skills`, marketplace, and project instruction/config inputs.
+- Status does not compare normalized native resources against desired inventory
+  and recorded state, so drift/unmanaged/missing findings are not complete.
+- Broad global-tree observation and `harness list` reachability/compatibility
+  reporting remain to be tightened against the foundation contracts.
+
+Local policy fixes in this pass make already-disabled harness changes explicit
+errors, preserve command names on storage failures, and isolate application
+unit tests from the host native environment. The feature remains implementing
+until the normalized observation and comparison work is delivered.
+
 ## Implementation units
 
 1. `epic-harness-observation-adoption-status-policy` — implement strict

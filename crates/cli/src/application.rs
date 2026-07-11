@@ -31,6 +31,13 @@ pub(crate) struct StatusApplication<'a> {
     pub(crate) state: &'a dyn StateRepository,
     pub(crate) scopes: &'a ScopeResolver<'a>,
     pub(crate) working_directory: &'a dyn WorkingDirectory,
+    pub(crate) native_observation: NativeObservationMode,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum NativeObservationMode {
+    Disabled,
+    System,
 }
 
 impl StatusApplication<'_> {
@@ -63,16 +70,20 @@ impl StatusApplication<'_> {
         let targets = match StatusTargets::resolve(args, &documents) {
             Ok(targets) => targets,
             Err(StatusTargetError::NoneEnabled) => {
-                return outcome
-                    .with_summary("targets", 0_u64)
-                    .with_error(ErrorDetail::new(
-                        "no_enabled_harnesses",
-                        "No harness is enabled in skilltap configuration.",
-                    ))
-                    .with_next_action(
-                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                            .with_command("skilltap harness enable <codex|claude>"),
-                    );
+                return first_use_harness_report(
+                    &documents.config,
+                    outcome,
+                    self.native_observation,
+                )
+                .with_summary("targets", 0_u64)
+                .with_error(ErrorDetail::new(
+                    "no_enabled_harnesses",
+                    "No harness is enabled in skilltap configuration.",
+                ))
+                .with_next_action(
+                    NextAction::new("enable_harness", "Enable Codex or Claude management.")
+                        .with_command("skilltap harness enable <codex|claude>"),
+                );
             }
             Err(StatusTargetError::NotEnabled) => {
                 outcome.result = ResultClass::Invalid;
@@ -92,6 +103,7 @@ impl StatusApplication<'_> {
             documents: &documents,
             scope: &scope,
             targets: &targets,
+            native_observation: self.native_observation,
         }
         .apply(outcome)
     }
@@ -121,6 +133,82 @@ impl StatusApplication<'_> {
             }
         }
     }
+}
+
+fn first_use_harness_report(
+    config: &ConfigDocument,
+    mut outcome: Outcome,
+    mode: NativeObservationMode,
+) -> Outcome {
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded status process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded status JSON limits are valid");
+    let search_path = std::env::var_os("PATH");
+    for (harness, kind, binary) in [
+        (
+            "codex",
+            HarnessKind::Codex,
+            config.harnesses().codex.binary.as_str(),
+        ),
+        (
+            "claude",
+            HarnessKind::Claude,
+            config.harnesses().claude.binary.as_str(),
+        ),
+    ] {
+        let mut entry = OutputEntry::new(harness, "not_enabled").with_field("enabled", false);
+        if mode == NativeObservationMode::Disabled {
+            outcome = outcome.with_resource(entry);
+            continue;
+        }
+        let configured = match configured_binary(binary) {
+            Ok(value) => value,
+            Err(_) => {
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "invalid_harness_binary",
+                        "The configured harness binary could not be resolved.",
+                    )
+                    .with_context("harness", harness),
+                );
+                outcome = outcome.with_resource(entry.with_field("reachable", false));
+                continue;
+            }
+        };
+        match detect_configured_installation(
+            kind,
+            configured,
+            search_path.clone(),
+            process_limits,
+            json_limits,
+        ) {
+            Ok(installation) => {
+                if let HarnessReachability::Reachable { native_version, .. } =
+                    installation.reachability()
+                {
+                    entry.status = "installed".to_owned();
+                    entry = entry
+                        .with_field("reachable", true)
+                        .with_field("version", native_version.as_str());
+                }
+            }
+            Err(error) => {
+                entry.status = "unreachable".to_owned();
+                entry = entry.with_field("reachable", false);
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "native_detection_failed",
+                        "The known harness could not be detected during first-use status.",
+                    )
+                    .with_context("harness", harness)
+                    .with_context("detail", error.to_string()),
+                );
+            }
+        }
+        outcome = outcome.with_resource(entry);
+    }
+    outcome
 }
 
 struct DocumentLoadPhase {
@@ -239,6 +327,7 @@ struct StatusProjection<'a> {
     documents: &'a StatusDocuments,
     scope: &'a StatusScope,
     targets: &'a StatusTargets,
+    native_observation: NativeObservationMode,
 }
 
 impl StatusProjection<'_> {
@@ -246,7 +335,12 @@ impl StatusProjection<'_> {
         for target in self.targets.iter() {
             outcome = outcome.with_resource(OutputEntry::new(target.as_str(), "selected"));
         }
-        let observation = NativeObservation::run(self.documents, self.scope, self.targets);
+        let observation = match self.native_observation {
+            NativeObservationMode::Disabled => NativeObservation::default(),
+            NativeObservationMode::System => {
+                NativeObservation::run(self.documents, self.scope, self.targets)
+            }
+        };
         for resource in observation.resources {
             outcome = outcome.with_resource(resource);
         }
@@ -286,6 +380,7 @@ impl StatusProjection<'_> {
     }
 }
 
+#[derive(Default)]
 struct NativeObservation {
     resources: Vec<OutputEntry>,
     warnings: Vec<Warning>,

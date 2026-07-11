@@ -16,7 +16,7 @@ use skilltap_core::{
 use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
     ResultClass,
-    application::StatusApplication,
+    application::{NativeObservationMode, StatusApplication},
     command::{Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs},
     dispatch::Dispatch,
 };
@@ -101,16 +101,16 @@ fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
     let filesystem = SystemFileSystem;
     let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
         Ok(repository) => repository,
-        Err(_) => return repository_composition_error(),
+        Err(_) => return repository_composition_error("status"),
     };
     let inventory = match FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone())
     {
         Ok(repository) => repository,
-        Err(_) => return repository_composition_error(),
+        Err(_) => return repository_composition_error("status"),
     };
     let state = match FileStateRepository::new(&filesystem, paths.skilltap_config().clone()) {
         Ok(repository) => repository,
-        Err(_) => return repository_composition_error(),
+        Err(_) => return repository_composition_error("status"),
     };
     let runner = SystemCommandRunner;
     let git = CommandGitRoot::new(
@@ -125,6 +125,7 @@ fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
         state: &state,
         scopes: &scopes,
         working_directory: &working_directory,
+        native_observation: NativeObservationMode::System,
     }
     .execute(args)
 }
@@ -134,12 +135,12 @@ fn with_harness_repository(
 ) -> Outcome {
     let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
         Ok(paths) => paths,
-        Err(_) => return repository_composition_error(),
+        Err(_) => return repository_composition_error("harness list"),
     };
     let filesystem = SystemFileSystem;
     let repository = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
         Ok(repository) => repository,
-        Err(_) => return repository_composition_error(),
+        Err(_) => return repository_composition_error("harness list"),
     };
     operation(&repository)
 }
@@ -149,7 +150,7 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
         let config = match repository.load() {
             Ok(DocumentState::Missing) => ConfigDocument::defaults(),
             Ok(DocumentState::Present(value)) => value,
-            Err(_) => return repository_composition_error(),
+            Err(_) => return repository_composition_error("harness list"),
         };
         Outcome::new("harness list", ResultClass::Completed)
             .with_resource(OutputEntry::new(
@@ -189,7 +190,7 @@ fn execute_harness_change(
         let current = match repository.load() {
             Ok(DocumentState::Missing) => ConfigDocument::defaults(),
             Ok(DocumentState::Present(value)) => value,
-            Err(_) => return repository_composition_error(),
+            Err(_) => return repository_composition_error(command),
         };
         let next = match current.with_harness_policy(harness, enabled, binary) {
             Ok(value) => value,
@@ -200,6 +201,12 @@ fn execute_harness_change(
                 ));
             }
         };
+        if !enabled && next == current {
+            return Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
+                "harness_already_disabled",
+                "The requested harness is already disabled.",
+            ));
+        }
         if next == current {
             return Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
                 harness.as_str(),
@@ -207,7 +214,7 @@ fn execute_harness_change(
             ));
         }
         if repository.replace(&next).is_err() {
-            return repository_composition_error();
+            return repository_composition_error(command);
         }
         Outcome::new(command, ResultClass::Completed).with_resource(OutputEntry::new(
             harness.as_str(),
@@ -216,8 +223,8 @@ fn execute_harness_change(
     })
 }
 
-fn repository_composition_error() -> Outcome {
-    Outcome::new("status", ResultClass::Invalid).with_error(ErrorDetail::new(
+fn repository_composition_error(command: &'static str) -> Outcome {
+    Outcome::new(command, ResultClass::Invalid).with_error(ErrorDetail::new(
         "storage_unavailable",
         "The skilltap storage repositories could not be composed.",
     ))

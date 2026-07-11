@@ -62,6 +62,7 @@ fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outc
         state: &state,
         scopes: &scopes,
         working_directory: &working_directory,
+        native_observation: NativeObservationMode::Disabled,
     }
     .execute(args)
 }
@@ -88,7 +89,13 @@ fn first_use_status_reports_no_enabled_harnesses_and_creates_nothing() {
         outcome
             .resources
             .iter()
-            .all(|resource| resource.id != "codex" && resource.id != "claude")
+            .any(|resource| resource.id == "codex" && resource.status == "not_enabled")
+    );
+    assert!(
+        outcome
+            .resources
+            .iter()
+            .any(|resource| resource.id == "claude")
     );
     assert!(!root.exists());
 }

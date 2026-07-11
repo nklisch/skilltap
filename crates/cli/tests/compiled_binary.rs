@@ -196,7 +196,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
     let leaves: &[(&[&str], &str)] = &[
         (&["harness", "list"], "harness list"),
         (&["harness", "enable", "codex"], "harness enable"),
-        (&["harness", "disable", "claude"], "harness disable"),
+        (&["harness", "disable", "codex"], "harness disable"),
         (&["adopt"], "adopt"),
         (&["plan"], "plan"),
         (&["sync"], "sync"),
@@ -343,6 +343,13 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
             .iter()
             .any(|entry| { entry["id"] == "codex" && entry["status"] == "disabled" })
     );
+
+    let repeat_disable = run(&machine, &["harness", "disable", "codex", "--json"]);
+    assert_code(&repeat_disable, 1);
+    assert_eq!(
+        json(&repeat_disable)["errors"][0]["code"],
+        "harness_already_disabled"
+    );
 }
 
 #[test]
@@ -375,7 +382,14 @@ fn first_use_status_is_read_only_and_reports_no_enabled_harnesses() {
             .as_array()
             .unwrap()
             .iter()
-            .all(|resource| { resource["id"] != "codex" && resource["id"] != "claude" })
+            .any(|resource| { resource["id"] == "codex" && resource["status"] == "unreachable" })
+    );
+    assert!(
+        value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| { resource["id"] == "claude" && resource["status"] == "unreachable" })
     );
     assert!(!config_root(&machine).exists());
 }
