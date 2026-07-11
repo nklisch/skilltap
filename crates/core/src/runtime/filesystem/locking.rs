@@ -12,27 +12,10 @@ use crate::{
 use super::unix_identity::{
     descriptor_identity_io, open_directory_no_follow, open_lock_no_follow, verify_lock_identity,
 };
-
-pub trait ConfigurationLock {
-    type Guard: ConfigurationLockGuard;
-
-    fn try_acquire(&self, path: &AbsolutePath) -> Result<Self::Guard, RuntimeError>;
-}
-
-pub trait ConfigurationLockGuard {
-    fn path(&self) -> &AbsolutePath;
-    fn release(self) -> Result<(), RuntimeError>;
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct SystemConfigurationLock;
-
-#[derive(Debug)]
-pub struct SystemConfigurationLockGuard {
-    file: Option<File>,
-    directory: Option<File>,
-    path: AbsolutePath,
-}
+use super::{
+    ConfigurationLock, ConfigurationLockGuard, SystemConfigurationLock,
+    SystemConfigurationLockGuard,
+};
 
 impl ConfigurationLock for SystemConfigurationLock {
     type Guard = SystemConfigurationLockGuard;

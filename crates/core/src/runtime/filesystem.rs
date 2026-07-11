@@ -21,11 +21,6 @@ mod locking;
 mod publication;
 mod unix_identity;
 
-pub use locking::{
-    ConfigurationLock, ConfigurationLockGuard, SystemConfigurationLock,
-    SystemConfigurationLockGuard,
-};
-
 #[cfg(test)]
 use locking::try_acquire_with;
 #[cfg(test)]
@@ -227,6 +222,27 @@ impl FileSystem for SystemFileSystem {
         removed?;
         sync_parent(path, FileSystemAction::Remove)
     }
+}
+
+pub trait ConfigurationLock {
+    type Guard: ConfigurationLockGuard;
+
+    fn try_acquire(&self, path: &AbsolutePath) -> Result<Self::Guard, RuntimeError>;
+}
+
+pub trait ConfigurationLockGuard {
+    fn path(&self) -> &AbsolutePath;
+    fn release(self) -> Result<(), RuntimeError>;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SystemConfigurationLock;
+
+#[derive(Debug)]
+pub struct SystemConfigurationLockGuard {
+    file: Option<File>,
+    directory: Option<File>,
+    path: AbsolutePath,
 }
 
 fn inspect(path: &AbsolutePath) -> Result<FileMetadata, RuntimeError> {
