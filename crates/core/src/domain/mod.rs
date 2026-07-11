@@ -1,6 +1,7 @@
 pub mod capability;
 pub mod compatibility;
 pub mod identity;
+pub mod operation;
 pub mod resource;
 pub mod scope;
 pub mod source;
@@ -12,6 +13,11 @@ pub use compatibility::{
     TransferFidelity,
 };
 pub use identity::{HarnessId, NativeId, OperationId, ResourceId};
+pub use operation::{
+    AcknowledgmentRequirement, ApplyOutcome, ApplyResult, AttentionKind, AttentionReason,
+    Operation, OperationClass, OperationContractError, OperationDependency, OperationOutcome,
+    OperationResult, OperationSelector, Plan, Reversibility,
+};
 pub use resource::{
     ComponentGraph, ComponentGraphError, ComponentId, ComponentKind, ComponentRequiredness,
     DesiredResource, GraphCollection, ObservationFinding, ObservationFindingKind, ObservedResource,
