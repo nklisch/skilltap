@@ -63,12 +63,14 @@ impl PlatformPaths {
         let config_home =
             optional_environment_path(environment, EnvironmentVariable::XdgConfigHome)?
                 .map_or_else(|| join(&home, ".config", PathRole::ConfigHome), Ok)?;
+        let codex_home = optional_environment_path(environment, EnvironmentVariable::CodexHome)?
+            .map_or_else(|| join(&home, ".codex", PathRole::CodexHome), Ok)?;
 
         Ok(Self {
             platform,
             skilltap_config: join(&config_home, "skilltap", PathRole::SkilltapConfig)?,
             global_agents: join(&home, "AGENTS.md", PathRole::GlobalAgents)?,
-            codex_home: join(&home, ".codex", PathRole::CodexHome)?,
+            codex_home,
             claude_home: join(&home, ".claude", PathRole::ClaudeHome)?,
             home,
             config_home,
@@ -200,6 +202,36 @@ mod tests {
     }
 
     #[test]
+    fn codex_home_override_is_independent_of_xdg_and_global_instructions() {
+        let environment = TestEnvironment::default()
+            .with(EnvironmentVariable::Home, "/home/nathan")
+            .with(EnvironmentVariable::XdgConfigHome, "/var/config/nathan")
+            .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan");
+        let paths = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+
+        assert_eq!(paths.codex_home().as_str(), "/opt/codex/nathan");
+        assert_eq!(
+            paths.skilltap_config().as_str(),
+            "/var/config/nathan/skilltap"
+        );
+        assert_eq!(paths.global_agents().as_str(), "/home/nathan/AGENTS.md");
+    }
+
+    #[test]
+    fn absent_or_empty_codex_home_uses_home_fallback() {
+        for environment in [
+            TestEnvironment::default().with(EnvironmentVariable::Home, "/Users/nathan"),
+            TestEnvironment::default()
+                .with(EnvironmentVariable::Home, "/Users/nathan")
+                .with(EnvironmentVariable::CodexHome, ""),
+        ] {
+            let paths = PlatformPaths::resolve_for(SupportedPlatform::MacOs, &environment).unwrap();
+            assert_eq!(paths.codex_home().as_str(), "/Users/nathan/.codex");
+            assert_eq!(paths.global_agents().as_str(), "/Users/nathan/AGENTS.md");
+        }
+    }
+
+    #[test]
     fn missing_relative_and_noncanonical_environment_paths_fail_fast() {
         let missing =
             PlatformPaths::resolve_for(SupportedPlatform::Linux, &TestEnvironment::default())
@@ -216,6 +248,8 @@ mod tests {
             (EnvironmentVariable::Home, "/home/nathan/../other"),
             (EnvironmentVariable::XdgConfigHome, "relative/config"),
             (EnvironmentVariable::XdgConfigHome, "/var//config"),
+            (EnvironmentVariable::CodexHome, "relative/codex"),
+            (EnvironmentVariable::CodexHome, "/opt/codex/../other"),
         ] {
             let environment = TestEnvironment::default()
                 .with(EnvironmentVariable::Home, "/home/nathan")
@@ -256,6 +290,29 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_codex_home_is_rejected_without_rendering_bytes() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let invalid = OsString::from_vec(vec![b'/', b't', b'm', b'p', 0xff]);
+        let environment = TestEnvironment::default()
+            .with(EnvironmentVariable::Home, "/home/nathan")
+            .with(EnvironmentVariable::CodexHome, invalid);
+        let error = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap_err();
+
+        assert!(matches!(
+            error,
+            RuntimeError::NonUtf8Environment {
+                variable: EnvironmentVariable::CodexHome
+            }
+        ));
+        assert_eq!(
+            error.to_string(),
+            "environment variable `CODEX_HOME` is not valid UTF-8"
+        );
+    }
+
     #[test]
     fn resolution_does_not_create_paths() {
         let unique = format!(
@@ -271,13 +328,15 @@ mod tests {
             .with(
                 EnvironmentVariable::XdgConfigHome,
                 format!("{unique}/config"),
-            );
+            )
+            .with(EnvironmentVariable::CodexHome, format!("{unique}/codex"));
         assert!(!std::path::Path::new(&unique).exists());
 
         let paths = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
 
         assert!(!std::path::Path::new(paths.home().as_str()).exists());
         assert!(!std::path::Path::new(paths.skilltap_config().as_str()).exists());
+        assert!(!std::path::Path::new(paths.codex_home().as_str()).exists());
     }
 
     #[test]

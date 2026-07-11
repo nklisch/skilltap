@@ -17,6 +17,7 @@ pub enum RuntimeBoundary {
 pub enum EnvironmentVariable {
     Home,
     XdgConfigHome,
+    CodexHome,
 }
 
 impl EnvironmentVariable {
@@ -24,6 +25,7 @@ impl EnvironmentVariable {
         match self {
             Self::Home => "HOME",
             Self::XdgConfigHome => "XDG_CONFIG_HOME",
+            Self::CodexHome => "CODEX_HOME",
         }
     }
 }
