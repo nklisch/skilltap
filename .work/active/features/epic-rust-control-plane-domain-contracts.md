@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-workspace-reset]
@@ -204,3 +204,9 @@ stories rather than reopening completed story history.
   surfaces required by the planning contract; binds consent consequences to
   selectors; validates plan-class/outcome and dependency execution rules; and
   makes operation-cycle diagnostics exact.
+
+All six child stories are now done. The corrective passes also made operation
+class/fidelity combinations explicit, required executable affected surfaces,
+bound partial consent exactly to compatibility consequences, and kept adoption
+origin independent from current target selection. The integrated locked suite
+passes with 56 core tests.
