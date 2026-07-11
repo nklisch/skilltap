@@ -1,7 +1,7 @@
 ---
 id: epic-cross-harness-materialization-hooks-contract
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-cross-harness-materialization-hooks
 depends_on: []
@@ -38,3 +38,7 @@ Acceptance criteria:
 - `cargo test -p skilltap-core hook_mapping::tests --offline` — passed.
 - `cargo clippy -p skilltap-core --all-targets --offline -- -D warnings` —
   passed.
+
+## Review
+
+Verdict: Approve — story verified by implement; fast-lane advance.
