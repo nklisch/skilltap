@@ -764,20 +764,25 @@ fn dangling_resolved_observed_edges_remain_visible_during_deserialization() {
 }
 
 #[test]
-fn findings_remain_separate_and_deterministically_ordered_by_metadata() {
-    let finding = |metadata| {
+fn findings_remain_separate_and_deterministically_ordered_by_typed_fields() {
+    let finding = |count| {
         ObservationFinding::new(
-            harness("codex"),
-            Scope::Global,
-            ObservationFindingKind::MalformedUnmanagedEntry,
-            None,
-            "unmanaged entry has no stable identity",
-            metadata,
+            ObservationFindingCode::new("native.entry.malformed").unwrap(),
+            ObservationSummary::MalformedNativeEntry,
+            ObservationSeverity::Warning,
+            ObservationSubject::Harness {
+                harness: harness("codex"),
+                scope: Scope::Global,
+            },
+            ObservationFields::new([(
+                ObservationFieldCode::new("affected-count").unwrap(),
+                ObservationFieldValue::Count(count),
+            )])
+            .unwrap(),
         )
-        .unwrap()
     };
-    let first = finding(json!({"z": 1, "nested": {"b": 2, "a": 1}}));
-    let second = finding(json!({"a": 2}));
+    let first = finding(2);
+    let second = finding(1);
     let forward = ResourceGraph::new([], [], [first.clone(), second.clone()]).unwrap();
     let reversed = ResourceGraph::new([], [], [second, first]).unwrap();
     assert!(forward.observed().is_empty());
@@ -787,8 +792,10 @@ fn findings_remain_separate_and_deterministically_ordered_by_metadata() {
     );
     assert!(
         serde_json::from_value::<ObservationFinding>(json!({
-            "harness":"codex","scope":{"kind":"global"},
-            "kind":"malformed_unmanaged_entry","message":" bad "
+            "code":"native.entry.malformed",
+            "summary":"dynamic native message",
+            "severity":"warning",
+            "subject":{"kind":"harness","harness":"codex","scope":{"kind":"global"}}
         }))
         .is_err()
     );

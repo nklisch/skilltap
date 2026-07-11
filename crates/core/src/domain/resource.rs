@@ -5,15 +5,20 @@ use std::{
     fmt,
 };
 
-use serde::{Deserialize, Deserializer, Serialize};
-use serde_json::Value;
-
 use super::{
     Fingerprint, HarnessId, HarnessSet, MaterialConsequence, NativeId, ResolvedRevision,
-    ResourceKey, Scope, Source, ValidationError,
+    ResourceKey, Scope, Source,
     dependency_graph::{ReferenceError, find_exact_cycle, validate_references},
-    validate_identifier, validate_text,
+    validate_identifier,
     validated_newtype::validated_string_newtype,
+};
+use serde::{Deserialize, Deserializer, Serialize};
+
+mod finding;
+pub use finding::{
+    ObservationFieldCode, ObservationFieldValue, ObservationFields, ObservationFinding,
+    ObservationFindingCode, ObservationFindingError, ObservationSeverity, ObservationSubject,
+    ObservationSummary,
 };
 
 validated_string_newtype!(ComponentId, "component id", 256, validate_identifier);
@@ -665,122 +670,6 @@ impl<'de> Deserialize<'de> for ObservedResource {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ObservationFindingKind {
-    MalformedUnmanagedEntry,
-    UnreadableNativeState,
-    UnsupportedNativeShape,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(into = "ObservationFindingWire")]
-pub struct ObservationFinding {
-    harness: HarnessId,
-    scope: Scope,
-    kind: ObservationFindingKind,
-    native_identity: Option<NativeId>,
-    message: String,
-    metadata: Value,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
-struct ObservationFindingWire {
-    harness: HarnessId,
-    scope: Scope,
-    kind: ObservationFindingKind,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    native_identity: Option<NativeId>,
-    message: String,
-    #[serde(default, skip_serializing_if = "Value::is_null")]
-    metadata: Value,
-}
-
-impl ObservationFinding {
-    pub fn new(
-        harness: HarnessId,
-        scope: Scope,
-        kind: ObservationFindingKind,
-        native_identity: Option<NativeId>,
-        message: impl Into<String>,
-        metadata: Value,
-    ) -> Result<Self, ValidationError> {
-        let message = message.into();
-        validate_text(&message, "observation finding message", 4096)?;
-        Ok(Self {
-            harness,
-            scope,
-            kind,
-            native_identity,
-            message,
-            metadata,
-        })
-    }
-
-    pub fn harness(&self) -> &HarnessId {
-        &self.harness
-    }
-
-    pub const fn scope(&self) -> &Scope {
-        &self.scope
-    }
-
-    pub const fn kind(&self) -> ObservationFindingKind {
-        self.kind
-    }
-
-    pub fn native_identity(&self) -> Option<&NativeId> {
-        self.native_identity.as_ref()
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-
-    pub const fn metadata(&self) -> &Value {
-        &self.metadata
-    }
-}
-
-impl From<ObservationFinding> for ObservationFindingWire {
-    fn from(value: ObservationFinding) -> Self {
-        Self {
-            harness: value.harness,
-            scope: value.scope,
-            kind: value.kind,
-            native_identity: value.native_identity,
-            message: value.message,
-            metadata: value.metadata,
-        }
-    }
-}
-
-impl TryFrom<ObservationFindingWire> for ObservationFinding {
-    type Error = ValidationError;
-
-    fn try_from(value: ObservationFindingWire) -> Result<Self, Self::Error> {
-        Self::new(
-            value.harness,
-            value.scope,
-            value.kind,
-            value.native_identity,
-            value.message,
-            value.metadata,
-        )
-    }
-}
-
-impl<'de> Deserialize<'de> for ObservationFinding {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let wire = ObservationFindingWire::deserialize(deserializer)?;
-        Self::try_from(wire).map_err(serde::de::Error::custom)
-    }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GraphCollection {
     Desired,
@@ -927,7 +816,7 @@ impl ResourceGraph {
         )?;
         validate_observed_dependencies(&observed_map)?;
         let mut findings = findings.into_iter().collect::<Vec<_>>();
-        findings.sort_by(finding_order);
+        findings.sort();
         Ok(Self {
             desired,
             observed: observed_map,
@@ -1051,75 +940,6 @@ fn validate_observed_dependencies(
         }
     }
     Ok(())
-}
-
-fn finding_order(left: &ObservationFinding, right: &ObservationFinding) -> std::cmp::Ordering {
-    finding_key(left)
-        .cmp(&finding_key(right))
-        .then_with(|| canonical_json(&left.metadata).cmp(&canonical_json(&right.metadata)))
-}
-
-fn finding_key(
-    finding: &ObservationFinding,
-) -> (
-    &HarnessId,
-    &str,
-    ObservationFindingKind,
-    Option<&NativeId>,
-    &str,
-) {
-    let scope = match &finding.scope {
-        Scope::Global => "",
-        Scope::Project(path) => path.as_str(),
-    };
-    (
-        &finding.harness,
-        scope,
-        finding.kind,
-        finding.native_identity.as_ref(),
-        &finding.message,
-    )
-}
-
-fn canonical_json(value: &Value) -> String {
-    fn write(value: &Value, output: &mut String) {
-        match value {
-            Value::Null => output.push_str("null"),
-            Value::Bool(value) => output.push_str(if *value { "true" } else { "false" }),
-            Value::Number(value) => output.push_str(&value.to_string()),
-            Value::String(value) => {
-                output.push_str(&serde_json::to_string(value).expect("JSON strings serialize"));
-            }
-            Value::Array(values) => {
-                output.push('[');
-                for (index, value) in values.iter().enumerate() {
-                    if index > 0 {
-                        output.push(',');
-                    }
-                    write(value, output);
-                }
-                output.push(']');
-            }
-            Value::Object(values) => {
-                output.push('{');
-                let mut entries = values.iter().collect::<Vec<_>>();
-                entries.sort_unstable_by_key(|(key, _)| *key);
-                for (index, (key, value)) in entries.into_iter().enumerate() {
-                    if index > 0 {
-                        output.push(',');
-                    }
-                    output.push_str(&serde_json::to_string(key).expect("JSON keys serialize"));
-                    output.push(':');
-                    write(value, output);
-                }
-                output.push('}');
-            }
-        }
-    }
-
-    let mut output = String::new();
-    write(value, &mut output);
-    output
 }
 
 impl From<ResourceGraph> for ResourceGraphWire {
