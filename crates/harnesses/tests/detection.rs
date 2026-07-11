@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, ffi::OsString, path::Path};
+use std::{collections::BTreeMap, ffi::OsString, fs, path::Path};
 
 use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, UnreachableReason},
@@ -165,4 +165,39 @@ fn probe_narrowing_is_strict_and_never_widens_profiles() {
     );
     let probed = probe_profile(&profile, &request, JsonLimits::new(4_096, 16).unwrap()).unwrap();
     assert_eq!(probed.profile_id().unwrap().as_str(), "codex-v3");
+}
+
+#[test]
+fn detection_pipeline_is_repeatable_and_keeps_sibling_failures_isolated() {
+    let (codex_root, _codex_fixture) = install(FakeNativeMode::VersionKnown, "codex");
+    let (claude_root, _claude_fixture) = install(FakeNativeMode::MalformedJson, "claude");
+    let (process_limits, json_limits) = limits();
+    let codex_before = fs::read_dir(codex_root.path()).unwrap().count();
+    let first = detect_installation(
+        HarnessKind::Codex,
+        codex_root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    )
+    .unwrap();
+    let second = detect_installation(
+        HarnessKind::Codex,
+        codex_root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    )
+    .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(
+        fs::read_dir(codex_root.path()).unwrap().count(),
+        codex_before
+    );
+    let claude = detect_installation(
+        HarnessKind::Claude,
+        claude_root.path().as_os_str().to_os_string(),
+        process_limits,
+        json_limits,
+    );
+    assert!(matches!(claude, Err(DetectionError::Runtime(_))));
+    assert_eq!(first.harness().as_str(), "codex");
 }

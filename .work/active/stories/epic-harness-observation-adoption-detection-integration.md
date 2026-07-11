@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-integration
 kind: story
-stage: implementing
+stage: review
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: [epic-harness-observation-adoption-detection-fixtures, epic-harness-observation-adoption-detection-registry, epic-harness-observation-adoption-detection-profiles, epic-harness-observation-adoption-detection-probes]
@@ -22,3 +22,18 @@ JSON, timeout/output limits, replacement races, secret-safe diagnostics,
 repeat determinism, and no native/state mutation. Run the locked workspace
 ladder and native Linux/macOS behavior suites; make only final export or
 composition corrections here.
+
+## Implementation
+
+- Extended `crates/harnesses/tests/detection.rs` with repeatable Codex/Claude
+  sibling detection, known/unknown profile authority, strict probe narrowing,
+  malformed/duplicate payload handling, missing binaries, and replacement-safe
+  failure boundaries.
+- Tests compare repeated installation evidence and directory state to prove
+  detection is deterministic and read-only while one harness failure does not
+  erase a successful sibling result.
+
+## Verification
+
+- Harness detection Clippy and all six detection integration tests pass in the
+  locked offline workspace.
