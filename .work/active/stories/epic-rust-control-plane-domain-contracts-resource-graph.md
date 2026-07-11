@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-graph
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-identity-scope-source]
@@ -44,3 +44,14 @@ namespacing, observation findings, and validated dependency graphs.
 - Dispatch rationale: direct implementation within the resource module while a
   sibling agent owned the disjoint capability/compatibility modules.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-11)
+
+- Blocker: `components: BTreeSet<ComponentKind>` collapses multiple components
+  of the same kind and preserves neither identity, requiredness, nor component
+  dependencies. Introduce validated `ComponentId`, a component record, and a
+  deterministic component subgraph that rejects duplicate, dangling, self, and
+  cyclic dependencies through constructors and deserialization.
+- Important: observation-finding ordering omits opaque metadata, so findings
+  with otherwise equal keys serialize according to adapter input order. Add a
+  deterministic metadata tie-break and prove reversed inputs serialize equally.
