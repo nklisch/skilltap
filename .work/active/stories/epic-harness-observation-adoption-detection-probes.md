@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-detection-probes
 kind: story
-stage: review
+stage: done
 tags: [infra,correctness]
 parent: epic-harness-observation-adoption-detection
 depends_on: [epic-harness-observation-adoption-detection-profiles]
@@ -40,3 +40,8 @@ write native or skilltap state.
 
 - Harness detection Clippy and all five detection tests pass in the locked
   offline workspace.
+
+## Review
+
+- Fast-lane review approved the green probe implementation. Probe authority is
+  monotonic and remains separate from native mutation or persisted state.
