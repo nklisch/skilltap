@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-runtime-executable-resolution
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits, epic-harness-observation-adoption-runtime-adversarial-fixtures]
@@ -48,6 +48,16 @@ remaining stat/exec race is eliminated.
   explicit `.` because accepting them would reintroduce implicit working-
   directory dependence and make resolution nondeterministic.
 - Adjacent issues parked: none.
+
+## Review
+
+- Approved after fresh-context review.
+- Confirmed explicit PATH validation/order, first-existing-candidate
+  authority, absolute/final-symlink canonicalization, regular/executable
+  checks, device/inode identity, and last-moment revalidation with the
+  documented remaining stat/exec race.
+- Focused resolver tests pass 8/8; fixed enum errors and resolver boundaries
+  do not expose raw paths.
 
 ## Verification
 
