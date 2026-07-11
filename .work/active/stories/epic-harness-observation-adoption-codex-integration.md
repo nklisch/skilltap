@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-codex-integration
 kind: story
-stage: review
+stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-codex-paths, epic-harness-observation-adoption-codex-config, epic-harness-observation-adoption-codex-resources]
@@ -32,3 +32,8 @@ diagnostics, and byte/type/link/mtime no-mutation.
 
 - Nine locked harness integration tests and warnings-denied Clippy pass; the
   full workspace ladder remains green.
+
+## Review
+
+- Fast-lane review approved the Codex composition coverage and green test
+  record; no native or skilltap writes are introduced.
