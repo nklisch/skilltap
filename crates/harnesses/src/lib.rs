@@ -257,6 +257,63 @@ pub fn observe_codex_config(input: &[u8]) -> Result<CodexConfigObservation, Code
     })
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub struct ClaudeSettingsObservation {
+    pub enabled_plugin_count: usize,
+    pub qualified_plugin_count: usize,
+    pub trust_policy_present: bool,
+    pub shared_project: bool,
+}
+
+impl std::fmt::Debug for ClaudeSettingsObservation {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ClaudeSettingsObservation")
+            .field("enabled_plugin_count", &self.enabled_plugin_count)
+            .field("qualified_plugin_count", &self.qualified_plugin_count)
+            .field("trust_policy_present", &self.trust_policy_present)
+            .field("shared_project", &self.shared_project)
+            .finish()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ClaudeSettingsError {
+    Runtime(ObservationRuntimeError),
+    InvalidShape,
+}
+
+/// Parses bounded Claude settings without returning native names or values.
+pub fn observe_claude_settings(
+    input: &[u8],
+    limits: JsonLimits,
+) -> Result<ClaudeSettingsObservation, ClaudeSettingsError> {
+    let decoded = StrictJson
+        .decode(input, limits)
+        .map_err(ClaudeSettingsError::Runtime)?;
+    let object = decoded
+        .value()
+        .as_object()
+        .ok_or(ClaudeSettingsError::InvalidShape)?;
+    let enabled = object
+        .get("enabledPlugins")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(ClaudeSettingsError::InvalidShape)?;
+    let qualified_plugin_count = enabled
+        .iter()
+        .filter(|value| value.as_str().is_some_and(|name| name.contains('@')))
+        .count();
+    Ok(ClaudeSettingsObservation {
+        enabled_plugin_count: enabled.len(),
+        qualified_plugin_count,
+        trust_policy_present: object.contains_key("trust"),
+        shared_project: object
+            .get("sharedProject")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+    })
+}
+
 fn absolute_child(
     root: &skilltap_core::domain::AbsolutePath,
     child: &str,

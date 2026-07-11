@@ -309,3 +309,22 @@ fn claude_paths_keep_global_and_personal_project_inputs_separate() {
         "/workspace/personal/.claude/settings.json"
     );
 }
+
+#[test]
+fn claude_settings_preserve_qualified_identity_counts_and_shared_project_state() {
+    let observed = skilltap_harnesses::observe_claude_settings(
+        br#"{
+  "enabledPlugins": ["lint@anthropic", "local-tool"],
+  "trust": {"consent": true},
+  "sharedProject": true,
+  "unknown": "secret"
+}"#,
+        JsonLimits::new(4096, 16).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(observed.enabled_plugin_count, 2);
+    assert_eq!(observed.qualified_plugin_count, 1);
+    assert!(observed.trust_policy_present);
+    assert!(observed.shared_project);
+    assert!(!format!("{observed:?}").contains("anthropic"));
+}
