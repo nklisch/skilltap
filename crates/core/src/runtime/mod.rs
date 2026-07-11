@@ -9,7 +9,7 @@ pub use clock::{Clock, FakeClock, SystemClock};
 pub use command::{CommandOutput, CommandRequest, CommandRunner, SystemCommandRunner};
 pub use error::{
     ClockAction, CommandAction, EnvironmentVariable, FileSystemAction, LockAction, PathRole,
-    RuntimeBoundary, RuntimeError,
+    PublicationState, RuntimeBoundary, RuntimeError,
 };
 pub use filesystem::{
     ConfigurationLock, ConfigurationLockGuard, FileKind, FileMetadata, FileSystem,

@@ -80,6 +80,12 @@ pub enum FileSystemAction {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PublicationState {
+    TemporaryLeft,
+    RollbackUnproven,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LockAction {
     Acquire,
     Release,
@@ -131,7 +137,20 @@ pub enum RuntimeError {
         action: FileSystemAction,
         path: AbsolutePath,
     },
+    FileIdentityChanged {
+        action: FileSystemAction,
+        path: AbsolutePath,
+    },
+    PartialPublication {
+        path: AbsolutePath,
+        state: PublicationState,
+        source: io::Error,
+        cleanup: io::Error,
+    },
     LockContended {
+        path: AbsolutePath,
+    },
+    LockIdentityChanged {
         path: AbsolutePath,
     },
     Lock {
@@ -163,8 +182,13 @@ impl RuntimeError {
             | Self::NonUtf8Path { .. }
             | Self::WorkingDirectory { .. }
             | Self::UnsuitableProjectPath { .. } => RuntimeBoundary::Path,
-            Self::FileSystem { .. } | Self::UnsafeSymlink { .. } => RuntimeBoundary::FileSystem,
-            Self::LockContended { .. } | Self::Lock { .. } => RuntimeBoundary::Lock,
+            Self::FileSystem { .. }
+            | Self::UnsafeSymlink { .. }
+            | Self::FileIdentityChanged { .. }
+            | Self::PartialPublication { .. } => RuntimeBoundary::FileSystem,
+            Self::LockContended { .. } | Self::LockIdentityChanged { .. } | Self::Lock { .. } => {
+                RuntimeBoundary::Lock
+            }
             Self::Command { .. } => RuntimeBoundary::Command,
             Self::Clock { .. } => RuntimeBoundary::Clock,
             Self::UnsupportedPlatform { .. } => RuntimeBoundary::UnsupportedPlatform,
@@ -221,8 +245,27 @@ impl fmt::Display for RuntimeError {
                 formatter,
                 "filesystem {action:?} refused symlink path `{path}`"
             ),
+            Self::FileIdentityChanged { action, path } => write!(
+                formatter,
+                "filesystem {action:?} refused changed path identity `{path}`"
+            ),
+            Self::PartialPublication {
+                path,
+                state,
+                source,
+                cleanup,
+            } => write!(
+                formatter,
+                "backup publication for `{path}` failed ({source}); state is {state:?} because cleanup failed ({cleanup})"
+            ),
             Self::LockContended { path } => {
                 write!(formatter, "configuration lock `{path}` is already held")
+            }
+            Self::LockIdentityChanged { path } => {
+                write!(
+                    formatter,
+                    "configuration lock path `{path}` changed during acquisition"
+                )
             }
             Self::Lock {
                 action,
@@ -254,6 +297,7 @@ impl std::error::Error for RuntimeError {
                 Some(source)
             }
             Self::FileSystem { source, .. }
+            | Self::PartialPublication { source, .. }
             | Self::Lock { source, .. }
             | Self::Command { source, .. }
             | Self::WorkingDirectory { source } => Some(source),
@@ -263,7 +307,9 @@ impl std::error::Error for RuntimeError {
             | Self::NonUtf8Path { .. }
             | Self::UnsuitableProjectPath { .. }
             | Self::UnsafeSymlink { .. }
+            | Self::FileIdentityChanged { .. }
             | Self::LockContended { .. }
+            | Self::LockIdentityChanged { .. }
             | Self::UnsupportedPlatform { .. } => None,
         }
     }

@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-runtime-primitives-filesystem-hardening
 kind: story
-stage: implementing
+stage: review
 tags: [infra, correctness]
 parent: epic-rust-control-plane-runtime-primitives
 depends_on: [epic-rust-control-plane-runtime-primitives-filesystem-lock]
@@ -37,3 +37,25 @@ have one canonical parent-prefix form.
   components, but rejects `dir/../AGENTS.md`, absolute, current-dir, redundant,
   or parent-only forms.
 - Full locked format/check/Clippy/test/rustdoc ladder passes.
+
+## Implementation notes
+
+- Files changed: hardened `crates/core/src/runtime/filesystem.rs`; extended typed runtime errors and
+  exports in `runtime/error.rs` and `runtime/mod.rs`; added the maintained `libc` Unix constants
+  dependency in workspace/core manifests and `Cargo.lock`.
+- Publication: recoverable copies now read from a no-follow, identity-verified descriptor into a
+  same-directory temporary, sync it completely, and atomically publish with no-clobber `hard_link`.
+  Failures remove only matching `(device, inode)` paths and distinguish cleaned failure,
+  `TemporaryLeft`, and `RollbackUnproven` outcomes.
+- Locking: acquisition no-follow opens and identity-verifies both the configuration directory and
+  lock file, holds an exclusive parent-directory lock with the file lock, and therefore remains
+  fail-fast even when the lock pathname is swapped to another inode.
+- Tests added: atomic backup visibility/no-clobber, three injected cleanup/rollback outcomes,
+  deterministic source-swap rejection, lock acquisition/path-swap rejection, two-inode contention,
+  lock symlink refusal, and leading-parent-only symlink target normalization.
+- Discrepancies from design: none. No unsafe code was required; safe Unix `OpenOptionsExt` uses
+  `O_NOFOLLOW`, `O_CLOEXEC`, and `O_DIRECTORY`, while standard metadata supplies descriptor/path
+  identity on both Linux and macOS.
+- Verification: locked format, all-target check, warnings-denied Clippy, workspace tests (90 core
+  tests), and warnings-denied rustdoc pass.
+- Adjacent issues parked: none.
