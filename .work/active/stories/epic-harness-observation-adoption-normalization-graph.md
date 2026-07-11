@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization-graph
 kind: story
-stage: review
+stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-normalization
 depends_on: [epic-harness-observation-adoption-codex, epic-harness-observation-adoption-claude]
@@ -32,3 +32,8 @@ snapshot ephemeral and read-only.
 
 - Harness Clippy and the normalization smoke test plus the locked workspace
   suite pass.
+
+## Review
+
+- Fast-lane review approved the deterministic ephemeral composition and green
+  workspace verification.
