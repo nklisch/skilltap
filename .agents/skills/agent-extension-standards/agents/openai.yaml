@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Extension Standards"
+  short_description: "Current Codex, Claude, and skill contracts"
+  default_prompt: "Use $agent-extension-standards to verify this adapter design against current native extension contracts."

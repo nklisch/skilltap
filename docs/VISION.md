@@ -1,292 +1,110 @@
-# skilltap
+# Vision
 
-A CLI for installing agent skills and plugins from any git host. Git-native, agent-agnostic, multi-source. Installs skills individually or as plugin bundles (skills + MCP servers + agent definitions) across multiple agent platforms.
+skilltap is a personal control plane for agent development environments.
+
+It gives one person a consistent way to understand and manage the skills, plugins, marketplaces, MCP servers, and instruction files used by Codex and Claude Code. It preserves each harness's native behavior while making the overall environment observable, reproducible on the same computer, and easier for agents to operate safely.
 
 ## Problem
 
-The SKILL.md format is standardized across 40+ agents (Claude Code, Cursor, Codex CLI, Gemini CLI, etc.), but distribution is fragmented. skills.sh only indexes GitHub. Other tools are centralized hosted services. There's no way to point at your own Gitea/GitLab instance and install from there.
+Agent harnesses provide increasingly capable extension systems, but each harness represents and manages those extensions differently.
 
-Individual agents are starting to build their own distribution — Claude Code has a full [plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) system with `marketplace.json`, `/plugin install`, and support for git, npm, and pip sources. But these are agent-specific. There's no agent-agnostic tool for distributing skills to whatever agent(s) you use.
+A person using multiple harnesses must understand several marketplace formats, plugin layouts, configuration files, installation scopes, instruction conventions, and lifecycle commands. The same skill may work everywhere, while a plugin may contain hooks, agents, apps, or servers that exist in only one harness. Configuration drifts as tools install or update resources independently.
+
+This leaves both people and agents with basic unanswered questions:
+
+- Which harnesses are configured on this computer?
+- Which marketplaces and plugins are installed?
+- Which resources are native, adopted, or managed by another tool?
+- Can a resource be transferred faithfully to another harness?
+- Are `AGENTS.md` and `CLAUDE.md` carrying the same instructions?
+- What changed outside the desired configuration?
+- What actions are safe to apply automatically?
+- What decision requires the user?
 
 ## Core Idea
 
-**Skills are git repos. Git is the transport. The CLI just clones and links.**
-
-Think: **Homebrew taps for agent skills.**
+skilltap maintains a normalized, machine-wide description of one person's agent environment.
 
-skilltap installs to the universal `.agents/skills/` directory defined by the [Agent Skills spec](https://agentskills.io/specification). This is the agent-agnostic path that works across all conforming agents. If you also want skills in an agent-specific directory (`.claude/skills/`, `.cursor/skills/`), opt in via `--also`.
+It can adopt existing Codex and Claude Code configuration into that state, compare the state with the current native environments, and synchronize changes back through each harness's supported mechanisms.
 
-skilltap also understands **plugins** — bundles that package skills alongside MCP servers and agent definitions. When you install a plugin, skilltap extracts the portable components (skills, MCP configs, agents) and installs them into each target agent platform. You can then toggle individual components on/off within an installed plugin.
+The normalized state is a control plane, not a replacement plugin format. Native harness behavior remains authoritative at the integration boundary.
 
-## Design Principles
+## Native First
 
-1. **Git-native.** Clone, shallow-clone, pull. No custom protocol. Git already handles versioning, auth, and distribution.
-2. **Agent-agnostic.** Installs to `.agents/skills/` by default — the universal path. Not tied to any single agent's ecosystem.
-3. **Multi-source.** Configure multiple sources (taps) — your Gitea, a friend's GitLab, public GitHub repos. Search across all of them.
-4. **Minimal.** No scoring, no benchmarking, no composition engine. Clone repos, make links. That's it.
-5. **One runtime.** Every command works headless. TTY detection picks output style; `--json` forces machine output anywhere; `--yes` resolves "do it" prompts; required args resolve "what" prompts. No separate agent runtime, no per-mode security split.
+skilltap uses a harness's native marketplace, plugin, and configuration mechanisms whenever they exist.
 
-## How It Works
+A resource crosses harness boundaries only when skilltap can represent it faithfully. When a native plugin is unavailable for a target harness, skilltap may materialize compatible components into that harness's supported locations.
 
-```
-┌─────────────┐  ┌─────────────┐  ┌──────────────┐
-│  Gitea       │  │  GitHub      │  │  GitLab      │
-│  (private)   │  │  (public)    │  │  (team)      │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────┬───────┴─────────────────┘
-                 │  git clone
-           ┌─────▼──────┐
-           │  skilltap   │
-           └─────┬───────┘
-                 │
-                 ▼
-          ~/.agents/skills/       ← universal (default)
-                 │
-                 │  optional symlinks
-      ┌──────────┼──────────┐
-      ▼          ▼          ▼
- ~/.claude/  ~/.cursor/  ~/.codex/
-  skills/    skills/     skills/
-```
+Partial or lossy materialization is visible and blocked by default. The user can approve the proposed result as a whole or choose components individually. Unsupported behavior is never silently discarded.
 
-### A skill = a directory with SKILL.md
+## Agent Forward
 
-A skill can live anywhere — as a standalone repo, or inside a larger project:
+Every command is deterministic and non-interactive.
 
-```
-# Standalone skill repo
-commit-helper/
-  SKILL.md              # required
-  scripts/              # optional
-  templates/            # optional
-  REFERENCE.md          # optional
+Commands produce concise output that an agent can interpret and convey to the user. Inspection and planning operations provide structured JSON when useful. When an operation requires judgment, skilltap explains:
 
-# Skills inside a code repo (co-located with the project they're for)
-termtube/
-  src/
-  tests/
-  .agents/skills/
-    termtube-dev/
-      SKILL.md
-    termtube-review/
-      SKILL.md
-```
+- What it observed.
+- What it proposes.
+- What cannot be preserved.
+- What decision the user needs to make.
+- How to proceed after that decision.
 
-No build step. No manifest file. If it has a SKILL.md, it's a skill.
+Agents do not need a separate operating mode. The same command contract serves people, agents, scripts, and automation.
 
-### A plugin = a bundle of skills + MCP servers + agents
+## Instructions as Shared Infrastructure
 
-A plugin is a repo (or directory) containing a plugin manifest that groups skills with MCP server configs and agent definitions. skilltap reads three formats:
+`AGENTS.md` is the canonical instruction format managed by skilltap. Global instructions live at `~/AGENTS.md`.
 
-- `.skilltap/<plugin>.toml` (native; multiple plugins per repo)
-- `.claude-plugin/plugin.json` (Claude Code)
-- `.codex-plugin/plugin.json` (Codex)
+Each harness consumes the canonical content directly or through a managed native-location bridge. Claude Code uses a managed `CLAUDE.md` symlink or import. Existing project and nested instruction files remain in their natural locations.
 
-```
-my-plugin/
-  .skilltap/
-    dev-toolkit.toml    # native manifest (publish = true to be installable)
-  skills/
-    helper/SKILL.md
-    reviewer/SKILL.md
-  .mcp.json             # MCP server definitions
-  agents/
-    code-review.md      # Agent definition (Claude Code format)
-```
+skilltap detects missing links, conflicting files, unexpected ownership, and instruction drift without silently overwriting user-authored content.
 
-skilltap extracts the portable subset: **skills** (installed via the existing skill system), **MCP servers** (injected into each target agent's config with the `skilltap:` namespace), and **agents** (placed in agent-specific directories, Claude Code for now). Platform-specific components (hooks, LSP, commands, output styles) are ignored.
+## Audience
 
-After installing, you can toggle individual components — disable a specific MCP server or skill within the plugin without removing the whole thing.
+skilltap serves individual developers who use more than one agent harness and want one trustworthy view of their local environment.
 
-### Plugin capture
+Its state describes one computer. Repositories and collaborators do not need to adopt skilltap. Project-specific resources can still be observed and managed locally without introducing a shared skilltap manifest into the repository.
 
-Installing a plugin that bundles a skill you already have as a standalone is idempotent. skilltap detects the collision, transfers ownership of the standalone to the plugin (atomic, with rollback on failure), and proceeds with the plugin install. Cross-source collisions (a different repo bundles the same skill name) prompt for confirmation in TTY mode and error out non-interactively unless `--force-capture` or `--no-capture` is set.
+## Principles
 
-### Repo scanning
+1. **Native before normalized.** Use supported harness behavior rather than bypassing it.
+2. **Faithfulness before portability.** Do not claim two components are equivalent when their behavior differs materially.
+3. **Plan before mutation.** Show what reconciliation intends to change and why.
+4. **Explicit loss.** Partial results require visible user approval.
+5. **Observable ownership.** Track whether a resource is native, adopted, or materialized by skilltap.
+6. **Idempotent reconciliation.** Synchronizing an unchanged environment produces no changes.
+7. **No hidden decisions.** Drift and conflicts are reported for resolution rather than silently merged.
+8. **Agent-readable operation.** Output makes the next safe action clear.
+9. **Deep support over broad claims.** A harness is supported only when skilltap can model and operate it faithfully.
 
-When you point skilltap at a repo, it scans for all SKILL.md files and lets you choose which to install. Single-skill repos install directly; multi-skill repos prompt for selection.
+## Success
 
-See [SPEC.md — Skill Discovery](./SPEC.md#skill-discovery) for the full scanning algorithm and SKILL.md frontmatter validation.
+skilltap succeeds when a person or agent can quickly determine the health of the computer's agent environment and safely bring managed harnesses into the intended state.
 
-### A tap = a git repo listing other skills
+A healthy environment has:
 
-A tap is a curated index — a git repo containing a `tap.json` (or Claude Code `marketplace.json`) that lists skill names, descriptions, repo URLs, and tags. Taps are how you share a curated collection. Your friends add your tap, they see your skills.
+- Known and reachable harnesses.
+- Traceable marketplaces and plugins.
+- Consistent shared instructions.
+- No unexplained drift.
+- No ambiguous ownership.
+- No silently omitted plugin behavior.
+- A zero-change reconciliation plan when native state matches desired state.
 
-See [SPEC.md — Source Adapters](./SPEC.md#source-adapters) for the tap and `tap.json` format specification.
+## Non-Goals
 
-### Project manifest
+skilltap does not:
 
-Every project gets a `skilltap.toml` declaring the skills, plugins, MCP servers, and taps it depends on, plus its default agent targets. A companion `skilltap.lock` records exact resolved refs.
+- Discover, rank, recommend, or index skills and plugins.
+- Host a marketplace.
+- Define a universal plugin format.
+- Reduce harnesses to a lowest-common-denominator abstraction.
+- Scan extension content for security issues.
+- Replace native authentication or secret storage.
+- Require project collaborators to install skilltap.
+- Act as a general-purpose dotfiles manager.
+- Run a background service.
+- Provide an interactive dashboard or setup wizard.
+- Claim support for a harness through file copying alone.
 
-- `skilltap install <type> <source>` adds to the manifest and lockfile.
-- `skilltap sync` installs from the lockfile, prompts on any drift between declared / locked / installed.
-- `skilltap update` refreshes the lockfile to the latest matching range.
-- A teammate clones the repo, runs `skilltap sync`, and gets the exact same setup.
-
-The manifest tracks all three state types (`[[skills]]`, `[[plugins]]`, `[[mcps]]`); sync reconciles all three.
-
-## CLI
-
-skilltap has one verb per action with typed args:
-
-- `install <type> <source>` — type is `skill | plugin | mcp`. Required.
-- `remove <type> <name>` — type required.
-- `update [type] [name]` — bare = all; `update <type>` = all of type; `update <type> <name>` = one.
-- `toggle [type] [name[:component]]` — TUI when args missing.
-- `try <type> <source>` — readonly preview.
-- `find [query]` — TUI when interactive, `--json` when not.
-- `adopt [path]` — bring unmanaged skills under management. TUI when no path.
-- `sync` — reconcile manifest ↔ lockfile ↔ state.
-- `doctor [skill|plugin <path>]` — env check or per-artifact validation.
-- `status [--json]` — headless dashboard.
-- `migrate` — translate legacy config and state to current format.
-
-Bare `skilltap` opens a multi-screen TUI dashboard (TTY only). See [UX.md](./UX.md) for the full command tree, flag combinations, and interactive prompt flows. See [SPEC.md](./SPEC.md#cli-commands) for the precise behavioral specification of each command.
-
-**Quick examples:**
-
-```bash
-# Install from any git URL (typed)
-skilltap install skill https://gitea.example.com/user/commit-helper
-
-# Install from a tap by name
-skilltap install skill commit-helper
-
-# GitHub shorthand
-skilltap install skill user/repo
-
-# Project scope + agent symlinks (smart-scope picks project automatically inside a git repo)
-skilltap install skill commit-helper --scope project --also claude-code
-
-# Search across all taps
-skilltap find review
-
-# Adopt a local skill for development
-skilltap adopt . --also claude-code
-
-# Install a plugin (one of many in a multi-plugin repo)
-skilltap install plugin user/dev-toolkit:test-runner --also claude-code --also cursor
-
-# Install all publishable plugins from a multi-plugin repo
-skilltap install plugin user/dev-toolkit:*
-
-# Install just an MCP server
-skilltap install mcp user/some-mcp
-
-# Toggle plugin components
-skilltap toggle plugin dev-toolkit
-skilltap toggle plugin dev-toolkit:test-generator   # direct component address
-```
-
-## Security Scanning
-
-Every install runs a multi-layer scan before writing anything to disk. Suspicious content surfaces with context; the user (or `on_warn` policy) decides.
-
-### Layer 1 — Static analysis (instant, no LLM)
-
-Fast pattern matching on every install. Detects invisible Unicode, hidden HTML/CSS, markdown hiding tricks, obfuscation (base64, hex, variable expansion), suspicious URLs (known exfiltration services), dangerous shell patterns, tag injection attempts, and suspicious file types/sizes.
-
-Warnings show the raw escaped content inline (so you can see what's hiding) and the file path + line number. The source is cloned to a temp dir before anything is installed.
-
-See [SPEC.md — Layer 1: Static Analysis](./SPEC.md#layer-1-static-analysis) for the complete detection pattern reference.
-
-### Layer 2 — Semantic scan (opt-in, uses the user's own agent)
-
-When `scan = "semantic"` or `--deep` is passed, skilltap uses the locally installed agent CLI to evaluate the skill's intent.
-
-**How it works:**
-
-1. **Chunk** the skill content into small blocks (~200–500 tokens). Pre-scan for tag injection attempts and auto-flag if found.
-2. **Send each chunk** to the user's agent in an isolated context — fresh session, no tools, no file access, randomized security wrapper tags.
-3. **Aggregate scores** across all chunks. Flag anything above threshold (default: 5).
-
-See [SPEC.md — Layer 2: Semantic Scan](./SPEC.md#layer-2-semantic-scan) for the full chunking algorithm, security prompt template, and agent invocation details.
-
-**Why chunking matters:**
-- A full skill can be thousands of tokens — attackers hide malicious instructions in the middle of legitimate content hoping they get lost in context.
-- Small chunks force focused evaluation on each section.
-- Each chunk is evaluated independently — no cross-contamination between sections.
-- Parallelizable — send up to 4 chunks concurrently for speed.
-
-**Why the user's own agent:**
-- Zero infrastructure — no API keys, no external service, no skilltap account.
-- Works offline if the agent supports it.
-- The user already trusts and pays for their agent.
-- No data leaves the user's machine beyond what their agent already does.
-
-### One policy
-
-The same `[security]` block applies to every caller — human, AI agent, CI, cron. What changes between callers is **resolution behavior** (TTY → prompt vs error, `--yes` auto-confirms, `--json` forces machine output), not security policy.
-
-See [SECURITY.md](./SECURITY.md) for the full configuration reference, scan modes, `on_warn` behavior, and trust list.
-
-### Additional hardening
-
-- **Scan the entire skill directory**, not just SKILL.md — 91% of real attacks hide payloads in auxiliary files.
-- **Flag non-plaintext files** — binaries, compiled code, minified JS.
-- **Size limits** — flag skills over `scanner.max_size` (default 50 KB).
-- **Diff on update** — `skilltap update` shows what changed and re-scans the diff.
-
-### Community trust signals
-
-Taps could optionally carry trust metadata (`verified`, `reviewedBy`). Social trust signal, not a security guarantee. Already implemented via npm provenance (Sigstore/SLSA) and GitHub attestations; per-skill trust tier displays in `list` / `info` / `find` output.
-
-## Auth
-
-Follows git's auth model — no custom auth layer:
-
-1. Git credential helpers (already configured for your hosts).
-2. SSH keys (for `git@` URLs).
-3. Token-in-URL (for HTTPS, e.g. Gitea access tokens).
-4. `GH_TOKEN` / `GITLAB_TOKEN` env vars (for API-based search).
-
-## TUI
-
-Bare `skilltap` opens a multi-screen Ink-based TUI dashboard with tabs for installed skills, plugins, taps, and updates. `find`, `toggle`, and `adopt` open TUIs when invoked without disambiguating arguments. Each TUI screen has a flat command-line equivalent — every TUI action is reproducible from a script.
-
-The TUI is humans-only. Headless callers use `skilltap status` for the dashboard view, or invoke commands with their typed args directly.
-
-## What This Is NOT
-
-- **Not a package manager.** No dependencies, no build step, no install scripts.
-- **Not a marketplace.** No centralized index. Taps are just git repos anyone can create.
-- **Not a runtime.** Skills are static files. No execution engine.
-- **Not a full plugin runtime.** Claude Code and Codex have their own plugin systems with hooks, channels, LSP, and other platform-specific features. skilltap reads their plugin formats but only installs the portable components (skills, MCP servers, agents). For the full platform-specific experience, use each agent's native plugin system.
-
-## Prior Art
-
-| Project | Relationship |
-|---------|-------------|
-| [Agent Skills spec](https://agentskills.io/specification) | The SKILL.md format we distribute. The standard across 40+ agents. |
-| [Claude Code plugin marketplace](https://code.claude.com/docs/en/plugin-marketplaces) | Claude Code's built-in system for distributing plugins (which include skills). Agent-specific. skilltap reads its `plugin.json` and `marketplace.json` formats. |
-| [MCP Registry API](https://registry.modelcontextprotocol.io/) | Most formally specified registry API for MCP servers. |
-| [Homebrew taps](https://docs.brew.sh/Taps) | Direct inspiration for the git-repo-as-index tap model. |
-| [skills.sh](https://skills.sh/) | GitHub-only CLI. No self-hosting, no registry API. Passive telemetry leaderboard. |
-| [Skillshub](https://github.com/EYH0602/skillshub) | Rust CLI with tap support. Similar direction, less mature. |
-| [ClawHub](https://github.com/openclaw/clawhub) | Largest index (13k+ skills). Convex backend, no open API spec. Had security incident (4.4% malicious). |
-| [OpenAI Skills API](https://developers.openai.com/api/docs/guides/tools-skills/) | Proprietary REST API. Cloud-only. |
-
-## Landscape
-
-**Skill format**: Settled. The [Agent Skills spec](https://agentskills.io/specification) (SKILL.md) is adopted by Anthropic, OpenAI, Google, GitHub, Cursor, and 30+ others.
-
-**Agent-specific distribution**: Emerging. Claude Code has a full plugin marketplace. OpenAI has a REST API. But these only work within their own agent.
-
-**Agent-agnostic distribution**: No standard. skills.sh is GitHub-only. Skillshub is Rust/early. ClawHub is centralized. skilltap fills the gap with a simple, self-hostable, git-native tool that installs to the universal `.agents/skills/` path.
-
-## Read formats — the ecosystem stays compatible
-
-skilltap reads (and where applicable, writes) these formats:
-
-- `SKILL.md` (Agent Skills spec)
-- `tap.json`
-- `.claude-plugin/marketplace.json`
-- `.claude-plugin/plugin.json`
-- `.codex-plugin/plugin.json`
-- `.skilltap/<name>.toml` (native plugin manifest)
-- `skilltap.toml` + `skilltap.lock` (project manifest + lockfile)
-- `state.json` (per-scope canonical state)
-
-Skills and plugins published in any of these formats keep working.
-
+Codex and Claude Code are the supported harnesses. Additional harnesses belong only when their native systems can participate in the same faithfulness and reconciliation model.

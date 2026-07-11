@@ -1,3 +1,10 @@
+---
+import_origin: inferred-from-legacy
+intended_output_kind: synthesis-brief
+source_path: .agents/skills/claude-code-marketplace/findings.md
+imported: 2026-07-10
+---
+
 # Research: Claude Code Marketplace / Plugin Structure and Distribution
 
 ## Context
