@@ -502,6 +502,22 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
     let source_text = source.to_str().unwrap();
 
+    let mismatch = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "other",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&mismatch, 1);
+    assert_eq!(json(&mismatch)["errors"][0]["code"], "skill_name_mismatch");
+
     let output = run(
         &machine,
         &[
@@ -574,6 +590,20 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     );
     assert_code(&replace, 2);
     assert_eq!(json(&replace)["summary"]["changed"], false);
+
+    let first_update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "source-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&first_update, 0);
+    assert_eq!(json(&first_update)["summary"]["changed"], true);
 
     fs::write(
         source.join("SKILL.md"),

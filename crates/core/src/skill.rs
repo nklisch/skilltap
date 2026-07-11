@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    domain::{Fingerprint, FingerprintAlgorithm, RelativeArtifactPath},
+    domain::{Fingerprint, FingerprintAlgorithm, NativeId, RelativeArtifactPath},
     runtime::{ExternalTreeEntryKind, ExternalTreeSnapshot},
     storage::{ArtifactTree, ArtifactTreeError},
 };
@@ -94,6 +94,33 @@ impl ValidatedSkillTree {
     pub const fn fingerprint(&self) -> &Fingerprint {
         &self.fingerprint
     }
+
+    /// Return the declared frontmatter name when it is a valid native
+    /// identifier. Callers use this only as an assertion; the directory name
+    /// remains the resource identity and the source is never rewritten.
+    pub fn declared_name(&self) -> Option<NativeId> {
+        let bytes = self
+            .tree
+            .files()
+            .get(&RelativeArtifactPath::new("SKILL.md").expect("static skill path is valid"))?;
+        let text = std::str::from_utf8(bytes).ok()?;
+        let mut lines = text.lines();
+        if lines.next() != Some("---") {
+            return None;
+        }
+        for line in lines {
+            if line == "---" {
+                return None;
+            }
+            let Some((key, value)) = line.split_once(':') else {
+                continue;
+            };
+            if key.trim() == "name" {
+                return NativeId::new(value.trim()).ok();
+            }
+        }
+        None
+    }
 }
 
 fn fingerprint(tree: &ArtifactTree) -> Result<Fingerprint, SkillTreeError> {
@@ -152,6 +179,7 @@ mod tests {
             skill.fingerprint().algorithm(),
             FingerprintAlgorithm::Sha256
         );
+        assert_eq!(skill.declared_name().unwrap().as_str(), "demo");
     }
 
     #[test]

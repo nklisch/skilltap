@@ -1458,6 +1458,13 @@ impl StatusApplication<'_> {
                 "The skill name could not be derived; provide --name.",
             ));
         };
+        if request.name.is_some() && skill.declared_name().as_ref() != Some(&name) {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "skill_name_mismatch",
+                "The supplied --name must match the SKILL.md frontmatter name.",
+            ));
+        }
         let destination = match skill_relative_destination(&name) {
             Some(destination) => destination,
             None => {
@@ -1894,7 +1901,7 @@ impl StatusApplication<'_> {
             target,
             SkillInstallRequest {
                 source: source.locator().as_str(),
-                name: Some(name.as_str()),
+                name: None,
                 requested_revision: source.requested_revision().map(|value| value.as_str()),
                 subdirectory: None,
             },
