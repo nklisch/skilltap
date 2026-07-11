@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-domain-contracts-resource-layers
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
@@ -23,19 +23,44 @@ different representations never overwrite one another.
 
 ## Acceptance criteria
 
-- [ ] `ObservationKey` includes `ResourceId`, `HarnessId`, and an explicit
+- [x] `ObservationKey` includes `ResourceId`, `HarnessId`, and an explicit
   declared/effective layer; duplicate exact keys fail while the same resource
   across harnesses/layers is preserved.
-- [ ] Representation-specific health, components, dependencies, native identity,
+- [x] Representation-specific health, components, dependencies, native identity,
   revision, fingerprint, provenance, ownership, and metadata live on one
   observed instance rather than mixed per-harness maps.
-- [ ] Desired resources preserve direct versus adopted origin (including source
+- [x] Desired resources preserve direct versus adopted origin (including source
   harness), explicit default/include/exclude component choices over the complete
   component graph, and accepted material consequences per target.
-- [ ] Constructors and serde reject source-harness/target mismatches, selections
+- [x] Constructors and serde reject source-harness/target mismatches, selections
   for absent components, consequences for untargeted harnesses, and invalid
   dependency graphs within each observation context.
-- [ ] Resource/component cycle errors report actual cycle members, not merely
+- [x] Resource/component cycle errors report actual cycle members, not merely
   downstream nodes blocked by a cycle.
-- [ ] Deterministic representative multi-harness, two-layer graphs round-trip.
-- [ ] Locked format, clippy, and workspace tests pass.
+- [x] Deterministic representative multi-harness, two-layer graphs round-trip.
+- [x] Locked format, clippy, and workspace tests pass.
+
+## Implementation notes
+
+- Files changed: `crates/core/src/domain/resource.rs` and this story.
+- Added `ObservationKey` and `ObservationLayer`; observed records now contain
+  scalar state for exactly one resource/harness/declared-or-effective context,
+  and graph identity uses the complete key.
+- Added `DesiredOrigin`, `ComponentChoice`, target-keyed accepted
+  `MaterialConsequence` sets, private desired/observed fields, strict serde
+  wires, accessors, and fallible constructors that enforce cross-field context.
+- Observed dependencies resolve only within their harness/layer. Desired,
+  observed, and component cycle errors use deterministic DFS back-edges to
+  report exact cycle members rather than downstream blocked nodes.
+- Tests added: 15 focused raw/serde tests covering adoption source targets,
+  complete component choice maps, accepted consequence targets/components,
+  exact observation duplicates, cross-context dependency rejection,
+  multi-harness/two-layer deterministic round trips, exact cycle diagnostics,
+  malformed findings, opaque metadata, strict wires, and stable enum forms.
+- Discrepancies from design: retained the existing `OpaqueHarnessMetadata` public
+  name for source compatibility, but layered `ObservedResource` uses one opaque
+  JSON value because its harness namespace is now carried by `ObservationKey`.
+- Adjacent issues parked: none.
+- Verification: `cargo fmt --all -- --check`, `cargo check --workspace --locked`,
+  `cargo clippy --workspace --all-targets --locked -- -D warnings`, and
+  `cargo test --workspace --locked` pass with 52 core tests.
