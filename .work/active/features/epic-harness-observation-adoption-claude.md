@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-claude
 kind: feature
-stage: drafting
+stage: implementing
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-detection]
@@ -24,3 +24,50 @@ separate enabled declarations from effective cache installs and version basis;
 and report trust, consent, policy, bridge, and malformed-state findings.
 Project-shared declarations remain observable but non-adoptable. Never mutate
 settings/cache, grant consent, or assume repository movement is an update.
+
+## Design
+
+The Claude adapter composes detection, strict bounded JSON, and external-tree
+runtime ports for user/global and one personal project scope. It treats
+qualified `name@marketplace` as identity, distinguishes marketplace plugins,
+skills-directory plugins, and standalone complete skills, and keeps enabled
+declarations separate from effective cache installations and version basis.
+Settings and cache are evidence only; shared project declarations remain
+observable but non-adoptable. Trust, consent, policy, bridge, and malformed
+state become typed findings without exposing native payloads.
+
+## Design decisions
+
+- **Identity**: marketplace-qualified names remain distinct from unqualified
+  local plugin names; similar names or URLs never imply equivalence.
+- **Scope**: global and one personal project scope are supported; shared
+  project declarations are reported but cannot become adoption candidates.
+- **Cache**: effective cache contents corroborate enabled declarations and
+  version basis only; cache presence never grants consent or mutation authority.
+
+## Implementation units
+
+1. `epic-harness-observation-adoption-claude-paths` — derive bounded Claude
+   global/project settings, plugin, cache, and skill roots — depends on
+   `[epic-harness-observation-adoption-detection,
+   epic-harness-observation-adoption-runtime]`.
+2. `epic-harness-observation-adoption-claude-settings` — parse bounded settings
+   and declarations, preserving qualified identities and malformed siblings —
+   depends on `[epic-harness-observation-adoption-claude-paths]`.
+3. `epic-harness-observation-adoption-claude-resources` — observe plugins,
+   complete skills, cache effective state, trust/consent/policy findings —
+   depends on `[epic-harness-observation-adoption-claude-settings]`.
+4. `epic-harness-observation-adoption-claude-integration` — verify global,
+   personal project, shared declarations, cache/trust distinctions,
+   deterministic no-mutation and safe errors — depends on
+   `[epic-harness-observation-adoption-claude-paths,
+   epic-harness-observation-adoption-claude-settings,
+   epic-harness-observation-adoption-claude-resources]`.
+
+## Acceptance criteria
+
+- Claude observation is bounded, deterministic, read-only, and scope-exact.
+- Qualified marketplace/plugin identities, enabled/effective/cache state,
+  complete skills, trust/consent/policy, bridges, and malformed siblings are
+  represented safely without adoption or mutation authority.
+- Linux and native macOS behavior suites pass without settings/cache writes.
