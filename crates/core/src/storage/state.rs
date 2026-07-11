@@ -1,0 +1,523 @@
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+
+use serde::{Deserialize, Deserializer, Serialize};
+
+use super::{SCHEMA_VERSION, SchemaError};
+use crate::domain::{
+    Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership, Provenance,
+    RelativeArtifactPath, ResolvedRevision, ResourceId, Source,
+};
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(try_from = "TimestampWire", into = "TimestampWire")]
+pub struct Timestamp {
+    seconds: u64,
+    nanoseconds: u32,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct TimestampWire {
+    seconds: u64,
+    nanoseconds: u32,
+}
+
+impl Timestamp {
+    pub fn new(seconds: u64, nanoseconds: u32) -> Result<Self, SchemaError> {
+        if nanoseconds >= 1_000_000_000 {
+            return Err(SchemaError::InvalidNanoseconds { nanoseconds });
+        }
+        let timestamp = Self {
+            seconds,
+            nanoseconds,
+        };
+        UNIX_EPOCH
+            .checked_add(Duration::new(seconds, nanoseconds))
+            .ok_or(SchemaError::TimestampOutOfRange)?;
+        Ok(timestamp)
+    }
+
+    pub const fn seconds(self) -> u64 {
+        self.seconds
+    }
+    pub const fn nanoseconds(self) -> u32 {
+        self.nanoseconds
+    }
+
+    pub fn from_system_time(value: SystemTime) -> Result<Self, SchemaError> {
+        let duration = value
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| SchemaError::TimestampBeforeEpoch)?;
+        Self::new(duration.as_secs(), duration.subsec_nanos())
+    }
+
+    pub fn to_system_time(self) -> Result<SystemTime, SchemaError> {
+        UNIX_EPOCH
+            .checked_add(Duration::new(self.seconds, self.nanoseconds))
+            .ok_or(SchemaError::TimestampOutOfRange)
+    }
+}
+
+impl From<Timestamp> for TimestampWire {
+    fn from(value: Timestamp) -> Self {
+        Self {
+            seconds: value.seconds,
+            nanoseconds: value.nanoseconds,
+        }
+    }
+}
+
+impl TryFrom<TimestampWire> for Timestamp {
+    type Error = SchemaError;
+    fn try_from(value: TimestampWire) -> Result<Self, Self::Error> {
+        Self::new(value.seconds, value.nanoseconds)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtifactRole {
+    MaterializedPlugin,
+    DirectSkill,
+    Backup,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManagedArtifactRecord {
+    owner: ResourceId,
+    role: ArtifactRole,
+    path: RelativeArtifactPath,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fingerprint: Option<Fingerprint>,
+}
+
+impl ManagedArtifactRecord {
+    pub fn new(
+        owner: ResourceId,
+        role: ArtifactRole,
+        path: RelativeArtifactPath,
+        fingerprint: Option<Fingerprint>,
+    ) -> Self {
+        Self {
+            owner,
+            role,
+            path,
+            fingerprint,
+        }
+    }
+    pub fn owner(&self) -> &ResourceId {
+        &self.owner
+    }
+    pub const fn role(&self) -> ArtifactRole {
+        self.role
+    }
+    pub fn path(&self) -> &RelativeArtifactPath {
+        &self.path
+    }
+    pub const fn fingerprint(&self) -> Option<&Fingerprint> {
+        self.fingerprint.as_ref()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "ApplyRecordWire")]
+pub struct ApplyRecord {
+    at: Timestamp,
+    operations: BTreeMap<OperationId, OperationResult>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ApplyRecordWire {
+    at: Timestamp,
+    operations: Vec<OperationResult>,
+}
+
+impl ApplyRecord {
+    pub fn new(
+        at: Timestamp,
+        operations: impl IntoIterator<Item = OperationResult>,
+    ) -> Result<Self, SchemaError> {
+        let mut collected = BTreeMap::new();
+        for operation in operations {
+            let id = operation.operation_id().clone();
+            if collected.insert(id.clone(), operation).is_some() {
+                return Err(SchemaError::DuplicateOperation { operation: id });
+            }
+        }
+        Ok(Self {
+            at,
+            operations: collected,
+        })
+    }
+    pub const fn at(&self) -> Timestamp {
+        self.at
+    }
+    pub const fn operations(&self) -> &BTreeMap<OperationId, OperationResult> {
+        &self.operations
+    }
+}
+
+impl From<ApplyRecord> for ApplyRecordWire {
+    fn from(value: ApplyRecord) -> Self {
+        Self {
+            at: value.at,
+            operations: value.operations.into_values().collect(),
+        }
+    }
+}
+
+impl TryFrom<ApplyRecordWire> for ApplyRecord {
+    type Error = SchemaError;
+    fn try_from(value: ApplyRecordWire) -> Result<Self, Self::Error> {
+        Self::new(value.at, value.operations)
+    }
+}
+
+impl<'de> Deserialize<'de> for ApplyRecord {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        ApplyRecordWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarnessState {
+    pub harness: HarnessId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_version: Option<NativeId>,
+    pub observed_at: Timestamp,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "ResourceStateWire")]
+pub struct ResourceState {
+    resource_id: ResourceId,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    native_ids: BTreeMap<HarnessId, NativeId>,
+    provenance: Provenance,
+    ownership: Ownership,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<Source>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    managed_artifact: Option<ManagedArtifactRecord>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fingerprint: Option<Fingerprint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    installed_revision: Option<ResolvedRevision>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    available_revision: Option<ResolvedRevision>,
+    observed_at: Timestamp,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_apply: Option<ApplyRecord>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ResourceStateWire {
+    resource_id: ResourceId,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    native_ids: BTreeMap<HarnessId, NativeId>,
+    provenance: Provenance,
+    ownership: Ownership,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    source: Option<Source>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    managed_artifact: Option<ManagedArtifactRecord>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fingerprint: Option<Fingerprint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    installed_revision: Option<ResolvedRevision>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    available_revision: Option<ResolvedRevision>,
+    observed_at: Timestamp,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_apply: Option<ApplyRecord>,
+}
+
+impl ResourceState {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        resource_id: ResourceId,
+        native_ids: BTreeMap<HarnessId, NativeId>,
+        provenance: Provenance,
+        ownership: Ownership,
+        source: Option<Source>,
+        managed_artifact: Option<ManagedArtifactRecord>,
+        fingerprint: Option<Fingerprint>,
+        installed_revision: Option<ResolvedRevision>,
+        available_revision: Option<ResolvedRevision>,
+        observed_at: Timestamp,
+        last_apply: Option<ApplyRecord>,
+    ) -> Result<Self, SchemaError> {
+        let ownership_valid = matches!(
+            (provenance, ownership),
+            (
+                Provenance::Direct | Provenance::Materialized,
+                Ownership::Skilltap
+            ) | (
+                Provenance::Native | Provenance::Adopted,
+                Ownership::Harness | Ownership::Unmanaged
+            )
+        );
+        if !ownership_valid {
+            return Err(SchemaError::InvalidOwnership {
+                resource: resource_id,
+            });
+        }
+        if let Some(artifact) = &managed_artifact {
+            if artifact.owner != resource_id {
+                return Err(SchemaError::ManagedOwnerMismatch {
+                    resource: resource_id,
+                    owner: artifact.owner.clone(),
+                });
+            }
+            let role_valid = matches!(
+                (artifact.role, provenance),
+                (ArtifactRole::MaterializedPlugin, Provenance::Materialized)
+                    | (ArtifactRole::DirectSkill, Provenance::Direct)
+                    | (
+                        ArtifactRole::Backup,
+                        Provenance::Direct | Provenance::Materialized
+                    )
+            );
+            if !role_valid {
+                return Err(SchemaError::InvalidArtifactRole {
+                    resource: resource_id,
+                });
+            }
+        }
+        Ok(Self {
+            resource_id,
+            native_ids,
+            provenance,
+            ownership,
+            source,
+            managed_artifact,
+            fingerprint,
+            installed_revision,
+            available_revision,
+            observed_at,
+            last_apply,
+        })
+    }
+    pub fn resource_id(&self) -> &ResourceId {
+        &self.resource_id
+    }
+    pub const fn provenance(&self) -> Provenance {
+        self.provenance
+    }
+    pub const fn ownership(&self) -> Ownership {
+        self.ownership
+    }
+    pub const fn managed_artifact(&self) -> Option<&ManagedArtifactRecord> {
+        self.managed_artifact.as_ref()
+    }
+    pub const fn native_ids(&self) -> &BTreeMap<HarnessId, NativeId> {
+        &self.native_ids
+    }
+    pub const fn source(&self) -> Option<&Source> {
+        self.source.as_ref()
+    }
+    pub const fn fingerprint(&self) -> Option<&Fingerprint> {
+        self.fingerprint.as_ref()
+    }
+    pub const fn installed_revision(&self) -> Option<&ResolvedRevision> {
+        self.installed_revision.as_ref()
+    }
+    pub const fn available_revision(&self) -> Option<&ResolvedRevision> {
+        self.available_revision.as_ref()
+    }
+    pub const fn observed_at(&self) -> Timestamp {
+        self.observed_at
+    }
+    pub const fn last_apply(&self) -> Option<&ApplyRecord> {
+        self.last_apply.as_ref()
+    }
+}
+
+impl From<ResourceState> for ResourceStateWire {
+    fn from(value: ResourceState) -> Self {
+        Self {
+            resource_id: value.resource_id,
+            native_ids: value.native_ids,
+            provenance: value.provenance,
+            ownership: value.ownership,
+            source: value.source,
+            managed_artifact: value.managed_artifact,
+            fingerprint: value.fingerprint,
+            installed_revision: value.installed_revision,
+            available_revision: value.available_revision,
+            observed_at: value.observed_at,
+            last_apply: value.last_apply,
+        }
+    }
+}
+
+impl TryFrom<ResourceStateWire> for ResourceState {
+    type Error = SchemaError;
+
+    fn try_from(value: ResourceStateWire) -> Result<Self, Self::Error> {
+        Self::new(
+            value.resource_id,
+            value.native_ids,
+            value.provenance,
+            value.ownership,
+            value.source,
+            value.managed_artifact,
+            value.fingerprint,
+            value.installed_revision,
+            value.available_revision,
+            value.observed_at,
+            value.last_apply,
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for ResourceState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        ResourceStateWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "StateWire")]
+pub struct StateDocument {
+    harnesses: BTreeMap<HarnessId, HarnessState>,
+    resources: BTreeMap<ResourceId, ResourceState>,
+    last_update_check: Option<Timestamp>,
+    last_successful_observation: Option<Timestamp>,
+    last_successful_application: Option<Timestamp>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct StateWire {
+    schema: u32,
+    harnesses: Vec<HarnessState>,
+    resources: Vec<ResourceState>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_update_check: Option<Timestamp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_successful_observation: Option<Timestamp>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_successful_application: Option<Timestamp>,
+}
+
+impl StateDocument {
+    pub const fn schema(&self) -> u32 {
+        SCHEMA_VERSION
+    }
+
+    pub fn new(
+        schema: u32,
+        harnesses: impl IntoIterator<Item = HarnessState>,
+        resources: impl IntoIterator<Item = ResourceState>,
+        last_update_check: Option<Timestamp>,
+        last_successful_observation: Option<Timestamp>,
+        last_successful_application: Option<Timestamp>,
+    ) -> Result<Self, SchemaError> {
+        if schema != SCHEMA_VERSION {
+            return Err(SchemaError::UnsupportedVersion {
+                document: "state",
+                version: schema,
+            });
+        }
+        let mut harness_map = BTreeMap::new();
+        for state in harnesses {
+            let id = state.harness.clone();
+            if harness_map.insert(id.clone(), state).is_some() {
+                return Err(SchemaError::DuplicateHarness { harness: id });
+            }
+        }
+        let mut resource_map = BTreeMap::new();
+        let mut managed_paths = BTreeSet::new();
+        for state in resources {
+            let id = state.resource_id.clone();
+            if let Some(artifact) = &state.managed_artifact
+                && !managed_paths.insert(artifact.path.clone())
+            {
+                return Err(SchemaError::DuplicateManagedPath {
+                    path: artifact.path.clone(),
+                });
+            }
+            if resource_map.insert(id.clone(), state).is_some() {
+                return Err(SchemaError::DuplicateStateResource { resource: id });
+            }
+        }
+        Ok(Self {
+            harnesses: harness_map,
+            resources: resource_map,
+            last_update_check,
+            last_successful_observation,
+            last_successful_application,
+        })
+    }
+    pub const fn harnesses(&self) -> &BTreeMap<HarnessId, HarnessState> {
+        &self.harnesses
+    }
+    pub const fn resources(&self) -> &BTreeMap<ResourceId, ResourceState> {
+        &self.resources
+    }
+    pub const fn last_update_check(&self) -> Option<Timestamp> {
+        self.last_update_check
+    }
+    pub const fn last_successful_observation(&self) -> Option<Timestamp> {
+        self.last_successful_observation
+    }
+    pub const fn last_successful_application(&self) -> Option<Timestamp> {
+        self.last_successful_application
+    }
+}
+
+impl From<StateDocument> for StateWire {
+    fn from(value: StateDocument) -> Self {
+        Self {
+            schema: SCHEMA_VERSION,
+            harnesses: value.harnesses.into_values().collect(),
+            resources: value.resources.into_values().collect(),
+            last_update_check: value.last_update_check,
+            last_successful_observation: value.last_successful_observation,
+            last_successful_application: value.last_successful_application,
+        }
+    }
+}
+
+impl TryFrom<StateWire> for StateDocument {
+    type Error = SchemaError;
+    fn try_from(value: StateWire) -> Result<Self, Self::Error> {
+        Self::new(
+            value.schema,
+            value.harnesses,
+            value.resources,
+            value.last_update_check,
+            value.last_successful_observation,
+            value.last_successful_application,
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for StateDocument {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        StateWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}

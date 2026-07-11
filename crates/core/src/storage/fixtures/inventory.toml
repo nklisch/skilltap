@@ -1,0 +1,67 @@
+schema = 1
+projects = ["/work/skilltap"]
+
+[[resources]]
+id = "harness:codex"
+kind = "harness"
+targets = ["codex"]
+update = "track"
+
+[resources.scope]
+kind = "global"
+
+[resources.origin]
+kind = "direct"
+
+[[resources]]
+id = "instructions:global"
+kind = "instruction_location"
+targets = ["codex"]
+update = "track"
+dependencies = ["skill:review"]
+
+[resources.scope]
+kind = "global"
+
+[resources.origin]
+kind = "direct"
+
+[[resources]]
+id = "marketplace:personal"
+kind = "marketplace"
+targets = ["codex"]
+update = "track"
+dependencies = ["harness:codex"]
+
+[resources.scope]
+kind = "global"
+
+[resources.origin]
+kind = "direct"
+
+[[resources]]
+id = "plugin:tools"
+kind = "plugin"
+targets = ["codex"]
+update = "track"
+dependencies = ["marketplace:personal"]
+
+[resources.scope]
+kind = "global"
+
+[resources.origin]
+kind = "direct"
+
+[[resources]]
+id = "skill:review"
+kind = "standalone_skill"
+targets = ["codex"]
+update = "track"
+dependencies = ["plugin:tools"]
+
+[resources.scope]
+kind = "project"
+path = "/work/skilltap"
+
+[resources.origin]
+kind = "direct"

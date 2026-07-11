@@ -1,0 +1,16 @@
+schema = 1
+
+[harnesses.codex]
+enabled = true
+binary = "codex"
+
+[harnesses.claude]
+enabled = true
+binary = "claude"
+
+[instructions]
+claude_mode = "symlink"
+
+[updates]
+mode = "apply-safe"
+interval = "6h"

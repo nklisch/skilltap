@@ -1,7 +1,7 @@
 ---
 id: epic-rust-control-plane-storage-schemas
 kind: story
-stage: implementing
+stage: review
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: []
@@ -31,3 +31,34 @@ artifact records described by the parent design.
 - Artifact records use validated relative paths and exact owner/role context.
 - Golden fixtures and unknown-field mutations cover all schemas; full locked
   verification passes.
+
+## Implementation notes
+
+- Added `skilltap_core::storage` with strict schema-1 `ConfigDocument`,
+  `InventoryDocument`, and `StateDocument` types plus validated update
+  intervals, nanosecond Unix timestamps, per-resource apply records, harness
+  state, resource state, and owner/role-bound managed artifact records.
+- The complete inventory spike succeeded with the existing `DesiredResource`
+  serde contract. Storage adds only a deterministic list/map document wire;
+  desired targets, sources, update intent, components, accepted consequences,
+  and dependencies remain domain-owned single sources of truth.
+- Constructors and deserialization share validation paths for versions,
+  canonical positive intervals, desired dependency graphs, declared project
+  roots, state identity/path uniqueness, provenance/ownership/artifact-role
+  consistency, duplicate operation results, and timestamp range/precision.
+- Added strict TOML config/inventory and JSON state golden fixtures. Negative
+  mutations cover unknown document and nested fields, unsupported versions,
+  desired-policy leakage into state, duplicates, dangling/cyclic graphs,
+  undeclared projects, invalid timestamps, and invalid artifact context.
+- Added maintained `toml` 1.1.2 as a workspace dependency. No repository,
+  filesystem mutation, observation, planning, or lifecycle behavior was added.
+- Files changed: `Cargo.toml`, `Cargo.lock`, `crates/core/Cargo.toml`,
+  `crates/core/src/lib.rs`, and `crates/core/src/storage/`.
+- Tests added: 8 storage schema/golden/negative-contract tests. Verification
+  passed with 107 workspace tests: `cargo fmt --all -- --check`,
+  `cargo check --locked --workspace --all-targets`,
+  `cargo clippy --locked --workspace --all-targets -- -D warnings`,
+  `cargo test --locked --workspace`, and
+  `RUSTDOCFLAGS='-D warnings' cargo doc --locked --workspace --no-deps`.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.

@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "harnesses": [
+    {
+      "harness": "codex",
+      "native_version": "1.2.3",
+      "observed_at": {
+        "seconds": 99,
+        "nanoseconds": 5
+      }
+    }
+  ],
+  "resources": [
+    {
+      "resource_id": "skill:review",
+      "provenance": "direct",
+      "ownership": "skilltap",
+      "managed_artifact": {
+        "owner": "skill:review",
+        "role": "direct_skill",
+        "path": "skills/review",
+        "fingerprint": {
+          "algorithm": "sha256",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "fingerprint": {
+        "algorithm": "sha256",
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "observed_at": {
+        "seconds": 100,
+        "nanoseconds": 25
+      },
+      "last_apply": {
+        "at": {
+          "seconds": 101,
+          "nanoseconds": 0
+        },
+        "operations": [
+          {
+            "operation_id": "install:skill",
+            "outcome": {
+              "status": "applied"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "last_update_check": {
+    "seconds": 98,
+    "nanoseconds": 0
+  },
+  "last_successful_observation": {
+    "seconds": 100,
+    "nanoseconds": 25
+  },
+  "last_successful_application": {
+    "seconds": 101,
+    "nanoseconds": 0
+  }
+}
