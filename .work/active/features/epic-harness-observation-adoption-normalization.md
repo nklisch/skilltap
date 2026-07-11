@@ -1,7 +1,7 @@
 ---
 id: epic-harness-observation-adoption-normalization
 kind: feature
-stage: implementing
+stage: done
 tags: []
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-codex, epic-harness-observation-adoption-claude]
@@ -78,3 +78,21 @@ snapshot is the single input for later status and adoption operations.
   semantics; names, URLs, copied fingerprints, and caches do not prove it.
 - Healthy siblings survive failures, malformed/unresolved evidence remains
   visible, and all normalized output is safe and typed.
+
+## Implementation
+
+- Completed graph composition, conservative source/semantics correlation,
+  failure-preserving health summaries, and integration verification over the
+  Codex/Claude observation outputs.
+- Normalization remains ephemeral and read-only; domain contracts retain exact
+  scope/harness/layer identity and reject missing/unexpected sibling outcomes.
+
+## Verification
+
+- Harness tests, normalization tests, 211 core tests, workspace Clippy, and
+  locked integration suites pass with deterministic safe output.
+
+## Review
+
+- Aggregate review approved from all green child records and the locked
+  workspace ladder.
