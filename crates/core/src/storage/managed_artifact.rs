@@ -5,8 +5,6 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use sha2::{Digest, Sha256};
-
 use crate::{
     domain::{AbsolutePath, Fingerprint, RelativeArtifactPath, ResourceId},
     runtime::{DirectoryIdentity, DirectoryPublishOutcome, DirectoryTreeFileSystem, RuntimeError},
@@ -350,19 +348,16 @@ impl<'a> FileManagedArtifactRepository<'a> {
 
     fn publish_at(
         &self,
-        owner: &ResourceId,
-        role: ArtifactRole,
-        fingerprint: Option<&Fingerprint>,
-        path: RelativeArtifactPath,
+        record: ManagedArtifactRecord,
         tree: &ArtifactTree,
         action: ManagedArtifactAction,
     ) -> Result<ArtifactPublication, ManagedArtifactError> {
-        let record =
-            ManagedArtifactRecord::new(owner.clone(), role, path.clone(), fingerprint.cloned());
+        let owner = record.owner().clone();
+        let path = record.path().clone();
         match self
             .filesystem
             .publish_tree_no_follow(&self.managed_root, &path, tree.files())
-            .map_err(|error| ManagedArtifactError::runtime(action, owner, &path, error))?
+            .map_err(|error| ManagedArtifactError::runtime(action, &owner, &path, error))?
         {
             DirectoryPublishOutcome::Published(identity) => {
                 Ok(ArtifactPublication::Published(ManagedArtifactHandle {
@@ -371,13 +366,13 @@ impl<'a> FileManagedArtifactRepository<'a> {
                 }))
             }
             DirectoryPublishOutcome::AlreadyExists => {
-                let loaded = self.load_with_action(owner, &record, action)?;
+                let loaded = self.load_with_action(&owner, &record, action)?;
                 if loaded.tree() == tree {
                     Ok(ArtifactPublication::Existing(loaded.handle))
                 } else {
                     Err(ManagedArtifactError::new(
                         action,
-                        owner,
+                        &owner,
                         Some(&path),
                         ManagedArtifactFailure::Conflict,
                     ))
@@ -392,7 +387,7 @@ impl<'a> FileManagedArtifactRepository<'a> {
         record: &ManagedArtifactRecord,
         action: ManagedArtifactAction,
     ) -> Result<LoadedArtifact, ManagedArtifactError> {
-        validate_record(owner, record).map_err(|()| {
+        record.validate_for_owner(owner).map_err(|_| {
             ManagedArtifactError::new(
                 action,
                 owner,
@@ -438,22 +433,16 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
                 ManagedArtifactFailure::InvalidRecord,
             ));
         }
-        let path = artifact_path(owner, role, fingerprint).map_err(|_| {
-            ManagedArtifactError::new(
-                ManagedArtifactAction::Publish,
-                owner,
-                None,
-                ManagedArtifactFailure::InvalidRecord,
-            )
-        })?;
-        self.publish_at(
-            owner,
-            role,
-            Some(fingerprint),
-            path,
-            tree,
-            ManagedArtifactAction::Publish,
-        )
+        let record = ManagedArtifactRecord::for_artifact(owner.clone(), role, fingerprint.clone())
+            .map_err(|_| {
+                ManagedArtifactError::new(
+                    ManagedArtifactAction::Publish,
+                    owner,
+                    None,
+                    ManagedArtifactFailure::InvalidRecord,
+                )
+            })?;
+        self.publish_at(record, tree, ManagedArtifactAction::Publish)
     }
 
     fn backup(
@@ -463,21 +452,17 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
     ) -> Result<ManagedArtifactHandle, ManagedArtifactError> {
         for _ in 0..32 {
             let sequence = BACKUP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-            let path = RelativeArtifactPath::new(format!(
-                "backup-{}-{}-{sequence}",
-                owner_key(owner),
-                std::process::id()
-            ))
-            .map_err(|_| {
-                ManagedArtifactError::new(
-                    ManagedArtifactAction::Backup,
-                    owner,
-                    None,
-                    ManagedArtifactFailure::InvalidRecord,
-                )
-            })?;
             let record =
-                ManagedArtifactRecord::new(owner.clone(), ArtifactRole::Backup, path.clone(), None);
+                ManagedArtifactRecord::for_backup(owner.clone(), std::process::id(), sequence)
+                    .map_err(|_| {
+                        ManagedArtifactError::new(
+                            ManagedArtifactAction::Backup,
+                            owner,
+                            None,
+                            ManagedArtifactFailure::InvalidRecord,
+                        )
+                    })?;
+            let path = record.path().clone();
             match self
                 .filesystem
                 .publish_tree_no_follow(&self.managed_root, &path, tree.files())
@@ -518,7 +503,7 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
         owner: &ResourceId,
         handle: &ManagedArtifactHandle,
     ) -> Result<(), ManagedArtifactError> {
-        validate_record(owner, handle.record()).map_err(|()| {
+        handle.record().validate_for_owner(owner).map_err(|_| {
             ManagedArtifactError::new(
                 ManagedArtifactAction::Remove,
                 owner,
@@ -542,64 +527,6 @@ impl ManagedArtifactRepository for FileManagedArtifactRepository<'_> {
                 )
             })
     }
-}
-
-fn artifact_path(
-    owner: &ResourceId,
-    role: ArtifactRole,
-    fingerprint: &Fingerprint,
-) -> Result<RelativeArtifactPath, ()> {
-    RelativeArtifactPath::new(format!(
-        "artifact-{}-{}-{}-{}",
-        role_component(role),
-        owner_key(owner),
-        fingerprint.algorithm(),
-        fingerprint.digest()
-    ))
-    .map_err(|_| ())
-}
-
-fn validate_record(owner: &ResourceId, record: &ManagedArtifactRecord) -> Result<(), ()> {
-    if record.owner() != owner {
-        return Err(());
-    }
-    match record.role() {
-        ArtifactRole::Backup => {
-            let prefix = format!("backup-{}-", owner_key(owner));
-            let suffix = record.path().as_str().strip_prefix(&prefix);
-            let generated = suffix.and_then(|value| value.split_once('-')).is_some_and(
-                |(process, sequence)| {
-                    !process.is_empty()
-                        && !sequence.is_empty()
-                        && process.bytes().all(|byte| byte.is_ascii_digit())
-                        && sequence.bytes().all(|byte| byte.is_ascii_digit())
-                },
-            );
-            if record.fingerprint().is_some() || record.path().as_str().contains('/') || !generated
-            {
-                return Err(());
-            }
-        }
-        ArtifactRole::MaterializedPlugin | ArtifactRole::DirectSkill => {
-            let fingerprint = record.fingerprint().ok_or(())?;
-            if record.path() != &artifact_path(owner, record.role(), fingerprint)? {
-                return Err(());
-            }
-        }
-    }
-    Ok(())
-}
-
-const fn role_component(role: ArtifactRole) -> &'static str {
-    match role {
-        ArtifactRole::MaterializedPlugin => "materialized-plugin",
-        ArtifactRole::DirectSkill => "direct-skill",
-        ArtifactRole::Backup => "backup",
-    }
-}
-
-fn owner_key(owner: &ResourceId) -> String {
-    format!("{:x}", Sha256::digest(owner.as_str().as_bytes()))
 }
 
 #[cfg(test)]

@@ -5,10 +5,10 @@ use std::{
 
 use serde::{Deserialize, Deserializer, Serialize};
 
-use super::{STATE_SCHEMA_VERSION, SchemaError};
+use super::{ArtifactRole, ManagedArtifactRecord, STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
     Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership, Provenance,
-    RelativeArtifactPath, ResolvedRevision, ResourceId, Source,
+    ResolvedRevision, ResourceId, Source,
 };
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -74,52 +74,6 @@ impl TryFrom<TimestampWire> for Timestamp {
     type Error = SchemaError;
     fn try_from(value: TimestampWire) -> Result<Self, Self::Error> {
         Self::new(value.seconds, value.nanoseconds)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ArtifactRole {
-    MaterializedPlugin,
-    DirectSkill,
-    Backup,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ManagedArtifactRecord {
-    owner: ResourceId,
-    role: ArtifactRole,
-    path: RelativeArtifactPath,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    fingerprint: Option<Fingerprint>,
-}
-
-impl ManagedArtifactRecord {
-    pub fn new(
-        owner: ResourceId,
-        role: ArtifactRole,
-        path: RelativeArtifactPath,
-        fingerprint: Option<Fingerprint>,
-    ) -> Self {
-        Self {
-            owner,
-            role,
-            path,
-            fingerprint,
-        }
-    }
-    pub fn owner(&self) -> &ResourceId {
-        &self.owner
-    }
-    pub const fn role(&self) -> ArtifactRole {
-        self.role
-    }
-    pub fn path(&self) -> &RelativeArtifactPath {
-        &self.path
-    }
-    pub const fn fingerprint(&self) -> Option<&Fingerprint> {
-        self.fingerprint.as_ref()
     }
 }
 
@@ -275,14 +229,9 @@ impl ResourceState {
             });
         }
         if let Some(artifact) = &managed_artifact {
-            if artifact.owner != resource_id {
-                return Err(SchemaError::ManagedOwnerMismatch {
-                    resource: resource_id,
-                    owner: artifact.owner.clone(),
-                });
-            }
+            artifact.validate_for_owner(&resource_id)?;
             let role_valid = matches!(
-                (artifact.role, provenance),
+                (artifact.role(), provenance),
                 (ArtifactRole::MaterializedPlugin, Provenance::Materialized)
                     | (ArtifactRole::DirectSkill, Provenance::Direct)
                     | (
@@ -449,10 +398,10 @@ impl StateDocument {
         for state in resources {
             let id = state.resource_id.clone();
             if let Some(artifact) = &state.managed_artifact
-                && !managed_paths.insert(artifact.path.clone())
+                && !managed_paths.insert(artifact.path().clone())
             {
                 return Err(SchemaError::DuplicateManagedPath {
-                    path: artifact.path.clone(),
+                    path: artifact.path().clone(),
                 });
             }
             if resource_map.insert(id.clone(), state).is_some() {

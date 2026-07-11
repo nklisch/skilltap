@@ -71,21 +71,24 @@ fn fingerprint() -> Fingerprint {
     Fingerprint::new(FingerprintAlgorithm::Sha256, "a".repeat(64)).unwrap()
 }
 
-fn managed_resource(id: &str, path: &str) -> ResourceState {
+fn managed_resource(id: &str) -> ResourceState {
     let id = ResourceId::new(id).unwrap();
+    let artifact_fingerprint = fingerprint();
     ResourceState::new(
         id.clone(),
         BTreeMap::new(),
         Provenance::Direct,
         Ownership::Skilltap,
         None,
-        Some(ManagedArtifactRecord::new(
-            id,
-            ArtifactRole::DirectSkill,
-            RelativeArtifactPath::new(path).unwrap(),
-            Some(fingerprint()),
-        )),
-        Some(fingerprint()),
+        Some(
+            ManagedArtifactRecord::for_artifact(
+                id,
+                ArtifactRole::DirectSkill,
+                artifact_fingerprint.clone(),
+            )
+            .unwrap(),
+        ),
+        Some(artifact_fingerprint),
         None,
         None,
         Timestamp::new(100, 25).unwrap(),
@@ -112,7 +115,7 @@ fn representative_state() -> StateDocument {
             native_version: Some(NativeId::new("1.2.3").unwrap()),
             observed_at: Timestamp::new(99, 5).unwrap(),
         }],
-        [managed_resource("skill:review", "skills/review")],
+        [managed_resource("skill:review")],
         Some(Timestamp::new(98, 0).unwrap()),
         Some(Timestamp::new(100, 25).unwrap()),
         Some(Timestamp::new(101, 0).unwrap()),
@@ -336,20 +339,8 @@ fn state_is_strict_golden_and_excludes_desired_policy() {
 }
 
 #[test]
-fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
-    let first = managed_resource("skill:first", "skills/shared");
-    let second = managed_resource("skill:second", "skills/shared");
-    assert!(matches!(
-        StateDocument::new(
-            STATE_SCHEMA_VERSION,
-            [],
-            [first.clone(), second],
-            None,
-            None,
-            None
-        ),
-        Err(SchemaError::DuplicateManagedPath { .. })
-    ));
+fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
+    let first = managed_resource("skill:first");
     assert!(
         StateDocument::new(
             STATE_SCHEMA_VERSION,
@@ -376,12 +367,12 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
     );
 
     let id = ResourceId::new("skill:bad").unwrap();
-    let wrong_owner = ManagedArtifactRecord::new(
+    let wrong_owner = ManagedArtifactRecord::for_artifact(
         ResourceId::new("skill:other").unwrap(),
         ArtifactRole::DirectSkill,
-        RelativeArtifactPath::new("skills/bad").unwrap(),
-        None,
-    );
+        fingerprint(),
+    )
+    .unwrap();
     assert!(
         ResourceState::new(
             id.clone(),
@@ -414,12 +405,12 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
         )
         .is_err()
     );
-    let wrong_role = ManagedArtifactRecord::new(
+    let wrong_role = ManagedArtifactRecord::for_artifact(
         id.clone(),
         ArtifactRole::MaterializedPlugin,
-        RelativeArtifactPath::new("skills/bad").unwrap(),
-        None,
-    );
+        fingerprint(),
+    )
+    .unwrap();
     assert!(
         ResourceState::new(
             id,
@@ -442,7 +433,7 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
     let state = StateDocument::new(
         STATE_SCHEMA_VERSION,
         [],
-        [managed_resource("skill:first", "skills/first")],
+        [managed_resource("skill:first")],
         None,
         None,
         None,
@@ -461,7 +452,7 @@ fn state_validates_duplicate_ids_paths_ownership_roles_and_apply_records() {
 
 #[test]
 fn constructor_and_deserialization_enforce_state_invariants_equally() {
-    let valid = managed_resource("skill:review", "skills/review");
+    let valid = managed_resource("skill:review");
     let mut value = serde_json::to_value(&valid).unwrap();
     value["ownership"] = serde_json::json!("unmanaged");
     assert!(serde_json::from_value::<ResourceState>(value).is_err());
@@ -469,7 +460,7 @@ fn constructor_and_deserialization_enforce_state_invariants_equally() {
     let apply = valid.managed_artifact().unwrap();
     assert_eq!(apply.owner(), valid.resource_id());
     assert_eq!(apply.role(), ArtifactRole::DirectSkill);
-    assert_eq!(apply.path().as_str(), "skills/review");
+    assert!(apply.path().as_str().starts_with("artifact-direct-skill-"));
 
     let mut duplicate_apply = serde_json::to_value(
         ApplyRecord::new(

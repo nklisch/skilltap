@@ -319,6 +319,23 @@ fn complete_tree_precedes_atomic_state_reference_and_failed_publish_preserves_bo
     let empty_state = fixture.initialize_documents();
     let handle = fixture.publish();
     let referenced = fixture.referenced_state(handle.record().clone());
+    let referenced: StateDocument =
+        serde_json::from_slice(&serde_json::to_vec_pretty(&referenced).unwrap()).unwrap();
+    let round_tripped_record = referenced
+        .resources()
+        .get(&fixture.owner)
+        .unwrap()
+        .managed_artifact()
+        .unwrap();
+    assert_eq!(round_tripped_record, handle.record());
+    assert_eq!(
+        fixture
+            .artifact_repository()
+            .load(&fixture.owner, round_tripped_record)
+            .unwrap()
+            .tree(),
+        &fixture.tree
+    );
     let reader_root = fixture.root.clone();
     let reader_owner = fixture.owner.clone();
     let reader_tree = fixture.tree.clone();

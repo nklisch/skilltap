@@ -18,7 +18,7 @@
       "managed_artifact": {
         "owner": "skill:review",
         "role": "direct_skill",
-        "path": "skills/review",
+        "path": "artifact-direct-skill-54bad1d89206c233bdd66fed835a7303efe4eed42a7fda2e20ee6d567e4e4e19-sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "fingerprint": {
           "algorithm": "sha256",
           "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

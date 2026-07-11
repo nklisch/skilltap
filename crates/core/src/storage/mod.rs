@@ -3,6 +3,7 @@
 mod config;
 mod inventory;
 mod managed_artifact;
+mod managed_record;
 mod repository;
 mod state;
 
@@ -16,15 +17,13 @@ pub use managed_artifact::{
     LoadedArtifact, ManagedArtifactAction, ManagedArtifactError, ManagedArtifactFailure,
     ManagedArtifactHandle, ManagedArtifactRepository, ManagedArtifactResidual,
 };
+pub use managed_record::{ArtifactRole, ManagedArtifactRecord};
 pub use repository::{
     ConfigRepository, DocumentAction, DocumentKind, DocumentState, FileConfigRepository,
     FileInventoryRepository, FileStateRepository, InventoryRepository, StateRepository,
     StorageError, StorageFailure,
 };
-pub use state::{
-    ApplyRecord, ArtifactRole, HarnessState, ManagedArtifactRecord, ResourceState, StateDocument,
-    Timestamp,
-};
+pub use state::{ApplyRecord, HarnessState, ResourceState, StateDocument, Timestamp};
 
 use std::fmt;
 
@@ -67,6 +66,9 @@ pub enum SchemaError {
     },
     ManagedOwnerMismatch {
         resource: ResourceId,
+        owner: ResourceId,
+    },
+    InvalidManagedArtifactRecord {
         owner: ResourceId,
     },
     InvalidOwnership {
@@ -125,6 +127,9 @@ impl fmt::Display for SchemaError {
                 formatter,
                 "managed artifact owner `{owner}` does not match resource `{resource}`"
             ),
+            Self::InvalidManagedArtifactRecord { owner } => {
+                write!(formatter, "managed artifact record for `{owner}` is invalid")
+            }
             Self::InvalidOwnership { resource } => write!(
                 formatter,
                 "resource `{resource}` has inconsistent provenance and ownership"

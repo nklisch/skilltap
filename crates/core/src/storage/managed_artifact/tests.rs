@@ -8,6 +8,7 @@ use super::*;
 use crate::{
     domain::FingerprintAlgorithm,
     runtime::{DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState, SystemFileSystem},
+    storage::SchemaError,
 };
 
 fn setup() -> (TempRoot, FileManagedArtifactRepository<'static>) {
@@ -203,10 +204,10 @@ fn owner_path_and_loaded_inode_are_required_for_removal() {
         RelativeArtifactPath::new("unowned-path").unwrap(),
         Some(fingerprint.clone()),
     );
-    assert_eq!(
-        repository.load(&owner, &wrong_path).unwrap_err().failure(),
-        ManagedArtifactFailure::InvalidRecord
-    );
+    assert!(matches!(
+        wrong_path,
+        Err(SchemaError::InvalidManagedArtifactRecord { .. })
+    ));
 
     let loaded = repository.load(&owner, handle.record()).unwrap();
     let path = absolute(&repository, handle.record().path());
@@ -252,7 +253,14 @@ fn live_and_dangling_managed_or_owned_ancestor_links_are_never_followed() {
     fs::create_dir(&outside).unwrap();
     let owner = owner("skill:ancestor");
     let fingerprint = fingerprint('d');
-    let destination = artifact_path(&owner, ArtifactRole::DirectSkill, &fingerprint).unwrap();
+    let destination = ManagedArtifactRecord::for_artifact(
+        owner.clone(),
+        ArtifactRole::DirectSkill,
+        fingerprint.clone(),
+    )
+    .unwrap()
+    .path()
+    .clone();
     std::os::unix::fs::symlink(&outside, absolute(&repository, &destination)).unwrap();
     assert!(
         repository
