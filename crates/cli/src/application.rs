@@ -51,9 +51,10 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     CanonicalObservation, GitSourceRevisionResolver, HarnessKind, NativeLifecycleAction,
-    NativeLifecyclePort, NativeLifecycleRequest, ObservedNativeRevisionResolver,
-    detect_configured_installation, native_arguments, normalize_observations,
-    observe_claude_canonical_resources, observe_codex_canonical_resources, select_profile,
+    NativeLifecyclePort, NativeLifecycleRequest, NativeResourcePresence,
+    ObservedNativeRevisionResolver, detect_configured_installation, native_arguments,
+    normalize_observations, observe_claude_canonical_resources, observe_codex_canonical_resources,
+    observe_native_resource, select_profile,
 };
 
 use crate::{
@@ -1087,6 +1088,7 @@ impl StatusApplication<'_> {
         command: &'static str,
         requested_scope: &ScopeArgs,
         target: &TargetArgs,
+        kind: ResourceKind,
         source: Option<&str>,
         name: Option<&str>,
     ) -> Outcome {
@@ -1134,15 +1136,23 @@ impl StatusApplication<'_> {
         for concrete_scope in &scope.resolved {
             for harness in targets.iter() {
                 operation_count += 1;
+                let presence =
+                    lifecycle_preview_presence(&documents, kind, harness, concrete_scope, name);
+                let status = match presence {
+                    NativeResourcePresence::Present => "no_change",
+                    NativeResourcePresence::Missing => "repair",
+                    NativeResourcePresence::Unknown => "planned",
+                };
                 outcome = outcome.with_operation(
                     crate::OperationOutcome::new(
                         format!("{command}:{harness}:{}", scope_label(concrete_scope)),
-                        "planned",
+                        status,
                     )
                     .with_field("target", harness.as_str())
                     .with_field("scope", scope_label(concrete_scope))
                     .with_field("source", source)
-                    .with_field("name", name),
+                    .with_field("name", name)
+                    .with_field("fresh_state", lifecycle_presence_label(presence)),
                 );
             }
         }
@@ -1412,7 +1422,21 @@ impl StatusApplication<'_> {
                     let operation_id =
                         lifecycle_operation_id(kind, target_id, concrete_scope, resource.key());
                     native_ids.insert(target_id.clone(), request.native_name.clone());
-                    if previously_applied(documents.state.as_ref(), resource.key(), &operation_id) {
+                    let journal_says_applied =
+                        previously_applied(documents.state.as_ref(), resource.key(), &operation_id);
+                    let fresh_presence = if journal_says_applied {
+                        observe_native_resource(
+                            configured.clone(),
+                            search_path.clone(),
+                            &native_request,
+                            process_limits,
+                            json_limits,
+                        )
+                        .unwrap_or(NativeResourcePresence::Unknown)
+                    } else {
+                        NativeResourcePresence::Unknown
+                    };
+                    if journal_says_applied && fresh_presence != NativeResourcePresence::Missing {
                         outcome = outcome.with_operation(
                             crate::OperationOutcome::new(operation_id.to_string(), "no_change")
                                 .with_field("target", target_id.as_str())
@@ -3692,6 +3716,7 @@ impl StatusApplication<'_> {
                                     target_id.clone(),
                                 )),
                             },
+                            resource.kind(),
                             source,
                             name,
                         ),
@@ -4986,6 +5011,66 @@ fn previously_applied(
                 OperationOutcome::Applied | OperationOutcome::NoChange
             )
         })
+}
+
+fn lifecycle_preview_presence(
+    documents: &StatusDocuments,
+    kind: ResourceKind,
+    harness: &HarnessId,
+    scope: &Scope,
+    name: &str,
+) -> NativeResourcePresence {
+    let action = match kind {
+        ResourceKind::Marketplace => NativeLifecycleAction::MarketplaceAdd,
+        ResourceKind::Plugin => NativeLifecycleAction::PluginInstall,
+        ResourceKind::StandaloneSkill
+        | ResourceKind::InstructionLocation
+        | ResourceKind::Harness => return NativeResourcePresence::Unknown,
+    };
+    let harness_kind = match harness.as_str() {
+        "codex" => HarnessKind::Codex,
+        "claude" => HarnessKind::Claude,
+        _ => return NativeResourcePresence::Unknown,
+    };
+    let configured = match harness_kind {
+        HarnessKind::Codex => configured_binary(documents.config.harnesses().codex.binary.as_str()),
+        HarnessKind::Claude => {
+            configured_binary(documents.config.harnesses().claude.binary.as_str())
+        }
+    };
+    let Ok(configured) = configured else {
+        return NativeResourcePresence::Unknown;
+    };
+    let Ok(name) = NativeId::new(name) else {
+        return NativeResourcePresence::Unknown;
+    };
+    let request = NativeLifecycleRequest {
+        harness: harness_kind,
+        action,
+        scope: scope.clone(),
+        name,
+        source: None,
+    };
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded lifecycle process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded lifecycle JSON limits are valid");
+    observe_native_resource(
+        configured,
+        std::env::var_os("PATH"),
+        &request,
+        process_limits,
+        json_limits,
+    )
+    .unwrap_or(NativeResourcePresence::Unknown)
+}
+
+fn lifecycle_presence_label(presence: NativeResourcePresence) -> &'static str {
+    match presence {
+        NativeResourcePresence::Present => "present",
+        NativeResourcePresence::Missing => "missing",
+        NativeResourcePresence::Unknown => "unknown",
+    }
 }
 
 fn operation_result_status(outcome: &OperationOutcome) -> &'static str {

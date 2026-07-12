@@ -10,8 +10,8 @@ use skilltap_core::{
     executor::{ExecutionError, ExecutionPort},
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, NativeProcessOutput, NativeProcessRequest,
-        NativeProcessRunner, ObservationRuntimeError, ProcessLimits, SystemExecutableResolver,
-        SystemNativeProcessRunner,
+        NativeProcessRunner, ObservationRuntimeError, ProcessLimits, StrictJson, StrictJsonDecoder,
+        SystemExecutableResolver, SystemNativeProcessRunner,
     },
 };
 
@@ -25,6 +25,16 @@ pub enum NativeLifecycleAction {
     PluginInstall,
     PluginRemove,
     PluginUpdate,
+}
+
+/// Fresh native evidence for a managed lifecycle resource.  Unknown is
+/// intentionally conservative: an unreadable or shape-changing native list
+/// must not cause a previously successful operation to run again.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeResourcePresence {
+    Present,
+    Missing,
+    Unknown,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,6 +129,110 @@ pub fn run_native_lifecycle(
         working_directory,
         limits,
     ))?)
+}
+
+/// Observe one exact native resource through the harness's documented JSON
+/// list command.  This is deliberately separate from lifecycle execution so
+/// callers can invalidate stale journal entries without treating caches as a
+/// write API.  Unknown output remains non-authoritative and preserves the
+/// existing idempotent journal behavior.
+pub fn observe_native_resource(
+    configured: ConfiguredBinary,
+    search_path: Option<OsString>,
+    request: &NativeLifecycleRequest,
+    process_limits: ProcessLimits,
+    json_limits: skilltap_core::runtime::JsonLimits,
+) -> Result<NativeResourcePresence, NativeLifecycleError> {
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
+    let output = SystemNativeProcessRunner.run(&NativeProcessRequest::new(
+        executable,
+        native_list_arguments(request),
+        BTreeMap::new(),
+        match &request.scope {
+            Scope::Global => None,
+            Scope::Project(path) => Some(path.clone()),
+        },
+        process_limits,
+    ))?;
+    if !output.status().success() {
+        return Ok(NativeResourcePresence::Unknown);
+    }
+    let decoded = match StrictJson.decode(output.stdout(), json_limits) {
+        Ok(decoded) => decoded,
+        Err(_) => return Ok(NativeResourcePresence::Unknown),
+    };
+    Ok(resource_presence(decoded.value(), request.name.as_str()))
+}
+
+fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
+    let scope = match &request.scope {
+        Scope::Global => "user",
+        Scope::Project(_) => "local",
+    };
+    let mut args = vec![OsString::from("plugin")];
+    match request.action {
+        NativeLifecycleAction::MarketplaceAdd
+        | NativeLifecycleAction::MarketplaceRemove
+        | NativeLifecycleAction::MarketplaceUpdate => {
+            args.extend(
+                ["marketplace", "list", "--json"]
+                    .into_iter()
+                    .map(OsString::from),
+            );
+        }
+        NativeLifecycleAction::PluginInstall
+        | NativeLifecycleAction::PluginRemove
+        | NativeLifecycleAction::PluginUpdate => {
+            args.extend(["list", "--json"].into_iter().map(OsString::from));
+        }
+    }
+    if request.harness == HarnessKind::Claude {
+        args.extend(["--scope", scope].into_iter().map(OsString::from));
+    }
+    args
+}
+
+fn resource_presence(value: &serde_json::Value, name: &str) -> NativeResourcePresence {
+    fn walk(value: &serde_json::Value, name: &str, recognized: &mut bool) -> bool {
+        match value {
+            serde_json::Value::Array(values) => {
+                *recognized = true;
+                values.iter().any(|value| walk(value, name, recognized))
+            }
+            serde_json::Value::Object(fields) => {
+                let mut matched = false;
+                for (field, value) in fields {
+                    let field_is_identity = matches!(
+                        field.as_str(),
+                        "name" | "id" | "plugin" | "marketplace" | "qualifiedName"
+                    );
+                    if field_is_identity && value.as_str() == Some(name) {
+                        matched = true;
+                    }
+                    if matches!(
+                        field.as_str(),
+                        "plugins" | "marketplaces" | "installed" | "resources" | "items"
+                    ) {
+                        *recognized = true;
+                    }
+                    matched |= walk(value, name, recognized);
+                }
+                matched
+            }
+            _ => false,
+        }
+    }
+
+    let mut recognized = false;
+    let present = walk(value, name, &mut recognized);
+    if present {
+        NativeResourcePresence::Present
+    } else if recognized {
+        NativeResourcePresence::Missing
+    } else {
+        NativeResourcePresence::Unknown
+    }
 }
 
 /// Execution adapter for a validated set of native lifecycle requests.
@@ -465,6 +579,27 @@ mod tests {
         assert_eq!(
             native_arguments(&source),
             Err(NativeLifecycleError::OptionLikeArgument("source"))
+        );
+    }
+
+    #[test]
+    fn native_resource_presence_is_conservative_and_identity_bound() {
+        assert_eq!(
+            resource_presence(
+                &serde_json::json!({
+                    "plugins": [{"name": "formatter@team"}]
+                }),
+                "formatter@team"
+            ),
+            NativeResourcePresence::Present
+        );
+        assert_eq!(
+            resource_presence(&serde_json::json!({"plugins": []}), "formatter@team"),
+            NativeResourcePresence::Missing
+        );
+        assert_eq!(
+            resource_presence(&serde_json::json!({"version": "3.0.0"}), "formatter@team"),
+            NativeResourcePresence::Unknown
         );
     }
 }

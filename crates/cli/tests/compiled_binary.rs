@@ -3140,6 +3140,89 @@ fn populated_plan_and_sync_apply_the_desired_inventory_resource() {
     let _ = fixture;
 }
 
+#[test]
+fn reconciliation_reobserves_missing_native_plugin_before_reusing_journal() {
+    let machine = machine();
+    let harness = machine.home().join("fake-codex");
+    let marker = machine.home().join("native-plugin-present");
+    let marker_literal = marker.to_str().unwrap().replace('\'', "'\\''");
+    fs::write(
+        &harness,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '%s' '{{\"version\":\"3.0.0\"}}'; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"list\" ]; then if [ -f '{marker}' ]; then printf '%s' '{{\"plugins\":[{{\"name\":\"formatter@team\"}}]}}'; else printf '%s' '{{\"plugins\":[]}}'; fi; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"add\" ]; then : > '{marker}'; exit 0; fi\nexit 0\n",
+            marker = marker_literal
+        ),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&harness).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&harness, permissions).unwrap();
+    }
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(&harness, &harness).replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::write(&marker, b"present").unwrap();
+
+    let install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "formatter@team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["summary"]["changed"], true);
+
+    let healthy_plan = run(&machine, &["plan", "--target", "codex", "--json"]);
+    assert_code(&healthy_plan, 2);
+    let healthy_value = json(&healthy_plan);
+    assert!(
+        healthy_value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["status"] == "no_change" && entry["fields"]["fresh_state"] == "present"
+            })
+    );
+
+    fs::remove_file(&marker).unwrap();
+    let drifted_plan = run(&machine, &["plan", "--target", "codex", "--json"]);
+    assert_code(&drifted_plan, 2);
+    let drifted_value = json(&drifted_plan);
+    assert!(
+        drifted_value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["status"] == "repair" && entry["fields"]["fresh_state"] == "missing"
+            })
+    );
+
+    let repair = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&repair, 0);
+    assert_eq!(json(&repair)["summary"]["changed"], true);
+    assert!(marker.is_file());
+
+    let repeat = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+}
+
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
     machine
         .run_in(&binary(), cwd, arguments)

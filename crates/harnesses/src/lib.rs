@@ -27,7 +27,7 @@ pub use update_resolution::{GitSourceRevisionResolver, ObservedNativeRevisionRes
 mod lifecycle;
 pub use lifecycle::{
     NativeLifecycleAction, NativeLifecycleError, NativeLifecyclePort, NativeLifecycleRequest,
-    native_arguments, run_native_lifecycle,
+    NativeResourcePresence, native_arguments, observe_native_resource, run_native_lifecycle,
 };
 
 pub use skilltap_core::VERSION;

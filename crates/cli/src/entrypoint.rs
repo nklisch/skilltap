@@ -806,7 +806,14 @@ fn execute_system_lifecycle_preview(
     name: Option<&str>,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        application.execute_lifecycle_preview(command, scope, target, source, name)
+        application.execute_lifecycle_preview(
+            command,
+            scope,
+            target,
+            skilltap_core::domain::ResourceKind::Plugin,
+            source,
+            name,
+        )
     })
 }
 
