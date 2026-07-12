@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -56,3 +56,17 @@ overwrite an unrelated destination during a race.
   use native no-replace/exchange primitives and report recovery attention when
   a replacement wins the race.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-12)
+
+- **Blocker — required rollback race coverage is absent and one race is
+  misclassified**: tests cover only replacement-before-rollback and the normal
+  exchange. They do not deterministically exercise replacement-during-rollback,
+  residual temporary files, or the no-prior cleanup race required by this
+  story. If a replacement arrives after the first exchange but before the
+  displaced-identity check, the helper can return `Restored` and delete the
+  private published inode while leaving the replacement in place; the caller
+  then reports a clean rollback instead of recovery attention. Add a
+  synchronization seam or deterministic hook, preserve the replacement, and
+  classify that outcome as attention while retaining safe residuals.
+- **Follow-up**: `story-skilltap-plugin-distribution-bootstrap-cli-rollback-race-coverage`.

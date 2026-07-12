@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -62,3 +62,26 @@ and `docs/SPEC.md` daemon promise unimplemented.
   result into `StatusApplication` so release transport remains one boundary;
   release-fixture injection remains test-only.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-12)
+
+- **Blocker — daemon binary publication bypasses the shared update lock and
+  can update the wrong executable**: `execute_system_daemon_binary_policy`
+  invokes the resolver/fetcher/installer before any `ConfigurationLock` is
+  acquired, while `daemon enable` records the exact `current_exe()` path but
+  `execute_binary_bootstrap_mode` defaults to `$HOME/.local/bin/skilltap`
+  unless an ambient `SKILLTAP_INSTALL` is present. A daemon installed from a
+  custom path can therefore publish a second binary instead of the service's
+  executable, and a foreground/daemon bootstrap race is not serialized. Add a
+  shared binary-update lock/publication boundary, derive the daemon destination
+  from the service executable (or an equivalent persisted identity), and cover
+  lock contention plus custom-destination updates in isolated tests.
+- **Blocker — daemon policy acceptance is not exercised end to end**: the only
+  added check test calls the private `execute_binary_bootstrap_with_mode`
+  helper directly. There is no isolated daemon test proving `off` avoids
+  resolution, `check`/`apply-safe` consume persisted config, major block/opt-in,
+  failed verification, idempotent repeat, or daemon result persistence. Add
+  injected resolver/fetcher/installer coverage at the daemon policy boundary;
+  leave the compiled fixtures on `bootstrap.mode = off` only as ambient-network
+  protection, not as the policy test.
+- **Follow-up**: `story-skilltap-plugin-distribution-bootstrap-daemon-target-lock`.
