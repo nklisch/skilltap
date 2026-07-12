@@ -1,7 +1,7 @@
 ---
 id: gate-docs-plan-sync-contract
 kind: story
-stage: review
+stage: done
 tags: [documentation]
 parent: null
 depends_on: []
@@ -66,3 +66,22 @@ execute them through the existing lock, journal, and native lifecycle ports.
   guessed into native mutations.
 - Focused verification: `cargo check -p skilltap --offline`, CLI unit tests,
   and the stable compiled-binary channel test pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: plan previews intentionally report planned work without mutation;
+instruction and harness inventory kinds remain explicit no-op projections until
+their dedicated adapters exist.
+
+**Notes**: Standard substrate review with deep correctness and foundation-doc
+lenses. The reconciliation path now selects desired resources by concrete scope,
+target, and include/exclude filters, previews lifecycle operations without
+publishing, and routes sync through the existing native and complete-skill
+adapters with journaling and repeat no-op behavior. The focused compiled-binary
+regression passes, and the implementation notes accurately call out the
+unsupported instruction/harness adapter boundary rather than weakening the
+contract.
