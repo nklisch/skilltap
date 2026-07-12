@@ -880,7 +880,7 @@ fn adoption_next_action(error: &AdoptionApplyError) -> NextAction {
         ),
     }
 }
-pub(super) fn first_use_harness_report(
+pub(crate) fn first_use_harness_report(
     config: &ConfigDocument,
     mut outcome: Outcome,
     mode: NativeObservationMode,
