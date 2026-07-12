@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-boundary-hardening
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -72,5 +72,5 @@ clobber a destination. The `None` rollback branch at lines 691-697 can unlink
 after its identity check. Existing integration fixtures cover bounded and
 symlink resolver payloads plus basic checksum/install behavior, but do not
 cover redirect-hop rejection, permission/interruption cleanup, or the complete
-race/rollback matrix required by this story. Item remains at `stage: review`
-pending the follow-up.
+race/rollback matrix required by this story. Item remains at `stage:
+implementing` pending the follow-up.
