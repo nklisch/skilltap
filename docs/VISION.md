@@ -43,9 +43,17 @@ retired.
 
 ## Native First
 
-skilltap uses a harness's native marketplace, plugin, and configuration mechanisms whenever they exist.
+skilltap uses a harness's native marketplace, plugin, and configuration mechanisms whenever they exist and are deterministic enough to reconcile.
 
 A resource crosses harness boundaries only when skilltap can represent it faithfully. When a native plugin is unavailable for a target harness, skilltap may materialize compatible components into that harness's supported locations.
+
+A harness does not need its own marketplace or plugin lifecycle to participate.
+The minimum target contract is faithful whole-directory skill loading plus MCP
+configuration through documented global and project surfaces. When native
+lifecycle is absent, skilltap owns source acquisition, managed installation,
+update, drift detection, and removal. Hooks, instructions, agents, commands,
+and other extension types are capability-detected rather than admission
+requirements.
 
 Partial or lossy materialization is visible and blocked by default. The user can approve the proposed result as a whole or choose components individually. Unsupported behavior is never silently discarded.
 
@@ -92,7 +100,7 @@ Its state describes one computer. Repositories and collaborators do not need to 
 6. **Idempotent reconciliation.** Synchronizing an unchanged environment produces no changes.
 7. **No hidden decisions.** Drift and conflicts are reported for resolution rather than silently merged.
 8. **Agent-readable operation.** Output makes the next safe action clear.
-9. **Deep support over broad claims.** A harness is supported only when skilltap can model and operate it faithfully.
+9. **Deep support over broad claims.** A harness is supported only when skilltap can model, observe, and reconcile its promised skill and MCP surfaces faithfully.
 
 ## Success
 
@@ -125,6 +133,10 @@ skilltap does not:
   elevated privileges and never bypasses acknowledgment, drift, or conflict
   safeguards.
 - Provide an interactive dashboard or setup wizard.
-- Claim support for a harness through file copying alone.
+- Claim support for a harness through undocumented cache copying or without
+  observable skill and MCP load behavior.
 
-Codex and Claude Code are the supported harnesses. Additional harnesses belong only when their native systems can participate in the same faithfulness and reconciliation model.
+Codex and Claude Code are the first supported harnesses. Additional harnesses
+belong when documented skill and MCP load paths can participate in the same
+faithfulness, ownership, and reconciliation model; native marketplace and
+plugin lifecycle support improves an adapter but is not required.

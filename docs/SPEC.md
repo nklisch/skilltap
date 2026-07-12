@@ -110,6 +110,9 @@ An existing native resource imported into skilltap's desired inventory.
 
 A resource created and owned by skilltap because the target harness lacks a native distribution for the source plugin.
 
+Materialization may be the primary lifecycle for a harness that provides
+documented skill and MCP load paths but no native marketplace or plugin manager.
+
 **Faithful equivalent**
 
 A target representation that preserves the source component's behavior and requirements.
@@ -423,6 +426,13 @@ For each target, installation preference is:
 3. Materialize a compatible plugin from accessible source components.
 4. Report a partial plan and require `--yes`.
 5. Block the operation.
+
+A target harness is eligible when it can faithfully load complete skill
+directories and MCP configuration from documented global and project surfaces
+that skilltap can observe. Marketplace registration and plugin lifecycle are
+capabilities, not prerequisites. When they are unavailable, skilltap owns the
+managed artifact and its source, revision, update, drift, and removal lifecycle.
+It never substitutes writes to undocumented caches.
 
 `plugin list` lists installed and desired plugins only. It does not expose an available-plugin catalog.
 

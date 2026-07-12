@@ -16,7 +16,8 @@ before skilltap mutates anything.
 5. A native file changed by skilltap appears explicitly in the reconciliation plan.
 6. Unknown harness versions are observe-only and never gain mutation authority
    from runtime probing.
-7. Unsupported native behavior may be materialized only through documented load paths.
+7. Unsupported or absent native lifecycle behavior may be materialized only
+   through documented load paths with explicit skilltap ownership.
 8. Every cross-harness mapping has an explicit compatibility classification.
 9. Observation findings expose only registered codes, authored summaries, typed
    subjects, and bounded typed scalar fields; raw native payloads never cross
@@ -394,9 +395,18 @@ If verification fails, status remains available and mutation is blocked with a h
 
 ## Adding Another Harness
 
-A harness is not supported until its adapter can provide reliable installation detection, stable observation, explicit global and project scope behavior, native or documented materialized skill loading, marketplace and plugin lifecycle boundaries, instruction behavior, capability and version detection, update identity, complete fixture-based contract tests, and clear unsupported-component reporting.
+A harness is not supported until its adapter can provide reliable installation
+detection, stable observation, explicit global and project scope behavior,
+faithful complete-directory skill loading, MCP configuration and load
+observation, update identity, complete fixture-based contract tests, and clear
+unsupported-component reporting.
 
-Filesystem copying alone is not a harness integration.
+Native marketplace, plugin lifecycle, hooks, instructions, agents, and other
+extension components are optional capabilities. When native lifecycle is
+absent, skilltap may own acquisition, managed projection, update, drift, and
+removal through documented skill and MCP load paths. Filesystem copying without
+a supported load contract, effective-state observation, ownership tracking,
+and idempotent reconciliation is not a harness integration.
 
 ## Authoritative References
 

@@ -2,7 +2,11 @@
 
 skilltap is a Rust CLI with a pure reconciliation core, native harness adapters, and a thin command layer.
 
-The architecture separates normalized intent from harness-specific behavior. Codex and Claude Code remain authoritative for their native formats and lifecycle operations.
+The architecture separates normalized intent from harness-specific behavior.
+Harnesses remain authoritative for documented native formats and lifecycle
+operations. When a harness has documented skill and MCP load paths but no
+native package lifecycle, skilltap owns the managed artifact lifecycle through
+those paths.
 
 ## System Context
 
@@ -224,7 +228,9 @@ Harness support is runtime-versioned.
 An adapter resolves the configured binary to one canonical executable identity,
 reads its opaque version, and selects a compiled capability profile whose
 support may differ between global and project scope. Compiled verified profiles
-are the only source of mutation authority.
+are the only source of native-command mutation authority. Managed publication
+authority is separately bounded by attested load paths, ownership, drift
+checks, and filesystem contracts.
 
 Runtime probes may confirm that compiled support remains usable or narrow it to
 unsupported or unverified. They cannot add a capability or widen support. An
@@ -369,6 +375,11 @@ flowchart TD
 The component graph preserves source dependencies. Omission of a required component blocks the complete resource.
 
 Materialized plugins live under `managed/` and are registered with the target through a documented native mechanism. Harness caches are never used as a write API.
+
+For a harness without native plugin registration, the adapter projects the
+faithful skill and MCP components into documented load paths and observes their
+effective state. The managed projection is the installation; it does not
+pretend to be a native marketplace package.
 
 ## Standalone Skills
 
