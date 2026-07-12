@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-guidance
 kind: feature
-stage: review
+stage: done
 tags: [content]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package, epic-skilltap-plugin-distribution-cli-contract, epic-skilltap-plugin-distribution-bootstrap]
@@ -233,3 +233,18 @@ network request.
 The four guidance stories are complete: portable activation body, configuration
 and instruction references, diagnostic/update/recovery reference, and offline
 artifact validation.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Feature acceptance review at standard weight. The complete skill
+directory provides a concise portable activation body plus progressive
+configuration/instruction and diagnostic references; package validation proves
+the reference tree and rejects unsafe/discovery or duplicate-command drift.
+All four child stories are independently approved and the offline plugin
+package suite passes.
