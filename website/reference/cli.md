@@ -51,7 +51,7 @@ configuration directory when necessary.
 | `--project <path>` | Use the project containing the supplied path. |
 | `--all-scopes` | Use global scope and every managed project. |
 | `--json` | Render the same result as a stable JSON envelope. |
-| `--yes` | Acknowledge a reported partial foreground result. |
+| `--yes` | Acknowledge every eligible partial or lossy consequence in this operation; blocked work remains blocked. |
 | `--include <selector>` | Include matching resources or components; repeatable. |
 | `--exclude <selector>` | Exclude matches; repeatable and wins over inclusion. |
 
