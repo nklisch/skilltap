@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-cli-contract
 kind: feature
-stage: implementing
+stage: review
 tags: [content]
 parent: epic-skilltap-plugin-distribution
 depends_on: []
@@ -274,3 +274,12 @@ the operator's HOME, XDG, Codex, Claude, or project files.
 - **Documentation drift**: the website intentionally stops duplicating syntax;
   compiled help tests and release checks must remain the guard against stale
   conceptual links.
+
+## Implementation notes
+- Execution capability: highest available local capability; the feature changes the public agent-facing CLI contract and release documentation.
+- Review weight: standard (autopilot project default).
+- Stories implemented: `story-skilltap-plugin-distribution-cli-help-contract`, `story-skilltap-plugin-distribution-cli-diagnostics`, and `story-skilltap-plugin-distribution-cli-verification`.
+- Commits: `7d39d76`, `2f038d3`, `4184627`.
+- Verification: `cargo fmt --all -- --check`; `cargo test --workspace --all-targets --offline` (all workspace suites green, including 46 CLI unit, 43 compiled CLI, 292 core, and integration/support suites).
+- Discrepancies from design: runtime native error payloads are omitted rather than summarized; the website uses executable-help invocation links and a conceptual family index instead of repeating command grammar.
+- Adjacent issues parked: none.
