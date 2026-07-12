@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-instruction-repair-nested-plan
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: null
 depends_on: [story-reconciliation-instruction-repair]
@@ -54,3 +54,21 @@ Implemented in `1f5f1de`:
 
 Verification: `cargo fmt --all` and the focused compiled test
 `reconciliation_plan_and_sync_preserve_nested_project_claude_bridge` passed.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at standard weight in a fresh same-harness
+context. Reviewed the implementation and its predecessor/review history,
+`docs/SPEC.md`, `docs/UX.md`, and the compiled instruction tests. The shared
+preview path resolver matches setup's nested-only project Claude policy for
+both symlink and import modes; healthy nested bridges render `no_change`,
+sync remains a no-op, and repeated sync is idempotent. Target and project
+scope boundaries remain explicit. Focused reconciliation tests and the full
+workspace test suite passed; no applicable security, breaking-contract, or
+foundation-document findings were identified.
