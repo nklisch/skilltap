@@ -1,7 +1,7 @@
 ---
 id: feature-split-cli-daemon-commands
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: null
 depends_on: []
@@ -239,3 +239,17 @@ so rollback is a source-only operation.
 1. `story-feature-split-cli-daemon-commands-module`
 2. `story-feature-split-cli-daemon-commands-disable` (depends on Step 1)
 3. `story-feature-split-cli-daemon-commands-status` (depends on Step 2)
+
+## Implementation notes
+
+- Execution capability: highest available local implementation context; this
+  cross-platform private-boundary extraction preserved service lifecycle
+  semantics and native manager calls.
+- Review weight: standard (autopilot default).
+- Implementation order: module/enable, disable lifecycle, then status and shared
+  service-manager helpers.
+- Verification: cargo check and cargo test -p skilltap --offline pass; the
+  package suite reports 46 library tests, 43 compiled-binary tests, and 3
+  plugin-package tests green.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
