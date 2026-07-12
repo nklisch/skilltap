@@ -121,23 +121,47 @@ download() {
   output_path="$2"
   max_bytes="${3:-$MAX_ARTIFACT_BYTES}"
   metadata="${output_path}.meta"
-  if command -v curl >/dev/null 2>&1; then
-    curl --fail --silent --show-error --location \
-      --max-redirs 3 --proto '=https' --proto-redir '=https' \
-      --connect-timeout 10 --max-time 30 --max-filesize "$max_bytes" \
-      --user-agent 'skilltap-installer/3' --output "$output_path" \
-      --write-out '%{http_code}\n%{url_effective}\n' "$url" >"$metadata"
-    validate_transfer "$metadata"
-  elif command -v wget >/dev/null 2>&1; then
-    # wget cannot expose the effective URL portably; its HTTPS-only bounded
-    # redirect policy is constrained to the fixed release URL supplied here.
-    wget --quiet --https-only --max-redirect=3 --timeout=30 --tries=1 \
-      --output-document="$output_path" "$url"
-    printf '200\n%s\n' "$url" >"$metadata"
-  else
-    err "curl or wget is required"
+  if ! command -v curl >/dev/null 2>&1; then
+    err "curl is required for redirect-attested release downloads"
     exit 1
   fi
+  current_url="$url"
+  hop=0
+  while [ "$hop" -lt 4 ]; do
+    validate_effective_url "$current_url"
+    hop_metadata="${metadata}.hop"
+    curl --silent --show-error --max-redirs 0 --proto '=https' \
+      --proto-redir '=https' --connect-timeout 10 --max-time 30 \
+      --max-filesize "$max_bytes" --user-agent 'skilltap-installer/3' \
+      --output "$output_path" --write-out '%{http_code}\n%{redirect_url}\n' \
+      "$current_url" >"$hop_metadata" || {
+        rm -f "$hop_metadata"
+        err "release download failed"
+        exit 1
+      }
+    status=$(sed -n '1p' "$hop_metadata")
+    redirect=$(sed -n '2p' "$hop_metadata")
+    case "$status" in
+      2[0-9][0-9])
+        printf '%s\n%s\n' "$status" "$current_url" >"$metadata"
+        rm -f "$hop_metadata"
+        break
+        ;;
+      3[0-9][0-9])
+        [ -n "$redirect" ] || { rm -f "$hop_metadata"; err "release redirect omitted its target"; exit 1; }
+        validate_effective_url "$redirect"
+        current_url="$redirect"
+        hop=$((hop + 1))
+        rm -f "$hop_metadata"
+        ;;
+      *)
+        rm -f "$hop_metadata"
+        err "release download returned an unexpected HTTP status"
+        exit 1
+        ;;
+    esac
+  done
+  [ -s "$metadata" ] || { err "release redirect chain exceeded its limit"; exit 1; }
   bytes=$(wc -c <"$output_path" | tr -d '[:space:]')
   case "$bytes" in ''|*[!0-9]*) err "download size could not be verified"; exit 1 ;; esac
   [ "$bytes" -le "$max_bytes" ] || { err "release download exceeds the size limit"; exit 1; }

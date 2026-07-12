@@ -60,6 +60,10 @@ done
 [ -n "$output" ] || exit 1
 case "$url" in
   */releases/latest)
+    if [ "${FAKE_MODE:-}" = hostile-redirect ]; then
+      printf '%s\n%s\n' 302 'https://evil.example/latest'
+      exit 0
+    fi
     if [ "${FAKE_MODE:-}" = malformed-metadata ]; then
       printf '%s' '{"tag_name":"latest"}' >"$output"
     else
@@ -95,6 +99,10 @@ if run_fixture malformed-metadata 2>/dev/null; then
 fi
 if run_fixture checksum-failure 2>/dev/null; then
   echo "checksum failure was accepted" >&2
+  exit 1
+fi
+if run_fixture hostile-redirect 2>/dev/null; then
+  echo "hostile redirect was accepted" >&2
   exit 1
 fi
 
