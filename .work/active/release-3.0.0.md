@@ -233,3 +233,12 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
   `gate-docs-partial-acknowledgment-contract`.
 - **gate-patterns** (2026-07-12) — 4 patterns extracted; item
   `gate-patterns-3.0.0`. No inconsistencies found.
+
+## Readiness
+
+Quality gates are complete, but the bundle is not shippable. Of 207 bound
+work items (excluding the release orchestration item), 194 are done and 13
+remain open: 10 implementing and 3 drafting gate findings. The release remains at
+`quality-gate` until those findings are implemented, reviewed, and advanced to
+`done`; then release-deploy can draft the changelog and request shipping
+confirmation.
