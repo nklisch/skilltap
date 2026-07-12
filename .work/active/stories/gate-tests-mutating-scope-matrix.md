@@ -48,3 +48,8 @@ with same-named global/project resources returns `operation_plan_invalid`
 because lifecycle operation IDs omit scope and collide. Parked as
 `idea-scope-aware-lifecycle-operation-ids`; do not weaken or skip this test.
 The story remains blocked on that fix and review of the resulting regression.
+
+## Blocker
+
+The regression cannot pass until lifecycle operation identities include the
+concrete scope. See parked item `idea-scope-aware-lifecycle-operation-ids`.
