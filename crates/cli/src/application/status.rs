@@ -579,7 +579,7 @@ impl NativeObservation {
                 json_limits,
             ) {
                 Ok(installation) => installation,
-                Err(error) => {
+                Err(_error) => {
                     result.failed_targets += scope.resolved.len();
                     result.resources.extend(scope.resolved.iter().map(|scope| {
                         OutputEntry::new(observation_id(target, scope), "unreachable")
@@ -591,8 +591,7 @@ impl NativeObservation {
                             "native_detection_failed",
                             "The configured harness could not be detected.",
                         )
-                        .with_context("harness", target.as_str())
-                        .with_context("detail", error.to_string()),
+                        .with_context("harness", target.as_str()),
                     );
                     continue;
                 }
@@ -752,7 +751,10 @@ impl NativeObservation {
                         result.warnings.push(finding_warning(finding));
                     }
                 }
-                HarnessObservationOutcome::Failed { request, error } => {
+                HarnessObservationOutcome::Failed {
+                    request,
+                    error: _error,
+                } => {
                     result.failed_targets += 1;
                     result.resources.push(
                         OutputEntry::new(
@@ -768,8 +770,7 @@ impl NativeObservation {
                             "Native harness state could not be observed within the safety limits.",
                         )
                         .with_context("harness", request.target().harness().as_str())
-                        .with_context("scope", scope_label(request.scope()))
-                        .with_context("detail", error.to_string()),
+                        .with_context("scope", scope_label(request.scope())),
                     );
                 }
             }

@@ -55,7 +55,7 @@ where
         .map(Into::into)
         .collect::<Vec<OsString>>();
     let json_requested = arguments.iter().any(|value| value == OsStr::new("--json"));
-    let dispatch = match Cli::try_parse_from(arguments) {
+    let dispatch = match Cli::try_parse_from(arguments.clone()) {
         Ok(cli) => Dispatch::from_command(cli.command.expect("Clap requires a subcommand")),
         Err(error)
             if matches!(
@@ -71,12 +71,26 @@ where
         }
         Err(error) => {
             let kind = error.kind();
-            let mut execution = render(parse_error(kind), json_requested, OutputChannel::Stderr);
+            let boundary = parse_boundary(&arguments);
+            let mut execution = render(
+                parse_error(&arguments, kind),
+                json_requested,
+                OutputChannel::Stderr,
+            );
             if kind == ErrorKind::MissingSubcommand && !json_requested {
                 execution.document.push('\n');
-                execution
-                    .document
-                    .push_str(&Cli::command().render_usage().to_string());
+                let mut command = Cli::command();
+                for token in boundary.command.split_whitespace().skip(1) {
+                    let Some(next) = command
+                        .get_subcommands()
+                        .find(|candidate| candidate.get_name() == token)
+                        .cloned()
+                    else {
+                        break;
+                    };
+                    command = next;
+                }
+                execution.document.push_str(&command.render_usage().to_string());
                 execution.document.push('\n');
             }
             return execution;
@@ -316,14 +330,13 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
         };
     let files = crate::daemon::files(&paths, &definition);
     let root = crate::daemon::root(&paths, platform);
-    if let Err(error) = filesystem.create_directory_all(&root) {
+    if let Err(_error) = filesystem.create_directory_all(&root) {
         return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
             Warning::new(
                 "daemon_definition_write_failed",
                 "The daemon service directory could not be created.",
             )
-            .with_context("path", root.as_str())
-            .with_context("detail", error.to_string()),
+            .with_context("path", root.as_str()),
         );
     }
     let mut existing = Vec::with_capacity(files.len());
@@ -372,7 +385,7 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
             )
         })
         .collect::<Vec<_>>();
-    if let Err((path, error)) = publish_daemon_files(&filesystem, &changed_files) {
+    if let Err((path, _error)) = publish_daemon_files(&filesystem, &changed_files) {
         return Outcome::new(command, ResultClass::AttentionRequired)
             .with_summary("changed", false)
             .with_warning(
@@ -380,8 +393,7 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
                     "daemon_definition_write_failed",
                     "The daemon service definition could not be published atomically; prior files were restored.",
                 )
-                .with_context("path", path.as_str())
-                .with_context("detail", error.to_string()),
+                .with_context("path", path.as_str()),
             );
     }
     if run_service_manager(platform, ServiceManagerAction::Enable, &files[0].0).is_err() {
@@ -1129,7 +1141,67 @@ fn repository_composition_error(command: &'static str) -> Outcome {
     ))
 }
 
-fn parse_error(kind: ErrorKind) -> Outcome {
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ParseBoundary {
+    command: String,
+    help_command: String,
+}
+
+fn parse_boundary(arguments: &[OsString]) -> ParseBoundary {
+    let mut command = Cli::command();
+    let mut path = Vec::new();
+    let mut tokens = arguments.iter().skip(1).peekable();
+
+    while let Some(token) = tokens.next() {
+        let Some(token) = token.to_str() else {
+            break;
+        };
+        if token == "--" {
+            break;
+        }
+        if token.starts_with('-') {
+            let argument = command.get_arguments().find(|argument| {
+                argument.get_long().is_some_and(|long| token == format!("--{long}"))
+                    || argument
+                        .get_short()
+                        .is_some_and(|short| token == format!("-{short}"))
+            });
+            if let Some(argument) = argument
+                && argument
+                    .get_num_args()
+                    .is_some_and(|range| range.takes_values())
+                && tokens.peek().is_some_and(|value| !value.to_string_lossy().starts_with('-'))
+            {
+                tokens.next();
+            } else if argument.is_none() && path.is_empty() {
+                break;
+            }
+            continue;
+        }
+        let Some(next) = command
+            .get_subcommands()
+            .find(|candidate| candidate.get_name() == token)
+            .cloned()
+        else {
+            break;
+        };
+        path.push(token.to_owned());
+        command = next;
+    }
+
+    let command = if path.is_empty() {
+        "skilltap".to_owned()
+    } else {
+        format!("skilltap {}", path.join(" "))
+    };
+    ParseBoundary {
+        help_command: format!("{command} --help"),
+        command,
+    }
+}
+
+fn parse_error(arguments: &[OsString], kind: ErrorKind) -> Outcome {
+    let boundary = parse_boundary(arguments);
     let (code, summary) = match kind {
         ErrorKind::MissingSubcommand => ("missing_command", "A command is required."),
         ErrorKind::InvalidUtf8 => (
@@ -1138,11 +1210,20 @@ fn parse_error(kind: ErrorKind) -> Outcome {
         ),
         _ => ("invalid_arguments", "The command arguments are invalid."),
     };
-    Outcome::new("skilltap", ResultClass::Invalid)
-        .with_error(ErrorDetail::new(code, summary))
+    Outcome::new(
+        boundary
+            .command
+            .strip_prefix("skilltap ")
+            .unwrap_or(&boundary.command),
+        ResultClass::Invalid,
+    )
+        .with_error(
+            ErrorDetail::new(code, summary)
+                .with_context("boundary", boundary.command.clone()),
+        )
         .with_next_action(
             NextAction::new("show_help", "Review the command grammar.")
-                .with_command("skilltap --help"),
+                .with_command(boundary.help_command),
         )
 }
 

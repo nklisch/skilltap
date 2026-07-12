@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::BTreeMap, io};
+use std::{cell::RefCell, collections::BTreeMap, ffi::OsString, io};
 
 use serde_json::Value;
 
@@ -44,8 +44,90 @@ fn parse_failures_are_normalized_as_one_json_document_when_requested() {
     let value: Value = serde_json::from_str(&execution.document).unwrap();
     assert_eq!(value["result"], "invalid");
     assert_eq!(value["errors"][0]["code"], "invalid_arguments");
+    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap status");
+    assert_eq!(
+        value["next_actions"][0]["command"],
+        "skilltap status --help"
+    );
     assert!(!execution.document.contains("pi"));
     assert_eq!(execution.document.lines().count(), 1);
+}
+
+#[test]
+fn nested_missing_commands_point_at_the_deepest_safe_help_boundary() {
+    let execution = run_from(["skilltap", "plugin", "--json"]);
+
+    assert_eq!(execution.exit_code, 1);
+    assert_eq!(execution.channel, OutputChannel::Stdout);
+    let value: Value = serde_json::from_str(&execution.document).unwrap();
+    assert_eq!(value["command"], "plugin");
+    assert_eq!(value["errors"][0]["code"], "invalid_arguments");
+    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap plugin");
+    assert_eq!(
+        value["next_actions"][0]["command"],
+        "skilltap plugin --help"
+    );
+    assert_eq!(execution.document.lines().count(), 1);
+}
+
+#[test]
+fn unknown_commands_fall_back_to_root_without_echoing_the_token() {
+    let execution = run_from(["skilltap", "secret-command", "--json"]);
+
+    assert_eq!(execution.exit_code, 1);
+    let value: Value = serde_json::from_str(&execution.document).unwrap();
+    assert_eq!(value["command"], "skilltap");
+    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap");
+    assert_eq!(
+        value["next_actions"][0]["command"],
+        "skilltap --help"
+    );
+    assert!(!execution.document.contains("secret-command"));
+}
+
+#[test]
+fn invalid_source_diagnostics_redact_locator_values() {
+    let execution = run_from([
+        "skilltap",
+        "marketplace",
+        "add",
+        "https://user:token@example.test/repo.git",
+        "--json",
+    ]);
+
+    assert_eq!(execution.exit_code, 1);
+    assert_eq!(execution.channel, OutputChannel::Stdout);
+    let value: Value = serde_json::from_str(&execution.document).unwrap();
+    assert_eq!(value["command"], "marketplace add");
+    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap marketplace add");
+    assert_eq!(
+        value["next_actions"][0]["command"],
+        "skilltap marketplace add --help"
+    );
+    assert!(!execution.document.contains("user:token"));
+    assert!(!execution.document.contains("example.test"));
+}
+
+#[test]
+fn non_utf8_parse_arguments_are_redacted_from_json_diagnostics() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+
+        let execution = run_from([
+            OsString::from("skilltap"),
+            OsString::from("plugin"),
+            OsString::from("remove"),
+            OsString::from_vec(vec![0xff]),
+            OsString::from("--json"),
+        ]);
+        assert_eq!(execution.exit_code, 1);
+        assert_eq!(execution.channel, OutputChannel::Stdout);
+        let value: Value = serde_json::from_str(&execution.document).unwrap();
+        assert_eq!(value["command"], "plugin remove");
+        assert_eq!(value["errors"][0]["code"], "invalid_utf8_argument");
+        assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap plugin remove");
+    }
 }
 
 #[test]

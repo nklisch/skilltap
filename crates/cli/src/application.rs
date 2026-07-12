@@ -1515,7 +1515,7 @@ fn first_use_harness_report(
                         .with_field("version", native_version.as_str());
                 }
             }
-            Err(error) => {
+            Err(_error) => {
                 entry.status = "unreachable".to_owned();
                 entry = entry.with_field("reachable", false);
                 outcome = outcome.with_warning(
@@ -1523,8 +1523,7 @@ fn first_use_harness_report(
                         "native_detection_failed",
                         "The known harness could not be detected during first-use status.",
                     )
-                    .with_context("harness", harness)
-                    .with_context("detail", error.to_string()),
+                    .with_context("harness", harness),
                 );
             }
         }

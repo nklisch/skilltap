@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cli-diagnostics
 kind: story
-stage: implementing
+stage: review
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on: []
@@ -28,3 +28,11 @@ Acceptance criteria:
   remain unchanged.
 - Unit tests cover missing command, invalid target/source/scope, non-UTF-8
   arguments, fake native failure output, and rendering fallback behavior.
+
+## Implementation notes
+- Execution capability: highest available local capability; parser/runtime diagnostics are a public safety contract.
+- Review weight: standard (autopilot project default).
+- Files changed: `crates/cli/src/entrypoint.rs`, `crates/cli/src/application.rs`, `crates/cli/src/application/status.rs`, `crates/cli/src/application/lifecycle.rs`, `crates/cli/src/entrypoint/tests.rs`.
+- Tests added: deepest recognized parse boundaries, nested/unknown command fallback, locator redaction, and non-UTF-8 JSON diagnostics.
+- Discrepancies from design: runtime native error payloads are omitted entirely rather than summarized; this keeps credentials, argv, and native stdout/stderr out of both renderers.
+- Adjacent issues parked: none.

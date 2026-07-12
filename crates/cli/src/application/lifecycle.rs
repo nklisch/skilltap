@@ -1098,18 +1098,17 @@ impl StatusApplication<'_> {
                     mode: documents.config.updates().mode,
                 }) {
                     Ok(plan) => plan,
-                    Err(error) => {
+                    Err(_error) => {
                         outcome.result = ResultClass::Invalid;
                         return outcome.with_error(
                             ErrorDetail::new(
                                 "foreground_update_plan_invalid",
                                 "The partial skill update could not be validated safely.",
-                            )
-                            .with_context("detail", error.to_string()),
+                            ),
                         );
                     }
                 };
-                if let Err(error) = select_foreground_updates_with_acknowledgment(
+                if let Err(_error) = select_foreground_updates_with_acknowledgment(
                     &update_plan,
                     &BTreeSet::new(),
                     acknowledged,
@@ -1120,8 +1119,7 @@ impl StatusApplication<'_> {
                             Warning::new(
                                 "partial_operation_requires_acknowledgment",
                                 "The skill is loadable but not fully strict for the selected harness; rerun with `--yes` to accept the reported loss.",
-                            )
-                            .with_context("detail", error.to_string()),
+                            ),
                         )
                         .with_next_action(NextAction::new(
                             "accept_partial",
