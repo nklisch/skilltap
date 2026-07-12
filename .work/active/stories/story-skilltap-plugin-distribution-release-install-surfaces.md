@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-install-surfaces
 kind: story
-stage: review
+stage: done
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: [story-skilltap-plugin-distribution-release-contract]
@@ -34,3 +34,18 @@ Acceptance criteria:
 - Tests added: offline public-surface parity checks for marketplace/installer/bootstrap/update/Homebrew wording; optional read-only sibling pointer validation via `SKILLTAP_SKILLS_MARKETPLACE`.
 - Discrepancies from design: active sibling checkout is not modified; pointer validation is opt-in when a parity checkout is supplied.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: the active `../skills` checkout remains intentionally untouched;
+set `SKILLTAP_SKILLS_MARKETPLACE` in an external parity checkout to enforce its
+direct canonical pointer.
+
+**Notes**: Fast substrate review at standard weight. README and website make
+marketplace and one-line installation equal paths, explain bootstrap result
+separation and update policy, and keep Homebrew binary-only. The offline
+surface script passes and performs only an optional read-only sibling check.
