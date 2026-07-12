@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: drafting
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
@@ -37,3 +37,8 @@ fails.
 ## Test location (suggested)
 
 Daemon unit tests and isolated compiled CLI tests.
+
+## Autopilot implementation note
+
+The failure matrix and isolated fixture strategy are fully specified; proceed
+directly to implementation and verification without a separate design pass.
