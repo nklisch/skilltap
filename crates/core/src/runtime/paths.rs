@@ -1,5 +1,7 @@
 use std::{ffi::OsString, path::PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use crate::domain::AbsolutePath;
 
 use super::{EnvironmentVariable, PathRole, RuntimeError, path_value::absolute_path};
@@ -17,7 +19,8 @@ impl Environment for ProcessEnvironment {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SupportedPlatform {
     Linux,
     MacOs,

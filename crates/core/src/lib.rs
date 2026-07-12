@@ -1,4 +1,5 @@
 pub mod adoption;
+pub mod bootstrap;
 pub mod compatibility;
 pub mod daemon;
 pub mod domain;

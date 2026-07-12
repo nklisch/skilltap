@@ -10,6 +10,8 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use super::{CONFIG_SCHEMA_VERSION, SchemaError};
 use crate::domain::{AbsolutePath, HarnessId, NativeId};
 
+use crate::bootstrap::BootstrapUpdateMode;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HarnessBinary(String);
 
@@ -207,12 +209,33 @@ pub struct UpdatePolicy {
     pub interval: UpdateInterval,
 }
 
+/// Policy for skilltap's own binary update lifecycle.  It is kept separate
+/// from resource update policy because major-version acknowledgement applies
+/// only to the self-hosted executable.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BinaryUpdatePolicy {
+    pub mode: BootstrapUpdateMode,
+    pub allow_major: bool,
+}
+
+impl Default for BinaryUpdatePolicy {
+    fn default() -> Self {
+        Self {
+            mode: BootstrapUpdateMode::ApplySafe,
+            allow_major: false,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "ConfigWire")]
 pub struct ConfigDocument {
     harnesses: HarnessPolicies,
     instructions: InstructionPolicy,
     updates: UpdatePolicy,
+    #[serde(default)]
+    bootstrap: BinaryUpdatePolicy,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -222,6 +245,13 @@ struct ConfigWire {
     harnesses: HarnessPolicies,
     instructions: InstructionPolicy,
     updates: UpdatePolicy,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "is_default_binary_policy")]
+    bootstrap: BinaryUpdatePolicy,
+}
+
+fn is_default_binary_policy(policy: &BinaryUpdatePolicy) -> bool {
+    policy == &BinaryUpdatePolicy::default()
 }
 
 impl ConfigDocument {
@@ -245,6 +275,7 @@ impl ConfigDocument {
             harnesses,
             instructions,
             updates,
+            bootstrap: BinaryUpdatePolicy::default(),
         })
     }
 
@@ -268,6 +299,7 @@ impl ConfigDocument {
                 interval: UpdateInterval::new(6, UpdateIntervalUnit::Hours)
                     .expect("known positive interval"),
             },
+            bootstrap: BinaryUpdatePolicy::default(),
         }
     }
 
@@ -279,6 +311,16 @@ impl ConfigDocument {
     }
     pub const fn updates(&self) -> &UpdatePolicy {
         &self.updates
+    }
+
+    pub const fn bootstrap(&self) -> &BinaryUpdatePolicy {
+        &self.bootstrap
+    }
+
+    pub fn with_bootstrap_policy(&self, policy: BinaryUpdatePolicy) -> Self {
+        let mut next = self.clone();
+        next.bootstrap = policy;
+        next
     }
 
     /// Returns a policy copy with one known harness's enabled state and binary.
@@ -323,6 +365,7 @@ impl From<ConfigDocument> for ConfigWire {
             harnesses: value.harnesses,
             instructions: value.instructions,
             updates: value.updates,
+            bootstrap: value.bootstrap,
         }
     }
 }
@@ -336,6 +379,10 @@ impl TryFrom<ConfigWire> for ConfigDocument {
             value.instructions,
             value.updates,
         )
+        .map(|mut config| {
+            config.bootstrap = value.bootstrap;
+            config
+        })
     }
 }
 

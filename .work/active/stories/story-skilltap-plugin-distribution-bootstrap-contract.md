@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-contract
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [epic-skilltap-plugin-distribution-package]
@@ -43,4 +43,8 @@ this item before implementation.
 
 ## Implementation notes
 - Execution capability: highest available local capability; release and update policy are security-sensitive contracts.
-- Review weight: standard (autopilot project default).
+- Review weight: standard (source: autopilot project default).
+- Files changed: `crates/core/src/bootstrap.rs`, `crates/core/src/lib.rs`, `crates/core/src/runtime/paths.rs`, `crates/core/src/storage/config.rs`.
+- Tests added: pure release/version, artifact validation, decision-policy, and bootstrap config round-trip tests.
+- Discrepancies from design: the binary policy is an optional `[bootstrap]` config table with deterministic defaults, preserving legacy config serialization when defaults are unchanged.
+- Adjacent issues parked: none.
