@@ -1,7 +1,7 @@
 ---
 id: story-feature-extract-cli-bootstrap-boundary-composition
 kind: story
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: feature-extract-cli-bootstrap-boundary
 depends_on: []
@@ -66,3 +66,23 @@ The main risk is import or visibility drift changing target filtering or the
 attention short circuit. Revert the module and dispatch edit to restore the
 composition block; this source-only move touches no native files or state.
 
+## Implementation notes
+
+- Execution capability: highest available local implementation; mechanical
+  boundary extraction with no behavior change.
+- Review weight: standard (autopilot default).
+- Files changed: `crates/cli/src/entrypoint.rs`,
+  `crates/cli/src/bootstrap_commands.rs`.
+- Tests added: none; existing bootstrap composition, target narrowing, JSON,
+  and plain-output assertions moved with the implementation.
+- Discrepancies from design: the publication and daemon blocks were moved in
+  the same mechanical extraction so the new private module was immediately
+  buildable; no contract or output behavior changed.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap --offline` (59 unit/compiled/package tests passed)
+- `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
+- `git diff --check`
