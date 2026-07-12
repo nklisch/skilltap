@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-release
 kind: feature
-stage: implementing
+stage: review
 tags: [infra, content]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package, epic-skilltap-plugin-distribution-cli-contract, epic-skilltap-plugin-distribution-bootstrap, epic-skilltap-plugin-distribution-guidance]
@@ -238,3 +238,9 @@ implementation run; CI prepares and validates publication.
   supported and major updates require explicit `--allow-major`.
 - **Cutover boundary**: legacy `nklisch/skilltap-skills` archival belongs to
   the dependent cutover feature after publication verification.
+
+## Children complete
+
+The four release stories are complete: release identity/artifact contract,
+installer/bootstrap parity, website/Homebrew/secondary-publisher installation
+surfaces, and pre-publication workflow verification.
