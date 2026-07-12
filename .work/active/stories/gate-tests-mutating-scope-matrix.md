@@ -1,7 +1,7 @@
 ---
 id: gate-tests-mutating-scope-matrix
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -83,3 +83,19 @@ Extended the scope matrix with equal `same@team` global/project resources,
 all-scopes removal, state/inventory assertions, unchanged native-tree
 snapshots, and a project sentinel byte check. The focused scope-matrix test
 passes against the fixed implementation.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review at review weight standard.
+The focused compiled-binary test passes. Equal logical ids are exercised in
+global and project scopes, all-scopes removal preserves the unrelated project
+resource, target-subset removal preserves the remaining target, inventory and
+state records are asserted, the native tree is snapshotted, and an untouched
+project sentinel is preserved. The scope-aware operation-id fix is covered by
+the matrix and no test weakening or foundation drift was found.
