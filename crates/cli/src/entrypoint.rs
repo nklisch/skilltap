@@ -180,6 +180,7 @@ where
                 "skill install",
                 &args.scope,
                 &args.target,
+                args.acknowledgment.yes,
                 SkillInstallRequest {
                     source: args.source.as_str(),
                     name: args.name.as_ref().map(|value| value.as_str()),
@@ -209,6 +210,7 @@ where
                 &args.scope,
                 &args.target,
                 args.skill.as_ref().map(|value| value.as_str()),
+                args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
@@ -763,10 +765,11 @@ fn execute_system_skill_install(
     command: &'static str,
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
+    acknowledged: bool,
     request: SkillInstallRequest<'_>,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        application.execute_skill_install(command, scope, target, request)
+        application.execute_skill_install(command, scope, target, acknowledged, request)
     })
 }
 
@@ -787,9 +790,10 @@ fn execute_system_skill_update(
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
     skill: Option<&str>,
+    acknowledged: bool,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        application.execute_skill_update(command, scope, target, skill)
+        application.execute_skill_update(command, scope, target, skill, acknowledged)
     })
 }
 

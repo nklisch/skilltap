@@ -745,6 +745,56 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
 }
 
 #[test]
+fn skill_install_requires_generic_yes_for_loadable_partial_frontmatter() {
+    let machine = machine();
+    let source = machine.home().join("partial-source");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: partial\ndescription: loadable but unterminated\nbody\n",
+    )
+    .unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source = source.to_str().unwrap();
+
+    let blocked = run(
+        &machine,
+        &["skill", "install", source, "--target", "codex", "--json"],
+    );
+    assert_code(&blocked, 2);
+    let blocked_value = json(&blocked);
+    assert_eq!(blocked_value["result"], "attention_required");
+    assert!(
+        blocked_value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| { warning["code"] == "partial_operation_requires_acknowledgment" })
+    );
+    assert!(
+        !machine
+            .home()
+            .join(".agents/skills/partial-source")
+            .exists()
+    );
+
+    let accepted = run(
+        &machine,
+        &[
+            "skill", "install", source, "--target", "codex", "--yes", "--json",
+        ],
+    );
+    assert_code(&accepted, 0);
+    assert_eq!(json(&accepted)["summary"]["changed"], true);
+    assert!(
+        machine
+            .home()
+            .join(".agents/skills/partial-source/SKILL.md")
+            .is_file()
+    );
+}
+
+#[test]
 fn claude_only_skill_install_keeps_canonical_and_harness_projection() {
     let machine = machine();
     let source = machine.home().join("claude-only-skill");

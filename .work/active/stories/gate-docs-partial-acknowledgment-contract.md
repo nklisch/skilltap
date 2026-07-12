@@ -1,7 +1,7 @@
 ---
 id: gate-docs-partial-acknowledgment-contract
 kind: story
-stage: implementing
+stage: review
 tags: [documentation]
 parent: null
 depends_on: []
@@ -68,6 +68,23 @@ desired public contract; it is the implementation that must change.
 - Focused verification: `cargo test -p skilltap-core foreground_update --offline`
   and `cargo check -p skilltap --offline` pass, including generic acceptance,
   unexpected-selector, and blocked-work coverage.
+
+## Implementation completion
+
+- `--yes` now travels from the compiled skill install/update dispatch through
+  reconciliation's delegated skill adapter; sync uses the same acknowledged
+  path instead of merely copying a summary field.
+- Loadable-but-non-strict skill frontmatter is represented as an eligible
+  partial consequence. The application builds a foreground update plan and
+  calls `select_foreground_updates_with_acknowledgment`; generic acceptance
+  selects it, while missing acknowledgment returns a stable next action.
+- Unloadable frontmatter remains a hard compatibility block and is not changed
+  by `--yes`. Existing include/exclude selectors continue to narrow sync's
+  operation scope; the exact core acknowledgment selectors remain available
+  to future piecewise callers but are not invented as a new CLI flag here.
+- Added compiled coverage for the no-ack block and generic `--yes` acceptance;
+  focused test `skill_install_requires_generic_yes_for_loadable_partial_frontmatter`
+  passes.
 
 ## Review findings
 

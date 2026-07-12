@@ -17,10 +17,15 @@ use skilltap_core::{
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
         ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
         ObservationTarget, ObservedResource, OperationAction, OperationId, OperationOutcome,
-        OperationResult, Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId,
-        ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
+        OperationResult, OperationSelector, Ownership, Plan, ProfileAuthority, Provenance,
+        ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind,
+        SourceLocator, UpdateIntent,
     },
     executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
+    foreground_update::{
+        ForegroundUpdateRequest, plan_foreground_updates,
+        select_foreground_updates_with_acknowledgment,
+    },
     instructions::fingerprint_contents,
     lifecycle_operation::native_operation,
     runtime::{
@@ -713,6 +718,7 @@ impl StatusApplication<'_> {
                     &child_scope,
                     &TargetArgs::default(),
                     Some(&name),
+                    false,
                 ),
                 _ => continue,
             };
@@ -1715,6 +1721,7 @@ impl StatusApplication<'_> {
         command: &'static str,
         requested_scope: &ScopeArgs,
         target: &TargetArgs,
+        acknowledged: bool,
         request: SkillInstallRequest<'_>,
     ) -> Outcome {
         let (documents, mut outcome) = match self.load_documents(command) {
@@ -1875,6 +1882,7 @@ impl StatusApplication<'_> {
             }
         };
         let mut compatibility_label = "compatible";
+        let mut partial_compatibility = false;
         for compatibility in SkillCompatibility::evaluate(&skill, &targets.resolved) {
             match compatibility.class() {
                 SkillCompatibilityClass::Blocked => {
@@ -1889,6 +1897,7 @@ impl StatusApplication<'_> {
                 }
                 SkillCompatibilityClass::Warning => {
                     compatibility_label = "warning";
+                    partial_compatibility = true;
                     outcome = outcome.with_warning(
                         Warning::new(
                             "skill_frontmatter_warning",
@@ -2031,6 +2040,71 @@ impl StatusApplication<'_> {
                     ));
                 }
             };
+            if partial_compatibility {
+                let acknowledgment_selector = OperationSelector::Resource {
+                    resource: key.clone(),
+                };
+                let candidate = UpdateCandidate {
+                    resource: key.clone(),
+                    // Compatibility acknowledgment is a foreground
+                    // decision even when the source revision itself did not
+                    // change (for example, the first install or a repeated
+                    // materialization). Use a private revision pair solely
+                    // to exercise the update-selection contract; the actual
+                    // source revision remains recorded below.
+                    current_revision: Some(skilltap_core::domain::ResolvedRevision::Native(
+                        NativeId::new("skilltap-partial-current").expect("static native id"),
+                    )),
+                    available_revision: Some(skilltap_core::domain::ResolvedRevision::Native(
+                        NativeId::new("skilltap-partial-available").expect("static native id"),
+                    )),
+                    resolution_error: None,
+                    pinned: update_intent == UpdateIntent::Pinned,
+                    drifted: false,
+                    compatibility_changed: false,
+                    requires_acknowledgment: true,
+                    intent: update_intent,
+                    acknowledgment_selectors: [acknowledgment_selector].into_iter().collect(),
+                };
+                let update_plan = match plan_foreground_updates(ForegroundUpdateRequest {
+                    resources: std::slice::from_ref(&desired),
+                    candidates: std::slice::from_ref(&candidate),
+                    mode: documents.config.updates().mode,
+                }) {
+                    Ok(plan) => plan,
+                    Err(error) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(
+                            ErrorDetail::new(
+                                "foreground_update_plan_invalid",
+                                "The partial skill update could not be validated safely.",
+                            )
+                            .with_context("detail", error.to_string()),
+                        );
+                    }
+                };
+                if let Err(error) = select_foreground_updates_with_acknowledgment(
+                    &update_plan,
+                    &BTreeSet::new(),
+                    acknowledged,
+                ) {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome
+                        .with_warning(
+                            Warning::new(
+                                "partial_operation_requires_acknowledgment",
+                                "The skill is loadable but not fully strict for the selected harness; rerun with `--yes` to accept the reported loss.",
+                            )
+                            .with_context("detail", error.to_string()),
+                        )
+                        .with_next_action(NextAction::new(
+                            "accept_partial",
+                            "Review the compatibility warning, then retry with `--yes` if the partial result is acceptable.",
+                        ))
+                        .with_summary("operations", 0_u64)
+                        .with_summary("changed", false);
+                }
+            }
             inventory = match inventory.with_resource(desired) {
                 Ok(inventory) => inventory,
                 Err(_) => {
@@ -2262,7 +2336,7 @@ impl StatusApplication<'_> {
                     "The standalone skill state could not be recorded safely.",
                 ));
             }
-            if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+            if skill_install_can_complete(&outcome, acknowledged) {
                 outcome.result = ResultClass::Completed;
             }
             let operation_count = outcome.operations.len() as u64;
@@ -2339,7 +2413,7 @@ impl StatusApplication<'_> {
                 outcome.result = ResultClass::AttentionRequired;
             }
         }
-        if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
+        if report.changed && skill_install_can_complete(&outcome, acknowledged) {
             outcome.result = ResultClass::Completed;
         }
         let mut outcome = outcome
@@ -2368,6 +2442,7 @@ impl StatusApplication<'_> {
         requested_scope: &ScopeArgs,
         target: &TargetArgs,
         skill_name: Option<&str>,
+        acknowledged: bool,
     ) -> Outcome {
         let (documents, _) = match self.load_documents(command) {
             Ok(value) => value,
@@ -2447,8 +2522,13 @@ impl StatusApplication<'_> {
                     continue;
                 }
                 let child_scope = scope_args_for_scope(&concrete_scope);
-                let child =
-                    self.execute_skill_update(command, &child_scope, target, Some(name.as_str()));
+                let child = self.execute_skill_update(
+                    command,
+                    &child_scope,
+                    target,
+                    Some(name.as_str()),
+                    acknowledged,
+                );
                 let child_changed =
                     child.summary.get("changed") == Some(&OutputValue::Boolean(true));
                 let child_operations = child.operations.len() as u64;
@@ -2519,6 +2599,7 @@ impl StatusApplication<'_> {
             command,
             requested_scope,
             target,
+            acknowledged,
             SkillInstallRequest {
                 source: source.locator().as_str(),
                 name: Some(name.as_str()),
@@ -3680,6 +3761,7 @@ impl StatusApplication<'_> {
                             "sync",
                             &child_scope,
                             &child_target,
+                            acknowledged,
                             SkillInstallRequest {
                                 source,
                                 name,
@@ -3982,6 +4064,16 @@ fn skill_relative_destination(
     name: &NativeId,
 ) -> Option<skilltap_core::domain::RelativeArtifactPath> {
     skilltap_core::domain::RelativeArtifactPath::new(format!("skills/{}", name.as_str())).ok()
+}
+
+fn skill_install_can_complete(outcome: &Outcome, acknowledged: bool) -> bool {
+    outcome.errors.is_empty()
+        && (outcome.warnings.is_empty()
+            || (acknowledged
+                && outcome
+                    .warnings
+                    .iter()
+                    .all(|warning| warning.code == "skill_frontmatter_warning")))
 }
 
 fn scope_args_for_scope(scope: &Scope) -> ScopeArgs {
