@@ -50,3 +50,16 @@ Acceptance criteria:
 scope/target behavior, complete skill-directory ownership, canonical
 AGENTS.md, native bridge precedence, and drift-preserving guidance match the
 foundation contracts. Offline package validation passes.
+
+## Review follow-up (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Corrected the Codex native instruction paths in the reference to
+honor `${CODEX_HOME:-$HOME/.codex}`, including the higher-precedence
+`AGENTS.override.md`, matching the foundation contract. No other layout or
+precedence claims changed.

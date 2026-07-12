@@ -5,8 +5,8 @@ source that should be kept consistent when managing the user's own machine.
 Codex and Claude consume different native paths, so a healthy bridge must be
 observed rather than assumed:
 
-- Codex normally reads `~/.codex/AGENTS.md`; a non-empty
-  `~/.codex/AGENTS.override.md` takes precedence.
+- Codex normally reads `${CODEX_HOME:-$HOME/.codex}/AGENTS.md`; a non-empty
+  `${CODEX_HOME:-$HOME/.codex}/AGENTS.override.md` takes precedence.
 - Claude normally reads `~/.claude/CLAUDE.md` and does not read `AGENTS.md`
   directly.
 - At project scope Codex layers `AGENTS.md` files from repository root toward

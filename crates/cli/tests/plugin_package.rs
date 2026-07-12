@@ -283,6 +283,7 @@ fn validate_guidance(skill_root: &Path) -> Result<(), String> {
             return Err(format!("SKILL.md does not link {reference}"));
         }
     }
+    validate_guidance_links(skill_root, &body)?;
     if body.contains("skilltap skill install --source") {
         return Err("SKILL.md contains a duplicated command grammar".to_owned());
     }
@@ -292,6 +293,50 @@ fn validate_guidance(skill_root: &Path) -> Result<(), String> {
         || normalized.contains("recommend a skill")
     {
         return Err("SKILL.md contains discovery instructions".to_owned());
+    }
+    Ok(())
+}
+
+fn validate_guidance_links(skill_root: &Path, body: &str) -> Result<(), String> {
+    let mut remaining = body;
+    while let Some((_, after_open)) = remaining.split_once("](") {
+        let Some((target, after_target)) = after_open.split_once(')') else {
+            return Err("SKILL.md contains an unterminated reference link".to_owned());
+        };
+        let target = target.split_whitespace().next().unwrap_or_default();
+        if target.is_empty() {
+            return Err("SKILL.md contains an empty reference link".to_owned());
+        }
+        if target.starts_with('#')
+            || target.starts_with("http://")
+            || target.starts_with("https://")
+            || target.starts_with("mailto:")
+        {
+            remaining = after_target;
+            continue;
+        }
+        let path = Path::new(target);
+        if path.is_absolute()
+            || path.components().any(|component| {
+                matches!(
+                    component,
+                    Component::ParentDir | Component::RootDir | Component::Prefix(_)
+                )
+            })
+        {
+            return Err(format!(
+                "SKILL.md reference link escapes skill root: {target}"
+            ));
+        }
+        let resolved = skill_root.join(path);
+        let metadata = fs::symlink_metadata(&resolved)
+            .map_err(|_| format!("SKILL.md reference link is missing: {target}"))?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(format!(
+                "SKILL.md reference link is not a regular file: {target}"
+            ));
+        }
+        remaining = after_target;
     }
     Ok(())
 }
@@ -495,4 +540,18 @@ fn guidance_validation_requires_references_and_rejects_discovery_or_duplicate_gr
     body.push_str("\nSearch for skills in every marketplace.\n");
     fs::write(&skill, body).unwrap();
     assert!(validate_package(&root).unwrap_err().contains("discovery"));
+
+    let (_temporary, root) = fixture();
+    let skill = root.join("skills/skilltap/SKILL.md");
+    let mut body = fs::read_to_string(&skill).unwrap();
+    body.push_str("\n[missing](references/missing.md)\n");
+    fs::write(&skill, body).unwrap();
+    assert!(validate_package(&root).unwrap_err().contains("missing"));
+
+    let (_temporary, root) = fixture();
+    let skill = root.join("skills/skilltap/SKILL.md");
+    let mut body = fs::read_to_string(&skill).unwrap();
+    body.push_str("\n[escape](../outside.md)\n");
+    fs::write(&skill, body).unwrap();
+    assert!(validate_package(&root).unwrap_err().contains("escapes"));
 }

@@ -248,3 +248,18 @@ configuration/instruction and diagnostic references; package validation proves
 the reference tree and rejects unsafe/discovery or duplicate-command drift.
 All four child stories are independently approved and the offline plugin
 package suite passes.
+
+## Review follow-up (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh follow-up review against `docs/SPEC.md`, `docs/ARCH.md`, and
+`docs/UX.md` confirms the guidance remains harness-neutral, no-search, and
+help-authoritative. Validation now checks every local body link for existence
+and root containment; instruction guidance honors `CODEX_HOME`; and the
+offline package suite passes. No foundation-doc drift or release-contract
+claim was introduced.

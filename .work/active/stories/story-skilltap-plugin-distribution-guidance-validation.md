@@ -48,3 +48,17 @@ Acceptance criteria:
 requires complete guidance references, rejects unsafe/missing trees, and
 guards against duplicate command grammar and discovery instructions. The
 offline plugin package suite passes all four tests.
+
+## Review follow-up (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Follow-up review closed the explicit link-boundary gap: validation
+now walks every local Markdown link in `SKILL.md`, rejects missing or
+non-regular targets, and rejects absolute/parent-directory escapes. The added
+missing-target and escaping-target fixtures pass with the deterministic
+offline package suite.
