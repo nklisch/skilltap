@@ -3739,12 +3739,21 @@ impl StatusApplication<'_> {
                     merge_reconciliation_outcome(&mut outcome, child);
                 }
             }
+            let operation_count = outcome.operations.len() as u64;
             if observation.failed_targets > 0 {
                 outcome.result = ResultClass::AttentionRequired;
             } else if outcome.errors.is_empty() && outcome.warnings.is_empty() {
-                outcome.result = ResultClass::Completed;
+                // A plan is an attention result whenever it contains work for
+                // the caller to inspect, even when every operation is safe or
+                // already satisfied.  Only an empty plan is a completed
+                // no-change result; sync keeps its normal applied/no-change
+                // classification below.
+                outcome.result = if operation_count > 0 {
+                    ResultClass::AttentionRequired
+                } else {
+                    ResultClass::Completed
+                };
             }
-            let operation_count = outcome.operations.len() as u64;
             return outcome
                 .with_summary("desired_resources", desired_count)
                 .with_summary("operations", operation_count)
