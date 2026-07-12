@@ -51,3 +51,8 @@ returns `attention_required` despite `changed=false` and safe work completing,
 because its aggregate outcome retains the document-load attention state.
 Parked as `idea-daemon-noop-result-class`; do not weaken or skip this test. The
 story remains blocked on that fix and review of the resulting regression.
+
+## Blocker
+
+The regression cannot pass until daemon aggregate results classify a successful
+no-op as completed. See parked item `idea-daemon-noop-result-class`.
