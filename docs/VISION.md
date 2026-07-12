@@ -35,8 +35,9 @@ explains the binary, command families, configuration layout, and diagnostic
 workflow at a high level. It is a delivery and discovery surface, not a second
 control plane, a marketplace browser, or a universal plugin format. The
 skilltap repository is the canonical implementation and release source. The
-active `../skills` repository is a maintained second marketplace publisher of
-the same plugin and must stay in metadata/version parity. The separate
+active `../skills` repository is a maintained second marketplace publisher
+whose marketplace entry points directly at this repository's canonical plugin
+subtree; it does not maintain a duplicate metadata or version stream. The separate
 `nklisch/skilltap-skills` repository is the legacy skilltap distribution being
 retired.
 
