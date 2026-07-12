@@ -715,16 +715,29 @@ fn remove_published_if_identity(path: &Path, expected: (u64, u64)) {
 }
 
 fn remove_published_if_identity_with(
-    _path: &Path,
-    _expected: (u64, u64),
+    path: &Path,
+    expected: (u64, u64),
     after_exchange: impl FnOnce(),
 ) {
-    // A portable conditional unlink primitive does not exist: any path-based
-    // remove can race a replacement between identity observation and unlink.
-    // Fail closed and leave the verified publication in place rather than risk
-    // deleting an unrelated executable. The caller reports the operation as a
-    // failed/attention result and a later explicit repair can reconcile it.
     after_exchange();
+    let Some(parent) = path.parent() else { return };
+    let marker = parent.join(format!(
+        ".skilltap-rollback-cleanup-{}",
+        ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    // Atomically move the observed destination into a private name without
+    // replacing anything. A replacement that wins before this operation is
+    // moved to the marker, inspected, and restored only with another
+    // no-replace rename; the destination is never unlinked by a stale name.
+    if rename_noreplace(path, &marker).is_err() {
+        return;
+    }
+    if destination_identity(&marker).ok().flatten() == Some(expected) {
+        let _ = fs::remove_file(&marker);
+    } else if rename_noreplace(&marker, path).is_err() {
+        // Preserve an unrelated replacement at `path`; leave the private
+        // residual for an explicit repair rather than deleting either inode.
+    }
 }
 
 /// Publish a verified payload without overwriting a destination that changed
@@ -772,10 +785,25 @@ fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
 
 #[cfg(target_os = "macos")]
 fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    // Hard-link publication is atomic and no-clobber on APFS/HFS+: an
-    // existing destination returns EEXIST without changing either path.
-    fs::hard_link(source, destination)?;
-    fs::remove_file(source)
+    use std::os::unix::ffi::OsStrExt;
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_EXCL,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
