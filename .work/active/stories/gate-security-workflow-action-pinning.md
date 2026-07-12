@@ -1,7 +1,7 @@
 ---
 id: gate-security-workflow-action-pinning
 kind: story
-stage: implementing
+stage: review
 tags: [security]
 parent: null
 depends_on: []
@@ -38,3 +38,16 @@ credentials.
 Pin every third-party action to a reviewed full commit SHA, update pins through
 reviewed dependency automation, minimize job permissions, and isolate the
 Homebrew token to the job that requires it.
+
+## Implementation Notes
+
+- Every third-party workflow action is pinned to a full commit SHA, with the
+  source tag retained in a comment for maintenance review.
+- Workflow-level write permissions were removed. Release attestation, release
+  publication, Pages deployment, and Homebrew update jobs now receive only the
+  permissions required for their individual operations.
+- Checkout credentials are not persisted in worktrees; the Homebrew token is
+  supplied only to the tap checkout and pull-request action in its dedicated
+  job.
+- Verification: Ruby YAML parsing succeeded for all three workflows; `git
+  diff --check` passed. `actionlint` was unavailable in the environment.

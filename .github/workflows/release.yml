@@ -11,10 +11,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
-  id-token: write
-  attestations: write
+permissions: {}
 
 env:
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
@@ -22,10 +19,13 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
 
       - name: Validate release tag matches workspace version
         run: |
@@ -52,10 +52,15 @@ jobs:
           - runner: macos-14
             asset: skilltap-darwin-arm64
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ env.RELEASE_TAG }}
+          persist-credentials: false
 
       - name: Build release binary
         run: cargo build --locked --release -p skilltap
@@ -76,11 +81,11 @@ jobs:
         run: scripts/verify-binary.sh "./${{ matrix.asset }}"
 
       - name: Attest artifact provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
         with:
           subject-path: ${{ matrix.asset }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.asset }}
           path: ${{ matrix.asset }}
@@ -89,8 +94,11 @@ jobs:
   release:
     needs: build
     runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: skilltap-*
           merge-multiple: true
@@ -99,7 +107,7 @@ jobs:
         run: sha256sum skilltap-* > checksums.txt
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
@@ -113,19 +121,23 @@ jobs:
   update-homebrew:
     needs: release
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - name: Check out skilltap release sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           ref: ${{ env.RELEASE_TAG }}
           path: source
+          persist-credentials: false
 
       - name: Check out Homebrew tap
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           repository: nklisch/homebrew-skilltap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: tap
+          persist-credentials: false
 
       - name: Synchronize formula source and checksums
         run: |
@@ -140,7 +152,7 @@ jobs:
           rm checksums.txt
 
       - name: Create Homebrew update pull request
-        uses: peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
         with:
           path: tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
