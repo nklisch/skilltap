@@ -1,7 +1,7 @@
 ---
 id: story-plan-nonempty-exit-class
 kind: story
-stage: implementing
+stage: review
 parent: null
 depends_on: []
 release_binding: 3.0.0
@@ -28,3 +28,17 @@ completed/no-change for an empty plan and retain the compiled regressions.
 
 Promoted from `idea-plan-nonempty-exit-class` after the final workspace test
 pass exposed the production regression.
+
+## Implementation Notes
+
+- Count planned operations before classifying the result. A populated,
+  side-effect-free plan now returns `attention_required` (exit 2), including
+  no-op and repair operations that still require caller inspection.
+- Empty plans remain `completed` (exit 0); observation failures and existing
+  errors/warnings retain their higher-severity result classes.
+- Existing compiled regressions cover populated, healthy, and drifted plans;
+  all pass without filesystem mutation.
+- Verification: `cargo fmt --all -- --check`; `cargo test -p skilltap
+  --test compiled_binary --offline`; `cargo test --workspace --all-targets
+  --offline`; `cargo clippy --workspace --all-targets --offline -- -D
+  warnings`.
