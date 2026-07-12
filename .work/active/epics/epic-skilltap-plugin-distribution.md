@@ -219,3 +219,12 @@ the final dependent handoff.
   its direct source pointer.
 - No part of the plugin or skill adds marketplace search, ranking,
   recommendation, or broad inventory discovery.
+
+## Refactor cadence (2026-07-12)
+
+Conservative discovery over the bootstrap CLI boundary, artifact runtime,
+plugin/package validation, release scripts, and cutover documentation found no
+high-confidence pure refactor worth emitting. The remaining large bootstrap
+module contains security-sensitive publication/test seams where extraction
+would increase coordination risk; shell and prose duplication is small and
+does not justify a behavior-preserving abstraction. No refactor items emitted.
