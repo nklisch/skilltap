@@ -215,4 +215,12 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
 
 ## Gate runs
 
-Pending: security, tests, cruft, docs, patterns.
+- **gate-security** (2026-07-12) — 4 findings (3 high, 1 medium); items
+  `gate-security-credential-bearing-source-state`,
+  `gate-security-installer-integrity`,
+  `gate-security-workflow-action-pinning`, and
+  `gate-security-git-argument-delimiters`.
+- **gate-tests** — pending.
+- **gate-cruft** — pending.
+- **gate-docs** — pending.
+- **gate-patterns** — pending.
