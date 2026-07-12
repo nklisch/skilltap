@@ -28,8 +28,8 @@ catalog. It does not search or recommend other skills, plugins, or marketplaces.
 The skilltap repository is the canonical implementation and release source for
 one public plugin identity with distinct native channel artifacts. The active
 `../skills` repository is a maintained secondary marketplace publisher of the
-same plugin; release validation keeps its plugin entry and version/source
-metadata in parity with this repository.
+same plugin; its marketplace entry points directly at this repository's
+canonical plugin subdirectory rather than copying manifests or versions.
 
 - Claude Code uses a `.claude-plugin/plugin.json` manifest and a
   `.claude-plugin/marketplace.json` catalog.

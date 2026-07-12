@@ -46,9 +46,9 @@ manifest is introduced.
 ## Design decisions
 
 - **Canonical source**: The package is authored and versioned in the skilltap
-  repository. The active `../skills` repository publishes a synchronized
-  second marketplace entry; `nklisch/skilltap-skills` is only a legacy
-  migration source.
+  repository. The active `../skills` repository publishes a second marketplace
+  entry that points directly at this plugin subdirectory; `nklisch/skilltap-
+  skills` is only a legacy migration source.
 - **Channel parity**: Claude and Codex receive distinct native manifests and
   catalogs around one complete shared skill directory; no Pi channel or
   universal manifest is added.

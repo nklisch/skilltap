@@ -33,7 +33,9 @@ repository.
 This epic also performs the publication cutover. The skilltap repository is the
 canonical implementation and release source, while the active `../skills`
 repository remains a maintained second marketplace publisher of the same
-plugin. Release work keeps both publishers in metadata/version parity. The
+plugin. Its marketplace entry points directly at this repository's canonical
+plugin subdirectory, so release work validates one source pointer instead of
+maintaining duplicate metadata or a second version stream. The
 separate public `nklisch/skilltap-skills` repository is the temporary legacy
 source; once the canonical plugin is published and verified, its old
 skilltap-related skills (including the former `claude-code-marketplace`
@@ -59,8 +61,9 @@ controls.
 
 - **Which repository owns the plugin?** This skilltap repository owns the
   implementation and release source. The active `../skills` repository remains
-  an intentional second marketplace publisher with synchronized metadata;
-  `nklisch/skilltap-skills` is the legacy repository being retired.
+  an intentional second marketplace publisher whose entry points directly at
+  this repository's plugin subdirectory; `nklisch/skilltap-skills` is the
+  legacy repository being retired.
 - **How are the two harnesses represented?** One public plugin identity is
   expressed through separate native Claude and Codex manifests and marketplace
   catalogs. The shared unit is the complete skill directory; manifests,
@@ -105,7 +108,7 @@ In scope:
 - A cutover/deprecation record for the legacy `nklisch/skilltap-skills`
   publication, with the old skilltap skills retired and that repository
   archived after verification. The active sibling publisher remains intact and
-  in parity.
+  points at the canonical source.
 
 Out of scope:
 
@@ -189,8 +192,8 @@ the final dependent handoff.
   synchronized. Repository archival authority for the legacy repo is external
   and requires an explicit handoff record.
 - Package, guidance, and release all touch publication assets. Their ownership
-  boundaries must stay explicit so version parity is generated or validated
-  from one source rather than maintained by repeated manual edits.
+  boundaries must stay explicit so the sibling marketplace uses one canonical
+  source pointer rather than repeated manual metadata edits.
 
 ## Acceptance criteria
 
@@ -212,6 +215,7 @@ the final dependent handoff.
 - `nklisch/skilltap-skills` no longer publishes the canonical skilltap plugin
   after cutover; its duplicate skilltap surfaces are retired and that legacy
   repository has an explicit archival/deprecation record. The active
-  `../skills` publisher continues publishing the same plugin in parity.
+  `../skills` publisher continues publishing the same canonical plugin through
+  its direct source pointer.
 - No part of the plugin or skill adds marketplace search, ranking,
   recommendation, or broad inventory discovery.

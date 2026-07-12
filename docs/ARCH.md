@@ -69,9 +69,10 @@ is intentionally outside the reconciliation core and cannot grant mutation
 authority to either harness adapter.
 
 The active `../skills` repository is a maintained secondary marketplace
-publisher of the same plugin. skilltap remains the implementation and release
-source; release integration synchronizes and validates the sibling's plugin
-entry and channel metadata rather than allowing two independent versions.
+publisher of the same plugin. Its marketplace entry points directly at this
+repository's canonical plugin subdirectory. skilltap remains the
+implementation and release source; release integration validates the source
+pointer rather than synchronizing duplicate manifests or versions.
 The legacy `nklisch/skilltap-skills` repository may mirror the plugin during
 the cutover, but it is removed or archived once the skilltap marketplace
 entries and release assets are authoritative.
