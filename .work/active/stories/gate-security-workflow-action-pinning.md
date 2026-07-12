@@ -1,7 +1,7 @@
 ---
 id: gate-security-workflow-action-pinning
 kind: story
-stage: review
+stage: done
 tags: [security]
 parent: null
 depends_on: []
@@ -51,3 +51,19 @@ Homebrew token to the job that requires it.
   job.
 - Verification: Ruby YAML parsing succeeded for all three workflows; `git
   diff --check` passed. `actionlint` was unavailable in the environment.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: `actionlint` remains unavailable locally; YAML parsing and direct
+pin/permission inspection were used instead.
+
+**Notes**: Standard substrate review with deep CI supply-chain/security lenses.
+All third-party `uses:` references in CI, Pages, release, attestation, artifact,
+and Homebrew jobs are full commit SHAs with maintenance comments. Workflow
+permissions are least-scoped at job level, checkout credentials are disabled,
+and the Homebrew token is confined to its checkout/PR job. Ruby YAML parsing and
+`git diff --check` pass.
