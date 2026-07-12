@@ -1,5 +1,5 @@
 ---
-description: skilltap command and flag reference.
+description: conceptual skilltap CLI index and executable-help guidance.
 ---
 
 # CLI Reference
@@ -7,42 +7,36 @@ description: skilltap command and flag reference.
 skilltap is deterministic and non-interactive. Running it without a subcommand
 prints concise help and exits with an input error.
 
-## Commands
+## Executable help is authoritative
 
-```text
-skilltap harness list
-skilltap harness enable <codex|claude>
-skilltap harness disable <codex|claude>
+This page is a conceptual index, not a second command grammar. The compiled
+binary owns names, arguments, validators, meaningful flags, and exit guidance.
+Ask the executable whenever an agent needs exact syntax:
 
-skilltap adopt
-skilltap status
-skilltap plan
-skilltap sync
-
-skilltap marketplace add <source>
-skilltap marketplace remove <name>
-skilltap marketplace update [name]
-skilltap marketplace list
-
-skilltap plugin install <plugin>@<marketplace>
-skilltap plugin remove <plugin>
-skilltap plugin update [plugin]
-skilltap plugin list
-
-skilltap skill install <source>
-skilltap skill remove <skill>
-skilltap skill update [skill]
-skilltap skill list
-
-skilltap instructions setup
-skilltap instructions status
-skilltap instructions repair
-
-skilltap daemon enable
-skilltap daemon disable
-skilltap daemon status
-skilltap daemon run
+```console
+$ skilltap --help
+$ skilltap <command-family> --help
+$ skilltap <command-family> <operation> --help
 ```
+
+The public command families are:
+
+| Family | Purpose | Start with |
+| --- | --- | --- |
+| Harness | Enable, disable, and inspect Codex/Claude policy | `skilltap harness --help` |
+| Adopt | Import native resources into desired state | `skilltap adopt --help` |
+| Status | Inspect desired, observed, and managed health | `skilltap status --help` |
+| Plan | Preview operations without mutating native state | `skilltap plan --help` |
+| Sync | Apply the selected desired-state operations | `skilltap sync --help` |
+| Marketplaces | Register, update, remove, and list native marketplace registrations | `skilltap marketplace --help` |
+| Plugins | Install, update, remove, and list plugins | `skilltap plugin --help` |
+| Skills | Install, update, remove, and list complete skill directories | `skilltap skill --help` |
+| Instructions | Set up and repair canonical `AGENTS.md` bridges | `skilltap instructions --help` |
+| Daemon | Opt into, inspect, run, or disable background updates | `skilltap daemon --help` |
+
+The standalone `adopt`, `status`, `plan`, and `sync` commands are the state
+control-plane operations. Their exact scope, target, selection, and
+acknowledgment flags are shown by their leaf help pages.
 
 There is no `init` command. The first mutating command creates skilltap's
 configuration directory when necessary.
@@ -62,7 +56,11 @@ configuration directory when necessary.
 | `--exclude <selector>` | Exclude matches; repeatable and wins over inclusion. |
 
 Only commands for which a flag is meaningful accept it. `--project` and
-`--all-scopes` are mutually exclusive.
+`--all-scopes` are mutually exclusive; the executable rejects misplaced flags.
+
+Every leaf help page also states the process exit classes: `0` completed, `1`
+invalid or pre-mutation failure, `2` attention or user decision required, and
+`3` partial mutation requiring recovery.
 
 Resource and component selectors begin as logical input. skilltap resolves
 them only within the command's selected scopes. Every planned operation then
@@ -75,20 +73,18 @@ only when that command requires it.
 
 ## Results and exit codes
 
-Plain output uses command-specific human result labels rather than exposing the
-JSON result class verbatim. Human-readable `status` output ends with one of:
+Plain output uses the same stable result labels across commands rather than
+exposing raw implementation details. Human-readable output ends with one of:
 
 ```text
-Result: healthy
-Result: changes needed
-Result: user decision required
-Result: unhealthy
+Result: completed
+Result: attention required
+Result: invalid
+Result: partial apply; recovery required
 ```
 
-Other commands use the same human vocabulary where it applies to their
-outcome; for example, successful marketplace and daemon operations end with
-`Result: healthy`, while a blocked partial transfer ends with
-`Result: user decision required`.
+The process exit code is authoritative for automation; `--json` carries the
+same result class and typed next actions for agents.
 
 `--json` emits exactly one schema-1 JSON document. `schema`, `command`,
 `result`, `summary`, `resources`, `operations`, `warnings`, `errors`, and
@@ -122,5 +118,6 @@ and the process reports its exit code to the caller.
 | `3` | Mutation partially completed and recovery is required. |
 
 For `plan`, a non-empty plan exits `2`. For `status`, unhealthy state or
-required changes exit `2`. For `sync`, blocked operations exit `2` when no
-mutation failed; a failed or partial mutation exits `3`.
+required changes exits `2`. For `sync`, blocked operations exit `2` when no
+mutation failed; a failed or partial mutation exits `3`. Consult the leaf help
+and structured `next_actions` for the recovery command an agent should run.

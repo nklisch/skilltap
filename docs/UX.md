@@ -164,7 +164,7 @@ Next actions
   skilltap adopt
   skilltap instructions status
 
-Result: changes needed
+Result: attention required
 ```
 
 Status discovers the global environment but does not create configuration. Use `status --project` for the current project or `status --all-scopes` for the complete managed computer.
@@ -202,7 +202,7 @@ Observed codex global scope
 
 No Codex configuration was changed.
 
-Result: user decision required
+Result: attention required
 ```
 
 Project adoption is explicit:
@@ -235,7 +235,7 @@ Daemon        enabled, last run 18 minutes ago
 Drift         none
 
 Projects      4 managed; run skilltap status --all-scopes for details
-Result: healthy
+Result: completed
 ```
 
 Attention is grouped by action:
@@ -260,7 +260,7 @@ Next actions
   skilltap plan --include plugin:review-tools@team
   skilltap status --project /home/user/src/app
 
-Result: user decision required
+Result: attention required
 ```
 
 Health findings use registered codes and authored summaries with typed scalar
@@ -317,7 +317,7 @@ To install the compatible subset:
   skilltap sync --project --include plugin:review-tools@personal --yes
 
 Explain the omitted hook to the user before confirming.
-Result: user decision required
+Result: attention required
 ```
 
 ## Marketplace Management
@@ -328,7 +328,7 @@ The caller provides the marketplace source directly:
 $ skilltap marketplace add anthropics/claude-plugins --target claude
 
 Registered anthropics-claude-plugins with Claude Code globally.
-Result: healthy
+Result: completed
 ```
 
 Project registration uses the same command with `--project`. A repository containing native catalogs for both harnesses may target both. A source supporting only one target reports the other target without inventing a catalog.
@@ -362,7 +362,7 @@ To accept this partial Codex plugin:
   skilltap plugin install deploy@claude-tools --target codex --yes
 
 Explain the missing `release-manager` agent to the user before confirming.
-Result: user decision required
+Result: attention required
 ```
 
 `plugin list` shows installed and desired plugins. It does not show the available contents of marketplaces.
@@ -380,7 +380,7 @@ Files: 8
 Targets: codex, claude
 Representation: complete directory
 
-Result: healthy
+Result: completed
 ```
 
 A skill inside a repository requires an explicit path:
@@ -398,7 +398,7 @@ Path: skills/commit-helper
 Revision: 8a21c4d
 Targets: codex, claude
 
-Result: healthy
+Result: completed
 ```
 
 A repository with multiple skills is not searched. The source root must contain `SKILL.md`, or the caller must provide `--path`.
@@ -416,7 +416,7 @@ Files: 8 -> 10
 Compatibility: compatible
 Targets: codex, claude
 
-Result: healthy
+Result: completed
 ```
 
 A pinned commit does not update. Local edits block replacement, and `--yes` does not silently overwrite unidentified local skill changes.
@@ -432,7 +432,7 @@ Canonical  /home/user/AGENTS.md
 Codex      ${CODEX_HOME:-/home/user/.codex}/AGENTS.md -> /home/user/AGENTS.md
 Claude     /home/user/.claude/CLAUDE.md -> ../AGENTS.md
 
-Result: healthy
+Result: completed
 ```
 
 Project setup is explicit:
@@ -443,7 +443,7 @@ $ skilltap instructions setup --project
 Canonical  /home/user/src/project/AGENTS.md
 Claude     /home/user/src/project/CLAUDE.md -> AGENTS.md
 
-Result: healthy
+Result: completed
 ```
 
 Existing canonical instructions are preserved. If `AGENTS.md` and `CLAUDE.md` contain different user-authored content, setup blocks without changing either file. `repair` operates only on bridges already owned by skilltap.
@@ -463,7 +463,7 @@ Blocked
   /home/user/src/service      review-tools           2.1.0 -> 3.0.0
     The new version adds an unsupported required LSP component.
 
-Result: user decision required
+Result: attention required
 ```
 
 ## Daemon
@@ -479,7 +479,7 @@ Policy: apply-safe
 Interval: 6h
 Scopes: global and 4 managed projects
 
-Result: healthy
+Result: completed
 ```
 
 On macOS, the service is reported as `launchd`.

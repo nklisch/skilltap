@@ -300,6 +300,93 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
 }
 
 #[test]
+fn compiled_leaf_help_is_the_agent_discovery_contract() {
+    let machine = machine();
+    let leaves: &[&[&str]] = &[
+        &["harness", "list"],
+        &["harness", "enable"],
+        &["harness", "disable"],
+        &["adopt"],
+        &["status"],
+        &["plan"],
+        &["sync"],
+        &["marketplace", "add"],
+        &["marketplace", "remove"],
+        &["marketplace", "update"],
+        &["marketplace", "list"],
+        &["plugin", "install"],
+        &["plugin", "remove"],
+        &["plugin", "update"],
+        &["plugin", "list"],
+        &["skill", "install"],
+        &["skill", "remove"],
+        &["skill", "update"],
+        &["skill", "list"],
+        &["instructions", "setup"],
+        &["instructions", "status"],
+        &["instructions", "repair"],
+        &["daemon", "enable"],
+        &["daemon", "disable"],
+        &["daemon", "status"],
+        &["daemon", "run"],
+    ];
+
+    for path in leaves {
+        let mut arguments = path.to_vec();
+        arguments.push("--help");
+        let output = run(&machine, &arguments);
+        assert_code(&output, 0);
+        assert!(output.stderr.is_empty(), "arguments: {arguments:?}");
+        let help = stdout(&output);
+        assert!(help.contains("Usage:"), "arguments: {arguments:?}");
+        assert!(
+            help.contains("Exit status: 0 completed"),
+            "arguments: {arguments:?}"
+        );
+        assert!(help.contains("-h, --help"), "arguments: {arguments:?}");
+    }
+}
+
+#[test]
+fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
+    let machine = machine();
+
+    let plain = run(&machine, &["status", "--target", "pi"]);
+    assert_code(&plain, 1);
+    assert!(plain.stdout.is_empty());
+    let plain_error = stderr(&plain);
+    assert!(plain_error.contains("boundary  skilltap status"));
+    assert!(plain_error.contains("skilltap status --help"));
+    assert!(!plain_error.contains("pi"));
+
+    let json_output = run(&machine, &["status", "--target", "pi", "--json"]);
+    assert_code(&json_output, 1);
+    let value = json(&json_output);
+    assert_eq!(value["command"], "status");
+    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap status");
+    assert_eq!(
+        value["next_actions"][0]["command"],
+        "skilltap status --help"
+    );
+    assert!(!stdout(&json_output).contains("pi"));
+
+    let source = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            "https://user:token@example.invalid/repo.git",
+            "--json",
+        ],
+    );
+    assert_code(&source, 1);
+    let source_value = json(&source);
+    assert_eq!(source_value["command"], "marketplace add");
+    assert!(!stdout(&source).contains("user:token"));
+    assert!(!stdout(&source).contains("example.invalid"));
+}
+
+#[test]
 fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_only() {
     let machine = machine();
     let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();

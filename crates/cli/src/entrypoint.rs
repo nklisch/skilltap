@@ -90,7 +90,9 @@ where
                     };
                     command = next;
                 }
-                execution.document.push_str(&command.render_usage().to_string());
+                execution
+                    .document
+                    .push_str(&command.render_usage().to_string());
                 execution.document.push('\n');
             }
             return execution;
@@ -1161,7 +1163,9 @@ fn parse_boundary(arguments: &[OsString]) -> ParseBoundary {
         }
         if token.starts_with('-') {
             let argument = command.get_arguments().find(|argument| {
-                argument.get_long().is_some_and(|long| token == format!("--{long}"))
+                argument
+                    .get_long()
+                    .is_some_and(|long| token == format!("--{long}"))
                     || argument
                         .get_short()
                         .is_some_and(|short| token == format!("-{short}"))
@@ -1170,7 +1174,9 @@ fn parse_boundary(arguments: &[OsString]) -> ParseBoundary {
                 && argument
                     .get_num_args()
                     .is_some_and(|range| range.takes_values())
-                && tokens.peek().is_some_and(|value| !value.to_string_lossy().starts_with('-'))
+                && tokens
+                    .peek()
+                    .is_some_and(|value| !value.to_string_lossy().starts_with('-'))
             {
                 tokens.next();
             } else if argument.is_none() && path.is_empty() {
@@ -1217,14 +1223,11 @@ fn parse_error(arguments: &[OsString], kind: ErrorKind) -> Outcome {
             .unwrap_or(&boundary.command),
         ResultClass::Invalid,
     )
-        .with_error(
-            ErrorDetail::new(code, summary)
-                .with_context("boundary", boundary.command.clone()),
-        )
-        .with_next_action(
-            NextAction::new("show_help", "Review the command grammar.")
-                .with_command(boundary.help_command),
-        )
+    .with_error(ErrorDetail::new(code, summary).with_context("boundary", boundary.command.clone()))
+    .with_next_action(
+        NextAction::new("show_help", "Review the command grammar.")
+            .with_command(boundary.help_command),
+    )
 }
 
 fn render(outcome: Outcome, json: bool, plain_channel: OutputChannel) -> CommandExecution {

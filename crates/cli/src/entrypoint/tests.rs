@@ -78,10 +78,7 @@ fn unknown_commands_fall_back_to_root_without_echoing_the_token() {
     let value: Value = serde_json::from_str(&execution.document).unwrap();
     assert_eq!(value["command"], "skilltap");
     assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap");
-    assert_eq!(
-        value["next_actions"][0]["command"],
-        "skilltap --help"
-    );
+    assert_eq!(value["next_actions"][0]["command"], "skilltap --help");
     assert!(!execution.document.contains("secret-command"));
 }
 
@@ -99,7 +96,10 @@ fn invalid_source_diagnostics_redact_locator_values() {
     assert_eq!(execution.channel, OutputChannel::Stdout);
     let value: Value = serde_json::from_str(&execution.document).unwrap();
     assert_eq!(value["command"], "marketplace add");
-    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap marketplace add");
+    assert_eq!(
+        value["errors"][0]["context"]["boundary"],
+        "skilltap marketplace add"
+    );
     assert_eq!(
         value["next_actions"][0]["command"],
         "skilltap marketplace add --help"
@@ -126,7 +126,10 @@ fn non_utf8_parse_arguments_are_redacted_from_json_diagnostics() {
         let value: Value = serde_json::from_str(&execution.document).unwrap();
         assert_eq!(value["command"], "plugin remove");
         assert_eq!(value["errors"][0]["code"], "invalid_utf8_argument");
-        assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap plugin remove");
+        assert_eq!(
+            value["errors"][0]["context"]["boundary"],
+            "skilltap plugin remove"
+        );
     }
 }
 

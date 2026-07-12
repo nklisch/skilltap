@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cli-verification
 kind: story
-stage: implementing
+stage: review
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on:
@@ -31,3 +31,11 @@ Acceptance criteria:
   duplicating full syntax.
 - Tests use `skilltap-test-support` isolated homes and fake native processes;
   no host Codex/Claude configuration is touched.
+
+## Implementation notes
+- Execution capability: highest available local capability; compiled CLI and documentation parity are release-facing surfaces.
+- Review weight: standard (autopilot project default).
+- Files changed: `crates/cli/tests/compiled_binary.rs`, `website/reference/cli.md`, `docs/UX.md`.
+- Tests added: all 26 compiled leaf help paths plus plain/JSON invalid boundary and redaction scenarios in isolated machines.
+- Discrepancies from design: the website now links agents to executable help through invocation examples and a conceptual family index instead of duplicating a static grammar.
+- Adjacent issues parked: none.

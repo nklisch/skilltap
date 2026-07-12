@@ -54,7 +54,11 @@ fn command_tree_matches_the_documented_v3_surface() {
     }
 }
 
-fn leaf_commands(command: &clap::Command, path: &mut Vec<String>, leaves: &mut Vec<(String, clap::Command)>) {
+fn leaf_commands(
+    command: &clap::Command,
+    path: &mut Vec<String>,
+    leaves: &mut Vec<(String, clap::Command)>,
+) {
     path.push(command.get_name().to_owned());
     let mut children = command.get_subcommands().peekable();
     if children.peek().is_none() {
@@ -76,7 +80,9 @@ fn every_public_leaf_has_descriptions_and_shared_exit_guidance() {
     assert_eq!(leaves.len(), 26, "the public leaf count changed");
     for (path, mut command) in leaves {
         assert!(
-            command.get_about().is_some_and(|about| !about.to_string().trim().is_empty()),
+            command
+                .get_about()
+                .is_some_and(|about| !about.to_string().trim().is_empty()),
             "{path} is missing a purpose description"
         );
         assert!(
@@ -85,20 +91,30 @@ fn every_public_leaf_has_descriptions_and_shared_exit_guidance() {
                 .is_some_and(|help| help.to_string().contains("Exit status: 0")),
             "{path} is missing the shared exit guidance"
         );
-        assert!(command.render_usage().to_string().contains("Usage:"), "{path}");
+        assert!(
+            command.render_usage().to_string().contains("Usage:"),
+            "{path}"
+        );
 
         for argument in command.get_arguments() {
             if matches!(argument.get_id().as_str(), "help" | "version") {
                 continue;
             }
             assert!(
-                argument.get_help().is_some_and(|help| !help.to_string().trim().is_empty()),
+                argument
+                    .get_help()
+                    .is_some_and(|help| !help.to_string().trim().is_empty()),
                 "{path} argument {} is missing help",
                 argument.get_id()
             );
-            if argument.get_num_args().is_some_and(|range| range.takes_values()) {
+            if argument
+                .get_num_args()
+                .is_some_and(|range| range.takes_values())
+            {
                 assert!(
-                    argument.get_value_names().is_some_and(|names| !names.is_empty()),
+                    argument
+                        .get_value_names()
+                        .is_some_and(|names| !names.is_empty()),
                     "{path} argument {} is missing a value name",
                     argument.get_id()
                 );
@@ -120,7 +136,9 @@ fn scope_target_acknowledgment_selection_and_json_flags_stay_on_intended_leaves(
         })
     };
     let has = |command: &clap::Command, name: &str| {
-        command.get_arguments().any(|argument| argument.get_id().as_str() == name)
+        command
+            .get_arguments()
+            .any(|argument| argument.get_id().as_str() == name)
     };
 
     for path in [
@@ -146,10 +164,7 @@ fn scope_target_acknowledgment_selection_and_json_flags_stay_on_intended_leaves(
     ] {
         assert!(has(&find(path), "yes"), "{path:?}");
     }
-    for path in [
-        &["sync"][..],
-        &["plugin", "install"][..],
-    ] {
+    for path in [&["sync"][..], &["plugin", "install"][..]] {
         let command = find(path);
         assert!(has(&command, "include"), "{path:?}");
         assert!(has(&command, "exclude"), "{path:?}");

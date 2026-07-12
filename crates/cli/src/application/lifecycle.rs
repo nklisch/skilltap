@@ -1100,12 +1100,10 @@ impl StatusApplication<'_> {
                     Ok(plan) => plan,
                     Err(_error) => {
                         outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(
-                            ErrorDetail::new(
-                                "foreground_update_plan_invalid",
-                                "The partial skill update could not be validated safely.",
-                            ),
-                        );
+                        return outcome.with_error(ErrorDetail::new(
+                            "foreground_update_plan_invalid",
+                            "The partial skill update could not be validated safely.",
+                        ));
                     }
                 };
                 if let Err(_error) = select_foreground_updates_with_acknowledgment(
