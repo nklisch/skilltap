@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-instruction-repair
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: null
 depends_on: []
@@ -66,3 +66,9 @@ correctness/foundation-contract pass. Existing compiled instruction tests and
 the full workspace suite passed. The implementation is otherwise aligned with
 the documented generic `--yes` and target/scope behavior, but plan must model
 the supported nested-only project Claude bridge before this story can close.
+
+## Follow-up resolved
+
+`story-reconciliation-instruction-repair-nested-plan` now aligns preview with
+the setup location policy and covers nested-only symlink/import bridges. The
+parent implementation is ready for a fresh review together with its dependent.
