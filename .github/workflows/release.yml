@@ -36,6 +36,9 @@ jobs:
             exit 1
           fi
 
+      - name: Validate plugin and artifact release contract
+        run: scripts/verify-release-contract.sh
+
   build:
     needs: validate
     name: Build ${{ matrix.asset }}

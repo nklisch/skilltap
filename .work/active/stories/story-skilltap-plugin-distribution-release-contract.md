@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-contract
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: []
@@ -28,3 +28,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: highest; release identity and supply-chain boundary.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `scripts/verify-release-contract.sh`, `.github/workflows/release.yml`.
+- Tests added: offline release contract script checks channel identity/version, supported asset matrix, checksums, and provenance attestation.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
