@@ -1,0 +1,22 @@
+{
+  "name": "skilltap",
+  "interface": {
+    "displayName": "skilltap"
+  },
+  "plugins": [
+    {
+      "name": "skilltap",
+      "source": {
+        "source": "local",
+        "path": "./plugin"
+      },
+      "description": "A personal control plane for managing Codex and Claude Code environments.",
+      "category": "Productivity",
+      "version": "3.0.1",
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      }
+    }
+  ]
+}

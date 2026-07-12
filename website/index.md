@@ -31,11 +31,12 @@ already use.
 
 ```bash
 # Claude Code
-claude plugin marketplace add https://github.com/nklisch/skilltap/tree/main/plugin --scope user
+claude plugin marketplace add nklisch/skilltap --scope user
 claude plugin install skilltap@skilltap --scope user
 
 # Codex marketplace
-codex plugin marketplace add https://github.com/nklisch/skilltap.git --ref main --sparse plugin
+codex plugin marketplace add nklisch/skilltap
+codex plugin add skilltap@skilltap
 ```
 
 Need the standalone binary directly, or setting up a harness without its
@@ -55,6 +56,6 @@ Then let skilltap check the setup:
 skilltap bootstrap
 ```
 
-Codex may require its interactive `/plugins` flow to finish installing or
-enabling the plugin. The bootstrap result explains the next step for the
-installed harness versions.
+Older Codex builds without `plugin add` can finish installation through
+`/plugins`. The bootstrap result explains the next step for the installed
+harness versions.

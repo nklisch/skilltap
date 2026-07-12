@@ -23,7 +23,7 @@ for manifest in plugin/.claude-plugin/plugin.json plugin/.codex-plugin/plugin.js
   }
 done
 
-for catalog in plugin/.claude-plugin/marketplace.json plugin/.agents/plugins/marketplace.json; do
+for catalog in .claude-plugin/marketplace.json .agents/plugins/marketplace.json plugin/.claude-plugin/marketplace.json plugin/.agents/plugins/marketplace.json; do
   grep -Fq '"name": "skilltap"' "$catalog" || {
     echo "error: $catalog has no skilltap entry" >&2
     exit 1
@@ -33,6 +33,19 @@ for catalog in plugin/.claude-plugin/marketplace.json plugin/.agents/plugins/mar
     exit 1
   }
 done
+
+grep -Fq '"source": "./plugin"' .claude-plugin/marketplace.json || {
+  echo "error: root Claude marketplace does not point at the canonical plugin directory" >&2
+  exit 1
+}
+grep -Fq '"source": "local"' .agents/plugins/marketplace.json || {
+  echo "error: root Codex marketplace source is not local" >&2
+  exit 1
+}
+grep -Fq '"path": "./plugin"' .agents/plugins/marketplace.json || {
+  echo "error: root Codex marketplace does not point at the canonical plugin directory" >&2
+  exit 1
+}
 
 grep -Fq '"source": "./"' plugin/.claude-plugin/marketplace.json || {
   echo "error: Claude marketplace source is not the canonical plugin root" >&2

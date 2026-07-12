@@ -40,13 +40,29 @@ management policy merely because a Codex or Claude executable is installed.
 
 ## Quick Start
 
-Install skilltap through either first-party path:
+The native plugin is the primary installation path. Add this repository as a
+marketplace, then install or enable the plugin in the harness you use:
 
 ```bash
-# Native Claude Code or Codex marketplace, then:
-skilltap bootstrap
+# Claude Code
+claude plugin marketplace add nklisch/skilltap --scope user
+claude plugin install skilltap@skilltap --scope user
 
-# Or verify/install the binary and invoke the same bootstrap boundary:
+# Codex marketplace
+codex plugin marketplace add nklisch/skilltap
+codex plugin add skilltap@skilltap
+```
+
+Let skilltap verify the binary and harness setup:
+
+```bash
+skilltap bootstrap
+```
+
+Need the standalone binary directly? Use the online installer after the plugin
+instructions:
+
+```bash
 curl -fsSL https://skilltap.dev/install.sh | sh
 ```
 

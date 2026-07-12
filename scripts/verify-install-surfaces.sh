@@ -1,21 +1,26 @@
 #!/bin/sh
-# Check that public installation surfaces describe one bootstrap path without
-# mutating the active sibling marketplace repository.
+# Check that public installation surfaces lead with working native plugin
+# commands and retain the standalone bootstrap path without mutating the active
+# sibling marketplace repository.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+LANDING="$ROOT/website/index.md"
 GETTING_STARTED="$ROOT/website/guide/getting-started.md"
 UPDATES="$ROOT/website/guide/updates.md"
 README="$ROOT/README.md"
 FORMULA="$ROOT/homebrew-skilltap/Formula/skilltap.rb"
 
-grep -Fq 'Native marketplace' "$GETTING_STARTED" || { echo "error: website lacks marketplace installation path" >&2; exit 1; }
-grep -Fq 'curl -fsSL https://skilltap.dev/install.sh | sh' "$GETTING_STARTED" || { echo "error: website lacks one-line installer path" >&2; exit 1; }
-grep -Fq 'skilltap bootstrap' "$GETTING_STARTED" || { echo "error: website lacks bootstrap handoff" >&2; exit 1; }
+for surface in "$LANDING" "$GETTING_STARTED" "$README"; do
+  grep -Fq 'claude plugin marketplace add nklisch/skilltap --scope user' "$surface" || { echo "error: $surface lacks the Claude marketplace shorthand" >&2; exit 1; }
+  grep -Fq 'claude plugin install skilltap@skilltap --scope user' "$surface" || { echo "error: $surface lacks the Claude plugin install command" >&2; exit 1; }
+  grep -Fq 'codex plugin marketplace add nklisch/skilltap' "$surface" || { echo "error: $surface lacks the Codex marketplace shorthand" >&2; exit 1; }
+  grep -Fq 'codex plugin add skilltap@skilltap' "$surface" || { echo "error: $surface lacks the Codex plugin install command" >&2; exit 1; }
+  grep -Fq 'curl -fsSL https://skilltap.dev/install.sh | sh' "$surface" || { echo "error: $surface lacks the one-line installer path" >&2; exit 1; }
+  grep -Fq 'skilltap bootstrap' "$surface" || { echo "error: $surface lacks the bootstrap handoff" >&2; exit 1; }
+done
 grep -Fq -- '--allow-major' "$UPDATES" || { echo "error: website lacks major-update policy" >&2; exit 1; }
 grep -Fq 'daemon' "$UPDATES" || { echo "error: website lacks daemon policy" >&2; exit 1; }
-grep -Fq 'Native Claude Code or Codex marketplace' "$README" || { echo "error: README lacks marketplace parity" >&2; exit 1; }
-grep -Fq 'skilltap bootstrap' "$README" || { echo "error: README lacks bootstrap handoff" >&2; exit 1; }
 if grep -Eiq 'brew.*install.*plugin|homebrew.*install.*plugin' "$FORMULA"; then
   echo "error: Homebrew formula must not claim to install harness plugins" >&2
   exit 1

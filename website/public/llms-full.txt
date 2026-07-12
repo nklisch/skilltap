@@ -63,16 +63,16 @@ then install or enable the plugin in the harness you already use:
 
 ```bash
 # Claude Code
-claude plugin marketplace add https://github.com/nklisch/skilltap/tree/main/plugin --scope user
+claude plugin marketplace add nklisch/skilltap --scope user
 claude plugin install skilltap@skilltap --scope user
 
 # Codex (marketplace registration)
-codex plugin marketplace add https://github.com/nklisch/skilltap.git --ref main --sparse plugin
+codex plugin marketplace add nklisch/skilltap
+codex plugin add skilltap@skilltap
 ```
 
-Claude can install the plugin natively after registration. Codex can expose the
-complete skill from its marketplace; open `/plugins` in Codex to install or
-enable the plugin when that native flow is available.
+Both harnesses install the plugin natively after registration. Older Codex
+builds without `plugin add` can install or enable it through `/plugins`.
 
 ### Install the standalone binary
 
