@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-core
 kind: story
-stage: implementing
+stage: review
 tags: [content]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: []
@@ -34,3 +34,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: standard; prose artifact constrained by foundation and extension contracts.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `plugin/skills/skilltap/SKILL.md`.
+- Tests added: existing offline plugin package validation passes with the complete portable skill tree.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
