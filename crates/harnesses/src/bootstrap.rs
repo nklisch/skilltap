@@ -13,7 +13,7 @@ use skilltap_core::{
 use crate::{
     DetectionError, HarnessKind, NativeLifecycleAction, NativeLifecycleRequest,
     NativeResourcePresence, detect_configured_installation, observe_native_resource,
-    run_native_lifecycle, select_profile,
+    run_native_lifecycle_bound, select_profile,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -102,7 +102,7 @@ impl HarnessBootstrapPolicy {
                 .expect("static bootstrap JSON limits are valid"),
             plugin_name: NativeId::new("skilltap").expect("canonical plugin id is valid"),
             canonical_source: Some(
-                SourceLocator::new("https://github.com/nklisch/skilltap")
+                SourceLocator::new("https://github.com/nklisch/skilltap/tree/main/plugin")
                     .expect("canonical source is valid"),
             ),
         }
@@ -167,12 +167,11 @@ pub fn setup_detected_plugin(
             next_action: unsupported_next_action(target),
         };
     }
-    let observed_configured = match installation.reachability() {
-        HarnessReachability::Reachable { executable, .. } => {
-            ConfiguredBinary::absolute(executable.path().clone())
-        }
+    let observed_executable = match installation.reachability() {
+        HarnessReachability::Reachable { executable, .. } => executable,
         HarnessReachability::Unreachable { .. } => unreachable!("reachable checked above"),
     };
+    let observed_configured = ConfiguredBinary::absolute(observed_executable.path().clone());
     let marketplace_request = NativeLifecycleRequest {
         harness: target,
         action: NativeLifecycleAction::MarketplaceAdd,
@@ -189,9 +188,8 @@ pub fn setup_detected_plugin(
     ) {
         Ok(NativeResourcePresence::Present) => {}
         Ok(NativeResourcePresence::Missing) => {
-            match run_native_lifecycle(
-                observed_configured.clone(),
-                None,
+            match run_native_lifecycle_bound(
+                observed_executable,
                 &marketplace_request,
                 policy.process_limits,
             ) {
@@ -247,7 +245,7 @@ pub fn setup_detected_plugin(
         }
         Ok(NativeResourcePresence::Missing) => {}
     }
-    match run_native_lifecycle(observed_configured, None, &request, policy.process_limits) {
+    match run_native_lifecycle_bound(observed_executable, &request, policy.process_limits) {
         Ok(output) if output.status().success() => HarnessSetupResult::Installed {
             harness: target,
             version: native_version.clone(),

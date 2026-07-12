@@ -4,8 +4,8 @@ use std::{collections::BTreeMap, ffi::OsString, fmt};
 
 use skilltap_core::{
     domain::{
-        ConfiguredBinary, EvidenceCode, EvidenceDetail, HarnessId, NativeId, Operation,
-        OperationId, OperationOutcome, Plan, Scope, SourceLocator,
+        ConfiguredBinary, EvidenceCode, EvidenceDetail, ExecutableIdentity, HarnessId, NativeId,
+        Operation, OperationId, OperationOutcome, Plan, Scope, SourceLocator,
     },
     executor::{ExecutionError, ExecutionPort},
     runtime::{
@@ -124,6 +124,28 @@ pub fn run_native_lifecycle(
     };
     Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable,
+        native_arguments(request)?,
+        std::collections::BTreeMap::new(),
+        working_directory,
+        limits,
+    ))?)
+}
+
+/// Execute a lifecycle vector against the exact executable identity that was
+/// observed during detection.  Revalidation immediately before spawn closes
+/// the PATH replacement window between read-first detection and mutation.
+pub fn run_native_lifecycle_bound(
+    executable: &ExecutableIdentity,
+    request: &NativeLifecycleRequest,
+    limits: ProcessLimits,
+) -> Result<NativeProcessOutput, NativeLifecycleError> {
+    SystemExecutableResolver.revalidate(executable)?;
+    let working_directory = match &request.scope {
+        Scope::Global => None,
+        Scope::Project(path) => Some(path.clone()),
+    };
+    Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
+        executable.clone(),
         native_arguments(request)?,
         std::collections::BTreeMap::new(),
         working_directory,

@@ -361,8 +361,10 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
             json_limits,
             plugin_name: NativeId::new("skilltap").expect("canonical plugin id is valid"),
             canonical_source: Some(
-                skilltap_core::domain::SourceLocator::new("https://github.com/nklisch/skilltap")
-                    .expect("canonical source is valid"),
+                skilltap_core::domain::SourceLocator::new(
+                    "https://github.com/nklisch/skilltap/tree/main/plugin",
+                )
+                .expect("canonical source is valid"),
             ),
         };
         let result = setup_first_party_plugin(kind, &bootstrap_policy);
@@ -504,13 +506,8 @@ fn execute_binary_bootstrap(
             "The user-local binary directory could not be created safely.",
         );
     }
-    let temporary = match AbsolutePath::new(
-        parent
-            .join(format!(".skilltap-bootstrap-{}", std::process::id()))
-            .to_string_lossy()
-            .into_owned(),
-    ) {
-        Ok(path) => path,
+    let (temporary_workspace, temporary) = match private_bootstrap_temp(parent) {
+        Ok(paths) => paths,
         Err(_) => {
             return binary_attention(
                 "temporary_path_failed",
@@ -520,7 +517,7 @@ fn execute_binary_bootstrap(
     };
     let fetch_result = SystemArtifactFetcher.fetch(artifact.download_url().as_str(), &temporary);
     if fetch_result.is_err() {
-        let _ = std::fs::remove_file(temporary.as_str());
+        let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
         return binary_attention(
             "release_download_failed",
             "The release artifact could not be downloaded; the existing binary was preserved.",
@@ -532,7 +529,7 @@ fn execute_binary_bootstrap(
         if std::fs::set_permissions(temporary.as_str(), std::fs::Permissions::from_mode(0o700))
             .is_err()
         {
-            let _ = std::fs::remove_file(temporary.as_str());
+            let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
             return binary_attention(
                 "release_permissions_failed",
                 "The downloaded executable could not be made runnable safely.",
@@ -540,7 +537,7 @@ fn execute_binary_bootstrap(
         }
     }
     if probe_installed_version(&temporary).as_ref() != Some(&manifest.version) {
-        let _ = std::fs::remove_file(temporary.as_str());
+        let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
         return binary_attention(
             "release_identity_failed",
             "The downloaded executable did not report the verified release version; the existing binary was preserved.",
@@ -555,7 +552,7 @@ fn execute_binary_bootstrap(
             .map(|metadata| metadata.permissions().mode())
     };
     let result = installer.install_verified(&temporary, &destination, artifact);
-    let _ = std::fs::remove_file(temporary.as_str());
+    let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
     if let Err(error) = result {
         return binary_attention("binary_install_failed", &error.to_string());
     }
@@ -587,6 +584,46 @@ fn execute_binary_bootstrap(
         warnings: Vec::new(),
         next_actions: Vec::new(),
     }
+}
+
+fn private_bootstrap_temp(
+    parent: &std::path::Path,
+) -> Result<(AbsolutePath, AbsolutePath), std::io::Error> {
+    for attempt in 0..64u32 {
+        let workspace_path = parent.join(format!(
+            ".skilltap-bootstrap-{}-{}",
+            std::process::id(),
+            attempt
+        ));
+        match std::fs::create_dir(&workspace_path) {
+            Ok(()) => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(
+                        &workspace_path,
+                        std::fs::Permissions::from_mode(0o700),
+                    )?;
+                }
+                let workspace = AbsolutePath::new(workspace_path.to_string_lossy().into_owned())
+                    .map_err(|_| std::io::Error::other("invalid temporary workspace"))?;
+                let payload = AbsolutePath::new(
+                    workspace_path
+                        .join("payload")
+                        .to_string_lossy()
+                        .into_owned(),
+                )
+                .map_err(|_| std::io::Error::other("invalid temporary payload"))?;
+                return Ok((workspace, payload));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "temporary workspace exhausted",
+    ))
 }
 
 #[cfg(unix)]

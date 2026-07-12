@@ -28,6 +28,7 @@ mod lifecycle;
 pub use lifecycle::{
     NativeLifecycleAction, NativeLifecycleError, NativeLifecyclePort, NativeLifecycleRequest,
     NativeResourcePresence, native_arguments, observe_native_resource, run_native_lifecycle,
+    run_native_lifecycle_bound,
 };
 mod bootstrap;
 pub use bootstrap::{

@@ -510,7 +510,7 @@ impl BinaryInstaller for SystemBinaryInstaller {
         if !metadata.file_type().is_file() {
             return Err(ArtifactError::InvalidArtifact);
         }
-        let bytes = fs::read(path.as_str()).map_err(|_| ArtifactError::InstallFailed)?;
+        let bytes = read_bounded(path, 64 * 1024 * 1024)?;
         let digest = format!("{:x}", Sha256::digest(bytes));
         Ok(Some(InstalledBinary {
             path: path.clone(),
@@ -525,7 +525,8 @@ impl BinaryInstaller for SystemBinaryInstaller {
         destination: &AbsolutePath,
         expected: &ReleaseArtifact,
     ) -> Result<(), ArtifactError> {
-        let bytes = fs::read(artifact.as_str()).map_err(|_| ArtifactError::InstallFailed)?;
+        let bytes =
+            read_bounded(artifact, 64 * 1024 * 1024).map_err(|_| ArtifactError::InstallFailed)?;
         let digest = format!("{:x}", Sha256::digest(&bytes));
         if digest != expected.sha256() {
             return Err(ArtifactError::ChecksumMismatch);
@@ -545,6 +546,18 @@ impl BinaryInstaller for SystemBinaryInstaller {
             .ok_or(ArtifactError::InstallFailed)?;
         fs::create_dir_all(parent).map_err(|_| ArtifactError::InstallFailed)?;
         let prior_identity = destination_identity(destination_path)?;
+        let prior_bytes = if prior_identity.is_some() {
+            Some(
+                read_bounded(destination, 64 * 1024 * 1024)
+                    .map_err(|_| ArtifactError::InstallFailed)?,
+            )
+        } else {
+            None
+        };
+        #[cfg(unix)]
+        let prior_mode = fs::metadata(destination_path)
+            .ok()
+            .map(|metadata| metadata.permissions().mode());
         let sequence = ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let temporary = parent.join(format!(
             ".{}.skilltap-artifact-{sequence}",
@@ -572,12 +585,66 @@ impl BinaryInstaller for SystemBinaryInstaller {
                 return Err(ArtifactError::DestinationChanged);
             }
             fs::rename(&temporary, destination_path).map_err(|_| ArtifactError::InstallFailed)?;
-            sync_parent(parent).map_err(|_| ArtifactError::InstallFailed)
+            if sync_parent(parent).is_err() {
+                restore_destination(destination_path, prior_bytes.as_deref(), {
+                    #[cfg(unix)]
+                    {
+                        prior_mode
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        None
+                    }
+                });
+                return Err(ArtifactError::InstallFailed);
+            }
+            Ok(())
         })();
         if result.is_err() {
             let _ = fs::remove_file(&temporary);
         }
         result
+    }
+}
+
+fn restore_destination(
+    path: &Path,
+    prior: Option<&[u8]>,
+    #[cfg(unix)] mode: Option<u32>,
+    #[cfg(not(unix))] _mode: Option<u32>,
+) {
+    match prior {
+        Some(bytes) => {
+            let Some(parent) = path.parent() else { return };
+            for attempt in 0..64u32 {
+                let temporary = parent.join(format!(
+                    ".skilltap-restore-{}-{attempt}",
+                    std::process::id()
+                ));
+                let Ok(mut file) = OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(&temporary)
+                else {
+                    continue;
+                };
+                if file.write_all(bytes).is_ok() {
+                    #[cfg(unix)]
+                    let _ = fs::set_permissions(
+                        &temporary,
+                        fs::Permissions::from_mode(mode.unwrap_or(0o700)),
+                    );
+                    let _ = file.sync_all();
+                    let _ = fs::rename(&temporary, path);
+                } else {
+                    let _ = fs::remove_file(&temporary);
+                }
+                return;
+            }
+        }
+        None => {
+            let _ = fs::remove_file(path);
+        }
     }
 }
 
