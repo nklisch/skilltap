@@ -1,7 +1,7 @@
 ---
 id: feature-split-cli-daemon-commands
 kind: feature
-stage: review
+stage: done
 tags: [refactor, infra]
 parent: null
 depends_on: []
@@ -253,3 +253,19 @@ so rollback is a source-only operation.
   plugin-package tests green.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: Child acceptance text names the legacy package selector
+skilltap-cli; the actual package is skilltap.
+
+**Notes**: Substrate review, fresh-context deep pass over the aggregate
+feature and all three completed children. The private module boundary is
+complete, service lifecycle behavior and native manager calls remain
+unchanged, and entrypoint retains only daemon dispatch plus daemon run.
+Package tests, workspace tests, formatting, clippy with warnings denied, and
+diff checks are green.
