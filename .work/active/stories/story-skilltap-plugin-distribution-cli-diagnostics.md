@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cli-diagnostics
 kind: story
-stage: review
+stage: done
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on: []
@@ -36,3 +36,19 @@ Acceptance criteria:
 - Tests added: deepest recognized parse boundaries, nested/unknown command fallback, locator redaction, and non-UTF-8 JSON diagnostics.
 - Discrepancies from design: runtime native error payloads are omitted entirely rather than summarized; this keeps credentials, argv, and native stdout/stderr out of both renderers.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context review of parser and runtime diagnostics.
+Boundary walking is allowlisted and deepest-command aware, unknown or
+non-UTF-8 tokens fall back safely, JSON remains one stdout document, plain
+errors remain on stderr, and runtime/native payloads are reduced to typed
+safe context. Tests cover invalid targets and locators, nested/unknown
+commands, non-UTF-8 arguments, fake native failures, and rendering behavior;
+workspace tests and clippy pass.
