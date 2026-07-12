@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -106,3 +106,19 @@ Added a duplicate `ExecStart` fixture that passes ownership detection but
 fails the generated service grammar. The daemon now reports typed
 `daemon_definition_malformed` attention and preserves the bytes. Clippy also
 passes for the extracted pair-publication helper.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review at review weight standard.
+The focused compiled-binary test passes for disable no-op, unmanaged
+lookalike preservation, malformed owned definitions, non-regular paths,
+manager failure, and owned-file retention. The focused unit test passes for
+pair-publication rollback when the second write fails. Assertions verify
+typed attention and preserve prior bytes; no test weakening or production
+scope drift found.
