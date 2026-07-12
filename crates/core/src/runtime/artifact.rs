@@ -715,46 +715,16 @@ fn remove_published_if_identity(path: &Path, expected: (u64, u64)) {
 }
 
 fn remove_published_if_identity_with(
-    path: &Path,
-    expected: (u64, u64),
+    _path: &Path,
+    _expected: (u64, u64),
     after_exchange: impl FnOnce(),
 ) {
-    let Some(parent) = path.parent() else { return };
-    let sequence = ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let marker = parent.join(format!(".skilltap-rollback-marker-{sequence}"));
-    let Ok(mut file) = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&marker)
-    else {
-        return;
-    };
-    let _ = file.write_all(b"rollback-marker");
-    let _ = file.sync_all();
-    let marker_identity = destination_identity(&marker).ok().flatten();
-    if exchange_paths(&marker, path).is_err() {
-        let _ = fs::remove_file(&marker);
-        return;
-    }
+    // A portable conditional unlink primitive does not exist: any path-based
+    // remove can race a replacement between identity observation and unlink.
+    // Fail closed and leave the verified publication in place rather than risk
+    // deleting an unrelated executable. The caller reports the operation as a
+    // failed/attention result and a later explicit repair can reconcile it.
     after_exchange();
-    if destination_identity(&marker).ok().flatten() != Some(expected) {
-        // The displaced inode was not the expected publication (a replacement
-        // won before the exchange).  Exchange back, then remove only our
-        // private marker and preserve the unrelated destination.
-        let _ = exchange_paths(&marker, path);
-        let _ = fs::remove_file(&marker);
-        return;
-    }
-    if destination_identity(path).ok().flatten() != marker_identity {
-        // A replacement arrived after the exchange.  Do not unlink the
-        // replacement; only clean up the displaced published inode.
-        let _ = fs::remove_file(&marker);
-        return;
-    }
-    // The destination still contains our marker.  Remove it and then remove
-    // the displaced published inode through the private marker path.
-    let _ = fs::remove_file(path);
-    let _ = fs::remove_file(&marker);
 }
 
 /// Publish a verified payload without overwriting a destination that changed
