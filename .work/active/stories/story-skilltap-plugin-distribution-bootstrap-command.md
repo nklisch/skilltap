@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: review
+stage: done
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -171,3 +171,24 @@ mixed harness results, pre-publish preservation, wrong-version artifacts, or
 post-publish identity failure. Keep this item at `stage: implementing` until
 the existing test-only composition follow-up restores that matrix without
 ambient production overrides.
+
+## Review (2026-07-12, current command matrix)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review of the composed command after
+`dfe28d8`, with the artifact and harness boundaries reviewed independently and
+their coverage follow-ups complete. The public grammar and help document
+target narrowing, major acknowledgment, JSON, no prompts, and exit classes;
+the command uses canonical release resolution and direct installed-version
+probes, and binary/harness results remain separate. The test-only composition
+seam covers install, no-op/update, blocked and accepted major upgrades,
+target narrowing, absent/mixed harness attention, failed pre-publish
+preservation, valid-checksum wrong-version/non-executable artifacts, and
+plain/schema-1 JSON next actions without shipping environment overrides. CLI
+bootstrap tests and the full CLI suite pass offline. Advancing the story to
+`stage: done`.
