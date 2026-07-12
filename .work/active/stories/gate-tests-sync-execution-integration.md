@@ -1,7 +1,7 @@
 ---
 id: gate-tests-sync-execution-integration
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
