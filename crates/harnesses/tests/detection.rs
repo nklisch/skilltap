@@ -111,10 +111,7 @@ fn malformed_native_output_is_typed_and_secret_safe() {
         json_limits,
     )
     .unwrap_err();
-    assert_eq!(
-        error,
-        DetectionError::Runtime(ObservationRuntimeError::JsonDuplicateKey)
-    );
+    assert_eq!(error, DetectionError::InvalidVersion);
     assert!(!format!("{error:?}").contains("3.0.1"));
 }
 
@@ -264,7 +261,7 @@ fn detection_pipeline_is_repeatable_and_keeps_sibling_failures_isolated() {
         process_limits,
         json_limits,
     );
-    assert!(matches!(claude, Err(DetectionError::Runtime(_))));
+    assert!(matches!(claude, Err(DetectionError::InvalidVersion)));
     assert_eq!(first.harness().as_str(), "codex");
 }
 
