@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-guidance
 kind: feature
-stage: implementing
+stage: review
 tags: [content]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package, epic-skilltap-plugin-distribution-cli-contract, epic-skilltap-plugin-distribution-bootstrap]
@@ -227,3 +227,9 @@ network request.
   `plugin/skills/skilltap/` directory and are shipped as one artifact.
 - **Validation ownership**: package validation checks structure and links;
   release validation owns version/source parity and website/install alignment.
+
+## Children complete
+
+The four guidance stories are complete: portable activation body, configuration
+and instruction references, diagnostic/update/recovery reference, and offline
+artifact validation.
