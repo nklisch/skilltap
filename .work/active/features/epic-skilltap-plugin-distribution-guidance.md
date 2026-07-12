@@ -29,6 +29,11 @@ diagnosis. This feature also defines the replacement/deprecation wording for
 the obsolete skilltap-adjacent guidance, while the actual sibling repository
 archive is handled by the final cutover feature.
 
+The skill is implicitly available to agents. It points agents to the
+self-bootstrap flow, direct `--help`, status/plan/sync diagnostics, and the
+latest-compatible update policy without turning the skill into a second CLI
+implementation.
+
 ## Epic context
 
 - Parent epic: `epic-skilltap-plugin-distribution`
@@ -43,6 +48,15 @@ archive is handled by the final cutover feature.
 - `docs/UX.md` — Help and Diagnostic Discovery, Target and Scope
 - `README.md` and `website/guide/` — current user-facing operating model
 - `.research/analysis/campaigns/marketplace-standards/specialists/agent-skills.md`
+
+## Design decisions
+
+- **Invocation policy**: The skill is implicitly available to agents so they
+  can recognize self-setup, status, and recovery requests without a manual
+  invocation ceremony.
+- **Guidance boundary**: The skill explains bootstrap, harness detection,
+  configuration layout, update policy, and diagnostic next actions at a high
+  level; direct `--help` remains authoritative for exact syntax.
 
 <!-- Feature design will define the skill's progressive-disclosure sections and
 reference boundaries. No UI mockups apply to this terminal/skill surface. -->
