@@ -1,7 +1,7 @@
 ---
 id: gate-docs-partial-acknowledgment-contract
 kind: story
-stage: review
+stage: implementing
 tags: [documentation]
 parent: null
 depends_on: []
@@ -68,3 +68,30 @@ desired public contract; it is the implementation that must change.
 - Focused verification: `cargo test -p skilltap-core foreground_update --offline`
   and `cargo check -p skilltap --offline` pass, including generic acceptance,
   unexpected-selector, and blocked-work coverage.
+
+## Review findings
+
+- **Blocker**: The new acknowledgment-aware core selector is not wired into any
+  application path. Repository search finds no callers of
+  `select_foreground_updates` or `select_foreground_updates_with_acknowledgment`;
+  `execute_reconciliation` only adds an `acknowledged` summary field, while its
+  plan/sync lifecycle adapters ignore the flag. Consequently `skilltap sync
+  --yes` cannot authorize an eligible partial/lossy lifecycle consequence, and
+  required/blocked behavior is not exercised at the CLI boundary. Connect the
+  documented generic acknowledgment (and piecewise selectors where exposed)
+  to reconciliation/update selection and add a compiled CLI regression covering
+  acceptance plus hard blocking.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: application acknowledgment plumbing is disconnected from the
+core selector; no CLI behavior currently changes under `sync --yes` (this item)
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review, deep correctness/contract lens due public
+CLI semantics. Core unit tests are green, but they only prove an unused API;
+the acceptance criterion requires end-to-end command behavior. Foundation docs
+remain correct and should not be weakened.
