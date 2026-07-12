@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cutover-legacy-record
 kind: story
-stage: review
+stage: done
 tags: [content, cleanup]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: [story-skilltap-plugin-distribution-cutover-canonical-verification]
@@ -36,3 +36,16 @@ Acceptance criteria:
 - Discrepancies from design: external archive/delete remains operator-gated;
   this repository performs no remote destructive action.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. The current-state record
+names the public retirement target and superseded surfaces, points to the
+canonical plugin/installer/bootstrap, excludes active `../skills`, and keeps
+destructive deletion/archive explicitly operator-gated.
