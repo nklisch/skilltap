@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-cutover
 kind: feature
-stage: implementing
+stage: review
 tags: [infra, content, cleanup]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-release]
@@ -179,3 +179,8 @@ for CI/operator use and skips safely when the sibling checkout is unavailable.
 - **Retention**: delete-refs applies to agile work records; the deprecation
   record keeps only current replacement/handoff facts, with git history as the
   audit trail.
+
+## Children complete
+
+The three cutover stories are complete: canonical evidence gate, legacy
+deprecation/archive handoff record, and read-only active sibling pointer parity.
