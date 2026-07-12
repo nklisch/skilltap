@@ -1,7 +1,7 @@
 ---
 id: story-feature-split-cli-daemon-commands-module
 kind: story
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: feature-split-cli-daemon-commands
 depends_on: []
@@ -52,3 +52,15 @@ The main risk is privacy/import wiring while the manager helper remains in the
 parent. Keep all service writes and output construction mechanical. Revert the
 extraction commit to restore the original function/test locations; no runtime
 state or service files are changed by this refactor.
+
+## Implementation notes
+
+- Execution capability: highest available local implementation context; daemon
+  service publication is a cross-platform lifecycle boundary.
+- Review weight: standard (autopilot default).
+- Files changed: crates/cli/src/daemon_commands.rs,
+  crates/cli/src/entrypoint.rs, and crates/cli/src/entrypoint/tests.rs.
+- Tests added: publication rollback test moved with its private helper into the
+  daemon command module; assertions are unchanged.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
