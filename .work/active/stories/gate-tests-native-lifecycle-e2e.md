@@ -1,7 +1,7 @@
 ---
 id: gate-tests-native-lifecycle-e2e
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
