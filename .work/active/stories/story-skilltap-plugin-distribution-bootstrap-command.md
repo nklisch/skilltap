@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: implementing
+stage: review
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -44,4 +44,8 @@ website prose.
 
 ## Implementation notes
 - Execution capability: highest available local capability; this changes the public agent-facing CLI and composes security-sensitive adapters.
-- Review weight: standard (autopilot project default).
+- Review weight: standard (source: autopilot project default).
+- Files changed: `crates/cli/src/command.rs`, `crates/cli/src/dispatch.rs`, `crates/cli/src/entrypoint.rs`, command/compiled-binary tests.
+- Tests added: bootstrap grammar/help and isolated JSON attention result; target narrowing and `--allow-major` parse coverage.
+- Discrepancies from design: when no release manifest transport is available, binary state is reported as `unavailable` with attention and no mutation; the command never claims a no-op or successful binary installation without verified release evidence.
+- Adjacent issues parked: none.

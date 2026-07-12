@@ -46,6 +46,11 @@ pub enum Command {
     /// Reconcile managed resources with desired state.
     #[command(after_help = EXIT_STATUS_HELP)]
     Sync(SyncArgs),
+    /// Install or repair the skilltap binary and first-party harness plugin.
+    #[command(
+        after_help = "Bootstrap is non-interactive. It detects Claude/Codex independently; use --allow-major to acknowledge an existing major-version upgrade.\nExit status: 0 completed; 1 invalid or pre-mutation failure; 2 attention or user decision required; 3 partial mutation requiring recovery."
+    )]
+    Bootstrap(BootstrapArgs),
     /// Manage registered native marketplaces.
     Marketplace(MarketplaceArgs),
     /// Manage plugins.
@@ -139,6 +144,18 @@ pub struct SyncArgs {
     pub acknowledgment: AcknowledgmentArgs,
     #[command(flatten)]
     pub selection: SelectionArgs,
+    #[command(flatten)]
+    pub output: OutputArgs,
+}
+
+#[derive(Debug, Args)]
+pub struct BootstrapArgs {
+    /// Detect and set up Codex, Claude Code, or both harnesses.
+    #[arg(long, value_name = "TARGET", value_parser = parse_target)]
+    pub target: Option<TargetSelection>,
+    /// Allow an existing binary to cross a major release boundary.
+    #[arg(long)]
+    pub allow_major: bool,
     #[command(flatten)]
     pub output: OutputArgs,
 }

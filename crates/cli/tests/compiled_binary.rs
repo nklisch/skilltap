@@ -179,6 +179,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         vec!["status", "--help"],
         vec!["plan", "--help"],
         vec!["sync", "--help"],
+        vec!["bootstrap", "--help"],
         vec!["marketplace", "--help"],
         vec!["plugin", "--help"],
         vec!["skill", "--help"],
@@ -201,6 +202,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         (&["adopt"], "adopt"),
         (&["plan"], "plan"),
         (&["sync"], "sync"),
+        (&["bootstrap"], "bootstrap"),
         (
             &["marketplace", "add", "https://example.invalid/team.git"],
             "marketplace add",
@@ -310,6 +312,7 @@ fn compiled_leaf_help_is_the_agent_discovery_contract() {
         &["status"],
         &["plan"],
         &["sync"],
+        &["bootstrap"],
         &["marketplace", "add"],
         &["marketplace", "remove"],
         &["marketplace", "update"],
@@ -345,6 +348,23 @@ fn compiled_leaf_help_is_the_agent_discovery_contract() {
         );
         assert!(help.contains("-h, --help"), "arguments: {arguments:?}");
     }
+}
+
+#[test]
+fn bootstrap_reports_binary_resolution_and_harness_attention_separately() {
+    let machine = machine();
+    let output = run(&machine, &["bootstrap", "--json"]);
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert_eq!(value["command"], "bootstrap");
+    assert_eq!(value["result"], "attention_required");
+    assert_eq!(value["resources"][0]["id"], "binary");
+    assert_eq!(value["resources"][0]["status"], "unavailable");
+    assert!(
+        value["warnings"]
+            .as_array()
+            .is_some_and(|warnings| !warnings.is_empty())
+    );
 }
 
 #[test]

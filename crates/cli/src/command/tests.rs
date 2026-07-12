@@ -27,6 +27,7 @@ fn command_tree_matches_the_documented_v3_surface() {
             "status",
             "plan",
             "sync",
+            "bootstrap",
             "marketplace",
             "plugin",
             "skill",
@@ -77,7 +78,7 @@ fn every_public_leaf_has_descriptions_and_shared_exit_guidance() {
     let mut leaves = Vec::new();
     leaf_commands(&root, &mut Vec::new(), &mut leaves);
 
-    assert_eq!(leaves.len(), 26, "the public leaf count changed");
+    assert_eq!(leaves.len(), 27, "the public leaf count changed");
     for (path, mut command) in leaves {
         assert!(
             command
@@ -172,6 +173,29 @@ fn scope_target_acknowledgment_selection_and_json_flags_stay_on_intended_leaves(
     assert!(!has(&find(&["adopt"]), "yes"));
     assert!(!has(&find(&["instructions", "status"]), "target"));
     assert!(!has(&find(&["harness", "list"]), "target"));
+}
+
+#[test]
+fn bootstrap_accepts_target_major_acknowledgment_and_json() {
+    let Cli {
+        command: Some(Command::Bootstrap(args)),
+    } = parse(&[
+        "skilltap",
+        "bootstrap",
+        "--target",
+        "claude",
+        "--allow-major",
+        "--json",
+    ])
+    else {
+        panic!("expected bootstrap command")
+    };
+    assert_eq!(
+        args.target,
+        Some(TargetSelection::Only(HarnessId::new("claude").unwrap()))
+    );
+    assert!(args.allow_major);
+    assert!(args.output.json);
 }
 
 #[test]

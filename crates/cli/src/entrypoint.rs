@@ -21,7 +21,7 @@ use crate::{
         NativeLifecycleKind, NativeObservationMode, SkillInstallRequest, StatusApplication,
     },
     command::{
-        AdoptArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
+        AdoptArgs, BootstrapArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
         ScopedOutputArgs, ScopedTargetArgs, SyncArgs,
     },
     dispatch::Dispatch,
@@ -102,6 +102,7 @@ where
         Dispatch::Adopt(args) => (execute_system_adopt(&args), OutputChannel::Stdout),
         Dispatch::Plan(args) => (execute_system_plan(&args), OutputChannel::Stdout),
         Dispatch::Sync(args) => (execute_system_sync(&args), OutputChannel::Stdout),
+        Dispatch::Bootstrap(args) => (execute_system_bootstrap(&args), OutputChannel::Stdout),
         Dispatch::SkillList(args) => (execute_system_skill_list(&args), OutputChannel::Stdout),
         Dispatch::MarketplaceList(args) => (
             execute_system_resource_list(
@@ -278,6 +279,121 @@ fn execute_system_plan(args: &PlanArgs) -> Outcome {
 
 fn execute_system_sync(args: &SyncArgs) -> Outcome {
     execute_system_reconciliation("sync", |application| application.execute_sync(args))
+}
+
+fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
+    use skilltap_core::domain::{ConfiguredBinary, TargetSelection};
+    use skilltap_harnesses::{
+        HarnessBootstrapPolicy, HarnessSetupResult, setup_first_party_plugin,
+    };
+
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error("bootstrap"),
+    };
+    let filesystem = SystemFileSystem;
+    let repository = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error("bootstrap"),
+    };
+    let config = match repository.load() {
+        Ok(DocumentState::Missing) => ConfigDocument::defaults(),
+        Ok(DocumentState::Present(value)) => value,
+        Err(_) => return repository_composition_error("bootstrap"),
+    };
+    let selected = args.target.clone().unwrap_or(TargetSelection::All);
+    let includes = |kind: HarnessKind| match &selected {
+        TargetSelection::All => true,
+        TargetSelection::Only(target) => target.as_str() == kind.id(),
+    };
+    let mut outcome = Outcome::new("bootstrap", ResultClass::AttentionRequired)
+        .with_scope(crate::OutputScope::Global)
+        .with_summary("binary", "attention")
+        .with_summary("version", skilltap_core::VERSION)
+        .with_summary("allow_major", args.allow_major);
+    let manifest_path =
+        std::env::var_os("SKILLTAP_RELEASE_MANIFEST").and_then(|value| value.into_string().ok());
+    outcome = outcome.with_resource(if manifest_path.is_some() {
+        OutputEntry::new("binary", "planned").with_field("policy", "latest-compatible")
+    } else {
+        OutputEntry::new("binary", "unavailable").with_field("policy", "latest-compatible")
+    });
+    if manifest_path.is_none() {
+        outcome = outcome.with_warning(crate::Warning::new(
+            "release_manifest_unavailable",
+            "The latest skilltap release manifest could not be resolved in this environment; no binary was changed.",
+        )).with_next_action(crate::NextAction::new(
+            "bootstrap_release",
+            "Provide the release transport through the published plugin or rerun `skilltap bootstrap --help`.",
+        ));
+    }
+    let search_path = std::env::var_os("PATH");
+    let process_limits =
+        skilltap_core::runtime::ProcessLimits::new(30_000, 64 * 1024, 64 * 1024, 128 * 1024)
+            .expect("bootstrap process limits are valid");
+    let json_limits = skilltap_core::runtime::JsonLimits::new(128 * 1024, 32)
+        .expect("bootstrap JSON limits are valid");
+    for (kind, policy) in [
+        (HarnessKind::Codex, &config.harnesses().codex),
+        (HarnessKind::Claude, &config.harnesses().claude),
+    ] {
+        if !includes(kind) {
+            continue;
+        }
+        let configured = if std::path::Path::new(policy.binary.as_str()).is_absolute() {
+            match AbsolutePath::new(policy.binary.as_str()) {
+                Ok(path) => ConfiguredBinary::absolute(path),
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_resource(OutputEntry::new(kind.id(), "invalid"));
+                    continue;
+                }
+            }
+        } else {
+            match NativeId::new(policy.binary.as_str()).and_then(ConfiguredBinary::path_lookup) {
+                Ok(binary) => binary,
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_resource(OutputEntry::new(kind.id(), "invalid"));
+                    continue;
+                }
+            }
+        };
+        let bootstrap_policy = HarnessBootstrapPolicy {
+            configured,
+            search_path: search_path.clone(),
+            process_limits,
+            json_limits,
+            plugin_name: NativeId::new("skilltap").expect("canonical plugin id is valid"),
+            canonical_source: Some(
+                skilltap_core::domain::SourceLocator::new("https://github.com/nklisch/skilltap")
+                    .expect("canonical source is valid"),
+            ),
+        };
+        let result = setup_first_party_plugin(kind, &bootstrap_policy);
+        let (status, attention, next_action) = match &result {
+            HarnessSetupResult::Installed { .. } => ("installed", false, None),
+            HarnessSetupResult::AlreadyPresent { .. } => ("already-present", false, None),
+            HarnessSetupResult::Unavailable { reason, .. } => {
+                ("unavailable", true, Some(reason.to_string()))
+            }
+            HarnessSetupResult::Unsupported { next_action, .. } => {
+                ("unsupported", true, Some(next_action.clone()))
+            }
+            HarnessSetupResult::Failed { reason, .. } => ("failed", true, Some(reason.to_string())),
+        };
+        outcome = outcome.with_resource(OutputEntry::new(kind.id(), status));
+        if let Some(next_action) = next_action {
+            outcome = outcome.with_next_action(NextAction::new(
+                format!("bootstrap_{}", kind.id()),
+                next_action,
+            ));
+        }
+        if attention {
+            outcome.result = ResultClass::AttentionRequired;
+        }
+    }
+    outcome
 }
 
 fn execute_system_daemon_run(_args: &crate::command::OutputArgs) -> Outcome {

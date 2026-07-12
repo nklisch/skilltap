@@ -1,10 +1,10 @@
 use crate::command::{
-    AdoptArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand, HarnessEnableArgs,
-    InstructionsCommand, InstructionsRepairArgs, InstructionsSetupArgs, MarketplaceAddArgs,
-    MarketplaceCommand, MarketplaceNamedArgs, MarketplaceUpdateArgs, OutputArgs, PlanArgs,
-    PluginCommand, PluginInstallArgs, PluginNamedArgs, PluginUpdateArgs, ScopedOutputArgs,
-    ScopedTargetArgs, SkillCommand, SkillInstallArgs, SkillNamedArgs, SkillUpdateArgs, StatusArgs,
-    SyncArgs,
+    AdoptArgs, BootstrapArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand,
+    HarnessEnableArgs, InstructionsCommand, InstructionsRepairArgs, InstructionsSetupArgs,
+    MarketplaceAddArgs, MarketplaceCommand, MarketplaceNamedArgs, MarketplaceUpdateArgs,
+    OutputArgs, PlanArgs, PluginCommand, PluginInstallArgs, PluginNamedArgs, PluginUpdateArgs,
+    ScopedOutputArgs, ScopedTargetArgs, SkillCommand, SkillInstallArgs, SkillNamedArgs,
+    SkillUpdateArgs, StatusArgs, SyncArgs,
 };
 
 pub(crate) enum Dispatch {
@@ -12,6 +12,7 @@ pub(crate) enum Dispatch {
     Adopt(AdoptArgs),
     Plan(PlanArgs),
     Sync(SyncArgs),
+    Bootstrap(BootstrapArgs),
     SkillList(ScopedTargetArgs),
     MarketplaceList(ScopedTargetArgs),
     PluginList(ScopedTargetArgs),
@@ -43,6 +44,7 @@ impl Dispatch {
             Command::Adopt(args) => Self::Adopt(args),
             Command::Plan(args) => Self::Plan(args),
             Command::Sync(args) => Self::Sync(args),
+            Command::Bootstrap(args) => Self::Bootstrap(args),
             Command::Harness(args) => match args.command {
                 HarnessCommand::List(args) => Self::HarnessList(args),
                 HarnessCommand::Enable(args) => Self::HarnessEnable(args),
@@ -86,6 +88,7 @@ impl Dispatch {
             Self::Adopt(args) => args.output.json,
             Self::Plan(args) => args.output.json,
             Self::Sync(args) => args.output.json,
+            Self::Bootstrap(args) => args.output.json,
             Self::SkillList(args) => args.output.json,
             Self::MarketplaceList(args) => args.output.json,
             Self::PluginList(args) => args.output.json,
