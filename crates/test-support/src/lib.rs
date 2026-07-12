@@ -44,7 +44,7 @@ impl TempRoot {
             let sequence = NEXT_TEMP_ROOT.fetch_add(1, Ordering::Relaxed);
             let path = parent.join(format!("{prefix}-{}-{sequence}", std::process::id()));
             match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self(path)),
+                Ok(()) => return fs::canonicalize(&path).map(Self),
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
                 Err(error) => return Err(error),
             }
