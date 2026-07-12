@@ -1,7 +1,7 @@
 ---
 id: story-scope-aware-lifecycle-operation-ids
 kind: story
-stage: review
+stage: done
 parent: null
 depends_on: []
 release_binding: 3.0.0
@@ -42,3 +42,17 @@ e2e test exposed the production defect.
 - Verification: `cargo test -p skilltap --lib application::tests:: --offline`
   passed (8 tests).
 - Production commit: `9bc22a7` (`Fix scope-aware lifecycle operation IDs`).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with correctness, scope-isolation, and
+tests lenses. Lifecycle IDs now hash action, target, concrete scope, and
+resource identity, preserving determinism while separating equal logical IDs
+across global and project scopes. Unit and compiled all-scopes regressions
+pass.
