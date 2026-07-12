@@ -1,7 +1,7 @@
 ---
 id: story-complete-status-application-extraction-status-projection
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-complete-status-application-extraction
 depends_on: []
@@ -65,3 +65,11 @@ Private visibility or an import selecting a different resolver could alter
 status output or break reconciliation. Revert this extraction commit to
 restore the helper blocks to `application.rs`; no state or native files are
 modified by the move.
+
+## Implementation
+
+Implemented in commit 0d155dc (with the visibility bridge correction in
+042e7ed). Projection helpers and the unavailable-source resolver now live in
+application/status.rs; the parent exposes only the narrow first-use bridge
+used by reconciliation. cargo test -p skilltap --offline passes, including
+status/update and compiled-binary coverage.
