@@ -1,7 +1,7 @@
 ---
 id: gate-tests-mutating-scope-matrix
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -52,6 +52,14 @@ specific resource section.
 Verification: the focused scope-matrix test passes against the fixed
 implementation.
 
+Extended the scope matrix with equal `same@team` global/project resources,
+all-scopes removal, state/inventory assertions, unchanged native-tree
+snapshots, and a project sentinel byte check. The existing target-subset and
+unrelated-project assertions remain intact.
+
+Verification: the focused scope-matrix test passes against the fixed
+implementation.
+
 ## Review (2026-07-12)
 
 **Verdict**: Request changes
@@ -68,3 +76,10 @@ project scopes, nor assert native trees, state records, and untouched bytes
 remain isolated across project/all-scopes mutations as required by the gate
 brief. Add those same-name and native/state assertions while retaining the
 existing coverage.
+
+## Follow-up Resolution
+
+Extended the scope matrix with equal `same@team` global/project resources,
+all-scopes removal, state/inventory assertions, unchanged native-tree
+snapshots, and a project sentinel byte check. The focused scope-matrix test
+passes against the fixed implementation.
