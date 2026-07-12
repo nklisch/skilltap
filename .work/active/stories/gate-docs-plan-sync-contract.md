@@ -1,7 +1,7 @@
 ---
 id: gate-docs-plan-sync-contract
 kind: story
-stage: implementing
+stage: review
 tags: [documentation]
 parent: null
 depends_on: []
@@ -49,3 +49,20 @@ implementation changes the public command behavior or examples.
 The current behavior is an implementation gap, not a documentation choice:
 populated inventory must produce scope/target-bound operations and `sync` must
 execute them through the existing lock, journal, and native lifecycle ports.
+
+## Implementation notes
+
+- `plan` and `sync` now resolve populated desired inventory into concrete,
+  scope- and target-bound lifecycle candidates rather than passing an empty
+  reconciliation request.
+- `plan` renders those candidates through the existing lifecycle preview path
+  without mutating native configuration or state.
+- `sync` delegates marketplace, plugin, and standalone-skill candidates to the
+  existing native and managed-skill adapters, preserving their lock,
+  revalidation, journal, and post-observation boundaries. Selection filters
+  apply independently to every concrete resource scope.
+- Instruction and harness inventory entries remain explicit no-op records until
+  their dedicated setup/lifecycle adapters are selected; they are never
+  guessed into native mutations.
+- Focused verification: `cargo check -p skilltap --offline`, CLI unit tests,
+  and the stable compiled-binary channel test pass.

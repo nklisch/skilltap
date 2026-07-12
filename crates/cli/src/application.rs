@@ -23,7 +23,6 @@ use skilltap_core::{
     executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
     instructions::fingerprint_contents,
     lifecycle_operation::native_operation,
-    reconciliation::{ReconciliationRequest, plan_reconciliation},
     runtime::{
         DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
         ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, FileKind, FileSystem,
@@ -626,11 +625,11 @@ fn instruction_apply_failure(detail: &'static str) -> ExecutionError {
 }
 
 impl StatusApplication<'_> {
-    /// Build a fresh, adapter-neutral reconciliation plan from the current
-    /// documents and bounded native observation. Lifecycle adapters add
-    /// concrete candidates in their respective feature slices; until then an
-    /// empty inventory is a valid no-op plan and populated inventory is
-    /// reported as attention rather than guessed into a mutation.
+    /// Build a fresh reconciliation plan from the current documents and
+    /// bounded native observation.  The desired inventory is the source of
+    /// lifecycle candidates: each resource is projected onto its selected
+    /// scope and harness target and then routed through the same adapter used
+    /// by the corresponding explicit lifecycle command.
     pub(crate) fn execute_plan(&self, args: &PlanArgs) -> Outcome {
         self.execute_reconciliation("plan", &args.target, &args.scope, &[], &[], false)
     }
@@ -3479,7 +3478,6 @@ impl StatusApplication<'_> {
             Ok(value) => value,
             Err(outcome) => return *outcome,
         };
-
         let status_args = StatusArgs {
             target: target.clone(),
             scope: requested_scope.clone(),
@@ -3525,17 +3523,6 @@ impl StatusApplication<'_> {
             }
         };
 
-        if let Some(selector) = includes.first().or_else(|| excludes.first()) {
-            outcome.result = ResultClass::Invalid;
-            return outcome.with_error(
-                ErrorDetail::new(
-                    "selector_unavailable",
-                    "The requested selector is not present in the current reconciliation plan.",
-                )
-                .with_context("selector", selector.as_str()),
-            );
-        }
-
         let observation = match self.native_observation {
             NativeObservationMode::Disabled => NativeObservation::default(),
             NativeObservationMode::System => NativeObservation::run(&documents, &scope, &targets),
@@ -3547,56 +3534,165 @@ impl StatusApplication<'_> {
             outcome = outcome.with_warning(warning);
         }
 
-        let planned = match plan_reconciliation(ReconciliationRequest::default()) {
-            Ok(plan) => plan,
-            Err(error) => {
-                outcome.result = ResultClass::Invalid;
-                return outcome.with_error(
-                    ErrorDetail::new(
-                        "reconciliation_plan_invalid",
-                        "The reconciliation plan could not be validated safely.",
-                    )
-                    .with_context("detail", error.to_string()),
-                );
-            }
-        };
-        let operation_count = planned.plan.iter().count() as u64;
-        let desired_count = documents
+        let desired = documents
             .inventory
             .as_ref()
-            .map_or(0, |inventory| inventory.resources().len());
-        let mut result = if observation.failed_targets > 0 {
-            ResultClass::AttentionRequired
-        } else {
-            ResultClass::Completed
-        };
-        if desired_count > 0 {
-            result = ResultClass::AttentionRequired;
-            outcome = outcome
-                .with_warning(Warning::new(
-                    "reconciliation_candidates_unavailable",
-                    "Desired resources are present, but no lifecycle adapter can safely produce mutation candidates yet.",
-                ))
-                .with_next_action(NextAction::new(
-                    "review_lifecycle_support",
-                    "Review the planned resource lifecycle support before retrying synchronization.",
-                ));
+            .map(|inventory| inventory.resources().values().cloned().collect::<Vec<_>>())
+            .unwrap_or_default();
+        let selected = desired
+            .iter()
+            .filter(|resource| {
+                scope
+                    .resolved
+                    .iter()
+                    .any(|selected| selected == resource.scope())
+                    && resource
+                        .targets()
+                        .iter()
+                        .any(|target| targets.resolved.contains(target))
+                    && reconciliation_selector_matches(resource, includes, excludes)
+            })
+            .collect::<Vec<_>>();
+        let desired_count = selected.len() as u64;
+
+        // `plan` is deliberately side-effect free.  Its candidates are
+        // assembled by the same resource-to-lifecycle projection used by
+        // `sync`, but rendered as planned operations instead of executing a
+        // native command or publishing state.
+        if command == "plan" {
+            for resource in selected {
+                for target_id in resource
+                    .targets()
+                    .iter()
+                    .filter(|target_id| targets.resolved.contains(target_id))
+                {
+                    let child_scope = scope_args_for_scope(resource.scope());
+                    let (source, name) = reconciliation_source_and_name(resource);
+                    let child = match resource.kind() {
+                        ResourceKind::Marketplace
+                        | ResourceKind::Plugin
+                        | ResourceKind::StandaloneSkill => self.execute_lifecycle_preview(
+                            "plan",
+                            &child_scope,
+                            &TargetArgs {
+                                target: Some(skilltap_core::domain::TargetSelection::Only(
+                                    target_id.clone(),
+                                )),
+                            },
+                            source,
+                            name,
+                        ),
+                        _ => Outcome::new("plan", ResultClass::Completed).with_operation(
+                            crate::OperationOutcome::new(
+                                format!("reconcile:{}:{}", target_id, resource.key()),
+                                "planned",
+                            )
+                            .with_field("target", target_id.as_str())
+                            .with_field("scope", scope_label(resource.scope())),
+                        ),
+                    };
+                    merge_reconciliation_outcome(&mut outcome, child);
+                }
+            }
+            if observation.failed_targets > 0 {
+                outcome.result = ResultClass::AttentionRequired;
+            } else if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+                outcome.result = ResultClass::Completed;
+            }
+            let operation_count = outcome.operations.len() as u64;
+            return outcome
+                .with_summary("desired_resources", desired_count)
+                .with_summary("operations", operation_count)
+                .with_summary("scopes", scope.count)
+                .with_summary("targets", targets.iter().len() as u64)
+                .with_summary("observed_targets", observation.observed_targets as u64)
+                .with_summary("failed_targets", observation.failed_targets as u64)
+                .with_summary("changed", false);
         }
-        if acknowledged {
-            outcome = outcome.with_warning(Warning::new(
-                "acknowledgment_not_applicable",
-                "--yes acknowledged no exact consequence because this plan contains no partial operation.",
-            ));
+
+        // `sync` delegates each candidate to its existing lifecycle adapter.
+        // This keeps locking, revalidation, native process bounds, journaling,
+        // and post-mutation observation identical to explicit commands.
+        for resource in selected {
+            let child_scope = scope_args_for_scope(resource.scope());
+            let (source, name) = reconciliation_source_and_name(resource);
+            for target_id in resource
+                .targets()
+                .iter()
+                .filter(|target_id| targets.resolved.contains(target_id))
+            {
+                let child_target = TargetArgs {
+                    target: Some(skilltap_core::domain::TargetSelection::Only(
+                        target_id.clone(),
+                    )),
+                };
+                let child = match resource.kind() {
+                    ResourceKind::Marketplace => self.execute_native_lifecycle(
+                        "sync",
+                        NativeLifecycleKind::MarketplaceAdd,
+                        &child_scope,
+                        &child_target,
+                        source,
+                        name,
+                    ),
+                    ResourceKind::Plugin => self.execute_native_lifecycle(
+                        "sync",
+                        NativeLifecycleKind::PluginInstall,
+                        &child_scope,
+                        &child_target,
+                        name,
+                        None,
+                    ),
+                    ResourceKind::StandaloneSkill => match source {
+                        Some(source) => self.execute_skill_install(
+                            "sync",
+                            &child_scope,
+                            &child_target,
+                            SkillInstallRequest {
+                                source,
+                                name,
+                                preserve_name: true,
+                                requested_revision: resource
+                                    .source()
+                                    .and_then(|value| value.requested_revision())
+                                    .map(|value| value.as_str()),
+                                subdirectory: resource
+                                    .source()
+                                    .and_then(|value| value.subdirectory())
+                                    .map(|value| value.as_str()),
+                            },
+                        ),
+                        None => Outcome::new("sync", ResultClass::AttentionRequired)
+                            .with_warning(Warning::new(
+                                "skill_source_unavailable",
+                                "The desired skill has no source locator and cannot be synchronized.",
+                            )),
+                    },
+                    ResourceKind::InstructionLocation => Outcome::new("sync", ResultClass::Completed)
+                        .with_operation(crate::OperationOutcome::new(
+                            format!("reconcile:{}:{}", target_id, resource.key()),
+                            "no_change",
+                        )),
+                    ResourceKind::Harness => Outcome::new("sync", ResultClass::Completed),
+                };
+                merge_reconciliation_outcome(&mut outcome, child);
+            }
         }
-        outcome.result = result;
+        if observation.failed_targets > 0 {
+            outcome.result = ResultClass::AttentionRequired;
+        } else if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+            outcome.result = ResultClass::Completed;
+        }
+        let changed = outcome.summary.get("changed") == Some(&OutputValue::Boolean(true));
+        let operation_count = outcome.operations.len() as u64;
         outcome
-            .with_summary("desired_resources", desired_count as u64)
+            .with_summary("desired_resources", desired_count)
             .with_summary("operations", operation_count)
             .with_summary("scopes", scope.count)
             .with_summary("targets", targets.iter().len() as u64)
             .with_summary("observed_targets", observation.observed_targets as u64)
             .with_summary("failed_targets", observation.failed_targets as u64)
-            .with_summary("changed", false)
+            .with_summary("changed", changed)
     }
 
     pub(crate) fn execute(&self, args: &StatusArgs) -> Outcome {
@@ -3881,6 +3977,51 @@ fn merge_result(current: ResultClass, next: ResultClass) -> ResultClass {
     } else {
         current
     }
+}
+
+/// Merge one resource-scoped lifecycle result into the aggregate reconciliation
+/// result.  Child adapters own their operation and journal details; the
+/// reconciliation command only combines those already-rendered records.
+fn merge_reconciliation_outcome(aggregate: &mut Outcome, child: Outcome) {
+    let child_changed = child.summary.get("changed") == Some(&OutputValue::Boolean(true));
+    aggregate.result = merge_result(aggregate.result, child.result);
+    aggregate.resources.extend(child.resources);
+    aggregate.operations.extend(child.operations);
+    aggregate.warnings.extend(child.warnings);
+    aggregate.errors.extend(child.errors);
+    aggregate.next_actions.extend(child.next_actions);
+    if child_changed {
+        aggregate
+            .summary
+            .insert("changed".to_owned(), OutputValue::Boolean(true));
+    }
+}
+
+fn reconciliation_selector_matches(
+    resource: &DesiredResource,
+    includes: &[NativeId],
+    excludes: &[NativeId],
+) -> bool {
+    let id = resource.id().as_str();
+    let included = includes.is_empty()
+        || includes.iter().any(|selector| {
+            selector.as_str() == id || selector.as_str() == resource.key().to_string()
+        });
+    let excluded = excludes
+        .iter()
+        .any(|selector| selector.as_str() == id || selector.as_str() == resource.key().to_string());
+    included && !excluded
+}
+
+fn reconciliation_source_and_name(resource: &DesiredResource) -> (Option<&str>, Option<&str>) {
+    let source = resource.source().map(|source| source.locator().as_str());
+    let name = match resource.kind() {
+        ResourceKind::Marketplace => resource.id().as_str().strip_prefix("marketplace:"),
+        ResourceKind::Plugin => resource.id().as_str().strip_prefix("plugin:"),
+        ResourceKind::StandaloneSkill => resource.id().as_str().strip_prefix("skill:"),
+        _ => None,
+    };
+    (source, name)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
