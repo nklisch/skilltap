@@ -1,7 +1,7 @@
 ---
 id: gate-tests-sync-execution-integration
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -49,3 +49,18 @@ and an immediate repeat is idempotent.
 Verification: the focused test passes. The full compiled-binary suite has 33
 passing tests; the two unrelated scope/safe-update regressions remain blocked
 on their parked production stories.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with deep reconciliation correctness and
+test-integrity lenses. The isolated regression proves populated inventory is
+visible in `plan` without state mutation, `sync` executes through the lifecycle
+adapter and journals state, and an immediate repeat is a no-change operation.
+The focused test passes; the recorded full-suite failures are unrelated active
+safe-update/scope stories.
