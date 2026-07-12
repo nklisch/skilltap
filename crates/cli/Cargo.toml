@@ -14,6 +14,7 @@ skilltap-harnesses.workspace = true
 
 [dev-dependencies]
 skilltap-test-support.workspace = true
+sha2.workspace = true
 
 [[bin]]
 name = "skilltap"

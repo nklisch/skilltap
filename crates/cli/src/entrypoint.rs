@@ -411,20 +411,8 @@ fn execute_binary_bootstrap(
     paths: &skilltap_core::runtime::PlatformPaths,
 ) -> BinaryBootstrapResult {
     use skilltap_core::{
-        bootstrap::{ArtifactKey, BinaryDecision, choose_binary_decision},
-        runtime::{
-            ArtifactFetcher, BinaryInstaller, ReleaseResolver, SystemArtifactFetcher,
-            SystemBinaryInstaller, SystemReleaseResolver,
-        },
-    };
-    let key = match ArtifactKey::current() {
-        Ok(key) => key,
-        Err(_) => {
-            return binary_attention(
-                "unsupported-platform",
-                "This platform has no published skilltap bootstrap artifact.",
-            );
-        }
+        bootstrap::ArtifactKey,
+        runtime::{SystemArtifactFetcher, SystemBinaryInstaller, SystemReleaseResolver},
     };
     let destination = match std::env::var_os("SKILLTAP_INSTALL")
         .and_then(|value| value.into_string().ok())
@@ -450,7 +438,48 @@ fn execute_binary_bootstrap(
             );
         }
     };
-    let manifest = match SystemReleaseResolver::current(key).latest() {
+    let key = match ArtifactKey::current() {
+        Ok(key) => key,
+        Err(_) => {
+            return binary_attention(
+                "unsupported-platform",
+                "This platform has no published skilltap bootstrap artifact.",
+            );
+        }
+    };
+    let resolver = SystemReleaseResolver::current(key);
+    let fetcher = SystemArtifactFetcher;
+    let installer = SystemBinaryInstaller;
+    execute_binary_bootstrap_with(args, destination, &resolver, &fetcher, &installer)
+}
+
+/// Test-only composition is provided by passing in the release, transport,
+/// and publication ports.  The shipped command above always constructs the
+/// canonical HTTPS resolver and system ports; no environment variable can
+/// replace those production boundaries.
+fn execute_binary_bootstrap_with<R, F, I>(
+    args: &BootstrapArgs,
+    destination: AbsolutePath,
+    resolver: &R,
+    fetcher: &F,
+    installer: &I,
+) -> BinaryBootstrapResult
+where
+    R: skilltap_core::runtime::ReleaseResolver,
+    F: skilltap_core::runtime::ArtifactFetcher,
+    I: skilltap_core::runtime::BinaryInstaller,
+{
+    use skilltap_core::bootstrap::{ArtifactKey, BinaryDecision, choose_binary_decision};
+    let key = match ArtifactKey::current() {
+        Ok(key) => key,
+        Err(_) => {
+            return binary_attention(
+                "unsupported-platform",
+                "This platform has no published skilltap bootstrap artifact.",
+            );
+        }
+    };
+    let manifest = match resolver.latest() {
         Ok(manifest) => manifest,
         Err(error) => return binary_attention("release_manifest_failed", &error.to_string()),
     };
@@ -458,7 +487,6 @@ fn execute_binary_bootstrap(
         Ok(artifact) => artifact,
         Err(error) => return binary_attention("release_asset_failed", &error.to_string()),
     };
-    let installer = SystemBinaryInstaller;
     let installed = match installer.inspect(&destination) {
         Ok(value) => value,
         Err(error) => return binary_attention("binary_inspection_failed", &error.to_string()),
@@ -521,7 +549,7 @@ fn execute_binary_bootstrap(
             );
         }
     };
-    let fetch_result = SystemArtifactFetcher.fetch(artifact.download_url().as_str(), &temporary);
+    let fetch_result = fetcher.fetch(artifact.download_url().as_str(), &temporary);
     if fetch_result.is_err() {
         let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
         return binary_attention(
@@ -736,6 +764,224 @@ fn binary_attention(code: &str, detail: &str) -> BinaryBootstrapResult {
             "bootstrap_help",
             "Run `skilltap bootstrap --help` for the release and platform requirements.",
         )],
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_tests {
+    use std::{fs, path::Path, sync::Arc};
+
+    use sha2::Digest;
+    use skilltap_core::{
+        bootstrap::{ArtifactKey, ReleaseArtifact, ReleaseVersion},
+        domain::{AbsolutePath, SourceLocator},
+        runtime::{
+            ArtifactError, ArtifactFetcher, BinaryInstaller, InstalledBinary, ReleaseManifest,
+            ReleaseResolver, SystemBinaryInstaller,
+        },
+    };
+    use skilltap_test_support::TempRoot;
+
+    use super::{BootstrapArgs, OutputArgs, execute_binary_bootstrap_with};
+
+    #[derive(Clone)]
+    struct FixtureResolver {
+        manifest: ReleaseManifest,
+    }
+
+    impl ReleaseResolver for FixtureResolver {
+        fn latest(&self) -> Result<ReleaseManifest, ArtifactError> {
+            Ok(self.manifest.clone())
+        }
+    }
+
+    #[derive(Clone)]
+    struct FixtureFetcher {
+        bytes: Arc<Vec<u8>>,
+    }
+
+    impl ArtifactFetcher for FixtureFetcher {
+        fn fetch(&self, _url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError> {
+            fs::write(destination.as_str(), self.bytes.as_ref())
+                .map_err(|_| ArtifactError::DownloadFailed)
+        }
+    }
+
+    struct WrongPublisher;
+
+    impl BinaryInstaller for WrongPublisher {
+        fn inspect(&self, path: &AbsolutePath) -> Result<Option<InstalledBinary>, ArtifactError> {
+            SystemBinaryInstaller.inspect(path)
+        }
+
+        fn install_verified(
+            &self,
+            _artifact: &AbsolutePath,
+            destination: &AbsolutePath,
+            _expected: &ReleaseArtifact,
+        ) -> Result<(), ArtifactError> {
+            let path = Path::new(destination.as_str());
+            fs::write(path, b"#!/bin/sh\nprintf 'skilltap 2.0.0\\n'\n")
+                .map_err(|_| ArtifactError::InstallFailed)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+                    .map_err(|_| ArtifactError::InstallFailed)?;
+            }
+            Ok(())
+        }
+    }
+
+    fn args(allow_major: bool) -> BootstrapArgs {
+        BootstrapArgs {
+            target: None,
+            allow_major,
+            output: OutputArgs { json: false },
+        }
+    }
+
+    fn key() -> ArtifactKey {
+        ArtifactKey::current().expect("tests run on a supported release host")
+    }
+
+    fn fixture(version: &str) -> (FixtureResolver, FixtureFetcher) {
+        let version = version.parse::<ReleaseVersion>().unwrap();
+        let bytes = format!("#!/bin/sh\nprintf 'skilltap {version}\\n'\n").into_bytes();
+        let key = key();
+        let artifact = ReleaseArtifact::new(
+            version,
+            key,
+            "skilltap-fixture",
+            format!("{:x}", sha2::Sha256::digest(&bytes)),
+            SourceLocator::new(
+                "https://github.com/nklisch/skilltap/releases/download/v3.0.0/skilltap-fixture",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        (
+            FixtureResolver {
+                manifest: ReleaseManifest::new(version, [artifact]).unwrap(),
+            },
+            FixtureFetcher {
+                bytes: Arc::new(bytes),
+            },
+        )
+    }
+
+    #[test]
+    fn isolated_matrix_covers_install_noop_update_major_block_and_opt_in() {
+        let root = TempRoot::new("bootstrap-command-matrix").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+
+        let (resolver, fetcher) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "installed");
+
+        let (resolver, fetcher) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "no-op");
+
+        let (resolver, fetcher) = fixture("3.1.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "updated");
+
+        let prior = fs::read(destination.as_str()).unwrap();
+        let (resolver, fetcher) = fixture("4.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "major-upgrade-blocked");
+        assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
+
+        let (resolver, fetcher) = fixture("4.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(true),
+            destination,
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "updated");
+    }
+
+    #[test]
+    fn wrong_release_identity_and_post_publish_identity_preserve_prior_binary() {
+        let root = TempRoot::new("bootstrap-command-failures").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        let (resolver, fetcher) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "installed");
+        let prior = fs::read(destination.as_str()).unwrap();
+
+        let wrong_bytes = Arc::new(b"#!/bin/sh\nprintf 'skilltap 9.9.9\\n'\n".to_vec());
+        let key = key();
+        let version = "3.1.0".parse::<ReleaseVersion>().unwrap();
+        let artifact = ReleaseArtifact::new(
+            version,
+            key,
+            "skilltap-fixture",
+            format!("{:x}", sha2::Sha256::digest(b"wrong payload")),
+            SourceLocator::new(
+                "https://github.com/nklisch/skilltap/releases/download/v3.0.0/skilltap-fixture",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let resolver = FixtureResolver {
+            manifest: ReleaseManifest::new(version, [artifact]).unwrap(),
+        };
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &FixtureFetcher { bytes: wrong_bytes },
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "unavailable");
+        assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
+
+        let (resolver, fetcher) = fixture("3.1.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &WrongPublisher,
+        );
+        assert_eq!(result.entry.status, "unavailable");
+        assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
     }
 }
 
