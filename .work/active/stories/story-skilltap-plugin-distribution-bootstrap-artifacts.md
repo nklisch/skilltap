@@ -48,4 +48,8 @@ Do not add a public command or mutate harness plugin state in this story.
 
 ## Implementation notes
 - Execution capability: highest available local capability; artifact installation is a security-sensitive boundary.
-- Review weight: standard (autopilot project default).
+- Review weight: standard (source: autopilot project default).
+- Files changed: `crates/core/src/runtime/artifact.rs`, `crates/core/src/runtime/mod.rs`.
+- Tests added: release manifest shape/duplicate rejection and release-host validation tests; atomic installer paths use validated checksums, private permissions, temporary siblings, and destination identity checks.
+- Discrepancies from design: release resolver remains an application-provided port; the core provides strict manifest parsing and direct bounded curl fetch adapter without network coupling.
+- Adjacent issues parked: none.

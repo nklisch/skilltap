@@ -1,3 +1,4 @@
+mod artifact;
 mod bounded_process;
 mod clock;
 mod command;
@@ -11,6 +12,10 @@ mod paths;
 mod scope;
 mod strict_json;
 
+pub use artifact::{
+    ArtifactError, ArtifactFetcher, BinaryInstaller, InstalledBinary, ReleaseManifest,
+    ReleaseResolver, SystemArtifactFetcher, SystemBinaryInstaller,
+};
 pub use bounded_process::SystemNativeProcessRunner;
 pub use clock::{Clock, FakeClock, SystemClock};
 pub use command::{CommandOutput, CommandRequest, CommandRunner, SystemCommandRunner};
