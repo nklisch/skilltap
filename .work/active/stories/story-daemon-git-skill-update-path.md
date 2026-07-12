@@ -1,7 +1,7 @@
 ---
 id: story-daemon-git-skill-update-path
 kind: story
-stage: implementing
+stage: review
 parent: null
 depends_on: []
 release_binding: 3.0.0
@@ -32,3 +32,18 @@ retaining daemon acknowledgment/drift safety and the compiled regression.
 
 Promoted from `idea-daemon-git-skill-update-path` after the release safe-update
 e2e test exposed the production defect.
+
+## Implementation notes
+
+- The daemon now routes Git-backed standalone skills through the explicit
+  `skill update` command path, preserving its validated source resolution,
+  managed-destination fingerprint check, atomic replacement, and state
+  journaling behavior.
+- The daemon wrapper continues to reject drift, pinned resources, and other
+  judgment-required outcomes; it only changes the child command used for the
+  already-selected safe update.
+- Focused verification reaches the replacement operation and records the new
+  Git revision. The existing compiled fixture has a stale naming assertion: it
+  installs a repository named `daemon-skill-source` without `--name` but reads
+  `daemon-skill`; the test fixture should be corrected separately without
+  changing the documented source-name default.
