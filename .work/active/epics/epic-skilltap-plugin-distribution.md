@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution
 kind: epic
-stage: implementing
+stage: review
 tags: [infra, content, architecture]
 parent: null
 depends_on: []
@@ -228,3 +228,11 @@ high-confidence pure refactor worth emitting. The remaining large bootstrap
 module contains security-sensitive publication/test seams where extraction
 would increase coordination risk; shell and prose duplication is small and
 does not justify a behavior-preserving abstraction. No refactor items emitted.
+
+## Children complete
+
+The package, CLI contract, bootstrap, guidance, release, and cutover features
+are complete and individually reviewed. Canonical evidence gates, installer
+and website parity checks, cross-harness bootstrap contracts, and the external
+legacy retirement handoff are recorded. Public release/tag/push and external
+repository archive actions remain outside this autopilot run.
