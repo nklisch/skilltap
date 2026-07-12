@@ -226,6 +226,7 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
   `gate-tests-mutating-scope-matrix`,
   `gate-tests-safe-update-e2e`, and
   `gate-tests-daemon-service-failure-paths`.
-- **gate-cruft** — pending.
+- **gate-cruft** (2026-07-12) — 1 finding (1 medium); item
+  `gate-cruft-dead-observation-scope-helper`.
 - **gate-docs** — pending.
 - **gate-patterns** — pending.
