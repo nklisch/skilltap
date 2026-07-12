@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cutover-legacy-record
 kind: story
-stage: implementing
+stage: review
 tags: [content, cleanup]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: [story-skilltap-plugin-distribution-cutover-canonical-verification]
@@ -30,3 +30,9 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: standard; current-state deprecation and handoff prose.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `docs/LEGACY-CUTOVER.md`.
+- Tests added: canonical cutover evidence gate covers replacement package,
+  installer, bootstrap, and complete guidance tree.
+- Discrepancies from design: external archive/delete remains operator-gated;
+  this repository performs no remote destructive action.
+- Adjacent issues parked: none.
