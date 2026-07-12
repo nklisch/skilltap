@@ -1,7 +1,7 @@
 ---
 id: story-share-reconciliation-selection
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: null
 depends_on: []
@@ -31,3 +31,11 @@ and resource-kind semantics identical.
 - Existing plan/sync compiled regressions remain green.
 - No public signatures or output schema changes.
 
+## Implementation Notes
+
+- Added `reconciliation_selections`, a shared ordered projection of desired
+  resources, selected scopes/targets, and include/exclude selectors.
+- Both plan and sync now consume the same `(resource, target)` sequence; the
+  desired resource count remains deduplicated independently of target count.
+- Verification: `cargo fmt --all` and `cargo test -p skilltap --offline`
+  passed (40 unit tests and 41 compiled-binary tests).

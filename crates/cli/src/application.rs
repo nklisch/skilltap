@@ -3338,67 +3338,52 @@ impl StatusApplication<'_> {
             .as_ref()
             .map(|inventory| inventory.resources().values().cloned().collect::<Vec<_>>())
             .unwrap_or_default();
-        let selected = desired
+        let selected = reconciliation_selections(&desired, &scope, &targets, includes, excludes);
+        let desired_count = selected
             .iter()
-            .filter(|resource| {
-                scope
-                    .resolved
-                    .iter()
-                    .any(|selected| selected == resource.scope())
-                    && resource
-                        .targets()
-                        .iter()
-                        .any(|target| targets.resolved.contains(target))
-                    && reconciliation_selector_matches(resource, includes, excludes)
-            })
-            .collect::<Vec<_>>();
-        let desired_count = selected.len() as u64;
+            .map(|(resource, _)| resource.key().to_string())
+            .collect::<BTreeSet<_>>()
+            .len() as u64;
 
         // `plan` is deliberately side-effect free.  Its candidates are
         // assembled by the same resource-to-lifecycle projection used by
         // `sync`, but rendered as planned operations instead of executing a
         // native command or publishing state.
         if command == "plan" {
-            for resource in selected {
-                for target_id in resource
-                    .targets()
-                    .iter()
-                    .filter(|target_id| targets.resolved.contains(target_id))
-                {
-                    let child_scope = scope_args_for_scope(resource.scope());
-                    let (source, name) = reconciliation_source_and_name(resource);
-                    let child = match resource.kind() {
-                        ResourceKind::Marketplace
-                        | ResourceKind::Plugin
-                        | ResourceKind::StandaloneSkill => self.execute_lifecycle_preview(
-                            "plan",
+            for (resource, target_id) in selected.iter().copied() {
+                let child_scope = scope_args_for_scope(resource.scope());
+                let (source, name) = reconciliation_source_and_name(resource);
+                let child = match resource.kind() {
+                    ResourceKind::Marketplace
+                    | ResourceKind::Plugin
+                    | ResourceKind::StandaloneSkill => self.execute_lifecycle_preview(
+                        "plan",
+                        &child_scope,
+                        &TargetArgs {
+                            target: Some(skilltap_core::domain::TargetSelection::Only(
+                                target_id.clone(),
+                            )),
+                        },
+                        resource.kind(),
+                        source,
+                        name,
+                    ),
+                    ResourceKind::InstructionLocation => self
+                        .execute_instruction_reconciliation_preview(
                             &child_scope,
-                            &TargetArgs {
-                                target: Some(skilltap_core::domain::TargetSelection::Only(
-                                    target_id.clone(),
-                                )),
-                            },
-                            resource.kind(),
-                            source,
-                            name,
+                            target_id,
+                            resource,
                         ),
-                        ResourceKind::InstructionLocation => self
-                            .execute_instruction_reconciliation_preview(
-                                &child_scope,
-                                target_id,
-                                resource,
-                            ),
-                        _ => Outcome::new("plan", ResultClass::Completed).with_operation(
-                            crate::OperationOutcome::new(
-                                format!("reconcile:{}:{}", target_id, resource.key()),
-                                "planned",
-                            )
-                            .with_field("target", target_id.as_str())
-                            .with_field("scope", scope_label(resource.scope())),
-                        ),
-                    };
-                    merge_reconciliation_outcome(&mut outcome, child);
-                }
+                    _ => Outcome::new("plan", ResultClass::Completed).with_operation(
+                        crate::OperationOutcome::new(
+                            format!("reconcile:{}:{}", target_id, resource.key()),
+                            "planned",
+                        )
+                        .with_field("target", target_id.as_str())
+                        .with_field("scope", scope_label(resource.scope())),
+                    ),
+                };
+                merge_reconciliation_outcome(&mut outcome, child);
             }
             let operation_count = outcome.operations.len() as u64;
             if observation.failed_targets > 0 {
@@ -3428,75 +3413,69 @@ impl StatusApplication<'_> {
         // `sync` delegates each candidate to its existing lifecycle adapter.
         // This keeps locking, revalidation, native process bounds, journaling,
         // and post-mutation observation identical to explicit commands.
-        for resource in selected {
+        for (resource, target_id) in selected.iter().copied() {
             let child_scope = scope_args_for_scope(resource.scope());
             let (source, name) = reconciliation_source_and_name(resource);
-            for target_id in resource
-                .targets()
-                .iter()
-                .filter(|target_id| targets.resolved.contains(target_id))
-            {
-                let child_target = TargetArgs {
-                    target: Some(skilltap_core::domain::TargetSelection::Only(
-                        target_id.clone(),
-                    )),
-                };
-                let child = match resource.kind() {
-                    ResourceKind::Marketplace => self.execute_native_lifecycle(
+            let child_target = TargetArgs {
+                target: Some(skilltap_core::domain::TargetSelection::Only(
+                    target_id.clone(),
+                )),
+            };
+            let child = match resource.kind() {
+                ResourceKind::Marketplace => self.execute_native_lifecycle(
+                    "sync",
+                    NativeLifecycleKind::MarketplaceAdd,
+                    &child_scope,
+                    &child_target,
+                    source,
+                    name,
+                ),
+                ResourceKind::Plugin => self.execute_native_lifecycle(
+                    "sync",
+                    NativeLifecycleKind::PluginInstall,
+                    &child_scope,
+                    &child_target,
+                    name,
+                    None,
+                ),
+                ResourceKind::StandaloneSkill => match source {
+                    Some(source) => self.execute_skill_install(
                         "sync",
-                        NativeLifecycleKind::MarketplaceAdd,
                         &child_scope,
                         &child_target,
-                        source,
-                        name,
+                        acknowledged,
+                        SkillInstallRequest {
+                            source,
+                            name,
+                            preserve_name: true,
+                            requested_revision: resource
+                                .source()
+                                .and_then(|value| value.requested_revision())
+                                .map(|value| value.as_str()),
+                            subdirectory: resource
+                                .source()
+                                .and_then(|value| value.subdirectory())
+                                .map(|value| value.as_str()),
+                        },
                     ),
-                    ResourceKind::Plugin => self.execute_native_lifecycle(
-                        "sync",
-                        NativeLifecycleKind::PluginInstall,
-                        &child_scope,
-                        &child_target,
-                        name,
-                        None,
+                    None => Outcome::new("sync", ResultClass::AttentionRequired).with_warning(
+                        Warning::new(
+                            "skill_source_unavailable",
+                            "The desired skill has no source locator and cannot be synchronized.",
+                        ),
                     ),
-                    ResourceKind::StandaloneSkill => match source {
-                        Some(source) => self.execute_skill_install(
-                            "sync",
-                            &child_scope,
-                            &child_target,
-                            acknowledged,
-                            SkillInstallRequest {
-                                source,
-                                name,
-                                preserve_name: true,
-                                requested_revision: resource
-                                    .source()
-                                    .and_then(|value| value.requested_revision())
-                                    .map(|value| value.as_str()),
-                                subdirectory: resource
-                                    .source()
-                                    .and_then(|value| value.subdirectory())
-                                    .map(|value| value.as_str()),
-                            },
-                        ),
-                        None => Outcome::new("sync", ResultClass::AttentionRequired)
-                            .with_warning(Warning::new(
-                                "skill_source_unavailable",
-                                "The desired skill has no source locator and cannot be synchronized.",
-                            )),
-                    },
-                    ResourceKind::InstructionLocation => self
-                        .execute_instruction_setup_for_target(
-                            "sync",
-                            &child_scope,
-                            None,
-                            acknowledged,
-                            true,
-                            Some(target_id),
-                        ),
-                    ResourceKind::Harness => Outcome::new("sync", ResultClass::Completed),
-                };
-                merge_reconciliation_outcome(&mut outcome, child);
-            }
+                },
+                ResourceKind::InstructionLocation => self.execute_instruction_setup_for_target(
+                    "sync",
+                    &child_scope,
+                    None,
+                    acknowledged,
+                    true,
+                    Some(target_id),
+                ),
+                ResourceKind::Harness => Outcome::new("sync", ResultClass::Completed),
+            };
+            merge_reconciliation_outcome(&mut outcome, child);
         }
         if observation.failed_targets > 0 {
             outcome.result = ResultClass::AttentionRequired;
@@ -3860,6 +3839,32 @@ fn reconciliation_selector_matches(
         .iter()
         .any(|selector| selector.as_str() == id || selector.as_str() == resource.key().to_string());
     included && !excluded
+}
+
+fn reconciliation_selections<'a>(
+    desired: &'a [DesiredResource],
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    includes: &[NativeId],
+    excludes: &[NativeId],
+) -> Vec<(&'a DesiredResource, &'a HarnessId)> {
+    desired
+        .iter()
+        .filter(|resource| {
+            scope
+                .resolved
+                .iter()
+                .any(|selected| selected == resource.scope())
+                && reconciliation_selector_matches(resource, includes, excludes)
+        })
+        .flat_map(|resource| {
+            resource
+                .targets()
+                .iter()
+                .filter(|target| targets.resolved.contains(target))
+                .map(move |target| (resource, target))
+        })
+        .collect()
 }
 
 fn reconciliation_source_and_name(resource: &DesiredResource) -> (Option<&str>, Option<&str>) {
