@@ -18,6 +18,8 @@ features:
     details: Works with each harness's own marketplace and plugin lifecycle whenever possible.
   - title: Agent forward
     details: Clear commands, useful plans, and optional JSON output make it easy for people and agents to work together.
+  - title: Bring plugins with you
+    details: Use compatible pieces from a Claude or Codex marketplace in the other harness, with clear warnings when behavior cannot carry over.
   - title: One machine-wide model
     details: Bring existing resources together, keep enabled harnesses aligned, and see drift from one place.
 ---

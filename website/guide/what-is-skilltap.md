@@ -14,6 +14,12 @@ lifecycle commands when they exist, records desired state separately from
 observed state, and reports when a resource cannot move faithfully between
 harnesses.
 
+That cross-harness handoff is a core part of skilltap: a marketplace or plugin
+built for Claude can still provide compatible skills and components in Codex,
+and vice versa. skilltap keeps the pieces that transfer cleanly, materializes
+them through the target harness's supported locations, and calls out anything
+that needs your approval instead of silently dropping behavior.
+
 ## What it manages
 
 - Marketplace registrations and native plugins.
