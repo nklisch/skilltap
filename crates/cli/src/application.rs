@@ -1396,7 +1396,8 @@ impl StatusApplication<'_> {
                             continue;
                         }
                     };
-                    let operation_id = lifecycle_operation_id(kind, target_id, resource.key());
+                    let operation_id =
+                        lifecycle_operation_id(kind, target_id, concrete_scope, resource.key());
                     native_ids.insert(target_id.clone(), request.native_name.clone());
                     if previously_applied(documents.state.as_ref(), resource.key(), &operation_id) {
                         outcome = outcome.with_operation(
@@ -4835,9 +4836,14 @@ fn command_arguments(arguments: Vec<std::ffi::OsString>) -> Result<Vec<CommandAr
 fn lifecycle_operation_id(
     kind: NativeLifecycleKind,
     target: &HarnessId,
+    scope: &Scope,
     resource: &ResourceKey,
 ) -> OperationId {
-    let label = format!("{kind:?}:{target}:{}", resource.id().as_str());
+    let label = format!(
+        "{kind:?}:{target}:{}:{}",
+        scope_label(scope),
+        resource.id().as_str()
+    );
     let mut hash = 0xcbf29ce484222325_u64;
     for byte in label.bytes() {
         hash ^= u64::from(byte);

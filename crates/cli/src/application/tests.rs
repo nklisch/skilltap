@@ -280,3 +280,52 @@ fn explicit_disabled_target_is_invalid_and_actionable() {
             .any(|error| error.code == "target_not_enabled")
     );
 }
+
+#[test]
+fn lifecycle_operation_identity_includes_concrete_scope() {
+    let target = HarnessId::new("claude").unwrap();
+    let resource_id = ResourceId::new("formatter@team").unwrap();
+    let global = ResourceKey::new(resource_id.clone(), Scope::Global);
+    let project_scope = Scope::Project(AbsolutePath::new("/tmp/skilltap-project").unwrap());
+    let project = ResourceKey::new(resource_id, project_scope.clone());
+
+    let global_id = lifecycle_operation_id(
+        NativeLifecycleKind::PluginRemove,
+        &target,
+        &Scope::Global,
+        &global,
+    );
+    let project_id = lifecycle_operation_id(
+        NativeLifecycleKind::PluginRemove,
+        &target,
+        &project_scope,
+        &project,
+    );
+
+    assert_ne!(global_id, project_id);
+    assert_eq!(
+        global_id,
+        lifecycle_operation_id(
+            NativeLifecycleKind::PluginRemove,
+            &target,
+            &Scope::Global,
+            &global,
+        )
+    );
+}
+
+#[test]
+fn daemon_noop_normalization_requires_clean_safe_operations() {
+    let mut completed = Outcome::new("daemon run", ResultClass::AttentionRequired);
+    normalize_daemon_noop_result(&mut completed, 1, 0);
+    assert_eq!(completed.result, ResultClass::Completed);
+
+    let mut warning = Outcome::new("daemon run", ResultClass::AttentionRequired)
+        .with_warning(Warning::new("update_warning", "review the update"));
+    normalize_daemon_noop_result(&mut warning, 1, 0);
+    assert_eq!(warning.result, ResultClass::AttentionRequired);
+
+    let mut pending = Outcome::new("daemon run", ResultClass::AttentionRequired);
+    normalize_daemon_noop_result(&mut pending, 1, 1);
+    assert_eq!(pending.result, ResultClass::AttentionRequired);
+}
