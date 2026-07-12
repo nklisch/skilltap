@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
