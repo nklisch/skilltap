@@ -1,7 +1,7 @@
 ---
 id: gate-security-installer-integrity
 kind: story
-stage: review
+stage: done
 tags: [security]
 parent: null
 depends_on: []
@@ -49,3 +49,19 @@ documented opt-in requires it.
   not match. Temporary files are cleaned up by the exit trap.
 - The installer no longer removes the macOS quarantine attribute.
 - Verification: `sh -n install.sh`.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: release checksums are fetched from the same immutable release tag as
+the artifact; a future hardening pass could add signed attestation verification,
+but the stated SHA-256 fail-closed requirement is met.
+
+**Notes**: Standard substrate review with deep supply-chain/security lenses.
+The installer downloads the selected checksum manifest, requires an exact
+64-hex digest for the selected asset, verifies with `sha256sum` or portable
+`shasum`, aborts before installation on any mismatch/missing tool, and no
+longer strips macOS quarantine. `sh -n install.sh` passes.
