@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution
 kind: epic
-stage: review
+stage: done
 tags: [infra, content, architecture]
 parent: null
 depends_on: []
@@ -236,3 +236,29 @@ are complete and individually reviewed. Canonical evidence gates, installer
 and website parity checks, cross-harness bootstrap contracts, and the external
 legacy retirement handoff are recorded. Public release/tag/push and external
 repository archive actions remain outside this autopilot run.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: External publication and handoff actions remain intentionally
+operator-gated: the active `../skills` marketplace pointer must be verified or
+repaired in that repository, and `nklisch/skilltap-skills` must be retired and
+archived through its owner controls after canonical release evidence. No local
+code path silently performs either action.
+**Nits**: none
+
+**Notes**: Fresh aggregate completion review covered all six child features and
+their terminal stories, current Rust code, plugin manifests and complete skill
+tree, bootstrap/artifact/rollback safety, CLI help and JSON contracts, release
+workflow, installer parity, website/Homebrew guidance, cutover evidence, and
+foundation-document alignment. Full offline workspace tests passed (59 CLI
+unit, 43 compiled CLI, 307 core, 6 bootstrap integration, 3 foundation
+integration, 3 runtime integration, 4 storage integration, 13 harness unit,
+7 harness bootstrap, 18 detection, normalization, and test-support suites),
+strict clippy and formatting passed, website build passed, and all release and
+cutover evidence scripts passed. The generated `website/public/llms-full.txt`
+was refreshed from the current website sources in this review. The epic's
+in-repo implementation is complete; publication/tag/push and external
+repository archive remain outside this autopilot run.
