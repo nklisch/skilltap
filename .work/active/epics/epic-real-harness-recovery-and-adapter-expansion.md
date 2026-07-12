@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-and-adapter-expansion
 kind: epic
-stage: drafting
+stage: implementing
 tags: [correctness, testing, architecture]
 parent: null
 depends_on: []
@@ -131,3 +131,58 @@ identifies candidates and exclusions under the new bar.
 - Full workspace, website, install-surface, release-contract, isolated native,
   idempotence, formatting, and strict clippy checks pass.
 
+## Design decisions
+
+- Keep native-command authority and managed-publication authority separate:
+  version/profile evidence gates the former; attested filesystem load paths,
+  ownership, and drift checks gate the latter.
+- Treat the explicit child-process environment as part of the adapter contract,
+  not an incidental inheritance setting. This preserves isolation without
+  forwarding unrelated secrets.
+- Split repairs by capability boundary rather than Rust crate so each feature
+  owns an observable outcome and can be verified end to end.
+- Put dual-native provenance and output aggregation after native lifecycle and
+  filesystem result semantics so it cannot normalize away unresolved adapter
+  failures.
+
+## Decomposition
+
+The epic is split into three independent foundation repairs, one native adapter
+consumer, one final state/diagnostics integrator, and one independent research
+input. Runtime detection and process isolation unlock real native testing;
+bootstrap transport and filesystem/instruction correctness can proceed in
+parallel. Native lifecycle follows runtime, while target-exact state and
+diagnostics follow both native lifecycle and filesystem result semantics.
+
+### Child features
+
+- `epic-real-harness-recovery-runtime-boundary` — detect and safely execute
+  current real harnesses and resolve configured roots — depends on: `[]`
+- `epic-real-harness-recovery-bootstrap-transport` — repair verified release
+  response handling — depends on: `[]`
+- `epic-real-harness-recovery-filesystem-instructions` — preserve executable
+  skill files and correct arbitrary-root instruction bridges — depends on:
+  `[epic-real-harness-recovery-runtime-boundary]`
+- `feature-relaxed-target-harness-research` — reassess adapters under the
+  skills-plus-MCP admission bar — depends on: `[]`
+- `epic-real-harness-recovery-native-lifecycle` — align native command vectors,
+  roots, scope, and fallbacks — depends on:
+  `[epic-real-harness-recovery-runtime-boundary]`
+- `epic-real-harness-recovery-state-diagnostics` — make updates, outputs, and
+  dual-native state target-exact — depends on:
+  `[epic-real-harness-recovery-native-lifecycle,
+  epic-real-harness-recovery-filesystem-instructions]`
+
+### Decomposition risks
+
+- Current fixtures encode synthetic version and command contracts; feature
+  verification must use real CLI help and isolated real execution without
+  broadening unknown-version mutation.
+- Environment repair can accidentally inherit secrets or escape isolation if
+  it forwards the parent wholesale; the contract must use an explicit minimal
+  allowlist.
+- Preserving executable bits can conflict with private managed-file defaults;
+  only source-executable regular files should retain execution, with write and
+  special-mode bits normalized safely.
+- Per-target provenance changes the persisted wire contract and must preserve
+  validation, existing state semantics, and independent schema discipline.
