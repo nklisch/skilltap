@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-diagnostics
 kind: story
-stage: review
+stage: done
 tags: [content]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: [story-skilltap-plugin-distribution-guidance-core]
@@ -37,3 +37,16 @@ Acceptance criteria:
 - Tests added: existing offline package validation passes with the complete guidance reference set.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. Diagnostic result
+interpretations, partial/attention safety, binary and Git-SHA update policy,
+daemon safeguards, and equivalent plain/JSON semantics are accurately
+described without duplicating CLI syntax. Offline package validation passes.
