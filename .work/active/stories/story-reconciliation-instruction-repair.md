@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-instruction-repair
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: null
 depends_on: []
@@ -52,3 +52,17 @@ Implemented in `4369a0a`:
 Verification: `cargo fmt --all`, focused compiled instruction/reconciliation
 tests, `cargo clippy --workspace --all-targets --offline -- -D warnings`, and
 the full workspace test suite passed.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: `story-reconciliation-instruction-repair-nested-plan`
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at standard weight, escalated to a focused
+correctness/foundation-contract pass. Existing compiled instruction tests and
+the full workspace suite passed. The implementation is otherwise aligned with
+the documented generic `--yes` and target/scope behavior, but plan must model
+the supported nested-only project Claude bridge before this story can close.
