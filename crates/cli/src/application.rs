@@ -1143,6 +1143,7 @@ impl StatusApplication<'_> {
                     NativeResourcePresence::Missing => "repair",
                     NativeResourcePresence::Unknown => "planned",
                 };
+                let recorded = lifecycle_recorded_state(&documents, kind, concrete_scope, name);
                 outcome = outcome.with_operation(
                     crate::OperationOutcome::new(
                         format!("{command}:{harness}:{}", scope_label(concrete_scope)),
@@ -1152,6 +1153,10 @@ impl StatusApplication<'_> {
                     .with_field("scope", scope_label(concrete_scope))
                     .with_field("source", source)
                     .with_field("name", name)
+                    .with_field(
+                        "recorded_state",
+                        if recorded { "present" } else { "missing" },
+                    )
                     .with_field("fresh_state", lifecycle_presence_label(presence)),
                 );
             }
@@ -5071,6 +5076,29 @@ fn lifecycle_presence_label(presence: NativeResourcePresence) -> &'static str {
         NativeResourcePresence::Missing => "missing",
         NativeResourcePresence::Unknown => "unknown",
     }
+}
+
+fn lifecycle_recorded_state(
+    documents: &StatusDocuments,
+    kind: ResourceKind,
+    scope: &Scope,
+    name: &str,
+) -> bool {
+    let prefix = match kind {
+        ResourceKind::Marketplace => "marketplace:",
+        ResourceKind::Plugin => "plugin:",
+        ResourceKind::StandaloneSkill
+        | ResourceKind::InstructionLocation
+        | ResourceKind::Harness => return false,
+    };
+    let Ok(id) = ResourceId::new(format!("{prefix}{name}")) else {
+        return false;
+    };
+    let key = ResourceKey::new(id, scope.clone());
+    documents
+        .state
+        .as_ref()
+        .is_some_and(|state| state.resources().contains_key(&key))
 }
 
 fn operation_result_status(outcome: &OperationOutcome) -> &'static str {
