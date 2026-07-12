@@ -1752,6 +1752,13 @@ impl StatusApplication<'_> {
                 ));
             }
         };
+        if is_option_like_git_value(locator.as_str()) {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "invalid_skill_source",
+                "The explicit skill source must not begin with `-`.",
+            ));
+        }
         let requested_revision = match request.requested_revision {
             Some(value) => match skilltap_core::domain::RequestedRevision::new(value) {
                 Ok(value) => Some(value),
@@ -1765,6 +1772,16 @@ impl StatusApplication<'_> {
             },
             None => None,
         };
+        if requested_revision
+            .as_ref()
+            .is_some_and(|revision| is_option_like_git_value(revision.as_str()))
+        {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "invalid_requested_revision",
+                "The requested Git revision must not begin with `-`.",
+            ));
+        }
         let subdirectory = match request.subdirectory {
             Some(value) => match skilltap_core::domain::RelativeArtifactPath::new(value) {
                 Ok(value) => Some(value),
@@ -4268,6 +4285,10 @@ struct SkillDestination {
     full_path: AbsolutePath,
 }
 
+fn is_option_like_git_value(value: &str) -> bool {
+    value.starts_with('-')
+}
+
 /// Resolve a Git source into skilltap's private managed cache using bounded,
 /// direct Git invocations. The cache identity is derived from the locator, so
 /// repeated installs fetch into the same checkout and can observe a changed
@@ -4278,6 +4299,16 @@ fn resolve_git_skill_source(
     requested_revision: Option<&skilltap_core::domain::RequestedRevision>,
     subdirectory: Option<&skilltap_core::domain::RelativeArtifactPath>,
 ) -> Result<ResolvedGitSkill, ()> {
+    // Keep this private boundary defensive even though callers validate the
+    // typed values first. Git treats leading-dash positional values as
+    // options unless an argument delimiter is present.
+    if is_option_like_git_value(locator.as_str())
+        || requested_revision
+            .as_ref()
+            .is_some_and(|revision| is_option_like_git_value(revision.as_str()))
+    {
+        return Err(());
+    }
     let source_root = AbsolutePath::new(format!(
         "{}/managed/sources",
         paths.skilltap_config().as_str()
@@ -4312,6 +4343,7 @@ fn resolve_git_skill_source(
                 OsString::from("--no-checkout"),
                 OsString::from("--depth"),
                 OsString::from("1"),
+                OsString::from("--"),
                 OsString::from(locator.as_str()),
                 OsString::from(checkout.as_str()),
             ],
@@ -4371,6 +4403,7 @@ fn resolve_git_skill_source(
                 OsString::from("--depth"),
                 OsString::from("1"),
                 OsString::from("origin"),
+                OsString::from("--"),
                 OsString::from(revision.as_str()),
             ],
             BTreeMap::new(),

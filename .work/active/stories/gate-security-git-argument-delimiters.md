@@ -1,7 +1,7 @@
 ---
 id: gate-security-git-argument-delimiters
 kind: story
-stage: implementing
+stage: review
 tags: [security]
 parent: null
 depends_on: []
@@ -42,3 +42,23 @@ revisions at the input boundary, and add adversarial direct-argv tests.
 
 The remediation and affected boundaries are explicit. Preserve native
 argument-vector execution and add validation/tests in the named adapters.
+
+## Implementation
+
+- Rejected leading-dash source locators and requested revisions both at the
+  explicit skill-install boundary and inside the Git source resolver.
+- Added Git `--` delimiters before repository and fetched refspec values while
+  preserving valid SCP-style locators such as `git@example.test:team/repo.git`.
+- Rejected leading-dash native lifecycle names and marketplace sources before
+  constructing Codex or Claude argument vectors; native harness command syntax
+  does not document an end-of-options delimiter for these positional values.
+- Added direct-argv and adversarial validation tests for both adapters.
+
+## Verification
+
+- `cargo fmt --all -- --check`
+- `cargo test -p skilltap-harnesses --offline` (10 passed)
+- `cargo test -p skilltap --offline` compiled and unit tests passed; two
+  unrelated compiled-binary tests remain failing in concurrent reconciliation
+  and daemon work (`native_mutations_keep_project_and_all_scope_boundaries`,
+  `safe_update_cycle_reports_changed_git_revision_and_records_daemon_result`).

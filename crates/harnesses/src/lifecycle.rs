@@ -39,6 +39,7 @@ pub struct NativeLifecycleRequest {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NativeLifecycleError {
     MissingSource,
+    OptionLikeArgument(&'static str),
     UnsupportedProjectScope,
     Runtime(ObservationRuntimeError),
 }
@@ -47,6 +48,12 @@ impl fmt::Display for NativeLifecycleError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(match self {
             Self::MissingSource => "marketplace add requires an explicit source",
+            Self::OptionLikeArgument(field) => {
+                return write!(
+                    formatter,
+                    "native lifecycle {field} must not begin with `-`"
+                );
+            }
             Self::UnsupportedProjectScope => {
                 "the native harness has no verified project-scoped lifecycle command"
             }
@@ -69,6 +76,16 @@ impl From<ObservationRuntimeError> for NativeLifecycleError {
 pub fn native_arguments(
     request: &NativeLifecycleRequest,
 ) -> Result<Vec<OsString>, NativeLifecycleError> {
+    if request.name.as_str().starts_with('-') {
+        return Err(NativeLifecycleError::OptionLikeArgument("name"));
+    }
+    if request
+        .source
+        .as_ref()
+        .is_some_and(|source| source.as_str().starts_with('-'))
+    {
+        return Err(NativeLifecycleError::OptionLikeArgument("source"));
+    }
     let project = matches!(request.scope, Scope::Project(_));
     match request.harness {
         HarnessKind::Codex if project => Err(NativeLifecycleError::UnsupportedProjectScope),
@@ -424,5 +441,30 @@ mod tests {
             )),
             Err(NativeLifecycleError::UnsupportedProjectScope)
         ));
+    }
+
+    #[test]
+    fn native_vectors_reject_option_like_untrusted_values() {
+        let mut name = request(
+            HarnessKind::Claude,
+            NativeLifecycleAction::PluginInstall,
+            Scope::Global,
+        );
+        name.name = NativeId::new("--help").unwrap();
+        assert_eq!(
+            native_arguments(&name),
+            Err(NativeLifecycleError::OptionLikeArgument("name"))
+        );
+
+        let mut source = request(
+            HarnessKind::Codex,
+            NativeLifecycleAction::MarketplaceAdd,
+            Scope::Global,
+        );
+        source.source = Some(SourceLocator::new("--upload-pack=evil").unwrap());
+        assert_eq!(
+            native_arguments(&source),
+            Err(NativeLifecycleError::OptionLikeArgument("source"))
+        );
     }
 }
