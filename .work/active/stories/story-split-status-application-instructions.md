@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-instructions
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-execution-ports]
@@ -49,3 +49,13 @@ Relative project bridge paths and backup ordering are sensitive to accidental
 context changes. Revert the extraction commit; no native or state migration is
 needed.
 
+## Implementation Notes
+
+- Moved instruction status, reconciliation preview, setup, and target-specific
+  bridge management into private `application/instructions.rs` methods.
+- Preserved canonical/bridge path resolution, duplicate consolidation, backup
+  behavior, symlink/import writes, operation IDs, and acknowledgment handling;
+  sibling reconciliation calls use `pub(super)` visibility.
+- Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
+  `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
+  binary tests).
