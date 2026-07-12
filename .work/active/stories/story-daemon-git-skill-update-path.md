@@ -1,7 +1,7 @@
 ---
 id: story-daemon-git-skill-update-path
 kind: story
-stage: review
+stage: done
 parent: null
 depends_on: []
 release_binding: 3.0.0
@@ -47,3 +47,18 @@ e2e test exposed the production defect.
   installs a repository named `daemon-skill-source` without `--name` but reads
   `daemon-skill`; the test fixture should be corrected separately without
   changing the documented source-name default.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with correctness, tests, update-safety,
+and foundation-doc lenses. The daemon now delegates Git-backed skill refreshes
+through the validated `skill update` path, retaining drift/pin safety and
+state journaling. The compiled safe-update regression uses the explicit
+`--name daemon-skill` fixture and passes through no-op and changed-revision
+cycles.
