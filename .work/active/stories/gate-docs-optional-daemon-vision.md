@@ -1,7 +1,7 @@
 ---
 id: gate-docs-optional-daemon-vision
 kind: story
-stage: review
+stage: done
 tags: [documentation]
 parent: null
 depends_on: []
@@ -47,3 +47,17 @@ aligned with `docs/ARCH.md` and `docs/SPEC.md`.
   drift, or conflict handling.
 - Verification: reviewed the corresponding daemon limits in `docs/ARCH.md` and
   `docs/SPEC.md`; `git diff --check` passed.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review, fast lane for a focused foundation-doc
+correction. `docs/VISION.md` now accurately distinguishes the optional,
+explicitly enabled user-level daemon from a required background service and
+matches the no-privilege and safety limits in `docs/ARCH.md` and `docs/SPEC.md`.
+`git diff --check` is clean.
