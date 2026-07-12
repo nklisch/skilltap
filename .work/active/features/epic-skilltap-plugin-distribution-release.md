@@ -29,6 +29,12 @@ to install or repair the skilltap resources they can load. Release metadata
 also drives the opt-out/latest-compatible binary update lifecycle, with major
 updates requiring explicit opt-in.
 
+The release must update and validate both marketplace publishers: this
+repository's native catalogs and the active `../skills` catalog entry. They
+publish the same plugin identity and release version even though each retains
+its native marketplace schema. The legacy `nklisch/skilltap-skills` repository
+is not a publisher to preserve after cutover.
+
 This feature owns release automation and public documentation alignment; it
 does not redefine the native plugin schemas, write harness caches, or archive
 the sibling repository before the canonical publication has been verified.
@@ -56,6 +62,9 @@ the sibling repository before the canonical publication has been verified.
 - **Update publication**: Release metadata drives latest-compatible default
   updates, user opt-out, and explicit major-version opt-in; the plugin skill,
   website, installer, and daemon must describe the same policy.
+- **Secondary publisher parity**: The active `../skills` marketplace remains a
+  supported distribution path. Release checks fail on missing or mismatched
+  skilltap plugin entries rather than silently allowing publisher drift.
 
 <!-- Feature design will define the exact release checks and publication
 artifacts. -->
