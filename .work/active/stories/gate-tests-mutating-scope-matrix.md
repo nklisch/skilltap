@@ -1,7 +1,7 @@
 ---
 id: gate-tests-mutating-scope-matrix
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -43,13 +43,11 @@ Added `native_mutations_keep_project_and_all_scope_boundaries`, covering
 global and Claude project installs, all-scopes removal, target-subset removal,
 inventory scope retention, and project isolation.
 
-The SPEC-backed test currently exposes a production defect: all-scopes removal
-with same-named global/project resources returns `operation_plan_invalid`
-because lifecycle operation IDs omit scope and collide. Parked as
-`idea-scope-aware-lifecycle-operation-ids`; do not weaken or skip this test.
-The story remains blocked on that fix and review of the resulting regression.
+The SPEC-backed regression initially exposed a production defect in
+scope-omitting lifecycle operation IDs; that fix landed in `9bc22a7` and the
+test now passes. The inventory assertion was also corrected to accept the
+documented multiline TOML rendering while still checking both targets in the
+specific resource section.
 
-## Blocker
-
-The regression cannot pass until lifecycle operation identities include the
-concrete scope. See parked item `idea-scope-aware-lifecycle-operation-ids`.
+Verification: the focused scope-matrix test passes against the fixed
+implementation.

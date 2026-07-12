@@ -157,7 +157,8 @@ fn assert_code(output: &Output, expected: i32) {
     assert_eq!(
         output.status.code(),
         Some(expected),
-        "stderr: {}",
+        "stdout: {}\\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
         stderr(output)
     );
 }
@@ -2288,7 +2289,14 @@ fn native_mutations_keep_project_and_all_scope_boundaries() {
     assert_code(&codex_install, 0);
     let before_target_remove =
         fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
-    assert!(before_target_remove.contains("targets = [\"claude\", \"codex\"]"));
+    let shared_section = before_target_remove
+        .split("[[resources]]")
+        .find(|section| section.contains("id = \"plugin:shared@team\""))
+        .expect("shared resource is present in inventory");
+    assert!(
+        shared_section.contains("\"claude\"") && shared_section.contains("\"codex\""),
+        "shared resource should retain both selected targets: {shared_section}"
+    );
 
     let remove_codex = run(
         &machine,
