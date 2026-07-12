@@ -15,7 +15,9 @@ updated: 2026-07-12
 
 ## Bound items
 
-Complete v3 Rust control-plane release bundle: 193 done items (185 active items and 8 late-bound archived bug-fix stubs). No research-tagged items were present.
+Complete v3 Rust control-plane release bundle: 212 done items (193 initially
+bound items plus 19 late-bound quality-gate and correctness items). No
+research-tagged items were present.
 
 | id | kind | source | stage |
 |----|------|--------|-------|
@@ -212,6 +214,30 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
 | story-fix-project-observation-empty | story | archived-stub | done |
 | story-fix-systemd-daemon-ownership | story | archived-stub | done |
 | story-fix-target-aware-skill-lifecycle | story | archived-stub | done |
+
+## Late-bound items
+
+| id | kind | source | stage |
+|----|------|--------|-------|
+| gate-security-credential-bearing-source-state | story | active | done |
+| gate-security-installer-integrity | story | active | done |
+| gate-security-workflow-action-pinning | story | active | done |
+| gate-security-git-argument-delimiters | story | active | done |
+| gate-tests-sync-execution-integration | story | active | done |
+| gate-tests-native-lifecycle-e2e | story | active | done |
+| gate-tests-mutating-scope-matrix | story | active | done |
+| gate-tests-safe-update-e2e | story | active | done |
+| gate-tests-daemon-service-failure-paths | story | active | done |
+| gate-cruft-dead-observation-scope-helper | story | active | done |
+| gate-docs-optional-daemon-vision | story | active | done |
+| gate-docs-plan-sync-contract | story | active | done |
+| gate-docs-partial-acknowledgment-contract | story | active | done |
+| gate-patterns-3.0.0 | story | active | done |
+| story-scope-aware-lifecycle-operation-ids | story | active | done |
+| story-daemon-noop-result-class | story | active | done |
+| story-daemon-git-skill-update-path | story | active | done |
+| story-reconciliation-observation-drift-repair | story | active | done |
+| story-plan-nonempty-exit-class | story | active | done |
 
 ## Gate runs
 
