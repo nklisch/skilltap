@@ -15,8 +15,8 @@ updated: 2026-07-12
 
 ## Bound items
 
-Complete v3 Rust control-plane release bundle: 214 done items (193 initially
-bound items plus 21 late-bound quality-gate and correctness items). No
+Complete v3 Rust control-plane release bundle: 224 done items (193 initially
+bound items plus 31 late-bound quality-gate, correctness, and refactor items). No
 research-tagged items were present.
 
 | id | kind | source | stage |
@@ -240,6 +240,15 @@ research-tagged items were present.
 | story-plan-nonempty-exit-class | story | active | done |
 | story-reconciliation-instruction-repair | story | active | done |
 | story-reconciliation-instruction-repair-nested-plan | story | active | done |
+| story-centralize-stable-hash | story | active | done |
+| story-share-cli-composition-bootstrap | story | active | done |
+| story-share-reconciliation-selection | story | active | done |
+| feature-split-status-application | feature | active | done |
+| story-split-status-application-execution-ports | story | active | done |
+| story-split-status-application-lifecycle | story | active | done |
+| story-split-status-application-instructions | story | active | done |
+| story-split-status-application-reconciliation | story | active | done |
+| story-split-status-application-status-adoption | story | active | done |
 
 ## Gate runs
 
@@ -264,8 +273,8 @@ research-tagged items were present.
 
 ## Readiness
 
-Quality gates and all bound remediation work are complete. Of 214 bound work
-items (excluding the release orchestration item), all 214 are done and none
+Quality gates and all bound remediation work are complete. Of 224 bound work
+items (excluding the release orchestration item), all 224 are done and none
 remain open. Late-bound correctness and contract stories promoted during
 autopilot are included in the bundle:
 
