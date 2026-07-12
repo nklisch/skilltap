@@ -1597,6 +1597,110 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
 }
 
 #[test]
+fn reconciliation_repairs_instruction_bridge_drift_with_target_and_scope_boundaries() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/skills")).unwrap();
+
+    let setup = run(&machine, &["instructions", "setup", "--json"]);
+    assert_code(&setup, 0);
+
+    let codex_bridge = machine.home().join(".codex/AGENTS.md");
+    let claude_bridge = machine.home().join(".claude/CLAUDE.md");
+    fs::remove_file(&codex_bridge).unwrap();
+    fs::write(&codex_bridge, b"unmanaged codex content\n").unwrap();
+
+    let plan = run(&machine, &["plan", "--target", "codex", "--json"]);
+    assert_code(&plan, 2);
+    let plan_value = json(&plan);
+    assert!(
+        plan_value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|operation| operation["status"] == "blocked")
+    );
+    assert!(
+        plan_value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "instruction_bridge_conflict")
+    );
+
+    let blocked = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&blocked, 2);
+    assert_eq!(json(&blocked)["summary"]["changed"], false);
+    assert_eq!(
+        fs::read(&codex_bridge).unwrap(),
+        b"unmanaged codex content\n"
+    );
+    assert!(
+        fs::read_link(&claude_bridge).is_ok(),
+        "targeted Codex sync must not alter the Claude bridge"
+    );
+
+    let repaired = run(&machine, &["sync", "--target", "codex", "--yes", "--json"]);
+    assert_code(&repaired, 2);
+    assert_eq!(json(&repaired)["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_link(&codex_bridge).unwrap(),
+        PathBuf::from("../AGENTS.md")
+    );
+
+    let repeat = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    let project = machine.working_directory().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let project_setup = run_in(
+        &machine,
+        &project,
+        &["instructions", "setup", "--project", "--json"],
+    );
+    assert_code(&project_setup, 0);
+    let project_claude = project.join("CLAUDE.md");
+    fs::remove_file(&project_claude).unwrap();
+    fs::write(&project_claude, b"project drift\n").unwrap();
+
+    let project_plan = run_in(
+        &machine,
+        &project,
+        &["plan", "--project", "--target", "claude", "--json"],
+    );
+    assert_code(&project_plan, 2);
+    assert!(
+        json(&project_plan)["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|operation| operation["status"] == "blocked")
+    );
+    let project_sync = run_in(
+        &machine,
+        &project,
+        &["sync", "--project", "--target", "claude", "--yes", "--json"],
+    );
+    assert_code(&project_sync, 2);
+    assert_eq!(json(&project_sync)["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_link(&project_claude).unwrap(),
+        PathBuf::from("AGENTS.md")
+    );
+    let _ = fixture;
+}
+
+#[test]
 fn daemon_run_accepts_json_output() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);

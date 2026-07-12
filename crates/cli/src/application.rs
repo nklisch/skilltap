@@ -3028,6 +3028,154 @@ impl StatusApplication<'_> {
             .with_summary("changed", report.changed)
     }
 
+    fn execute_instruction_reconciliation_preview(
+        &self,
+        requested_scope: &ScopeArgs,
+        target: &HarnessId,
+        resource: &DesiredResource,
+    ) -> Outcome {
+        let (documents, mut outcome) = match self.load_documents("plan") {
+            Ok(value) => value,
+            Err(outcome) => return *outcome,
+        };
+        let status_args = StatusArgs {
+            target: TargetArgs {
+                target: Some(skilltap_core::domain::TargetSelection::Only(target.clone())),
+            },
+            scope: requested_scope.clone(),
+            output: OutputArgs::default(),
+        };
+        let scope = match StatusScope::resolve(self, &status_args, &documents) {
+            Ok(scope) => scope,
+            Err(error) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(error);
+            }
+        };
+        outcome.scope = Some(scope.output.clone());
+        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "platform_paths_unavailable",
+                    "The skilltap configuration paths could not be resolved.",
+                ));
+            }
+        };
+        let filesystem = SystemFileSystem;
+        let Some(concrete_scope) = scope.resolved.first() else {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "instruction_scope_unavailable",
+                "The instruction resource scope could not be resolved.",
+            ));
+        };
+        let (canonical, bridges) =
+            instruction_locations(&paths, concrete_scope, std::slice::from_ref(target));
+        let is_canonical = resource.id().as_str().contains(":canonical:");
+        let operation_id = format!("reconcile:{target}:{}", resource.key());
+        let status;
+        let mut path = canonical.clone();
+        let mut warning = None;
+        if !is_canonical {
+            let Some((_, bridge)) = bridges
+                .into_iter()
+                .find(|(candidate, _)| candidate == target)
+            else {
+                status = "blocked";
+                warning = Some(Warning::new(
+                    "instruction_bridge_unavailable",
+                    "The selected harness has no supported instruction bridge at this scope.",
+                ));
+                outcome.result = ResultClass::AttentionRequired;
+                outcome = outcome.with_operation(
+                    crate::OperationOutcome::new(operation_id, status)
+                        .with_field("target", target.as_str())
+                        .with_field("scope", scope_label(concrete_scope)),
+                );
+                if let Some(warning) = warning {
+                    outcome = outcome.with_warning(warning);
+                }
+                return outcome;
+            };
+            path = bridge;
+        }
+
+        let health = if is_canonical {
+            match filesystem.inspect(&path) {
+                Ok(metadata) => match metadata.kind() {
+                    FileKind::Missing => "missing",
+                    FileKind::RegularFile => "managed",
+                    _ => "conflict",
+                },
+                Err(_) => "unreadable",
+            }
+        } else {
+            let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
+                && path.as_str().ends_with("/.claude/CLAUDE.md");
+            let expected_target =
+                if nested_project_bridge || matches!(concrete_scope, Scope::Global) {
+                    "../AGENTS.md"
+                } else {
+                    "AGENTS.md"
+                };
+            let expected_bytes =
+                if documents.config.instructions().claude_mode == ClaudeInstructionMode::Import {
+                    if matches!(concrete_scope, Scope::Global) {
+                        b"@~/AGENTS.md\n".as_slice()
+                    } else if nested_project_bridge {
+                        b"@../AGENTS.md\n".as_slice()
+                    } else {
+                        b"@AGENTS.md\n".as_slice()
+                    }
+                } else {
+                    &[]
+                };
+            instruction_bridge_status_with_target(
+                &filesystem,
+                &path,
+                documents.config.instructions().claude_mode,
+                expected_target,
+                expected_bytes,
+            )
+        };
+        match health {
+            "missing" => status = "repair",
+            "managed" => status = "no_change",
+            _ => {
+                status = "blocked";
+                warning = Some(
+                    Warning::new(
+                        if is_canonical {
+                            "instruction_canonical_conflict"
+                        } else {
+                            "instruction_bridge_conflict"
+                        },
+                        if is_canonical {
+                            "The canonical AGENTS.md path is not a regular file; no change was made."
+                        } else {
+                            "The bridge contains existing content; use sync --yes to repair it."
+                        },
+                    )
+                    .with_context("target", target.as_str())
+                    .with_context("path", path.as_str()),
+                );
+                outcome.result = ResultClass::AttentionRequired;
+            }
+        }
+        outcome = outcome.with_operation(
+            crate::OperationOutcome::new(operation_id, status)
+                .with_field("target", target.as_str())
+                .with_field("scope", scope_label(concrete_scope))
+                .with_field("path", path.as_str()),
+        );
+        if let Some(warning) = warning {
+            outcome = outcome.with_warning(warning);
+        }
+        outcome
+    }
+
     pub(crate) fn execute_instruction_setup(
         &self,
         command: &'static str,
@@ -3035,6 +3183,28 @@ impl StatusApplication<'_> {
         mode: Option<ClaudeInstructionMode>,
         acknowledged: bool,
         repair: bool,
+    ) -> Outcome {
+        self.execute_instruction_setup_for_target(
+            command,
+            requested_scope,
+            mode,
+            acknowledged,
+            repair,
+            None,
+        )
+    }
+
+    /// Run instruction setup/repair for one selected harness when
+    /// reconciliation targets a single bridge. Explicit instruction commands
+    /// continue to use the all-enabled behavior above.
+    fn execute_instruction_setup_for_target(
+        &self,
+        command: &'static str,
+        requested_scope: &ScopeArgs,
+        mode: Option<ClaudeInstructionMode>,
+        acknowledged: bool,
+        repair: bool,
+        target_filter: Option<&HarnessId>,
     ) -> Outcome {
         let (documents, mut outcome) = match self.load_documents(command) {
             Ok(value) => value,
@@ -3053,7 +3223,10 @@ impl StatusApplication<'_> {
             }
         };
         outcome.scope = Some(scope.output.clone());
-        let enabled = enabled_harnesses(&documents.config);
+        let mut enabled = enabled_harnesses(&documents.config);
+        if let Some(target) = target_filter {
+            enabled.retain(|candidate| candidate == target);
+        }
         if enabled.is_empty() {
             outcome.result = ResultClass::AttentionRequired;
             return outcome.with_error(ErrorDetail::new(
@@ -3221,16 +3394,23 @@ impl StatusApplication<'_> {
                 canonical_resource.clone(),
                 enabled.first().expect("enabled set is non-empty").clone(),
             );
-            inventory = match inventory.with_resource(canonical_desired) {
-                Ok(inventory) => inventory,
-                Err(_) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    return outcome.with_error(ErrorDetail::new(
-                        "inventory_resource_conflict",
-                        "The canonical instruction resource conflicts with desired state.",
-                    ));
-                }
-            };
+            // A target-scoped reconciliation may select Claude while the
+            // canonical resource was originally seeded under Codex. The
+            // canonical key is shared by both harnesses; preserve the
+            // existing desired record rather than treating that projection as
+            // an inventory conflict.
+            if !inventory.resources().contains_key(&canonical_resource) {
+                inventory = match inventory.with_resource(canonical_desired) {
+                    Ok(inventory) => inventory,
+                    Err(_) => {
+                        outcome.result = ResultClass::AttentionRequired;
+                        return outcome.with_error(ErrorDetail::new(
+                            "inventory_resource_conflict",
+                            "The canonical instruction resource conflicts with desired state.",
+                        ));
+                    }
+                };
+            }
             let canonical_state = ResourceState::new(
                 canonical_resource,
                 BTreeMap::from([(
@@ -3719,6 +3899,12 @@ impl StatusApplication<'_> {
                             source,
                             name,
                         ),
+                        ResourceKind::InstructionLocation => self
+                            .execute_instruction_reconciliation_preview(
+                                &child_scope,
+                                target_id,
+                                resource,
+                            ),
                         _ => Outcome::new("plan", ResultClass::Completed).with_operation(
                             crate::OperationOutcome::new(
                                 format!("reconcile:{}:{}", target_id, resource.key()),
@@ -3815,11 +4001,15 @@ impl StatusApplication<'_> {
                                 "The desired skill has no source locator and cannot be synchronized.",
                             )),
                     },
-                    ResourceKind::InstructionLocation => Outcome::new("sync", ResultClass::Completed)
-                        .with_operation(crate::OperationOutcome::new(
-                            format!("reconcile:{}:{}", target_id, resource.key()),
-                            "no_change",
-                        )),
+                    ResourceKind::InstructionLocation => self
+                        .execute_instruction_setup_for_target(
+                            "sync",
+                            &child_scope,
+                            None,
+                            acknowledged,
+                            true,
+                            Some(target_id),
+                        ),
                     ResourceKind::Harness => Outcome::new("sync", ResultClass::Completed),
                 };
                 merge_reconciliation_outcome(&mut outcome, child);
