@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cutover-canonical-verification
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: []
@@ -28,3 +28,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: highest; publication and retirement safety gate.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `scripts/verify-cutover.sh`.
+- Tests added: offline release/installer/surface/package/bootstrap/harness evidence gate and complete skill-reference presence checks.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
