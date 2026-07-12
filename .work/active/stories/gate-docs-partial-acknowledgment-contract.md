@@ -11,7 +11,7 @@ created: 2026-07-12
 updated: 2026-07-12
 ---
 
-# Align partial-operation acknowledgment documentation
+# Implement the documented partial-operation acknowledgment contract
 
 ## Drift category
 
@@ -35,10 +35,21 @@ it is set. The product contract requires naming the accepted consequence or
 resource (for example, repeatable `--accept-partial <resource-id>`), with
 unsupported required components remaining blocked.
 
-## Required edit
+## Required implementation
 
-Replace generic `--yes` partial-approval grammar, examples, and prose with an
-operation/resource-scoped acknowledgment. Update the CLI parser and
-application contract in the same change and regenerate website/reference
-copies together.
+Keep the foundation and website documentation as the source of truth. Make
+the implementation accept generic `--yes` as approval for all eligible
+partial/lossy consequences in the current operation or plan, while retaining
+optional repeatable resource/component selectors for piecewise acceptance.
+Required or blocked components remain blocked even with `--yes`.
 
+Update the CLI/application plumbing and core selection logic together, then
+add tests for generic acceptance, selector-scoped acceptance, unexpected
+selectors, and required-component blocking. Regenerate website/reference
+copies only if command syntax changes.
+
+## Product decision
+
+The documentation is correct. The prior gate interpretation incorrectly
+treated the exact-selector implementation in `foreground_update.rs` as the
+desired public contract; it is the implementation that must change.

@@ -38,8 +38,14 @@ separate paths.
 
 ## Required edit
 
-Either implement lifecycle candidate resolution and execution for `plan` and
-`sync`, or revise all listed foundation and website language and examples to
-state that populated-inventory lifecycle support is pending. Regenerate the
-bundled website documentation after the source edit.
+The foundation and website contract is intentional and remains the source of
+truth. Implement lifecycle candidate resolution and execution for `plan` and
+`sync`; do not weaken the documented synchronization behavior to match the
+current stub. Regenerate the bundled website documentation only if the
+implementation changes the public command behavior or examples.
 
+## Product decision
+
+The current behavior is an implementation gap, not a documentation choice:
+populated inventory must produce scope/target-bound operations and `sync` must
+execute them through the existing lock, journal, and native lifecycle ports.
