@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-execution-ports
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: []
@@ -49,3 +49,12 @@ Private visibility and lifetime/import mistakes are the primary risk. Revert
 the extraction commit to restore the blocks to `application.rs`; the move does
 not touch persisted state or native files.
 
+## Implementation Notes
+
+- Moved `StateExecutionJournal`, `ManagedSkillPort`, and `InstructionPort`
+  (including their entries, actions, validation, rollback, and failure helpers)
+  into `crates/cli/src/application/execution.rs`.
+- Kept the application façade's imports and all concrete construction sites
+  behaviorally identical; only private module visibility and imports changed.
+- Verification: `cargo fmt --all -- --check` and `cargo test -p skilltap --offline`
+  passed (40 unit tests and 41 compiled-binary tests).
