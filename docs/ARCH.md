@@ -68,9 +68,19 @@ are observed and reported as separate steps. The plugin's high-level guidance
 is intentionally outside the reconciliation core and cannot grant mutation
 authority to either harness adapter.
 
-The former sibling skills repository may mirror the plugin during the cutover,
-but publication is one-way from skilltap. The mirror is removed or archived
-once the skilltap marketplace entries and release assets are authoritative.
+The legacy `nklisch/skilltap-skills` repository may mirror the plugin during the
+cutover, but publication is one-way from skilltap. That repository is removed
+or archived once the skilltap marketplace entries and release assets are
+authoritative. The active sibling `../skills` development repository is not a
+cutover target.
+
+The online installer and native marketplace installation share one
+self-bootstrap application boundary. The installer may detect Claude Code and
+Codex executables and invoke that boundary after binary verification; it must
+not infer harness management enablement or write undocumented native caches.
+The update resolver treats the skilltap binary as a managed resource with
+latest-compatible default policy, opt-out support, and explicit major-version
+opt-in.
 
 ### `skilltap-core`
 

@@ -43,5 +43,14 @@ manifest is introduced.
 - `.research/analysis/campaigns/marketplace-standards/specialists/claude.md`
 - `.research/analysis/campaigns/marketplace-standards/specialists/agent-skills.md`
 
+## Design decisions
+
+- **Canonical source**: The package is authored and versioned in the skilltap
+  repository; `nklisch/skilltap-skills` is only a legacy migration source and
+  `../skills` is not involved.
+- **Channel parity**: Claude and Codex receive distinct native manifests and
+  catalogs around one complete shared skill directory; no Pi channel or
+  universal manifest is added.
+
 <!-- Feature design will define the exact manifests, catalog entries, and
 validation units. -->

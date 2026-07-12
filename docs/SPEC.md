@@ -57,9 +57,18 @@ require elevated privileges.
 
 Plugin metadata and binary artifacts are versioned from the same skilltap
 release and retain the repository's checksum and provenance guarantees. The
-former sibling `../skills` repository is a temporary migration mirror only; it
-is not a second long-term source of truth and is archived after the canonical
-plugin publication is live.
+legacy `nklisch/skilltap-skills` repository is a temporary migration source
+only; it is not a second long-term source of truth and is archived after the
+canonical plugin publication is live. The active sibling `../skills`
+development repository is unrelated to this retirement and must not be
+archived or modified by this feature.
+
+The website and the one-line installer are equal first-class installation
+surfaces with the native plugin marketplaces. The installer downloads and
+verifies the current binary, detects installed Claude Code and Codex binaries,
+and invokes the same self-setup flow to install or repair the skilltap skill
+and plugin resources that those harnesses can load. Detection never implies
+that a harness is enabled for ordinary skilltap reconciliation.
 
 Help and error output are part of this distribution contract. Every public
 command and leaf command exposes concise, non-interactive help with its
@@ -529,6 +538,12 @@ On each interval, the daemon:
 4. Applies updates when policy is `apply-safe` and no decision is required.
 5. Re-observes affected harnesses.
 6. Records results for `status`.
+
+The same update lifecycle may manage the skilltap binary itself. Binary
+updates default to the latest compatible release, can be disabled by policy,
+and never auto-apply a major-version change unless the user explicitly opts
+in. Plugin guidance and the website use this lifecycle rather than inventing a
+separate updater.
 
 The daemon never supplies `--yes`, accepts partial materialization, overwrites local drift, resolves conflicts, or modifies unmanaged resources. An update requiring judgment remains pending for foreground review.
 

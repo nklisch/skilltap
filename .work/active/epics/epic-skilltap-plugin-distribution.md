@@ -30,11 +30,13 @@ alone completed setup. The same release must publish distinct Claude and Codex
 manifests and marketplace catalogs from one canonical source in this
 repository.
 
-This epic also performs the publication cutover. The sibling `../skills`
-repository is a temporary migration mirror, not a second source of truth. Once
-the skilltap plugin is published and verified, the old skilltap-related skills
-(including the former `claude-code-marketplace` surface) are retired there and
-the repository is archived according to its own repository controls.
+This epic also performs the publication cutover. The separate public
+`nklisch/skilltap-skills` repository is a temporary migration source, not a
+second source of truth. Once the skilltap plugin is published and verified,
+the old skilltap-related skills (including the former `claude-code-marketplace`
+surface) are retired there and that repository is archived according to its
+own repository controls. The active sibling `../skills` repository is not a
+cutover target and must remain untouched.
 
 ## Foundation references
 
@@ -54,8 +56,9 @@ the repository is archived according to its own repository controls.
 ## Strategic decisions
 
 - **Which repository owns the plugin?** This skilltap repository is the sole
-  canonical publisher. `../skills` may mirror the plugin only long enough to
-  cut users over; it must not remain a bidirectional publishing source.
+  canonical publisher. `nklisch/skilltap-skills` may mirror the plugin only
+  long enough to cut users over; it must not remain a bidirectional publishing
+  source. The active sibling `../skills` repository is explicitly excluded.
 - **How are the two harnesses represented?** One public plugin identity is
   expressed through separate native Claude and Codex manifests and marketplace
   catalogs. The shared unit is the complete skill directory; manifests,
@@ -97,8 +100,9 @@ In scope:
   leaf command, with plain and JSON tests for actionable, secret-safe output.
 - Release workflow, website/install documentation, and Homebrew story updates
   needed to make the plugin and binary installation path coherent.
-- A cutover/deprecation record for the sibling `../skills` publication, with
-  the old skilltap skills retired and the repository archived after verification.
+- A cutover/deprecation record for the legacy `nklisch/skilltap-skills`
+  publication, with the old skilltap skills retired and that repository
+  archived after verification. The active sibling remains intact.
 
 Out of scope:
 
@@ -147,7 +151,8 @@ the final dependent handoff.
   JSON diagnostics, next actions, and compiled-binary contract — depends on:
   `[]`.
 - `epic-skilltap-plugin-distribution-bootstrap` — verified macOS/Linux binary
-  bootstrap with explicit native-hook capability handling — depends on:
+  bootstrap, harness detection, and opt-in self-update policy with explicit
+  native-hook capability handling — depends on:
   `[epic-skilltap-plugin-distribution-package]`.
 - `epic-skilltap-plugin-distribution-guidance` — high-level portable skill and
   diagnostic references — depends on:
@@ -161,8 +166,9 @@ the final dependent handoff.
   epic-skilltap-plugin-distribution-cli-contract,
   epic-skilltap-plugin-distribution-bootstrap,
   epic-skilltap-plugin-distribution-guidance]`.
-- `epic-skilltap-plugin-distribution-cutover` — sibling publisher retirement,
-  superseded-skill removal, and archive handoff — depends on:
+- `epic-skilltap-plugin-distribution-cutover` — legacy
+  `nklisch/skilltap-skills` retirement, superseded-skill removal, and archive
+  handoff while preserving active `../skills` — depends on:
   `[epic-skilltap-plugin-distribution-release]`.
 
 ## Decomposition risks
@@ -173,10 +179,10 @@ the final dependent handoff.
 - The existing `website/public/install.sh` has drifted from the checksum-
   verifying root installer. Release design must establish one generated or
   parity-checked installer path before publishing plugin guidance.
-- The sibling repository currently has no skilltap marketplace entry, so the
-  cutover must verify the canonical publication rather than assume a mirror is
-  already equivalent. Repository archival authority is external and requires
-  an explicit handoff record.
+- The legacy `nklisch/skilltap-skills` repository carries a different skilltap-
+  era tap surface, so the cutover must verify canonical publication rather
+  than assume equivalence. Repository archival authority is external and
+  requires an explicit handoff record; `../skills` must remain untouched.
 - Package, guidance, and release all touch publication assets. Their ownership
   boundaries must stay explicit so version parity is generated or validated
   from one source rather than maintained by repeated manual edits.
@@ -198,8 +204,9 @@ the final dependent handoff.
 - Plugin metadata, binary assets, checksums, attestations, website guidance,
   and Homebrew/install instructions cannot silently drift in version or source
   identity.
-- `../skills` no longer publishes the canonical skilltap plugin after cutover;
-  its duplicate skilltap surfaces are retired and the repository has an
-  explicit archival/deprecation record.
+- `nklisch/skilltap-skills` no longer publishes the canonical skilltap plugin
+  after cutover; its duplicate skilltap surfaces are retired and that legacy
+  repository has an explicit archival/deprecation record. The active
+  `../skills` repository is unchanged.
 - No part of the plugin or skill adds marketplace search, ranking,
   recommendation, or broad inventory discovery.
