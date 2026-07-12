@@ -1,7 +1,7 @@
 ---
 id: story-remove-dead-lifecycle-preview-wrapper
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -68,3 +68,17 @@ wrapper if a compile or test search reveals a missed call site.
 - `cargo test --workspace --all-targets --offline`
 - `cargo clippy --workspace --all-targets --offline -- -D warnings`
 - `git diff --check`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. The deleted function was
+private, had no callers, and was guarded only by `#[allow(dead_code)]`; the
+live application preview method and reconciliation callers remain unchanged.
+The complete offline workspace test suite, strict clippy, formatting, and diff
+checks pass.
