@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-bootstrap
 kind: feature
-stage: review
+stage: implementing
 tags: [infra, security]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package]
@@ -458,3 +458,35 @@ bootstrap boundary rather than duplicating harness mutation logic.
 
 - Execution capability: highest available local capability; this feature spans release artifacts, security-sensitive installation, and native harness contracts.
 - Review weight: standard (autopilot project default).
+
+## Review findings (2026-07-12)
+
+- **Blocker — unattended binary update policy is inert**: `BinaryUpdatePolicy`
+  is persisted and round-trips, but `StatusApplication::execute_daemon_cycle`
+  reads only the ordinary resource update policy and never resolves or applies
+  the skilltap binary. The documented default same-major self-update,
+  opt-out/check modes, and explicit major opt-in therefore do not execute.
+  Follow-up: `story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy`.
+- **Important — CLI rollback can clobber a replacement**:
+  `restore_previous_binary` checks the destination identity and then performs
+  an overwrite-capable `rename`/`write`. A replacement between those steps can
+  be overwritten during post-install identity recovery. Follow-up:
+  `story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety`.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: daemon/update-cycle binary policy is unimplemented ->
+`story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy`
+
+**Important**: CLI post-install rollback remains identity-unsafe ->
+`story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety`
+
+**Nits**: none
+
+**Notes**: Deep substrate review at standard weight with fresh context. All
+direct child stories were done and the full offline workspace test, clippy,
+format, installer contract, shell syntax, website build, and diff checks were
+green. Foundation-doc and product-contract review found the two follow-ups
+above; the feature remains implementing until both are closed.
