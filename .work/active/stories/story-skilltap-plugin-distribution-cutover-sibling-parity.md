@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cutover-sibling-parity
 kind: story
-stage: implementing
+stage: review
 tags: [infra, testing, cleanup]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: [story-skilltap-plugin-distribution-cutover-canonical-verification]
@@ -29,3 +29,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: highest; cross-repository publication safety boundary.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `scripts/verify-install-surfaces.sh`, `docs/LEGACY-CUTOVER.md`.
+- Tests added: explicit `SKILLTAP_SKILLS_MARKETPLACE` read-only pointer validation; absent sibling checkout safely skips.
+- Discrepancies from design: no sibling checkout is mutated or archived; local default remains a safe skip until an external parity checkout is supplied.
+- Adjacent issues parked: none.

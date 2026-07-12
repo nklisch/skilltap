@@ -25,9 +25,9 @@ fi
 # at a checkout with SKILLTAP_SKILLS_MARKETPLACE; local absence is expected.
 if [ -n "${SKILLTAP_SKILLS_MARKETPLACE:-}" ]; then
   SIBLING=$SKILLTAP_SKILLS_MARKETPLACE
-  grep -Fq '"name": "skilltap"' "$SIBLING" || { echo "error: sibling marketplace has no skilltap entry" >&2; exit 1; }
+  grep -Eq '"name"[[:space:]]*:[[:space:]]*"skilltap"' "$SIBLING" || { echo "error: sibling marketplace has no skilltap entry" >&2; exit 1; }
   grep -Fq 'https://github.com/nklisch/skilltap' "$SIBLING" || { echo "error: sibling skilltap entry is not canonical" >&2; exit 1; }
-  grep -Fq '"path": "plugin"' "$SIBLING" || { echo "error: sibling skilltap entry is not pointed at plugin/" >&2; exit 1; }
+  grep -Eq '"path"[[:space:]]*:[[:space:]]*"plugin"' "$SIBLING" || { echo "error: sibling skilltap entry is not pointed at plugin/" >&2; exit 1; }
 else
   echo "sibling marketplace check skipped (set SKILLTAP_SKILLS_MARKETPLACE in a parity checkout)"
 fi
