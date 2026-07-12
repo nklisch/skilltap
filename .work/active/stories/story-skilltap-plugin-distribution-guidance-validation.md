@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-validation
 kind: story
-stage: review
+stage: done
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: [story-skilltap-plugin-distribution-guidance-layout, story-skilltap-plugin-distribution-guidance-diagnostics]
@@ -35,3 +35,16 @@ Acceptance criteria:
 - Tests added: required guidance references, complete-tree links, and rejection of duplicate command/discovery language.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. Package validation now
+requires complete guidance references, rejects unsafe/missing trees, and
+guards against duplicate command grammar and discovery instructions. The
+offline plugin package suite passes all four tests.
