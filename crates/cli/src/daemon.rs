@@ -118,10 +118,103 @@ pub fn valid(platform: ServicePlatform, contents: &[u8]) -> bool {
     }
 }
 
+/// Extract the exact executable path recorded in a skilltap-owned service
+/// definition.  The daemon must publish updates to the executable that the
+/// service will actually invoke; falling back to a conventional PATH location
+/// could create an unreferenced second installation.
+pub fn executable_from_service(platform: ServicePlatform, contents: &[u8]) -> Option<AbsolutePath> {
+    if !valid(platform, contents) {
+        return None;
+    }
+    let text = std::str::from_utf8(contents).ok()?;
+    let raw = match platform {
+        ServicePlatform::Launchd => {
+            let arguments = text.split_once("<key>ProgramArguments</key>")?.1;
+            let first = arguments.split_once("<array><string>")?.1;
+            first.split_once("</string>")?.0.to_owned()
+        }
+        ServicePlatform::SystemdUser => text
+            .lines()
+            .find_map(|line| line.strip_prefix("ExecStart="))?
+            .strip_suffix(" daemon run")
+            .map(str::to_owned)?,
+    };
+    let raw = match platform {
+        ServicePlatform::Launchd => xml_unescape(&raw),
+        ServicePlatform::SystemdUser => systemd_unescape(&raw),
+    };
+    AbsolutePath::new(raw).ok()
+}
+
+fn xml_unescape(value: &str) -> String {
+    value
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
+        .replace("&gt;", ">")
+        .replace("&lt;", "<")
+        .replace("&amp;", "&")
+}
+
+fn systemd_unescape(value: &str) -> String {
+    if value.starts_with('"') && value.ends_with('"') && value.len() >= 2 {
+        value[1..value.len() - 1]
+            .replace("\\\"", "\"")
+            .replace("\\\\", "\\")
+            .replace("%%", "%")
+    } else {
+        value.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use skilltap_core::daemon::ServicePlatform;
+
+    #[test]
+    fn extracts_executable_from_owned_service_definitions() {
+        let launchd =
+            skilltap_core::daemon::render_service(&skilltap_core::daemon::DaemonServiceSpec {
+                platform: ServicePlatform::Launchd,
+                interval: skilltap_core::storage::UpdateInterval::new(
+                    1,
+                    skilltap_core::storage::UpdateIntervalUnit::Hours,
+                )
+                .unwrap(),
+                executable: AbsolutePath::new("/tmp/skill&tap/bin/skilltap").unwrap(),
+            })
+            .unwrap();
+        assert_eq!(
+            executable_from_service(
+                ServicePlatform::Launchd,
+                launchd.files()[0].contents().as_bytes()
+            )
+            .unwrap()
+            .as_str(),
+            "/tmp/skill&tap/bin/skilltap"
+        );
+
+        let systemd =
+            skilltap_core::daemon::render_service(&skilltap_core::daemon::DaemonServiceSpec {
+                platform: ServicePlatform::SystemdUser,
+                interval: skilltap_core::storage::UpdateInterval::new(
+                    1,
+                    skilltap_core::storage::UpdateIntervalUnit::Hours,
+                )
+                .unwrap(),
+                executable: AbsolutePath::new("/tmp/skill%tap/bin/skilltap").unwrap(),
+            })
+            .unwrap();
+        assert_eq!(
+            executable_from_service(
+                ServicePlatform::SystemdUser,
+                systemd.files()[0].contents().as_bytes()
+            )
+            .unwrap()
+            .as_str(),
+            "/tmp/skill%tap/bin/skilltap"
+        );
+    }
 
     #[test]
     fn systemd_ownership_accepts_skilltap_service_and_timer_files() {

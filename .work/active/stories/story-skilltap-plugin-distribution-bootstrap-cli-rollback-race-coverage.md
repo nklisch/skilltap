@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-cli-rollback-race-coverage
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety]
@@ -48,3 +48,16 @@ clean restoration when a replacement arrived after the first exchange.
 - Execution capability: highest; this is a security-sensitive file publication
   and recovery boundary.
 - Review weight: standard (source: autopilot).
+
+## Implementation notes
+
+- Execution capability: highest; rollback identity and residual cleanup are
+  security-sensitive publication boundaries.
+- Review weight: standard (source: autopilot).
+- Files changed: `crates/cli/src/entrypoint.rs`.
+- Tests added: deterministic replacement-during-exchange, replacement-during
+  first-install cleanup, residual temporary-file, and normal restoration paths.
+- Discrepancies from design: unsupported platforms continue to fail closed;
+  Unix helpers use injected post-exchange/cleanup hooks in tests while the
+  production path remains hook-free.
+- Adjacent issues parked: none.

@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-daemon-target-lock
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy]
@@ -55,3 +55,16 @@ coverage.
 - Execution capability: highest; this crosses concurrent publication and the
   self-update security boundary.
 - Review weight: standard (source: autopilot).
+
+## Implementation notes
+
+- Execution capability: highest; shared binary publication and service-target
+  identity cross concurrent update and supply-chain boundaries.
+- Review weight: standard (source: autopilot).
+- Files changed: `crates/cli/src/entrypoint.rs`, `crates/cli/src/daemon.rs`.
+- Tests added: daemon executable extraction, shared-lock contention with no
+  resolver/fetcher calls, and custom destination publication under the lock.
+- Discrepancies from design: service executable identity is parsed from the
+  validated managed launchd/systemd definition; a missing or malformed service
+  fails closed rather than guessing a destination.
+- Adjacent issues parked: none.

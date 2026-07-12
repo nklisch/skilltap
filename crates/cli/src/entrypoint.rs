@@ -4,7 +4,8 @@ use clap::{CommandFactory, Parser, error::ErrorKind};
 use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, NativeId},
     runtime::{
-        CommandGitRoot, PlatformPaths, ProcessEnvironment, ScopeResolver, SystemCommandRunner,
+        CommandGitRoot, ConfigurationLock, ConfigurationLockGuard, FileSystem, PlatformPaths,
+        ProcessEnvironment, ScopeResolver, SystemCommandRunner, SystemConfigurationLock,
         SystemFileSystem, SystemWorkingDirectory,
     },
     storage::{
@@ -502,7 +503,84 @@ fn execute_binary_bootstrap_mode(
     let resolver = SystemReleaseResolver::current(key);
     let fetcher = SystemArtifactFetcher;
     let installer = SystemBinaryInstaller;
-    execute_binary_bootstrap_with_mode(args, destination, &resolver, &fetcher, &installer, mode)
+    let lock_path = match AbsolutePath::new(format!(
+        "{}/skilltap.lock",
+        paths.skilltap_config().as_str()
+    )) {
+        Ok(path) => path,
+        Err(_) => {
+            return binary_attention(
+                "lock_path_invalid",
+                "The skilltap binary update lock path is invalid.",
+            );
+        }
+    };
+    execute_binary_bootstrap_with_lock(
+        args,
+        destination,
+        &resolver,
+        &fetcher,
+        &installer,
+        &SystemConfigurationLock,
+        &lock_path,
+        mode,
+    )
+}
+
+/// Run a binary publication while holding the same cooperative configuration
+/// lock used by all foreground mutations.  The daemon and foreground paths
+/// both use this boundary, so a resolver never fetches an artifact that cannot
+/// be published to the current installation.
+fn execute_binary_bootstrap_with_lock<R, F, I, L>(
+    args: &BootstrapArgs,
+    destination: AbsolutePath,
+    resolver: &R,
+    fetcher: &F,
+    installer: &I,
+    lock: &L,
+    lock_path: &AbsolutePath,
+    mode: BinaryExecutionMode,
+) -> BinaryBootstrapResult
+where
+    R: skilltap_core::runtime::ReleaseResolver,
+    F: skilltap_core::runtime::ArtifactFetcher,
+    I: skilltap_core::runtime::BinaryInstaller,
+    L: ConfigurationLock,
+{
+    if let Some(parent) = std::path::Path::new(lock_path.as_str()).parent()
+        && std::fs::create_dir_all(parent).is_err()
+    {
+        return binary_attention(
+            "configuration_lock_path_unavailable",
+            "The skilltap configuration directory could not be prepared for binary updates.",
+        );
+    }
+    let guard = match lock.try_acquire(lock_path) {
+        Ok(guard) => guard,
+        Err(skilltap_core::runtime::RuntimeError::LockContended { .. }) => {
+            return binary_pending(
+                "configuration_locked",
+                "Another skilltap update is publishing the configured binary; no network or mutation was attempted.",
+            );
+        }
+        Err(_) => {
+            return binary_attention(
+                "configuration_lock_failed",
+                "The skilltap binary update lock could not be acquired safely.",
+            );
+        }
+    };
+    let mut result =
+        execute_binary_bootstrap_with_mode(args, destination, resolver, fetcher, installer, mode);
+    if guard.release().is_err() {
+        result.attention = true;
+        result.pending = true;
+        result.warnings.push(crate::Warning::new(
+            "configuration_lock_release_failed",
+            "The skilltap binary update completed, but the configuration lock could not be released safely.",
+        ));
+    }
+    result
 }
 
 /// Test-only composition is provided by passing in the release, transport,
@@ -818,11 +896,25 @@ fn restore_previous_binary(
     bytes: &[u8],
     mode: Option<u32>,
 ) -> RollbackResult {
+    restore_previous_binary_with_hook(path, expected, bytes, mode, || {})
+}
+
+#[cfg(unix)]
+fn restore_previous_binary_with_hook(
+    path: &AbsolutePath,
+    expected: Option<(u64, u64)>,
+    bytes: &[u8],
+    mode: Option<u32>,
+    after_exchange: impl FnOnce(),
+) -> RollbackResult {
     use std::os::unix::fs::PermissionsExt;
     let destination = std::path::Path::new(path.as_str());
     let Some(parent) = destination.parent() else {
         return RollbackResult::Failed;
     };
+    if binary_file_identity_absolute(destination) != expected {
+        return RollbackResult::ReplacementPreserved;
+    }
     let temporary = parent.join(format!(
         ".skilltap-restore-{}-{}",
         std::process::id(),
@@ -850,7 +942,17 @@ fn restore_previous_binary(
         return RollbackResult::Failed;
     }
     drop(file);
+    let prior_identity = binary_file_identity_absolute(&temporary);
     if exchange_paths_cli(&temporary, destination).is_err() {
+        let _ = std::fs::remove_file(&temporary);
+        return RollbackResult::ReplacementPreserved;
+    }
+    // The first exchange is atomic, but another writer can still replace the
+    // destination immediately afterwards.  Observe the destination inode
+    // before classifying the rollback so a replacement is always surfaced as
+    // recovery attention rather than a clean restoration.
+    after_exchange();
+    if binary_file_identity_absolute(destination) != prior_identity {
         let _ = std::fs::remove_file(&temporary);
         return RollbackResult::ReplacementPreserved;
     }
@@ -884,6 +986,16 @@ fn restore_previous_binary(
 
 #[cfg(unix)]
 fn remove_published_binary(path: &AbsolutePath, expected: Option<(u64, u64)>) -> RollbackResult {
+    remove_published_binary_with_hooks(path, expected, || {}, |path| std::fs::remove_file(path))
+}
+
+#[cfg(unix)]
+fn remove_published_binary_with_hooks(
+    path: &AbsolutePath,
+    expected: Option<(u64, u64)>,
+    after_rename: impl FnOnce(),
+    remove_file: impl Fn(&std::path::Path) -> std::io::Result<()>,
+) -> RollbackResult {
     let Some(expected) = expected else {
         return RollbackResult::Failed;
     };
@@ -899,9 +1011,21 @@ fn remove_published_binary(path: &AbsolutePath, expected: Option<(u64, u64)>) ->
     if rename_noreplace_cli(destination, &marker).is_err() {
         return RollbackResult::ReplacementPreserved;
     }
+    after_rename();
     if binary_file_identity_absolute(&marker) == Some(expected) {
-        let _ = std::fs::remove_file(&marker);
-        RollbackResult::Removed
+        if binary_file_identity_absolute(destination).is_some() {
+            // A replacement won the path after the no-replace move.  The
+            // marker is still the expected published inode and can be
+            // removed without touching the replacement.
+            return match remove_file(&marker) {
+                Ok(()) => RollbackResult::ReplacementPreserved,
+                Err(_) => RollbackResult::Failed,
+            };
+        }
+        match remove_file(&marker) {
+            Ok(()) => RollbackResult::Removed,
+            Err(_) => RollbackResult::Failed,
+        }
     } else if rename_noreplace_cli(&marker, destination).is_ok() {
         RollbackResult::ReplacementPreserved
     } else {
@@ -1072,6 +1196,20 @@ fn binary_attention(code: &str, detail: &str) -> BinaryBootstrapResult {
     }
 }
 
+fn binary_pending(code: &str, detail: &str) -> BinaryBootstrapResult {
+    BinaryBootstrapResult {
+        entry: OutputEntry::new("binary", "pending").with_field("policy", "apply-safe"),
+        attention: true,
+        pending: true,
+        changed: false,
+        warnings: vec![crate::Warning::new(code, detail)],
+        next_actions: vec![crate::NextAction::new(
+            "retry_binary_update",
+            "Retry the update after the current skilltap mutation finishes.",
+        )],
+    }
+}
+
 #[cfg(test)]
 mod bootstrap_tests {
     use std::{fs, path::Path, sync::Arc};
@@ -1081,8 +1219,9 @@ mod bootstrap_tests {
         bootstrap::{ArtifactKey, ReleaseArtifact, ReleaseVersion},
         domain::{AbsolutePath, HarnessId, SourceLocator, TargetSelection},
         runtime::{
-            ArtifactError, ArtifactFetcher, BinaryInstaller, InstalledBinary, ReleaseManifest,
-            ReleaseResolver, SystemBinaryInstaller,
+            ArtifactError, ArtifactFetcher, BinaryInstaller, ConfigurationLock,
+            ConfigurationLockGuard, InstalledBinary, ReleaseManifest, ReleaseResolver,
+            RuntimeError, SystemBinaryInstaller, SystemConfigurationLock,
         },
     };
     use skilltap_test_support::TempRoot;
@@ -1090,7 +1229,9 @@ mod bootstrap_tests {
     use super::{
         BinaryBootstrapResult, BinaryExecutionMode, BootstrapArgs, OutputArgs, RollbackResult,
         compose_bootstrap_outcome, execute_binary_bootstrap_with,
-        execute_binary_bootstrap_with_mode, remove_published_binary, restore_previous_binary,
+        execute_binary_bootstrap_with_lock, execute_binary_bootstrap_with_mode,
+        remove_published_binary, remove_published_binary_with_hooks, restore_previous_binary,
+        restore_previous_binary_with_hook,
     };
     use crate::{JsonRenderer, PlainRenderer, Renderer};
 
@@ -1135,6 +1276,28 @@ mod bootstrap_tests {
     }
 
     struct WrongPublisher;
+
+    struct ContendedLock;
+
+    impl ConfigurationLock for ContendedLock {
+        type Guard = NeverGuard;
+
+        fn try_acquire(&self, path: &AbsolutePath) -> Result<Self::Guard, RuntimeError> {
+            Err(RuntimeError::LockContended { path: path.clone() })
+        }
+    }
+
+    struct NeverGuard;
+
+    impl ConfigurationLockGuard for NeverGuard {
+        fn path(&self) -> &AbsolutePath {
+            panic!("a contended lock never returns a guard")
+        }
+
+        fn release(self) -> Result<(), RuntimeError> {
+            Ok(())
+        }
+    }
 
     impl BinaryInstaller for WrongPublisher {
         fn inspect(&self, path: &AbsolutePath) -> Result<Option<InstalledBinary>, ArtifactError> {
@@ -1286,6 +1449,53 @@ mod bootstrap_tests {
         assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
     }
 
+    #[test]
+    fn daemon_binary_lock_contention_is_pending_without_resolver_or_fetcher() {
+        let root = TempRoot::new("bootstrap-daemon-lock-contention").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("custom/skilltap").display().to_string()).unwrap();
+        let lock_path =
+            AbsolutePath::new(root.path().join("skilltap.lock").display().to_string()).unwrap();
+        let (resolver, fetcher) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with_lock(
+            &args(false),
+            destination,
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+            &ContendedLock,
+            &lock_path,
+            BinaryExecutionMode::ApplySafe,
+        );
+        assert_eq!(result.entry.status, "pending");
+        assert!(result.attention);
+        assert!(result.pending);
+        assert!(!result.changed);
+        assert_eq!(result.warnings[0].code, "configuration_locked");
+    }
+
+    #[test]
+    fn daemon_binary_update_uses_custom_destination_while_locked() {
+        let root = TempRoot::new("bootstrap-daemon-custom-target").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("custom/skilltap").display().to_string()).unwrap();
+        let lock_path =
+            AbsolutePath::new(root.path().join("skilltap.lock").display().to_string()).unwrap();
+        let (resolver, fetcher) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with_lock(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+            &SystemConfigurationLock,
+            &lock_path,
+            BinaryExecutionMode::ApplySafe,
+        );
+        assert_eq!(result.entry.status, "installed");
+        assert!(Path::new(destination.as_str()).exists());
+    }
+
     #[cfg(unix)]
     #[test]
     fn rollback_exchange_preserves_replacement_and_restores_matching_publish() {
@@ -1312,6 +1522,33 @@ mod bootstrap_tests {
 
     #[cfg(unix)]
     #[test]
+    fn rollback_replacement_during_exchange_is_attention_and_preserved() {
+        let root = TempRoot::new("bootstrap-cli-rollback-during").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        fs::create_dir_all(root.path().join("bin")).unwrap();
+        fs::write(destination.as_str(), b"published").unwrap();
+        let published = super::binary_file_identity(&destination);
+        let replacement = root.path().join("replacement-during");
+        fs::write(&replacement, b"replacement-during").unwrap();
+        let result = restore_previous_binary_with_hook(
+            &destination,
+            published,
+            b"prior",
+            Some(0o700),
+            || {
+                fs::rename(&replacement, destination.as_str()).unwrap();
+            },
+        );
+        assert_eq!(result, RollbackResult::ReplacementPreserved);
+        assert_eq!(
+            fs::read(destination.as_str()).unwrap(),
+            b"replacement-during"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn first_install_cleanup_only_removes_expected_identity() {
         let root = TempRoot::new("bootstrap-cli-cleanup").unwrap();
         let destination =
@@ -1333,6 +1570,51 @@ mod bootstrap_tests {
             RollbackResult::ReplacementPreserved
         );
         assert_eq!(fs::read(destination.as_str()).unwrap(), b"replacement");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn first_install_cleanup_preserves_replacement_and_reports_residual() {
+        let root = TempRoot::new("bootstrap-cli-cleanup-races").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        fs::create_dir_all(root.path().join("bin")).unwrap();
+        fs::write(destination.as_str(), b"published").unwrap();
+        let published = super::binary_file_identity(&destination);
+        let replacement = root.path().join("replacement-during-cleanup");
+        fs::write(&replacement, b"replacement-during-cleanup").unwrap();
+        let result = remove_published_binary_with_hooks(
+            &destination,
+            published,
+            || {
+                fs::rename(&replacement, destination.as_str()).unwrap();
+            },
+            |path| fs::remove_file(path),
+        );
+        assert_eq!(result, RollbackResult::ReplacementPreserved);
+        assert_eq!(
+            fs::read(destination.as_str()).unwrap(),
+            b"replacement-during-cleanup"
+        );
+
+        fs::write(destination.as_str(), b"published-residual").unwrap();
+        let published = super::binary_file_identity(&destination);
+        let result = remove_published_binary_with_hooks(
+            &destination,
+            published,
+            || {},
+            |_| Err(std::io::Error::other("test residual")),
+        );
+        assert_eq!(result, RollbackResult::Failed);
+        assert!(
+            fs::read_dir(root.path().join("bin"))
+                .unwrap()
+                .flatten()
+                .any(|entry| entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".skilltap-rollback-cleanup-"))
+        );
     }
 
     #[test]
@@ -1536,14 +1818,45 @@ fn execute_system_daemon_binary_policy() -> Outcome {
             next_actions: Vec::new(),
         },
         BootstrapUpdateMode::Check | BootstrapUpdateMode::ApplySafe => {
+            let destination = match daemon_binary_destination(&paths) {
+                Ok(destination) => destination,
+                Err(detail) => return binary_policy_attention(detail),
+            };
             let args = BootstrapArgs {
                 target: None,
                 allow_major: policy.allow_major,
                 output: OutputArgs::default(),
             };
-            execute_binary_bootstrap_mode(
+            let key = match skilltap_core::bootstrap::ArtifactKey::current() {
+                Ok(key) => key,
+                Err(_) => {
+                    return binary_policy_attention(
+                        "This platform has no published skilltap bootstrap artifact.",
+                    );
+                }
+            };
+            let resolver = skilltap_core::runtime::SystemReleaseResolver::current(key);
+            let fetcher = skilltap_core::runtime::SystemArtifactFetcher;
+            let installer = skilltap_core::runtime::SystemBinaryInstaller;
+            let lock_path = match AbsolutePath::new(format!(
+                "{}/skilltap.lock",
+                paths.skilltap_config().as_str()
+            )) {
+                Ok(path) => path,
+                Err(_) => {
+                    return binary_policy_attention(
+                        "The skilltap binary update lock path is invalid.",
+                    );
+                }
+            };
+            execute_binary_bootstrap_with_lock(
                 &args,
-                &paths,
+                destination,
+                &resolver,
+                &fetcher,
+                &installer,
+                &SystemConfigurationLock,
+                &lock_path,
                 match policy.mode {
                     BootstrapUpdateMode::Check => BinaryExecutionMode::Check,
                     BootstrapUpdateMode::ApplySafe => BinaryExecutionMode::ApplySafe,
@@ -1568,6 +1881,39 @@ fn execute_system_daemon_binary_policy() -> Outcome {
         outcome = outcome.with_next_action(action);
     }
     outcome
+}
+
+fn binary_policy_attention(detail: &str) -> Outcome {
+    Outcome::new("daemon run", ResultClass::AttentionRequired)
+        .with_scope(OutputScope::Global)
+        .with_resource(OutputEntry::new("binary", "unavailable"))
+        .with_summary("binary_changed", false)
+        .with_summary("binary_pending", true)
+        .with_warning(crate::Warning::new(
+            "daemon_binary_target_unavailable",
+            detail,
+        ))
+}
+
+fn daemon_binary_destination(paths: &PlatformPaths) -> Result<AbsolutePath, &'static str> {
+    let platform = crate::daemon::platform(paths);
+    let root = crate::daemon::root(paths, platform);
+    let name = match platform {
+        skilltap_core::daemon::ServicePlatform::Launchd => {
+            format!("{}.plist", skilltap_core::daemon::SERVICE_LABEL)
+        }
+        skilltap_core::daemon::ServicePlatform::SystemdUser => {
+            skilltap_core::daemon::SYSTEMD_UNIT.to_owned()
+        }
+    };
+    let path = AbsolutePath::new(format!("{}/{}", root.as_str(), name))
+        .map_err(|_| "The daemon service definition path is invalid.")?;
+    let contents = SystemFileSystem
+        .read_regular_no_follow(&path)
+        .map_err(|_| "The daemon service definition could not be read safely.")?
+        .ok_or("The daemon service is not enabled, so its binary destination is unknown.")?;
+    crate::daemon::executable_from_service(platform, &contents)
+        .ok_or("The managed daemon service definition is malformed or has no executable target.")
 }
 
 fn execute_system_skill_list(args: &ScopedTargetArgs) -> Outcome {
