@@ -1,7 +1,7 @@
 ---
 id: gate-tests-safe-update-e2e
 kind: story
-stage: review
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
@@ -53,3 +53,21 @@ the daemon's inventory selector.
 
 Verification: the focused safe-update test passes against the fixed
 implementation, including no-op and changed-revision daemon records.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: the required safe-update policy and failure matrix is not covered
+(this item)
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review with correctness, tests,
+update-safety, and daemon-state lenses. The Git fixture correctly proves one
+clean no-op, an available revision, a changed revision, and a persisted daemon
+record. The acceptance criteria additionally require policy modes, pinned and
+drifted resources, partial/lock/source failures, repeat no-op behavior, and
+available-revision plus daemon-run state assertions across those outcomes.
+Those cases are absent; extend the isolated matrix without weakening the
+existing regression.
