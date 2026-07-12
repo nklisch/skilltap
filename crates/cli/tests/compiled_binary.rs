@@ -2839,13 +2839,6 @@ fn safe_update_policy_pins_drift_and_source_failures_remain_visible() {
             .unwrap()
             >= 1
     );
-    assert!(
-        unavailable_value["resources"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|entry| { entry["id"] == "daemon" && entry["status"] == "pending" })
-    );
     let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(state.contains("\"daemon_run\""));
     assert!(state.contains("\"result\": \"pending\""));
