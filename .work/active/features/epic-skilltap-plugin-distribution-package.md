@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-package
 kind: feature
-stage: review
+stage: done
 tags: [architecture, infra]
 parent: epic-skilltap-plugin-distribution
 depends_on: []
@@ -211,3 +211,18 @@ home, native harness caches, or `../skills`.
 Both child stories are implemented and awaiting review. The canonical package
 assets and boundary tests are self-contained under this repository; no active
 publisher checkout or native harness state was changed.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context feature review. Both child stories are
+complete and independently reviewed. The package preserves native Claude and
+Codex schemas around one complete skill directory, validates Cargo-version and
+source parity at the repository boundary, and introduces no discovery or
+native-state mutation. The plugin publication tree in `docs/ARCH.md` was
+aligned with the implemented catalog locations before approval.
