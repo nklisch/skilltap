@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -136,3 +136,21 @@ vectors/scope and target isolation, present/missing/unknown observation,
 malformed output, replacement blocking, or cache non-mutation. Keep this item
 at `stage: implementing` until the existing contract-coverage follow-up adds
 those isolated tests and capability seam.
+
+## Review (2026-07-12, current harness contract)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review of the adapter after `dc8fd63`, with the
+contract-coverage follow-up approved in `454e4d2`. Claude setup observes first,
+uses the canonical marketplace and qualified plugin identity at user scope,
+and binds mutations to the detected executable. Operation-specific capability
+checks fail closed; Codex remains an actionable unsupported result. Unknown
+versions and malformed lists block mutation, and the fake-binary suite proves
+capability narrowing, target isolation, no cache writes, exact vectors,
+presence handling, and replacement races. Full harness tests pass offline.
+Advancing the story to `stage: done`.
