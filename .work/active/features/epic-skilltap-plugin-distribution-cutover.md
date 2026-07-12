@@ -24,10 +24,11 @@ plugin and binary path before the old publisher disappears.
 
 This feature tracks the cross-repository handoff and evidence; it does not
 create a compatibility layer or preserve the legacy repository as a second
-source of truth. The active local `../skills` repository is unrelated and must
-remain intact. Any remaining non-skilltap content in `skilltap-skills` is
-outside this feature's product scope, even if repository archival requires an
-operator-level decision about its future.
+source of truth. The active local `../skills` repository remains a supported
+second publisher and must retain its synchronized skilltap entry. Any
+remaining non-skilltap content in `skilltap-skills` is outside this feature's
+product scope, even if repository archival requires an operator-level decision
+about its future.
 
 ## Epic context
 
@@ -49,8 +50,8 @@ operator-level decision about its future.
 ## Design decisions
 
 - **Retirement target**: Only the public `nklisch/skilltap-skills` repository is
-  retired. The active sibling `../skills` repository remains fully supported
-  and is not modified or archived.
+  retired. The active sibling `../skills` repository remains fully supported as
+  a synchronized publisher and is not archived.
 - **Cutover gate**: Retire the legacy repository only after the canonical
   plugin, website installer, binary bootstrap, and implicit skill are verified
   as usable.
