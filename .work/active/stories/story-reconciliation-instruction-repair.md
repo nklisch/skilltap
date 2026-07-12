@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-instruction-repair
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: null
 depends_on: []
@@ -72,3 +72,24 @@ the supported nested-only project Claude bridge before this story can close.
 `story-reconciliation-instruction-repair-nested-plan` now aligns preview with
 the setup location policy and covers nested-only symlink/import bridges. The
 parent implementation is ready for a fresh review together with its dependent.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at standard weight in a fresh same-harness
+context, after the nested-plan dependency reached done. Reviewed commits
+`4369a0a`, `206af14`, `1f5f1de`, `86aa5d5`, and `1da1ff1`, the implementation,
+`docs/SPEC.md`, `docs/UX.md`, and compiled instruction coverage. Plan performs
+fresh bridge inspection and reports repair/no-change/conflict; sync routes
+through the existing setup/repair journal with target and scope filtering.
+Drifted user-authored bridges remain blocked without generic `--yes`, while
+acknowledged repair creates recoverable backups; missing managed bridges and
+healthy repeats are safe and idempotent. Nested-only project Claude symlink
+and import bridges resolve consistently with setup. Focused reconciliation
+tests, full workspace tests, formatting, and clippy all passed. No blockers,
+important findings, or foundation-document drift were identified.
