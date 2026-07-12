@@ -1,7 +1,7 @@
 ---
 id: gate-security-credential-bearing-source-state
 kind: story
-stage: review
+stage: done
 tags: [security]
 parent: null
 depends_on: []
@@ -51,3 +51,17 @@ secret-canary tests.
 - Discrepancies from design: credential-bearing locators fail closed rather than being normalized/redacted, preserving the no-authentication-material invariant while directing callers to Git helpers or environment-backed authentication. SCP-style Git locators remain valid because their `user@host:path` form is not URI userinfo.
 - Adjacent issues parked: none.
 - System persistence now creates/replaces owned documents with mode `0600`, configuration roots with mode `0700`, and managed artifact roots are hardened to `0700` when opened.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with deep security and persistence-boundary
+lenses. URI userinfo and common credential query keys are rejected before
+serialization, SCP-style Git locators remain supported, and owned documents,
+configuration roots, and managed trees are hardened to user-only modes. Focused
+source, CLI validation, storage integration, and Unix permission tests all pass.
