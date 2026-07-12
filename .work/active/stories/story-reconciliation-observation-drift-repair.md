@@ -46,7 +46,11 @@ the foundation synchronization contract remains authoritative.
   resources are re-planned and repaired through the existing lock, execution,
   and journal path.
 - `plan` exposes `fresh_state` and classifies native lifecycle previews as
-  `no_change`, `repair`, or `planned` without mutating state.
+  `no_change`, `repair`, or `planned` without mutating state; a native-present
+  resource with missing recorded provenance is also a repair so plan and sync
+  agree on state restoration.
+- Native list decoding is strict: malformed arrays, entries, and list fields
+  remain unknown rather than becoming false missing evidence.
 - Added an isolated compiled regression covering present → externally removed
   → plan repair classification → sync repair → repeat no-change.
 - Verification: `cargo fmt --all`, focused harness and CLI unit tests,
