@@ -958,11 +958,13 @@ mod tests {
         let root = skilltap_test_support::TempRoot::new("bootstrap-publication-race").unwrap();
         let destination = root.path().join("skilltap");
         let temporary = root.path().join("payload");
+        let replacement = root.path().join("replacement");
         fs::write(&destination, b"prior").unwrap();
         let prior = destination_identity(&destination).unwrap();
         fs::write(&temporary, b"verified").unwrap();
+        fs::write(&replacement, b"unrelated replacement").unwrap();
         fs::remove_file(&destination).unwrap();
-        fs::write(&destination, b"unrelated replacement").unwrap();
+        fs::rename(&replacement, &destination).unwrap();
 
         assert_eq!(
             publish_destination(&temporary, &destination, prior),
@@ -994,10 +996,12 @@ mod tests {
     fn rollback_exchange_preserves_a_replacement_before_rollback() {
         let root = skilltap_test_support::TempRoot::new("bootstrap-rollback-race").unwrap();
         let destination = root.path().join("skilltap");
+        let replacement = root.path().join("replacement");
         fs::write(&destination, b"published").unwrap();
         let expected = destination_identity(&destination).unwrap().unwrap();
+        fs::write(&replacement, b"unrelated replacement").unwrap();
         fs::remove_file(&destination).unwrap();
-        fs::write(&destination, b"unrelated replacement").unwrap();
+        fs::rename(&replacement, &destination).unwrap();
 
         restore_destination(&destination, Some(expected), Some(b"prior"), None);
         assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
@@ -1009,10 +1013,12 @@ mod tests {
         let root =
             skilltap_test_support::TempRoot::new("bootstrap-rollback-no-prior-race").unwrap();
         let destination = root.path().join("skilltap");
+        let replacement = root.path().join("replacement");
         fs::write(&destination, b"published").unwrap();
         let expected = destination_identity(&destination).unwrap().unwrap();
+        fs::write(&replacement, b"unrelated replacement").unwrap();
         fs::remove_file(&destination).unwrap();
-        fs::write(&destination, b"unrelated replacement").unwrap();
+        fs::rename(&replacement, &destination).unwrap();
 
         remove_published_if_identity(&destination, expected);
         assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
@@ -1045,12 +1051,14 @@ mod tests {
         let root =
             skilltap_test_support::TempRoot::new("bootstrap-rollback-post-exchange").unwrap();
         let destination = root.path().join("skilltap");
+        let replacement = root.path().join("replacement");
         fs::write(&destination, b"published").unwrap();
         let expected = destination_identity(&destination).unwrap().unwrap();
+        fs::write(&replacement, b"unrelated replacement").unwrap();
 
         remove_published_if_identity_with(&destination, expected, || {
             fs::remove_file(&destination).unwrap();
-            fs::write(&destination, b"unrelated replacement").unwrap();
+            fs::rename(&replacement, &destination).unwrap();
         });
         assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
     }

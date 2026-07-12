@@ -222,13 +222,15 @@ mod tests {
         let second = FakeNativeProcess::new(FakeNativeMode::Exit(1)).unwrap();
         let root = TempRoot::new("skilltap-executable-replacement").unwrap();
         let candidate = root.join("codex");
+        let replacement = root.join("replacement");
         copy_executable(first.executable(), &candidate);
         let resolved = SystemExecutableResolver
             .resolve(&absolute(&candidate))
             .unwrap();
 
+        copy_executable(second.executable(), &replacement);
         fs::remove_file(&candidate).unwrap();
-        copy_executable(second.executable(), &candidate);
+        fs::rename(&replacement, &candidate).unwrap();
 
         assert_eq!(
             SystemExecutableResolver.revalidate(&resolved),
