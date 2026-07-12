@@ -1,7 +1,7 @@
 ---
 id: gate-tests-native-lifecycle-e2e
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -49,3 +49,17 @@ native roots.
 
 Verification: the focused test passes; the full `compiled_binary` integration
 suite passes for this story's coverage.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with deep lifecycle and regression lenses.
+The isolated compiled-binary scenario exercises marketplace add/update/remove
+and plugin install/update/remove for both Codex and Claude, checks operation
+results and inventory/state journal material, and repeats add/install for
+no-change behavior. The focused test passes.
