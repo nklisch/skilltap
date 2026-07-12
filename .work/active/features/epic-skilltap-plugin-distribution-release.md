@@ -258,3 +258,20 @@ input; CI enforces it when `SKILLTAP_SKILLS_MARKETPLACE` points at a checkout.
 platform/checksum/provenance gates, installer/bootstrap parity, public
 marketplace/online/Homebrew guidance, and offline validation fixtures are
 aligned. The legacy sibling archive remains explicitly deferred to cutover.
+
+## Review follow-up (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh aggregate review confirmed installer redirect/checksum and
+binary/harness result handling, release workflow ordering, website/Homebrew
+parity, and the explicit read-only sibling-check boundary. Hardened
+`verify-release-contract.sh` to reject non-canonical manifest repositories or
+native catalog source roots directly, in addition to the package validator.
+Offline release-contract, installer, installation-surface, and package checks
+pass. The optional sibling checkout remains an explicit external parity input;
+legacy retirement remains deferred to cutover.

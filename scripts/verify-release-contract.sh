@@ -17,6 +17,10 @@ for manifest in plugin/.claude-plugin/plugin.json plugin/.codex-plugin/plugin.js
     echo "error: $manifest version does not match $VERSION" >&2
     exit 1
   }
+  grep -Fq '"repository": "https://github.com/nklisch/skilltap"' "$manifest" || {
+    echo "error: $manifest repository identity is not canonical" >&2
+    exit 1
+  }
 done
 
 for catalog in plugin/.claude-plugin/marketplace.json plugin/.agents/plugins/marketplace.json; do
@@ -29,6 +33,19 @@ for catalog in plugin/.claude-plugin/marketplace.json plugin/.agents/plugins/mar
     exit 1
   }
 done
+
+grep -Fq '"source": "./"' plugin/.claude-plugin/marketplace.json || {
+  echo "error: Claude marketplace source is not the canonical plugin root" >&2
+  exit 1
+}
+grep -Fq '"source": "local"' plugin/.agents/plugins/marketplace.json || {
+  echo "error: Codex marketplace source is not local" >&2
+  exit 1
+}
+grep -Fq '"path": "./"' plugin/.agents/plugins/marketplace.json || {
+  echo "error: Codex marketplace path is not the canonical plugin root" >&2
+  exit 1
+}
 
 for asset in skilltap-linux-x64 skilltap-linux-arm64 skilltap-darwin-x64 skilltap-darwin-arm64; do
   grep -Fq "$asset" .github/workflows/release.yml || {
