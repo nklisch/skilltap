@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifacts
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -70,3 +70,29 @@ Do not add a public command or mutate harness plugin state in this story.
 **Nits**: none
 
 **Notes**: Substrate review at standard weight, escalated to a focused security/correctness pass because this boundary downloads and publishes an executable. `cargo test --workspace --all-targets --offline` passed, but the bounded transport, temporary-file, checksum/publication, and executable identity lenses found the acceptance gaps above. Item remains at `stage: implementing` pending fixes and regression coverage.
+
+## Review (2026-07-12, hardened follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: redirect host enforcement and publication race/rollback identity
+guards remain incomplete (this item)
+**Important**: required isolated transport/publication regression coverage is
+absent (this item)
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review of commits `c880496` and
+`85b56ea`. Workspace tests, clippy with warnings denied, and formatting are
+green. The implementation now uses private temporary directories, bounded
+reads/process output, duplicate-asset rejection, executable checks, and
+pre/post version probes. However, `SystemArtifactFetcher` follows curl's
+`--location` redirects and validates only the final `%{url_effective}` after
+the response has already been downloaded; an intermediate cross-host hop is
+not rejected as required by the release-host contract. `SystemBinaryInstaller`
+still has a stat-then-rename race, and both `restore_destination` and the CLI
+rollback rename bytes without revalidating the destination identity, so a
+replacement can overwrite an unrelated executable during rollback. No
+`crates/core/tests/bootstrap_integration.rs` exists and the current unit tests
+do not cover oversized/symlink responses, redirect hops, checksum cleanup,
+permission/interruption preservation, replacement races, or post-publish
+rollback. Item remains at `stage: implementing`.

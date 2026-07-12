@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -68,3 +68,27 @@ or an undocumented post-install hook.
 **Nits**: none
 
 **Notes**: Substrate review at standard weight, escalated to a native-contract/correctness pass. Workspace tests passed, but the read-first/native lifecycle and target-isolation lenses found that the canonical source is not actually used by the install vector and the Codex interactive contract gap is not represented. Item remains at `stage: implementing` pending fixes and fake-binary coverage.
+
+## Review (2026-07-12, hardened follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: none beyond the missing acceptance evidence
+**Important**: capability-bound marketplace mutation and native contract
+regression coverage are incomplete (this item)
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review of commits `c880496` and
+`85b56ea`. The implementation now preserves Codex as an actionable
+`Unsupported` result, uses the canonical `.../tree/main/plugin` source and
+qualified `skilltap@skilltap` identity for Claude, observes before mutation,
+and binds mutations to the detected executable identity with last-moment
+revalidation. It nevertheless gates only `plugin.install` before invoking
+the marketplace add operation; a narrowed profile that withdraws
+`marketplace.register` would still receive a native marketplace mutation.
+The story also has no `crates/harnesses/tests/bootstrap.rs` fake-binary suite:
+the two local unit tests do not prove exact marketplace/plugin vectors,
+scope/target isolation, present/missing/unknown list behavior, capability
+narrowing, or identity replacement handling. Add the operation-specific
+capability check and the required isolated tests. Item remains at
+`stage: implementing`.

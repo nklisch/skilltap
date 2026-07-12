@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: review
+stage: implementing
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -108,3 +108,26 @@ resolution/installation and its acceptance matrix is covered.
 **Nits**: none
 
 **Notes**: Substrate review at standard weight, escalated to a public CLI/security pass after the prior binary-wiring fix. `cargo test --workspace --all-targets --offline` passed, but the command still reports success without the required verified executable identity and exposes fixture environment seams in the production composition. Item remains at `stage: implementing` pending fixes and isolated tests that exercise the real release boundary.
+
+## Review (2026-07-12, hardened follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: composed bootstrap still depends on an identity-unsafe artifact
+rollback boundary (tracked by the artifact correction item)
+**Important**: the required compiled bootstrap acceptance matrix is absent
+(this item)
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review of commits `c880496` and
+`85b56ea`. The public grammar, target narrowing, separate binary/harness
+result entries, canonical source, direct version probe, major guard, and
+production removal of local release/artifact/version override seams are
+present; workspace tests, clippy, and formatting are green. The hardened
+follow-up removed all compiled bootstrap fixture tests, leaving no isolated
+coverage for first install, same-major repeat, blocked major, target
+narrowing, absent harness, mixed success/attention, failed pre-publish
+preservation, or post-publish identity failure. Restore a test-only
+composition seam (or equivalent deterministic fixture harness) and cover the
+acceptance matrix without reintroducing ambient production overrides. The
+item remains at `stage: implementing`.
