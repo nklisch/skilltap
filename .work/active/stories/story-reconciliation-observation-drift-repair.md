@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-observation-drift-repair
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: null
 depends_on: []
@@ -56,3 +56,21 @@ the foundation synchronization contract remains authoritative.
 - Verification: `cargo fmt --all`, focused harness and CLI unit tests,
   `cargo clippy -p skilltap-harnesses -p skilltap --all-targets --offline -- -D warnings`,
   and all 39 compiled-binary tests pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review, standard weight, same-harness fresh context. The
+implementation now uses bounded native list observations, treats malformed,
+unsupported, or failed JSON as unknown, and only invalidates a successful
+journal when fresh evidence proves the resource missing. The compiled
+regression covers healthy presence, missing provenance, external removal,
+repair, and an idempotent repeat; lifecycle unit coverage covers valid and
+malformed list shapes. Verification passed with `cargo fmt --all -- --check`,
+focused harness tests, all 39 compiled-binary tests, and workspace clippy with
+`-D warnings`.
