@@ -2475,6 +2475,75 @@ fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() 
     assert!(timer.is_dir());
 }
 
+#[test]
+fn populated_plan_and_sync_apply_the_desired_inventory_resource() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()).replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+
+    // Seed a valid desired inventory through the explicit lifecycle command,
+    // then remove only apply provenance to simulate an unapplied desired state.
+    let install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "formatter@team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    let inventory_path = config_root(&machine).join("inventory.toml");
+    let inventory_before = fs::read(&inventory_path).unwrap();
+    fs::remove_file(config_root(&machine).join("state.json")).unwrap();
+
+    let plan = run(&machine, &["plan", "--target", "codex", "--json"]);
+    assert_code(&plan, 2);
+    let plan_value = json(&plan);
+    assert_eq!(plan_value["summary"]["desired_resources"], 1);
+    assert!(plan_value["summary"]["operations"].as_u64().unwrap() >= 1);
+    assert!(
+        plan_value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["status"] == "planned" || entry["status"] == "pending" })
+    );
+    assert_eq!(fs::read(&inventory_path).unwrap(), inventory_before);
+    assert!(!config_root(&machine).join("state.json").exists());
+
+    let sync = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&sync, 0);
+    let sync_value = json(&sync);
+    assert_eq!(sync_value["result"], "completed");
+    assert_eq!(sync_value["summary"]["changed"], true);
+    assert!(sync_value["summary"]["operations"].as_u64().unwrap() >= 1);
+    assert!(config_root(&machine).join("state.json").is_file());
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("formatter@team"));
+
+    // The second reconciliation is idempotent and must not rewrite inventory.
+    let repeat_inventory = fs::read(&inventory_path).unwrap();
+    let repeat = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+    assert_eq!(fs::read(&inventory_path).unwrap(), repeat_inventory);
+
+    // Keep the fixture binary alive through the whole test; lifecycle and
+    // post-observation calls use this exact isolated executable.
+    let _ = fixture;
+}
+
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
     machine
         .run_in(&binary(), cwd, arguments)

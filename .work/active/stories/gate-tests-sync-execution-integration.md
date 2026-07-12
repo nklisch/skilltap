@@ -37,3 +37,15 @@ calls.
 ## Test location (suggested)
 
 `crates/cli/tests/compiled_binary.rs`
+
+## Implementation Notes
+
+Added `populated_plan_and_sync_apply_the_desired_inventory_resource`.
+It seeds a desired plugin, removes only apply state to create an unapplied
+inventory, verifies `plan` emits a scope/target-bound operation without
+mutating inventory or state, then verifies `sync` journals the native apply
+and an immediate repeat is idempotent.
+
+Verification: the focused test passes. The full compiled-binary suite has 33
+passing tests; the two unrelated scope/safe-update regressions remain blocked
+on their parked production stories.
