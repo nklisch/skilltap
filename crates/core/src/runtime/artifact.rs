@@ -443,45 +443,65 @@ impl ArtifactFetcher for SystemArtifactFetcher {
             .map_err(|_| ArtifactError::DownloadFailed)?;
         let limits = ProcessLimits::new(30_000, 4 * 1024, 4 * 1024, 8 * 1024)
             .map_err(|_| ArtifactError::DownloadFailed)?;
-        let output = SystemNativeProcessRunner
-            .run(&NativeProcessRequest::new(
-                executable,
-                [
-                    "--fail",
-                    "--silent",
-                    "--show-error",
-                    "--location",
-                    "--max-redirs",
-                    "5",
-                    "--proto",
-                    "=https",
-                    "--proto-redir",
-                    "=https",
-                    "--max-time",
-                    "30",
-                    "--max-filesize",
-                    "67108864",
-                    "--output",
-                    destination.as_str(),
-                    "--write-out",
-                    "%{url_effective}",
-                    "--",
-                    url,
-                ]
-                .into_iter()
-                .map(std::ffi::OsString::from),
-                std::collections::BTreeMap::new(),
-                None,
-                limits,
-            ))
-            .map_err(|_| ArtifactError::DownloadFailed)?;
-        if !output.status().success() {
+        let mut current = url.to_owned();
+        for _ in 0..6 {
+            validate_release_url(&current)?;
+            let output = SystemNativeProcessRunner
+                .run(&NativeProcessRequest::new(
+                    executable.clone(),
+                    [
+                        "--fail",
+                        "--silent",
+                        "--show-error",
+                        "--max-redirs",
+                        "0",
+                        "--proto",
+                        "=https",
+                        "--proto-redir",
+                        "=https",
+                        "--max-time",
+                        "30",
+                        "--max-filesize",
+                        "67108864",
+                        "--output",
+                        destination.as_str(),
+                        "--write-out",
+                        "%{http_code}\n%{redirect_url}",
+                        "--",
+                        &current,
+                    ]
+                    .into_iter()
+                    .map(std::ffi::OsString::from),
+                    std::collections::BTreeMap::new(),
+                    None,
+                    limits,
+                ))
+                .map_err(|_| ArtifactError::DownloadFailed)?;
+            if !output.status().success() {
+                return Err(ArtifactError::DownloadFailed);
+            }
+            let response =
+                std::str::from_utf8(output.stdout()).map_err(|_| ArtifactError::DownloadFailed)?;
+            let mut lines = response.lines().rev();
+            let redirect = lines.next().unwrap_or_default().trim();
+            let status = lines
+                .next()
+                .and_then(|value| value.trim().parse::<u16>().ok())
+                .ok_or(ArtifactError::DownloadFailed)?;
+            if (300..400).contains(&status) {
+                if redirect.is_empty() {
+                    return Err(ArtifactError::InvalidLocator);
+                }
+                validate_release_url(redirect)?;
+                current = redirect.to_owned();
+                continue;
+            }
+            if (200..300).contains(&status) {
+                return Ok(());
+            }
             return Err(ArtifactError::DownloadFailed);
         }
-        let effective = std::str::from_utf8(output.stdout())
-            .map_err(|_| ArtifactError::DownloadFailed)?
-            .trim();
-        validate_release_url(effective)
+        Err(ArtifactError::InvalidLocator)
     }
 }
 
@@ -585,17 +605,23 @@ impl BinaryInstaller for SystemBinaryInstaller {
                 return Err(ArtifactError::DestinationChanged);
             }
             fs::rename(&temporary, destination_path).map_err(|_| ArtifactError::InstallFailed)?;
+            let published_identity = destination_identity(destination_path)?;
             if sync_parent(parent).is_err() {
-                restore_destination(destination_path, prior_bytes.as_deref(), {
-                    #[cfg(unix)]
+                restore_destination(
+                    destination_path,
+                    published_identity,
+                    prior_bytes.as_deref(),
                     {
-                        prior_mode
-                    }
-                    #[cfg(not(unix))]
-                    {
-                        None
-                    }
-                });
+                        #[cfg(unix)]
+                        {
+                            prior_mode
+                        }
+                        #[cfg(not(unix))]
+                        {
+                            None
+                        }
+                    },
+                );
                 return Err(ArtifactError::InstallFailed);
             }
             Ok(())
@@ -609,6 +635,7 @@ impl BinaryInstaller for SystemBinaryInstaller {
 
 fn restore_destination(
     path: &Path,
+    expected: Option<(u64, u64)>,
     prior: Option<&[u8]>,
     #[cfg(unix)] mode: Option<u32>,
     #[cfg(not(unix))] _mode: Option<u32>,
@@ -635,16 +662,21 @@ fn restore_destination(
                         fs::Permissions::from_mode(mode.unwrap_or(0o700)),
                     );
                     let _ = file.sync_all();
-                    let _ = fs::rename(&temporary, path);
+                    if destination_identity(path).ok() == Some(expected) {
+                        let _ = fs::rename(&temporary, path);
+                    } else {
+                        let _ = fs::remove_file(&temporary);
+                    }
                 } else {
                     let _ = fs::remove_file(&temporary);
                 }
                 return;
             }
         }
-        None => {
+        None if destination_identity(path).ok() == Some(expected) => {
             let _ = fs::remove_file(path);
         }
+        None => {}
     }
 }
 

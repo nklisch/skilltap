@@ -322,6 +322,12 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
     for action in binary.next_actions {
         outcome = outcome.with_next_action(action);
     }
+    // Do not mutate native harness state when the binary boundary did not
+    // complete. Bootstrap's binary and harness phases are reported separately,
+    // but a failed/blocked release must remain a read-only attention result.
+    if binary.attention {
+        return outcome;
+    }
     let search_path = std::env::var_os("PATH");
     let process_limits =
         skilltap_core::runtime::ProcessLimits::new(30_000, 64 * 1024, 64 * 1024, 128 * 1024)
@@ -559,9 +565,14 @@ fn execute_binary_bootstrap(
     if probe_installed_version(&destination).as_ref() != Some(&manifest.version) {
         if let Some(previous) = previous {
             #[cfg(unix)]
-            restore_previous_binary(&destination, &previous, previous_mode);
+            restore_previous_binary(
+                &destination,
+                binary_file_identity(&destination),
+                &previous,
+                previous_mode,
+            );
             #[cfg(not(unix))]
-            restore_previous_binary(&destination, &previous);
+            restore_previous_binary(&destination, binary_file_identity(&destination), &previous);
         } else {
             let _ = std::fs::remove_file(destination.as_str());
         }
@@ -627,7 +638,12 @@ fn private_bootstrap_temp(
 }
 
 #[cfg(unix)]
-fn restore_previous_binary(path: &AbsolutePath, bytes: &[u8], mode: Option<u32>) {
+fn restore_previous_binary(
+    path: &AbsolutePath,
+    expected: Option<(u64, u64)>,
+    bytes: &[u8],
+    mode: Option<u32>,
+) {
     use std::os::unix::fs::PermissionsExt;
     let destination = std::path::Path::new(path.as_str());
     let Some(parent) = destination.parent() else {
@@ -647,15 +663,37 @@ fn restore_previous_binary(path: &AbsolutePath, bytes: &[u8], mode: Option<u32>)
             &temporary,
             std::fs::Permissions::from_mode(mode.unwrap_or(0o700)),
         );
-        let _ = std::fs::rename(&temporary, destination);
+        if binary_file_identity(path) == expected {
+            let _ = std::fs::rename(&temporary, destination);
+        } else {
+            let _ = std::fs::remove_file(&temporary);
+        }
     } else {
         let _ = std::fs::remove_file(&temporary);
     }
 }
 
 #[cfg(not(unix))]
-fn restore_previous_binary(path: &AbsolutePath, bytes: &[u8]) {
-    let _ = std::fs::write(path.as_str(), bytes);
+fn restore_previous_binary(path: &AbsolutePath, expected: Option<(u64, u64)>, bytes: &[u8]) {
+    if binary_file_identity(path) == expected {
+        let _ = std::fs::write(path.as_str(), bytes);
+    }
+}
+
+fn binary_file_identity(path: &AbsolutePath) -> Option<(u64, u64)> {
+    let metadata = std::fs::symlink_metadata(path.as_str()).ok()?;
+    if !metadata.file_type().is_file() {
+        return None;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        Some((metadata.dev(), metadata.ino()))
+    }
+    #[cfg(not(unix))]
+    {
+        Some((0, metadata.len()))
+    }
 }
 
 fn probe_installed_version(
