@@ -1,7 +1,7 @@
 ---
 id: feature-split-status-application
 kind: feature
-stage: implementing
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -431,3 +431,33 @@ The feature remains pure refactoring. If implementation uncovers a behavior
 change or bug (including a missing `plan`/`sync` candidate), stop the extraction
 and route that change as a separate non-`[refactor]` item rather than hiding it
 in a module move.
+
+## Children complete (2026-07-12)
+
+All five extraction children reached `stage: done` after review. Their
+implementation commits are `0a4814d`, `cc3a5a6`, `411904f`, `e3e1192`, and
+`de3c132`; the supporting refactors are `209564f`, `53f2f81`, and `d78d3af`.
+The bundle preserves public signatures, command output/error contracts,
+operation IDs, lifecycle ordering, and filesystem/state boundaries. Shared
+private helper support intentionally remains in `application.rs` where it is
+used across sibling modules.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: The implementation keeps several shared helper types and projections
+in `application.rs` instead of relocating every helper into its responsibility
+module as the step sketches suggest. The resulting private module graph is
+coherent and the choice preserves shared support without changing behavior.
+
+**Notes**: Deep feature review in a fresh same-harness context at standard
+weight. Aggregate review covered design alignment, public and CLI contracts,
+serialization/output and error stability, operation IDs, state/journal and
+filesystem ordering, native lifecycle routing, plan mutation-freedom, sync
+selection, status read-only behavior, adoption locking, and foundation-doc
+alignment. `cargo fmt --all -- --check`, `cargo test --workspace --all-targets
+--offline`, `cargo clippy --workspace --all-targets --offline -- -D warnings`,
+and `git diff --check` all pass.
