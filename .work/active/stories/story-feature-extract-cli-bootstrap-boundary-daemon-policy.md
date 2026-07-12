@@ -1,7 +1,7 @@
 ---
 id: story-feature-extract-cli-bootstrap-boundary-daemon-policy
 kind: story
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: feature-extract-cli-bootstrap-boundary
 depends_on: [story-feature-extract-cli-bootstrap-boundary-publication]
@@ -65,3 +65,25 @@ Moving the policy wrapper could alter update timing or service destination error
 mapping. Restore the policy block and wrapper to `entrypoint.rs` on failure;
 the source-only revert changes no daemon service files or binaries.
 
+## Implementation notes
+
+- Execution capability: highest available local implementation; daemon policy
+  and destination discovery were moved mechanically with the publication
+  boundary.
+- Review weight: standard (autopilot default).
+- Files changed: `crates/cli/src/bootstrap_commands.rs`,
+  `crates/cli/src/entrypoint.rs`.
+- Tests added: none; daemon policy, lifecycle merge, lock, and destination
+  fixtures remain unchanged and continue to pass.
+- Discrepancies from design: the policy extraction landed in the same source
+  move as the preceding child stories so the private module had one complete,
+  buildable owner; daemon lifecycle ownership and output contracts are
+  unchanged.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap --offline` (59 unit/compiled/package tests passed)
+- `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
+- `git diff --check`
