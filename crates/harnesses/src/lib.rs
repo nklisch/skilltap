@@ -29,6 +29,11 @@ pub use lifecycle::{
     NativeLifecycleAction, NativeLifecycleError, NativeLifecyclePort, NativeLifecycleRequest,
     NativeResourcePresence, native_arguments, observe_native_resource, run_native_lifecycle,
 };
+mod bootstrap;
+pub use bootstrap::{
+    HarnessBootstrapPolicy, HarnessSetupResult, SetupReason, setup_detected_plugin,
+    setup_first_party_plugin,
+};
 
 pub use skilltap_core::VERSION;
 

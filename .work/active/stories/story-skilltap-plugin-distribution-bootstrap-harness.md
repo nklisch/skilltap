@@ -46,4 +46,8 @@ or an undocumented post-install hook.
 
 ## Implementation notes
 - Execution capability: highest available local capability; this crosses native harness contracts and trust boundaries.
-- Review weight: standard (autopilot project default).
+- Review weight: standard (source: autopilot project default).
+- Files changed: `crates/harnesses/src/bootstrap.rs`, `crates/harnesses/src/lib.rs`.
+- Tests added: unknown-version observe-only and unreachable-target bounded-result tests; setup performs presence observation before any native mutation and returns actionable Codex/Claude next actions.
+- Discrepancies from design: setup policy accepts the configured executable and canonical source as application-owned inputs, keeping target probing and native command composition in the adapter.
+- Adjacent issues parked: none.
