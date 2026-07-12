@@ -12,8 +12,7 @@ use skilltap_core::{
 
 use crate::{
     HarnessKind, NativeLifecycleAction, NativeLifecycleRequest, NativeResourcePresence,
-    detect_configured_installation, observe_native_resource,
-    run_native_lifecycle, select_profile,
+    detect_configured_installation, observe_native_resource, run_native_lifecycle, select_profile,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]

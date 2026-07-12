@@ -154,7 +154,10 @@ impl ReleaseManifest {
     }
 
     pub fn artifact(&self, key: ArtifactKey) -> Result<&ReleaseArtifact, ArtifactError> {
-        let mut matches = self.artifacts.iter().filter(|artifact| artifact.key == key);
+        let mut matches = self
+            .artifacts
+            .iter()
+            .filter(|artifact| artifact.key() == &key);
         let first = matches.next().ok_or(ArtifactError::UnsupportedAsset)?;
         if matches.next().is_some() {
             return Err(ArtifactError::UnsupportedAsset);
@@ -270,7 +273,7 @@ impl BinaryInstaller for SystemBinaryInstaller {
     ) -> Result<(), ArtifactError> {
         let bytes = fs::read(artifact.as_str()).map_err(|_| ArtifactError::InstallFailed)?;
         let digest = format!("{:x}", Sha256::digest(&bytes));
-        if digest != expected.sha256 {
+        if digest != expected.sha256() {
             return Err(ArtifactError::ChecksumMismatch);
         }
         let metadata =
@@ -347,7 +350,7 @@ fn sync_parent(parent: &Path) -> std::io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bootstrap::{ArtifactArch, ReleaseVersion};
+    use crate::bootstrap::ArtifactArch;
     use crate::runtime::SupportedPlatform;
 
     fn key() -> ArtifactKey {
