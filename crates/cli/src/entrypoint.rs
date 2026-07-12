@@ -316,26 +316,6 @@ fn execute_system_instruction_status(args: &ScopedOutputArgs) -> Outcome {
     })
 }
 
-#[allow(dead_code)]
-fn execute_system_lifecycle_preview(
-    command: &'static str,
-    scope: &crate::command::ScopeArgs,
-    target: &crate::command::TargetArgs,
-    source: Option<&str>,
-    name: Option<&str>,
-) -> Outcome {
-    execute_system_reconciliation(command, |application| {
-        application.execute_lifecycle_preview(
-            command,
-            scope,
-            target,
-            skilltap_core::domain::ResourceKind::Plugin,
-            source,
-            name,
-        )
-    })
-}
-
 fn execute_system_skill_install(
     command: &'static str,
     scope: &crate::command::ScopeArgs,

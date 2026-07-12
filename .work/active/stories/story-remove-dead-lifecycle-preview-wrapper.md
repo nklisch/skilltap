@@ -1,7 +1,7 @@
 ---
 id: story-remove-dead-lifecycle-preview-wrapper
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: null
 depends_on: []
@@ -48,3 +48,23 @@ strict clippy to prove no hidden caller or contract changes.
 
 Risk is low: the function is private and has no callers. Restore the deleted
 wrapper if a compile or test search reveals a missed call site.
+
+## Implementation notes
+
+- Execution capability: highest available local implementation; one-line
+  dead-code removal after repository-wide caller verification.
+- Review weight: standard (autopilot default).
+- Files changed: `crates/cli/src/entrypoint.rs`.
+- Tests added: none; existing lifecycle preview application behavior remains
+  untouched.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
+
+## Verification
+
+- Repository-wide `rg` confirmed no remaining
+  `execute_system_lifecycle_preview` caller or definition.
+- `cargo fmt --all -- --check`
+- `cargo test --workspace --all-targets --offline`
+- `cargo clippy --workspace --all-targets --offline -- -D warnings`
+- `git diff --check`
