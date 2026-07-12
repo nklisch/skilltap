@@ -1,0 +1,42 @@
+---
+id: story-skilltap-plugin-package-validation
+kind: story
+stage: implementing
+tags: [testing, architecture]
+parent: epic-skilltap-plugin-distribution-package
+depends_on: [story-skilltap-plugin-package-assets]
+release_binding: null
+gate_origin: null
+created: 2026-07-12
+updated: 2026-07-12
+---
+
+# Validate the canonical plugin package boundary
+
+Add a compiled workspace test that validates the checked-in publication tree
+without mutating native harness state or the active sibling publisher. Reuse
+the core complete-skill and frontmatter contracts, while keeping Claude and
+Codex JSON validation as separate channel branches.
+
+## Acceptance criteria
+
+- `crates/cli/tests/plugin_package.rs` validates both manifests, both native
+  catalogs, the shared complete skill tree, identity/version parity, and
+  relative source containment.
+- Tests pass for the valid package and fail for isolated fixtures with
+  malformed JSON, missing channel-required fields, name/version drift,
+  `../` traversal, missing/non-regular `SKILL.md`, invalid frontmatter, and
+  symlinked skill entries.
+- Supporting files beside `SKILL.md` remain included in complete-tree
+  validation; the test never treats `SKILL.md` as the entire artifact.
+- The expected version is derived from the workspace release identity rather
+  than duplicated in test constants.
+- Test fixtures are created below test-support temporary roots and no command
+  writes to `$HOME`, Codex/Claude caches, or `../skills`.
+
+## Verification
+
+Run the focused compiled test, then `cargo test --workspace --all-targets` and
+`cargo clippy --workspace --all-targets -- -D warnings`. The package test's
+failure messages should name the channel and relative path that violated the
+contract so release failures are actionable.

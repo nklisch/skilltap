@@ -1,0 +1,44 @@
+---
+id: story-skilltap-plugin-package-assets
+kind: story
+stage: implementing
+tags: [architecture, infra]
+parent: epic-skilltap-plugin-distribution-package
+depends_on: []
+release_binding: null
+gate_origin: null
+created: 2026-07-12
+updated: 2026-07-12
+---
+
+# Establish canonical plugin publication assets
+
+Create the repository-owned `plugin/` publication root with the complete
+shared `skilltap` skill directory, separate native Claude and Codex manifests,
+and each harness's native marketplace catalog. Use `skilltap` as the exact
+public identity and the Cargo workspace version as the package version. The
+catalogs must refer to the package root through their documented relative
+source form and must not flatten one harness's schema into the other.
+
+## Acceptance criteria
+
+- `plugin/.claude-plugin/plugin.json` and `plugin/.codex-plugin/plugin.json`
+  are valid native manifests with matching public name, description, and
+  release version.
+- Claude's catalog is at `plugin/.claude-plugin/marketplace.json` and Codex's
+  catalog is at `plugin/.agents/plugins/marketplace.json`; each uses its own
+  required fields and contains one exact `skilltap` entry.
+- `plugin/skills/skilltap/SKILL.md` is a complete strict skill stub with
+  top-level `name: skilltap` and non-empty `description`; no component is
+  stored below a manifest directory.
+- The package tree has no symlinks, path traversal, arbitrary discovery
+  metadata, or unrelated harness components.
+- The asset layout is exercised by the package validation story before the
+  feature can advance.
+
+## Notes
+
+The guidance feature owns the substantive skill prose and may add supporting
+files beneath the same complete skill directory. Do not edit the active
+`../skills` publisher in this story; release integration validates its direct
+source pointer later.
