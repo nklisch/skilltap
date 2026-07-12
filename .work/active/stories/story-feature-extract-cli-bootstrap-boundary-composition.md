@@ -1,7 +1,7 @@
 ---
 id: story-feature-extract-cli-bootstrap-boundary-composition
 kind: story
-stage: review
+stage: done
 tags: [refactor, infra]
 parent: feature-extract-cli-bootstrap-boundary
 depends_on: []
@@ -86,3 +86,17 @@ composition block; this source-only move touches no native files or state.
 - `cargo test -p skilltap --offline` (59 unit/compiled/package tests passed)
 - `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
 - `git diff --check`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review, standard weight. The dispatcher now calls the
+private module boundary; composition fixtures retain their assertions and all
+CLI tests, formatting, clippy, and diff checks are green. The publication and
+daemon extraction landed in the same mechanical move to keep the module
+buildable, and their child stories remain tracked for lifecycle accounting.
