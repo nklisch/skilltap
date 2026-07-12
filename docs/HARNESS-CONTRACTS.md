@@ -120,7 +120,8 @@ Existing user-authored native instruction files are conflicts until their conten
 
 The Codex adapter locates the configured `codex` binary and reads its version.
 
-The adapter selects a verified compiled profile for the exact Codex version and
+The adapter selects a verified compiled profile for exact Codex version
+`0.144.1` and
 scope. Help and JSON probes may narrow that profile before use. Native plugin
 installation is available only when the profile includes the operation and the
 installed CLI still exposes:
@@ -141,6 +142,10 @@ codex plugin marketplace remove
 ```
 
 If an installed Codex release lacks one of these commands, the corresponding capability is unavailable. skilltap does not substitute cache mutation.
+
+This profile does not grant plugin update: Codex `0.144.1` exposes add, list,
+and remove but no plugin update command. Marketplace upgrade is a distinct
+catalog-source operation.
 
 ### Native paths
 
@@ -216,7 +221,8 @@ Direct TOML editing is used only for documented settings without a native lifecy
 
 The Claude adapter locates the configured `claude` binary and reads its version.
 
-Native plugin lifecycle is available only when a verified compiled profile for
+Native plugin lifecycle is available only when the verified compiled profile
+for Claude Code `2.1.201` and
 the exact Claude version and scope includes the operation and runtime evidence
 has not narrowed it:
 
@@ -228,6 +234,11 @@ claude plugin uninstall
 claude plugin enable
 claude plugin disable
 ```
+
+Claude marketplace and plugin list commands accept `--json` but not `--scope`.
+Marketplace update also omits `--scope`; project selection is supplied by the
+bounded working directory. Marketplace add/remove and plugin mutations receive
+the exact `user` or `local` scope supported by their operation.
 
 Native marketplace lifecycle follows the same compiled-authority and
 narrowing-only rule for:

@@ -352,7 +352,7 @@ fn render_script(
             script.push_str("printf '2.1.201 (Claude Code)\\n'\nexit 0\n");
         }
         FakeNativeMode::VersionKnown => {
-            script.push_str("printf '%s' '{\"version\":\"3.0.0\"}'\nexit 0\n");
+            script.push_str("printf '%s' '{\"version\":\"0.144.1\"}'\nexit 0\n");
         }
         FakeNativeMode::VersionUnknown => {
             script.push_str("printf '%s' '{\"version\":\"99.0.0\"}'\nexit 0\n");
@@ -547,7 +547,7 @@ mod tests {
             ),
             (
                 FakeNativeMode::VersionKnown,
-                b"{\"version\":\"3.0.0\"}".as_slice(),
+                b"{\"version\":\"0.144.1\"}".as_slice(),
             ),
             (
                 FakeNativeMode::VersionUnknown,

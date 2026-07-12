@@ -154,7 +154,7 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
     .unwrap();
     match known.reachability() {
         HarnessReachability::Reachable { native_version, .. } => {
-            assert_eq!(native_version.as_str(), "3.0.0")
+            assert_eq!(native_version.as_str(), "0.144.1")
         }
         HarnessReachability::Unreachable { .. } => panic!("known fixture is reachable"),
     }
@@ -176,7 +176,7 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
 }
 
 #[test]
-fn exact_real_versions_are_reachable_but_remain_observe_only() {
+fn exact_real_versions_are_reachable_and_select_exact_profiles() {
     for (harness, mode, binary, expected) in [
         (
             HarnessKind::Codex,
@@ -208,7 +208,7 @@ fn exact_real_versions_are_reachable_but_remain_observe_only() {
         assert!(
             select_profile(harness, native_version)
                 .mutation_capabilities()
-                .is_none()
+                .is_some()
         );
     }
 }
@@ -363,11 +363,26 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
 
 #[test]
 fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
-    let known = skilltap_core::domain::NativeVersion::new("3.0.0").unwrap();
+    let known = skilltap_core::domain::NativeVersion::new("0.144.1").unwrap();
     let unknown = skilltap_core::domain::NativeVersion::new("99.0.0").unwrap();
     let known_profile = select_profile(HarnessKind::Codex, &known);
     assert!(known_profile.mutation_capabilities().is_some());
-    assert_eq!(known_profile.profile_id().unwrap().as_str(), "codex-v3");
+    assert_eq!(
+        known_profile.profile_id().unwrap().as_str(),
+        "codex-0-144-1"
+    );
+
+    for version in ["3.0.0", "0.144.0", "0.144.2", "2.1.201"] {
+        assert!(
+            select_profile(
+                HarnessKind::Codex,
+                &skilltap_core::domain::NativeVersion::new(version).unwrap()
+            )
+            .mutation_capabilities()
+            .is_none(),
+            "{version} must not select the exact Codex profile"
+        );
+    }
 
     let unknown_profile = select_profile(HarnessKind::Codex, &unknown);
     assert!(unknown_profile.mutation_capabilities().is_none());
@@ -376,7 +391,7 @@ fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
 
 #[test]
 fn probe_narrowing_is_strict_and_never_widens_profiles() {
-    let known = skilltap_core::domain::NativeVersion::new("3.0.0").unwrap();
+    let known = skilltap_core::domain::NativeVersion::new("0.144.1").unwrap();
     let profile = select_profile(HarnessKind::Codex, &known);
     let narrowed = skilltap_harnesses::narrow_profile(
         &profile,
@@ -420,7 +435,7 @@ fn probe_narrowing_is_strict_and_never_widens_profiles() {
         ProcessLimits::new(1_000, 4_096, 4_096, 8_192).unwrap(),
     );
     let probed = probe_profile(&profile, &request, JsonLimits::new(4_096, 16).unwrap()).unwrap();
-    assert_eq!(probed.profile_id().unwrap().as_str(), "codex-v3");
+    assert_eq!(probed.profile_id().unwrap().as_str(), "codex-0-144-1");
 }
 
 #[test]

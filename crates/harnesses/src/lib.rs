@@ -612,13 +612,13 @@ pub fn select_profile(harness: HarnessKind, version: &NativeVersion) -> Capabili
     let capabilities = compiled_capabilities(harness);
     let known = matches!(
         (harness, version.as_str()),
-        (HarnessKind::Codex, "3.0.0") | (HarnessKind::Claude, "3.0.0")
+        (HarnessKind::Codex, "0.144.1") | (HarnessKind::Claude, "2.1.201")
     );
     if known {
         CapabilityProfileSelection::verified(
             CapabilityProfileId::new(match harness {
-                HarnessKind::Codex => "codex-v3",
-                HarnessKind::Claude => "claude-v3",
+                HarnessKind::Codex => "codex-0-144-1",
+                HarnessKind::Claude => "claude-2-1-201",
             })
             .expect("compiled profile identifiers are valid"),
             capabilities,
@@ -629,89 +629,34 @@ pub fn select_profile(harness: HarnessKind, version: &NativeVersion) -> Capabili
 }
 
 fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
+    let support = |capability: &str, supported: bool| {
+        (
+            CapabilityId::new(capability).expect("compiled capability is valid"),
+            if supported {
+                CapabilitySupport::Supported
+            } else {
+                CapabilitySupport::Unverified
+            },
+        )
+    };
+    let codex = harness == HarnessKind::Codex;
     let global = CapabilitySet::new([
-        (
-            CapabilityId::new("harness.observe").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("plugin.install").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("plugin.remove").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("plugin.update").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("marketplace.register").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("marketplace.remove").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("marketplace.update").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
+        support("harness.observe", true),
+        support("plugin.install", true),
+        support("plugin.remove", true),
+        support("plugin.update", !codex),
+        support("marketplace.register", true),
+        support("marketplace.remove", true),
+        support("marketplace.update", true),
     ]);
     let project = CapabilitySet::new([
-        (
-            CapabilityId::new("harness.observe").expect("compiled capability is valid"),
-            CapabilitySupport::Supported,
-        ),
-        (
-            CapabilityId::new("plugin.install").expect("compiled capability is valid"),
-            if matches!(harness, HarnessKind::Codex) {
-                CapabilitySupport::Unverified
-            } else {
-                CapabilitySupport::Supported
-            },
-        ),
-        (
-            CapabilityId::new("plugin.remove").expect("compiled capability is valid"),
-            if matches!(harness, HarnessKind::Codex) {
-                CapabilitySupport::Unverified
-            } else {
-                CapabilitySupport::Supported
-            },
-        ),
-        (
-            CapabilityId::new("plugin.update").expect("compiled capability is valid"),
-            if matches!(harness, HarnessKind::Codex) {
-                CapabilitySupport::Unverified
-            } else {
-                CapabilitySupport::Supported
-            },
-        ),
-        (
-            CapabilityId::new("marketplace.register").expect("compiled capability is valid"),
-            if matches!(harness, HarnessKind::Codex) {
-                CapabilitySupport::Unverified
-            } else {
-                CapabilitySupport::Supported
-            },
-        ),
-        (
-            CapabilityId::new("marketplace.remove").expect("compiled capability is valid"),
-            if matches!(harness, HarnessKind::Codex) {
-                CapabilitySupport::Unverified
-            } else {
-                CapabilitySupport::Supported
-            },
-        ),
-        (
-            CapabilityId::new("marketplace.update").expect("compiled capability is valid"),
-            if matches!(harness, HarnessKind::Codex) {
-                CapabilitySupport::Unverified
-            } else {
-                CapabilitySupport::Supported
-            },
-        ),
+        support("harness.observe", true),
+        support("plugin.install", !codex),
+        support("plugin.remove", !codex),
+        support("plugin.update", !codex),
+        support("marketplace.register", !codex),
+        support("marketplace.remove", !codex),
+        support("marketplace.update", !codex),
     ]);
     ScopedCapabilitySets::new(global, project)
 }

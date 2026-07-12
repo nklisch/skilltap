@@ -16,7 +16,7 @@ fn write_fake_claude(
 ) -> (skilltap_core::domain::ConfiguredBinary, std::path::PathBuf) {
     write_fake_claude_version(
         root,
-        r#"{"version":"3.0.0"}"#,
+        "2.1.201 (Claude Code)",
         marketplace_payload,
         plugin_payload,
     )
@@ -60,7 +60,7 @@ fn installation(target: HarnessKind) -> HarnessInstallation {
                 AbsolutePath::new("/tmp/skilltap-fake-harness").unwrap(),
                 ExecutableFileIdentity::new(1, 1),
             ),
-            native_version: NativeVersion::new("3.0.0").unwrap(),
+            native_version: NativeVersion::new("2.1.201").unwrap(),
         },
     )
 }
@@ -88,7 +88,7 @@ fn claude_setup_uses_marketplace_then_qualified_plugin_vectors() {
     let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
     assert!(matches!(result, HarnessSetupResult::Installed { .. }));
     let calls = fs::read_to_string(log).unwrap();
-    assert!(calls.contains("plugin marketplace list --json --scope user"));
+    assert!(calls.contains("plugin marketplace list --json"));
     assert!(
         calls.contains(
             "plugin marketplace add https://github.com/nklisch/skilltap/tree/main/plugin"
@@ -111,8 +111,8 @@ fn claude_bootstrap_presence_matrix_is_read_first_and_target_isolated() {
     assert!(matches!(result, HarnessSetupResult::AlreadyPresent { .. }));
     let calls = fs::read_to_string(&log).unwrap();
     assert!(calls.lines().any(|line| line == "--version"));
-    assert!(calls.contains("plugin marketplace list --json --scope user"));
-    assert!(calls.contains("plugin list --json --scope user"));
+    assert!(calls.contains("plugin marketplace list --json"));
+    assert!(calls.contains("plugin list --json"));
     assert!(!calls.contains("marketplace add"));
     assert!(!calls.contains("plugin install"));
     assert!(!calls.contains("codex"));

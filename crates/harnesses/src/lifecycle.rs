@@ -51,6 +51,7 @@ pub enum NativeLifecycleError {
     MissingSource,
     OptionLikeArgument(&'static str),
     UnsupportedProjectScope,
+    UnsupportedAction,
     Runtime(ObservationRuntimeError),
 }
 
@@ -67,6 +68,7 @@ impl fmt::Display for NativeLifecycleError {
             Self::UnsupportedProjectScope => {
                 "the native harness has no verified project-scoped lifecycle command"
             }
+            Self::UnsupportedAction => "the native harness has no verified lifecycle command",
             Self::Runtime(error) => return error.fmt(formatter),
         })
     }
@@ -97,6 +99,11 @@ pub fn native_arguments(
         return Err(NativeLifecycleError::OptionLikeArgument("source"));
     }
     let project = matches!(request.scope, Scope::Project(_));
+    if request.harness == HarnessKind::Codex
+        && request.action == NativeLifecycleAction::PluginUpdate
+    {
+        return Err(NativeLifecycleError::UnsupportedAction);
+    }
     match request.harness {
         HarnessKind::Codex if project => Err(NativeLifecycleError::UnsupportedProjectScope),
         HarnessKind::Claude => {
@@ -191,10 +198,6 @@ pub fn observe_native_resource(
 }
 
 fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
-    let scope = match &request.scope {
-        Scope::Global => "user",
-        Scope::Project(_) => "local",
-    };
     let mut args = vec![OsString::from("plugin")];
     match request.action {
         NativeLifecycleAction::MarketplaceAdd
@@ -211,9 +214,6 @@ fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
         | NativeLifecycleAction::PluginUpdate => {
             args.extend(["list", "--json"].into_iter().map(OsString::from));
         }
-    }
-    if request.harness == HarnessKind::Claude {
-        args.extend(["--scope", scope].into_iter().map(OsString::from));
     }
     args
 }
@@ -546,7 +546,9 @@ fn claude_arguments(request: &NativeLifecycleRequest, scope: &str) -> Vec<OsStri
                 .map(OsString::from),
         ),
     }
-    args.extend(["--scope", scope].into_iter().map(OsString::from));
+    if request.action != NativeLifecycleAction::MarketplaceUpdate {
+        args.extend(["--scope", scope].into_iter().map(OsString::from));
+    }
     args
 }
 
@@ -607,6 +609,32 @@ mod tests {
             claude_update,
             ["plugin", "update", "formatter@team", "--scope", "user"].map(OsString::from)
         );
+        let claude_marketplace_update = native_arguments(&request(
+            HarnessKind::Claude,
+            NativeLifecycleAction::MarketplaceUpdate,
+            Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
+        ))
+        .unwrap();
+        assert_eq!(
+            claude_marketplace_update,
+            ["plugin", "marketplace", "update", "formatter@team"].map(OsString::from)
+        );
+        assert_eq!(
+            native_list_arguments(&request(
+                HarnessKind::Claude,
+                NativeLifecycleAction::MarketplaceUpdate,
+                Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
+            )),
+            ["plugin", "marketplace", "list", "--json"].map(OsString::from)
+        );
+        assert_eq!(
+            native_list_arguments(&request(
+                HarnessKind::Claude,
+                NativeLifecycleAction::PluginInstall,
+                Scope::Global,
+            )),
+            ["plugin", "list", "--json"].map(OsString::from)
+        );
         let codex_remove = native_arguments(&request(
             HarnessKind::Codex,
             NativeLifecycleAction::MarketplaceRemove,
@@ -625,6 +653,14 @@ mod tests {
             )),
             Err(NativeLifecycleError::UnsupportedProjectScope)
         ));
+        assert_eq!(
+            native_arguments(&request(
+                HarnessKind::Codex,
+                NativeLifecycleAction::PluginUpdate,
+                Scope::Global,
+            )),
+            Err(NativeLifecycleError::UnsupportedAction)
+        );
     }
 
     #[test]

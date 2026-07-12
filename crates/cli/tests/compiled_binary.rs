@@ -241,7 +241,13 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         if *command != "daemon run" {
             arguments.push("--json");
         }
-        let output = run(&machine, &arguments);
+        let output = if *command == "harness list" {
+            machine
+                .run_with_path(&binary(), &arguments, machine.working_directory())
+                .expect("run harness list with isolated PATH")
+        } else {
+            run(&machine, &arguments)
+        };
         if command.starts_with("harness ") {
             assert_code(&output, if *command == "harness list" { 2 } else { 0 });
             let value = json(&output);
@@ -400,8 +406,15 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
 fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_only() {
     let machine = machine();
     let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let claude_fixture = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
 
-    let first_list = run(&machine, &["harness", "list", "--json"]);
+    let first_list = machine
+        .run_with_path(
+            &binary(),
+            &["harness", "list", "--json"],
+            machine.working_directory(),
+        )
+        .expect("run first-use harness list with isolated PATH");
     assert_code(&first_list, 2);
     let first_value = json(&first_list);
     assert_eq!(first_value["command"], "harness list");
@@ -422,8 +435,8 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     );
     assert!(!config_root(&machine).exists());
 
-    let binary = fixture.executable();
-    let binary_text = binary.to_str().expect("fake binary path is UTF-8");
+    let fixture_binary = fixture.executable();
+    let binary_text = fixture_binary.to_str().expect("fake binary path is UTF-8");
     let enable = run(
         &machine,
         &[
@@ -439,6 +452,11 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     assert_eq!(json(&enable)["result"], "completed");
     let config_path = config_root(&machine).join("config.toml");
     assert!(config_path.is_file());
+    let configured = fs::read_to_string(&config_path).unwrap().replace(
+        "binary = \"claude\"",
+        &format!("binary = {}", toml_string(claude_fixture.executable())),
+    );
+    fs::write(&config_path, configured).unwrap();
     let initial_bytes = fs::read(&config_path).expect("read enabled config");
     assert!(String::from_utf8_lossy(&initial_bytes).contains(binary_text));
     let initial_mtime = fs::metadata(&config_path)
@@ -465,12 +483,14 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
         initial_mtime
     );
 
-    let list_plain = run(&machine, &["harness", "list"]);
-    assert_code(&list_plain, 2);
+    let list_plain = machine
+        .run_with_path(&binary(), &["harness", "list"], machine.working_directory())
+        .expect("run harness list with isolated PATH");
+    assert_code(&list_plain, 0);
     assert!(list_plain.stderr.is_empty());
     assert!(stdout(&list_plain).contains("codex  enabled"));
     assert!(stdout(&list_plain).contains("claude  disabled"));
-    assert!(stdout(&list_plain).contains("Result: attention required"));
+    assert!(stdout(&list_plain).contains("Result: completed"));
 
     let disable = run(&machine, &["harness", "disable", "codex"]);
     assert_code(&disable, 0);
@@ -481,9 +501,9 @@ fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_onl
     assert!(String::from_utf8_lossy(&final_bytes).contains("enabled = false"));
 
     let final_list = run(&machine, &["harness", "list", "--json"]);
-    assert_code(&final_list, 2);
+    assert_code(&final_list, 0);
     let final_value = json(&final_list);
-    assert_eq!(final_value["result"], "attention_required");
+    assert_eq!(final_value["result"], "completed");
     assert!(
         final_value["resources"]
             .as_array()
@@ -1977,7 +1997,7 @@ fn reconciliation_plan_and_sync_preserve_nested_project_claude_bridge() {
         ("import", Some(b"@../AGENTS.md\n".as_slice())),
     ] {
         let machine = machine();
-        let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+        let fixture = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
         let mut config = native_config(fixture.executable(), fixture.executable());
         config = config.replace(
             "claude_mode = \"symlink\"",
@@ -2296,7 +2316,13 @@ fn instruction_repair_does_not_remove_broken_duplicate_bridge_entries() {
 #[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
     let machine = machine();
-    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
     let project = machine.working_directory().join("project");
     let nested = project.join("nested");
     fs::create_dir_all(&nested).unwrap();
@@ -2325,7 +2351,7 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
         &nested,
         &["status", "--project", "--target", "claude", "--json"],
     );
-    assert_code(&current, 2);
+    assert_code(&current, 0);
     let value = json(&current);
     assert_eq!(value["scope"]["kind"], "project");
     assert_eq!(value["scope"]["path"], project.to_str().unwrap());
@@ -2348,7 +2374,7 @@ fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() 
             "--json",
         ],
     );
-    assert_code(&explicit, 2);
+    assert_code(&explicit, 0);
     let value = json(&explicit);
     assert_eq!(value["scope"]["path"], project.to_str().unwrap());
     assert_eq!(value["summary"]["targets"], 2);
@@ -2555,11 +2581,12 @@ fn adopt_project_and_all_scopes_preserve_project_inventory_scope() {
 #[test]
 fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_repeats() {
     let machine = machine();
-    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
     write_owned(
         &machine,
         "config.toml",
-        &native_config(fixture.executable(), fixture.executable()),
+        &native_config(codex.executable(), claude.executable()),
     );
     for root in [
         machine.home().join(".codex"),
@@ -2675,8 +2702,13 @@ fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_rep
                 "--json",
             ],
         );
-        assert_code(&plugin_update, 0);
-        assert_eq!(json(&plugin_update)["result"], "completed");
+        if target == "codex" {
+            assert_code(&plugin_update, 2);
+            assert_eq!(json(&plugin_update)["result"], "attention_required");
+        } else {
+            assert_code(&plugin_update, 0);
+            assert_eq!(json(&plugin_update)["result"], "completed");
+        }
 
         let plugin_remove = run(
             &machine,
@@ -2711,11 +2743,12 @@ fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_rep
 #[test]
 fn native_mutations_keep_project_and_all_scope_boundaries() {
     let machine = machine();
-    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
     write_owned(
         &machine,
         "config.toml",
-        &native_config(fixture.executable(), fixture.executable()),
+        &native_config(codex.executable(), claude.executable()),
     );
     fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
     fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
@@ -3614,7 +3647,7 @@ fn reconciliation_reobserves_missing_native_plugin_before_reusing_journal() {
     fs::write(
         &harness,
         format!(
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '%s' '{{\"version\":\"3.0.0\"}}'; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"list\" ]; then if [ -f '{marker}' ]; then printf '%s' '{{\"plugins\":[{{\"name\":\"formatter@team\"}}]}}'; else printf '%s' '{{\"plugins\":[]}}'; fi; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"add\" ]; then : > '{marker}'; exit 0; fi\nexit 0\n",
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '%s' 'codex-cli 0.144.1'; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"list\" ]; then if [ -f '{marker}' ]; then printf '%s' '{{\"plugins\":[{{\"name\":\"formatter@team\"}}]}}'; else printf '%s' '{{\"plugins\":[]}}'; fi; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"add\" ]; then : > '{marker}'; exit 0; fi\nexit 0\n",
             marker = marker_literal
         ),
     )
