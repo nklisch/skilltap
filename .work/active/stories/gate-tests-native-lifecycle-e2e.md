@@ -38,3 +38,14 @@ unknown-field preservation, post-observation, and state journal records.
 ## Test location (suggested)
 
 `crates/cli/tests/compiled_binary.rs` and harness lifecycle integration tests.
+
+## Implementation Notes
+
+Added `native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_repeats`
+to the compiled-binary suite. It exercises marketplace add/update/remove and
+plugin install/update/remove for Codex and Claude, verifies operation output,
+inventory/state journaling, and immediate repeat no-op behavior in isolated
+native roots.
+
+Verification: the focused test passes; the full `compiled_binary` integration
+suite passes for this story's coverage.

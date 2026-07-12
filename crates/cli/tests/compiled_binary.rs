@@ -2037,6 +2037,444 @@ fn adopt_project_and_all_scopes_preserve_project_inventory_scope() {
     assert!(all_value["summary"]["already_managed"].as_u64().unwrap() > 0);
 }
 
+#[test]
+fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_repeats() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()),
+    );
+    for root in [
+        machine.home().join(".codex"),
+        machine.home().join(".claude"),
+    ] {
+        fs::create_dir_all(root.join("plugins")).unwrap();
+        fs::create_dir_all(root.join("skills")).unwrap();
+    }
+
+    for target in ["codex", "claude"] {
+        let add = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                "https://example.invalid/team.git",
+                "--name",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&add, 0);
+        let add_value = json(&add);
+        assert_eq!(add_value["result"], "completed", "target={target}");
+        assert_eq!(add_value["summary"]["changed"], true, "target={target}");
+        assert!(
+            add_value["operations"]
+                .as_array()
+                .is_some_and(|operations| !operations.is_empty()),
+            "target={target}, output={add_value}"
+        );
+
+        let add_repeat = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                "https://example.invalid/team.git",
+                "--name",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&add_repeat, 0);
+        assert_eq!(json(&add_repeat)["summary"]["changed"], false);
+
+        let marketplace_update = run(
+            &machine,
+            &[
+                "marketplace",
+                "update",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&marketplace_update, 0);
+        assert_eq!(json(&marketplace_update)["result"], "completed");
+
+        let plugin = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "formatter@team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&plugin, 0);
+        let plugin_value = json(&plugin);
+        assert_eq!(plugin_value["result"], "completed", "target={target}");
+        assert_eq!(plugin_value["summary"]["changed"], true, "target={target}");
+        assert!(
+            plugin_value["operations"]
+                .as_array()
+                .is_some_and(|operations| !operations.is_empty()),
+            "target={target}, output={plugin_value}"
+        );
+        let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+        assert!(inventory.contains("plugin:formatter@team"));
+        let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+        assert!(state.contains("formatter@team"));
+
+        let plugin_repeat = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "formatter@team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&plugin_repeat, 0);
+        assert_eq!(json(&plugin_repeat)["summary"]["changed"], false);
+
+        let plugin_update = run(
+            &machine,
+            &[
+                "plugin",
+                "update",
+                "formatter@team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&plugin_update, 0);
+        assert_eq!(json(&plugin_update)["result"], "completed");
+
+        let plugin_remove = run(
+            &machine,
+            &[
+                "plugin",
+                "remove",
+                "formatter@team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&plugin_remove, 0);
+        assert_eq!(json(&plugin_remove)["result"], "completed");
+
+        let marketplace_remove = run(
+            &machine,
+            &[
+                "marketplace",
+                "remove",
+                "team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&marketplace_remove, 0);
+        assert_eq!(json(&marketplace_remove)["result"], "completed");
+    }
+}
+
+#[test]
+fn native_mutations_keep_project_and_all_scope_boundaries() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    let project = machine.working_directory().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let git = Command::new("git")
+        .args(["init", "--quiet"])
+        .current_dir(&project)
+        .output()
+        .unwrap();
+    assert!(
+        git.status.success(),
+        "{}",
+        String::from_utf8_lossy(&git.stderr)
+    );
+
+    let global = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "global@team",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&global, 0);
+    let project_install = run_in(
+        &machine,
+        &project,
+        &[
+            "plugin",
+            "install",
+            "project@team",
+            "--project",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&project_install, 0);
+    assert_eq!(json(&project_install)["scope"]["kind"], "project");
+    assert_eq!(
+        json(&project_install)["scope"]["path"],
+        project.to_str().unwrap()
+    );
+
+    let inventory_before =
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(inventory_before.contains("plugin:global@team"));
+    assert!(inventory_before.contains("plugin:project@team"));
+    let global_before = inventory_before.clone();
+
+    let remove_global = run(
+        &machine,
+        &[
+            "plugin",
+            "remove",
+            "global@team",
+            "--all-scopes",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&remove_global, 0);
+    let after_global_remove =
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(!after_global_remove.contains("plugin:global@team"));
+    assert!(after_global_remove.contains("plugin:project@team"));
+    assert_ne!(after_global_remove, global_before);
+
+    let codex_install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "shared@team",
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&codex_install, 0);
+    let before_target_remove =
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(before_target_remove.contains("targets = [\"claude\", \"codex\"]"));
+
+    let remove_codex = run(
+        &machine,
+        &[
+            "plugin",
+            "remove",
+            "shared@team",
+            "--all-scopes",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&remove_codex, 0);
+    let after_target_remove =
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(after_target_remove.contains("plugin:shared@team"));
+    assert!(after_target_remove.contains("targets = [\"claude\"]"));
+    assert!(after_target_remove.contains("plugin:project@team"));
+}
+
+#[test]
+fn safe_update_cycle_reports_changed_git_revision_and_records_daemon_result() {
+    let machine = machine();
+    let repository = machine.home().join("daemon-skill-source");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: daemon-skill\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    for args in [
+        vec!["init", "--quiet", "--initial-branch", "main"],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    write_owned(
+        &machine,
+        "config.toml",
+        &ENABLED_CONFIG.replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    let source = format!("file://{}", repository.to_str().unwrap());
+    let install = run(
+        &machine,
+        &["skill", "install", &source, "--target", "codex", "--json"],
+    );
+    assert_code(&install, 0);
+    let first_daemon = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&first_daemon, 0);
+    let first_value = json(&first_daemon);
+    assert_eq!(first_value["result"], "completed");
+    assert_eq!(first_value["summary"]["changed"], false);
+    let first_state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(first_state.contains("\"daemon_run\""));
+    assert!(first_state.contains("\"result\": \"completed\""));
+
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: daemon-skill\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+    let add = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "update",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+    let status = run(&machine, &["status", "--target", "codex", "--json"]);
+    assert_code(&status, 2);
+    let status_value = json(&status);
+    assert!(
+        status_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["id"]
+                .as_str()
+                .unwrap_or_default()
+                .starts_with("update:"))
+    );
+
+    let second_daemon = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&second_daemon, 0);
+    let second_value = json(&second_daemon);
+    assert_eq!(second_value["result"], "completed");
+    assert_eq!(second_value["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(machine.home().join(".agents/skills/daemon-skill/SKILL.md")).unwrap(),
+        "---\nname: daemon-skill\ndescription: v2\n---\nv2\n"
+    );
+    let second_state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(second_state.contains("\"daemon_run\""));
+    assert!(second_state.contains("\"result\": \"completed\""));
+}
+
+#[test]
+fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let service_root = machine.configuration_home().join("systemd/user");
+    fs::create_dir_all(&service_root).unwrap();
+    let service = service_root.join("skilltap-update.service");
+    let timer = service_root.join("skilltap-update.timer");
+
+    let disable_empty = run(&machine, &["daemon", "disable", "--json"]);
+    assert_code(&disable_empty, 0);
+    assert_eq!(json(&disable_empty)["summary"]["changed"], false);
+
+    fs::write(&service, "[Unit]\nDescription=unmanaged lookalike\n").unwrap();
+    let conflict = run(&machine, &["daemon", "enable", "--json"]);
+    assert_code(&conflict, 2);
+    let conflict_value = json(&conflict);
+    assert_eq!(
+        conflict_value["warnings"][0]["code"],
+        "daemon_definition_conflict"
+    );
+    assert_eq!(
+        fs::read(&service).unwrap(),
+        b"[Unit]\nDescription=unmanaged lookalike\n"
+    );
+
+    fs::remove_file(&service).unwrap();
+    fs::create_dir(&timer).unwrap();
+    let unreadable = run(&machine, &["daemon", "enable", "--json"]);
+    assert_code(&unreadable, 2);
+    let unreadable_value = json(&unreadable);
+    assert_eq!(
+        unreadable_value["warnings"][0]["code"],
+        "daemon_definition_unreadable"
+    );
+    assert!(service.is_file() || !service.exists());
+    assert!(timer.is_dir());
+}
+
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
     machine
         .run_in(&binary(), cwd, arguments)
