@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-bootstrap
 kind: feature
-stage: implementing
+stage: review
 tags: [infra, security]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package]
