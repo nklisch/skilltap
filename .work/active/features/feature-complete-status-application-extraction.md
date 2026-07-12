@@ -1,7 +1,7 @@
 ---
 id: feature-complete-status-application-extraction
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor]
 parent: null
 depends_on: []
@@ -255,3 +255,8 @@ already verified.
 
 1. `story-complete-status-application-extraction-status-projection`
 2. `story-complete-status-application-extraction-observation-support`
+
+## Children complete
+
+Both extraction stories are done with green verification and approved review
+records; the feature is ready for its aggregate review.
