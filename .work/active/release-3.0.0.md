@@ -231,4 +231,5 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
 - **gate-docs** (2026-07-12) — 3 findings (3 high); items
   `gate-docs-optional-daemon-vision`, `gate-docs-plan-sync-contract`, and
   `gate-docs-partial-acknowledgment-contract`.
-- **gate-patterns** — pending.
+- **gate-patterns** (2026-07-12) — 4 patterns extracted; item
+  `gate-patterns-3.0.0`. No inconsistencies found.
