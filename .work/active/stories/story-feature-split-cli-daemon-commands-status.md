@@ -1,7 +1,7 @@
 ---
 id: story-feature-split-cli-daemon-commands-status
 kind: story
-stage: review
+stage: done
 tags: [refactor, infra]
 parent: feature-split-cli-daemon-commands
 depends_on:
@@ -69,3 +69,18 @@ and dispatch calls in `entrypoint.rs`.
   idempotence coverage remains unchanged.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: Acceptance text names the legacy package selector skilltap-cli;
+the actual package is skilltap.
+
+**Notes**: Substrate review, fresh-context deep pass. Mechanical private
+module extraction preserves status projections, manager argument vectors,
+state diagnostics, and dispatch behavior; entrypoint retains only dispatch
+and daemon run. cargo test -p skilltap --offline, cargo fmt --all -- --check,
+workspace clippy with warnings denied, and git diff --check pass.
