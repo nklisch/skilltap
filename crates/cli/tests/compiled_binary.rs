@@ -1891,14 +1891,24 @@ fn daemon_enable_is_idempotent_in_an_isolated_config_root() {
     let first = run(&machine, &["daemon", "enable", "--json"]);
     assert!(first.status.code() == Some(0) || first.status.code() == Some(2));
     let first_value = json(&first);
+    #[cfg(target_os = "macos")]
+    let root = machine.home().join("Library/LaunchAgents");
+    #[cfg(not(target_os = "macos"))]
     let root = machine.configuration_home().join("systemd/user");
+    #[cfg(target_os = "macos")]
+    let service = root.join("com.skilltap.daemon.plist");
+    #[cfg(not(target_os = "macos"))]
     let service = root.join("skilltap-update.service");
+    #[cfg(not(target_os = "macos"))]
     let timer = root.join("skilltap-update.timer");
     assert!(service.is_file());
+    #[cfg(not(target_os = "macos"))]
     assert!(timer.is_file());
     let service_bytes = fs::read(&service).unwrap();
+    #[cfg(not(target_os = "macos"))]
     let timer_bytes = fs::read(&timer).unwrap();
     let service_mtime = fs::metadata(&service).unwrap().modified().unwrap();
+    #[cfg(not(target_os = "macos"))]
     let timer_mtime = fs::metadata(&timer).unwrap().modified().unwrap();
 
     let second = run(&machine, &["daemon", "enable", "--json"]);
@@ -1907,11 +1917,13 @@ fn daemon_enable_is_idempotent_in_an_isolated_config_root() {
     assert_eq!(second_value["summary"]["changed"], false);
     assert_eq!(first_value["command"], "daemon enable");
     assert_eq!(fs::read(&service).unwrap(), service_bytes);
+    #[cfg(not(target_os = "macos"))]
     assert_eq!(fs::read(&timer).unwrap(), timer_bytes);
     assert_eq!(
         fs::metadata(&service).unwrap().modified().unwrap(),
         service_mtime
     );
+    #[cfg(not(target_os = "macos"))]
     assert_eq!(
         fs::metadata(&timer).unwrap().modified().unwrap(),
         timer_mtime
@@ -3266,6 +3278,7 @@ fn safe_update_lock_contention_records_pending_failure_and_recovers() {
     );
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() {
     let machine = machine();
