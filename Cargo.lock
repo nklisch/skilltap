@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "skilltap"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "clap",
  "libc",
@@ -307,7 +307,7 @@ dependencies = [
 
 [[package]]
 name = "skilltap-core"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "libc",
  "serde",
@@ -319,7 +319,7 @@ dependencies = [
 
 [[package]]
 name = "skilltap-harnesses"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "serde_json",
  "skilltap-core",
@@ -329,7 +329,7 @@ dependencies = [
 
 [[package]]
 name = "skilltap-test-support"
-version = "3.0.0"
+version = "3.0.1"
 
 [[package]]
 name = "strsim"
