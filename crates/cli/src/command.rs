@@ -9,6 +9,15 @@ use skilltap_core::{
     storage::{ClaudeInstructionMode, HarnessBinary, UpdateInterval},
 };
 
+/// Shared guidance printed on every executable leaf command.
+///
+/// Keep this text in the command grammar so compiled help, plugin guidance,
+/// and website links all describe the same result/exit contract.
+pub(crate) const EXIT_STATUS_HELP: &str = concat!(
+    "Exit status: 0 completed; 1 invalid or pre-mutation failure; 2 attention ",
+    "or user decision required; 3 partial mutation requiring recovery."
+);
+
 #[derive(Debug, Parser)]
 #[command(
     name = "skilltap",
@@ -26,12 +35,16 @@ pub enum Command {
     /// Manage enabled agent harnesses.
     Harness(HarnessArgs),
     /// Adopt existing native resources into desired state.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Adopt(AdoptArgs),
     /// Inspect desired, observed, and managed state.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Status(StatusArgs),
     /// Show the operations required to reach desired state.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Plan(PlanArgs),
     /// Reconcile managed resources with desired state.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Sync(SyncArgs),
     /// Manage registered native marketplaces.
     Marketplace(MarketplaceArgs),
@@ -54,15 +67,19 @@ pub struct HarnessArgs {
 #[derive(Debug, Subcommand)]
 pub enum HarnessCommand {
     /// List configured harnesses.
+    #[command(after_help = EXIT_STATUS_HELP)]
     List(OutputArgs),
     /// Enable one harness.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Enable(HarnessEnableArgs),
     /// Disable one harness without uninstalling its resources.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Disable(HarnessChangeArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct HarnessEnableArgs {
+    /// Harness to enable (`codex` or `claude`).
     #[arg(value_parser = parse_harness)]
     pub harness: HarnessId,
     /// Override the harness executable name or absolute path.
@@ -74,6 +91,7 @@ pub struct HarnessEnableArgs {
 
 #[derive(Debug, Args)]
 pub struct HarnessChangeArgs {
+    /// Harness to disable (`codex` or `claude`).
     #[arg(value_parser = parse_harness)]
     pub harness: HarnessId,
     #[command(flatten)]
@@ -134,19 +152,25 @@ pub struct MarketplaceArgs {
 #[derive(Debug, Subcommand)]
 pub enum MarketplaceCommand {
     /// Register an explicit marketplace source.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Add(MarketplaceAddArgs),
     /// Remove a registered marketplace.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Remove(MarketplaceNamedArgs),
     /// Update one marketplace or all selected marketplaces.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Update(MarketplaceUpdateArgs),
     /// List registered marketplaces without browsing their contents.
+    #[command(after_help = EXIT_STATUS_HELP)]
     List(ScopedTargetArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct MarketplaceAddArgs {
+    /// Marketplace source locator (for example a Git URL or local path).
     #[arg(value_parser = parse_source_locator)]
     pub source: SourceLocator,
+    /// Stable native marketplace name to register.
     #[arg(long, value_parser = parse_native_id)]
     pub name: Option<NativeId>,
     #[command(flatten)]
@@ -155,6 +179,7 @@ pub struct MarketplaceAddArgs {
 
 #[derive(Debug, Args)]
 pub struct MarketplaceNamedArgs {
+    /// Registered marketplace name.
     #[arg(value_parser = parse_native_id)]
     pub name: NativeId,
     #[command(flatten)]
@@ -163,6 +188,7 @@ pub struct MarketplaceNamedArgs {
 
 #[derive(Debug, Args)]
 pub struct MarketplaceUpdateArgs {
+    /// Registered marketplace name; omit to update all selected marketplaces.
     #[arg(value_parser = parse_native_id)]
     pub name: Option<NativeId>,
     #[command(flatten)]
@@ -178,17 +204,22 @@ pub struct PluginArgs {
 #[derive(Debug, Subcommand)]
 pub enum PluginCommand {
     /// Install an exact plugin@marketplace selector.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Install(PluginInstallArgs),
     /// Remove one managed plugin.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Remove(PluginNamedArgs),
     /// Update one plugin or all selected plugins.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Update(PluginUpdateArgs),
     /// List installed and desired plugins.
+    #[command(after_help = EXIT_STATUS_HELP)]
     List(ScopedTargetArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct PluginInstallArgs {
+    /// Exact plugin selector in `<plugin>@<marketplace>` form.
     #[arg(value_name = "PLUGIN@MARKETPLACE", value_parser = parse_plugin_selector)]
     pub plugin: NativeId,
     #[command(flatten)]
@@ -205,6 +236,7 @@ pub struct PluginInstallArgs {
 
 #[derive(Debug, Args)]
 pub struct PluginNamedArgs {
+    /// Managed plugin name.
     #[arg(value_parser = parse_native_id)]
     pub plugin: NativeId,
     #[command(flatten)]
@@ -213,6 +245,7 @@ pub struct PluginNamedArgs {
 
 #[derive(Debug, Args)]
 pub struct PluginUpdateArgs {
+    /// Managed plugin name; omit to update all selected plugins.
     #[arg(value_parser = parse_native_id)]
     pub plugin: Option<NativeId>,
     #[command(flatten)]
@@ -234,23 +267,31 @@ pub struct SkillArgs {
 #[derive(Debug, Subcommand)]
 pub enum SkillCommand {
     /// Install one explicit skill directory or source.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Install(SkillInstallArgs),
     /// Remove one managed standalone skill.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Remove(SkillNamedArgs),
     /// Update one skill or all selected skills.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Update(SkillUpdateArgs),
     /// List installed and desired standalone skills.
+    #[command(after_help = EXIT_STATUS_HELP)]
     List(ScopedTargetArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct SkillInstallArgs {
+    /// Skill source locator (the complete directory must contain SKILL.md).
     #[arg(value_parser = parse_source_locator)]
     pub source: SourceLocator,
+    /// Desired standalone skill name.
     #[arg(long, value_parser = parse_native_id)]
     pub name: Option<NativeId>,
+    /// Git revision to fetch for the skill source.
     #[arg(long = "ref", value_name = "GIT_REF", value_parser = parse_requested_revision)]
     pub requested_revision: Option<RequestedRevision>,
+    /// Relative subdirectory containing the skill.
     #[arg(long, value_name = "SUBDIRECTORY", value_parser = parse_relative_path)]
     pub path: Option<RelativeArtifactPath>,
     #[command(flatten)]
@@ -265,6 +306,7 @@ pub struct SkillInstallArgs {
 
 #[derive(Debug, Args)]
 pub struct SkillNamedArgs {
+    /// Managed standalone skill name.
     #[arg(value_parser = parse_native_id)]
     pub skill: NativeId,
     #[command(flatten)]
@@ -273,6 +315,7 @@ pub struct SkillNamedArgs {
 
 #[derive(Debug, Args)]
 pub struct SkillUpdateArgs {
+    /// Managed skill name; omit to update all selected skills.
     #[arg(value_parser = parse_native_id)]
     pub skill: Option<NativeId>,
     #[command(flatten)]
@@ -294,15 +337,19 @@ pub struct InstructionsArgs {
 #[derive(Debug, Subcommand)]
 pub enum InstructionsCommand {
     /// Create canonical instructions and required harness bridges.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Setup(InstructionsSetupArgs),
     /// Inspect canonical instructions and harness bridges.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Status(ScopedOutputArgs),
     /// Repair bridges already managed by skilltap.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Repair(InstructionsRepairArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct InstructionsSetupArgs {
+    /// Claude instruction bridge mode (`symlink` or `import`).
     #[arg(long, value_name = "MODE", value_parser = parse_instruction_mode)]
     pub mode: Option<ClaudeInstructionMode>,
     #[command(flatten)]
@@ -332,17 +379,22 @@ pub struct DaemonArgs {
 #[derive(Debug, Subcommand)]
 pub enum DaemonCommand {
     /// Install and start the user update service.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Enable(DaemonEnableArgs),
     /// Stop and remove the user update service.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Disable(OutputArgs),
     /// Inspect the user update service.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Status(OutputArgs),
     /// Run one foreground daemon cycle.
+    #[command(after_help = EXIT_STATUS_HELP)]
     Run(OutputArgs),
 }
 
 #[derive(Debug, Args)]
 pub struct DaemonEnableArgs {
+    /// Update interval for the user service (for example `6h`).
     #[arg(long, value_name = "DURATION", value_parser = parse_update_interval)]
     pub interval: Option<UpdateInterval>,
     #[command(flatten)]

@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cli-help-contract
 kind: story
-stage: implementing
+stage: review
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on: []
@@ -29,3 +29,11 @@ Acceptance criteria:
   descriptions or misplaced scope, target, acknowledgment, selector, and JSON
   flags.
 - Existing parser behavior and the shared `--yes` semantics are unchanged.
+
+## Implementation notes
+- Execution capability: highest available local capability; this changes the public agent-facing CLI contract.
+- Review weight: standard (autopilot project default).
+- Files changed: `crates/cli/src/command.rs`, `crates/cli/src/command/tests.rs`.
+- Tests added: generated command-tree help/exit-footer coverage and scoped flag placement assertions.
+- Discrepancies from design: none; Clap remains the sole command grammar source.
+- Adjacent issues parked: none.

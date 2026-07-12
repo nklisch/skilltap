@@ -54,6 +54,111 @@ fn command_tree_matches_the_documented_v3_surface() {
     }
 }
 
+fn leaf_commands(command: &clap::Command, path: &mut Vec<String>, leaves: &mut Vec<(String, clap::Command)>) {
+    path.push(command.get_name().to_owned());
+    let mut children = command.get_subcommands().peekable();
+    if children.peek().is_none() {
+        leaves.push((path.join(" "), command.clone()));
+    } else {
+        for child in children {
+            leaf_commands(child, path, leaves);
+        }
+    }
+    path.pop();
+}
+
+#[test]
+fn every_public_leaf_has_descriptions_and_shared_exit_guidance() {
+    let root = Cli::command();
+    let mut leaves = Vec::new();
+    leaf_commands(&root, &mut Vec::new(), &mut leaves);
+
+    assert_eq!(leaves.len(), 26, "the public leaf count changed");
+    for (path, mut command) in leaves {
+        assert!(
+            command.get_about().is_some_and(|about| !about.to_string().trim().is_empty()),
+            "{path} is missing a purpose description"
+        );
+        assert!(
+            command
+                .get_after_help()
+                .is_some_and(|help| help.to_string().contains("Exit status: 0")),
+            "{path} is missing the shared exit guidance"
+        );
+        assert!(command.render_usage().to_string().contains("Usage:"), "{path}");
+
+        for argument in command.get_arguments() {
+            if matches!(argument.get_id().as_str(), "help" | "version") {
+                continue;
+            }
+            assert!(
+                argument.get_help().is_some_and(|help| !help.to_string().trim().is_empty()),
+                "{path} argument {} is missing help",
+                argument.get_id()
+            );
+            if argument.get_num_args().is_some_and(|range| range.takes_values()) {
+                assert!(
+                    argument.get_value_names().is_some_and(|names| !names.is_empty()),
+                    "{path} argument {} is missing a value name",
+                    argument.get_id()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn scope_target_acknowledgment_selection_and_json_flags_stay_on_intended_leaves() {
+    let root = Cli::command();
+    let find = |path: &[&str]| {
+        path.iter().fold(root.clone(), |command, name| {
+            command
+                .get_subcommands()
+                .find(|child| child.get_name() == *name)
+                .unwrap_or_else(|| panic!("missing command path: {path:?}"))
+                .clone()
+        })
+    };
+    let has = |command: &clap::Command, name: &str| {
+        command.get_arguments().any(|argument| argument.get_id().as_str() == name)
+    };
+
+    for path in [
+        &["status"][..],
+        &["plan"][..],
+        &["sync"][..],
+        &["plugin", "install"][..],
+        &["skill", "install"][..],
+    ] {
+        let command = find(path);
+        assert!(has(&command, "target"), "{path:?}");
+        assert!(has(&command, "project"), "{path:?}");
+        assert!(has(&command, "json"), "{path:?}");
+    }
+    for path in [
+        &["sync"][..],
+        &["plugin", "install"][..],
+        &["plugin", "update"][..],
+        &["skill", "install"][..],
+        &["skill", "update"][..],
+        &["instructions", "setup"][..],
+        &["instructions", "repair"][..],
+    ] {
+        assert!(has(&find(path), "yes"), "{path:?}");
+    }
+    for path in [
+        &["sync"][..],
+        &["plugin", "install"][..],
+    ] {
+        let command = find(path);
+        assert!(has(&command, "include"), "{path:?}");
+        assert!(has(&command, "exclude"), "{path:?}");
+    }
+    assert!(!has(&find(&["adopt"]), "yes"));
+    assert!(!has(&find(&["instructions", "status"]), "target"));
+    assert!(!has(&find(&["harness", "list"]), "target"));
+}
+
 #[test]
 fn no_subcommand_is_an_input_error_with_usage() {
     let error = Cli::try_parse_from(["skilltap"]).unwrap_err();
