@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-core
 kind: story
-stage: review
+stage: done
 tags: [content]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: []
@@ -38,3 +38,16 @@ Acceptance criteria:
 - Tests added: existing offline plugin package validation passes with the complete portable skill tree.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. Portable frontmatter,
+intent routing, no-discovery boundary, native/partial safety, separate
+bootstrap results, and executable-help authority are all represented. Existing
+offline package tests pass.
