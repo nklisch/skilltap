@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution
 kind: epic
-stage: drafting
+stage: implementing
 tags: [infra, content, architecture]
 parent: null
 depends_on: []
@@ -110,41 +110,76 @@ Out of scope:
 - A background watcher for plugin installation; the existing optional daemon
   remains an update mechanism, not a plugin bootstrap service.
 
-## Anticipated child features
+## Design decisions
 
-- `epic-skilltap-plugin-distribution-package` — define the canonical plugin
-  tree, complete shared skill, channel manifests, marketplace catalogs, and
-  version/identity validation.
-- `epic-skilltap-plugin-distribution-guidance` — author the high-level skill,
-  command discovery map, configuration/debug references, and deprecation of
-  the obsolete skill surface.
-- `epic-skilltap-plugin-distribution-bootstrap` — design and implement the
-  platform-aware verified binary bootstrap with explicit native-hook
-  capability handling and idempotent isolated tests.
-- `epic-skilltap-plugin-distribution-cli-contract` — audit and improve
-  `--help`, errors, JSON envelopes, next actions, and compiled-binary
-  coverage so agents can learn the CLI directly.
-- `epic-skilltap-plugin-distribution-release` — integrate plugin packaging,
-  checksums, attestations, website/install/Homebrew documentation, and release
-  validation into one versioned publication path.
-- `epic-skilltap-plugin-distribution-cutover` — migrate the canonical skill
-  from `../skills`, retire `claude-code-marketplace` there, add the archival
-  notice, and verify no duplicate publisher remains.
+- **How is the epic split?** The package contract, CLI contract, and binary
+  bootstrap are separate capability features because they have different
+  ownership and verification surfaces. Guidance consumes those contracts;
+  release integration consumes all of them; sibling cutover is deliberately
+  last. This avoids a layer-shaped split while keeping the critical path
+  visible.
+- **Is there a UI surface?** No. The deliverable is native plugin metadata,
+  terminal help/errors, release automation, and portable skill prose. No
+  mockups or dashboard work apply.
+- **Where does native uncertainty live?** The bootstrap feature owns the
+  Codex/Claude post-install capability gap and must preserve explicit
+  agent-invocable setup. The package and release features may not assume an
+  undocumented hook or cache mutation path.
+- **What is the version source?** Cargo release version, plugin channel
+  metadata, marketplace entries, checksums, and attestation references are one
+  release identity. The release feature owns parity checks; no independent
+  sibling version stream is introduced.
 
-## Decomposition constraints
+## Decomposition
 
-The package contract must precede release wiring, and the CLI contract must
-precede final skill prose so the skill can link agents to real help output. The
-bootstrap design must be reviewed against both native plugin contracts before
-it promises automatic execution. Release integration depends on package,
-guidance, bootstrap, and CLI contract completion. The sibling cutover is last:
-it cannot remove the old publisher until the canonical marketplace entries,
-binary bootstrap, and release verification are live.
+The realized decomposition follows capability boundaries and keeps package and
+CLI work parallel. Bootstrap depends on the package shape; guidance waits for
+the package, stable help contract, and verified bootstrap instructions. Release
+publication then consumes every artifact contract, and the sibling cutover is
+the final dependent handoff.
 
-Every mutating bootstrap test runs in an isolated fixture root and repeats the
-operation to prove idempotency. Tests must distinguish stale documentation or
-fixtures from real production bugs; real bootstrap or release correctness
-failures become tracked work rather than being hidden in test changes.
+### Child features
+
+- `epic-skilltap-plugin-distribution-package` — canonical plugin tree,
+  complete shared skill boundary, native manifests/catalogs, and identity
+  validation — depends on: `[]`.
+- `epic-skilltap-plugin-distribution-cli-contract` — executable help, plain and
+  JSON diagnostics, next actions, and compiled-binary contract — depends on:
+  `[]`.
+- `epic-skilltap-plugin-distribution-bootstrap` — verified macOS/Linux binary
+  bootstrap with explicit native-hook capability handling — depends on:
+  `[epic-skilltap-plugin-distribution-package]`.
+- `epic-skilltap-plugin-distribution-guidance` — high-level portable skill and
+  diagnostic references — depends on:
+  `[epic-skilltap-plugin-distribution-package,
+  epic-skilltap-plugin-distribution-cli-contract,
+  epic-skilltap-plugin-distribution-bootstrap]`.
+- `epic-skilltap-plugin-distribution-release` — versioned plugin/binary
+  publication, checksums, attestations, website, install, and Homebrew
+  alignment — depends on:
+  `[epic-skilltap-plugin-distribution-package,
+  epic-skilltap-plugin-distribution-cli-contract,
+  epic-skilltap-plugin-distribution-bootstrap,
+  epic-skilltap-plugin-distribution-guidance]`.
+- `epic-skilltap-plugin-distribution-cutover` — sibling publisher retirement,
+  superseded-skill removal, and archive handoff — depends on:
+  `[epic-skilltap-plugin-distribution-release]`.
+
+## Decomposition risks
+
+- Codex's public contract does not guarantee a non-interactive plugin install
+  or post-install hook. Treating native installation as binary setup would
+  create a false-success path; bootstrap must remain explicitly observable.
+- The existing `website/public/install.sh` has drifted from the checksum-
+  verifying root installer. Release design must establish one generated or
+  parity-checked installer path before publishing plugin guidance.
+- The sibling repository currently has no skilltap marketplace entry, so the
+  cutover must verify the canonical publication rather than assume a mirror is
+  already equivalent. Repository archival authority is external and requires
+  an explicit handoff record.
+- Package, guidance, and release all touch publication assets. Their ownership
+  boundaries must stay explicit so version parity is generated or validated
+  from one source rather than maintained by repeated manual edits.
 
 ## Acceptance criteria
 
@@ -168,6 +203,3 @@ failures become tracked work rather than being hidden in test changes.
   explicit archival/deprecation record.
 - No part of the plugin or skill adds marketplace search, ranking,
   recommendation, or broad inventory discovery.
-
-<!-- The epic-design pass will turn these seams into dependency-ordered child
-features and resolve implementation-level native/bootstrap details. -->
