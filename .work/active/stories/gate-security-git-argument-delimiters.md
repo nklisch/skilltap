@@ -1,7 +1,7 @@
 ---
 id: gate-security-git-argument-delimiters
 kind: story
-stage: review
+stage: done
 tags: [security]
 parent: null
 depends_on: []
@@ -62,3 +62,18 @@ argument-vector execution and add validation/tests in the named adapters.
   unrelated compiled-binary tests remain failing in concurrent reconciliation
   and daemon work (`native_mutations_keep_project_and_all_scope_boundaries`,
   `safe_update_cycle_reports_changed_git_revision_and_records_daemon_result`).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with deep command-boundary/security
+lenses. Git locators and revisions are rejected when option-like and are
+delimited in `ls-remote`, clone, and fetch argument vectors; native lifecycle
+names and sources are similarly validated before vector construction. SCP-style
+locators remain valid. Harness and CLI focused tests pass; the noted compiled
+binary failures are unrelated concurrent reconciliation/daemon stories.
