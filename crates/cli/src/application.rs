@@ -727,6 +727,7 @@ impl StatusApplication<'_> {
             .with_summary("changed", changed)
             .with_summary("safe_operations", safe_operations)
             .with_summary("pending_operations", pending_operations);
+        normalize_daemon_noop_result(&mut aggregate, safe_operations, pending_operations);
         self.persist_daemon_run(&mut aggregate, safe_operations, pending_operations);
         aggregate
     }
@@ -4001,6 +4002,25 @@ fn merge_result(current: ResultClass, next: ResultClass) -> ResultClass {
         next
     } else {
         current
+    }
+}
+
+/// A document-load phase starts outcomes in `attention_required` so malformed
+/// owned documents cannot be mistaken for successful commands. A daemon cycle
+/// that completes safe updates may inherit that provisional class even when
+/// every child update completed cleanly. The absence of warnings/errors and
+/// pending work is the evidence needed to normalize that aggregate result.
+fn normalize_daemon_noop_result(
+    outcome: &mut Outcome,
+    safe_operations: u64,
+    pending_operations: u64,
+) {
+    if safe_operations > 0
+        && pending_operations == 0
+        && outcome.warnings.is_empty()
+        && outcome.errors.is_empty()
+    {
+        outcome.result = ResultClass::Completed;
     }
 }
 
