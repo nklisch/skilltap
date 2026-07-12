@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: review
+stage: implementing
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -151,3 +151,23 @@ pre-publish preservation, wrong-version artifacts, or post-publish identity
 failure. Keep the command at `stage: implementing` until the existing
 coverage follow-up restores deterministic isolated acceptance tests without
 reintroducing production environment overrides.
+
+## Review (2026-07-12, fresh-context acceptance)
+
+**Verdict**: Request changes
+
+**Blockers**: none in the composed command path (this review)
+**Important**: compiled bootstrap acceptance matrix remains absent ->
+`story-skilltap-plugin-distribution-bootstrap-command-coverage`
+
+**Nits**: none
+
+**Notes**: Standard fresh-context review after `00b9493`. The public grammar,
+canonical resolver wiring, direct version probe, major guard, and separate
+binary/harness results are present, and the workspace tests are green. There
+is no isolated compiled bootstrap coverage for first install, healthy repeat,
+same-major update, blocked/allowed major upgrade, target narrowing, absent or
+mixed harness results, pre-publish preservation, wrong-version artifacts, or
+post-publish identity failure. Keep this item at `stage: implementing` until
+the existing test-only composition follow-up restores that matrix without
+ambient production overrides.

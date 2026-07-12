@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifacts
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -115,5 +115,26 @@ only exercises duplicate manifest assets and checksum preservation; it does
 not cover the redirect-hop loop, oversized or symlink payload rejection,
 temporary cleanup, permission/interruption paths, replacement races, or
 post-publish rollback preservation required by this story. Item remains at
+`stage: implementing` until the existing hardening follow-up adds those
+isolated fixtures.
+
+## Review (2026-07-12, fresh-context acceptance)
+
+**Verdict**: Request changes
+
+**Blockers**: none in the bounded implementation (this review)
+**Important**: acceptance coverage remains incomplete ->
+`story-skilltap-plugin-distribution-bootstrap-artifact-boundary-hardening`
+
+**Nits**: none
+
+**Notes**: Standard fresh-context review after `00b9493` (including the
+additional integration fixtures in `4f96b4c`). The hardened transport and
+publication code has the required host/identity guards and the workspace tests
+are green. The integration suite now covers bounded/symlink resolver payloads,
+destination symlinks, checksum preservation, duplicate manifests, and one
+successful install, but still does not cover redirect-hop rejection,
+permission/interruption cleanup, destination replacement races, or
+post-publish rollback preservation required by this story. Keep this item at
 `stage: implementing` until the existing hardening follow-up adds those
 isolated fixtures.

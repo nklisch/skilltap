@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -115,3 +115,24 @@ binary tests assert exact Claude vectors, scope/target isolation,
 present/missing/unknown handling, capability narrowing, or replacement
 blocking. Item remains at `stage: implementing` until the existing contract
 coverage follow-up closes both gaps.
+
+## Review (2026-07-12, fresh-context acceptance)
+
+**Verdict**: Request changes
+
+**Blockers**: none in the corrected guard (this review)
+**Important**: operation-specific capability and fake-binary coverage remain
+missing -> `story-skilltap-plugin-distribution-bootstrap-harness-contract-coverage`
+
+**Nits**: none
+
+**Notes**: Standard fresh-context review after `00b9493`. The adapter now
+requires both `marketplace.register` and `plugin.install` for Claude, keeps
+Codex unsupported, binds native calls to the observed executable, and the
+workspace tests are green. The harness suite still has only one Codex
+unsupported assertion and one Claude happy-path log check; it does not prove
+that a narrowed profile blocks marketplace registration, exact argument
+vectors/scope and target isolation, present/missing/unknown observation,
+malformed output, replacement blocking, or cache non-mutation. Keep this item
+at `stage: implementing` until the existing contract-coverage follow-up adds
+those isolated tests and capability seam.
