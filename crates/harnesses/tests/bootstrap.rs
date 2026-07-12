@@ -82,20 +82,8 @@ fn codex_plugin_setup_preserves_the_interactive_contract_gap() {
 #[cfg(unix)]
 #[test]
 fn claude_setup_uses_marketplace_then_qualified_plugin_vectors() {
-    use std::os::unix::fs::PermissionsExt;
-
     let root = TempRoot::new("harness-bootstrap").unwrap();
-    let binary = root.path().join("claude");
-    let log = root.path().join("calls.log");
-    let script = format!(
-        "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{}'\nif [ \"$1\" = \"--version\" ]; then printf '{{\\\"version\\\":\\\"3.0.0\\\"}}'; else printf '{{\\\"marketplaces\\\":[],\\\"plugins\\\":[]}}'; fi\n",
-        log.display()
-    );
-    fs::write(&binary, script).unwrap();
-    fs::set_permissions(&binary, fs::Permissions::from_mode(0o700)).unwrap();
-    let configured = ConfiguredBinary::absolute(
-        AbsolutePath::new(binary.to_string_lossy().into_owned()).unwrap(),
-    );
+    let (configured, log) = write_fake_claude(&root, r#"{"marketplaces":[]}"#, r#"{"plugins":[]}"#);
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
     let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
     assert!(matches!(result, HarnessSetupResult::Installed { .. }));
