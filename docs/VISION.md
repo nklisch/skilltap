@@ -34,10 +34,11 @@ harnesses. That plugin is an agent-facing entry point to skilltap itself: it
 explains the binary, command families, configuration layout, and diagnostic
 workflow at a high level. It is a delivery and discovery surface, not a second
 control plane, a marketplace browser, or a universal plugin format. The
-skilltap repository is its canonical publisher. The separate
+skilltap repository is the canonical implementation and release source. The
+active `../skills` repository is a maintained second marketplace publisher of
+the same plugin and must stay in metadata/version parity. The separate
 `nklisch/skilltap-skills` repository is the legacy skilltap distribution being
-retired; the active `../skills` development repository is not part of that
-cutover.
+retired.
 
 ## Native First
 

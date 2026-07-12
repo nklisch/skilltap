@@ -30,13 +30,15 @@ alone completed setup. The same release must publish distinct Claude and Codex
 manifests and marketplace catalogs from one canonical source in this
 repository.
 
-This epic also performs the publication cutover. The separate public
-`nklisch/skilltap-skills` repository is a temporary migration source, not a
-second source of truth. Once the skilltap plugin is published and verified,
-the old skilltap-related skills (including the former `claude-code-marketplace`
-surface) are retired there and that repository is archived according to its
-own repository controls. The active sibling `../skills` repository is not a
-cutover target and must remain untouched.
+This epic also performs the publication cutover. The skilltap repository is the
+canonical implementation and release source, while the active `../skills`
+repository remains a maintained second marketplace publisher of the same
+plugin. Release work keeps both publishers in metadata/version parity. The
+separate public `nklisch/skilltap-skills` repository is the temporary legacy
+source; once the canonical plugin is published and verified, its old
+skilltap-related skills (including the former `claude-code-marketplace`
+surface) are retired and that repository is archived according to its own
+controls.
 
 ## Foundation references
 
@@ -55,10 +57,10 @@ cutover target and must remain untouched.
 
 ## Strategic decisions
 
-- **Which repository owns the plugin?** This skilltap repository is the sole
-  canonical publisher. `nklisch/skilltap-skills` may mirror the plugin only
-  long enough to cut users over; it must not remain a bidirectional publishing
-  source. The active sibling `../skills` repository is explicitly excluded.
+- **Which repository owns the plugin?** This skilltap repository owns the
+  implementation and release source. The active `../skills` repository remains
+  an intentional second marketplace publisher with synchronized metadata;
+  `nklisch/skilltap-skills` is the legacy repository being retired.
 - **How are the two harnesses represented?** One public plugin identity is
   expressed through separate native Claude and Codex manifests and marketplace
   catalogs. The shared unit is the complete skill directory; manifests,
@@ -102,7 +104,8 @@ In scope:
   needed to make the plugin and binary installation path coherent.
 - A cutover/deprecation record for the legacy `nklisch/skilltap-skills`
   publication, with the old skilltap skills retired and that repository
-  archived after verification. The active sibling remains intact.
+  archived after verification. The active sibling publisher remains intact and
+  in parity.
 
 Out of scope:
 
@@ -181,8 +184,10 @@ the final dependent handoff.
   parity-checked installer path before publishing plugin guidance.
 - The legacy `nklisch/skilltap-skills` repository carries a different skilltap-
   era tap surface, so the cutover must verify canonical publication rather
-  than assume equivalence. Repository archival authority is external and
-  requires an explicit handoff record; `../skills` must remain untouched.
+  than assume equivalence. The active `../skills` publisher currently needs a
+  parity check/repair in the local checkout before it can be treated as
+  synchronized. Repository archival authority for the legacy repo is external
+  and requires an explicit handoff record.
 - Package, guidance, and release all touch publication assets. Their ownership
   boundaries must stay explicit so version parity is generated or validated
   from one source rather than maintained by repeated manual edits.
@@ -207,6 +212,6 @@ the final dependent handoff.
 - `nklisch/skilltap-skills` no longer publishes the canonical skilltap plugin
   after cutover; its duplicate skilltap surfaces are retired and that legacy
   repository has an explicit archival/deprecation record. The active
-  `../skills` repository is unchanged.
+  `../skills` publisher continues publishing the same plugin in parity.
 - No part of the plugin or skill adds marketplace search, ranking,
   recommendation, or broad inventory discovery.

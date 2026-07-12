@@ -68,11 +68,13 @@ are observed and reported as separate steps. The plugin's high-level guidance
 is intentionally outside the reconciliation core and cannot grant mutation
 authority to either harness adapter.
 
-The legacy `nklisch/skilltap-skills` repository may mirror the plugin during the
-cutover, but publication is one-way from skilltap. That repository is removed
-or archived once the skilltap marketplace entries and release assets are
-authoritative. The active sibling `../skills` development repository is not a
-cutover target.
+The active `../skills` repository is a maintained secondary marketplace
+publisher of the same plugin. skilltap remains the implementation and release
+source; release integration synchronizes and validates the sibling's plugin
+entry and channel metadata rather than allowing two independent versions.
+The legacy `nklisch/skilltap-skills` repository may mirror the plugin during
+the cutover, but it is removed or archived once the skilltap marketplace
+entries and release assets are authoritative.
 
 The online installer and native marketplace installation share one
 self-bootstrap application boundary. The installer may detect Claude Code and

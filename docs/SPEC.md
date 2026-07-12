@@ -25,8 +25,11 @@ catalog. It does not search or recommend other skills, plugins, or marketplaces.
 
 ## Self-Hosted Plugin Distribution
 
-The skilltap repository is the canonical publisher for one public plugin
-identity with distinct native channel artifacts:
+The skilltap repository is the canonical implementation and release source for
+one public plugin identity with distinct native channel artifacts. The active
+`../skills` repository is a maintained secondary marketplace publisher of the
+same plugin; release validation keeps its plugin entry and version/source
+metadata in parity with this repository.
 
 - Claude Code uses a `.claude-plugin/plugin.json` manifest and a
   `.claude-plugin/marketplace.json` catalog.
