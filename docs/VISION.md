@@ -103,7 +103,10 @@ skilltap does not:
 - Replace native authentication or secret storage.
 - Require project collaborators to install skilltap.
 - Act as a general-purpose dotfiles manager.
-- Run a background service.
+- Run a background service by default or require one for normal operation. An
+  optional user-level update daemon may be explicitly enabled; it runs without
+  elevated privileges and never bypasses acknowledgment, drift, or conflict
+  safeguards.
 - Provide an interactive dashboard or setup wizard.
 - Claim support for a harness through file copying alone.
 

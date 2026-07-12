@@ -1,7 +1,7 @@
 ---
 id: gate-docs-optional-daemon-vision
 kind: story
-stage: implementing
+stage: review
 tags: [documentation]
 parent: null
 depends_on: []
@@ -37,3 +37,13 @@ running it performs a bounded update cycle.
 Remove the daemon exclusion or qualify it as an optional user-level service
 that is never required and never needs elevated privileges. Keep the limits
 aligned with `docs/ARCH.md` and `docs/SPEC.md`.
+
+## Implementation Notes
+
+- Updated the Vision non-goals to distinguish an optional, explicitly enabled
+  user-level update daemon from a required background service.
+- The wording preserves the daemon safeguards documented by the architecture
+  and specification: no elevated privileges and no bypass of acknowledgment,
+  drift, or conflict handling.
+- Verification: reviewed the corresponding daemon limits in `docs/ARCH.md` and
+  `docs/SPEC.md`; `git diff --check` passed.
