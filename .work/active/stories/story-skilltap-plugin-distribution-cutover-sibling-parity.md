@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cutover-sibling-parity
 kind: story
-stage: review
+stage: done
 tags: [infra, testing, cleanup]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: [story-skilltap-plugin-distribution-cutover-canonical-verification]
@@ -33,3 +33,16 @@ Acceptance criteria:
 - Tests added: explicit `SKILLTAP_SKILLS_MARKETPLACE` read-only pointer validation; absent sibling checkout safely skips.
 - Discrepancies from design: no sibling checkout is mutated or archived; local default remains a safe skip until an external parity checkout is supplied.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: pointer validation is opt-in through an explicit sibling checkout
+path because this workspace must not mutate or archive active `../skills`.
+
+**Notes**: Fast substrate review at standard weight. Valid and wrong pointer
+fixtures pass/fail deterministically; canonical URL, plugin path, and identity
+are checked read-only, with safe skip when no parity checkout is supplied.
