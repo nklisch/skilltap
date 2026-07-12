@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -51,3 +51,20 @@ or an undocumented post-install hook.
 - Tests added: unknown-version observe-only and unreachable-target bounded-result tests; setup performs presence observation before any native mutation and returns actionable Codex/Claude next actions.
 - Discrepancies from design: setup policy accepts the configured executable and canonical source as application-owned inputs, keeping target probing and native command composition in the adapter.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-12)
+
+- **Blocker — canonical source and marketplace identity are dropped from plugin setup** (`crates/harnesses/src/bootstrap.rs:155-188`, `crates/harnesses/src/lifecycle.rs:450-458`): bootstrap constructs a `PluginInstall` request with `source: Some(https://github.com/nklisch/skilltap)` but the native argument builder ignores `source` for plugin installs and emits only `plugin install skilltap ...`. It never registers the canonical marketplace first and uses the unqualified name even though native plugin identity is marketplace-qualified. On a clean host the command can install from no selected source (or fail), and a present `skilltap@marketplace` will be classified missing and reinstalled on every run. Register/observe the canonical marketplace and use the exact qualified identity, or return an explicit unsupported/attention result when the native host cannot do so; add fake-binary tests for first setup and healthy repeat.
+- **Blocker — Codex capability gap is not preserved at runtime** (`crates/harnesses/src/bootstrap.rs:144-160`, `crates/harnesses/src/lib.rs:566-624`): any exact `codex 3.0.0` profile grants `plugin.install`, so bootstrap proceeds to `codex plugin add skilltap` without a runtime capability probe or Codex-specific guard. A host that only exposes the documented interactive `/plugins` flow receives a mutation attempt and is classified as a generic command failure rather than the required actionable `Unsupported` result. Narrow the profile with observed help/capability evidence and ensure unsupported Codex setup never invokes a plugin-install vector.
+- **Important — detected executable identity is not carried into mutation** (`crates/harnesses/src/bootstrap.rs:138-188`): after read-first detection, setup ignores the `ExecutableIdentity` in `HarnessInstallation` and resolves `policy.configured` again. A PATH replacement between the version probe and lifecycle call can run a different binary under the old profile. Bind lifecycle execution to the observed executable identity (or re-probe and revalidate the exact identity immediately before mutation), and test replacement between phases.
+- **Important — malformed version diagnostics are reported as not-installed** (`crates/harnesses/src/bootstrap.rs:120-130`): every detection/probe error, including malformed or unknown version JSON, is collapsed to `SetupReason::NotInstalled`. Mutation is conservatively avoided, but the result is not truthful or actionable for an installed-but-unusable harness. Preserve an invalid/unknown-version reason distinct from absence.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: canonical marketplace/qualified plugin setup; runtime Codex unsupported-capability handling (this item)
+**Important**: detected executable identity binding; truthful malformed-version diagnostics (this item)
+**Nits**: none
+
+**Notes**: Substrate review at standard weight, escalated to a native-contract/correctness pass. Workspace tests passed, but the read-first/native lifecycle and target-isolation lenses found that the canonical source is not actually used by the install vector and the Codex interactive contract gap is not represented. Item remains at `stage: implementing` pending fixes and fake-binary coverage.

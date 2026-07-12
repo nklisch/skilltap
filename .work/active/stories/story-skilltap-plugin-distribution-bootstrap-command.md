@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: review
+stage: implementing
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -91,3 +91,20 @@ fallback; setting `SKILLTAP_RELEASE_MANIFEST` merely changes the label to
 `planned` and still performs no binary operation. The item remains at
 `stage: implementing` until the command is wired to verified artifact
 resolution/installation and its acceptance matrix is covered.
+
+## Review findings (2026-07-12)
+
+- **Blocker — success is reported before binary identity/version verification** (`crates/cli/src/entrypoint.rs:551-569`): after checksum publication the command immediately emits `installed`/`updated`; it never probes the newly published executable or checks that its reported version matches the selected release. The compiled tests use the literal `test-binary`, so they cannot catch this contract violation. A valid checksum for the wrong or non-executable file is currently reported as a successful bootstrap. Compose a bounded post-publish probe (and preserve/rollback the prior destination on failure) and add first-install/update regression coverage.
+- **Blocker — production command accepts unrestricted local release/artifact overrides** (`crates/cli/src/entrypoint.rs:445-455, 535-543`): `SKILLTAP_RELEASE_MANIFEST` switches the command from the canonical latest-release resolver to any absolute local file, and `SKILLTAP_RELEASE_ARTIFACT` copies any local path into the install flow. These fixture seams are live in the shipped binary, bypass the HTTPS/redirect/checksum transport contract, and let an ambient environment choose arbitrary executable bytes. Keep deterministic fixture injection behind a test-only composition boundary (or a tightly authenticated local resolver) so normal `bootstrap` always resolves the canonical release and never trusts ambient source/artifact paths.
+- **Important — installed-version override can produce false policy decisions** (`crates/cli/src/entrypoint.rs:469-474`): `SKILLTAP_INSTALLED_VERSION` wins over probing the existing executable. An ambient value can make an old/unknown binary appear current or newer, causing a false no-op and bypassing the intended verified major-version decision. Remove this production override and derive the version from the executable (or trusted skilltap state) only.
+- **Important — workspace lint verification is failing** (`crates/core/src/bootstrap.rs:304-314`, `crates/core/src/runtime/artifact.rs:514-528`): `cargo clippy --workspace --all-targets --offline -- -D warnings` fails on the bootstrap changes, so the command story's recorded verification is incomplete even though the full test suite passes.
+
+## Review (2026-07-12, follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: post-publish binary verification; removal of unrestricted production release/artifact overrides (this item)
+**Important**: ambient installed-version override; clippy gate failures (this item)
+**Nits**: none
+
+**Notes**: Substrate review at standard weight, escalated to a public CLI/security pass after the prior binary-wiring fix. `cargo test --workspace --all-targets --offline` passed, but the command still reports success without the required verified executable identity and exposes fixture environment seams in the production composition. Item remains at `stage: implementing` pending fixes and isolated tests that exercise the real release boundary.
