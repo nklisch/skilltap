@@ -3957,14 +3957,7 @@ fn preferred_instruction_bridge_path(
 fn instruction_resource_key(scope: &Scope, role: &str, target: &str) -> Option<ResourceKey> {
     let scope_label = match scope {
         Scope::Global => "global".to_owned(),
-        Scope::Project(path) => {
-            let mut hash = 0xcbf29ce484222325_u64;
-            for byte in path.as_str().bytes() {
-                hash ^= u64::from(byte);
-                hash = hash.wrapping_mul(0x100000001b3);
-            }
-            format!("project-{hash:016x}")
-        }
+        Scope::Project(path) => format!("project-{:016x}", stable_hash(path.as_str())),
     };
     ResourceId::new(format!("instructions:{scope_label}:{role}:{target}"))
         .ok()
@@ -3974,21 +3967,13 @@ fn instruction_resource_key(scope: &Scope, role: &str, target: &str) -> Option<R
 fn instruction_operation_id(scope: &Scope, role: &str, target: &str) -> OperationId {
     let resource = instruction_resource_key(scope, role, target)
         .expect("instruction resource identity is valid");
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in resource.id().as_str().bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(resource.id().as_str());
     OperationId::new(format!("instructions:{hash:016x}"))
         .expect("instruction operation id is valid")
 }
 
 fn instruction_backup_path(paths: &PlatformPaths, bridge: &AbsolutePath) -> AbsolutePath {
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in bridge.as_str().bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(bridge.as_str());
     AbsolutePath::new(format!(
         "{}/managed/backups/instructions/{hash:016x}.bak",
         paths.skilltap_config().as_str()
@@ -4174,11 +4159,7 @@ fn resolve_git_skill_source(
     SystemFileSystem
         .create_directory_all(&source_root)
         .map_err(|_| ())?;
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in locator.as_str().bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(locator.as_str());
     let checkout =
         AbsolutePath::new(format!("{}/git-{hash:016x}", source_root.as_str())).map_err(|_| ())?;
     let git = NativeId::new("git").map_err(|_| ())?;
@@ -4333,43 +4314,27 @@ fn append_skill_subdirectory(
 
 fn skill_operation_id(target: &HarnessId, resource: &ResourceKey) -> OperationId {
     let label = format!("skill:{target}:{}", resource.id().as_str());
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in label.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(&label);
     OperationId::new(format!("skill:{target}:{hash:016x}")).expect("skill operation id is valid")
 }
 
 fn skill_canonical_operation_id(resource: &ResourceKey) -> OperationId {
     let label = format!("skill-canonical:{}", resource.id().as_str());
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in label.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(&label);
     OperationId::new(format!("skill-canonical:{hash:016x}"))
         .expect("canonical skill operation id is valid")
 }
 
 fn skill_remove_operation_id(target: &HarnessId, resource: &ResourceKey) -> OperationId {
     let label = format!("skill-remove:{target}:{}", resource.id().as_str());
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in label.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(&label);
     OperationId::new(format!("skill-remove:{target}:{hash:016x}"))
         .expect("skill removal operation id is valid")
 }
 
 fn skill_canonical_remove_operation_id(resource: &ResourceKey) -> OperationId {
     let label = format!("skill-remove-canonical:{}", resource.id().as_str());
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in label.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(&label);
     OperationId::new(format!("skill-remove-canonical:{hash:016x}"))
         .expect("canonical skill removal operation id is valid")
 }
@@ -4700,11 +4665,7 @@ fn lifecycle_operation_id(
         scope_label(scope),
         resource.id().as_str()
     );
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in label.bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(&label);
     OperationId::new(format!("lifecycle:{}:{hash:016x}", target.as_str()))
         .expect("lifecycle operation id is valid")
 }
@@ -6092,12 +6053,14 @@ fn native_surface_resource(
 }
 
 fn stable_resource_id(harness: &HarnessId, root: &str) -> String {
-    let mut hash = 0xcbf29ce484222325_u64;
-    for byte in format!("{harness}:{root}").bytes() {
-        hash ^= u64::from(byte);
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
+    let hash = stable_hash(&format!("{harness}:{root}"));
     format!("native-{hash:016x}")
+}
+
+fn stable_hash(input: &str) -> u64 {
+    input.bytes().fold(0xcbf29ce484222325_u64, |hash, byte| {
+        (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3)
+    })
 }
 
 fn native_surface_kind(root: &str) -> ResourceKind {

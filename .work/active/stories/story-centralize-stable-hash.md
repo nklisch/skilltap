@@ -1,7 +1,7 @@
 ---
 id: story-centralize-stable-hash
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: null
 depends_on: []
@@ -32,3 +32,10 @@ replace the equivalent loops around lines 4482-4512, 4698-4702, 4857-4892,
 - No public signatures or serialized IDs change.
 - The repeated hash implementation exists only once.
 
+## Implementation Notes
+
+- Added one private `stable_hash(&str) -> u64` FNV-1a helper and replaced all
+  operation, instruction, backup, checkout, lifecycle, skill, and native
+  resource identifier loops with it while preserving labels and formatting.
+- Verification: `cargo fmt --all` and `cargo test -p skilltap --offline`
+  passed (40 unit tests and 41 compiled-binary tests).
