@@ -3478,6 +3478,13 @@ impl StatusApplication<'_> {
             Ok(value) => value,
             Err(outcome) => return *outcome,
         };
+        if acknowledged {
+            // Carry the generic foreground acknowledgment through the
+            // reconciliation boundary. Resource adapters decide which
+            // consequences are eligible; hard blocks and drift are never
+            // bypassed by this flag.
+            outcome = outcome.with_summary("acknowledged", true);
+        }
         let status_args = StatusArgs {
             target: target.clone(),
             scope: requested_scope.clone(),

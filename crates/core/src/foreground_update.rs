@@ -357,11 +357,26 @@ pub fn record_verified_updates(
     .map_err(UpdateRecordingError::State)
 }
 
-/// Select safe and explicitly acknowledged entries. Exact selector equality
-/// is required; there is no generic bypass for a partial consequence.
+/// Select safe and explicitly acknowledged entries.  The legacy helper keeps
+/// exact selector semantics; callers of a foreground command should use
+/// [`select_foreground_updates_with_acknowledgment`] so `--yes` can accept all
+/// eligible partial consequences while still rejecting unexpected selectors
+/// and hard-blocked resources.
 pub fn select_foreground_updates(
     plan: &ForegroundUpdatePlan,
     acknowledgments: &BTreeSet<OperationSelector>,
+) -> Result<ForegroundUpdateSelection, ForegroundUpdateSelectionError> {
+    select_foreground_updates_with_acknowledgment(plan, acknowledgments, false)
+}
+
+/// Select updates with either piecewise acknowledgments or a generic
+/// foreground acknowledgment.  `accept_all` is intentionally limited to
+/// `NeedsDecision` entries: `Blocked` entries represent unsupported or unsafe
+/// work and remain blocked even when `--yes` is supplied.
+pub fn select_foreground_updates_with_acknowledgment(
+    plan: &ForegroundUpdatePlan,
+    acknowledgments: &BTreeSet<OperationSelector>,
+    accept_all: bool,
 ) -> Result<ForegroundUpdateSelection, ForegroundUpdateSelectionError> {
     let expected = plan
         .entries
@@ -389,7 +404,7 @@ pub fn select_foreground_updates(
                         resource: entry.resource.clone(),
                     });
                 }
-                if !entry.acknowledgment_selectors.is_subset(acknowledgments) {
+                if !accept_all && !entry.acknowledgment_selectors.is_subset(acknowledgments) {
                     return Err(ForegroundUpdateSelectionError::MissingAcknowledgment {
                         resource: entry.resource.clone(),
                         selectors: entry.acknowledgment_selectors.clone(),
@@ -532,6 +547,39 @@ mod tests {
         assert!(matches!(
             select_foreground_updates(&plan, &unexpected),
             Err(ForegroundUpdateSelectionError::UnexpectedAcknowledgment { .. })
+        ));
+    }
+
+    #[test]
+    fn generic_acknowledgment_accepts_all_partial_entries_but_not_blocked_work() {
+        let selected = resource("alpha");
+        let selector = OperationSelector::Resource {
+            resource: selected.key().clone(),
+        };
+        let mut partial = candidate(&selected, 'a', 'b');
+        partial.requires_acknowledgment = true;
+        partial.acknowledgment_selectors = [selector].into_iter().collect();
+        let plan = plan_foreground_updates(ForegroundUpdateRequest {
+            resources: std::slice::from_ref(&selected),
+            candidates: &[partial],
+            mode: UpdateMode::ApplySafe,
+        })
+        .unwrap();
+        let selection =
+            select_foreground_updates_with_acknowledgment(&plan, &BTreeSet::new(), true).unwrap();
+        assert_eq!(selection.entries().len(), 1);
+
+        let mut blocked = candidate(&selected, 'a', 'b');
+        blocked.resolution_error = Some(crate::updates::ResolutionError::UnreachableSource);
+        let blocked_plan = plan_foreground_updates(ForegroundUpdateRequest {
+            resources: std::slice::from_ref(&selected),
+            candidates: &[blocked],
+            mode: UpdateMode::ApplySafe,
+        })
+        .unwrap();
+        assert!(matches!(
+            select_foreground_updates_with_acknowledgment(&blocked_plan, &BTreeSet::new(), true),
+            Err(ForegroundUpdateSelectionError::Blocked { .. })
         ));
     }
 

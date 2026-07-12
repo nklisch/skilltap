@@ -402,7 +402,9 @@ pub struct SelectionArgs {
 
 #[derive(Clone, Copy, Debug, Default, Args)]
 pub struct AcknowledgmentArgs {
-    /// Acknowledge the exact partial or lossy result reported by the plan.
+    /// Accept every eligible partial or lossy consequence in this operation.
+    /// Required, unsupported, drifted, and otherwise blocked work remains
+    /// blocked even when this flag is present.
     #[arg(long)]
     pub yes: bool,
 }

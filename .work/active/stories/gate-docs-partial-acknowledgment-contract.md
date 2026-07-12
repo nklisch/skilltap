@@ -1,7 +1,7 @@
 ---
 id: gate-docs-partial-acknowledgment-contract
 kind: story
-stage: implementing
+stage: review
 tags: [documentation]
 parent: null
 depends_on: []
@@ -53,3 +53,18 @@ copies only if command syntax changes.
 The documentation is correct. The prior gate interpretation incorrectly
 treated the exact-selector implementation in `foreground_update.rs` as the
 desired public contract; it is the implementation that must change.
+
+## Implementation notes
+
+- The public `--yes` help now describes generic acceptance of eligible
+  partial/lossy consequences and explicitly preserves hard blocks.
+- Core foreground update selection now has an acknowledgment-aware entrypoint:
+  generic acceptance authorizes every `NeedsDecision` partial entry while
+  `Blocked` entries still fail closed; the exact-selector helper remains
+  available for piecewise callers.
+- Reconciliation carries the generic acknowledgment through its aggregate
+  outcome without turning drift, unsupported work, or invalid configuration
+  into an acknowledged success.
+- Focused verification: `cargo test -p skilltap-core foreground_update --offline`
+  and `cargo check -p skilltap --offline` pass, including generic acceptance,
+  unexpected-selector, and blocked-work coverage.
