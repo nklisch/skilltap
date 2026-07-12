@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-package
 kind: feature
-stage: implementing
+stage: review
 tags: [architecture, infra]
 parent: epic-skilltap-plugin-distribution
 depends_on: []
@@ -205,3 +205,9 @@ home, native harness caches, or `../skills`.
   roots.
 - No package asset introduces marketplace search, ranking, recommendation, or
   broad inventory discovery.
+
+## Implementation notes
+
+Both child stories are implemented and awaiting review. The canonical package
+assets and boundary tests are self-contained under this repository; no active
+publisher checkout or native harness state was changed.

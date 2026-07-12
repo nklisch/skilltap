@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-package-validation
 kind: story
-stage: implementing
+stage: review
 tags: [testing, architecture]
 parent: epic-skilltap-plugin-distribution-package
 depends_on: [story-skilltap-plugin-package-assets]
@@ -40,3 +40,16 @@ Run the focused compiled test, then `cargo test --workspace --all-targets` and
 `cargo clippy --workspace --all-targets -- -D warnings`. The package test's
 failure messages should name the channel and relative path that violated the
 contract so release failures are actionable.
+
+## Implementation notes
+
+- Added `crates/cli/tests/plugin_package.rs` with channel-specific manifest and
+  marketplace validation, Cargo-version parity checks, source containment,
+  complete skill-tree observation, and strict Codex/Claude frontmatter checks.
+- Isolated fixture copies cover malformed JSON, missing required metadata,
+  identity/version drift, traversal and wrong-root sources, missing or
+  non-regular `SKILL.md`, invalid frontmatter, and symlink escapes. Supporting
+  files remain part of the validated tree.
+- Focused verification passes: `cargo test -p skilltap --test plugin_package
+  --offline` and `cargo clippy -p skilltap --test plugin_package --offline --
+  -D warnings`.

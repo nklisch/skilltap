@@ -1,0 +1,25 @@
+{
+  "name": "skilltap",
+  "version": "3.0.0",
+  "description": "A personal control plane for managing Codex and Claude Code environments.",
+  "author": {
+    "name": "nklisch"
+  },
+  "repository": "https://github.com/nklisch/skilltap",
+  "license": "MIT",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "skilltap",
+    "shortDescription": "Manage Codex and Claude Code environments",
+    "longDescription": "Adopt, reconcile, and update native marketplaces, plugins, skills, and instruction files across Codex and Claude Code.",
+    "developerName": "nklisch",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Bash"
+    ],
+    "defaultPrompt": "Use skilltap to inspect and manage this agent environment.",
+    "websiteURL": "https://github.com/nklisch/skilltap"
+  }
+}

@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-package-assets
 kind: story
-stage: implementing
+stage: review
 tags: [architecture, infra]
 parent: epic-skilltap-plugin-distribution-package
 depends_on: []
@@ -42,3 +42,15 @@ The guidance feature owns the substantive skill prose and may add supporting
 files beneath the same complete skill directory. Do not edit the active
 `../skills` publisher in this story; release integration validates its direct
 source pointer later.
+
+## Implementation notes
+
+- Added the repository-owned `plugin/` root with separate native Claude and
+  Codex manifests and catalogs.
+- The Codex manifest explicitly points at `./skills/` and keeps its native
+  `interface` metadata; the Claude manifest remains free of Codex-only fields.
+- Both development catalogs point to the package root (`./`), with Codex using
+  its documented local source object. No hooks, MCP servers, executables, or
+  cache files were introduced.
+- The skill stub is intentionally concise; the guidance feature owns the
+  substantive operational content.
