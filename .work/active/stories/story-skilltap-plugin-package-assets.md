@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-package-assets
 kind: story
-stage: review
+stage: done
 tags: [architecture, infra]
 parent: epic-skilltap-plugin-distribution-package
 depends_on: []
@@ -54,3 +54,17 @@ source pointer later.
   cache files were introduced.
 - The skill stub is intentionally concise; the guidance feature owns the
   substantive operational content.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review. Verified the native Claude and Codex
+manifests/catalogs, complete skill directory boundary, and package identity
+against the implementation and focused/full workspace tests. Corrected the
+plugin tree diagram in `docs/ARCH.md` so the foundation matches the checked-in
+catalog locations.
