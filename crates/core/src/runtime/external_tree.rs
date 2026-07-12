@@ -406,7 +406,10 @@ fn clear_errno() {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsString, fs, os::unix::ffi::OsStringExt, path::Path};
+    use std::{fs, path::Path};
+
+    #[cfg(not(target_os = "macos"))]
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
 
     use skilltap_test_support::ExternalTreeFixture;
 
@@ -535,17 +538,22 @@ mod tests {
             assert_eq!(error, ObservationRuntimeError::TreeEntryUnsupported);
         }
 
-        let tree = ExternalTreeFixture::new().unwrap();
-        let name = OsString::from_vec(vec![b's', 0xff]);
-        fs::write(tree.root().join(name), b"secret").unwrap();
-        let error = observer
-            .observe(&request(&tree, limits(1, 2, 8, 8, 8)))
-            .unwrap_err();
-        assert_eq!(error, ObservationRuntimeError::TreeEntryNonUtf8);
-        assert_eq!(
-            error.to_string(),
-            "an external tree entry name is not valid UTF-8"
-        );
+        // APFS rejects non-UTF-8 directory entries with `EINVAL`, so this
+        // fixture is only meaningful on filesystems that permit such names.
+        #[cfg(not(target_os = "macos"))]
+        {
+            let tree = ExternalTreeFixture::new().unwrap();
+            let name = OsString::from_vec(vec![b's', 0xff]);
+            fs::write(tree.root().join(name), b"secret").unwrap();
+            let error = observer
+                .observe(&request(&tree, limits(1, 2, 8, 8, 8)))
+                .unwrap_err();
+            assert_eq!(error, ObservationRuntimeError::TreeEntryNonUtf8);
+            assert_eq!(
+                error.to_string(),
+                "an external tree entry name is not valid UTF-8"
+            );
+        }
     }
 
     #[test]
