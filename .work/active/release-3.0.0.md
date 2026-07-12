@@ -220,7 +220,12 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
   `gate-security-installer-integrity`,
   `gate-security-workflow-action-pinning`, and
   `gate-security-git-argument-delimiters`.
-- **gate-tests** — pending.
+- **gate-tests** (2026-07-12) — 5 findings (4 high, 1 medium); items
+  `gate-tests-sync-execution-integration`,
+  `gate-tests-native-lifecycle-e2e`,
+  `gate-tests-mutating-scope-matrix`,
+  `gate-tests-safe-update-e2e`, and
+  `gate-tests-daemon-service-failure-paths`.
 - **gate-cruft** — pending.
 - **gate-docs** — pending.
 - **gate-patterns** — pending.
