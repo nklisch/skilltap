@@ -15,8 +15,8 @@ updated: 2026-07-12
 
 ## Bound items
 
-Complete v3 Rust control-plane release bundle: 224 done items (193 initially
-bound items plus 31 late-bound quality-gate, correctness, and refactor items). No
+Complete v3 Rust control-plane release bundle: 223 done items (193 initially
+bound items plus 30 late-bound quality-gate, correctness, and refactor items). No
 research-tagged items were present.
 
 | id | kind | source | stage |
@@ -273,8 +273,8 @@ research-tagged items were present.
 
 ## Readiness
 
-Quality gates and all bound remediation work are complete. Of 224 bound work
-items (excluding the release orchestration item), all 224 are done and none
+Quality gates and all bound remediation work are complete. Of 223 bound work
+items (excluding the release orchestration item), all 223 are done and none
 remain open. Late-bound correctness and contract stories promoted during
 autopilot are included in the bundle:
 
