@@ -52,35 +52,8 @@ Start with [Getting Started](./getting-started).
 
 ## Install
 
-Choose the setup path that fits how you work:
-
-- **Native marketplace:** install the `skilltap` plugin from the Claude Code
-  or Codex marketplace entry published by this repository, then run the
-  executable bootstrap command below.
-- **One-line installer:** verify and install the binary with the command below;
-  it invokes the same bootstrap boundary after verification.
-
-On macOS or Linux, install the standalone binary and run its first-party
-bootstrap boundary:
-
-```bash
-curl -fsSL https://skilltap.dev/install.sh | sh
-```
-
-The installer verifies the release checksum, installs the user-level binary,
-and invokes `skilltap bootstrap` to detect Claude Code and Codex independently.
-Harness absence or an unsupported native lifecycle is reported as attention;
-the verified binary remains available. The executable is the authoritative
-command discovery surface:
-
-```console
-skilltap bootstrap --help
-```
-
-### Add the marketplace yourself
-
-If you prefer to use each harness directly, register this repository's plugin
-marketplace with the commands below:
+The plugin is skilltap's primary distribution surface. Add the marketplace,
+then install or enable the plugin in the harness you already use:
 
 ```bash
 # Claude Code
@@ -93,21 +66,29 @@ codex plugin marketplace add https://github.com/nklisch/skilltap.git --ref main 
 
 Claude can install the plugin natively after registration. Codex can expose the
 complete skill from its marketplace; open `/plugins` in Codex to install or
-enable the plugin when that native flow is available. `skilltap bootstrap`
-checks both harnesses and reports the exact next step for your installation.
+enable the plugin when that native flow is available.
 
-If you installed the plugin through a native marketplace, use the same
-command. Claude's native path is the qualified plugin install from the
-registered `skilltap` marketplace; Codex's marketplace source can expose the
-complete skill even when its installed host has no non-interactive native
-plugin mutation. Follow the harness result and next action printed by
-`bootstrap`; never write a harness cache by hand. Marketplace installation and
-the one-line installer are equivalent first-party setup paths.
+### Install the standalone binary
 
-Or use Homebrew:
+After marketplace setup, use the online installer when you want the binary
+directly or need to set up a harness without its plugin flow:
 
 ```bash
+# macOS or Linux
+curl -fsSL https://skilltap.dev/install.sh | sh
+
+# Or Homebrew
 brew install nklisch/skilltap/skilltap
+```
+
+The installer verifies the release checksum, installs the user-level binary,
+and invokes `skilltap bootstrap` to detect Claude Code and Codex independently.
+Harness absence or an unsupported native lifecycle is reported as attention;
+the verified binary remains available. The executable is the authoritative
+command discovery surface:
+
+```console
+skilltap bootstrap --help
 ```
 
 Verify the binary:

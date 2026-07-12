@@ -22,17 +22,10 @@ features:
     details: Bring existing resources together, keep enabled harnesses aligned, and see drift from one place.
 ---
 
-## Install and connect your harnesses
+## Install the plugin first
 
-Install the binary, or add the plugin through the harness you already use.
-
-```bash
-# One-line installer
-curl -fsSL https://skilltap.dev/install.sh | sh
-
-# Or Homebrew
-brew install nklisch/skilltap/skilltap
-```
+Add the marketplace, then install or enable the plugin in the harness you
+already use.
 
 ```bash
 # Claude Code
@@ -41,6 +34,17 @@ claude plugin install skilltap@skilltap --scope user
 
 # Codex marketplace
 codex plugin marketplace add https://github.com/nklisch/skilltap.git --ref main --sparse plugin
+```
+
+Need the standalone binary directly, or setting up a harness without its
+plugin flow? Use the online installer after registering the marketplace:
+
+```bash
+# One-line installer
+curl -fsSL https://skilltap.dev/install.sh | sh
+
+# Or Homebrew
+brew install nklisch/skilltap/skilltap
 ```
 
 Then let skilltap check the setup:
