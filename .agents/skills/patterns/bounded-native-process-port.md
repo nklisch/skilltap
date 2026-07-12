@@ -15,7 +15,7 @@ for every harness interaction.
 - Git revision resolution: `crates/harnesses/src/update_resolution.rs:56-81`
 - Harness lifecycle execution: `crates/harnesses/src/lifecycle.rs:86-104`
 - Harness detection: `crates/harnesses/src/lib.rs:99-119`
-- Daemon service probe: `crates/cli/src/entrypoint.rs:707-724`
+- Daemon service probe: `crates/cli/src/bootstrap_commands.rs:1062-1081`
 
 ## When to Use
 
@@ -35,4 +35,3 @@ for every harness interaction.
 - Calling `std::process::Command` from an adapter instead of the bounded runner.
 - Passing unresolved executable paths.
 - Omitting process limits or allowing ambient environment inheritance.
-
