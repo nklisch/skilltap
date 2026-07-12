@@ -1,7 +1,7 @@
 ---
 id: gate-tests-safe-update-e2e
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -93,3 +93,19 @@ daemon update reports `configuration_locked`, records pending work, and
 recovers to apply the revision after the lock releases. Drift and unavailable
 source assertions now also require pending-operation accounting and the
 persisted daemon `pending` result.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review at review weight standard.
+All three focused safe-update tests pass. Coverage now includes changed Git
+SHAs and repeat no-op behavior, check/off/apply-safe policy modes, pinned and
+drifted resources, unavailable sources with pending daemon records, and
+Linux-isolated lock contention with recovery after release. Assertions verify
+the resulting state and output without weakening failures or touching the
+host environment.
