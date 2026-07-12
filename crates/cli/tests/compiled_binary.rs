@@ -2715,6 +2715,12 @@ fn safe_update_policy_pins_drift_and_source_failures_remain_visible() {
     assert_code(&drift, 2);
     let drift_value = json(&drift);
     assert!(
+        drift_value["summary"]["pending_operations"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert!(
         drift_value["warnings"]
             .as_array()
             .unwrap()
@@ -2827,8 +2833,171 @@ fn safe_update_policy_pins_drift_and_source_failures_remain_visible() {
                     || warning["code"] == "skill_source_unavailable"
             })
     );
+    assert!(
+        unavailable_value["summary"]["pending_operations"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert!(
+        unavailable_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| { entry["id"] == "daemon" && entry["status"] == "pending" })
+    );
     let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(state.contains("\"daemon_run\""));
+    assert!(state.contains("\"result\": \"pending\""));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn safe_update_lock_contention_records_pending_failure_and_recovers() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()).replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    let repository = machine.home().join("lock-skill-source");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: lock-skill\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    for args in [
+        vec!["init", "--quiet", "--initial-branch", "main"],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    let source = format!("file://{}", repository.to_str().unwrap());
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            &source,
+            "--name",
+            "lock-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: lock-skill\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+    for args in [
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "update",
+        ],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+
+    let lock_path = config_root(&machine).join("skilltap.lock");
+    let marker = machine.home().join("lock-held");
+    let script = format!(
+        "flock -n '{}' sh -c 'touch \"{}\"; sleep 1'",
+        lock_path.to_str().unwrap(),
+        marker.to_str().unwrap()
+    );
+    let mut holder = Command::new("sh").args(["-c", &script]).spawn().unwrap();
+    for _ in 0..100 {
+        if marker.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(marker.exists(), "lock holder did not acquire the file lock");
+
+    let blocked = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&blocked, 2);
+    let blocked_value = json(&blocked);
+    assert!(
+        blocked_value["summary"]["pending_operations"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert!(
+        blocked_value["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| { error["code"] == "configuration_locked" })
+    );
+    let _ = holder.wait();
+
+    let recovered = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&recovered, 0);
+    let recovered_value = json(&recovered);
+    assert_eq!(recovered_value["result"], "completed");
+    assert_eq!(recovered_value["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(machine.home().join(".agents/skills/lock-skill/SKILL.md")).unwrap(),
+        "---\nname: lock-skill\ndescription: v2\n---\nv2\n"
+    );
 }
 
 #[test]

@@ -87,3 +87,9 @@ It covers check/off/apply-safe policy observations, a pinned resource blocked
 from automatic replacement, local destination drift preservation, unavailable
 Git source handling, and daemon-run state retention. Both safe-update focused
 tests pass, including the Git revision transition regression.
+
+Added Linux-isolated lock contention coverage with a real `flock` holder:
+daemon update reports `configuration_locked`, records pending work, and
+recovers to apply the revision after the lock releases. Drift and unavailable
+source assertions now also require pending-operation accounting and the
+persisted daemon `pending` result.
