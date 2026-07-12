@@ -73,6 +73,7 @@ pub enum ValidationError {
         kind: &'static str,
         expected: &'static str,
     },
+    CredentialBearingSourceLocator,
     PathNotAbsolute,
     InvalidAbsolutePathComponent,
     PathNotRelative,
@@ -119,6 +120,9 @@ impl fmt::Display for ValidationError {
             Self::InvalidFormat { kind, expected } => {
                 write!(formatter, "{kind} must {expected}")
             }
+            Self::CredentialBearingSourceLocator => formatter.write_str(
+                "source locator must not contain URL credentials; use a Git credential helper or environment-backed authentication",
+            ),
             Self::PathNotAbsolute => write!(formatter, "absolute path must be absolute"),
             Self::InvalidAbsolutePathComponent => {
                 write!(formatter, "absolute path must be lexically normalized")

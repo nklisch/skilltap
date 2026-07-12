@@ -13,6 +13,9 @@ use std::{
     time::Duration,
 };
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use skilltap_core::{
     domain::{
         AbsolutePath, ComponentGraph, DesiredOrigin, DesiredResource, Fingerprint,
@@ -454,4 +457,46 @@ fn assert_owned_files_exclude_authentication(root: &Path) {
             "authentication sentinel leaked into {path}"
         );
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn persisted_documents_and_managed_artifacts_are_private() {
+    let fixture = Fixture::new();
+    fixture.initialize_documents();
+
+    let root_mode = fs::metadata(fixture.root_path())
+        .unwrap()
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(root_mode, 0o700);
+    for document in ["config.toml", "inventory.toml", "state.json"] {
+        let path = fixture.root_path().join(document);
+        let mode = fs::metadata(path).unwrap().permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "document {document} must be user-readable only"
+        );
+    }
+
+    let handle = fixture.publish();
+    let managed = fixture.root_path().join("managed");
+    assert_eq!(
+        fs::metadata(&managed).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    let artifact = managed.join(handle.record().path().as_str());
+    assert_eq!(
+        fs::metadata(&artifact).unwrap().permissions().mode() & 0o777,
+        0o700
+    );
+    assert_eq!(
+        fs::metadata(artifact.join("SKILL.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
 }

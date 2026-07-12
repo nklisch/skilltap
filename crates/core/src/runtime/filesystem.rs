@@ -126,6 +126,17 @@ pub trait FileSystem {
     fn inspect(&self, path: &AbsolutePath) -> Result<FileMetadata, RuntimeError>;
     fn canonicalize(&self, path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError>;
     fn create_directory_all(&self, path: &AbsolutePath) -> Result<(), RuntimeError>;
+    /// Restrict an owned directory to its user on platforms with POSIX modes.
+    ///
+    /// Test doubles may leave this as the default no-op; the system adapter is
+    /// the boundary that enforces the machine-state permission contract.
+    fn ensure_private_directory(&self, _path: &AbsolutePath) -> Result<(), RuntimeError> {
+        Ok(())
+    }
+    /// Restrict an owned document to its user on platforms with POSIX modes.
+    fn ensure_private_file(&self, _path: &AbsolutePath) -> Result<(), RuntimeError> {
+        Ok(())
+    }
     fn read(&self, path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError>;
     fn read_regular_no_follow(&self, path: &AbsolutePath) -> Result<Option<Vec<u8>>, RuntimeError>;
     fn atomic_write(&self, path: &AbsolutePath, contents: &[u8]) -> Result<(), RuntimeError>;
@@ -161,7 +172,19 @@ impl FileSystem for SystemFileSystem {
             return Err(unsafe_symlink(FileSystemAction::CreateDirectory, path));
         }
         fs::create_dir_all(path.as_str())
+            .map_err(|source| filesystem_error(FileSystemAction::CreateDirectory, path, source))?;
+        ensure_private_directory(path)
             .map_err(|source| filesystem_error(FileSystemAction::CreateDirectory, path, source))
+    }
+
+    fn ensure_private_directory(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
+        ensure_private_directory(path)
+            .map_err(|source| filesystem_error(FileSystemAction::CreateDirectory, path, source))
+    }
+
+    fn ensure_private_file(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
+        ensure_private_file(path)
+            .map_err(|source| filesystem_error(FileSystemAction::Write, path, source))
     }
 
     fn read(&self, path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError> {
@@ -375,7 +398,10 @@ fn create_temporary(parent: &Path, name: &std::ffi::OsStr) -> io::Result<(PathBu
             std::process::id()
         ));
         match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(file) => return Ok((path, file)),
+            Ok(file) => {
+                ensure_private_file_io(&file)?;
+                return Ok((path, file));
+            }
             Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
             Err(source) => return Err(source),
         }
@@ -384,6 +410,42 @@ fn create_temporary(parent: &Path, name: &std::ffi::OsStr) -> io::Result<(PathBu
         io::ErrorKind::AlreadyExists,
         "could not allocate atomic-write temporary file",
     ))
+}
+
+#[cfg(unix)]
+fn ensure_private_directory(path: &AbsolutePath) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::set_permissions(path.as_str(), fs::Permissions::from_mode(0o700))
+}
+
+#[cfg(not(unix))]
+fn ensure_private_directory(_path: &AbsolutePath) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn ensure_private_file(path: &AbsolutePath) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::set_permissions(path.as_str(), fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn ensure_private_file(_path: &AbsolutePath) -> io::Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn ensure_private_file_io(file: &File) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    file.set_permissions(fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn ensure_private_file_io(_file: &File) -> io::Result<()> {
+    Ok(())
 }
 
 fn sync_parent(path: &AbsolutePath, _action: FileSystemAction) -> Result<(), RuntimeError> {

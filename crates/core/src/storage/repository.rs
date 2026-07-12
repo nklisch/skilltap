@@ -318,7 +318,17 @@ where
                 StorageError::runtime(self.kind, DocumentAction::Write, &self.path, source)
             })?;
         self.filesystem
+            .ensure_private_directory(&self.config_root)
+            .map_err(|source| {
+                StorageError::runtime(self.kind, DocumentAction::Write, &self.path, source)
+            })?;
+        self.filesystem
             .atomic_write(&self.path, &contents)
+            .map_err(|source| {
+                StorageError::runtime(self.kind, DocumentAction::Write, &self.path, source)
+            })?;
+        self.filesystem
+            .ensure_private_file(&self.path)
             .map_err(|source| {
                 StorageError::runtime(self.kind, DocumentAction::Write, &self.path, source)
             })

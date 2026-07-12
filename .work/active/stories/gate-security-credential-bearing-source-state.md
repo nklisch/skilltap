@@ -1,7 +1,7 @@
 ---
 id: gate-security-credential-bearing-source-state
 kind: story
-stage: implementing
+stage: review
 tags: [security]
 parent: null
 depends_on: []
@@ -41,3 +41,13 @@ Reject or normalize URL userinfo and credential-bearing locators, use credential
 helpers or environment references, store only redacted locators, enforce 0600
 document files and 0700 configuration/managed directories, and add persistence
 secret-canary tests.
+
+## Implementation notes
+
+- Execution capability: highest same-harness capability; this is a security-sensitive domain and persistence boundary.
+- Review weight: standard (caller/default).
+- Files changed: `crates/core/src/domain/{mod.rs,source.rs}`, `crates/core/src/runtime/filesystem.rs`, `crates/core/src/runtime/filesystem/directory_tree/unix_support.rs`, `crates/core/src/storage/repository.rs`, `crates/core/tests/storage_integration.rs`, `crates/cli/src/command/tests.rs`.
+- Tests added: URI credential and credential-query rejection with persisted-wire coverage; CLI source-argument rejection; Unix mode assertions for owned documents and managed artifact trees.
+- Discrepancies from design: credential-bearing locators fail closed rather than being normalized/redacted, preserving the no-authentication-material invariant while directing callers to Git helpers or environment-backed authentication. SCP-style Git locators remain valid because their `user@host:path` form is not URI userinfo.
+- Adjacent issues parked: none.
+- System persistence now creates/replaces owned documents with mode `0600`, configuration roots with mode `0700`, and managed artifact roots are hardened to `0700` when opened.

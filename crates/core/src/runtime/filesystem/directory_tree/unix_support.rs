@@ -1,10 +1,13 @@
 use std::{
     ffi::{CStr, CString, OsString},
-    fs::{File, TryLockError},
+    fs::{File, Permissions, TryLockError},
     io,
     os::{
         fd::{AsRawFd, FromRawFd, RawFd},
-        unix::{ffi::OsStringExt, fs::MetadataExt},
+        unix::{
+            ffi::OsStringExt,
+            fs::{MetadataExt, PermissionsExt},
+        },
     },
     path::{Component, Path},
 };
@@ -32,6 +35,10 @@ pub(super) fn open_absolute_directory(path: &AbsolutePath, create: bool) -> io::
             Err(error) => return Err(error),
         }
     }
+    // The managed tree is a private skilltap boundary. Apply the mode to the
+    // opened descriptor as well as newly-created ancestors so an existing
+    // directory cannot retain group/world access after adoption.
+    directory.set_permissions(Permissions::from_mode(0o700))?;
     Ok(directory)
 }
 

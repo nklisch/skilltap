@@ -259,6 +259,26 @@ fn representative_nested_commands_convert_values() {
 }
 
 #[test]
+fn source_arguments_reject_credential_bearing_uri_locators() {
+    for command in [
+        &[
+            "skilltap",
+            "marketplace",
+            "add",
+            "https://user:token@example.test/repo.git",
+        ][..],
+        &[
+            "skilltap",
+            "skill",
+            "install",
+            "https://example.test/repo.git?access_token=token",
+        ][..],
+    ] {
+        rejects(command, ErrorKind::ValueValidation);
+    }
+}
+
+#[test]
 fn plugin_install_requires_an_exact_marketplace_selector() {
     let Command::Plugin(PluginArgs {
         command: PluginCommand::Install(args),

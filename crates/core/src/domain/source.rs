@@ -7,7 +7,12 @@ use super::{
     validated_newtype::validated_string_newtype,
 };
 
-validated_string_newtype!(SourceLocator, "source locator", 4096, validate_text);
+validated_string_newtype!(
+    SourceLocator,
+    "source locator",
+    4096,
+    validate_source_locator
+);
 validated_string_newtype!(RequestedRevision, "requested revision", 512, validate_text);
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
@@ -133,6 +138,72 @@ impl<'de> Deserialize<'de> for Source {
         let wire = SourceWire::deserialize(deserializer)?;
         Self::try_from(wire).map_err(serde::de::Error::custom)
     }
+}
+
+/// Reject source locators that would persist authentication material.
+///
+/// URI userinfo is the most common way credentials enter Git and catalog
+/// locators (`https://user:token@example.test/repo.git`).  Source locators
+/// intentionally remain opaque to the domain, so we validate only the URI
+/// authority and the conventional credential query keys here.  SCP-style Git
+/// locators (`git@example.test:org/repo.git`) are not URI authorities and remain
+/// valid; SSH authentication for those locators belongs to the user's Git
+/// credential helper/agent rather than skilltap state.
+fn validate_source_locator(
+    value: &str,
+    kind: &'static str,
+    max: usize,
+) -> Result<(), ValidationError> {
+    validate_text(value, kind, max)?;
+
+    let Some(authority_start) = value.find("://") else {
+        return Ok(());
+    };
+    let authority_start = authority_start + 3;
+    let authority_end = value[authority_start..]
+        .find(['/', '?', '#'])
+        .map(|offset| authority_start + offset)
+        .unwrap_or(value.len());
+    if value[authority_start..authority_end].contains('@') {
+        return Err(ValidationError::CredentialBearingSourceLocator);
+    }
+
+    let query_start = value[authority_end..]
+        .find('?')
+        .map(|offset| authority_end + offset + 1);
+    if let Some(query_start) = query_start {
+        let query_end = value[query_start..]
+            .find('#')
+            .map(|offset| query_start + offset)
+            .unwrap_or(value.len());
+        for pair in value[query_start..query_end].split('&') {
+            let key = pair.split_once('=').map_or(pair, |(key, _)| key);
+            if is_credential_query_key(key) {
+                return Err(ValidationError::CredentialBearingSourceLocator);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn is_credential_query_key(key: &str) -> bool {
+    let key = key.trim().to_ascii_lowercase();
+    matches!(
+        key.as_str(),
+        "access_token"
+            | "access-token"
+            | "api_key"
+            | "api-key"
+            | "apikey"
+            | "auth"
+            | "authorization"
+            | "credential"
+            | "credentials"
+            | "password"
+            | "passwd"
+            | "secret"
+            | "token"
+    )
 }
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -404,6 +475,36 @@ mod tests {
         assert_eq!(local.kind(), SourceKind::Local);
         assert_eq!(local.locator().as_str(), "/home/nathan/plugin");
         assert!(local.requested_revision().is_none());
+    }
+
+    #[test]
+    fn source_locators_reject_uri_credentials_before_they_can_be_persisted() {
+        for locator in [
+            "https://user:token@example.test/repo.git",
+            "https://token@example.test/repo.git",
+            "https://example.test/repo.git?access_token=token",
+            "https://example.test/repo.git?password=token",
+            "https://example.test/repo.git?x=1&API_KEY=token",
+        ] {
+            assert_eq!(
+                SourceLocator::new(locator).unwrap_err(),
+                ValidationError::CredentialBearingSourceLocator,
+                "credential-bearing locator should be rejected: {locator}"
+            );
+            let persisted = format!(r#"{{"kind":"git","locator":"{locator}"}}"#);
+            assert!(serde_json::from_str::<Source>(&persisted).is_err());
+        }
+    }
+
+    #[test]
+    fn source_locators_allow_noncredential_query_values_and_scp_git_syntax() {
+        for locator in [
+            "https://example.test/repo.git?ref=stable",
+            "https://example.test/catalog.json?channel=stable",
+            "git@example.test:org/repo.git",
+        ] {
+            assert!(SourceLocator::new(locator).is_ok(), "locator: {locator}");
+        }
     }
 
     #[test]
