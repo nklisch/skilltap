@@ -882,9 +882,17 @@ fn execute_system_reconciliation(
     command: &'static str,
     execute: impl FnOnce(StatusApplication<'_>) -> Outcome,
 ) -> Outcome {
+    with_system_application(command, repository_composition_error, execute)
+}
+
+fn with_system_application(
+    command: &'static str,
+    paths_error: fn(&'static str) -> Outcome,
+    execute: impl FnOnce(StatusApplication<'_>) -> Outcome,
+) -> Outcome {
     let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
         Ok(paths) => paths,
-        Err(_) => return repository_composition_error(command),
+        Err(_) => return paths_error(command),
     };
     let filesystem = SystemFileSystem;
     let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
@@ -918,82 +926,22 @@ fn execute_system_reconciliation(
 }
 
 fn execute_system_adopt(args: &AdoptArgs) -> Outcome {
-    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
-        Ok(paths) => paths,
-        Err(_) => return repository_composition_error("adopt"),
-    };
-    let filesystem = SystemFileSystem;
-    let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
-        Ok(repository) => repository,
-        Err(_) => return repository_composition_error("adopt"),
-    };
-    let inventory = match FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone())
-    {
-        Ok(repository) => repository,
-        Err(_) => return repository_composition_error("adopt"),
-    };
-    let state = match FileStateRepository::new(&filesystem, paths.skilltap_config().clone()) {
-        Ok(repository) => repository,
-        Err(_) => return repository_composition_error("adopt"),
-    };
-    let runner = SystemCommandRunner;
-    let git = CommandGitRoot::new(
-        &runner,
-        NativeId::new("git").expect("known command identifier"),
-    );
-    let working_directory = SystemWorkingDirectory;
-    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
-    StatusApplication {
-        config: &config,
-        inventory: &inventory,
-        state: &state,
-        scopes: &scopes,
-        working_directory: &working_directory,
-        native_observation: NativeObservationMode::System,
-    }
-    .execute_adopt(args)
+    with_system_application("adopt", repository_composition_error, |application| {
+        application.execute_adopt(args)
+    })
 }
 
 fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
-    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
-        Ok(paths) => paths,
-        Err(_) => {
-            return Outcome::new("status", ResultClass::Invalid).with_error(ErrorDetail::new(
-                "platform_paths_unavailable",
-                "The skilltap configuration paths could not be resolved.",
-            ));
-        }
-    };
-    let filesystem = SystemFileSystem;
-    let config = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
-        Ok(repository) => repository,
-        Err(_) => return repository_composition_error("status"),
-    };
-    let inventory = match FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone())
-    {
-        Ok(repository) => repository,
-        Err(_) => return repository_composition_error("status"),
-    };
-    let state = match FileStateRepository::new(&filesystem, paths.skilltap_config().clone()) {
-        Ok(repository) => repository,
-        Err(_) => return repository_composition_error("status"),
-    };
-    let runner = SystemCommandRunner;
-    let git = CommandGitRoot::new(
-        &runner,
-        NativeId::new("git").expect("known command identifier"),
-    );
-    let working_directory = SystemWorkingDirectory;
-    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
-    StatusApplication {
-        config: &config,
-        inventory: &inventory,
-        state: &state,
-        scopes: &scopes,
-        working_directory: &working_directory,
-        native_observation: NativeObservationMode::System,
-    }
-    .execute(args)
+    with_system_application("status", status_paths_error, |application| {
+        application.execute(args)
+    })
+}
+
+fn status_paths_error(_command: &'static str) -> Outcome {
+    Outcome::new("status", ResultClass::Invalid).with_error(ErrorDetail::new(
+        "platform_paths_unavailable",
+        "The skilltap configuration paths could not be resolved.",
+    ))
 }
 
 fn with_harness_repository(

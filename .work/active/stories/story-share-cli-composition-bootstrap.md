@@ -1,7 +1,7 @@
 ---
 id: story-share-cli-composition-bootstrap
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: null
 depends_on: []
@@ -32,3 +32,11 @@ and borrowed lifetimes unchanged.
 - Existing output, errors, and command behavior remain unchanged.
 - Workspace tests, formatting, and clippy stay green.
 
+## Implementation Notes
+
+- Added a private `with_system_application` composition helper that owns
+  platform-path, repository, scope resolver, and system adapter construction.
+- Routed reconciliation, adopt, and status through the helper while retaining
+  status's distinct `platform_paths_unavailable` mapping.
+- Verification: `cargo fmt --all -- --check` and `cargo check -p skilltap --offline`
+  passed.
