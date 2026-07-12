@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-contract
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: []
@@ -32,3 +32,15 @@ Acceptance criteria:
 - Tests added: offline release contract script checks channel identity/version, supported asset matrix, checksums, and provenance attestation.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. Offline release-contract
+checks validate workspace/channel identity and version parity, supported asset
+matrix, checksums, and provenance attestation wiring before publication.
