@@ -1,7 +1,7 @@
 ---
 id: story-feature-extract-cli-bootstrap-boundary-publication
 kind: story
-stage: review
+stage: done
 tags: [refactor, infra]
 parent: feature-extract-cli-bootstrap-boundary
 depends_on: [story-feature-extract-cli-bootstrap-boundary-composition]
@@ -87,3 +87,16 @@ part of the rollback.
 - `cargo test -p skilltap --offline` (59 unit/compiled/package tests passed)
 - `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
 - `git diff --check`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review, standard weight. Publication, lock, identity,
+rollback, cleanup, and test-only seams are private to `bootstrap_commands`;
+the full CLI test suite and strict clippy pass with unchanged assertions and
+no core artifact or installer changes.
