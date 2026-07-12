@@ -117,13 +117,16 @@ fn walk(
                 }
                 hook(HookPoint::BeforeOpen(&relative))?;
                 let mut file = open_entry(directory.as_raw_fd(), &name, 0)?;
-                require_opened(&file, identity, libc::S_IFREG)?;
+                let metadata = require_opened(&file, identity, libc::S_IFREG)?;
+                let executable = metadata.st_mode & 0o111 != 0;
                 verify_at(directory.as_raw_fd(), &name, identity)?;
                 let bytes = read_file_bounded(&mut file, state.limits.file_bytes())?;
                 hook(HookPoint::AfterRead(&relative))?;
                 verify_opened_and_path(&file, directory.as_raw_fd(), &name, identity)?;
                 add_total(state, bytes.len())?;
-                state.entries.push(ExternalTreeEntry::file(path, bytes));
+                state
+                    .entries
+                    .push(ExternalTreeEntry::file(path, bytes, executable));
             }
             libc::S_IFLNK => {
                 hook(HookPoint::BeforeOpen(&relative))?;
@@ -344,7 +347,7 @@ fn require_opened(
     file: &File,
     expected: Identity,
     kind: libc::mode_t,
-) -> Result<(), ObservationRuntimeError> {
+) -> Result<libc::stat, ObservationRuntimeError> {
     let mut metadata = std::mem::MaybeUninit::uninit();
     cvt(unsafe { libc::fstat(file.as_raw_fd(), metadata.as_mut_ptr()) })
         .map_err(|_| ObservationRuntimeError::TreeEntryUnreadable)?;
@@ -352,7 +355,7 @@ fn require_opened(
     if metadata.st_mode & libc::S_IFMT != kind || stat_identity(&metadata)? != expected {
         return Err(ObservationRuntimeError::TreeEntryChanged);
     }
-    Ok(())
+    Ok(metadata)
 }
 fn verify_opened_and_path(
     file: &File,
@@ -406,7 +409,7 @@ fn clear_errno() {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path};
+    use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
     #[cfg(not(target_os = "macos"))]
     use std::{ffi::OsString, os::unix::ffi::OsStringExt};
@@ -455,6 +458,31 @@ mod tests {
         );
         assert!(!format!("{snapshot:?}").contains(SECRET));
         assert!(!format!("{:?}", snapshot.entries()[0]).contains(SECRET));
+    }
+
+    #[test]
+    fn observes_only_normalized_executable_intent_from_source_modes() {
+        let tree = ExternalTreeFixture::new().unwrap();
+        for (name, mode) in [("owner", 0o4700), ("group", 0o2410), ("world", 0o4401)] {
+            let path = tree.root().join(name);
+            fs::write(&path, name).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let plain = tree.root().join("plain");
+        fs::write(&plain, b"#!/bin/sh\n").unwrap();
+        fs::set_permissions(&plain, fs::Permissions::from_mode(0o666)).unwrap();
+
+        let snapshot = SystemExternalTreeObserver
+            .observe(&request(&tree, limits(1, 4, 32, 128, 16)))
+            .unwrap();
+        for entry in snapshot.entries() {
+            assert_eq!(
+                entry.file_executable(),
+                Some(entry.path().as_str() != "plain"),
+                "{}",
+                entry.path()
+            );
+        }
     }
 
     #[test]

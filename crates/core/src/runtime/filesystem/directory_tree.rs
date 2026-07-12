@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::{ffi::CString, fs::File, io, os::fd::AsRawFd, path::Path};
 
 use crate::{
-    domain::{AbsolutePath, RelativeArtifactPath},
+    domain::{AbsolutePath, ArtifactFile, RelativeArtifactPath},
     runtime::{
         DirectoryContentState, DirectoryIdentity, DirectoryPathState, DirectorySyncState,
         FileSystemAction, RuntimeError,
@@ -43,14 +43,20 @@ pub trait DirectoryTreeFileSystem {
         &self,
         managed_root: &AbsolutePath,
         destination: &RelativeArtifactPath,
-        files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError>;
 
     fn load_tree_no_follow(
         &self,
         managed_root: &AbsolutePath,
         destination: &RelativeArtifactPath,
-    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError>;
+    ) -> Result<
+        (
+            DirectoryIdentity,
+            BTreeMap<RelativeArtifactPath, ArtifactFile>,
+        ),
+        RuntimeError,
+    >;
 
     fn remove_tree_no_follow(
         &self,
@@ -65,7 +71,7 @@ impl DirectoryTreeFileSystem for SystemFileSystem {
         &self,
         managed_root: &AbsolutePath,
         destination: &RelativeArtifactPath,
-        files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
         publish_tree(managed_root, destination, files)
     }
@@ -74,7 +80,13 @@ impl DirectoryTreeFileSystem for SystemFileSystem {
         &self,
         managed_root: &AbsolutePath,
         destination: &RelativeArtifactPath,
-    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+    ) -> Result<
+        (
+            DirectoryIdentity,
+            BTreeMap<RelativeArtifactPath, ArtifactFile>,
+        ),
+        RuntimeError,
+    > {
         load_tree(managed_root, destination)
     }
 
@@ -92,7 +104,7 @@ impl DirectoryTreeFileSystem for SystemFileSystem {
 fn publish_tree(
     managed_root: &AbsolutePath,
     destination: &RelativeArtifactPath,
-    files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
 ) -> Result<DirectoryPublishOutcome, RuntimeError> {
     let root = open_absolute_directory(managed_root, true).map_err(|source| {
         filesystem_error(FileSystemAction::CreateDirectory, managed_root, source)
@@ -195,7 +207,7 @@ fn publish_tree(
 fn publish_tree(
     _managed_root: &AbsolutePath,
     _destination: &RelativeArtifactPath,
-    _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    _files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
 ) -> Result<DirectoryPublishOutcome, RuntimeError> {
     Err(RuntimeError::UnsupportedPlatform {
         platform: std::env::consts::OS.to_owned(),
@@ -206,7 +218,13 @@ fn publish_tree(
 fn load_tree(
     managed_root: &AbsolutePath,
     destination: &RelativeArtifactPath,
-) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+) -> Result<
+    (
+        DirectoryIdentity,
+        BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    ),
+    RuntimeError,
+> {
     let root = open_absolute_directory(managed_root, false)
         .map_err(|source| filesystem_error(FileSystemAction::Read, managed_root, source))?;
     let directory = open_relative_directory(&root, destination)
@@ -223,7 +241,13 @@ fn load_tree(
 fn load_tree(
     _managed_root: &AbsolutePath,
     _destination: &RelativeArtifactPath,
-) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+) -> Result<
+    (
+        DirectoryIdentity,
+        BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    ),
+    RuntimeError,
+> {
     Err(RuntimeError::UnsupportedPlatform {
         platform: std::env::consts::OS.to_owned(),
     })

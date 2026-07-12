@@ -39,7 +39,7 @@ impl SkillCompatibility {
             .files()
             .iter()
             .find(|(path, _)| path.as_str() == "SKILL.md")
-            .map(|(_, bytes)| bytes)
+            .map(|(_, file)| file.contents())
             .expect("validated skill tree contains SKILL.md");
         targets
             .iter()
@@ -154,6 +154,7 @@ mod tests {
             [ExternalTreeEntry::file(
                 RelativeArtifactPath::new("SKILL.md").unwrap(),
                 content.to_vec(),
+                false,
             )],
             ExternalTreeLimits::new(8, 32, 1024, 4096, 1024).unwrap(),
         )

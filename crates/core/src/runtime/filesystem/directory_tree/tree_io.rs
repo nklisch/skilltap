@@ -6,7 +6,7 @@ use std::{
     os::fd::{AsRawFd, FromRawFd},
 };
 
-use crate::domain::RelativeArtifactPath;
+use crate::domain::{ArtifactFile, RelativeArtifactPath};
 
 use super::ancestor_paths;
 use super::unix_support::{
@@ -16,7 +16,7 @@ use super::unix_support::{
 
 pub(super) fn write_tree(
     root: &File,
-    files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
 ) -> io::Result<()> {
     let directories = files
         .keys()
@@ -30,20 +30,24 @@ pub(super) fn write_tree(
         parent.sync_all()?;
         child.sync_all()?;
     }
-    for (path, contents) in files {
+    for (path, artifact) in files {
         let (parent, name) = open_relative_parent(root, path, false)?;
         let fd = cvt(unsafe {
             libc::openat(
                 parent.as_raw_fd(),
                 name.as_ptr(),
                 libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-                0o600,
+                if artifact.is_executable() {
+                    0o700
+                } else {
+                    0o600
+                },
             )
         })?;
         let mut file = unsafe { File::from_raw_fd(fd) };
         let identity = require_regular(&file)?;
         verify_at(parent.as_raw_fd(), &name, identity)?;
-        file.write_all(contents)?;
+        file.write_all(artifact.contents())?;
         file.sync_all()?;
         if require_regular(&file)? != identity {
             return Err(io::Error::other(
@@ -63,7 +67,7 @@ pub(super) fn write_tree(
 pub(super) fn read_tree(
     directory: &File,
     prefix: Option<&str>,
-    files: &mut BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    files: &mut BTreeMap<RelativeArtifactPath, ArtifactFile>,
 ) -> io::Result<()> {
     read_tree_with(directory, prefix, files, &mut |_| {})
 }
@@ -71,7 +75,7 @@ pub(super) fn read_tree(
 pub(super) fn read_tree_with(
     directory: &File,
     prefix: Option<&str>,
-    files: &mut BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    files: &mut BTreeMap<RelativeArtifactPath, ArtifactFile>,
     before_open: &mut impl FnMut(&str),
 ) -> io::Result<()> {
     let names = directory_names(directory)?;
@@ -107,6 +111,7 @@ pub(super) fn read_tree_with(
                 })?;
                 let mut file = unsafe { File::from_raw_fd(fd) };
                 let identity = require_regular(&file)?;
+                let executable = metadata.st_mode & 0o111 != 0;
                 verify_at(directory.as_raw_fd(), &name, identity)?;
                 let mut contents = Vec::new();
                 file.read_to_end(&mut contents)?;
@@ -118,7 +123,7 @@ pub(super) fn read_tree_with(
                 verify_at(directory.as_raw_fd(), &name, identity)?;
                 let path = RelativeArtifactPath::new(relative)
                     .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-                files.insert(path, contents);
+                files.insert(path, ArtifactFile::new(contents, executable));
             }
             _ => {
                 return Err(io::Error::other(

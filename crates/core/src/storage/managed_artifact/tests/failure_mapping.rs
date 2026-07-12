@@ -5,7 +5,7 @@ impl DirectoryTreeFileSystem for PartialFileSystem {
         &self,
         managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        _files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
         Err(RuntimeError::PartialDirectoryPublication {
             path: managed_root.clone(),
@@ -21,7 +21,7 @@ impl DirectoryTreeFileSystem for PartialFileSystem {
         &self,
         _managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, ArtifactFile>), RuntimeError> {
         unreachable!()
     }
 
@@ -67,7 +67,7 @@ impl DirectoryTreeFileSystem for PartialRemovalFileSystem {
         &self,
         _managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        _files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
         unreachable!()
     }
@@ -76,7 +76,7 @@ impl DirectoryTreeFileSystem for PartialRemovalFileSystem {
         &self,
         _managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, ArtifactFile>), RuntimeError> {
         unreachable!()
     }
 
@@ -140,7 +140,7 @@ impl DirectoryTreeFileSystem for CountingFileSystem {
         &self,
         _managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        _files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
         self.calls.set(self.calls.get() + 1);
         unreachable!("owner mismatch must fail before publication")
@@ -150,7 +150,7 @@ impl DirectoryTreeFileSystem for CountingFileSystem {
         &self,
         _managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, ArtifactFile>), RuntimeError> {
         self.calls.set(self.calls.get() + 1);
         unreachable!("owner mismatch must fail before loading")
     }
@@ -225,7 +225,7 @@ impl DirectoryTreeFileSystem for OccupiedFileSystem {
         &self,
         _managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-        _files: &BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        _files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
         let call = self.calls.get() + 1;
         self.calls.set(call);
@@ -243,7 +243,7 @@ impl DirectoryTreeFileSystem for OccupiedFileSystem {
         &self,
         managed_root: &AbsolutePath,
         _destination: &RelativeArtifactPath,
-    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, Vec<u8>>), RuntimeError> {
+    ) -> Result<(DirectoryIdentity, BTreeMap<RelativeArtifactPath, ArtifactFile>), RuntimeError> {
         if self.load_fails {
             Err(RuntimeError::FileSystem {
                 action: crate::runtime::FileSystemAction::Read,
@@ -253,7 +253,10 @@ impl DirectoryTreeFileSystem for OccupiedFileSystem {
         } else {
             Ok((
                 DirectoryIdentity::new(2, 2),
-                BTreeMap::from([(RelativeArtifactPath::new("different").unwrap(), vec![9])]),
+                BTreeMap::from([(
+                    RelativeArtifactPath::new("different").unwrap(),
+                    ArtifactFile::new(vec![9], false),
+                )]),
             ))
         }
     }

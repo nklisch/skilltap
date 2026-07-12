@@ -19,6 +19,22 @@ fn whole_skill_directory_publishes_immutably_and_round_trips_exact_bytes() {
         fs::read(absolute(&repository, handle.record().path()).join("SKILL.md")).unwrap(),
         b"not semantically validated"
     );
+    assert_eq!(
+        fs::metadata(absolute(&repository, handle.record().path()).join("SKILL.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o600
+    );
+    assert_eq!(
+        fs::metadata(absolute(&repository, handle.record().path()).join("scripts/run.sh"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o700
+    );
 
     let repeated = repository
         .publish(&owner, ArtifactRole::DirectSkill, &fingerprint, &tree)

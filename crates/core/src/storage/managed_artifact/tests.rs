@@ -1,12 +1,12 @@
 #![cfg(unix)]
 
-use std::{cell::Cell, collections::BTreeMap, fs, io, path::PathBuf};
+use std::{cell::Cell, collections::BTreeMap, fs, io, os::unix::fs::PermissionsExt, path::PathBuf};
 
 use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::{
-    domain::{FingerprintAlgorithm, ResourceId, ResourceKey, Scope},
+    domain::{ArtifactFile, FingerprintAlgorithm, ResourceId, ResourceKey, Scope},
     runtime::{
         DirectoryContentState, DirectoryPathState, DirectoryPublishOutcome, DirectorySyncState,
         RuntimeError, SystemFileSystem,
@@ -32,9 +32,18 @@ fn fingerprint(byte: char) -> Fingerprint {
 
 fn skill_tree() -> ArtifactTree {
     ArtifactTree::new([
-        ("SKILL.md", b"not semantically validated".to_vec()),
-        ("scripts/run.sh", b"#!/bin/sh\nexit 0\n".to_vec()),
-        ("references/guide.md", vec![0, 1, 2, 255]),
+        (
+            "SKILL.md",
+            ArtifactFile::new(b"not semantically validated".to_vec(), false),
+        ),
+        (
+            "scripts/run.sh",
+            ArtifactFile::new(b"#!/bin/sh\nexit 0\n".to_vec(), true),
+        ),
+        (
+            "references/guide.md",
+            ArtifactFile::new(vec![0, 1, 2, 255], false),
+        ),
     ])
     .unwrap()
 }

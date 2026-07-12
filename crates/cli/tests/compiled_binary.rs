@@ -841,6 +841,179 @@ fn local_skill_install_publishes_the_complete_canonical_tree() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn whole_skill_modes_are_normalized_for_global_and_project_codex_and_claude() {
+    use std::os::unix::fs::PermissionsExt;
+
+    fn write_skill(root: &Path, name: &str) {
+        fs::create_dir_all(root.join("scripts")).unwrap();
+        fs::create_dir_all(root.join("references")).unwrap();
+        fs::write(
+            root.join("SKILL.md"),
+            format!("---\nname: {name}\ndescription: mode test\n---\n"),
+        )
+        .unwrap();
+        fs::write(root.join("scripts/run.sh"), b"#!/bin/sh\nexit 0\n").unwrap();
+        fs::write(root.join("references/plain.sh"), b"#!/bin/sh\nexit 0\n").unwrap();
+        fs::set_permissions(
+            root.join("scripts/run.sh"),
+            fs::Permissions::from_mode(0o7777),
+        )
+        .unwrap();
+        fs::set_permissions(
+            root.join("references/plain.sh"),
+            fs::Permissions::from_mode(0o6666),
+        )
+        .unwrap();
+    }
+
+    fn assert_normalized(root: &Path) {
+        assert_eq!(
+            fs::metadata(root.join("SKILL.md"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o600
+        );
+        assert_eq!(
+            fs::metadata(root.join("scripts/run.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o700
+        );
+        assert_eq!(
+            fs::metadata(root.join("references/plain.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o600
+        );
+    }
+
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let global_source = machine.home().join("global-mode-skill");
+    write_skill(&global_source, "global-mode-skill");
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            global_source.to_str().unwrap(),
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    for destination in [
+        machine.home().join(".agents/skills/global-mode-skill"),
+        machine.home().join(".claude/skills/global-mode-skill"),
+    ] {
+        assert_normalized(&destination);
+    }
+
+    fs::set_permissions(
+        global_source.join("scripts/run.sh"),
+        fs::Permissions::from_mode(0o600),
+    )
+    .unwrap();
+    let update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "global-mode-skill",
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["summary"]["changed"], true);
+    for destination in [
+        machine
+            .home()
+            .join(".agents/skills/global-mode-skill/scripts/run.sh"),
+        machine
+            .home()
+            .join(".claude/skills/global-mode-skill/scripts/run.sh"),
+    ] {
+        assert_eq!(
+            fs::metadata(destination).unwrap().permissions().mode() & 0o7777,
+            0o600
+        );
+    }
+    let repeat = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "global-mode-skill",
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    let drifted = machine
+        .home()
+        .join(".agents/skills/global-mode-skill/scripts/run.sh");
+    fs::set_permissions(&drifted, fs::Permissions::from_mode(0o700)).unwrap();
+    let remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "global-mode-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 2);
+    assert!(
+        json(&remove)["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "skill_destination_drifted_requires_acknowledgment")
+    );
+    fs::set_permissions(&drifted, fs::Permissions::from_mode(0o600)).unwrap();
+
+    let project = machine.working_directory().join("mode-project");
+    fs::create_dir_all(&project).unwrap();
+    let project_source = machine.home().join("project-mode-skill");
+    write_skill(&project_source, "project-mode-skill");
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            project_source.to_str().unwrap(),
+            "--target",
+            "all",
+            "--project",
+            project.to_str().unwrap(),
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    for destination in [
+        project.join(".agents/skills/project-mode-skill"),
+        project.join(".claude/skills/project-mode-skill"),
+    ] {
+        assert_normalized(&destination);
+    }
+}
+
 #[test]
 fn skill_install_requires_generic_yes_for_loadable_partial_frontmatter() {
     let machine = machine();

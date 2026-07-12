@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, fmt};
 use sha2::{Digest, Sha256};
 
 use crate::{
-    domain::{Fingerprint, FingerprintAlgorithm, NativeId, RelativeArtifactPath},
+    domain::{ArtifactFile, Fingerprint, FingerprintAlgorithm, NativeId, RelativeArtifactPath},
     runtime::{ExternalTreeEntryKind, ExternalTreeSnapshot},
     storage::{ArtifactTree, ArtifactTreeError},
 };
@@ -66,7 +66,10 @@ impl ValidatedSkillTree {
                     }
                     files.insert(
                         entry.path().as_str().to_owned(),
-                        entry.file_bytes().unwrap_or_default().to_vec(),
+                        ArtifactFile::new(
+                            entry.file_bytes().unwrap_or_default().to_vec(),
+                            entry.file_executable().unwrap_or(false),
+                        ),
                     );
                 }
                 ExternalTreeEntryKind::Symlink => {
@@ -103,7 +106,7 @@ impl ValidatedSkillTree {
             .tree
             .files()
             .get(&RelativeArtifactPath::new("SKILL.md").expect("static skill path is valid"))?;
-        let text = std::str::from_utf8(bytes).ok()?;
+        let text = std::str::from_utf8(bytes.contents()).ok()?;
         let mut lines = text.lines();
         if lines.next() != Some("---") {
             return None;
@@ -125,14 +128,16 @@ impl ValidatedSkillTree {
 
 fn fingerprint(tree: &ArtifactTree) -> Result<Fingerprint, SkillTreeError> {
     let mut digest = Sha256::new();
-    for (path, bytes) in tree.files() {
+    for (path, file) in tree.files() {
         let path = path.as_str().as_bytes();
         let path_len = u64::try_from(path.len()).map_err(|_| SkillTreeError::Fingerprint)?;
-        let byte_len = u64::try_from(bytes.len()).map_err(|_| SkillTreeError::Fingerprint)?;
+        let byte_len =
+            u64::try_from(file.contents().len()).map_err(|_| SkillTreeError::Fingerprint)?;
         digest.update(path_len.to_be_bytes());
         digest.update(path);
+        digest.update([u8::from(file.is_executable())]);
         digest.update(byte_len.to_be_bytes());
-        digest.update(bytes);
+        digest.update(file.contents());
     }
     let hex = digest
         .finalize()
@@ -159,10 +164,12 @@ mod tests {
                 ExternalTreeEntry::file(
                     RelativeArtifactPath::new("SKILL.md").unwrap(),
                     b"---\nname: demo\n---\n".to_vec(),
+                    false,
                 ),
                 ExternalTreeEntry::file(
                     RelativeArtifactPath::new("docs/example.txt").unwrap(),
                     b"sibling".to_vec(),
+                    false,
                 ),
             ],
             limits(),
@@ -188,6 +195,7 @@ mod tests {
             [ExternalTreeEntry::file(
                 RelativeArtifactPath::new("nested/SKILL.md").unwrap(),
                 b"content".to_vec(),
+                false,
             )],
             limits(),
         )
@@ -208,5 +216,25 @@ mod tests {
             ValidatedSkillTree::validate(&symlink),
             Err(SkillTreeError::SymlinkNotAllowed { .. })
         ));
+    }
+
+    #[test]
+    fn executable_intent_changes_fingerprint_without_changing_contents() {
+        let make = |executable| {
+            ExternalTreeSnapshot::new(
+                [ExternalTreeEntry::file(
+                    RelativeArtifactPath::new("SKILL.md").unwrap(),
+                    b"---\nname: demo\n---\n".to_vec(),
+                    executable,
+                )],
+                limits(),
+            )
+            .unwrap()
+        };
+        let plain = ValidatedSkillTree::validate(&make(false)).unwrap();
+        let executable = ValidatedSkillTree::validate(&make(true)).unwrap();
+
+        assert_ne!(plain.fingerprint(), executable.fingerprint());
+        assert_eq!(plain.tree().files().len(), executable.tree().files().len());
     }
 }

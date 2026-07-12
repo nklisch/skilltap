@@ -3,16 +3,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::domain::RelativeArtifactPath;
+use crate::domain::{ArtifactFile, RelativeArtifactPath};
 
 use super::{ArtifactTree, ArtifactTreeError};
 
-pub(super) fn validate<P, B>(
-    files: impl IntoIterator<Item = (P, B)>,
-) -> Result<BTreeMap<RelativeArtifactPath, Vec<u8>>, ArtifactTreeError>
+pub(super) fn validate<P, F>(
+    files: impl IntoIterator<Item = (P, F)>,
+) -> Result<BTreeMap<RelativeArtifactPath, ArtifactFile>, ArtifactTreeError>
 where
     P: Into<String>,
-    B: Into<Vec<u8>>,
+    F: Into<ArtifactFile>,
 {
     let mut collected = BTreeMap::new();
     for (path, contents) in files {
@@ -45,12 +45,12 @@ where
 
 impl ArtifactTree {
     pub(super) fn from_validated(
-        files: BTreeMap<RelativeArtifactPath, Vec<u8>>,
+        files: BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<Self, ArtifactTreeError> {
         Self::new(
             files
                 .into_iter()
-                .map(|(path, contents)| (path.as_str().to_owned(), contents)),
+                .map(|(path, file)| (path.as_str().to_owned(), file)),
         )
     }
 }

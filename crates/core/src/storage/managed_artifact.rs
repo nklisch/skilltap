@@ -1,7 +1,10 @@
 use std::{collections::BTreeMap, fmt};
 
 use crate::{
-    domain::{AbsolutePath, Fingerprint, RelativeArtifactPath, ResourceId, ResourceKey, Scope},
+    domain::{
+        AbsolutePath, ArtifactFile, Fingerprint, RelativeArtifactPath, ResourceId, ResourceKey,
+        Scope,
+    },
     runtime::{
         DirectoryContentState, DirectoryIdentity, DirectoryPathState, DirectorySyncState,
         DirectoryTreeFileSystem,
@@ -38,21 +41,21 @@ impl std::error::Error for ArtifactTreeError {}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ArtifactTree {
-    files: BTreeMap<RelativeArtifactPath, Vec<u8>>,
+    files: BTreeMap<RelativeArtifactPath, ArtifactFile>,
 }
 
 impl ArtifactTree {
-    pub fn new<P, B>(files: impl IntoIterator<Item = (P, B)>) -> Result<Self, ArtifactTreeError>
+    pub fn new<P, F>(files: impl IntoIterator<Item = (P, F)>) -> Result<Self, ArtifactTreeError>
     where
         P: Into<String>,
-        B: Into<Vec<u8>>,
+        F: Into<ArtifactFile>,
     {
         Ok(Self {
             files: tree_validation::validate(files)?,
         })
     }
 
-    pub const fn files(&self) -> &BTreeMap<RelativeArtifactPath, Vec<u8>> {
+    pub const fn files(&self) -> &BTreeMap<RelativeArtifactPath, ArtifactFile> {
         &self.files
     }
 }

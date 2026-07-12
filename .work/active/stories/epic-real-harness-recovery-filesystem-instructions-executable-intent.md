@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-executable-intent
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -36,3 +36,11 @@ and destination drift checks.
 - Existing no-follow, identity revalidation, cleanup, and unsupported-entry
   tests remain green.
 
+## Implementation notes
+
+- Execution capability: direct inline implementation; the change is cohesive but security-sensitive across the core artifact and descriptor-relative filesystem boundary.
+- Review weight: standard (project default); focused security and end-to-end regression coverage exercises the risky mode normalization paths.
+- Files changed: `crates/core/src/domain/artifact.rs`, domain exports, external-tree observation, skill validation/fingerprinting, managed artifact trees, directory-tree publication/loading, compatibility consumers, related core tests, and `crates/cli/tests/compiled_binary.rs`.
+- Tests added: source execute-bit observation, secret-safe artifact debug rendering, mode-only skill fingerprint changes, exact private `0600`/`0700` publication and reload, managed artifact mode round trips, destination mode drift, source mode-only updates/repeat no-ops, and whole-directory Codex/Claude installs in global/project scopes.
+- Discrepancies from design: `ArtifactFile` accepts `Vec<u8>` as non-executable for compatibility at existing byte-only construction sites; explicit observed and published skill paths always construct it with typed intent. No persisted `ArtifactTree` wire exists in the current repository, so wire validation remained at existing domain constructors rather than adding an unused serialized contract.
+- Adjacent issues parked: none. One full compiled-binary test currently fails because concurrent harness-detection work changed the default first-use status result; the executable-intent focused test and the other 43 compiled-binary tests pass.

@@ -719,7 +719,7 @@ pub enum ExternalTreeEntryKind {
 #[allow(dead_code)]
 enum ExternalTreePayload {
     Directory,
-    File(Vec<u8>),
+    File { bytes: Vec<u8>, executable: bool },
     Symlink(Vec<u8>),
 }
 
@@ -739,10 +739,10 @@ impl ExternalTreeEntry {
         }
     }
     #[allow(dead_code)]
-    pub(crate) fn file(path: RelativeArtifactPath, bytes: Vec<u8>) -> Self {
+    pub(crate) fn file(path: RelativeArtifactPath, bytes: Vec<u8>, executable: bool) -> Self {
         Self {
             path,
-            payload: ExternalTreePayload::File(bytes),
+            payload: ExternalTreePayload::File { bytes, executable },
         }
     }
     #[allow(dead_code)]
@@ -758,13 +758,19 @@ impl ExternalTreeEntry {
     pub const fn kind(&self) -> ExternalTreeEntryKind {
         match &self.payload {
             ExternalTreePayload::Directory => ExternalTreeEntryKind::Directory,
-            ExternalTreePayload::File(_) => ExternalTreeEntryKind::File,
+            ExternalTreePayload::File { .. } => ExternalTreeEntryKind::File,
             ExternalTreePayload::Symlink(_) => ExternalTreeEntryKind::Symlink,
         }
     }
     pub fn file_bytes(&self) -> Option<&[u8]> {
         match &self.payload {
-            ExternalTreePayload::File(bytes) => Some(bytes),
+            ExternalTreePayload::File { bytes, .. } => Some(bytes),
+            _ => None,
+        }
+    }
+    pub const fn file_executable(&self) -> Option<bool> {
+        match &self.payload {
+            ExternalTreePayload::File { executable, .. } => Some(*executable),
             _ => None,
         }
     }
@@ -782,9 +788,10 @@ impl fmt::Debug for ExternalTreeEntry {
             ExternalTreePayload::Directory => {
                 formatter.debug_struct("Directory").finish_non_exhaustive()
             }
-            ExternalTreePayload::File(bytes) => formatter
+            ExternalTreePayload::File { bytes, executable } => formatter
                 .debug_struct("File")
                 .field("byte_count", &bytes.len())
+                .field("executable", executable)
                 .finish_non_exhaustive(),
             ExternalTreePayload::Symlink(target) => formatter
                 .debug_struct("Symlink")
@@ -830,7 +837,7 @@ impl ExternalTreeSnapshot {
             }
             let payload_bytes = match &entry.payload {
                 ExternalTreePayload::Directory => 0,
-                ExternalTreePayload::File(bytes) => {
+                ExternalTreePayload::File { bytes, .. } => {
                     let length = u64::try_from(bytes.len())
                         .map_err(|_| ObservationRuntimeError::TreeFileLimitExceeded)?;
                     if length > limits.file_bytes() {
@@ -1168,6 +1175,7 @@ mod tests {
                 ExternalTreeEntry::file(
                     RelativeArtifactPath::new("secret.txt").unwrap(),
                     SECRET.as_bytes().to_vec(),
+                    false,
                 ),
                 ExternalTreeEntry::symlink(
                     RelativeArtifactPath::new("link").unwrap(),
@@ -1214,6 +1222,7 @@ mod tests {
         let first = ExternalTreeEntry::file(
             RelativeArtifactPath::new("a/file").unwrap(),
             b"content".to_vec(),
+            true,
         );
         let second = ExternalTreeEntry::directory(RelativeArtifactPath::new("a").unwrap());
         let snapshot = ExternalTreeSnapshot::new([first.clone(), second], tree_limits()).unwrap();
@@ -1283,7 +1292,11 @@ mod tests {
 
         let limits = ExternalTreeLimits::new(2, 2, 2, 3, 2).unwrap();
         let file = |path: &str, size| {
-            ExternalTreeEntry::file(RelativeArtifactPath::new(path).unwrap(), vec![0; size])
+            ExternalTreeEntry::file(
+                RelativeArtifactPath::new(path).unwrap(),
+                vec![0; size],
+                false,
+            )
         };
         let link = |path: &str, size| {
             ExternalTreeEntry::symlink(RelativeArtifactPath::new(path).unwrap(), vec![0; size])

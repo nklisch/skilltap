@@ -5,12 +5,50 @@ use std::{
     ffi::CString,
     fs::{self, File},
     io,
-    os::unix::fs::FileTypeExt,
+    os::unix::fs::{FileTypeExt, PermissionsExt},
 };
 
 use skilltap_test_support::TempRoot;
 
 use super::*;
+
+#[test]
+fn publication_normalizes_file_modes_and_loading_preserves_only_executable_intent() {
+    let temporary = TempRoot::new("skilltap-directory-mode-test").unwrap();
+    let managed = AbsolutePath::new(temporary.join("managed").to_str().unwrap()).unwrap();
+    let destination = RelativeArtifactPath::new("artifact").unwrap();
+    let files = BTreeMap::from([
+        (
+            RelativeArtifactPath::new("SKILL.md").unwrap(),
+            ArtifactFile::new(b"#!/bin/sh\n".to_vec(), false),
+        ),
+        (
+            RelativeArtifactPath::new("scripts/run").unwrap(),
+            ArtifactFile::new(b"run".to_vec(), true),
+        ),
+    ]);
+
+    publish_tree(&managed, &destination, &files).unwrap();
+    let root = temporary.join("managed/artifact");
+    assert_eq!(
+        fs::metadata(root.join("SKILL.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o600
+    );
+    assert_eq!(
+        fs::metadata(root.join("scripts/run"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o700
+    );
+    let (_, loaded) = load_tree(&managed, &destination).unwrap();
+    assert_eq!(loaded, files);
+}
 
 #[test]
 fn cooperating_writer_lock_serializes_managed_namespace_publication() {
@@ -21,7 +59,10 @@ fn cooperating_writer_lock_serializes_managed_namespace_publication() {
     held.try_lock().unwrap();
     let managed = AbsolutePath::new(managed.to_str().unwrap()).unwrap();
     let destination = RelativeArtifactPath::new("artifact").unwrap();
-    let files = BTreeMap::from([(RelativeArtifactPath::new("file").unwrap(), vec![1])]);
+    let files = BTreeMap::from([(
+        RelativeArtifactPath::new("file").unwrap(),
+        ArtifactFile::new(vec![1], false),
+    )]);
 
     let error = publish_tree(&managed, &destination, &files).unwrap_err();
     assert!(matches!(
@@ -35,7 +76,10 @@ fn successful_publication_explicitly_releases_writer_lock_before_return() {
     let temporary = TempRoot::new("skilltap-directory-lock-release-test").unwrap();
     let managed = temporary.join("managed");
     let managed_path = AbsolutePath::new(managed.to_str().unwrap()).unwrap();
-    let files = BTreeMap::from([(RelativeArtifactPath::new("file").unwrap(), vec![1])]);
+    let files = BTreeMap::from([(
+        RelativeArtifactPath::new("file").unwrap(),
+        ArtifactFile::new(vec![1], false),
+    )]);
 
     for sequence in 0..128 {
         let destination = RelativeArtifactPath::new(format!("artifact-{sequence}")).unwrap();
