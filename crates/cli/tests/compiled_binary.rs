@@ -3186,6 +3186,28 @@ fn reconciliation_reobserves_missing_native_plugin_before_reusing_journal() {
     assert_code(&install, 0);
     assert_eq!(json(&install)["summary"]["changed"], true);
 
+    // The native plugin remains present even when skilltap's journal is
+    // externally removed. Plan must show the provenance repair that sync will
+    // perform instead of claiming a no-op from native presence alone.
+    fs::remove_file(config_root(&machine).join("state.json")).unwrap();
+    let unrecorded_plan = run(&machine, &["plan", "--target", "codex", "--json"]);
+    assert_code(&unrecorded_plan, 2);
+    let unrecorded_value = json(&unrecorded_plan);
+    assert!(
+        unrecorded_value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["status"] == "repair"
+                    && entry["fields"]["fresh_state"] == "present"
+                    && entry["fields"]["recorded_state"] == "missing"
+            })
+    );
+    let restore = run(&machine, &["sync", "--target", "codex", "--json"]);
+    assert_code(&restore, 0);
+    assert_eq!(json(&restore)["summary"]["changed"], true);
+
     let healthy_plan = run(&machine, &["plan", "--target", "codex", "--json"]);
     assert_code(&healthy_plan, 2);
     let healthy_value = json(&healthy_plan);

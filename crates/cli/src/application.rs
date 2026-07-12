@@ -1138,12 +1138,14 @@ impl StatusApplication<'_> {
                 operation_count += 1;
                 let presence =
                     lifecycle_preview_presence(&documents, kind, harness, concrete_scope, name);
-                let status = match presence {
-                    NativeResourcePresence::Present => "no_change",
-                    NativeResourcePresence::Missing => "repair",
-                    NativeResourcePresence::Unknown => "planned",
-                };
                 let recorded = lifecycle_recorded_state(&documents, kind, concrete_scope, name);
+                let status = match (presence, recorded) {
+                    (NativeResourcePresence::Present, true) => "no_change",
+                    (NativeResourcePresence::Present, false)
+                    | (NativeResourcePresence::Missing, true)
+                    | (NativeResourcePresence::Missing, false) => "repair",
+                    (NativeResourcePresence::Unknown, _) => "planned",
+                };
                 outcome = outcome.with_operation(
                     crate::OperationOutcome::new(
                         format!("{command}:{harness}:{}", scope_label(concrete_scope)),
