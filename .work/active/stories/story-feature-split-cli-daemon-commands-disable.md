@@ -1,7 +1,7 @@
 ---
 id: story-feature-split-cli-daemon-commands-disable
 kind: story
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: feature-split-cli-daemon-commands
 depends_on:
@@ -50,3 +50,15 @@ The extraction can accidentally change module privacy or evaluation order.
 Keep the function body mechanical and use the existing parent manager helper.
 Revert the move and dispatch edit to roll back without touching service files or
 state.
+
+## Implementation notes
+
+- Execution capability: highest available local implementation context; the
+  extraction crosses platform-specific service ownership and manager handling.
+- Review weight: standard (autopilot default).
+- Files changed: crates/cli/src/daemon_commands.rs and
+  crates/cli/src/entrypoint.rs.
+- Tests added: none; existing service-failure and idempotence coverage remains
+  unchanged.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.

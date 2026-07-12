@@ -1,5 +1,7 @@
 use super::{ServiceManagerAction, repository_composition_error, run_service_manager};
-use crate::{ErrorDetail, NextAction, Outcome, OutputEntry, ResultClass, Warning};
+use crate::{
+    ErrorDetail, NextAction, Outcome, OutputEntry, ResultClass, Warning, command::OutputArgs,
+};
 use skilltap_core::{
     domain::AbsolutePath,
     runtime::{FileSystem, PlatformPaths, ProcessEnvironment, SystemFileSystem},
@@ -169,6 +171,98 @@ fn publish_daemon_files(
         written.push(changed);
     }
     Ok(())
+}
+
+pub(super) fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
+    let command = "daemon disable";
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let platform = crate::daemon::platform(&paths);
+    let root = crate::daemon::root(&paths, platform);
+    let names = match platform {
+        skilltap_core::daemon::ServicePlatform::Launchd => {
+            vec![format!("{}.plist", skilltap_core::daemon::SERVICE_LABEL)]
+        }
+        skilltap_core::daemon::ServicePlatform::SystemdUser => vec![
+            skilltap_core::daemon::SYSTEMD_UNIT.to_owned(),
+            skilltap_core::daemon::SYSTEMD_TIMER.to_owned(),
+        ],
+    };
+    let files = names
+        .iter()
+        .map(|name| AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap())
+        .collect::<Vec<_>>();
+    let mut owned_present = false;
+    for path in &files {
+        match SystemFileSystem.read_regular_no_follow(path) {
+            Ok(Some(contents))
+                if crate::daemon::owns(platform, &contents)
+                    && !crate::daemon::valid(platform, &contents) =>
+            {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "malformed"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_malformed",
+                        "An owned daemon service definition is malformed; it was not removed.",
+                    ));
+            }
+            Ok(Some(contents)) if crate::daemon::owns(platform, &contents) => {
+                owned_present = true;
+            }
+            Ok(Some(_)) => {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_conflict",
+                        "An unmanaged service definition occupies the skilltap path; it was not removed.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+            Ok(None) => {}
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_unreadable",
+                        "The daemon service definition could not be inspected safely.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+        }
+    }
+    if !owned_present {
+        return Outcome::new(command, ResultClass::Completed)
+            .with_resource(OutputEntry::new(root.as_str(), "disabled"))
+            .with_summary("changed", false);
+    }
+    if run_service_manager(platform, ServiceManagerAction::Disable, &files[0]).is_err() {
+        return Outcome::new(command, ResultClass::AttentionRequired).with_warning(Warning::new(
+            "daemon_manager_unavailable",
+            "The user service manager did not disable the daemon; owned definitions were retained.",
+        ));
+    }
+    let mut changed = false;
+    for path in &files {
+        if let Ok(Some(contents)) = SystemFileSystem.read_regular_no_follow(path)
+            && crate::daemon::owns(platform, &contents)
+        {
+            if SystemFileSystem.remove(path).is_err() {
+                return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
+                    Warning::new(
+                        "daemon_definition_remove_failed",
+                        "The owned daemon service definition could not be removed safely.",
+                    )
+                    .with_context("path", path.as_str()),
+                );
+            }
+            changed = true;
+        }
+    }
+    Outcome::new(command, ResultClass::Completed)
+        .with_resource(OutputEntry::new(root.as_str(), "disabled"))
+        .with_summary("changed", changed)
 }
 
 #[cfg(test)]
