@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command-coverage
 kind: story
-stage: review
+stage: done
 tags: [infra, testing, security]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -75,3 +75,24 @@ different bytes, so it stops at checksum failure rather than proving a validly
 checksummed wrong-version or non-executable release is reported as identity
 attention. Keep the story at `stage: implementing` until those deterministic
 branches are covered without reintroducing production overrides.
+
+## Review (2026-07-12, current matrix)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: the acceptance matrix is exercised through the private composition
+seam rather than a networked process invocation; the shipped path remains
+canonical-only as required.
+
+**Notes**: Standard substrate review of the current command coverage at
+`6eeb3ab`. The valid-checksummed wrong-version fixture now reaches executable
+identity validation, while non-executable and post-publish identity failures
+preserve the prior binary. The isolated command tests cover install,
+same-major no-op/update, major blocking and opt-in, target narrowing,
+absent/mixed per-harness outcomes, separate binary/per-target resources, and
+plain/schema-1 JSON next actions. The test-only resolver/fetcher/installer
+boundary is private; production composition still uses the canonical HTTPS
+resolver with no ambient fixture overrides. Targeted bootstrap tests pass and
+the full CLI suite at this commit is green.
