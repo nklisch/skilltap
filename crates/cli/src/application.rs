@@ -1166,14 +1166,6 @@ impl StatusApplication<'_> {
         outcome
             .with_summary("operations", operation_count)
             .with_summary("changed", false)
-            .with_warning(Warning::new(
-                "mutation_adapter_pending",
-                "The lifecycle request is planned but not applied until its native or managed adapter is available.",
-            ))
-            .with_next_action(NextAction::new(
-                "inspect_plan",
-                "Review the planned operation before the lifecycle adapter is enabled.",
-        ))
     }
 
     /// Apply one native marketplace/plugin lifecycle request through the core
