@@ -4,9 +4,10 @@ description: A personal control plane for Codex and Claude Code environments.
 
 # What is skilltap?
 
-skilltap manages the agent tooling already chosen for one computer. It adopts,
-reconciles, and updates native marketplaces, plugins, complete skill
-directories, and shared instruction files across Codex and Claude Code.
+skilltap gives agents an easy way to help you look after the tooling on your
+computer. It adopts, reconciles, and updates native marketplaces, plugins,
+complete skill directories, and shared instruction files across Codex and
+Claude Code.
 
 The harnesses remain authoritative for their own formats. skilltap uses native
 lifecycle commands when they exist, records desired state separately from
@@ -32,7 +33,7 @@ Callers provide explicit marketplace, plugin, skill, and project identities.
 
 1. Enable the Codex and Claude adapters you use.
 2. Adopt existing native configuration into skilltap's inventory.
-3. Review a deterministic plan.
+3. Review a clear plan.
 4. Synchronize safe, faithful changes.
 5. Use status to inspect health, drift, updates, and required decisions.
 

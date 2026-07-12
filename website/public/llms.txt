@@ -1,6 +1,6 @@
 # skilltap
 
-> Personal control plane for Codex and Claude Code marketplaces, plugins, skills, and shared instructions.
+> An easy way for agents to help you manage Codex and Claude Code marketplaces, plugins, skills, and shared instructions.
 
 ## Guide
 

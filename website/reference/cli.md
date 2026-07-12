@@ -4,8 +4,9 @@ description: conceptual skilltap CLI index and executable-help guidance.
 
 # CLI Reference
 
-skilltap is deterministic and non-interactive. Running it without a subcommand
-prints concise help and exits with an input error.
+skilltap is a clear, non-interactive CLI that works well from a terminal or an
+agent. Running it without a subcommand prints concise help and exits with an
+input error.
 
 ## Executable help is authoritative
 

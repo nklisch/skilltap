@@ -6,7 +6,7 @@ description: Install skilltap and adopt an existing Codex or Claude environment.
 
 ## Install
 
-There are two equal first-party installation paths:
+Choose the setup path that fits how you work:
 
 - **Native marketplace:** install the `skilltap` plugin from the Claude Code
   or Codex marketplace entry published by this repository, then run the
@@ -30,6 +30,25 @@ command discovery surface:
 ```console
 skilltap bootstrap --help
 ```
+
+### Add the marketplace yourself
+
+If you prefer to use each harness directly, register this repository's plugin
+marketplace with the commands below:
+
+```bash
+# Claude Code
+claude plugin marketplace add https://github.com/nklisch/skilltap/tree/main/plugin --scope user
+claude plugin install skilltap@skilltap --scope user
+
+# Codex (marketplace registration)
+codex plugin marketplace add https://github.com/nklisch/skilltap.git --ref main --sparse plugin
+```
+
+Claude can install the plugin natively after registration. Codex can expose the
+complete skill from its marketplace; open `/plugins` in Codex to install or
+enable the plugin when that native flow is available. `skilltap bootstrap`
+checks both harnesses and reports the exact next step for your installation.
 
 If you installed the plugin through a native marketplace, use the same
 command. Claude's native path is the qualified plugin install from the
