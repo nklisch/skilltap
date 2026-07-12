@@ -1,22 +1,51 @@
 use super::*;
 
 impl StatusApplication<'_> {
+    #[allow(dead_code)]
     pub(crate) fn execute_daemon_cycle(&self) -> Outcome {
+        self.execute_daemon_cycle_with_binary(None)
+    }
+
+    /// Execute one unattended resource cycle, optionally incorporating the
+    /// verified self-update result produced by the CLI composition boundary.
+    /// The binary policy is deliberately passed in as an already-rendered
+    /// result so this application service never creates a second resolver or
+    /// installer path.
+    pub(crate) fn execute_daemon_cycle_with_binary(&self, binary: Option<Outcome>) -> Outcome {
         let command = "daemon run";
         let (documents, mut aggregate) = match self.load_documents(command) {
             Ok(value) => value,
             Err(outcome) => return *outcome,
         };
-        if documents.config.updates().mode != skilltap_core::storage::UpdateMode::ApplySafe {
+        let mut safe_operations = 0_u64;
+        let mut pending_operations = 0_u64;
+        if let Some(binary) = binary {
+            if binary.summary.get("binary_changed") == Some(&OutputValue::Boolean(true)) {
+                safe_operations += 1;
+            }
+            if binary.summary.get("binary_pending") == Some(&OutputValue::Boolean(true)) {
+                pending_operations += 1;
+            }
+            aggregate.result = merge_result(aggregate.result, binary.result);
+            aggregate.resources.extend(binary.resources);
+            aggregate.operations.extend(binary.operations);
+            aggregate.warnings.extend(binary.warnings);
+            aggregate.errors.extend(binary.errors);
+            aggregate.next_actions.extend(binary.next_actions);
+        }
+        let resource_updates_enabled =
+            documents.config.updates().mode == skilltap_core::storage::UpdateMode::ApplySafe;
+        if !resource_updates_enabled {
             aggregate = aggregate
                 .with_warning(Warning::new(
                     "daemon_policy_not_apply_safe",
                     "The configured update policy does not permit automatic application.",
                 ))
-                .with_summary("changed", false)
-                .with_summary("safe_operations", 0_u64)
-                .with_summary("pending_operations", 0_u64);
-            self.persist_daemon_run(&mut aggregate, 0, 0);
+                .with_summary("changed", safe_operations > 0)
+                .with_summary("safe_operations", safe_operations)
+                .with_summary("pending_operations", pending_operations);
+            normalize_daemon_noop_result(&mut aggregate, safe_operations, pending_operations);
+            self.persist_daemon_run(&mut aggregate, safe_operations, pending_operations);
             return aggregate;
         }
         let mut tasks = Vec::new();
@@ -40,9 +69,7 @@ impl StatusApplication<'_> {
                 tasks.push((resource.kind(), name.to_owned(), resource.scope().clone()));
             }
         }
-        let mut changed = false;
-        let mut safe_operations = 0_u64;
-        let mut pending_operations = 0_u64;
+        let mut changed = safe_operations > 0;
         for (kind, name, scope) in tasks {
             let child_scope = scope_args_for_scope(&scope);
             let child = match kind {

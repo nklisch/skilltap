@@ -15,8 +15,8 @@ use skilltap_core::{
 use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_profile};
 
 use crate::{
-    ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, PlainRenderer, Renderer,
-    ResultClass,
+    ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, OutputScope, PlainRenderer,
+    Renderer, ResultClass,
     application::{
         NativeLifecycleKind, NativeObservationMode, SkillInstallRequest, StatusApplication,
     },
@@ -438,13 +438,29 @@ fn compose_bootstrap_outcome(
 struct BinaryBootstrapResult {
     entry: OutputEntry,
     attention: bool,
+    pending: bool,
+    changed: bool,
     warnings: Vec<crate::Warning>,
     next_actions: Vec<crate::NextAction>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum BinaryExecutionMode {
+    Check,
+    ApplySafe,
 }
 
 fn execute_binary_bootstrap(
     args: &BootstrapArgs,
     paths: &skilltap_core::runtime::PlatformPaths,
+) -> BinaryBootstrapResult {
+    execute_binary_bootstrap_mode(args, paths, BinaryExecutionMode::ApplySafe)
+}
+
+fn execute_binary_bootstrap_mode(
+    args: &BootstrapArgs,
+    paths: &skilltap_core::runtime::PlatformPaths,
+    mode: BinaryExecutionMode,
 ) -> BinaryBootstrapResult {
     use skilltap_core::{
         bootstrap::ArtifactKey,
@@ -486,19 +502,43 @@ fn execute_binary_bootstrap(
     let resolver = SystemReleaseResolver::current(key);
     let fetcher = SystemArtifactFetcher;
     let installer = SystemBinaryInstaller;
-    execute_binary_bootstrap_with(args, destination, &resolver, &fetcher, &installer)
+    execute_binary_bootstrap_with_mode(args, destination, &resolver, &fetcher, &installer, mode)
 }
 
 /// Test-only composition is provided by passing in the release, transport,
 /// and publication ports.  The shipped command above always constructs the
 /// canonical HTTPS resolver and system ports; no environment variable can
 /// replace those production boundaries.
+#[cfg(test)]
 fn execute_binary_bootstrap_with<R, F, I>(
     args: &BootstrapArgs,
     destination: AbsolutePath,
     resolver: &R,
     fetcher: &F,
     installer: &I,
+) -> BinaryBootstrapResult
+where
+    R: skilltap_core::runtime::ReleaseResolver,
+    F: skilltap_core::runtime::ArtifactFetcher,
+    I: skilltap_core::runtime::BinaryInstaller,
+{
+    execute_binary_bootstrap_with_mode(
+        args,
+        destination,
+        resolver,
+        fetcher,
+        installer,
+        BinaryExecutionMode::ApplySafe,
+    )
+}
+
+fn execute_binary_bootstrap_with_mode<R, F, I>(
+    args: &BootstrapArgs,
+    destination: AbsolutePath,
+    resolver: &R,
+    fetcher: &F,
+    installer: &I,
+    mode: BinaryExecutionMode,
 ) -> BinaryBootstrapResult
 where
     R: skilltap_core::runtime::ReleaseResolver,
@@ -545,8 +585,11 @@ where
         return BinaryBootstrapResult {
             entry: OutputEntry::new("binary", "major-upgrade-blocked")
                 .with_field("available_version", manifest.version.to_string())
+                .with_field("policy", binary_policy_label(mode))
                 .with_field("path_role", "user-local-bin/skilltap"),
             attention: true,
+            pending: true,
+            changed: false,
             warnings: vec![crate::Warning::new(
                 "major_upgrade_blocked",
                 "A newer major skilltap binary is available; no existing binary was changed.",
@@ -561,10 +604,32 @@ where
         return BinaryBootstrapResult {
             entry: OutputEntry::new("binary", "no-op")
                 .with_field("version", manifest.version.to_string())
+                .with_field("policy", binary_policy_label(mode))
                 .with_field("path_role", "user-local-bin/skilltap"),
             attention: false,
+            pending: false,
+            changed: false,
             warnings: Vec::new(),
             next_actions: Vec::new(),
+        };
+    }
+    if mode == BinaryExecutionMode::Check {
+        return BinaryBootstrapResult {
+            entry: OutputEntry::new("binary", "update-available")
+                .with_field("available_version", manifest.version.to_string())
+                .with_field("policy", binary_policy_label(mode))
+                .with_field("path_role", "user-local-bin/skilltap"),
+            attention: true,
+            pending: true,
+            changed: false,
+            warnings: vec![crate::Warning::new(
+                "binary_update_available",
+                "A compatible skilltap binary update is available; the check policy did not publish it.",
+            )],
+            next_actions: vec![crate::NextAction::new(
+                "apply_binary_update",
+                "Run `skilltap bootstrap` or set bootstrap.mode = \"apply-safe\" to apply the verified update.",
+            )],
         };
     }
     let parent = std::path::Path::new(destination.as_str())
@@ -637,24 +702,35 @@ where
     if let Err(error) = result {
         return binary_attention("binary_install_failed", &error.to_string());
     }
+    // Capture the identity immediately after publication.  Passing a fresh
+    // stat result into rollback would bless a replacement that arrived after
+    // publication and let recovery overwrite an unrelated executable.
+    let published_identity = binary_file_identity(&destination);
     if probe_installed_version(&destination).as_ref() != Some(&manifest.version) {
-        if let Some(previous) = previous {
+        let rollback = if let Some(previous) = previous {
             #[cfg(unix)]
-            restore_previous_binary(
-                &destination,
-                binary_file_identity(&destination),
-                &previous,
-                previous_mode,
-            );
+            {
+                restore_previous_binary(&destination, published_identity, &previous, previous_mode)
+            }
             #[cfg(not(unix))]
-            restore_previous_binary(&destination, binary_file_identity(&destination), &previous);
+            {
+                restore_previous_binary(&destination, published_identity, &previous)
+            }
         } else {
-            let _ = std::fs::remove_file(destination.as_str());
-        }
-        return binary_attention(
-            "post_install_identity_failed",
-            "The published executable did not report the verified release version; the previous binary was restored.",
-        );
+            remove_published_binary(&destination, published_identity)
+        };
+        let detail = match rollback {
+            RollbackResult::Restored | RollbackResult::Removed => {
+                "The published executable did not report the verified release version; the previous binary was restored."
+            }
+            RollbackResult::ReplacementPreserved => {
+                "The published executable failed its identity check, but a replacement arrived before rollback; it was preserved and recovery needs attention."
+            }
+            RollbackResult::Failed => {
+                "The published executable failed its identity check and could not be rolled back safely; recovery needs attention."
+            }
+        };
+        return binary_attention("post_install_identity_failed", detail);
     }
     BinaryBootstrapResult {
         entry: OutputEntry::new(
@@ -665,10 +741,20 @@ where
             },
         )
         .with_field("version", manifest.version.to_string())
+        .with_field("policy", binary_policy_label(mode))
         .with_field("path_role", "user-local-bin/skilltap"),
         attention: false,
+        pending: false,
+        changed: true,
         warnings: Vec::new(),
         next_actions: Vec::new(),
+    }
+}
+
+fn binary_policy_label(mode: BinaryExecutionMode) -> &'static str {
+    match mode {
+        BinaryExecutionMode::Check => "check",
+        BinaryExecutionMode::ApplySafe => "apply-safe",
     }
 }
 
@@ -712,46 +798,209 @@ fn private_bootstrap_temp(
     ))
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RollbackResult {
+    Restored,
+    Removed,
+    ReplacementPreserved,
+    Failed,
+}
+
+/// Restore a prior executable through an atomic exchange.  A stat-then-rename
+/// sequence is not sufficient here: another process can replace the path
+/// between those operations and be overwritten by recovery.  Exchange lets us
+/// inspect the inode that was actually displaced and put an unrelated one
+/// back without clobbering it.
 #[cfg(unix)]
 fn restore_previous_binary(
     path: &AbsolutePath,
     expected: Option<(u64, u64)>,
     bytes: &[u8],
     mode: Option<u32>,
-) {
+) -> RollbackResult {
     use std::os::unix::fs::PermissionsExt;
     let destination = std::path::Path::new(path.as_str());
     let Some(parent) = destination.parent() else {
-        return;
+        return RollbackResult::Failed;
     };
-    let temporary = parent.join(format!(".skilltap-restore-{}", std::process::id()));
-    if std::fs::OpenOptions::new()
+    let temporary = parent.join(format!(
+        ".skilltap-restore-{}-{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("worker")
+    ));
+    let mut file = match std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&temporary)
-        .is_err()
     {
-        return;
-    }
-    if std::fs::write(&temporary, bytes).is_ok() {
-        let _ = std::fs::set_permissions(
+        Ok(file) => file,
+        Err(_) => return RollbackResult::Failed,
+    };
+    use std::io::Write;
+    if file.write_all(bytes).is_err()
+        || file.sync_all().is_err()
+        || std::fs::set_permissions(
             &temporary,
             std::fs::Permissions::from_mode(mode.unwrap_or(0o700)),
-        );
-        if binary_file_identity(path) == expected {
-            let _ = std::fs::rename(&temporary, destination);
-        } else {
-            let _ = std::fs::remove_file(&temporary);
-        }
-    } else {
+        )
+        .is_err()
+    {
+        drop(file);
         let _ = std::fs::remove_file(&temporary);
+        return RollbackResult::Failed;
+    }
+    drop(file);
+    if exchange_paths_cli(&temporary, destination).is_err() {
+        let _ = std::fs::remove_file(&temporary);
+        return RollbackResult::ReplacementPreserved;
+    }
+    let displaced = binary_file_identity_absolute(&temporary);
+    if displaced == expected {
+        let _ = std::fs::remove_file(&temporary);
+        RollbackResult::Restored
+    } else if exchange_paths_cli(&temporary, destination).is_ok() {
+        // The displaced inode was not the one published by skilltap.  The
+        // second exchange restores that unrelated replacement at the path;
+        // the prior bytes remain private and can be removed safely.
+        let _ = std::fs::remove_file(&temporary);
+        RollbackResult::ReplacementPreserved
+    } else {
+        // Keep the residual rather than deleting a path whose identity is no
+        // longer known.  The destination remains whatever the exchange left.
+        RollbackResult::Failed
     }
 }
 
 #[cfg(not(unix))]
-fn restore_previous_binary(path: &AbsolutePath, expected: Option<(u64, u64)>, bytes: &[u8]) {
-    if binary_file_identity(path) == expected {
-        let _ = std::fs::write(path.as_str(), bytes);
+fn restore_previous_binary(
+    _path: &AbsolutePath,
+    _expected: Option<(u64, u64)>,
+    _bytes: &[u8],
+) -> RollbackResult {
+    // This publication boundary has no atomic no-replace/exchange primitive
+    // on unsupported platforms.  Fail closed rather than overwrite a race.
+    RollbackResult::Failed
+}
+
+#[cfg(unix)]
+fn remove_published_binary(path: &AbsolutePath, expected: Option<(u64, u64)>) -> RollbackResult {
+    let Some(expected) = expected else {
+        return RollbackResult::Failed;
+    };
+    let destination = std::path::Path::new(path.as_str());
+    let Some(parent) = destination.parent() else {
+        return RollbackResult::Failed;
+    };
+    let marker = parent.join(format!(
+        ".skilltap-rollback-cleanup-{}-{}",
+        std::process::id(),
+        std::thread::current().name().unwrap_or("worker")
+    ));
+    if rename_noreplace_cli(destination, &marker).is_err() {
+        return RollbackResult::ReplacementPreserved;
+    }
+    if binary_file_identity_absolute(&marker) == Some(expected) {
+        let _ = std::fs::remove_file(&marker);
+        RollbackResult::Removed
+    } else if rename_noreplace_cli(&marker, destination).is_ok() {
+        RollbackResult::ReplacementPreserved
+    } else {
+        RollbackResult::Failed
+    }
+}
+
+#[cfg(not(unix))]
+fn remove_published_binary(_path: &AbsolutePath, _expected: Option<(u64, u64)>) -> RollbackResult {
+    RollbackResult::Failed
+}
+
+#[cfg(unix)]
+fn binary_file_identity_absolute(path: &std::path::Path) -> Option<(u64, u64)> {
+    let metadata = std::fs::symlink_metadata(path).ok()?;
+    if !metadata.file_type().is_file() {
+        return None;
+    }
+    use std::os::unix::fs::MetadataExt;
+    Some((metadata.dev(), metadata.ino()))
+}
+
+#[cfg(unix)]
+fn rename_noreplace_cli(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let source = std::ffi::CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let destination = std::ffi::CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    #[cfg(target_os = "linux")]
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
+    #[cfg(target_os = "macos")]
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_EXCL,
+        )
+    };
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let result = -1;
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(unix)]
+fn exchange_paths_cli(
+    source: &std::path::Path,
+    destination: &std::path::Path,
+) -> std::io::Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+    let source = std::ffi::CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let destination = std::ffi::CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    #[cfg(target_os = "linux")]
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_EXCHANGE,
+        )
+    };
+    #[cfg(target_os = "macos")]
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_SWAP,
+        )
+    };
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let result = -1;
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
     }
 }
 
@@ -813,6 +1062,8 @@ fn binary_attention(code: &str, detail: &str) -> BinaryBootstrapResult {
     BinaryBootstrapResult {
         entry: OutputEntry::new("binary", "unavailable").with_field("policy", "latest-compatible"),
         attention: true,
+        pending: true,
+        changed: false,
         warnings: vec![crate::Warning::new(code, detail)],
         next_actions: vec![crate::NextAction::new(
             "bootstrap_help",
@@ -837,8 +1088,9 @@ mod bootstrap_tests {
     use skilltap_test_support::TempRoot;
 
     use super::{
-        BinaryBootstrapResult, BootstrapArgs, OutputArgs, compose_bootstrap_outcome,
-        execute_binary_bootstrap_with,
+        BinaryBootstrapResult, BinaryExecutionMode, BootstrapArgs, OutputArgs, RollbackResult,
+        compose_bootstrap_outcome, execute_binary_bootstrap_with,
+        execute_binary_bootstrap_with_mode, remove_published_binary, restore_previous_binary,
     };
     use crate::{JsonRenderer, PlainRenderer, Renderer};
 
@@ -1005,6 +1257,85 @@ mod bootstrap_tests {
     }
 
     #[test]
+    fn daemon_check_resolves_updates_without_fetching_or_publishing() {
+        let root = TempRoot::new("bootstrap-daemon-check").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        let (resolver, fetcher) = fixture("3.0.0");
+        let installed = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(installed.entry.status, "installed");
+        let prior = fs::read(destination.as_str()).unwrap();
+        let (resolver, fetcher) = fixture("3.1.0");
+        let result = execute_binary_bootstrap_with_mode(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &fetcher,
+            &SystemBinaryInstaller,
+            BinaryExecutionMode::Check,
+        );
+        assert_eq!(result.entry.status, "update-available");
+        assert!(result.pending);
+        assert!(!result.changed);
+        assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rollback_exchange_preserves_replacement_and_restores_matching_publish() {
+        let root = TempRoot::new("bootstrap-cli-rollback").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        fs::create_dir_all(root.path().join("bin")).unwrap();
+        fs::write(destination.as_str(), b"published").unwrap();
+        let published = super::binary_file_identity(&destination);
+        let replacement = b"replacement";
+        let replacement_path = root.path().join("replacement");
+        fs::write(&replacement_path, replacement).unwrap();
+        fs::rename(&replacement_path, destination.as_str()).unwrap();
+        let result = restore_previous_binary(&destination, published, b"prior", Some(0o700));
+        assert_eq!(result, RollbackResult::ReplacementPreserved);
+        assert_eq!(fs::read(destination.as_str()).unwrap(), replacement);
+
+        fs::write(destination.as_str(), b"published-again").unwrap();
+        let published = super::binary_file_identity(&destination);
+        let result = restore_previous_binary(&destination, published, b"prior-again", Some(0o700));
+        assert_eq!(result, RollbackResult::Restored);
+        assert_eq!(fs::read(destination.as_str()).unwrap(), b"prior-again");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn first_install_cleanup_only_removes_expected_identity() {
+        let root = TempRoot::new("bootstrap-cli-cleanup").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        fs::create_dir_all(root.path().join("bin")).unwrap();
+        fs::write(destination.as_str(), b"published").unwrap();
+        let published = super::binary_file_identity(&destination);
+        assert_eq!(
+            remove_published_binary(&destination, published),
+            RollbackResult::Removed
+        );
+        assert!(!Path::new(destination.as_str()).exists());
+
+        let replacement_path = root.path().join("replacement-2");
+        fs::write(&replacement_path, b"replacement").unwrap();
+        fs::rename(&replacement_path, destination.as_str()).unwrap();
+        assert_eq!(
+            remove_published_binary(&destination, published),
+            RollbackResult::ReplacementPreserved
+        );
+        assert_eq!(fs::read(destination.as_str()).unwrap(), b"replacement");
+    }
+
+    #[test]
     fn wrong_release_identity_and_post_publish_identity_preserve_prior_binary() {
         let root = TempRoot::new("bootstrap-command-failures").unwrap();
         let destination =
@@ -1076,6 +1407,8 @@ mod bootstrap_tests {
         BinaryBootstrapResult {
             entry: super::OutputEntry::new("binary", "no-op"),
             attention: false,
+            pending: false,
+            changed: false,
             warnings: Vec::new(),
             next_actions: Vec::new(),
         }
@@ -1166,9 +1499,75 @@ mod bootstrap_tests {
 }
 
 fn execute_system_daemon_run(_args: &crate::command::OutputArgs) -> Outcome {
+    let binary = execute_system_daemon_binary_policy();
     execute_system_reconciliation("daemon run", |application| {
-        application.execute_daemon_cycle()
+        application.execute_daemon_cycle_with_binary(Some(binary))
     })
+}
+
+/// Apply the persisted self-update policy once per daemon cycle.  This uses
+/// the same resolver/fetcher/installer boundary as foreground bootstrap; the
+/// application service only merges its bounded result with resource updates.
+fn execute_system_daemon_binary_policy() -> Outcome {
+    use skilltap_core::bootstrap::BootstrapUpdateMode;
+    let command = "daemon run";
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let filesystem = SystemFileSystem;
+    let repository = match FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()) {
+        Ok(repository) => repository,
+        Err(_) => return repository_composition_error(command),
+    };
+    let config = match repository.load() {
+        Ok(DocumentState::Missing) => ConfigDocument::defaults(),
+        Ok(DocumentState::Present(config)) => config,
+        Err(_) => return repository_composition_error(command),
+    };
+    let policy = config.bootstrap();
+    let result = match policy.mode {
+        BootstrapUpdateMode::Off => BinaryBootstrapResult {
+            entry: OutputEntry::new("binary", "disabled").with_field("policy", "off"),
+            attention: false,
+            pending: false,
+            changed: false,
+            warnings: Vec::new(),
+            next_actions: Vec::new(),
+        },
+        BootstrapUpdateMode::Check | BootstrapUpdateMode::ApplySafe => {
+            let args = BootstrapArgs {
+                target: None,
+                allow_major: policy.allow_major,
+                output: OutputArgs::default(),
+            };
+            execute_binary_bootstrap_mode(
+                &args,
+                &paths,
+                match policy.mode {
+                    BootstrapUpdateMode::Check => BinaryExecutionMode::Check,
+                    BootstrapUpdateMode::ApplySafe => BinaryExecutionMode::ApplySafe,
+                    BootstrapUpdateMode::Off => unreachable!(),
+                },
+            )
+        }
+    };
+    let mut outcome = Outcome::new(command, ResultClass::Completed)
+        .with_scope(OutputScope::Global)
+        .with_resource(result.entry)
+        .with_summary("binary_changed", result.changed)
+        .with_summary("binary_pending", result.pending)
+        .with_summary("binary_policy", format!("{:?}", policy.mode).to_lowercase());
+    if result.attention {
+        outcome.result = ResultClass::AttentionRequired;
+    }
+    for warning in result.warnings {
+        outcome = outcome.with_warning(warning);
+    }
+    for action in result.next_actions {
+        outcome = outcome.with_next_action(action);
+    }
+    outcome
 }
 
 fn execute_system_skill_list(args: &ScopedTargetArgs) -> Outcome {

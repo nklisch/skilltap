@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -53,5 +53,12 @@ and `docs/SPEC.md` daemon promise unimplemented.
 - Execution capability: highest; this crosses the daemon lifecycle and
   security-sensitive release publication boundary.
 - Review weight: standard (source: autopilot).
-- Adjacent issue: CLI post-install rollback should be audited for a
-  no-clobber race before release review.
+- Files changed: `crates/cli/src/application/lifecycle.rs`,
+  `crates/cli/src/entrypoint.rs`, `crates/cli/tests/compiled_binary.rs`.
+- Tests added: daemon check mode no-publish matrix and daemon binary-result
+  composition/persistence coverage; existing isolated daemon fixtures now
+  explicitly set `bootstrap.mode = "off"` to avoid ambient network access.
+- Discrepancies from design: the daemon composes the already-rendered binary
+  result into `StatusApplication` so release transport remains one boundary;
+  release-fixture injection remains test-only.
+- Adjacent issues parked: none.

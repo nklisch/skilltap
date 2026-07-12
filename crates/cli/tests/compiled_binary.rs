@@ -28,6 +28,10 @@ claude_mode = "symlink"
 [updates]
 mode = "apply-safe"
 interval = "6h"
+
+[bootstrap]
+mode = "off"
+allow_major = false
 "#;
 
 fn machine() -> IsolatedMachine {
@@ -60,6 +64,10 @@ claude_mode = "symlink"
 [updates]
 mode = "apply-safe"
 interval = "6h"
+
+[bootstrap]
+mode = "off"
+allow_major = false
 "#,
         toml_string(codex),
         toml_string(claude),

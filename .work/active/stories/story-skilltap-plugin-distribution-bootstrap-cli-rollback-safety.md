@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -48,3 +48,11 @@ overwrite an unrelated destination during a race.
 - Execution capability: highest; this is a security-sensitive rollback and
   publication boundary.
 - Review weight: standard (source: autopilot).
+- Files changed: `crates/cli/src/entrypoint.rs`, `crates/cli/Cargo.toml`,
+  `Cargo.lock`.
+- Tests added: atomic exchange rollback tests for normal restoration and
+  replacement preservation, plus identity-safe first-install cleanup.
+- Discrepancies from design: unsupported platforms fail closed; Linux/macOS
+  use native no-replace/exchange primitives and report recovery attention when
+  a replacement wins the race.
+- Adjacent issues parked: none.
