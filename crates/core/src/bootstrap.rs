@@ -299,18 +299,13 @@ pub fn choose_binary_decision(
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum BootstrapUpdateMode {
     Off,
     Check,
+    #[default]
     ApplySafe,
-}
-
-impl Default for BootstrapUpdateMode {
-    fn default() -> Self {
-        Self::ApplySafe
-    }
 }
 
 impl From<UpdateMode> for BootstrapUpdateMode {

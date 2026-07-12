@@ -11,8 +11,9 @@ use skilltap_core::{
 };
 
 use crate::{
-    HarnessKind, NativeLifecycleAction, NativeLifecycleRequest, NativeResourcePresence,
-    detect_configured_installation, observe_native_resource, run_native_lifecycle, select_profile,
+    DetectionError, HarnessKind, NativeLifecycleAction, NativeLifecycleRequest,
+    NativeResourcePresence, detect_configured_installation, observe_native_resource,
+    run_native_lifecycle, select_profile,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -120,6 +121,12 @@ pub fn setup_first_party_plugin(
         policy.json_limits,
     ) {
         Ok(installation) => installation,
+        Err(DetectionError::InvalidVersion | DetectionError::NonZeroExit) => {
+            return HarnessSetupResult::Unavailable {
+                harness: target,
+                reason: SetupReason::InvalidVersion,
+            };
+        }
         Err(_) => {
             return HarnessSetupResult::Unavailable {
                 harness: target,
@@ -141,6 +148,14 @@ pub fn setup_detected_plugin(
             reason: SetupReason::NotInstalled,
         };
     };
+    // Codex's current public contract does not attest a non-interactive
+    // plugin install. Preserve that gap rather than attempting cache writes.
+    if target == HarnessKind::Codex {
+        return HarnessSetupResult::Unsupported {
+            harness: target,
+            next_action: unsupported_next_action(target),
+        };
+    }
     let profile = select_profile(target, native_version);
     let capability = CapabilityId::new("plugin.install").expect("compiled capability id is valid");
     let support = profile
@@ -152,16 +167,67 @@ pub fn setup_detected_plugin(
             next_action: unsupported_next_action(target),
         };
     }
+    let observed_configured = match installation.reachability() {
+        HarnessReachability::Reachable { executable, .. } => {
+            ConfiguredBinary::absolute(executable.path().clone())
+        }
+        HarnessReachability::Unreachable { .. } => unreachable!("reachable checked above"),
+    };
+    let marketplace_request = NativeLifecycleRequest {
+        harness: target,
+        action: NativeLifecycleAction::MarketplaceAdd,
+        scope: Scope::Global,
+        name: NativeId::new("skilltap").expect("canonical marketplace id is valid"),
+        source: policy.canonical_source.clone(),
+    };
+    match observe_native_resource(
+        observed_configured.clone(),
+        None,
+        &marketplace_request,
+        policy.process_limits,
+        policy.json_limits,
+    ) {
+        Ok(NativeResourcePresence::Present) => {}
+        Ok(NativeResourcePresence::Missing) => {
+            match run_native_lifecycle(
+                observed_configured.clone(),
+                None,
+                &marketplace_request,
+                policy.process_limits,
+            ) {
+                Ok(output) if output.status().success() => {}
+                Ok(_) => {
+                    return HarnessSetupResult::Failed {
+                        harness: target,
+                        reason: SetupReason::NativeCommandFailed,
+                    };
+                }
+                Err(_) => {
+                    return HarnessSetupResult::Failed {
+                        harness: target,
+                        reason: SetupReason::NativeCommandUnavailable,
+                    };
+                }
+            }
+        }
+        Ok(NativeResourcePresence::Unknown) | Err(_) => {
+            return HarnessSetupResult::Failed {
+                harness: target,
+                reason: SetupReason::UnknownNativeState,
+            };
+        }
+    }
     let request = NativeLifecycleRequest {
         harness: target,
         action: NativeLifecycleAction::PluginInstall,
         scope: Scope::Global,
-        name: policy.plugin_name.clone(),
-        source: policy.canonical_source.clone(),
+        name: NativeId::new(format!("{}@skilltap", policy.plugin_name.as_str()))
+            .expect("canonical qualified plugin id is valid"),
+        source: None,
     };
     let presence = observe_native_resource(
-        policy.configured.clone(),
-        policy.search_path.clone(),
+        observed_configured.clone(),
+        None,
         &request,
         policy.process_limits,
         policy.json_limits,
@@ -181,12 +247,7 @@ pub fn setup_detected_plugin(
         }
         Ok(NativeResourcePresence::Missing) => {}
     }
-    match run_native_lifecycle(
-        policy.configured.clone(),
-        policy.search_path.clone(),
-        &request,
-        policy.process_limits,
-    ) {
+    match run_native_lifecycle(observed_configured, None, &request, policy.process_limits) {
         Ok(output) if output.status().success() => HarnessSetupResult::Installed {
             harness: target,
             version: native_version.clone(),

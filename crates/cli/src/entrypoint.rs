@@ -403,10 +403,10 @@ fn execute_binary_bootstrap(
     paths: &skilltap_core::runtime::PlatformPaths,
 ) -> BinaryBootstrapResult {
     use skilltap_core::{
-        bootstrap::{ArtifactKey, BinaryDecision, ReleaseVersion, choose_binary_decision},
+        bootstrap::{ArtifactKey, BinaryDecision, choose_binary_decision},
         runtime::{
-            ArtifactError, ArtifactFetcher, BinaryInstaller, FileReleaseResolver, ReleaseResolver,
-            SystemArtifactFetcher, SystemBinaryInstaller, SystemReleaseResolver,
+            ArtifactFetcher, BinaryInstaller, ReleaseResolver, SystemArtifactFetcher,
+            SystemBinaryInstaller, SystemReleaseResolver,
         },
     };
     let key = match ArtifactKey::current() {
@@ -442,18 +442,7 @@ fn execute_binary_bootstrap(
             );
         }
     };
-    let manifest_path =
-        std::env::var_os("SKILLTAP_RELEASE_MANIFEST").and_then(|value| value.into_string().ok());
-    let manifest = match manifest_path {
-        Some(path) => match AbsolutePath::new(path) {
-            Ok(path) => FileReleaseResolver::new(path, key).latest(),
-            Err(_) => Err(ArtifactError::InvalidManifest(
-                "release manifest path is invalid",
-            )),
-        },
-        None => SystemReleaseResolver::current(key).latest(),
-    };
-    let manifest = match manifest {
+    let manifest = match SystemReleaseResolver::current(key).latest() {
         Ok(manifest) => manifest,
         Err(error) => return binary_attention("release_manifest_failed", &error.to_string()),
     };
@@ -466,12 +455,9 @@ fn execute_binary_bootstrap(
         Ok(value) => value,
         Err(error) => return binary_attention("binary_inspection_failed", &error.to_string()),
     };
-    let installed_version = installed.as_ref().and_then(|_| {
-        std::env::var("SKILLTAP_INSTALLED_VERSION")
-            .ok()
-            .and_then(|value| value.trim_start_matches('v').parse::<ReleaseVersion>().ok())
-            .or_else(|| probe_installed_version(&destination))
-    });
+    let installed_version = installed
+        .as_ref()
+        .and_then(|_| probe_installed_version(&destination));
     if installed.is_some() && installed_version.is_none() {
         return binary_attention(
             "unknown_version",
@@ -532,15 +518,7 @@ fn execute_binary_bootstrap(
             );
         }
     };
-    let fetch_result = if let Some(path) =
-        std::env::var_os("SKILLTAP_RELEASE_ARTIFACT").and_then(|value| value.into_string().ok())
-    {
-        std::fs::copy(path, temporary.as_str())
-            .map(|_| ())
-            .map_err(|_| ArtifactError::DownloadFailed)
-    } else {
-        SystemArtifactFetcher.fetch(artifact.download_url().as_str(), &temporary)
-    };
+    let fetch_result = SystemArtifactFetcher.fetch(artifact.download_url().as_str(), &temporary);
     if fetch_result.is_err() {
         let _ = std::fs::remove_file(temporary.as_str());
         return binary_attention(
@@ -548,10 +526,52 @@ fn execute_binary_bootstrap(
             "The release artifact could not be downloaded; the existing binary was preserved.",
         );
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if std::fs::set_permissions(temporary.as_str(), std::fs::Permissions::from_mode(0o700))
+            .is_err()
+        {
+            let _ = std::fs::remove_file(temporary.as_str());
+            return binary_attention(
+                "release_permissions_failed",
+                "The downloaded executable could not be made runnable safely.",
+            );
+        }
+    }
+    if probe_installed_version(&temporary).as_ref() != Some(&manifest.version) {
+        let _ = std::fs::remove_file(temporary.as_str());
+        return binary_attention(
+            "release_identity_failed",
+            "The downloaded executable did not report the verified release version; the existing binary was preserved.",
+        );
+    }
+    let previous = std::fs::read(destination.as_str()).ok();
+    #[cfg(unix)]
+    let previous_mode = {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::metadata(destination.as_str())
+            .ok()
+            .map(|metadata| metadata.permissions().mode())
+    };
     let result = installer.install_verified(&temporary, &destination, artifact);
     let _ = std::fs::remove_file(temporary.as_str());
     if let Err(error) = result {
         return binary_attention("binary_install_failed", &error.to_string());
+    }
+    if probe_installed_version(&destination).as_ref() != Some(&manifest.version) {
+        if let Some(previous) = previous {
+            #[cfg(unix)]
+            restore_previous_binary(&destination, &previous, previous_mode);
+            #[cfg(not(unix))]
+            restore_previous_binary(&destination, &previous);
+        } else {
+            let _ = std::fs::remove_file(destination.as_str());
+        }
+        return binary_attention(
+            "post_install_identity_failed",
+            "The published executable did not report the verified release version; the previous binary was restored.",
+        );
     }
     BinaryBootstrapResult {
         entry: OutputEntry::new(
@@ -567,6 +587,38 @@ fn execute_binary_bootstrap(
         warnings: Vec::new(),
         next_actions: Vec::new(),
     }
+}
+
+#[cfg(unix)]
+fn restore_previous_binary(path: &AbsolutePath, bytes: &[u8], mode: Option<u32>) {
+    use std::os::unix::fs::PermissionsExt;
+    let destination = std::path::Path::new(path.as_str());
+    let Some(parent) = destination.parent() else {
+        return;
+    };
+    let temporary = parent.join(format!(".skilltap-restore-{}", std::process::id()));
+    if std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
+        .is_err()
+    {
+        return;
+    }
+    if std::fs::write(&temporary, bytes).is_ok() {
+        let _ = std::fs::set_permissions(
+            &temporary,
+            std::fs::Permissions::from_mode(mode.unwrap_or(0o700)),
+        );
+        let _ = std::fs::rename(&temporary, destination);
+    } else {
+        let _ = std::fs::remove_file(&temporary);
+    }
+}
+
+#[cfg(not(unix))]
+fn restore_previous_binary(path: &AbsolutePath, bytes: &[u8]) {
+    let _ = std::fs::write(path.as_str(), bytes);
 }
 
 fn probe_installed_version(

@@ -2,19 +2,25 @@
 
 use std::{
     fs::{self, File, OpenOptions},
-    io::Write,
+    io::{Read, Write},
     path::Path,
     sync::atomic::{AtomicU64, Ordering},
 };
 
 use sha2::{Digest, Sha256};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 use crate::{
     bootstrap::{ArtifactKey, ReleaseArtifact, ReleaseVersion},
     domain::{AbsolutePath, Fingerprint, FingerprintAlgorithm, SourceLocator},
 };
 
-use super::{CommandRequest, CommandRunner, SystemCommandRunner};
+use super::{
+    ExecutableResolutionRequest, ExecutableResolver, NativeProcessRequest, NativeProcessRunner,
+    ProcessLimits, SystemExecutableResolver, SystemNativeProcessRunner,
+};
 
 static ARTIFACT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -224,15 +230,9 @@ impl<F> SystemReleaseResolver<F> {
 
 impl<F: ArtifactFetcher> ReleaseResolver for SystemReleaseResolver<F> {
     fn latest(&self) -> Result<ReleaseManifest, ArtifactError> {
-        let path = std::env::temp_dir().join(format!(
-            ".skilltap-release-manifest-{}-{}",
-            std::process::id(),
-            ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-        ));
-        let path = AbsolutePath::new(path.to_string_lossy().into_owned())
-            .map_err(|_| ArtifactError::DownloadFailed)?;
+        let (workspace, path) = private_temp_file("manifest")?;
         let result = self.fetcher.fetch(self.url.as_str(), &path).and_then(|()| {
-            let bytes = fs::read(path.as_str()).map_err(|_| ArtifactError::DownloadFailed)?;
+            let bytes = read_bounded(&path, 4 * 1024 * 1024)?;
             let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| {
                 ArtifactError::InvalidManifest("release manifest is not valid JSON")
             })?;
@@ -242,7 +242,7 @@ impl<F: ArtifactFetcher> ReleaseResolver for SystemReleaseResolver<F> {
                 ReleaseManifest::parse(&value, self.key)
             }
         });
-        let _ = fs::remove_file(path.as_str());
+        let _ = fs::remove_dir_all(workspace.as_str());
         result
     }
 }
@@ -270,12 +270,16 @@ impl<F: ArtifactFetcher> SystemReleaseResolver<F> {
             .ok_or(ArtifactError::InvalidManifest(
                 "GitHub release assets are missing",
             ))?;
-        let asset = assets
+        let matches = assets
             .iter()
-            .find(|asset| {
+            .filter(|asset| {
                 asset.get("name").and_then(serde_json::Value::as_str) == Some(expected_name)
             })
-            .ok_or(ArtifactError::UnsupportedAsset)?;
+            .collect::<Vec<_>>();
+        if matches.len() != 1 {
+            return Err(ArtifactError::UnsupportedAsset);
+        }
+        let asset = matches[0];
         let download_url = asset
             .get("browser_download_url")
             .and_then(serde_json::Value::as_str)
@@ -285,26 +289,16 @@ impl<F: ArtifactFetcher> SystemReleaseResolver<F> {
         let checksums_url = format!(
             "https://github.com/nklisch/skilltap/releases/download/v{version}/checksums.txt"
         );
-        let checksum_path = AbsolutePath::new(
-            std::env::temp_dir()
-                .join(format!(
-                    ".skilltap-release-checksums-{}-{}",
-                    std::process::id(),
-                    ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-                ))
-                .to_string_lossy()
-                .into_owned(),
-        )
-        .map_err(|_| ArtifactError::DownloadFailed)?;
+        let (checksum_workspace, checksum_path) = private_temp_file("checksums")?;
         let checksum = self
             .fetcher
             .fetch(&checksums_url, &checksum_path)
             .and_then(|()| {
-                let contents = fs::read_to_string(checksum_path.as_str())
+                let contents = String::from_utf8(read_bounded(&checksum_path, 1024 * 1024)?)
                     .map_err(|_| ArtifactError::DownloadFailed)?;
                 parse_checksum(&contents, expected_name)
             });
-        let _ = fs::remove_file(checksum_path.as_str());
+        let _ = fs::remove_dir_all(checksum_workspace.as_str());
         let checksum = checksum?;
         let artifact = ReleaseArtifact::new(
             version,
@@ -317,6 +311,59 @@ impl<F: ArtifactFetcher> SystemReleaseResolver<F> {
         .map_err(|_| ArtifactError::InvalidManifest("GitHub release asset metadata is invalid"))?;
         ReleaseManifest::new(version, [artifact])
     }
+}
+
+fn private_temp_file(label: &str) -> Result<(AbsolutePath, AbsolutePath), ArtifactError> {
+    for _ in 0..64 {
+        let workspace_path = std::env::temp_dir().join(format!(
+            ".skilltap-{label}-{}-{}",
+            std::process::id(),
+            ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::create_dir(&workspace_path) {
+            Ok(()) => {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(&workspace_path, fs::Permissions::from_mode(0o700))
+                        .map_err(|_| ArtifactError::DownloadFailed)?;
+                }
+                let workspace = AbsolutePath::new(workspace_path.to_string_lossy().into_owned())
+                    .map_err(|_| ArtifactError::DownloadFailed)?;
+                let file = AbsolutePath::new(
+                    workspace_path
+                        .join("payload")
+                        .to_string_lossy()
+                        .into_owned(),
+                )
+                .map_err(|_| ArtifactError::DownloadFailed)?;
+                return Ok((workspace, file));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return Err(ArtifactError::DownloadFailed),
+        }
+    }
+    Err(ArtifactError::DownloadFailed)
+}
+
+fn read_bounded(path: &AbsolutePath, limit: u64) -> Result<Vec<u8>, ArtifactError> {
+    let metadata =
+        fs::symlink_metadata(path.as_str()).map_err(|_| ArtifactError::DownloadFailed)?;
+    if metadata.file_type().is_symlink()
+        || !metadata.file_type().is_file()
+        || metadata.len() > limit
+    {
+        return Err(ArtifactError::DownloadFailed);
+    }
+    let file = fs::File::open(path.as_str()).map_err(|_| ArtifactError::DownloadFailed)?;
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| ArtifactError::DownloadFailed)?;
+    if bytes.len() as u64 > limit {
+        return Err(ArtifactError::DownloadFailed);
+    }
+    Ok(bytes)
 }
 
 fn github_asset_name(key: ArtifactKey) -> &'static str {
@@ -384,38 +431,57 @@ pub struct SystemArtifactFetcher;
 impl ArtifactFetcher for SystemArtifactFetcher {
     fn fetch(&self, url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError> {
         validate_release_url(url)?;
-        let executable =
-            crate::domain::NativeId::new("curl").map_err(|_| ArtifactError::InvalidLocator)?;
-        let request = CommandRequest::new(
-            executable,
-            [
-                "--fail",
-                "--silent",
-                "--show-error",
-                "--location",
-                "--proto",
-                "=https",
-                "--proto-redir",
-                "=https",
-                "--max-time",
-                "30",
-                "--output",
-                destination.as_str(),
-                "--",
-                url,
-            ]
-            .into_iter()
-            .map(std::ffi::OsString::from),
-            None,
-        );
-        let output = SystemCommandRunner
-            .run(&request)
+        let configured = crate::domain::ConfiguredBinary::path_lookup(
+            crate::domain::NativeId::new("curl").map_err(|_| ArtifactError::InvalidLocator)?,
+        )
+        .map_err(|_| ArtifactError::InvalidLocator)?;
+        let executable = SystemExecutableResolver
+            .resolve(&ExecutableResolutionRequest::new(
+                configured,
+                std::env::var_os("PATH"),
+            ))
             .map_err(|_| ArtifactError::DownloadFailed)?;
-        if output.status().success() {
-            Ok(())
-        } else {
-            Err(ArtifactError::DownloadFailed)
+        let limits = ProcessLimits::new(30_000, 4 * 1024, 4 * 1024, 8 * 1024)
+            .map_err(|_| ArtifactError::DownloadFailed)?;
+        let output = SystemNativeProcessRunner
+            .run(&NativeProcessRequest::new(
+                executable,
+                [
+                    "--fail",
+                    "--silent",
+                    "--show-error",
+                    "--location",
+                    "--max-redirs",
+                    "5",
+                    "--proto",
+                    "=https",
+                    "--proto-redir",
+                    "=https",
+                    "--max-time",
+                    "30",
+                    "--max-filesize",
+                    "67108864",
+                    "--output",
+                    destination.as_str(),
+                    "--write-out",
+                    "%{url_effective}",
+                    "--",
+                    url,
+                ]
+                .into_iter()
+                .map(std::ffi::OsString::from),
+                std::collections::BTreeMap::new(),
+                None,
+                limits,
+            ))
+            .map_err(|_| ArtifactError::DownloadFailed)?;
+        if !output.status().success() {
+            return Err(ArtifactError::DownloadFailed);
         }
+        let effective = std::str::from_utf8(output.stdout())
+            .map_err(|_| ArtifactError::DownloadFailed)?
+            .trim();
+        validate_release_url(effective)
     }
 }
 
@@ -467,6 +533,10 @@ impl BinaryInstaller for SystemBinaryInstaller {
         let metadata =
             fs::metadata(artifact.as_str()).map_err(|_| ArtifactError::InvalidArtifact)?;
         if !metadata.is_file() {
+            return Err(ArtifactError::InvalidArtifact);
+        }
+        #[cfg(unix)]
+        if metadata.permissions().mode() & 0o111 == 0 {
             return Err(ArtifactError::InvalidArtifact);
         }
         let destination_path = Path::new(destination.as_str());
@@ -523,7 +593,7 @@ fn destination_identity(path: &Path) -> Result<Option<(u64, u64)>, ArtifactError
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;
-        return Ok(Some((metadata.dev(), metadata.ino())));
+        Ok(Some((metadata.dev(), metadata.ino())))
     }
     #[cfg(not(unix))]
     {
