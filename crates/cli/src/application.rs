@@ -703,7 +703,13 @@ impl StatusApplication<'_> {
                     Some(&name),
                 ),
                 ResourceKind::StandaloneSkill => self.execute_skill_update(
-                    command,
+                    // A daemon cycle is still the safe, non-interactive
+                    // update path.  Reuse the explicit skill-update
+                    // command's replacement planning so a changed Git
+                    // revision is applied when the destination is managed
+                    // and unchanged; the daemon wrapper still refuses
+                    // drift, pins, and other judgment-required work.
+                    "skill update",
                     &child_scope,
                     &TargetArgs::default(),
                     Some(&name),
