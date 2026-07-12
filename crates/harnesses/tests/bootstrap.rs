@@ -14,6 +14,21 @@ fn write_fake_claude(
     marketplace_payload: &str,
     plugin_payload: &str,
 ) -> (skilltap_core::domain::ConfiguredBinary, std::path::PathBuf) {
+    write_fake_claude_version(
+        root,
+        r#"{"version":"3.0.0"}"#,
+        marketplace_payload,
+        plugin_payload,
+    )
+}
+
+#[cfg(unix)]
+fn write_fake_claude_version(
+    root: &TempRoot,
+    version_payload: &str,
+    marketplace_payload: &str,
+    plugin_payload: &str,
+) -> (skilltap_core::domain::ConfiguredBinary, std::path::PathBuf) {
     use std::os::unix::fs::PermissionsExt;
 
     let binary = root.path().join("claude");
@@ -21,7 +36,7 @@ fn write_fake_claude(
     let script = format!(
         "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\nif [ \"$1\" = \"--version\" ]; then printf '%s' '{version}'; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"marketplace\" ]; then printf '%s' '{marketplace_payload}'; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"list\" ]; then printf '%s' '{plugin_payload}'; exit 0; fi\nexit 0\n",
         log = log.display(),
-        version = r#"{"version":"3.0.0"}"#,
+        version = version_payload,
         marketplace_payload = marketplace_payload,
         plugin_payload = plugin_payload,
     );
@@ -113,6 +128,18 @@ fn claude_bootstrap_presence_matrix_is_read_first_and_target_isolated() {
     assert!(!calls.contains("marketplace add"));
     assert!(!calls.contains("plugin install"));
     assert!(!calls.contains("codex"));
+    let mut entries = fs::read_dir(root.path())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect::<Vec<_>>();
+    entries.sort();
+    assert_eq!(
+        entries,
+        [
+            std::ffi::OsString::from("calls.log"),
+            std::ffi::OsString::from("claude")
+        ]
+    );
 }
 
 #[cfg(unix)]
@@ -159,6 +186,44 @@ fn malformed_or_unknown_native_lists_block_mutation_and_codex_stays_unsupported(
         ),
     );
     assert!(matches!(codex, HarnessSetupResult::Unsupported { .. }));
+}
+
+#[cfg(unix)]
+#[test]
+fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
+    let malformed_root = TempRoot::new("harness-bootstrap-version-malformed").unwrap();
+    let (configured, _log) = write_fake_claude_version(
+        &malformed_root,
+        "{malformed",
+        r#"{"marketplaces":[]}"#,
+        r#"{"plugins":[]}"#,
+    );
+    let policy = HarnessBootstrapPolicy::skilltap(configured, None);
+    assert!(matches!(
+        skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy),
+        HarnessSetupResult::Unavailable {
+            reason: skilltap_harnesses::SetupReason::InvalidVersion,
+            ..
+        }
+    ));
+
+    let unknown_root = TempRoot::new("harness-bootstrap-version-unknown").unwrap();
+    let (configured, log) = write_fake_claude_version(
+        &unknown_root,
+        r#"{"version":"99.0.0"}"#,
+        r#"{"marketplaces":[]}"#,
+        r#"{"plugins":[]}"#,
+    );
+    let policy = HarnessBootstrapPolicy::skilltap(configured, None);
+    assert!(matches!(
+        skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy),
+        HarnessSetupResult::Unsupported { .. }
+    ));
+    let calls = fs::read_to_string(log).unwrap();
+    assert!(calls.contains("--version --json"));
+    assert!(!calls.contains("marketplace list"));
+    assert!(!calls.contains("marketplace add"));
+    assert!(!calls.contains("plugin install"));
 }
 
 #[cfg(unix)]

@@ -120,9 +120,12 @@ pub fn detect_configured_installation(
     if !output.status().success() {
         return Err(DetectionError::NonZeroExit);
     }
+    // A successful harness process with malformed or over-limit version JSON
+    // is an invalid version contract, not an absent executable.  Preserve the
+    // distinction so bootstrap can report an actionable version attention.
     let decoded = StrictJson
         .decode(output.stdout(), json_limits)
-        .map_err(DetectionError::Runtime)?;
+        .map_err(|_| DetectionError::InvalidVersion)?;
     let version = decoded
         .value()
         .get("version")
