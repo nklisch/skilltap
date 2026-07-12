@@ -1025,7 +1025,12 @@ fn remove_published_binary_with_hooks(
     }
     after_rename();
     if binary_file_identity_absolute(&marker) == Some(expected) {
-        if binary_file_identity_absolute(destination).is_some() {
+        let destination_state = match std::fs::symlink_metadata(destination) {
+            Ok(_) => Some(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(_) => return RollbackResult::Failed,
+        };
+        if destination_state.is_some() {
             // A replacement won the path after the no-replace move.  The
             // marker is still the expected published inode and can be
             // removed without touching the replacement.
