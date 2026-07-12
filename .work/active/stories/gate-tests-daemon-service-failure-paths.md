@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: review
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
@@ -82,3 +82,20 @@ rollback coverage (this item)
 lenses. The focused test passes, but its assertions do not cover the complete
 failure matrix named in the item and original gate finding. Do not weaken the
 existing cases; extend the isolated test support and retain unmanaged files.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: malformed-owned-definition coverage is still absent (this item)
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review with correctness, tests,
+and daemon safety lenses. The new manager-failure and pair-write rollback
+coverage is present and green. However, the purported malformed case is an
+unmanaged lookalike (`daemon::owns` rejects it), so it does not exercise a
+malformed definition that passes ownership detection but fails validation.
+Add an isolated owned-marker/expected-field fixture with malformed syntax and
+assert typed attention plus preservation, while retaining the existing
+unmanaged, non-regular, manager, and rollback cases.
