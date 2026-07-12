@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-installer
 kind: story
-stage: review
+stage: implementing
 tags: [infra, content, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -93,3 +93,37 @@ does correctly delegate native harness setup through a fixed direct argument
 vector and keeps unsupported harness attention visible, but its pre-bootstrap
 binary publication remains a security and parity gap. Keep the story at
 `stage: implementing` until that boundary is closed.
+
+## Review (2026-07-12, installer hardening follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: the shell transport does not attest every redirect hop (this
+item)
+
+**Important**: the static installer fixture does not exercise redirect-host
+rejection, unsupported platforms, or missing runtime dependencies; the Rust
+installed-version probe accepts any semver token in arbitrary output rather
+than requiring the exact `skilltap <version>` identity (this item)
+
+**Nits**: temporary metadata files can remain when an early pre-trap download
+fails
+
+**Notes**: Standard fresh-context substrate review of `edcaf74` and `13d2558`,
+with a focused security/correctness pass over the installer boundary. The
+installer now verifies release tags, bounds metadata/checksum/artifact sizes,
+checksums and candidate identity before invoking the Rust bootstrap, preserves
+the prior binary on binary attention, rejects symlinked/foreign-owned
+destinations, and delegates publication through the atomic Rust installer.
+`sh -n install.sh`, `scripts/verify-installer.sh`, the core artifact suite,
+and the CLI bootstrap matrix pass offline; website guidance is aligned.
+
+The remaining blocker is redirect safety in the shell fallback: curl follows
+up to three arbitrary HTTPS redirects and only checks the final effective URL,
+while wget does not attest the effective URL at all. An intermediate
+cross-host hop can therefore supply the metadata or executable before the
+final URL returns to an allowed GitHub host, violating the same per-hop
+release-host contract enforced by the Rust resolver. The installer must either
+validate each hop before fetching it or constrain the shell path to a verified
+handoff that provides that guarantee, and add a fixture proving a hostile
+intermediate redirect fails closed. Keep this story at `stage: implementing`.
