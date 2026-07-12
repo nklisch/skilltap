@@ -1,7 +1,7 @@
 ---
 id: story-scope-aware-lifecycle-operation-ids
 kind: story
-stage: implementing
+stage: review
 parent: null
 depends_on: []
 release_binding: 3.0.0
@@ -31,3 +31,14 @@ same name produce distinct operations.
 
 Promoted from `idea-scope-aware-lifecycle-operation-ids` after the release
 e2e test exposed the production defect.
+
+## Implementation notes
+
+- Lifecycle operation hashing now includes the concrete scope label alongside
+  the action, target, and resource id, so global and project operations with
+  the same logical id remain distinct while repeated tuples stay deterministic.
+- Added focused unit coverage for global/project identity separation and
+  deterministic regeneration.
+- Verification: `cargo test -p skilltap --lib application::tests:: --offline`
+  passed (8 tests).
+- Production commit: `9bc22a7` (`Fix scope-aware lifecycle operation IDs`).
