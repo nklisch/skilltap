@@ -5,10 +5,10 @@ stage: done
 tags: [infra]
 parent: epic-rust-control-plane-storage
 depends_on: [epic-rust-control-plane-storage-schemas]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Implement Owned Document Repositories

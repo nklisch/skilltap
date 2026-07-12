@@ -5,12 +5,12 @@ stage: done
 tags: [cli,infra]
 parent: epic-harness-observation-adoption-status
 depends_on: [epic-harness-observation-adoption-status-integration]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Normalize Status Resources and Findings

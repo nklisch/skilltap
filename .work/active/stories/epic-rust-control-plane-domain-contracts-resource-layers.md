@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: epic-rust-control-plane-domain-contracts
 depends_on: [epic-rust-control-plane-domain-contracts-resource-graph, epic-rust-control-plane-domain-contracts-capability-compatibility]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Preserve Desired Origin and Layered Harness Observations

@@ -5,12 +5,12 @@ stage: done
 tags: [infra, testing]
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-cli-shell]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: tests
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Run Native macOS Contracts Before Merge

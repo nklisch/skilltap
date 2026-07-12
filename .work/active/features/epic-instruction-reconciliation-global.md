@@ -5,12 +5,12 @@ stage: done
 tags: []
 parent: epic-instruction-reconciliation
 depends_on: [epic-instruction-reconciliation-model]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Manage Global Canonical Instructions

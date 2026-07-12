@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: epic-safe-update-automation-policy
 depends_on: [epic-safe-update-automation-policy-contract]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Re-evaluate Compatibility for Updates

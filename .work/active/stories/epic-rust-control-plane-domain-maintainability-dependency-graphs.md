@@ -5,10 +5,10 @@ stage: done
 tags: [refactor]
 parent: epic-rust-control-plane-domain-maintainability
 depends_on: [epic-rust-control-plane-domain-maintainability-validated-newtypes]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: refactor-design
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Share Private Dependency Graph Traversal

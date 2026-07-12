@@ -5,12 +5,12 @@ stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-codex
 depends_on: [epic-harness-observation-adoption-codex-config]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/campaigns/marketplace-standards/specialists/codex.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Observe Codex Resources and Instructions

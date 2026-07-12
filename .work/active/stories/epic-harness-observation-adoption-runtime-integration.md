@@ -5,12 +5,12 @@ stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-executable-resolution, epic-harness-observation-adoption-runtime-bounded-process, epic-harness-observation-adoption-runtime-strict-json, epic-harness-observation-adoption-runtime-codex-home, epic-harness-observation-adoption-runtime-external-tree]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Verify the Complete Native Observation Runtime

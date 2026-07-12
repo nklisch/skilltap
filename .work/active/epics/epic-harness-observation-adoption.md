@@ -5,7 +5,7 @@ stage: done
 tags: []
 parent: null
 depends_on: [epic-rust-control-plane]
-release_binding: null
+release_binding: 3.0.0
 research_refs:
   - .research/analysis/briefs/current-agent-extension-standards.md
   - .research/analysis/campaigns/marketplace-standards/specialists/codex.md
@@ -14,7 +14,7 @@ research_refs:
 research_origin: null
 gate_origin: null
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-12
 ---
 
 # Harness Observation and Adoption

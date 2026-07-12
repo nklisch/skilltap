@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: epic-rust-control-plane
 depends_on: [epic-rust-control-plane-workspace-reset]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Control-Plane Domain Contracts

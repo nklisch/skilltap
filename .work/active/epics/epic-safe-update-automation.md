@@ -5,10 +5,10 @@ stage: done
 tags: [infra]
 parent: null
 depends_on: [epic-native-marketplace-plugin-lifecycle, epic-standalone-skill-lifecycle, epic-cross-harness-materialization]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-10
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Safe Update Automation

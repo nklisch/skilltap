@@ -5,12 +5,12 @@ stage: done
 tags: []
 parent: epic-reconciliation-execution
 depends_on: [epic-reconciliation-execution-executor]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Expose Plan and Sync Commands

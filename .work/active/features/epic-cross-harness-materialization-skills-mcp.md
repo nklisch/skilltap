@@ -5,12 +5,12 @@ stage: done
 tags: []
 parent: epic-cross-harness-materialization
 depends_on: [epic-cross-harness-materialization-compatibility]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Materialize Portable Skills and MCP

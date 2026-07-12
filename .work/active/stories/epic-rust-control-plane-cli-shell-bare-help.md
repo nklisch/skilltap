@@ -5,10 +5,10 @@ stage: done
 tags: [bug, cli]
 parent: epic-rust-control-plane-cli-shell
 depends_on: [epic-rust-control-plane-cli-shell-composition]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: tests
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Restore Bare CLI Help

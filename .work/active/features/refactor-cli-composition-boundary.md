@@ -5,12 +5,12 @@ stage: done
 tags: [refactor]
 parent: null
 depends_on: []
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: refactor-design
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Deduplicate CLI Document and Scope Composition

@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: null
 depends_on: [epic-reconciliation-execution]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-12
 ---
 
 # Standalone Skill Lifecycle

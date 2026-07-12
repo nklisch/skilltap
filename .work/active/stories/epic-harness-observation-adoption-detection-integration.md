@@ -5,12 +5,12 @@ stage: done
 tags: [testing,infra]
 parent: epic-harness-observation-adoption-detection
 depends_on: [epic-harness-observation-adoption-detection-fixtures, epic-harness-observation-adoption-detection-registry, epic-harness-observation-adoption-detection-profiles, epic-harness-observation-adoption-detection-probes]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Verify Harness Detection End to End

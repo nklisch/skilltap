@@ -5,10 +5,10 @@ stage: done
 tags: [cli, infra]
 parent: epic-rust-control-plane-cli-shell
 depends_on: [epic-rust-control-plane-cli-shell-command-model, epic-rust-control-plane-cli-shell-output]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Compose the Foundation CLI

@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: epic-safe-update-automation-diagnostics
 depends_on: [epic-safe-update-automation-diagnostics-status]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Offer Deterministic Daemon Recovery Actions

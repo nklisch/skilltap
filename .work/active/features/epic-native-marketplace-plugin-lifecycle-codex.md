@@ -5,12 +5,12 @@ stage: done
 tags: []
 parent: epic-native-marketplace-plugin-lifecycle
 depends_on: [epic-native-marketplace-plugin-lifecycle-identity]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Add Codex Marketplace and Plugin Adapter

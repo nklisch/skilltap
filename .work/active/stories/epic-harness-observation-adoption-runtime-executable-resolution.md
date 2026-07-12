@@ -5,12 +5,12 @@ stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-runtime
 depends_on: [epic-harness-observation-adoption-runtime-contracts-limits, epic-harness-observation-adoption-runtime-adversarial-fixtures]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Resolve and Revalidate Harness Executables

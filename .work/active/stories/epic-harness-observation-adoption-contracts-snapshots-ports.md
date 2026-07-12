@@ -5,12 +5,12 @@ stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-contracts
 depends_on: [epic-harness-observation-adoption-contracts-storage-wires, epic-harness-observation-adoption-contracts-findings, epic-harness-observation-adoption-contracts-installation-profiles]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Define Ephemeral Snapshot and Adapter Ports

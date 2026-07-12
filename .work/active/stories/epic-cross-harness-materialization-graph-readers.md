@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: epic-cross-harness-materialization-graph
 depends_on: [epic-cross-harness-materialization-graph-contract]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Read Explicit Native Plugin Sources

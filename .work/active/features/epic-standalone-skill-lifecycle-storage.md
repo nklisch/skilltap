@@ -5,12 +5,12 @@ stage: done
 tags: []
 parent: epic-standalone-skill-lifecycle
 depends_on: [epic-standalone-skill-lifecycle-tree]
-release_binding: null
+release_binding: 3.0.0
 research_refs: []
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Publish Canonical Skill Trees

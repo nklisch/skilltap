@@ -5,13 +5,13 @@ stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption
 depends_on: [epic-harness-observation-adoption-detection]
-release_binding: null
+release_binding: 3.0.0
 research_refs:
   - .research/analysis/campaigns/marketplace-standards/specialists/claude.md
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Claude Code Observation Adapter

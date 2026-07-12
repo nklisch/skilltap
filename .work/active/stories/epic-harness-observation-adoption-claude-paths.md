@@ -5,12 +5,12 @@ stage: done
 tags: [infra]
 parent: epic-harness-observation-adoption-claude
 depends_on: [epic-harness-observation-adoption-detection, epic-harness-observation-adoption-runtime]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/campaigns/marketplace-standards/specialists/claude.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Derive Claude Observation Paths

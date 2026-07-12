@@ -7,10 +7,10 @@ parent: epic-rust-control-plane-runtime-primitives
 depends_on:
   - epic-rust-control-plane-runtime-primitives-command-clock
   - epic-rust-control-plane-runtime-primitives-filesystem-lock
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Scope and Target Resolution

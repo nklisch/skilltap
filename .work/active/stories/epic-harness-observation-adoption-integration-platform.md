@@ -5,12 +5,12 @@ stage: done
 tags: [testing]
 parent: epic-harness-observation-adoption-integration
 depends_on: [epic-harness-observation-adoption-integration-cli]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Verify Platform and Failure Guardrails

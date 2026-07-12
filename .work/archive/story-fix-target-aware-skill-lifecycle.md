@@ -5,7 +5,7 @@ stage: done
 tags: [bug]
 parent: null
 depends_on: []
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 archived_atop: v2.2.6
 git_ref: ef7e796

@@ -5,10 +5,10 @@ stage: done
 tags: []
 parent: epic-cross-harness-materialization-publish
 depends_on: [epic-cross-harness-materialization-publish-batch]
-release_binding: null
+release_binding: 3.0.0
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Apply Managed Publication Transactions

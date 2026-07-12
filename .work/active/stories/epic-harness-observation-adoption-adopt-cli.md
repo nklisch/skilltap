@@ -5,12 +5,12 @@ stage: done
 tags: [cli]
 parent: epic-harness-observation-adoption-adopt
 depends_on: [epic-harness-observation-adoption-adopt-persistence]
-release_binding: null
+release_binding: 3.0.0
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Expose Adoption CLI
