@@ -1,7 +1,7 @@
 ---
 id: gate-tests-mutating-scope-matrix
 kind: story
-stage: review
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
@@ -51,3 +51,20 @@ specific resource section.
 
 Verification: the focused scope-matrix test passes against the fixed
 implementation.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: end-to-end scope-isolation matrix remains incomplete (this item)
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review with correctness, tests,
+scope-isolation, and state-boundary lenses. The regression covers a global
+resource, one project resource, all-scopes removal, target-subset retention,
+and inventory isolation. It does not exercise equal resource IDs in global and
+project scopes, nor assert native trees, state records, and untouched bytes
+remain isolated across project/all-scopes mutations as required by the gate
+brief. Add those same-name and native/state assertions while retaining the
+existing coverage.
