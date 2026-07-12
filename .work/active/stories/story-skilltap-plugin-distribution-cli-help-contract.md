@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cli-help-contract
 kind: story
-stage: review
+stage: done
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on: []
@@ -37,3 +37,19 @@ Acceptance criteria:
 - Tests added: generated command-tree help/exit-footer coverage and scoped flag placement assertions.
 - Discrepancies from design: none; Clap remains the sole command grammar source.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context review of the public CLI contract. Generated
+help metadata covers all 26 executable leaves, non-help arguments have
+purpose/value text, exit guidance is shared, and scope/target/selection/
+acknowledgment/JSON flags remain constrained to their intended operations.
+Command parsing and the generic `--yes` semantics remain unchanged. The
+conceptual website reference was corrected to describe generic partial/lossy
+acknowledgment accurately.
