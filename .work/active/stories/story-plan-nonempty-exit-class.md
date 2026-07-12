@@ -1,7 +1,7 @@
 ---
 id: story-plan-nonempty-exit-class
 kind: story
-stage: review
+stage: done
 parent: null
 depends_on: []
 release_binding: 3.0.0
@@ -42,3 +42,14 @@ pass exposed the production regression.
   --test compiled_binary --offline`; `cargo test --workspace --all-targets
   --offline`; `cargo clippy --workspace --all-targets --offline -- -D
   warnings`.
+
+## Review
+
+Approved. The populated-plan result classification now derives from the
+rendered operation count, so any non-empty plan returns `attention_required`
+and exit code 2 while remaining side-effect free. Empty plans remain
+`completed` with exit code 0, and existing observation/error precedence is
+preserved. The adjacent output change removes the stale unavailable-adapter
+warning and next action without changing the plan payload. The compiled
+populated, healthy, and drifted-plan regressions, the full workspace tests,
+format check, and warnings-denied Clippy all pass.
