@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-cli-contract
 kind: feature
-stage: review
+stage: done
 tags: [content]
 parent: epic-skilltap-plugin-distribution
 depends_on: []
@@ -283,3 +283,20 @@ the operator's HOME, XDG, Codex, Claude, or project files.
 - Verification: `cargo fmt --all -- --check`; `cargo test --workspace --all-targets --offline` (all workspace suites green, including 46 CLI unit, 43 compiled CLI, 292 core, and integration/support suites).
 - Discrepancies from design: runtime native error payloads are omitted rather than summarized; the website uses executable-help invocation links and a conceptual family index instead of repeating command grammar.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context feature review. All three child stories are
+done and independently reviewed. The executable clap tree is the sole help
+authority, all 26 leaves expose stable exit guidance, parser/runtime failures
+are boundary-aware and secret-safe, and compiled isolated tests cover the
+complete help surface plus representative invalid paths. The website and UX
+references remain conceptual and now accurately describe generic `--yes`
+acknowledgment without duplicating grammar. Foundation documents remain
+aligned.
