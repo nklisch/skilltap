@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: review
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
@@ -52,3 +52,27 @@ non-regular definitions are surfaced as unreadable without overwriting them.
 
 Verification: the focused test passes; the full `compiled_binary` integration
 suite passes for this story's coverage.
+
+## Review findings
+
+- **Blocker**: The regression covers only three of the five failure classes in
+  the gate scope: disable no-op, unmanaged lookalike preservation, and a
+  non-regular timer path. It does not exercise a malformed owned definition,
+  service-manager failure propagation, or rollback/restoration when the second
+  service definition write fails. Add isolated fixtures/fake-manager controls
+  for those paths and assert typed attention, no destructive overwrite, and
+  pair-write recovery before advancing this item.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: missing malformed-definition, manager-failure, and pair-write
+rollback coverage (this item)
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with deep test-integrity and daemon safety
+lenses. The focused test passes, but its assertions do not cover the complete
+failure matrix named in the item and original gate finding. Do not weaken the
+existing cases; extend the isolated test support and retain unmanaged files.
