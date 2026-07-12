@@ -1,7 +1,7 @@
 ---
 id: feature-extract-cli-bootstrap-boundary
 kind: feature
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: null
 depends_on: []
@@ -357,3 +357,31 @@ daemon service files or binary state are changed by the source-only revert.
 - `story-feature-extract-cli-bootstrap-boundary-composition`
 - `story-feature-extract-cli-bootstrap-boundary-publication`
 - `story-feature-extract-cli-bootstrap-boundary-daemon-policy`
+
+## Children complete
+
+All three refactor stories are done and approved. The private
+`bootstrap_commands` module now owns composition, publication, rollback, and
+daemon binary policy; `entrypoint::run_from` and daemon-cycle composition
+cross only the narrow wrappers.
+
+## Implementation notes
+
+- Execution capability: highest available local implementation; one
+  behavior-preserving mechanical extraction kept the intermediate tree green.
+- Review weight: standard (autopilot default).
+- Files changed: `crates/cli/src/entrypoint.rs`,
+  `crates/cli/src/bootstrap_commands.rs`.
+- Tests added: none; all existing bootstrap, publication, rollback, daemon,
+  compiled-binary, package, and lifecycle tests remain unchanged and pass.
+- Discrepancies from design: the three mechanical moves landed together rather
+  than as separate source commits; ownership and public behavior match the
+  staged target shape.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap --offline`
+- `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
+- `git diff --check`
