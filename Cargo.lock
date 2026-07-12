@@ -298,6 +298,7 @@ dependencies = [
  "clap",
  "serde",
  "serde_json",
+ "sha2",
  "skilltap-core",
  "skilltap-harnesses",
  "skilltap-test-support",

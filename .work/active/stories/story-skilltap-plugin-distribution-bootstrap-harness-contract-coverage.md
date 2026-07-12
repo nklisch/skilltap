@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness-contract-coverage
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -38,3 +38,11 @@ Acceptance criteria:
 Fresh-context review of the hardened bootstrap harness commits `c880496` and
 `85b56ea` found the marketplace capability check and promised fake-binary
 coverage missing.
+
+## Implementation notes
+- Execution capability: highest; harness lifecycle writes require native capability and executable identity authority.
+- Review weight: standard (autopilot caller policy).
+- Files changed: `crates/harnesses/src/bootstrap.rs`, `crates/harnesses/tests/bootstrap.rs`.
+- Tests added: isolated fake-binary vectors for present/missing/malformed resources, target isolation, Codex unsupported behavior, unknown capability narrowing, and executable replacement between detection and mutation.
+- Discrepancies from design: operation-specific capability checks are explicit while preserving fail-closed behavior for profiles that cannot attest either operation.
+- Adjacent issues parked: none.

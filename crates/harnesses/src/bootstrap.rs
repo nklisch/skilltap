@@ -164,7 +164,16 @@ pub fn setup_detected_plugin(
             .and_then(|sets| sets.for_scope(&Scope::Global).support(&capability))
             .is_some_and(|support| matches!(support, CapabilitySupport::Supported))
     };
-    if !supports("marketplace.register") || !supports("plugin.install") {
+    // Each native mutation has its own capability gate.  Keep these checks
+    // explicit so a profile cannot accidentally authorize marketplace
+    // registration by proving only plugin installation (or vice versa).
+    if !supports("marketplace.register") {
+        return HarnessSetupResult::Unsupported {
+            harness: target,
+            next_action: unsupported_next_action(target),
+        };
+    }
+    if !supports("plugin.install") {
         return HarnessSetupResult::Unsupported {
             harness: target,
             next_action: unsupported_next_action(target),

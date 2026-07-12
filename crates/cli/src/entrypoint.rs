@@ -306,27 +306,12 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
         TargetSelection::All => true,
         TargetSelection::Only(target) => target.as_str() == kind.id(),
     };
-    let mut outcome = Outcome::new("bootstrap", ResultClass::Completed)
-        .with_scope(crate::OutputScope::Global)
-        .with_summary("binary", "pending")
-        .with_summary("version", skilltap_core::VERSION)
-        .with_summary("allow_major", args.allow_major);
     let binary = execute_binary_bootstrap(args, &paths);
-    outcome = outcome.with_resource(binary.entry);
-    if binary.attention {
-        outcome.result = ResultClass::AttentionRequired;
-    }
-    for warning in binary.warnings {
-        outcome = outcome.with_warning(warning);
-    }
-    for action in binary.next_actions {
-        outcome = outcome.with_next_action(action);
-    }
     // Do not mutate native harness state when the binary boundary did not
     // complete. Bootstrap's binary and harness phases are reported separately,
     // but a failed/blocked release must remain a read-only attention result.
     if binary.attention {
-        return outcome;
+        return compose_bootstrap_outcome(args, binary, Vec::new());
     }
     let search_path = std::env::var_os("PATH");
     let process_limits =
@@ -334,6 +319,7 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
             .expect("bootstrap process limits are valid");
     let json_limits = skilltap_core::runtime::JsonLimits::new(128 * 1024, 32)
         .expect("bootstrap JSON limits are valid");
+    let mut harness_results = Vec::new();
     for (kind, policy) in [
         (HarnessKind::Codex, &config.harnesses().codex),
         (HarnessKind::Claude, &config.harnesses().claude),
@@ -345,8 +331,13 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
             match AbsolutePath::new(policy.binary.as_str()) {
                 Ok(path) => ConfiguredBinary::absolute(path),
                 Err(_) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome.with_resource(OutputEntry::new(kind.id(), "invalid"));
+                    harness_results.push((
+                        kind,
+                        HarnessSetupResult::Unavailable {
+                            harness: kind,
+                            reason: skilltap_harnesses::SetupReason::InvalidVersion,
+                        },
+                    ));
                     continue;
                 }
             }
@@ -354,8 +345,13 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
             match NativeId::new(policy.binary.as_str()).and_then(ConfiguredBinary::path_lookup) {
                 Ok(binary) => binary,
                 Err(_) => {
-                    outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome.with_resource(OutputEntry::new(kind.id(), "invalid"));
+                    harness_results.push((
+                        kind,
+                        HarnessSetupResult::Unavailable {
+                            harness: kind,
+                            reason: skilltap_harnesses::SetupReason::InvalidVersion,
+                        },
+                    ));
                     continue;
                 }
             }
@@ -374,6 +370,46 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
             ),
         };
         let result = setup_first_party_plugin(kind, &bootstrap_policy);
+        harness_results.push((kind, result));
+    }
+    compose_bootstrap_outcome(args, binary, harness_results)
+}
+
+fn compose_bootstrap_outcome(
+    args: &BootstrapArgs,
+    binary: BinaryBootstrapResult,
+    harness_results: Vec<(HarnessKind, skilltap_harnesses::HarnessSetupResult)>,
+) -> Outcome {
+    use skilltap_core::domain::TargetSelection;
+    use skilltap_harnesses::HarnessSetupResult;
+
+    let mut outcome = Outcome::new("bootstrap", ResultClass::Completed)
+        .with_scope(crate::OutputScope::Global)
+        .with_summary("binary", "pending")
+        .with_summary("version", skilltap_core::VERSION)
+        .with_summary("allow_major", args.allow_major)
+        .with_resource(binary.entry);
+    if binary.attention {
+        outcome.result = ResultClass::AttentionRequired;
+    }
+    for warning in binary.warnings {
+        outcome = outcome.with_warning(warning);
+    }
+    for action in binary.next_actions {
+        outcome = outcome.with_next_action(action);
+    }
+    if binary.attention {
+        return outcome;
+    }
+    let selected = args.target.clone().unwrap_or(TargetSelection::All);
+    for (kind, result) in harness_results {
+        let included = match &selected {
+            TargetSelection::All => true,
+            TargetSelection::Only(target) => target.as_str() == kind.id(),
+        };
+        if !included {
+            continue;
+        }
         let (status, attention, next_action) = match &result {
             HarnessSetupResult::Installed { .. } => ("installed", false, None),
             HarnessSetupResult::AlreadyPresent { .. } => ("already-present", false, None),
@@ -560,6 +596,17 @@ where
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
+        let executable = match std::fs::metadata(temporary.as_str()) {
+            Ok(metadata) => metadata.permissions().mode() & 0o111 != 0,
+            Err(_) => false,
+        };
+        if !executable {
+            let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
+            return binary_attention(
+                "release_permissions_failed",
+                "The downloaded release artifact is not executable; the existing binary was preserved.",
+            );
+        }
         if std::fs::set_permissions(temporary.as_str(), std::fs::Permissions::from_mode(0o700))
             .is_err()
         {
@@ -774,7 +821,7 @@ mod bootstrap_tests {
     use sha2::Digest;
     use skilltap_core::{
         bootstrap::{ArtifactKey, ReleaseArtifact, ReleaseVersion},
-        domain::{AbsolutePath, SourceLocator},
+        domain::{AbsolutePath, HarnessId, SourceLocator, TargetSelection},
         runtime::{
             ArtifactError, ArtifactFetcher, BinaryInstaller, InstalledBinary, ReleaseManifest,
             ReleaseResolver, SystemBinaryInstaller,
@@ -782,7 +829,11 @@ mod bootstrap_tests {
     };
     use skilltap_test_support::TempRoot;
 
-    use super::{BootstrapArgs, OutputArgs, execute_binary_bootstrap_with};
+    use super::{
+        BinaryBootstrapResult, BootstrapArgs, OutputArgs, compose_bootstrap_outcome,
+        execute_binary_bootstrap_with,
+    };
+    use crate::{JsonRenderer, PlainRenderer, Renderer};
 
     #[derive(Clone)]
     struct FixtureResolver {
@@ -803,7 +854,24 @@ mod bootstrap_tests {
     impl ArtifactFetcher for FixtureFetcher {
         fn fetch(&self, _url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError> {
             fs::write(destination.as_str(), self.bytes.as_ref())
-                .map_err(|_| ArtifactError::DownloadFailed)
+                .map_err(|_| ArtifactError::DownloadFailed)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(destination.as_str(), fs::Permissions::from_mode(0o700))
+                    .map_err(|_| ArtifactError::DownloadFailed)?;
+            }
+            Ok(())
+        }
+    }
+
+    struct NonExecutableFetcher {
+        bytes: Vec<u8>,
+    }
+
+    impl ArtifactFetcher for NonExecutableFetcher {
+        fn fetch(&self, _url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError> {
+            fs::write(destination.as_str(), &self.bytes).map_err(|_| ArtifactError::DownloadFailed)
         }
     }
 
@@ -972,6 +1040,19 @@ mod bootstrap_tests {
         assert_eq!(result.entry.status, "unavailable");
         assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
 
+        let (resolver, _) = fixture("3.2.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &NonExecutableFetcher {
+                bytes: b"#!/bin/sh\nprintf 'skilltap 3.2.0\\n'\n".to_vec(),
+            },
+            &SystemBinaryInstaller,
+        );
+        assert_eq!(result.entry.status, "unavailable");
+        assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
+
         let (resolver, fetcher) = fixture("3.1.0");
         let result = execute_binary_bootstrap_with(
             &args(false),
@@ -982,6 +1063,98 @@ mod bootstrap_tests {
         );
         assert_eq!(result.entry.status, "unavailable");
         assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
+    }
+
+    fn completed_binary() -> BinaryBootstrapResult {
+        BinaryBootstrapResult {
+            entry: super::OutputEntry::new("binary", "no-op"),
+            attention: false,
+            warnings: Vec::new(),
+            next_actions: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn composed_bootstrap_contract_keeps_target_narrowing_and_json_schema_stable() {
+        let args = BootstrapArgs {
+            target: Some(TargetSelection::Only(HarnessId::new("claude").unwrap())),
+            allow_major: false,
+            output: OutputArgs { json: true },
+        };
+        let outcome = compose_bootstrap_outcome(
+            &args,
+            completed_binary(),
+            vec![
+                (
+                    skilltap_harnesses::HarnessKind::Codex,
+                    skilltap_harnesses::HarnessSetupResult::Installed {
+                        harness: skilltap_harnesses::HarnessKind::Codex,
+                        version: skilltap_core::domain::NativeVersion::new("3.0.0").unwrap(),
+                    },
+                ),
+                (
+                    skilltap_harnesses::HarnessKind::Claude,
+                    skilltap_harnesses::HarnessSetupResult::AlreadyPresent {
+                        harness: skilltap_harnesses::HarnessKind::Claude,
+                        version: skilltap_core::domain::NativeVersion::new("3.0.0").unwrap(),
+                    },
+                ),
+            ],
+        );
+        let json = JsonRenderer.render(&outcome).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["schema"], 1);
+        assert_eq!(value["result"], "completed");
+        assert_eq!(value["resources"].as_array().unwrap().len(), 2);
+        assert_eq!(value["resources"][1]["id"], "claude");
+        assert!(!json.contains("codex"));
+        let plain = PlainRenderer.render(&outcome).unwrap();
+        assert!(plain.contains("binary  no-op"));
+        assert!(plain.contains("claude  already-present"));
+        assert!(!plain.contains("codex"));
+    }
+
+    #[test]
+    fn composed_bootstrap_contract_reports_absent_and_mixed_harness_attention() {
+        let args = BootstrapArgs {
+            target: None,
+            allow_major: false,
+            output: OutputArgs { json: false },
+        };
+        let outcome = compose_bootstrap_outcome(
+            &args,
+            completed_binary(),
+            vec![
+                (
+                    skilltap_harnesses::HarnessKind::Claude,
+                    skilltap_harnesses::HarnessSetupResult::Installed {
+                        harness: skilltap_harnesses::HarnessKind::Claude,
+                        version: skilltap_core::domain::NativeVersion::new("3.0.0").unwrap(),
+                    },
+                ),
+                (
+                    skilltap_harnesses::HarnessKind::Codex,
+                    skilltap_harnesses::HarnessSetupResult::Unavailable {
+                        harness: skilltap_harnesses::HarnessKind::Codex,
+                        reason: skilltap_harnesses::SetupReason::NotInstalled,
+                    },
+                ),
+            ],
+        );
+        assert_eq!(outcome.result, super::ResultClass::AttentionRequired);
+        let json = JsonRenderer.render(&outcome).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["schema"], 1);
+        let resources = value["resources"].as_array().unwrap();
+        let codex = resources
+            .iter()
+            .find(|resource| resource["id"] == "codex")
+            .unwrap();
+        assert_eq!(codex["status"], "unavailable");
+        assert_eq!(value["next_actions"][0]["code"], "bootstrap_codex");
+        let plain = PlainRenderer.render(&outcome).unwrap();
+        assert!(plain.contains("codex  unavailable"));
+        assert!(plain.contains("not installed"));
     }
 }
 

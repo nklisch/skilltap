@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command-coverage
 kind: story
-stage: implementing
+stage: review
 tags: [infra, testing, security]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -44,7 +44,7 @@ removed.
 - Execution capability: highest; bootstrap combines release transport, executable probing, and atomic publication.
 - Review weight: standard (autopilot caller policy).
 - Files changed: `crates/cli/src/entrypoint.rs`, `crates/cli/Cargo.toml`.
-- Tests added: isolated compiled command composition seam covering first install, same-major no-op/update, major blocking and opt-in, wrong-release identity, and post-publish identity rollback preservation.
+- Tests added: isolated compiled command composition seam covering first install, same-major no-op/update, major blocking and opt-in, valid-checksummed wrong-version/non-executable releases, post-publish identity rollback preservation, target narrowing, absent/mixed harness outcomes, and plain/schema-1 JSON contracts.
 - Discrepancies from design: production execution still constructs only canonical HTTPS system ports; deterministic tests inject ports through a private in-process composition boundary.
 - Adjacent issues parked: none.
 
