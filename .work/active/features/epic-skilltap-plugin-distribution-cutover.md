@@ -11,21 +11,23 @@ created: 2026-07-12
 updated: 2026-07-12
 ---
 
-# Retire the Sibling Skills Publisher
+# Retire the Legacy Skilltap Skills Publisher
 
 ## Brief
 
-Complete the one-way publication cutover from `../skills` to the canonical
-skilltap repository. Remove or retire the old skilltap-adjacent guidance,
-including `claude-code-marketplace` where it is superseded, add an explicit
+Complete the one-way publication cutover from the public
+`nklisch/skilltap-skills` repository to the canonical skilltap repository.
+Remove or retire its old skilltap-adjacent guidance, including
+`claude-code-marketplace` where it is superseded, add an explicit
 deprecation/archive record, and verify that users have a working canonical
 plugin and binary path before the old publisher disappears.
 
 This feature tracks the cross-repository handoff and evidence; it does not
-create a compatibility layer or preserve the sibling repository as a second
-source of truth. Any remaining non-skilltap plugins in that repository are
+create a compatibility layer or preserve the legacy repository as a second
+source of truth. The active local `../skills` repository is unrelated and must
+remain intact. Any remaining non-skilltap content in `skilltap-skills` is
 outside this feature's product scope, even if repository archival requires an
-operator-level decision about their future.
+operator-level decision about its future.
 
 ## Epic context
 
@@ -38,9 +40,20 @@ operator-level decision about their future.
 - `docs/VISION.md` — canonical publisher boundary
 - `docs/SPEC.md` — Self-Hosted Plugin Distribution
 - `docs/ARCH.md` — Plugin Publication Boundary
-- `../skills/AGENTS.md` — current sibling publication rules
-- `../skills/.claude-plugin/marketplace.json` — current sibling catalog
-- `../skills/.agents/skills/claude-code-marketplace/` — superseded guidance
+- `https://github.com/nklisch/skilltap-skills` — legacy public repository
+- `https://github.com/nklisch/skilltap-skills/blob/main/README.md` — current
+  legacy skilltap distribution surface
+- `https://github.com/nklisch/skilltap-skills/tree/main/.agents/skills` —
+  superseded guidance locations
+
+## Design decisions
+
+- **Retirement target**: Only the public `nklisch/skilltap-skills` repository is
+  retired. The active sibling `../skills` repository remains fully supported
+  and is not modified or archived.
+- **Cutover gate**: Retire the legacy repository only after the canonical
+  plugin, website installer, binary bootstrap, and implicit skill are verified
+  as usable.
 
 <!-- Feature design will define the cutover checklist and external-repository
 handoff without changing skilltap's native resource semantics. -->
