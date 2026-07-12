@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-installer
 kind: story
-stage: review
+stage: done
 tags: [infra, content, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -127,3 +127,25 @@ release-host contract enforced by the Rust resolver. The installer must either
 validate each hop before fetching it or constrain the shell path to a verified
 handoff that provides that guarantee, and add a fixture proving a hostile
 intermediate redirect fails closed. Keep this story at `stage: implementing`.
+
+## Review (2026-07-12, redirect and identity acceptance)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context substrate review of `f7c69b9`, `3e703df`,
+and `9075a89`. The installer now requires curl and fails closed instead of
+using wget, performs bounded direct requests with `--max-redirs 0`, validates
+each redirect target before the next hop, and rejects hostile redirect hosts
+in the isolated verifier fixture. Metadata, checksum, and artifact transfers
+remain size-bounded and checksum- plus exact-identity-verified. The shell
+delegates publication and harness setup through the verified Rust bootstrap;
+binary attention preserves the prior executable, while harness attention stays
+separate. Destination validation rejects symlinked paths and owner mismatches,
+and healthy repeats are idempotent. The Rust installed-binary probe now
+requires the exact `skilltap <version>` output shape. `scripts/verify-installer.sh`,
+`sh -n install.sh`, cargo formatting, clippy with warnings denied, and the
+CLI all-target test suite pass offline.
