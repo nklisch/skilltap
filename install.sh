@@ -7,6 +7,24 @@ REPO="nklisch/skilltap"
 INSTALL_DIR="${SKILLTAP_INSTALL:-$HOME/.local/bin}"
 BINARY_NAME="skilltap"
 
+validate_install_dir() {
+  case "$INSTALL_DIR" in
+    /*) ;;
+    *) err "SKILLTAP_INSTALL must be an absolute user-owned directory"; exit 1 ;;
+  esac
+  case "$INSTALL_DIR" in
+    *..*|*[[:cntrl:]]*) err "SKILLTAP_INSTALL contains an unsafe path component"; exit 1 ;;
+  esac
+  if [ -L "$INSTALL_DIR" ]; then
+    err "SKILLTAP_INSTALL must not be a symlink"
+    exit 1
+  fi
+  if [ -e "$INSTALL_DIR" ] && [ ! -d "$INSTALL_DIR" ]; then
+    err "SKILLTAP_INSTALL is not a directory"
+    exit 1
+  fi
+}
+
 # --- Colors (only when stdout is a terminal) ---
 
 if [ -t 1 ]; then
@@ -125,6 +143,7 @@ main() {
   bold "skilltap installer"
   echo ""
 
+  validate_install_dir
   detect_platform
   get_latest_version
 

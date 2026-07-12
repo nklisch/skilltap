@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-installer
 kind: story
-stage: implementing
+stage: review
 tags: [infra, content, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -53,3 +53,8 @@ bootstrap path and record the limitation in the plugin guidance.
 - Tests added: POSIX syntax/static installer contract checks and isolated compiled binary install/no-op/major acknowledgment scenarios.
 - Discrepancies from design: the shell entrypoint delegates post-install harness setup to the verified binary and accepts attention exit 2 while failing closed on pre-mutation errors.
 - Adjacent issues parked: none.
+
+## Review readiness
+- `install.sh` validates absolute non-symlink destinations, verifies checksums before publication, and invokes the verified Rust bootstrap with a direct fixed argument vector.
+- Unsupported harness setup is accepted as attention (exit 2) while binary/pre-mutation failures remain fatal.
+- `scripts/verify-installer.sh`, `sh -n install.sh`, and the VitePress website build pass; generated `website/public/llms-full.txt` is synchronized.

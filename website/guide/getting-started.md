@@ -6,6 +6,14 @@ description: Install skilltap and adopt an existing Codex or Claude environment.
 
 ## Install
 
+There are two equal first-party installation paths:
+
+- **Native marketplace:** install the `skilltap` plugin from the Claude Code
+  or Codex marketplace entry published by this repository, then run the
+  executable bootstrap command below.
+- **One-line installer:** verify and install the binary with the command below;
+  it invokes the same bootstrap boundary after verification.
+
 On macOS or Linux, install the standalone binary and run its first-party
 bootstrap boundary:
 

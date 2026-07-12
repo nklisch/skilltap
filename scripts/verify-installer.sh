@@ -9,6 +9,7 @@ grep -q 'sha256sum' "$INSTALLER" || { echo "installer must verify sha256sum" >&2
 grep -q 'shasum -a 256' "$INSTALLER" || { echo "installer must support macOS shasum" >&2; exit 1; }
 grep -q 'bootstrap --target all --json' "$INSTALLER" || { echo "installer must delegate bootstrap" >&2; exit 1; }
 grep -q 'SKILLTAP_INSTALL=' "$INSTALLER" || { echo "installer must pass the verified destination" >&2; exit 1; }
+grep -q 'validate_install_dir' "$INSTALLER" || { echo "installer must validate its destination" >&2; exit 1; }
 
 # The shell entry point may only invoke fixed release URLs and the verified
 # binary. Reject common shell-evaluation and privilege-escalation regressions.
