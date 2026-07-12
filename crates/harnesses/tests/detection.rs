@@ -80,8 +80,46 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
 }
 
 #[test]
+fn exact_real_versions_are_reachable_but_remain_observe_only() {
+    for (harness, mode, binary, expected) in [
+        (
+            HarnessKind::Codex,
+            FakeNativeMode::CodexVersion,
+            "codex",
+            "0.144.1",
+        ),
+        (
+            HarnessKind::Claude,
+            FakeNativeMode::ClaudeVersion,
+            "claude",
+            "2.1.201",
+        ),
+    ] {
+        let (root, _fixture) = install(mode, binary);
+        let (process_limits, json_limits) = limits();
+        let installation = detect_installation(
+            harness,
+            root.path().as_os_str().to_os_string(),
+            process_limits,
+            json_limits,
+        )
+        .unwrap();
+        let HarnessReachability::Reachable { native_version, .. } = installation.reachability()
+        else {
+            panic!("real version fixture must be reachable");
+        };
+        assert_eq!(native_version.as_str(), expected);
+        assert!(
+            select_profile(harness, native_version)
+                .mutation_capabilities()
+                .is_none()
+        );
+    }
+}
+
+#[test]
 fn configured_absolute_binary_is_used_for_detection_without_path_lookup() {
-    let (root, _fixture) = install(FakeNativeMode::VersionKnown, "codex");
+    let (root, fixture) = install(FakeNativeMode::VersionKnown, "codex");
     let (process_limits, json_limits) = limits();
     let configured = ConfiguredBinary::absolute(
         AbsolutePath::new(root.join("codex").to_str().unwrap()).unwrap(),
@@ -98,6 +136,36 @@ fn configured_absolute_binary_is_used_for_detection_without_path_lookup() {
         installation.reachability(),
         HarnessReachability::Reachable { .. }
     ));
+    assert_eq!(
+        fixture.captured_invocation().unwrap().arguments(),
+        &[b"--version".to_vec()]
+    );
+}
+
+#[test]
+fn cross_harness_and_extra_document_versions_are_rejected() {
+    for (harness, mode, binary) in [
+        (HarnessKind::Codex, FakeNativeMode::ClaudeVersion, "codex"),
+        (HarnessKind::Claude, FakeNativeMode::CodexVersion, "claude"),
+        (
+            HarnessKind::Codex,
+            FakeNativeMode::ExtraJsonDocument,
+            "codex",
+        ),
+    ] {
+        let (root, _fixture) = install(mode, binary);
+        let (process_limits, json_limits) = limits();
+        assert_eq!(
+            detect_installation(
+                harness,
+                root.path().as_os_str().to_os_string(),
+                process_limits,
+                json_limits,
+            )
+            .unwrap_err(),
+            DetectionError::InvalidVersion
+        );
+    }
 }
 
 #[test]
@@ -140,6 +208,35 @@ fn flood_native_output_is_bounded_and_secret_safe() {
     let rendered = format!("{error:?}");
     assert!(!rendered.contains("xxxxxxxx"));
     assert!(!rendered.contains("yyyyyyyy"));
+}
+
+#[test]
+fn nonzero_and_timeout_version_commands_remain_distinct_failures() {
+    let (nonzero_root, _fixture) = install(FakeNativeMode::Exit(17), "codex");
+    let (process_limits, json_limits) = limits();
+    assert_eq!(
+        detect_installation(
+            HarnessKind::Codex,
+            nonzero_root.path().as_os_str().to_os_string(),
+            process_limits,
+            json_limits,
+        )
+        .unwrap_err(),
+        DetectionError::NonZeroExit
+    );
+
+    let (timeout_root, _fixture) = install(FakeNativeMode::Hang, "claude");
+    let timeout_limits = ProcessLimits::new(50, 4_096, 4_096, 8_192).unwrap();
+    assert_eq!(
+        detect_installation(
+            HarnessKind::Claude,
+            timeout_root.path().as_os_str().to_os_string(),
+            timeout_limits,
+            json_limits,
+        )
+        .unwrap_err(),
+        DetectionError::Runtime(ObservationRuntimeError::ProcessDeadlineExceeded)
+    );
 }
 
 #[test]

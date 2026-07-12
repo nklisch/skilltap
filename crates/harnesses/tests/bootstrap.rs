@@ -110,7 +110,7 @@ fn claude_bootstrap_presence_matrix_is_read_first_and_target_isolated() {
     let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
     assert!(matches!(result, HarnessSetupResult::AlreadyPresent { .. }));
     let calls = fs::read_to_string(&log).unwrap();
-    assert!(calls.contains("--version --json"));
+    assert!(calls.lines().any(|line| line == "--version"));
     assert!(calls.contains("plugin marketplace list --json --scope user"));
     assert!(calls.contains("plugin list --json --scope user"));
     assert!(!calls.contains("marketplace add"));
@@ -198,7 +198,7 @@ fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
     let unknown_root = TempRoot::new("harness-bootstrap-version-unknown").unwrap();
     let (configured, log) = write_fake_claude_version(
         &unknown_root,
-        r#"{"version":"99.0.0"}"#,
+        "99.0.0 (Claude Code)",
         r#"{"marketplaces":[]}"#,
         r#"{"plugins":[]}"#,
     );
@@ -208,7 +208,7 @@ fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
         HarnessSetupResult::Unsupported { .. }
     ));
     let calls = fs::read_to_string(log).unwrap();
-    assert!(calls.contains("--version --json"));
+    assert!(calls.lines().any(|line| line == "--version"));
     assert!(!calls.contains("marketplace list"));
     assert!(!calls.contains("marketplace add"));
     assert!(!calls.contains("plugin install"));

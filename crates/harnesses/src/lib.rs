@@ -111,7 +111,7 @@ pub fn detect_configured_installation(
     let output = SystemNativeProcessRunner
         .run(&NativeProcessRequest::new(
             resolved.clone(),
-            [OsString::from("--version"), OsString::from("--json")],
+            version_arguments(harness),
             BTreeMap::new(),
             None,
             process_limits,
@@ -120,18 +120,7 @@ pub fn detect_configured_installation(
     if !output.status().success() {
         return Err(DetectionError::NonZeroExit);
     }
-    // A successful harness process with malformed or over-limit version JSON
-    // is an invalid version contract, not an absent executable.  Preserve the
-    // distinction so bootstrap can report an actionable version attention.
-    let decoded = StrictJson
-        .decode(output.stdout(), json_limits)
-        .map_err(|_| DetectionError::InvalidVersion)?;
-    let version = decoded
-        .value()
-        .get("version")
-        .and_then(serde_json::Value::as_str)
-        .ok_or(DetectionError::InvalidVersion)?;
-    let native_version = NativeVersion::new(version).map_err(|_| DetectionError::InvalidVersion)?;
+    let native_version = decode_native_version(harness, output.stdout(), json_limits)?;
     Ok(HarnessInstallation::new(
         HarnessId::new(harness.id()).map_err(|_| DetectionError::InvalidVersion)?,
         configured,
@@ -140,6 +129,55 @@ pub fn detect_configured_installation(
             native_version,
         },
     ))
+}
+
+fn version_arguments(_harness: HarnessKind) -> Vec<OsString> {
+    vec![OsString::from("--version")]
+}
+
+fn decode_native_version(
+    harness: HarnessKind,
+    stdout: &[u8],
+    json_limits: JsonLimits,
+) -> Result<NativeVersion, DetectionError> {
+    let text = std::str::from_utf8(stdout).map_err(|_| DetectionError::InvalidVersion)?;
+    let text = text.strip_suffix('\n').unwrap_or(text);
+    let text = text.strip_suffix('\r').unwrap_or(text);
+    if text.is_empty() || text.chars().any(char::is_control) {
+        return Err(DetectionError::InvalidVersion);
+    }
+
+    let version = if text.starts_with('{') {
+        let decoded = StrictJson
+            .decode(stdout, json_limits)
+            .map_err(|_| DetectionError::InvalidVersion)?;
+        decoded
+            .value()
+            .as_object()
+            .and_then(|object| object.get("version"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or(DetectionError::InvalidVersion)?
+            .to_owned()
+    } else {
+        match harness {
+            HarnessKind::Codex => text
+                .strip_prefix("codex-cli ")
+                .filter(|version| is_single_version_token(version))
+                .ok_or(DetectionError::InvalidVersion)?
+                .to_owned(),
+            HarnessKind::Claude => text
+                .strip_suffix(" (Claude Code)")
+                .filter(|version| is_single_version_token(version))
+                .ok_or(DetectionError::InvalidVersion)?
+                .to_owned(),
+        }
+    };
+
+    NativeVersion::new(&version).map_err(|_| DetectionError::InvalidVersion)
+}
+
+fn is_single_version_token(version: &str) -> bool {
+    !version.is_empty() && !version.chars().any(char::is_whitespace)
 }
 
 /// Represents an absent or unusable binary without probing resources.

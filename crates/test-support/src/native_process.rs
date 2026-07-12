@@ -22,12 +22,15 @@ pub enum PipeHolder {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FakeNativeMode {
     Exit(u8),
+    CodexVersion,
+    ClaudeVersion,
     VersionKnown,
     VersionUnknown,
     ProbeNarrow,
     ProbeDrift,
     MalformedJson,
     DuplicateJson,
+    ExtraJsonDocument,
     Hang,
     Flood {
         stdout_bytes: u64,
@@ -342,6 +345,12 @@ fn render_script(
     }
     match mode {
         FakeNativeMode::Exit(code) => script.push_str(&format!("exit {code}\n")),
+        FakeNativeMode::CodexVersion => {
+            script.push_str("printf 'codex-cli 0.144.1\\n'\nexit 0\n");
+        }
+        FakeNativeMode::ClaudeVersion => {
+            script.push_str("printf '2.1.201 (Claude Code)\\n'\nexit 0\n");
+        }
         FakeNativeMode::VersionKnown => {
             script.push_str("printf '%s' '{\"version\":\"3.0.0\"}'\nexit 0\n");
         }
@@ -364,6 +373,10 @@ fn render_script(
         FakeNativeMode::DuplicateJson => {
             script
                 .push_str("printf '%s' '{\"version\":\"3.0.0\",\"version\":\"3.0.1\"}'\nexit 0\n");
+        }
+        FakeNativeMode::ExtraJsonDocument => {
+            script
+                .push_str("printf '%s' '{\"version\":\"3.0.0\"}{\"version\":\"3.0.1\"}'\nexit 0\n");
         }
         FakeNativeMode::Hang => {
             let barrier = hang_barrier.expect("hang mode has a readiness barrier");
@@ -525,6 +538,14 @@ mod tests {
     fn detection_payload_modes_are_exact_and_deterministic() {
         for (mode, expected) in [
             (
+                FakeNativeMode::CodexVersion,
+                b"codex-cli 0.144.1\n".as_slice(),
+            ),
+            (
+                FakeNativeMode::ClaudeVersion,
+                b"2.1.201 (Claude Code)\n".as_slice(),
+            ),
+            (
                 FakeNativeMode::VersionKnown,
                 b"{\"version\":\"3.0.0\"}".as_slice(),
             ),
@@ -546,6 +567,10 @@ mod tests {
             (
                 FakeNativeMode::DuplicateJson,
                 b"{\"version\":\"3.0.0\",\"version\":\"3.0.1\"}".as_slice(),
+            ),
+            (
+                FakeNativeMode::ExtraJsonDocument,
+                b"{\"version\":\"3.0.0\"}{\"version\":\"3.0.1\"}".as_slice(),
             ),
         ] {
             let native = FakeNativeProcess::new(mode).unwrap();
