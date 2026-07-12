@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-diagnostics
 kind: story
-stage: implementing
+stage: review
 tags: [content]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: [story-skilltap-plugin-distribution-guidance-core]
@@ -33,3 +33,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: standard; prose follows stable output and update policy contracts.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `plugin/skills/skilltap/references/diagnostics.md`.
+- Tests added: existing offline package validation passes with the complete guidance reference set.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
