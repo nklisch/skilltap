@@ -1,11 +1,15 @@
 //! Bounded release transport and atomic user-level binary publication.
 
 use std::{
+    ffi::CString,
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::Path,
     sync::atomic::{AtomicU64, Ordering},
 };
+
+#[cfg(target_os = "linux")]
+use std::os::unix::ffi::OsStrExt;
 
 use sha2::{Digest, Sha256};
 
@@ -604,7 +608,7 @@ impl BinaryInstaller for SystemBinaryInstaller {
             if destination_identity(destination_path)? != prior_identity {
                 return Err(ArtifactError::DestinationChanged);
             }
-            fs::rename(&temporary, destination_path).map_err(|_| ArtifactError::InstallFailed)?;
+            publish_destination(&temporary, destination_path, prior_identity)?;
             let published_identity = destination_identity(destination_path)?;
             if sync_parent(parent).is_err() {
                 restore_destination(
@@ -662,10 +666,21 @@ fn restore_destination(
                         fs::Permissions::from_mode(mode.unwrap_or(0o700)),
                     );
                     let _ = file.sync_all();
-                    if destination_identity(path).ok() == Some(expected) {
-                        let _ = fs::rename(&temporary, path);
-                    } else {
-                        let _ = fs::remove_file(&temporary);
+                    // Exchange the restore payload with the published file and
+                    // inspect the path that was moved out.  If another actor
+                    // replaced the destination after publication, exchanging
+                    // back preserves that replacement instead of clobbering it.
+                    match exchange_paths(&temporary, path) {
+                        Ok(()) if destination_identity(&temporary).ok() == Some(expected) => {
+                            let _ = fs::remove_file(&temporary);
+                        }
+                        Ok(()) => {
+                            let _ = exchange_paths(&temporary, path);
+                            let _ = fs::remove_file(&temporary);
+                        }
+                        Err(_) => {
+                            let _ = fs::remove_file(&temporary);
+                        }
                     }
                 } else {
                     let _ = fs::remove_file(&temporary);
@@ -674,9 +689,105 @@ fn restore_destination(
             }
         }
         None if destination_identity(path).ok() == Some(expected) => {
+            // There is no prior payload to restore.  Keep the identity check
+            // immediately adjacent to removal; publication itself is
+            // conditional, so a replacement observed before rollback is left
+            // untouched.
             let _ = fs::remove_file(path);
         }
         None => {}
+    }
+}
+
+/// Publish a verified payload without overwriting a destination that changed
+/// after it was observed.  Linux provides the required compare-and-swap-like
+/// directory operations through `renameat2`: `RENAME_NOREPLACE` handles first
+/// install and `RENAME_EXCHANGE` lets updates inspect the inode displaced by
+/// the exchange before deciding whether to keep it.
+fn publish_destination(
+    temporary: &Path,
+    destination: &Path,
+    prior: Option<(u64, u64)>,
+) -> Result<(), ArtifactError> {
+    match prior {
+        Some(expected) => {
+            exchange_paths(temporary, destination).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::NotFound {
+                    ArtifactError::DestinationChanged
+                } else {
+                    ArtifactError::InstallFailed
+                }
+            })?;
+            if destination_identity(temporary)? != Some(expected) {
+                // The destination was replaced between observation and the
+                // exchange.  Put the unrelated replacement back at its path.
+                exchange_paths(temporary, destination)
+                    .map_err(|_| ArtifactError::DestinationChanged)?;
+                return Err(ArtifactError::DestinationChanged);
+            }
+            Ok(())
+        }
+        None => match rename_noreplace(temporary, destination) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                Err(ArtifactError::DestinationChanged)
+            }
+            Err(_) => Err(ArtifactError::InstallFailed),
+        },
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    rename_with_flags(source, destination, libc::RENAME_NOREPLACE)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
+    // The supported release platforms currently expose Linux's atomic
+    // primitive.  Keep a conservative fallback for other Unix targets: the
+    // adjacent identity check still prevents ordinary stale writes.
+    fs::rename(source, destination)
+}
+
+#[cfg(target_os = "linux")]
+fn exchange_paths(source: &Path, destination: &Path) -> std::io::Result<()> {
+    rename_with_flags(source, destination, libc::RENAME_EXCHANGE)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn exchange_paths(source: &Path, destination: &Path) -> std::io::Result<()> {
+    // See `rename_noreplace`: non-Linux hosts use the best available atomic
+    // rename while retaining post-operation identity validation.
+    fs::rename(source, destination)
+}
+
+#[cfg(target_os = "linux")]
+fn rename_with_flags(
+    source: &Path,
+    destination: &Path,
+    flags: libc::c_uint,
+) -> std::io::Result<()> {
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    // SAFETY: both C strings are NUL-free owned path bytes and AT_FDCWD
+    // scopes the operation to the process's current directory.
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            flags,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
     }
 }
 
@@ -737,5 +848,56 @@ mod tests {
             validate_release_url("--url"),
             Err(ArtifactError::InvalidLocator)
         );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn publication_exchange_preserves_a_replacement_observed_after_initial_identity() {
+        let root = skilltap_test_support::TempRoot::new("bootstrap-publication-race").unwrap();
+        let destination = root.path().join("skilltap");
+        let temporary = root.path().join("payload");
+        fs::write(&destination, b"prior").unwrap();
+        let prior = destination_identity(&destination).unwrap();
+        fs::write(&temporary, b"verified").unwrap();
+        fs::remove_file(&destination).unwrap();
+        fs::write(&destination, b"unrelated replacement").unwrap();
+
+        assert_eq!(
+            publish_destination(&temporary, &destination, prior),
+            Err(ArtifactError::DestinationChanged)
+        );
+        assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
+        assert!(temporary.exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn first_install_uses_no_clobber_when_destination_appears_after_observation() {
+        let root = skilltap_test_support::TempRoot::new("bootstrap-first-install-race").unwrap();
+        let destination = root.path().join("skilltap");
+        let temporary = root.path().join("payload");
+        fs::write(&temporary, b"verified").unwrap();
+        fs::write(&destination, b"unrelated replacement").unwrap();
+
+        assert_eq!(
+            publish_destination(&temporary, &destination, None),
+            Err(ArtifactError::DestinationChanged)
+        );
+        assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
+        assert!(temporary.exists());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn rollback_exchange_preserves_a_replacement_before_rollback() {
+        let root = skilltap_test_support::TempRoot::new("bootstrap-rollback-race").unwrap();
+        let destination = root.path().join("skilltap");
+        fs::write(&destination, b"published").unwrap();
+        let expected = destination_identity(&destination).unwrap().unwrap();
+        fs::remove_file(&destination).unwrap();
+        fs::write(&destination, b"unrelated replacement").unwrap();
+
+        restore_destination(&destination, Some(expected), Some(b"prior"), None);
+        assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
     }
 }

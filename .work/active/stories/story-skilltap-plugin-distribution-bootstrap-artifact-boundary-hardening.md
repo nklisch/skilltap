@@ -40,3 +40,11 @@ Acceptance criteria:
 
 Fresh-context review of the hardened bootstrap artifact commits `c880496` and
 `85b56ea` found redirect-chain enforcement and identity-safe rollback gaps.
+
+## Implementation notes
+- Execution capability: highest; release transport and publication are security-sensitive filesystem/process boundaries.
+- Review weight: standard (autopilot caller policy).
+- Files changed: `crates/core/src/runtime/artifact.rs`.
+- Tests added: Linux no-clobber first-install, replacement exchange, and rollback preservation cases.
+- Discrepancies from design: redirect validation was already applied at every bounded hop; publication now uses Linux `renameat2` no-replace/exchange primitives and preserves replacements observed during rollback.
+- Adjacent issues parked: none.
