@@ -1027,6 +1027,20 @@ mod tests {
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
     #[test]
+    fn no_prior_rollback_removes_the_expected_destination_when_unchanged() {
+        let root =
+            skilltap_test_support::TempRoot::new("bootstrap-rollback-no-prior-cleanup").unwrap();
+        let destination = root.path().join("skilltap");
+        fs::write(&destination, b"published").unwrap();
+        let expected = destination_identity(&destination).unwrap().unwrap();
+
+        remove_published_if_identity(&destination, expected);
+        assert!(!destination.exists());
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
     fn no_prior_rollback_preserves_replacement_arriving_after_exchange() {
         let root =
             skilltap_test_support::TempRoot::new("bootstrap-rollback-post-exchange").unwrap();
