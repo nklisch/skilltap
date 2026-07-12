@@ -798,8 +798,15 @@ fn probe_installed_version(
         return None;
     }
     let text = String::from_utf8(output.stdout().to_vec()).ok()?;
-    text.split_whitespace()
-        .find_map(|token| token.trim_start_matches('v').parse().ok())
+    let mut fields = text.split_whitespace();
+    if fields.next() != Some("skilltap") {
+        return None;
+    }
+    let version = fields.next()?;
+    if fields.next().is_some() {
+        return None;
+    }
+    version.trim_start_matches('v').parse().ok()
 }
 
 fn binary_attention(code: &str, detail: &str) -> BinaryBootstrapResult {
