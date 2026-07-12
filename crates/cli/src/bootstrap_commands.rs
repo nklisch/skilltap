@@ -1,6 +1,8 @@
 //! Private command boundary for bootstrap publication and daemon binary policy.
-//
-//! This module owns composition only; runtime ports remain in skilltap-core.
+//!
+//! This module owns bootstrap composition, publication, rollback, and daemon
+//! policy projection; runtime ports remain in skilltap-core.
+
 use super::*;
 pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
     use skilltap_core::domain::{ConfiguredBinary, TargetSelection};

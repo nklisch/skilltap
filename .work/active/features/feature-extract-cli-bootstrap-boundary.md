@@ -1,7 +1,7 @@
 ---
 id: feature-extract-cli-bootstrap-boundary
 kind: feature
-stage: review
+stage: done
 tags: [refactor, infra]
 parent: null
 depends_on: []
@@ -385,3 +385,18 @@ cross only the narrow wrappers.
 - `cargo test -p skilltap --offline`
 - `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
 - `git diff --check`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Feature review, standard weight. The complete bootstrap boundary is
+isolated in a private module, dispatcher and daemon composition use narrow
+wrappers, and the existing publication/rollback fixtures remain colocated.
+Workspace formatting, all offline tests (including CLI, harness, core, and
+integration suites), strict clippy, and diff checks pass. No core artifact,
+installer, harness lifecycle, or output contract changed.
