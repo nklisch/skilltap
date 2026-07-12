@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-installer
 kind: story
-stage: review
+stage: implementing
 tags: [infra, content, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -58,3 +58,38 @@ bootstrap path and record the limitation in the plugin guidance.
 - `install.sh` validates absolute non-symlink destinations, verifies checksums before publication, and invokes the verified Rust bootstrap with a direct fixed argument vector.
 - Unsupported harness setup is accepted as attention (exit 2) while binary/pre-mutation failures remain fatal.
 - `scripts/verify-installer.sh`, `sh -n install.sh`, and the VitePress website build pass; generated `website/public/llms-full.txt` is synchronized.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: the shell installer publishes the downloaded bytes with plain
+`mv` before invoking Rust bootstrap, then accepts any bootstrap exit `2` as
+success (`install.sh:161-186`). A checksum-valid but wrong-version executable,
+an unknown existing binary, or a blocked major upgrade can therefore leave a
+broken/unverified binary while the installer reports installation complete;
+this also bypasses the command's atomic publication and major-version policy.
+The installer must verify the artifact identity before publication, preserve a
+prior binary on failure, and distinguish binary attention from optional
+harness attention (this item)
+
+**Important**: release metadata/version parsing and shell downloads are not
+bounded or host/redirect-attested like the Rust resolver (`install.sh:48-65,
+128-141`), and `VERSION` is not validated as a release tag. The static script
+check has no isolated installer fixture for malformed metadata, checksum
+failure, unsafe destination, missing dependency, or repeat behavior; the
+compiled bootstrap tests do not execute `install.sh`. Add bounded validation
+and an offline shell contract harness (or explicitly constrain the installer
+to a verified handoff) before approval (this item)
+
+**Nits**: `validate_install_dir` checks only the final directory component;
+existing destination symlinks and symlinked parent components should be
+rejected before `mv`.
+
+**Notes**: Standard substrate review at highest implementation capability with
+standard review weight. `sh -n install.sh`, `scripts/verify-installer.sh`, and
+the VitePress build pass, and website/package parity is present. The installer
+does correctly delegate native harness setup through a fixed direct argument
+vector and keeps unsupported harness attention visible, but its pre-bootstrap
+binary publication remains a security and parity gap. Keep the story at
+`stage: implementing` until that boundary is closed.
