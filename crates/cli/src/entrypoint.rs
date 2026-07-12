@@ -361,31 +361,17 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
             )
         })
         .collect::<Vec<_>>();
-    let mut written: Vec<(AbsolutePath, Vec<u8>, Option<Vec<u8>>)> = Vec::new();
-    for (path, contents, previous) in &changed_files {
-        if let Err(error) = filesystem.atomic_write(path, contents) {
-            for (written_path, _, written_previous) in written.iter().rev() {
-                match written_previous {
-                    Some(previous) => {
-                        let _ = filesystem.atomic_write(written_path, previous);
-                    }
-                    None => {
-                        let _ = filesystem.remove(written_path);
-                    }
-                }
-            }
-            return Outcome::new(command, ResultClass::AttentionRequired)
-                .with_summary("changed", false)
-                .with_warning(
-                    Warning::new(
-                        "daemon_definition_write_failed",
-                        "The daemon service definition could not be published atomically; prior files were restored.",
-                    )
-                    .with_context("path", path.as_str())
-                    .with_context("detail", error.to_string()),
-                );
-        }
-        written.push((path.clone(), contents.clone(), previous.clone()));
+    if let Err((path, error)) = publish_daemon_files(&filesystem, &changed_files) {
+        return Outcome::new(command, ResultClass::AttentionRequired)
+            .with_summary("changed", false)
+            .with_warning(
+                Warning::new(
+                    "daemon_definition_write_failed",
+                    "The daemon service definition could not be published atomically; prior files were restored.",
+                )
+                .with_context("path", path.as_str())
+                .with_context("detail", error.to_string()),
+            );
     }
     if run_service_manager(platform, ServiceManagerAction::Enable, &files[0].0).is_err() {
         return Outcome::new(command, ResultClass::AttentionRequired)
@@ -407,6 +393,36 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
                 .with_field("platform", format!("{platform:?}").to_lowercase()),
         )
         .with_summary("changed", !changed_files.is_empty())
+}
+
+type DaemonChangedFile = (AbsolutePath, Vec<u8>, Option<Vec<u8>>);
+
+/// Publish all changed service definitions as one recoverable pair. If a
+/// later definition fails, every earlier write is restored to its prior bytes
+/// (or removed when it did not previously exist).
+fn publish_daemon_files(
+    filesystem: &dyn FileSystem,
+    changed_files: &[DaemonChangedFile],
+) -> Result<(), (AbsolutePath, skilltap_core::runtime::RuntimeError)> {
+    let mut written: Vec<&DaemonChangedFile> = Vec::new();
+    for changed in changed_files {
+        let (path, contents, _previous) = changed;
+        if let Err(error) = filesystem.atomic_write(path, contents) {
+            for (written_path, _, written_previous) in written.iter().rev().map(|entry| *entry) {
+                match written_previous {
+                    Some(previous) => {
+                        let _ = filesystem.atomic_write(written_path, previous);
+                    }
+                    None => {
+                        let _ = filesystem.remove(written_path);
+                    }
+                }
+            }
+            return Err((path.clone(), error));
+        }
+        written.push(changed);
+    }
+    Ok(())
 }
 
 fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {

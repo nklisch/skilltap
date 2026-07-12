@@ -2530,6 +2530,19 @@ fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() 
     );
 
     fs::remove_file(&service).unwrap();
+    fs::write(&service, b"# skilltap-managed-v3\nmalformed definition\n").unwrap();
+    let malformed = run(&machine, &["daemon", "enable", "--json"]);
+    assert_code(&malformed, 2);
+    assert_eq!(
+        json(&malformed)["warnings"][0]["code"],
+        "daemon_definition_conflict"
+    );
+    assert_eq!(
+        fs::read(&service).unwrap(),
+        b"# skilltap-managed-v3\nmalformed definition\n"
+    );
+
+    fs::remove_file(&service).unwrap();
     fs::create_dir(&timer).unwrap();
     let unreadable = run(&machine, &["daemon", "enable", "--json"]);
     assert_code(&unreadable, 2);
@@ -2540,6 +2553,34 @@ fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() 
     );
     assert!(service.is_file() || !service.exists());
     assert!(timer.is_dir());
+
+    fs::remove_dir(&timer).unwrap();
+    let fake_manager_root = machine.home().join("fake-manager-bin");
+    fs::create_dir_all(&fake_manager_root).unwrap();
+    let manager = fake_manager_root.join("systemctl");
+    fs::write(&manager, "#!/bin/sh\nexit 42\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&manager).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&manager, permissions).unwrap();
+    }
+    let manager_failure = machine
+        .run_with_path(
+            &binary(),
+            &["daemon", "enable", "--json"],
+            &fake_manager_root,
+        )
+        .unwrap();
+    assert_code(&manager_failure, 2);
+    let manager_value = json(&manager_failure);
+    assert_eq!(
+        manager_value["warnings"][0]["code"],
+        "daemon_manager_unavailable"
+    );
+    assert!(service.is_file());
+    assert!(timer.is_file());
 }
 
 #[test]

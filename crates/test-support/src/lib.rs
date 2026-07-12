@@ -139,6 +139,26 @@ impl IsolatedMachine {
             .env_remove("CODEX_HOME")
             .output()
     }
+
+    /// Run a compiled command with an explicit isolated executable search
+    /// path. This is used by service lifecycle tests to install deterministic
+    /// fake managers without touching the host PATH.
+    pub fn run_with_path(
+        &self,
+        binary: &Path,
+        arguments: &[&str],
+        search_path: &Path,
+    ) -> io::Result<Output> {
+        Command::new(binary)
+            .args(arguments)
+            .current_dir(self.working_directory())
+            .env("HOME", &self.home)
+            .env("XDG_CONFIG_HOME", &self.configuration_home)
+            .env("PATH", search_path)
+            .env_remove("SKILLTAP_HOME")
+            .env_remove("CODEX_HOME")
+            .output()
+    }
 }
 
 /// Resolves the compiled test binary, honoring an absolute or working-directory-relative override.

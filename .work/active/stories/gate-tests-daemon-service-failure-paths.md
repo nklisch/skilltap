@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -50,8 +50,14 @@ to the compiled-binary suite. It verifies disable is a no-op when nothing is
 owned, unmanaged lookalikes are preserved and reported as conflicts, and
 non-regular definitions are surfaced as unreadable without overwriting them.
 
-Verification: the focused test passes; the full `compiled_binary` integration
-suite passes for this story's coverage.
+Extended the matrix with malformed owned-definition preservation and a fake
+`systemctl` manager that deterministically verifies manager-failure attention
+while retaining both service files. Added a fault-injected publication test
+for pair-write rollback, proving the first service file is restored when the
+second write fails.
+
+Verification: focused compiled and entrypoint unit tests pass; the full
+compiled-binary integration suite passes for this story's coverage.
 
 ## Review findings
 
