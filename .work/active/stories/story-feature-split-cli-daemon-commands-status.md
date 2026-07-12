@@ -1,7 +1,7 @@
 ---
 id: story-feature-split-cli-daemon-commands-status
 kind: story
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: feature-split-cli-daemon-commands
 depends_on:
@@ -56,3 +56,16 @@ manager helper is shared by all three commands. Preserve direct argument
 vectors and result construction exactly; use a mechanical move with no
 deduplication. Revert the final extraction commit to restore the helper block
 and dispatch calls in `entrypoint.rs`.
+
+## Implementation notes
+
+- Execution capability: highest available local implementation context; status
+  projections and bounded service-manager execution form the final shared
+  lifecycle boundary.
+- Review weight: standard (autopilot default).
+- Files changed: crates/cli/src/daemon_commands.rs and
+  crates/cli/src/entrypoint.rs.
+- Tests added: none; all existing daemon status, manager-failure, and
+  idempotence coverage remains unchanged.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.

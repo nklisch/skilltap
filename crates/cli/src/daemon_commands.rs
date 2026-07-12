@@ -1,11 +1,20 @@
-use super::{ServiceManagerAction, repository_composition_error, run_service_manager};
+use std::{collections::BTreeMap, ffi::OsString};
+
+use super::repository_composition_error;
 use crate::{
     ErrorDetail, NextAction, Outcome, OutputEntry, ResultClass, Warning, command::OutputArgs,
 };
 use skilltap_core::{
-    domain::AbsolutePath,
+    domain::{AbsolutePath, ConfiguredBinary, NativeId},
+    runtime::{
+        ExecutableResolutionRequest, ExecutableResolver, NativeProcessRequest, NativeProcessRunner,
+        ProcessLimits, SystemExecutableResolver, SystemNativeProcessRunner,
+    },
     runtime::{FileSystem, PlatformPaths, ProcessEnvironment, SystemFileSystem},
-    storage::{ConfigDocument, ConfigRepository, DocumentState, FileConfigRepository},
+    storage::{
+        ConfigDocument, ConfigRepository, DocumentState, FileConfigRepository, FileStateRepository,
+        StateRepository,
+    },
 };
 
 pub(super) fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outcome {
@@ -263,6 +272,253 @@ pub(super) fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
     Outcome::new(command, ResultClass::Completed)
         .with_resource(OutputEntry::new(root.as_str(), "disabled"))
         .with_summary("changed", changed)
+}
+
+pub(super) fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
+    let command = "daemon status";
+    let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        Ok(paths) => paths,
+        Err(_) => return repository_composition_error(command),
+    };
+    let platform = crate::daemon::platform(&paths);
+    let root = crate::daemon::root(&paths, platform);
+    let names = match platform {
+        skilltap_core::daemon::ServicePlatform::Launchd => {
+            vec![format!("{}.plist", skilltap_core::daemon::SERVICE_LABEL)]
+        }
+        skilltap_core::daemon::ServicePlatform::SystemdUser => vec![
+            skilltap_core::daemon::SYSTEMD_UNIT.to_owned(),
+            skilltap_core::daemon::SYSTEMD_TIMER.to_owned(),
+        ],
+    };
+    let state_record =
+        match FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone())
+            .and_then(|repository| repository.load())
+        {
+            Ok(DocumentState::Present(state)) => state.daemon_run().cloned(),
+            Ok(DocumentState::Missing) => None,
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_warning(Warning::new(
+                        "daemon_state_unavailable",
+                        "The daemon state document could not be loaded safely.",
+                    ))
+                    .with_next_action(NextAction::new(
+                        "repair_daemon_state",
+                        "Repair or remove the malformed skilltap state document before retrying.",
+                    ));
+            }
+        };
+    let mut installed = true;
+    for name in &names {
+        let path = AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap();
+        match SystemFileSystem.read_regular_no_follow(&path) {
+            Ok(Some(contents))
+                if crate::daemon::owns(platform, &contents)
+                    && !crate::daemon::valid(platform, &contents) =>
+            {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "malformed"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_malformed",
+                        "An owned daemon service definition is malformed; inspect it before retrying.",
+                    ));
+            }
+            Ok(Some(contents)) if crate::daemon::owns(platform, &contents) => {}
+            Ok(None) => installed = false,
+            Ok(Some(_)) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "conflict"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_conflict",
+                        "An unmanaged service definition occupies the skilltap path.",
+                    ));
+            }
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "unreadable"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_unreadable",
+                        "The daemon service definition could not be inspected safely.",
+                    ));
+            }
+        }
+    }
+    if !installed {
+        let mut entry = OutputEntry::new(root.as_str(), "disabled");
+        entry = daemon_record_fields(entry, state_record.as_ref());
+        return Outcome::new(command, ResultClass::Completed)
+            .with_resource(entry)
+            .with_next_action(
+                NextAction::new(
+                    "enable_daemon",
+                    "Enable the optional user daemon before expecting automatic updates.",
+                )
+                .with_command("skilltap daemon enable"),
+            );
+    }
+    let manager = run_service_manager(
+        platform,
+        ServiceManagerAction::Status,
+        &AbsolutePath::new(format!("{}/{}", root.as_str(), names[0])).unwrap(),
+    );
+    if manager.is_err() {
+        let entry = daemon_record_fields(
+            OutputEntry::new(root.as_str(), "installed"),
+            state_record.as_ref(),
+        );
+        return Outcome::new(command, ResultClass::AttentionRequired)
+            .with_resource(entry)
+            .with_warning(Warning::new(
+                "daemon_manager_unavailable",
+                "The owned daemon definition exists, but manager state could not be confirmed.",
+            ))
+            .with_next_action(
+                NextAction::new(
+                    "retry_daemon_enable",
+                    "Retry daemon enable after checking the user service manager.",
+                )
+                .with_command("skilltap daemon enable"),
+            );
+    }
+    let status = state_record.as_ref().map_or("enabled_never_run", |record| {
+        daemon_result_label(record.result())
+    });
+    let entry = daemon_record_fields(
+        OutputEntry::new(root.as_str(), status),
+        state_record.as_ref(),
+    );
+    let mut outcome = Outcome::new(command, ResultClass::Completed).with_resource(entry);
+    if let Some(record) = state_record.as_ref()
+        && record.result() != skilltap_core::storage::DaemonRunResult::Completed
+    {
+        outcome = outcome.with_next_action(daemon_recovery_action(record.result()));
+    } else if state_record.is_none() {
+        outcome = outcome.with_next_action(
+            NextAction::new(
+                "run_daemon_cycle",
+                "Run one bounded daemon cycle to establish update health.",
+            )
+            .with_command("skilltap daemon run"),
+        );
+    }
+    outcome
+}
+
+fn daemon_result_label(result: skilltap_core::storage::DaemonRunResult) -> &'static str {
+    match result {
+        skilltap_core::storage::DaemonRunResult::Completed => "completed",
+        skilltap_core::storage::DaemonRunResult::Pending => "pending",
+        skilltap_core::storage::DaemonRunResult::Contended => "contended",
+        skilltap_core::storage::DaemonRunResult::Failed => "failed",
+    }
+}
+
+fn daemon_record_fields(
+    mut entry: OutputEntry,
+    record: Option<&skilltap_core::storage::DaemonRunRecord>,
+) -> OutputEntry {
+    let Some(record) = record else { return entry };
+    entry = entry
+        .with_field("last_run_seconds", record.at().seconds())
+        .with_field("run_result", daemon_result_label(record.result()))
+        .with_field("safe_operations", record.safe_operations())
+        .with_field("pending_operations", record.pending_operations());
+    if let Some(code) = record.failure_code() {
+        entry = entry.with_field("failure", code.as_str());
+    }
+    entry
+}
+
+fn daemon_recovery_action(result: skilltap_core::storage::DaemonRunResult) -> NextAction {
+    match result {
+        skilltap_core::storage::DaemonRunResult::Pending => NextAction::new(
+            "review_pending_updates",
+            "Review pending updates and their decisions before foreground application.",
+        )
+        .with_command("skilltap status --all-scopes"),
+        skilltap_core::storage::DaemonRunResult::Contended => NextAction::new(
+            "retry_daemon_cycle",
+            "Retry one bounded daemon cycle after the configuration lock is available.",
+        )
+        .with_command("skilltap daemon run"),
+        skilltap_core::storage::DaemonRunResult::Failed => NextAction::new(
+            "inspect_daemon_status",
+            "Inspect daemon status and retry only after resolving the reported failure.",
+        )
+        .with_command("skilltap daemon status"),
+        skilltap_core::storage::DaemonRunResult::Completed => NextAction::new(
+            "run_daemon_cycle",
+            "Run one bounded daemon cycle when another update check is needed.",
+        )
+        .with_command("skilltap daemon run"),
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ServiceManagerAction {
+    Enable,
+    Disable,
+    Status,
+}
+
+fn run_service_manager(
+    platform: skilltap_core::daemon::ServicePlatform,
+    action: ServiceManagerAction,
+    definition: &AbsolutePath,
+) -> Result<(), ()> {
+    let (binary, arguments) = match (platform, action) {
+        (skilltap_core::daemon::ServicePlatform::Launchd, ServiceManagerAction::Enable) => {
+            ("launchctl", vec!["load", "-w", definition.as_str()])
+        }
+        (skilltap_core::daemon::ServicePlatform::Launchd, ServiceManagerAction::Disable) => {
+            ("launchctl", vec!["unload", "-w", definition.as_str()])
+        }
+        (skilltap_core::daemon::ServicePlatform::Launchd, ServiceManagerAction::Status) => (
+            "launchctl",
+            vec!["list", skilltap_core::daemon::SERVICE_LABEL],
+        ),
+        (skilltap_core::daemon::ServicePlatform::SystemdUser, ServiceManagerAction::Enable) => (
+            "systemctl",
+            vec![
+                "--user",
+                "enable",
+                "--now",
+                skilltap_core::daemon::SYSTEMD_TIMER,
+            ],
+        ),
+        (skilltap_core::daemon::ServicePlatform::SystemdUser, ServiceManagerAction::Disable) => (
+            "systemctl",
+            vec![
+                "--user",
+                "disable",
+                "--now",
+                skilltap_core::daemon::SYSTEMD_TIMER,
+            ],
+        ),
+        (skilltap_core::daemon::ServicePlatform::SystemdUser, ServiceManagerAction::Status) => (
+            "systemctl",
+            vec!["--user", "is-enabled", skilltap_core::daemon::SYSTEMD_TIMER],
+        ),
+    };
+    let configured =
+        ConfiguredBinary::path_lookup(NativeId::new(binary).map_err(|_| ())?).map_err(|_| ())?;
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(
+            configured,
+            std::env::var_os("PATH"),
+        ))
+        .map_err(|_| ())?;
+    let limits = ProcessLimits::new(5_000, 64 * 1024, 64 * 1024, 128 * 1024).map_err(|_| ())?;
+    let request = NativeProcessRequest::new(
+        executable,
+        arguments.into_iter().map(OsString::from),
+        BTreeMap::new(),
+        None,
+        limits,
+    );
+    let output = SystemNativeProcessRunner.run(&request).map_err(|_| ())?;
+    output.status().success().then_some(()).ok_or(())
 }
 
 #[cfg(test)]
