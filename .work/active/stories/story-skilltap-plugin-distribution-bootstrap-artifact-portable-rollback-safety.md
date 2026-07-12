@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-portable-rollback-safety
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -103,3 +103,20 @@ and leaves the rollback acceptance unmet. Keep the story at
 `stage: implementing` until an atomic no-replace move-to-private-marker
 rollback (or an explicitly documented equivalent) removes only the expected
 inode while preserving replacements.
+
+## Review (2026-07-12, atomic cleanup)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review of `053cd1a` plus the cleanup regression
+test in `ac6dfbb` at highest implementation capability. No-prior rollback now
+atomically moves the observed destination to a private no-replace marker,
+removes only the expected identity, and restores unrelated replacements
+without unlinking a raced pathname. macOS uses `renameatx_np(RENAME_EXCL)`
+instead of the prior hard-link/unlink fallback; unsupported platforms remain
+fail-closed. Redirect-hop, publication, replacement, no-prior cleanup, and
+bootstrap integration tests pass. Advancing the story to `stage: done`.
