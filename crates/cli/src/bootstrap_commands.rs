@@ -618,6 +618,12 @@ enum RollbackResult {
     Failed,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct BinaryIdentity {
+    location: (u64, u64),
+    digest: [u8; 32],
+}
+
 /// Restore a prior executable through an atomic exchange.  A stat-then-rename
 /// sequence is not sufficient here: another process can replace the path
 /// between those operations and be overwritten by recovery.  Exchange lets us
@@ -626,7 +632,7 @@ enum RollbackResult {
 #[cfg(unix)]
 fn restore_previous_binary(
     path: &AbsolutePath,
-    expected: Option<(u64, u64)>,
+    expected: Option<BinaryIdentity>,
     bytes: &[u8],
     mode: Option<u32>,
 ) -> RollbackResult {
@@ -636,7 +642,7 @@ fn restore_previous_binary(
 #[cfg(unix)]
 fn restore_previous_binary_with_hook(
     path: &AbsolutePath,
-    expected: Option<(u64, u64)>,
+    expected: Option<BinaryIdentity>,
     bytes: &[u8],
     mode: Option<u32>,
     after_exchange: impl FnOnce(),
@@ -710,7 +716,7 @@ fn restore_previous_binary_with_hook(
 #[cfg(not(unix))]
 fn restore_previous_binary(
     _path: &AbsolutePath,
-    _expected: Option<(u64, u64)>,
+    _expected: Option<BinaryIdentity>,
     _bytes: &[u8],
 ) -> RollbackResult {
     // This publication boundary has no atomic no-replace/exchange primitive
@@ -719,14 +725,17 @@ fn restore_previous_binary(
 }
 
 #[cfg(unix)]
-fn remove_published_binary(path: &AbsolutePath, expected: Option<(u64, u64)>) -> RollbackResult {
+fn remove_published_binary(
+    path: &AbsolutePath,
+    expected: Option<BinaryIdentity>,
+) -> RollbackResult {
     remove_published_binary_with_hooks(path, expected, || {}, |path| std::fs::remove_file(path))
 }
 
 #[cfg(unix)]
 fn remove_published_binary_with_hooks(
     path: &AbsolutePath,
-    expected: Option<(u64, u64)>,
+    expected: Option<BinaryIdentity>,
     after_rename: impl FnOnce(),
     remove_file: impl Fn(&std::path::Path) -> std::io::Result<()>,
 ) -> RollbackResult {
@@ -773,18 +782,32 @@ fn remove_published_binary_with_hooks(
 }
 
 #[cfg(not(unix))]
-fn remove_published_binary(_path: &AbsolutePath, _expected: Option<(u64, u64)>) -> RollbackResult {
+fn remove_published_binary(
+    _path: &AbsolutePath,
+    _expected: Option<BinaryIdentity>,
+) -> RollbackResult {
     RollbackResult::Failed
 }
 
 #[cfg(unix)]
-fn binary_file_identity_absolute(path: &std::path::Path) -> Option<(u64, u64)> {
+fn binary_file_identity_absolute(path: &std::path::Path) -> Option<BinaryIdentity> {
+    binary_file_identity_path(path)
+}
+
+fn binary_file_identity_path(path: &std::path::Path) -> Option<BinaryIdentity> {
     let metadata = std::fs::symlink_metadata(path).ok()?;
     if !metadata.file_type().is_file() {
         return None;
     }
-    use std::os::unix::fs::MetadataExt;
-    Some((metadata.dev(), metadata.ino()))
+    let digest = binary_file_digest(path)?;
+    #[cfg(unix)]
+    let location = {
+        use std::os::unix::fs::MetadataExt;
+        (metadata.dev(), metadata.ino())
+    };
+    #[cfg(not(unix))]
+    let location = (0, metadata.len());
+    Some(BinaryIdentity { location, digest })
 }
 
 #[cfg(unix)]
@@ -867,19 +890,23 @@ fn exchange_paths_cli(
     }
 }
 
-fn binary_file_identity(path: &AbsolutePath) -> Option<(u64, u64)> {
-    let metadata = std::fs::symlink_metadata(path.as_str()).ok()?;
-    if !metadata.file_type().is_file() {
-        return None;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        Some((metadata.dev(), metadata.ino()))
-    }
-    #[cfg(not(unix))]
-    {
-        Some((0, metadata.len()))
+fn binary_file_identity(path: &AbsolutePath) -> Option<BinaryIdentity> {
+    binary_file_identity_path(std::path::Path::new(path.as_str()))
+}
+
+fn binary_file_digest(path: &std::path::Path) -> Option<[u8; 32]> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path).ok()?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).ok()?;
+        if read == 0 {
+            return Some(digest.finalize().into());
+        }
+        digest.update(&buffer[..read]);
     }
 }
 

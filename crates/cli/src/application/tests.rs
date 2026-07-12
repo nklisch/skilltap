@@ -172,7 +172,11 @@ fn relative_project_is_resolved_against_the_working_directory() {
     assert_eq!(
         outcome.scope,
         Some(OutputScope::Project {
-            path: project.to_str().unwrap().to_owned(),
+            path: fs::canonicalize(&project)
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned(),
         })
     );
 }

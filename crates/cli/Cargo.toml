@@ -12,10 +12,10 @@ serde_json.workspace = true
 skilltap-core.workspace = true
 skilltap-harnesses.workspace = true
 libc.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 skilltap-test-support.workspace = true
-sha2.workspace = true
 
 [[bin]]
 name = "skilltap"
