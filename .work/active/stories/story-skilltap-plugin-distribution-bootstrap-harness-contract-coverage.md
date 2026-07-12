@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness-contract-coverage
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -74,3 +74,21 @@ operation-specific guard itself is fail-closed for known profiles, but no test
 can currently withdraw either global capability; the malformed-version mapping
 remains a production diagnostic defect. Keep the item at `stage: implementing`
 until the missing acceptance evidence and truthful version result are addressed.
+
+## Review (2026-07-12, current contract)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review of `dc8fd63` at highest implementation
+capability with standard review weight. The adapter now maps malformed version
+JSON to `InvalidVersion`, narrows unknown versions to observe-only, and the
+fake-binary suite proves capability narrowing, target isolation, no cache
+writes, exact Claude user-scoped vectors/canonical source/qualified identity,
+presence and malformed-list handling, Codex unsupported behavior, and
+replacement blocking. The two pre-existing detection tests were stale after
+the intentional diagnostic correction and were aligned in `23ca090`. Full
+`skilltap-harnesses` tests pass; advancing this follow-up to `stage: done`.
