@@ -1,7 +1,7 @@
 ---
 id: story-feature-split-cli-daemon-commands-module
 kind: story
-stage: review
+stage: done
 tags: [refactor, infra]
 parent: feature-split-cli-daemon-commands
 depends_on: []
@@ -64,3 +64,17 @@ state or service files are changed by this refactor.
   daemon command module; assertions are unchanged.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: Acceptance text names the legacy package selector skilltap-cli;
+the actual package is skilltap.
+
+**Notes**: Substrate review, fresh-context standard pass. Mechanical private
+module extraction preserves enable dispatch, publication ordering, rollback,
+and output behavior. cargo test -p skilltap --offline, cargo fmt --all
+-- --check, workspace clippy with warnings denied, and git diff --check pass.
