@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-dead-observation-scope-helper
 kind: story
-stage: review
+stage: done
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -49,3 +49,17 @@ no separate design expansion is required.
 - Verification passed: `cargo test -p skilltap-core --offline` (292 unit tests,
   10 integration/doc tests), `cargo fmt --all -- --check`, and
   `cargo check -p skilltap-core --offline`.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review, fast lane for a bounded behavior-preserving
+cleanup. The helper and dead-code suppression are absent, the retained
+`ObservationKey` import remains used by tests, and the recorded core tests,
+format check, and package check are green. No foundation or public-contract
+surface is changed.
