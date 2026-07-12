@@ -26,7 +26,11 @@ use skilltap_core::{
         ForegroundUpdateRequest, plan_foreground_updates,
         select_foreground_updates_with_acknowledgment,
     },
-    instructions::fingerprint_contents,
+    instructions::{
+        InstructionBridgeMode as CoreInstructionBridgeMode, InstructionBridgeRepresentation,
+        InstructionBridgeSpec, InstructionHealth, ObservedInstructionBridge, classify_bridge,
+        fingerprint_contents, relative_symlink_target, resolve_symlink_target,
+    },
     lifecycle_operation::native_operation,
     runtime::{
         DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
@@ -479,51 +483,80 @@ fn instruction_desired_resource(resource: ResourceKey, target: HarnessId) -> Des
 
 fn instruction_bridge_status(
     filesystem: &dyn FileSystem,
+    canonical: &AbsolutePath,
     bridge: &AbsolutePath,
     scope: &Scope,
     mode: ClaudeInstructionMode,
 ) -> &'static str {
-    let (symlink_target, import_contents) = match scope {
-        Scope::Global => ("../AGENTS.md", b"@~/AGENTS.md\n".as_slice()),
-        Scope::Project(_) => ("AGENTS.md", b"@AGENTS.md\n".as_slice()),
+    let import_contents = match scope {
+        Scope::Global => b"@~/AGENTS.md\n".as_slice(),
+        Scope::Project(_) => b"@AGENTS.md\n".as_slice(),
     };
-    instruction_bridge_status_with_target(filesystem, bridge, mode, symlink_target, import_contents)
+    instruction_bridge_status_with_target(filesystem, canonical, bridge, mode, import_contents)
 }
 
 fn instruction_bridge_status_with_target(
     filesystem: &dyn FileSystem,
+    canonical: &AbsolutePath,
     bridge: &AbsolutePath,
     mode: ClaudeInstructionMode,
-    symlink_target: &str,
     import_contents: &[u8],
 ) -> &'static str {
+    let representation = match mode {
+        ClaudeInstructionMode::Symlink => match relative_symlink_target(bridge, canonical) {
+            Ok(target) => InstructionBridgeRepresentation::Symlink(target),
+            Err(_) => return "broken",
+        },
+        ClaudeInstructionMode::Import => {
+            InstructionBridgeRepresentation::Import(import_contents.to_vec())
+        }
+    };
+    let spec = InstructionBridgeSpec {
+        canonical: canonical.clone(),
+        bridge: bridge.clone(),
+        mode: match mode {
+            ClaudeInstructionMode::Symlink => CoreInstructionBridgeMode::Symlink,
+            ClaudeInstructionMode::Import => CoreInstructionBridgeMode::Import,
+        },
+        representation,
+    };
     let metadata = match filesystem.inspect(bridge) {
         Ok(metadata) => metadata,
         Err(_) => return "unreadable",
     };
-    match metadata.kind() {
-        FileKind::Missing => "missing",
+    let observed = match metadata.kind() {
+        FileKind::Missing => ObservedInstructionBridge::Missing,
         FileKind::Symlink => {
-            if mode == ClaudeInstructionMode::Symlink
-                && metadata
-                    .link_target()
-                    .is_some_and(|target| target == std::path::Path::new(symlink_target))
-            {
-                "managed"
-            } else {
-                "divergent"
+            let effective_target = metadata
+                .link_target()
+                .and_then(|target| resolve_symlink_target(bridge, target).ok());
+            let target_kind = effective_target
+                .as_ref()
+                .and_then(|target| filesystem.inspect(target).ok())
+                .map(|target| target.kind());
+            ObservedInstructionBridge::Symlink {
+                effective_target,
+                target_exists: target_kind.is_some_and(|kind| kind != FileKind::Missing),
+                target_is_regular: target_kind == Some(FileKind::RegularFile),
             }
         }
         FileKind::RegularFile => {
-            if mode == ClaudeInstructionMode::Import
-                && filesystem.read(bridge).ok().as_deref() == Some(import_contents)
-            {
-                "managed"
-            } else {
-                "divergent"
+            let Some(contents) = filesystem.read_regular_no_follow(bridge).ok().flatten() else {
+                return "unreadable";
+            };
+            ObservedInstructionBridge::RegularFile {
+                fingerprint: fingerprint_contents(&contents),
             }
         }
-        _ => "broken",
+        FileKind::Directory | FileKind::Other => ObservedInstructionBridge::Other,
+    };
+    match classify_bridge(&spec, &observed) {
+        InstructionHealth::Missing => "missing",
+        InstructionHealth::Managed => "managed",
+        InstructionHealth::Divergent => "divergent",
+        InstructionHealth::Broken => "broken",
+        InstructionHealth::Duplicate => "duplicate",
+        InstructionHealth::Unmanaged => "unmanaged",
     }
 }
 

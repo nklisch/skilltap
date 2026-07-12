@@ -73,7 +73,13 @@ impl StatusApplication<'_> {
             }
             for (target, bridge) in bridges {
                 path_count += 1;
-                let status = instruction_bridge_status(&filesystem, &bridge, concrete_scope, mode);
+                let status = instruction_bridge_status(
+                    &filesystem,
+                    &canonical,
+                    &bridge,
+                    concrete_scope,
+                    mode,
+                );
                 outcome = outcome.with_resource(
                     OutputEntry::new(
                         instruction_resource_key(concrete_scope, "bridge", target.as_str())
@@ -116,9 +122,9 @@ impl StatusApplication<'_> {
                     path_count += 1;
                     let nested_status = instruction_bridge_status_with_target(
                         &filesystem,
+                        &canonical,
                         &nested,
                         mode,
-                        "../AGENTS.md",
                         b"@../AGENTS.md\n",
                     );
                     outcome = outcome.with_resource(
@@ -255,12 +261,6 @@ impl StatusApplication<'_> {
         } else {
             let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
                 && path.as_str().ends_with("/.claude/CLAUDE.md");
-            let expected_target =
-                if nested_project_bridge || matches!(concrete_scope, Scope::Global) {
-                    "../AGENTS.md"
-                } else {
-                    "AGENTS.md"
-                };
             let expected_bytes =
                 if documents.config.instructions().claude_mode == ClaudeInstructionMode::Import {
                     if matches!(concrete_scope, Scope::Global) {
@@ -275,9 +275,9 @@ impl StatusApplication<'_> {
                 };
             instruction_bridge_status_with_target(
                 &filesystem,
+                &canonical,
                 &path,
                 documents.config.instructions().claude_mode,
-                expected_target,
                 expected_bytes,
             )
         };
@@ -654,17 +654,20 @@ impl StatusApplication<'_> {
             for (target, bridge) in bridges {
                 let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
                     && bridge.as_str().ends_with("/.claude/CLAUDE.md");
-                let expected_symlink = RelativeSymlinkTarget::new(
-                    if nested_project_bridge || matches!(concrete_scope, Scope::Global) {
-                        "../AGENTS.md"
-                    } else {
-                        "AGENTS.md"
-                    },
-                );
+                let expected_symlink = relative_symlink_target(&bridge, &canonical);
                 let (write, expected_bytes) = match mode {
                     ClaudeInstructionMode::Symlink => (
                         InstructionWrite::Symlink {
-                            target: expected_symlink.clone().expect("static link target valid"),
+                            target: match expected_symlink.clone() {
+                                Ok(target) => target,
+                                Err(_) => {
+                                    outcome.result = ResultClass::Invalid;
+                                    return outcome.with_error(ErrorDetail::new(
+                                        "instruction_bridge_path_invalid",
+                                        "The instruction bridge could not be related safely to the canonical AGENTS.md path.",
+                                    ));
+                                }
+                            },
                         },
                         Vec::new(),
                     ),
@@ -686,13 +689,9 @@ impl StatusApplication<'_> {
                 };
                 let bridge_health = match instruction_bridge_status_with_target(
                     &filesystem,
+                    &canonical,
                     &bridge,
                     mode,
-                    if nested_project_bridge || matches!(concrete_scope, Scope::Global) {
-                        "../AGENTS.md"
-                    } else {
-                        "AGENTS.md"
-                    },
                     &expected_bytes,
                 ) {
                     "missing" => InstructionBridgeHealth::Missing,
@@ -748,23 +747,25 @@ impl StatusApplication<'_> {
                     ));
                     continue;
                 }
+                let bridge_kind = filesystem
+                    .inspect(&bridge)
+                    .ok()
+                    .map(|metadata| metadata.kind());
                 if bridge_health == InstructionBridgeHealth::Conflict {
                     let repairable = repair
                         && acknowledged
-                        && filesystem
-                            .inspect(&bridge)
-                            .map(|metadata| metadata.kind() == FileKind::RegularFile)
-                            .unwrap_or(false);
+                        && matches!(bridge_kind, Some(FileKind::RegularFile | FileKind::Symlink));
                     if repairable {
-                        // The repair operation below creates a recoverable
-                        // backup before removing the divergent regular file.
+                        // Regular files are backed up before replacement.
+                        // Symlinks are themselves the conflicting entry and
+                        // are removed without following their target.
                     } else {
                         outcome.result = ResultClass::AttentionRequired;
                         outcome = outcome.with_warning(
                             Warning::new(
                                 "instruction_bridge_conflict",
                                 if repair {
-                                    "The bridge requires --yes and must be a divergent regular file before repair."
+                                    "The bridge requires --yes and must be a divergent regular file or symlink before repair."
                                 } else {
                                     "The bridge contains existing content; use instructions repair with --yes."
                                 },
@@ -781,7 +782,11 @@ impl StatusApplication<'_> {
                     outcome = outcome.with_warning(
                         Warning::new(
                             "instruction_bridge_repair",
-                            "The divergent instruction bridge will be backed up before replacement.",
+                            if bridge_kind == Some(FileKind::RegularFile) {
+                                "The divergent instruction bridge will be backed up before replacement."
+                            } else {
+                                "The divergent instruction symlink will be replaced without following its target."
+                            },
                         )
                         .with_context("target", target.as_str()),
                     );
@@ -820,7 +825,8 @@ impl StatusApplication<'_> {
                         path: bridge.clone(),
                         write,
                         action: operation_action,
-                        backup: repair_operation.then(|| instruction_backup_path(&paths, &bridge)),
+                        backup: (repair_operation && bridge_kind == Some(FileKind::RegularFile))
+                            .then(|| instruction_backup_path(&paths, &bridge)),
                     },
                 );
             }

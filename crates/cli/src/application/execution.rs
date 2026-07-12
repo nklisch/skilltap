@@ -490,6 +490,18 @@ impl ExecutionPort for InstructionPort<'_> {
                     "The existing instruction bridge could not be replaced safely.",
                 )
             })?;
+        } else if entry.action == OperationAction::InstructionRepair
+            && self
+                .filesystem
+                .inspect(&entry.path)
+                .map(|metadata| metadata.kind() == FileKind::Symlink)
+                .unwrap_or(false)
+        {
+            self.filesystem.remove(&entry.path).map_err(|_| {
+                instruction_apply_failure(
+                    "The divergent instruction symlink could not be replaced safely.",
+                )
+            })?;
         }
         match &entry.write {
             InstructionWrite::Canonical => {

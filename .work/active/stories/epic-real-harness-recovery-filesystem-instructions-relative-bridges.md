@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-relative-bridges
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -35,3 +35,25 @@ classifier.
   repairable, never managed.
 - Unit and compiled-binary coverage uses only isolated roots.
 
+## Implementation notes
+
+- Execution capability: strongest available; this is a security-sensitive
+  filesystem identity change shared by setup, status, plan, repair, and sync.
+- Review weight: standard, inherited from the autopilot caller.
+- Files changed: `crates/core/src/instructions.rs`,
+  `crates/cli/src/application.rs`,
+  `crates/cli/src/application/instructions.rs`,
+  `crates/cli/src/application/execution.rs`, and
+  `crates/cli/tests/instruction_bridges.rs`.
+- Tests added: core unit coverage for arbitrary relative computation, lexical
+  observation, root escape rejection, and exact live regular-target health;
+  compiled-binary coverage for a sibling custom `CODEX_HOME`, the historical
+  fixed-depth wrong link, acknowledged symlink repair, and absolute-link
+  rejection in an isolated machine.
+- Discrepancies from design: the validated `RelativeSymlinkTarget` remains
+  exported by the runtime filesystem module for workspace compatibility; the
+  single bridge specification and classifier live in core instructions and
+  are consumed by every CLI instruction path. Divergent symlinks are
+  repairable without backup because removing the link itself cannot follow or
+  alter its target; divergent regular files retain recoverable backups.
+- Adjacent issues parked: none.
