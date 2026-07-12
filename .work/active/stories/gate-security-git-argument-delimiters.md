@@ -1,7 +1,7 @@
 ---
 id: gate-security-git-argument-delimiters
 kind: story
-stage: drafting
+stage: implementing
 tags: [security]
 parent: null
 depends_on: []
@@ -37,3 +37,8 @@ not reject option-like values beginning with `-`.
 
 Use `--` delimiters wherever supported, reject option-like locators and
 revisions at the input boundary, and add adversarial direct-argv tests.
+
+## Autopilot implementation note
+
+The remediation and affected boundaries are explicit. Preserve native
+argument-vector execution and add validation/tests in the named adapters.
