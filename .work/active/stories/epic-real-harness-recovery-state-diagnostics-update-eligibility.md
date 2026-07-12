@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-update-eligibility
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on: []
@@ -30,3 +30,19 @@ as available updates.
 - Local instructions and local-path skills do not create phantom updates.
 - Target-specific revision disagreement yields exact entries and identical
   plain/JSON summary counts.
+
+## Implementation
+
+- Added `UpdateDecision::is_actionable_available` as the single summary
+  predicate: only safe and decision-required changed revisions count.
+- Status retains blocked resolution, drift, and policy entries and their
+  warnings, but no longer inflates `available_updates` for them.
+- Disabled, unchanged, local-path, and instruction candidates remain zero-count
+  because their decisions are no-update or blocked.
+
+## Verification
+
+- Core coverage exercises every safety class plus unresolved and disabled
+  candidates.
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`

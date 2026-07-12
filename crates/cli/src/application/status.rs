@@ -1110,7 +1110,7 @@ fn status_update_projection(
         }
         let candidate = candidate_for(resource, &request, &resolved);
         let decision = classify_update_with_mode(&candidate, update_mode);
-        if decision.safety != UpdateSafety::NoUpdate {
+        if decision.is_actionable_available() {
             available_updates += 1;
         }
         entries.push(update_projection_entry(resource, &candidate, decision));

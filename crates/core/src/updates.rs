@@ -258,6 +258,16 @@ impl UpdateDecision {
     const fn new(safety: UpdateSafety, reason: Option<UpdateDecisionReason>) -> Self {
         Self { safety, reason }
     }
+
+    /// Whether this decision represents a resolved changed revision that a
+    /// foreground operator can act on. Blocked diagnostics stay visible but
+    /// are not advertised as available updates.
+    pub const fn is_actionable_available(self) -> bool {
+        matches!(
+            self.safety,
+            UpdateSafety::Safe | UpdateSafety::NeedsDecision
+        )
+    }
 }
 
 pub fn classify_update(candidate: &UpdateCandidate) -> UpdateSafety {
@@ -403,6 +413,35 @@ mod tests {
         unresolved.available_revision = None;
         unresolved.resolution_error = Some(ResolutionError::UnreachableSource);
         assert_eq!(classify_update(&unresolved), UpdateSafety::Blocked);
+    }
+
+    #[test]
+    fn only_safe_and_decision_required_updates_are_actionable_available() {
+        for (safety, expected) in [
+            (UpdateSafety::NoUpdate, false),
+            (UpdateSafety::Safe, true),
+            (UpdateSafety::NeedsDecision, true),
+            (UpdateSafety::Blocked, false),
+        ] {
+            assert_eq!(
+                UpdateDecision::new(safety, None).is_actionable_available(),
+                expected
+            );
+        }
+
+        let mut unresolved = candidate();
+        unresolved.available_revision = None;
+        unresolved.resolution_error = Some(ResolutionError::UnreachableSource);
+        assert!(
+            !classify_update_with_mode(&unresolved, UpdateMode::ApplySafe)
+                .is_actionable_available()
+        );
+
+        let mut disabled = candidate();
+        disabled.intent = UpdateIntent::Disabled;
+        assert!(
+            !classify_update_with_mode(&disabled, UpdateMode::ApplySafe).is_actionable_available()
+        );
     }
 
     #[test]
