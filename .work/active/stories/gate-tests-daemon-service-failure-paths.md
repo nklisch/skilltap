@@ -42,3 +42,13 @@ Daemon unit tests and isolated compiled CLI tests.
 
 The failure matrix and isolated fixture strategy are fully specified; proceed
 directly to implementation and verification without a separate design pass.
+
+## Implementation Notes
+
+Added `daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions`
+to the compiled-binary suite. It verifies disable is a no-op when nothing is
+owned, unmanaged lookalikes are preserved and reported as conflicts, and
+non-regular definitions are surfaced as unreadable without overwriting them.
+
+Verification: the focused test passes; the full `compiled_binary` integration
+suite passes for this story's coverage.
