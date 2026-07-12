@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-instruction-repair-nested-plan
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: null
 depends_on: [story-reconciliation-instruction-repair]
@@ -39,3 +39,18 @@ contract.
 The existing setup regression `instruction_setup_preserves_existing_nested_project_claude_bridge`
 demonstrates the supported state. `execute_instruction_reconciliation_preview`
 currently selects only the root project bridge and has no nested fallback.
+
+## Implementation
+
+Implemented in `1f5f1de`:
+
+- Added shared preview location resolution that recognizes a nested-only
+  project Claude bridge when the root `CLAUDE.md` is absent, matching setup's
+  preservation policy while retaining the stable bridge resource identity.
+- Added isolated compiled coverage for both symlink and import modes. The
+  coverage verifies setup preserves the nested bridge, plan reports
+  `no_change` with the nested path, sync performs no mutation, and repeated
+  sync remains idempotent.
+
+Verification: `cargo fmt --all` and the focused compiled test
+`reconciliation_plan_and_sync_preserve_nested_project_claude_bridge` passed.
