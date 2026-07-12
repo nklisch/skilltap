@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-instruction-repair
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: null
 depends_on: []
@@ -34,3 +34,21 @@ instruction repair.
 
 This is a final-review finding promoted directly to an implementation story;
 the foundation instruction-reconciliation contract remains authoritative.
+
+Implemented in `4369a0a`:
+
+- `plan` now inspects canonical and harness bridge paths and reports
+  `no_change`, `repair`, or blocked conflict operations from fresh filesystem
+  state.
+- `sync` delegates instruction resources through the existing setup/repair
+  execution journal with a target-filtered adapter, preserving canonical
+  inventory records when reconciling a different selected harness.
+- `--yes` is required for divergent bridge replacement and duplicate cleanup;
+  missing managed bridges remain safely repairable without acknowledgment.
+- Compiled coverage exercises drift planning, blocked sync, acknowledged
+  repair, repeat no-change, global target isolation, and project/Claude scope
+  selection.
+
+Verification: `cargo fmt --all`, focused compiled instruction/reconciliation
+tests, `cargo clippy --workspace --all-targets --offline -- -D warnings`, and
+the full workspace test suite passed.
