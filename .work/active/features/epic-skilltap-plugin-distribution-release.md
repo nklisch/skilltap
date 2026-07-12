@@ -22,6 +22,13 @@ source identity. CI should validate native package shape, help/bootstrap
 contracts, and release inputs before publication, while the website, install
 script, and Homebrew instructions describe the same path.
 
+The website's plugin marketplace instructions and the one-line online
+installer are equal first-class installation methods. The installer detects
+installed Claude Code and Codex binaries and invokes the same bootstrap flow
+to install or repair the skilltap resources they can load. Release metadata
+also drives the opt-out/latest-compatible binary update lifecycle, with major
+updates requiring explicit opt-in.
+
 This feature owns release automation and public documentation alignment; it
 does not redefine the native plugin schemas, write harness caches, or archive
 the sibling repository before the canonical publication has been verified.
@@ -40,6 +47,15 @@ the sibling repository before the canonical publication has been verified.
 - `.github/workflows/ci.yml` and `.github/workflows/release.yml`
 - `install.sh`, `website/`, and `homebrew-skilltap/`
 - `README.md` — installation and operating story
+
+## Design decisions
+
+- **Equal installation story**: Website marketplace instructions and the
+  one-line installer are first-class peers. Both install/repair the binary and
+  detected-harness skill/plugin resources through the same bootstrap boundary.
+- **Update publication**: Release metadata drives latest-compatible default
+  updates, user opt-out, and explicit major-version opt-in; the plugin skill,
+  website, installer, and daemon must describe the same policy.
 
 <!-- Feature design will define the exact release checks and publication
 artifacts. -->
