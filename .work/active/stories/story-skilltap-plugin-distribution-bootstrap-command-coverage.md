@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command-coverage
 kind: story
-stage: review
+stage: implementing
 tags: [infra, testing, security]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -47,3 +47,31 @@ removed.
 - Tests added: isolated compiled command composition seam covering first install, same-major no-op/update, major blocking and opt-in, wrong-release identity, and post-publish identity rollback preservation.
 - Discrepancies from design: production execution still constructs only canonical HTTPS system ports; deterministic tests inject ports through a private in-process composition boundary.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: the acceptance matrix is only partially represented in the
+private binary helper tests; target narrowing, absent/mixed harness outcomes,
+and plain/schema-1 JSON result/next-action contracts are not exercised, and
+the wrong-version fixture currently fails checksum verification before the
+identity check (this item)
+**Important**: the compiled-binary suite still exercises `bootstrap` only for
+help/grammar, not an isolated command execution with independent per-target
+results (this item)
+**Nits**: none
+
+**Notes**: Standard substrate review of `a86e9fc`. The test-only resolver,
+fetcher, and installer composition seam is correctly private and the shipped
+path still constructs only canonical system ports. The two unit tests pass and
+cover install/no-op/same-major update/major block/major opt-in plus a
+post-publish rollback publisher. However, they call only
+`execute_binary_bootstrap_with`; none invokes the public bootstrap composition
+or verifies target selection, absent harnesses, mixed success/attention,
+separate binary/per-harness statuses, or plain and schema-1 JSON next actions.
+The purported wrong-release case hashes `wrong payload` while fetching
+different bytes, so it stops at checksum failure rather than proving a validly
+checksummed wrong-version or non-executable release is reported as identity
+attention. Keep the story at `stage: implementing` until those deterministic
+branches are covered without reintroducing production overrides.
