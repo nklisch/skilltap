@@ -46,13 +46,15 @@ It creates an isolated Git-backed complete skill tree, verifies daemon no-op
 state journaling, advances the upstream commit, checks status update evidence,
 then verifies the daemon applies the new tree and records its run.
 
-The initial no-op assertion currently exposes a production defect: the daemon
-returns `attention_required` despite `changed=false` and safe work completing,
-because its aggregate outcome retains the document-load attention state.
-Parked as `idea-daemon-noop-result-class`; do not weaken or skip this test. The
-story remains blocked on that fix and review of the resulting regression.
+The initial daemon result classification defect was fixed in `24c3ffc`, but the
+SPEC-backed test now reaches a deeper production gap: a Git-backed skill is
+left pending with `skill_update_required` when the daemon invokes the
+installer through the `daemon run` command, before the safe revision cycle can
+run. Parked as `idea-daemon-git-skill-update-path`; do not weaken or skip this
+test. The story remains blocked on that fix and review of the resulting
+regression.
 
 ## Blocker
 
-The regression cannot pass until daemon aggregate results classify a successful
-no-op as completed. See parked item `idea-daemon-noop-result-class`.
+The regression cannot pass until the daemon reuses the safe Git-backed skill
+update path. See parked item `idea-daemon-git-skill-update-path`.
