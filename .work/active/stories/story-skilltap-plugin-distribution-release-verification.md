@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-verification
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: [story-skilltap-plugin-distribution-release-installer, story-skilltap-plugin-distribution-release-install-surfaces]
@@ -31,3 +31,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: highest; release workflow and provenance gates.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `.github/workflows/release.yml`.
+- Tests added: release validate job runs offline plugin package, installer, and public installation-surface fixtures before asset publication.
+- Discrepancies from design: sibling pointer remains an explicit external parity input and is not mutated by CI.
+- Adjacent issues parked: none.
