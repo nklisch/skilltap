@@ -42,5 +42,14 @@ classes; it does not add plugin packaging or binary installation behavior.
   contracts
 - `crates/cli/tests/compiled_binary.rs` — executable CLI contract
 
+## Design decisions
+
+- **Bootstrap discoverability**: The self-setup flow is a first-class,
+  help-described skilltap command that the plugin and one-line installer can
+  invoke; it is not hidden in undocumented shell behavior.
+- **Contract authority**: The executable help and stable output remain the
+  exact source of truth, while the plugin and website provide high-level
+  guidance and links into that contract.
+
 <!-- Feature design will determine the precise help/error gaps and verification
 surface. -->
