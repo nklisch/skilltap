@@ -157,11 +157,14 @@ pub fn setup_detected_plugin(
         };
     }
     let profile = select_profile(target, native_version);
-    let capability = CapabilityId::new("plugin.install").expect("compiled capability id is valid");
-    let support = profile
-        .mutation_capabilities()
-        .and_then(|capabilities| capabilities.for_scope(&Scope::Global).support(&capability));
-    if !matches!(support, Some(CapabilitySupport::Supported)) {
+    let capabilities = profile.mutation_capabilities();
+    let supports = |name: &str| {
+        let capability = CapabilityId::new(name).expect("compiled capability id is valid");
+        capabilities
+            .and_then(|sets| sets.for_scope(&Scope::Global).support(&capability))
+            .is_some_and(|support| matches!(support, CapabilitySupport::Supported))
+    };
+    if !supports("marketplace.register") || !supports("plugin.install") {
         return HarnessSetupResult::Unsupported {
             harness: target,
             next_action: unsupported_next_action(target),
