@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-layout
 kind: story
-stage: implementing
+stage: review
 tags: [content]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: [story-skilltap-plugin-distribution-guidance-core]
@@ -33,3 +33,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: standard; documentation must remain foundation-grounded.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `plugin/skills/skilltap/references/configuration.md`, `plugin/skills/skilltap/references/instructions.md`.
+- Tests added: existing offline package validation passes with linked complete references.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
