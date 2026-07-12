@@ -15,8 +15,8 @@ updated: 2026-07-12
 
 ## Bound items
 
-Complete v3 Rust control-plane release bundle: 212 done items (193 initially
-bound items plus 19 late-bound quality-gate and correctness items). No
+Complete v3 Rust control-plane release bundle: 214 done items (193 initially
+bound items plus 21 late-bound quality-gate and correctness items). No
 research-tagged items were present.
 
 | id | kind | source | stage |
