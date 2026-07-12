@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-boundary-hardening
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -48,3 +48,29 @@ Fresh-context review of the hardened bootstrap artifact commits `c880496` and
 - Tests added: Linux no-clobber first-install, replacement exchange, and rollback preservation cases.
 - Discrepancies from design: redirect validation was already applied at every bounded hop; publication now uses Linux `renameat2` no-replace/exchange primitives and preserves replacements observed during rollback.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: supported macOS publication still falls back to overwrite-capable
+`fs::rename`; no-prior rollback has a stat-then-unlink race that can remove an
+unrelated replacement -> `story-skilltap-plugin-distribution-bootstrap-artifact-portable-rollback-safety`
+
+**Important**: the required isolated redirect-hop, permission/interruption,
+and full cleanup/publication regression matrix is still not present ->
+`story-skilltap-plugin-distribution-bootstrap-artifact-portable-rollback-safety`
+
+**Nits**: none
+
+**Notes**: Substrate review at standard weight, fresh-context focused security
+pass. `cargo test -p skilltap-core runtime::artifact --offline`, workspace
+formatting, and clippy with warnings denied pass. Linux no-replace/exchange
+tests preserve replacements, but the non-Linux branches at
+`crates/core/src/runtime/artifact.rs:745-763` use ordinary rename and can
+clobber a destination. The `None` rollback branch at lines 691-697 can unlink
+after its identity check. Existing integration fixtures cover bounded and
+symlink resolver payloads plus basic checksum/install behavior, but do not
+cover redirect-hop rejection, permission/interruption cleanup, or the complete
+race/rollback matrix required by this story. Item remains at `stage: review`
+pending the follow-up.
