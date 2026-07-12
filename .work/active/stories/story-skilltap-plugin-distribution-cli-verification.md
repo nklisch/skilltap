@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cli-verification
 kind: story
-stage: review
+stage: done
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on:
@@ -39,3 +39,20 @@ Acceptance criteria:
 - Tests added: all 26 compiled leaf help paths plus plain/JSON invalid boundary and redaction scenarios in isolated machines.
 - Discrepancies from design: the website now links agents to executable help through invocation examples and a conceptual family index instead of duplicating a static grammar.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard fresh-context review. The compiled suite exercises root,
+group, and all 26 leaf help paths plus representative plain/JSON invalid
+boundaries in isolated machines; the full workspace test suite and clippy are
+green. Website and UX references remain conceptual, identify all ten current
+families, link agents to executable help, and document the stable result,
+scope/target, and generic partial-acknowledgment contracts without becoming a
+second grammar. The website `--yes` wording was corrected during review to
+match the executable semantics.
