@@ -880,3 +880,523 @@ fn adoption_next_action(error: &AdoptionApplyError) -> NextAction {
         ),
     }
 }
+pub(super) fn first_use_harness_report(
+    config: &ConfigDocument,
+    mut outcome: Outcome,
+    mode: NativeObservationMode,
+    requested: Option<&skilltap_core::domain::TargetSelection>,
+) -> Outcome {
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded status process limits are valid");
+    let json_limits =
+        JsonLimits::new(256 * 1024, 64).expect("bounded status JSON limits are valid");
+    let search_path = std::env::var_os("PATH");
+    let all_harnesses = [
+        HarnessId::new("codex").expect("known harness"),
+        HarnessId::new("claude").expect("known harness"),
+    ];
+    let selected = skilltap_core::runtime::resolve_targets(requested, all_harnesses.clone())
+        .unwrap_or_else(|_| {
+            skilltap_core::domain::HarnessSet::new(all_harnesses).expect("known harnesses")
+        });
+    for (harness, kind, binary) in [
+        (
+            "codex",
+            HarnessKind::Codex,
+            config.harnesses().codex.binary.as_str(),
+        ),
+        (
+            "claude",
+            HarnessKind::Claude,
+            config.harnesses().claude.binary.as_str(),
+        ),
+    ]
+    .into_iter()
+    .filter(|(harness, _, _)| selected.iter().any(|value| value.as_str() == *harness))
+    {
+        let mut entry = OutputEntry::new(harness, "not_enabled").with_field("enabled", false);
+        if mode == NativeObservationMode::Disabled {
+            outcome = outcome.with_resource(entry);
+            continue;
+        }
+        let configured = match configured_binary(binary) {
+            Ok(value) => value,
+            Err(_) => {
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "invalid_harness_binary",
+                        "The configured harness binary could not be resolved.",
+                    )
+                    .with_context("harness", harness),
+                );
+                outcome = outcome.with_resource(entry.with_field("reachable", false));
+                continue;
+            }
+        };
+        match detect_configured_installation(
+            kind,
+            configured,
+            search_path.clone(),
+            process_limits,
+            json_limits,
+        ) {
+            Ok(installation) => {
+                if let HarnessReachability::Reachable { native_version, .. } =
+                    installation.reachability()
+                {
+                    entry.status = "installed".to_owned();
+                    entry = entry
+                        .with_field("reachable", true)
+                        .with_field("version", native_version.as_str());
+                }
+            }
+            Err(_error) => {
+                entry.status = "unreachable".to_owned();
+                entry = entry.with_field("reachable", false);
+                outcome = outcome.with_warning(
+                    Warning::new(
+                        "native_detection_failed",
+                        "The known harness could not be detected during first-use status.",
+                    )
+                    .with_context("harness", harness),
+                );
+            }
+        }
+        outcome = outcome.with_resource(entry);
+    }
+    outcome
+}
+
+fn daemon_status_projection(
+    record: Option<&skilltap_core::storage::DaemonRunRecord>,
+) -> OutputEntry {
+    let Some(record) = record else {
+        return OutputEntry::new("daemon", "never_run");
+    };
+    let status = match record.result() {
+        skilltap_core::storage::DaemonRunResult::Completed => "completed",
+        skilltap_core::storage::DaemonRunResult::Pending => "pending",
+        skilltap_core::storage::DaemonRunResult::Contended => "contended",
+        skilltap_core::storage::DaemonRunResult::Failed => "failed",
+    };
+    let mut entry = OutputEntry::new("daemon", status)
+        .with_field("last_run_seconds", record.at().seconds())
+        .with_field("safe_operations", record.safe_operations())
+        .with_field("pending_operations", record.pending_operations());
+    if let Some(code) = record.failure_code() {
+        entry = entry.with_field("failure", code.as_str());
+    }
+    entry
+}
+
+struct UnavailableSourceRevisionResolver;
+
+impl SourceRevisionResolver for UnavailableSourceRevisionResolver {
+    fn resolve(
+        &self,
+        source: &skilltap_core::domain::Source,
+    ) -> Result<skilltap_core::domain::ResolvedRevision, ResolutionError> {
+        Err(ResolutionError::UnsupportedSourceKind(source.kind()))
+    }
+}
+
+fn status_update_projection(
+    documents: &StatusDocuments,
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    observation: &NativeObservation,
+) -> (Vec<OutputEntry>, Vec<Warning>, usize) {
+    let Some(inventory) = documents.inventory.as_ref() else {
+        return (Vec::new(), Vec::new(), 0);
+    };
+    let Some(environment) = observation.environment.as_ref() else {
+        return (Vec::new(), Vec::new(), 0);
+    };
+    let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+        .expect("bounded update resolution process limits are valid");
+    let git_resolver = GitSourceRevisionResolver::system(process_limits).ok();
+    let native_resolver = ObservedNativeRevisionResolver::new(environment);
+    let fallback_resolver = UnavailableSourceRevisionResolver;
+    let mut entries = Vec::new();
+    let mut warnings = Vec::new();
+    let mut available_updates = 0;
+    let update_mode = documents.config.updates().mode;
+    for resource in inventory.resources().values().filter(|resource| {
+        scope.resolved.contains(resource.scope())
+            && resource
+                .targets()
+                .iter()
+                .any(|target| targets.resolved.contains(target))
+    }) {
+        let installed = documents
+            .state
+            .as_ref()
+            .and_then(|state| state.resources().get(resource.key()))
+            .and_then(|state| state.installed_revision());
+        if update_mode == skilltap_core::storage::UpdateMode::Off
+            || resource.update() == UpdateIntent::Disabled
+        {
+            let candidate = UpdateCandidate {
+                resource: resource.key().clone(),
+                current_revision: installed.cloned(),
+                available_revision: None,
+                resolution_error: None,
+                pinned: resource.update() == UpdateIntent::Pinned,
+                drifted: false,
+                compatibility_changed: false,
+                requires_acknowledgment: false,
+                intent: resource.update(),
+                acknowledgment_selectors: BTreeSet::new(),
+            };
+            let decision = classify_update_with_mode(&candidate, update_mode);
+            entries.push(update_projection_entry(resource, &candidate, decision));
+            continue;
+        }
+        let request = UpdateResolutionRequest {
+            resource,
+            installed,
+            drifted: false,
+            compatibility_changed: false,
+            requires_acknowledgment: false,
+        };
+        let resolved = if resource.source().is_some() {
+            match git_resolver.as_ref() {
+                Some(resolver) => resolve_candidate(resolver, &native_resolver, request),
+                None => resolve_candidate(&fallback_resolver, &native_resolver, request),
+            }
+        } else {
+            resolve_candidate(&fallback_resolver, &native_resolver, request)
+        };
+        if let Some(error) = resolved.error.as_ref() {
+            warnings.push(
+                Warning::new(
+                    "update_resolution_unavailable",
+                    "An available revision could not be resolved without mutation.",
+                )
+                .with_context("resource", resource.key().to_string())
+                .with_context("reason", resolution_error_label(error)),
+            );
+        }
+        let candidate = candidate_for(resource, &request, &resolved);
+        let decision = classify_update_with_mode(&candidate, update_mode);
+        if decision.safety != UpdateSafety::NoUpdate {
+            available_updates += 1;
+        }
+        entries.push(update_projection_entry(resource, &candidate, decision));
+    }
+    (entries, warnings, available_updates)
+}
+
+fn update_projection_entry(
+    resource: &DesiredResource,
+    candidate: &UpdateCandidate,
+    decision: UpdateDecision,
+) -> OutputEntry {
+    let status = match (decision.safety, decision.reason) {
+        (UpdateSafety::NoUpdate, Some(UpdateDecisionReason::DisabledResource)) => "disabled",
+        (UpdateSafety::Blocked, Some(UpdateDecisionReason::GlobalModeOff)) => "policy_off",
+        (UpdateSafety::NeedsDecision, Some(UpdateDecisionReason::CheckOnly)) => "check_only",
+        (UpdateSafety::NeedsDecision, Some(UpdateDecisionReason::PinnedResource)) => "pinned",
+        (UpdateSafety::NoUpdate, _) => "up_to_date",
+        (UpdateSafety::Safe, _) => "safe",
+        (UpdateSafety::NeedsDecision, _) => "needs_decision",
+        (UpdateSafety::Blocked, _) => "blocked",
+    };
+    let mut entry = OutputEntry::new(format!("update:{}", resource.key()), status)
+        .with_field("resource", resource.key().to_string());
+    if let Some(reason) = decision.reason {
+        entry = entry.with_field("reason", update_decision_reason_label(reason));
+    }
+    if let Some(current) = candidate.current_revision.as_ref() {
+        entry = entry.with_field("current", revision_label(current));
+    }
+    if let Some(available) = candidate.available_revision.as_ref() {
+        entry = entry.with_field("available", revision_label(available));
+    }
+    entry
+}
+
+fn update_decision_reason_label(reason: UpdateDecisionReason) -> &'static str {
+    match reason {
+        UpdateDecisionReason::DisabledResource => "disabled_resource",
+        UpdateDecisionReason::GlobalModeOff => "global_mode_off",
+        UpdateDecisionReason::CheckOnly => "check_only",
+        UpdateDecisionReason::PinnedResource => "pinned_resource",
+        UpdateDecisionReason::Drifted => "drifted",
+        UpdateDecisionReason::CompatibilityChanged => "compatibility_changed",
+        UpdateDecisionReason::AcknowledgmentRequired => "acknowledgment_required",
+        UpdateDecisionReason::ResolutionFailed => "resolution_failed",
+    }
+}
+
+fn resolution_error_label(error: &ResolutionError) -> &'static str {
+    match error {
+        ResolutionError::UnreachableSource => "unreachable_source",
+        ResolutionError::InvalidRequestedRevision => "invalid_requested_revision",
+        ResolutionError::UnsupportedSourceKind(_) => "unsupported_source_kind",
+        ResolutionError::NativeObservationUnavailable => "native_observation_unavailable",
+        ResolutionError::TargetDisagreement => "target_disagreement",
+    }
+}
+fn observe_trees(
+    kind: HarnessKind,
+    paths: &PlatformPaths,
+    scope: &Scope,
+    limits: ExternalTreeLimits,
+) -> Result<Vec<CanonicalObservation>, skilltap_core::runtime::ObservationRuntimeError> {
+    match kind {
+        HarnessKind::Codex => {
+            let inputs =
+                skilltap_harnesses::codex_observation_paths(paths, scope).map_err(|_| {
+                    skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
+                })?;
+            observe_codex_canonical_resources(&inputs, scope, limits)
+        }
+        HarnessKind::Claude => {
+            let inputs =
+                skilltap_harnesses::claude_observation_paths(paths, scope).map_err(|_| {
+                    skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
+                })?;
+            observe_claude_canonical_resources(&inputs, scope, limits)
+        }
+    }
+}
+
+fn instruction_surface_labels(
+    kind: HarnessKind,
+    paths: &PlatformPaths,
+    scope: &Scope,
+) -> Vec<&'static str> {
+    match kind {
+        HarnessKind::Codex => {
+            let inputs = match skilltap_harnesses::codex_observation_paths(paths, scope) {
+                Ok(inputs) => inputs,
+                Err(_) => return Vec::new(),
+            };
+            match scope {
+                Scope::Global => {
+                    let mut labels = Vec::new();
+                    if path_exists(inputs.global_agents.as_str()) {
+                        labels.push("codex.global.instructions");
+                    }
+                    if child_path_exists(paths.home().as_str(), ".agents/plugins/marketplace.json")
+                    {
+                        labels.push("codex.global.marketplace");
+                    }
+                    if child_path_exists(paths.codex_home().as_str(), "config.toml") {
+                        labels.push("codex.global.config");
+                    }
+                    labels
+                }
+                Scope::Project(_) => {
+                    let mut labels = Vec::new();
+                    let project = match scope {
+                        Scope::Project(project) => project,
+                        Scope::Global => unreachable!(),
+                    };
+                    if inputs
+                        .project_agents
+                        .as_ref()
+                        .is_some_and(|path| path_exists(path.as_str()))
+                    {
+                        labels.push("project.agents.instructions");
+                    }
+                    if inputs
+                        .project_override
+                        .as_ref()
+                        .is_some_and(|path| path_exists(path.as_str()))
+                    {
+                        labels.push("project.agents.override");
+                    }
+                    if child_path_exists(project.as_str(), ".agents/plugins/marketplace.json") {
+                        labels.push("project.marketplace");
+                    }
+                    if child_path_exists(project.as_str(), ".codex/config.toml") {
+                        labels.push("project.codex.config");
+                    }
+                    labels
+                }
+            }
+        }
+        HarnessKind::Claude => {
+            let inputs = match skilltap_harnesses::claude_observation_paths(paths, scope) {
+                Ok(inputs) => inputs,
+                Err(_) => return Vec::new(),
+            };
+            match scope {
+                Scope::Global => {
+                    let mut labels = Vec::new();
+                    if path_exists(inputs.global_settings.as_str()) {
+                        labels.push("claude.settings");
+                    }
+                    if child_path_exists(
+                        paths.claude_home().as_str(),
+                        "plugins/known_marketplaces.json",
+                    ) {
+                        labels.push("claude.marketplace");
+                    }
+                    if child_path_exists(paths.claude_home().as_str(), "CLAUDE.md") {
+                        labels.push("claude.instructions");
+                    }
+                    labels
+                }
+                Scope::Project(project) => {
+                    let mut labels = Vec::new();
+                    if inputs
+                        .project_settings
+                        .as_ref()
+                        .is_some_and(|path| path_exists(path.as_str()))
+                    {
+                        labels.push("project.claude.settings");
+                    }
+                    if child_path_exists(project.as_str(), "CLAUDE.md")
+                        || child_path_exists(project.as_str(), ".claude/CLAUDE.md")
+                    {
+                        labels.push("project.claude.instructions");
+                    }
+                    labels
+                }
+            }
+        }
+    }
+}
+
+fn path_exists(path: &str) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
+fn child_path_exists(root: &str, child: &str) -> bool {
+    path_exists(Path::new(root).join(child).to_string_lossy().as_ref())
+}
+
+fn native_surface_resource(
+    harness: &HarnessId,
+    scope: &Scope,
+    root: &str,
+    authority: ProfileAuthority,
+    entries: usize,
+) -> ObservedResource {
+    let id = ResourceId::new(stable_resource_id(harness, root))
+        .expect("stable native surface identifier is valid");
+    let key = ResourceKey::new(id, scope.clone());
+    let observation_key = ObservationKey::new(key, harness.clone(), ObservationLayer::Effective);
+    let kind = native_surface_kind(root);
+    let native_identity = NativeId::new(format!("{harness}:{root}:entries-{entries}"))
+        .expect("native surface identity is valid");
+    ObservedResource::new(
+        observation_key,
+        kind,
+        Provenance::Native,
+        Ownership::Unmanaged,
+        if authority == ProfileAuthority::ObserveOnly {
+            ResourceHealth::Unknown
+        } else {
+            ResourceHealth::Healthy
+        },
+        None,
+        ComponentGraph::new([]).expect("empty component graph is valid"),
+        BTreeSet::new(),
+        native_identity,
+        None,
+        None,
+    )
+}
+
+fn stable_resource_id(harness: &HarnessId, root: &str) -> String {
+    let hash = stable_hash(&format!("{harness}:{root}"));
+    format!("native-{hash:016x}")
+}
+
+fn native_surface_kind(root: &str) -> ResourceKind {
+    if root.ends_with("skills") {
+        ResourceKind::StandaloneSkill
+    } else if root.contains("marketplace") {
+        ResourceKind::Marketplace
+    } else if root.ends_with("plugins") || root.ends_with("claude") {
+        ResourceKind::Plugin
+    } else {
+        ResourceKind::InstructionLocation
+    }
+}
+
+fn observation_error(
+    error: skilltap_core::runtime::ObservationRuntimeError,
+) -> ObservationAdapterError {
+    use skilltap_core::runtime::ObservationRuntimeError as RuntimeError;
+    match error {
+        RuntimeError::TreeDepthLimitExceeded
+        | RuntimeError::TreeEntryLimitExceeded
+        | RuntimeError::TreeFileLimitExceeded
+        | RuntimeError::TreeTotalLimitExceeded
+        | RuntimeError::TreeSymlinkTargetLimitExceeded => {
+            ObservationAdapterError::ResourceLimitExceeded {}
+        }
+        RuntimeError::ProcessDeadlineExceeded => ObservationAdapterError::DeadlineExceeded {},
+        RuntimeError::TreeEntryUnsupported
+        | RuntimeError::TreeEntryNonUtf8
+        | RuntimeError::DuplicateTreeEntry => ObservationAdapterError::NativeShapeUnsupported {},
+        _ => ObservationAdapterError::NativeStateUnreadable {},
+    }
+}
+
+fn resource_identity(resource: &ObservedResource) -> String {
+    format!(
+        "{}:{}:{}",
+        resource.key().harness(),
+        resource.key().resource().id(),
+        match resource.key().layer() {
+            ObservationLayer::Declared => "declared",
+            ObservationLayer::Effective => "effective",
+        }
+    )
+}
+
+fn resource_health(health: ResourceHealth) -> &'static str {
+    match health {
+        ResourceHealth::Healthy => "healthy",
+        ResourceHealth::Drifted => "drifted",
+        ResourceHealth::Degraded => "degraded",
+        ResourceHealth::Unknown => "unknown",
+    }
+}
+
+fn resource_kind(kind: ResourceKind) -> &'static str {
+    match kind {
+        ResourceKind::Harness => "harness",
+        ResourceKind::Marketplace => "marketplace",
+        ResourceKind::Plugin => "plugin",
+        ResourceKind::StandaloneSkill => "standalone_skill",
+        ResourceKind::InstructionLocation => "instruction_location",
+    }
+}
+
+fn profile_authority(authority: ProfileAuthority) -> &'static str {
+    match authority {
+        ProfileAuthority::VerifiedCompiled => "verified_compiled",
+        ProfileAuthority::ObserveOnly => "observe_only",
+    }
+}
+
+fn capability_count(
+    profile: &skilltap_core::domain::CapabilityProfileSelection,
+    scope: &Scope,
+    support: CapabilitySupport,
+) -> usize {
+    profile
+        .observation_capabilities()
+        .for_scope(scope)
+        .iter()
+        .filter(|(_, value)| *value == support)
+        .count()
+}
+
+fn finding_warning(finding: &ObservationFinding) -> Warning {
+    Warning::new(finding.code().as_str(), finding.summary().as_str()).with_context(
+        "severity",
+        format!("{:?}", finding.severity()).to_lowercase(),
+    )
+}
+
+fn observation_id(harness: &HarnessId, scope: &Scope) -> String {
+    format!("{}:{}", harness, scope_label(scope))
+}
