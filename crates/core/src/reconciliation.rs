@@ -7,8 +7,8 @@ use crate::{
         CompatibilityAnalysis, CompatibilityAnalysisError, CompatibilityRequest, analyze,
     },
     domain::{
-        Fingerprint, NativeId, ObservationKey, Operation, OperationClass, OperationContractError,
-        Ownership, Plan, ResourceHealth, ResourceKey, Scope,
+        Fingerprint, NativeId, Operation, OperationClass, OperationContractError, Ownership, Plan,
+        ResourceHealth, ResourceKey,
     },
     hook_mapping::{HookContract, HookMappingError, HookTargetContract, analyze_hook},
     storage::ResourceState,
@@ -253,19 +253,14 @@ pub fn plan_reconciliation(
     })
 }
 
-#[allow(dead_code)]
-fn _scope_of_observation(key: &ObservationKey) -> &Scope {
-    key.resource().scope()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::domain::{
         AffectedSurface, CompatibilityClass, CompatibilityResult, ComponentGraph, ComponentId,
-        ComponentRequiredness, EvidenceCode, EvidenceDetail, HarnessId, ObservationLayer,
-        OperationAction, OperationId, OperationReason, OperationSelector, OperationSemantics,
-        Provenance, ResourceId, ResourceKind, TransferFidelity,
+        ComponentRequiredness, EvidenceCode, EvidenceDetail, HarnessId, ObservationKey,
+        ObservationLayer, OperationAction, OperationId, OperationReason, OperationSelector,
+        OperationSemantics, Provenance, ResourceId, ResourceKind, TransferFidelity,
     };
 
     fn resource() -> ResourceKey {
