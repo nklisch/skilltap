@@ -48,4 +48,8 @@ bootstrap path and record the limitation in the plugin guidance.
 
 ## Implementation notes
 - Execution capability: highest available local capability; installer parity and plugin handoff affect security and release trust.
-- Review weight: standard (autopilot project default).
+- Review weight: standard (source: autopilot project default).
+- Files changed: `install.sh`, `scripts/verify-installer.sh`, `website/guide/getting-started.md`, `website/guide/updates.md`, compiled bootstrap coverage.
+- Tests added: POSIX syntax/static installer contract checks and isolated compiled binary install/no-op/major acknowledgment scenarios.
+- Discrepancies from design: the shell entrypoint delegates post-install harness setup to the verified binary and accepts attention exit 2 while failing closed on pre-mutation errors.
+- Adjacent issues parked: none.

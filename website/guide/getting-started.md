@@ -6,11 +6,26 @@ description: Install skilltap and adopt an existing Codex or Claude environment.
 
 ## Install
 
-On macOS or Linux, install the standalone binary:
+On macOS or Linux, install the standalone binary and run its first-party
+bootstrap boundary:
 
 ```bash
 curl -fsSL https://skilltap.dev/install.sh | sh
 ```
+
+The installer verifies the release checksum, installs the user-level binary,
+and invokes `skilltap bootstrap` to detect Claude Code and Codex independently.
+Harness absence or an unsupported native lifecycle is reported as attention;
+the verified binary remains available. The executable is the authoritative
+command discovery surface:
+
+```console
+skilltap bootstrap --help
+```
+
+If you installed the plugin through either native marketplace, use the same
+command. Marketplace installation and the one-line installer are equivalent
+first-party setup paths; neither path writes native harness caches.
 
 Or use Homebrew:
 

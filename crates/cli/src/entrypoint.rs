@@ -306,26 +306,21 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
         TargetSelection::All => true,
         TargetSelection::Only(target) => target.as_str() == kind.id(),
     };
-    let mut outcome = Outcome::new("bootstrap", ResultClass::AttentionRequired)
+    let mut outcome = Outcome::new("bootstrap", ResultClass::Completed)
         .with_scope(crate::OutputScope::Global)
-        .with_summary("binary", "attention")
+        .with_summary("binary", "pending")
         .with_summary("version", skilltap_core::VERSION)
         .with_summary("allow_major", args.allow_major);
-    let manifest_path =
-        std::env::var_os("SKILLTAP_RELEASE_MANIFEST").and_then(|value| value.into_string().ok());
-    outcome = outcome.with_resource(if manifest_path.is_some() {
-        OutputEntry::new("binary", "planned").with_field("policy", "latest-compatible")
-    } else {
-        OutputEntry::new("binary", "unavailable").with_field("policy", "latest-compatible")
-    });
-    if manifest_path.is_none() {
-        outcome = outcome.with_warning(crate::Warning::new(
-            "release_manifest_unavailable",
-            "The latest skilltap release manifest could not be resolved in this environment; no binary was changed.",
-        )).with_next_action(crate::NextAction::new(
-            "bootstrap_release",
-            "Provide the release transport through the published plugin or rerun `skilltap bootstrap --help`.",
-        ));
+    let binary = execute_binary_bootstrap(args, &paths);
+    outcome = outcome.with_resource(binary.entry);
+    if binary.attention {
+        outcome.result = ResultClass::AttentionRequired;
+    }
+    for warning in binary.warnings {
+        outcome = outcome.with_warning(warning);
+    }
+    for action in binary.next_actions {
+        outcome = outcome.with_next_action(action);
     }
     let search_path = std::env::var_os("PATH");
     let process_limits =
@@ -394,6 +389,227 @@ fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
         }
     }
     outcome
+}
+
+struct BinaryBootstrapResult {
+    entry: OutputEntry,
+    attention: bool,
+    warnings: Vec<crate::Warning>,
+    next_actions: Vec<crate::NextAction>,
+}
+
+fn execute_binary_bootstrap(
+    args: &BootstrapArgs,
+    paths: &skilltap_core::runtime::PlatformPaths,
+) -> BinaryBootstrapResult {
+    use skilltap_core::{
+        bootstrap::{ArtifactKey, BinaryDecision, ReleaseVersion, choose_binary_decision},
+        runtime::{
+            ArtifactError, ArtifactFetcher, BinaryInstaller, FileReleaseResolver, ReleaseResolver,
+            SystemArtifactFetcher, SystemBinaryInstaller, SystemReleaseResolver,
+        },
+    };
+    let key = match ArtifactKey::current() {
+        Ok(key) => key,
+        Err(_) => {
+            return binary_attention(
+                "unsupported-platform",
+                "This platform has no published skilltap bootstrap artifact.",
+            );
+        }
+    };
+    let destination = match std::env::var_os("SKILLTAP_INSTALL")
+        .and_then(|value| value.into_string().ok())
+        .map(AbsolutePath::new)
+        .transpose()
+    {
+        Ok(Some(path)) => path,
+        Ok(None) => {
+            match AbsolutePath::new(format!("{}/.local/bin/skilltap", paths.home().as_str())) {
+                Ok(path) => path,
+                Err(_) => {
+                    return binary_attention(
+                        "invalid-destination",
+                        "The user-local skilltap install destination is invalid.",
+                    );
+                }
+            }
+        }
+        Err(_) => {
+            return binary_attention(
+                "invalid-destination",
+                "SKILLTAP_INSTALL must be a normalized absolute path.",
+            );
+        }
+    };
+    let manifest_path =
+        std::env::var_os("SKILLTAP_RELEASE_MANIFEST").and_then(|value| value.into_string().ok());
+    let manifest = match manifest_path {
+        Some(path) => match AbsolutePath::new(path) {
+            Ok(path) => FileReleaseResolver::new(path, key).latest(),
+            Err(_) => Err(ArtifactError::InvalidManifest(
+                "release manifest path is invalid",
+            )),
+        },
+        None => SystemReleaseResolver::current(key).latest(),
+    };
+    let manifest = match manifest {
+        Ok(manifest) => manifest,
+        Err(error) => return binary_attention("release_manifest_failed", &error.to_string()),
+    };
+    let artifact = match manifest.artifact(key) {
+        Ok(artifact) => artifact,
+        Err(error) => return binary_attention("release_asset_failed", &error.to_string()),
+    };
+    let installer = SystemBinaryInstaller;
+    let installed = match installer.inspect(&destination) {
+        Ok(value) => value,
+        Err(error) => return binary_attention("binary_inspection_failed", &error.to_string()),
+    };
+    let installed_version = installed.as_ref().and_then(|_| {
+        std::env::var("SKILLTAP_INSTALLED_VERSION")
+            .ok()
+            .and_then(|value| value.trim_start_matches('v').parse::<ReleaseVersion>().ok())
+            .or_else(|| probe_installed_version(&destination))
+    });
+    if installed.is_some() && installed_version.is_none() {
+        return binary_attention(
+            "unknown_version",
+            "The existing skilltap executable version could not be verified; no replacement was attempted.",
+        );
+    }
+    let decision = choose_binary_decision(
+        installed_version.as_ref(),
+        &manifest.version,
+        args.allow_major,
+    );
+    if decision == BinaryDecision::MajorUpgradeBlocked {
+        return BinaryBootstrapResult {
+            entry: OutputEntry::new("binary", "major-upgrade-blocked")
+                .with_field("available_version", manifest.version.to_string())
+                .with_field("path_role", "user-local-bin/skilltap"),
+            attention: true,
+            warnings: vec![crate::Warning::new(
+                "major_upgrade_blocked",
+                "A newer major skilltap binary is available; no existing binary was changed.",
+            )],
+            next_actions: vec![crate::NextAction::new(
+                "allow_major",
+                "Rerun with --allow-major to accept the major-version consequence.",
+            )],
+        };
+    }
+    if decision == BinaryDecision::Noop {
+        return BinaryBootstrapResult {
+            entry: OutputEntry::new("binary", "no-op")
+                .with_field("version", manifest.version.to_string())
+                .with_field("path_role", "user-local-bin/skilltap"),
+            attention: false,
+            warnings: Vec::new(),
+            next_actions: Vec::new(),
+        };
+    }
+    let parent = std::path::Path::new(destination.as_str())
+        .parent()
+        .unwrap_or(std::path::Path::new("/"));
+    if std::fs::create_dir_all(parent).is_err() {
+        return binary_attention(
+            "destination_unavailable",
+            "The user-local binary directory could not be created safely.",
+        );
+    }
+    let temporary = match AbsolutePath::new(
+        parent
+            .join(format!(".skilltap-bootstrap-{}", std::process::id()))
+            .to_string_lossy()
+            .into_owned(),
+    ) {
+        Ok(path) => path,
+        Err(_) => {
+            return binary_attention(
+                "temporary_path_failed",
+                "The private bootstrap temporary path is invalid.",
+            );
+        }
+    };
+    let fetch_result = if let Some(path) =
+        std::env::var_os("SKILLTAP_RELEASE_ARTIFACT").and_then(|value| value.into_string().ok())
+    {
+        std::fs::copy(path, temporary.as_str())
+            .map(|_| ())
+            .map_err(|_| ArtifactError::DownloadFailed)
+    } else {
+        SystemArtifactFetcher.fetch(artifact.download_url().as_str(), &temporary)
+    };
+    if fetch_result.is_err() {
+        let _ = std::fs::remove_file(temporary.as_str());
+        return binary_attention(
+            "release_download_failed",
+            "The release artifact could not be downloaded; the existing binary was preserved.",
+        );
+    }
+    let result = installer.install_verified(&temporary, &destination, artifact);
+    let _ = std::fs::remove_file(temporary.as_str());
+    if let Err(error) = result {
+        return binary_attention("binary_install_failed", &error.to_string());
+    }
+    BinaryBootstrapResult {
+        entry: OutputEntry::new(
+            "binary",
+            match decision {
+                BinaryDecision::Install => "installed",
+                _ => "updated",
+            },
+        )
+        .with_field("version", manifest.version.to_string())
+        .with_field("path_role", "user-local-bin/skilltap"),
+        attention: false,
+        warnings: Vec::new(),
+        next_actions: Vec::new(),
+    }
+}
+
+fn probe_installed_version(
+    path: &AbsolutePath,
+) -> Option<skilltap_core::bootstrap::ReleaseVersion> {
+    use skilltap_core::runtime::{
+        ExecutableResolutionRequest, ExecutableResolver, NativeProcessRequest, NativeProcessRunner,
+        ProcessLimits, SystemExecutableResolver, SystemNativeProcessRunner,
+    };
+    let executable = SystemExecutableResolver
+        .resolve(&ExecutableResolutionRequest::new(
+            skilltap_core::domain::ConfiguredBinary::absolute(path.clone()),
+            None,
+        ))
+        .ok()?;
+    let limits = ProcessLimits::new(5_000, 4 * 1024, 4 * 1024, 8 * 1024).ok()?;
+    let output = SystemNativeProcessRunner
+        .run(&NativeProcessRequest::new(
+            executable,
+            [std::ffi::OsString::from("--version")],
+            std::collections::BTreeMap::new(),
+            None,
+            limits,
+        ))
+        .ok()?;
+    if !output.status().success() {
+        return None;
+    }
+    let text = String::from_utf8(output.stdout().to_vec()).ok()?;
+    text.split_whitespace()
+        .find_map(|token| token.trim_start_matches('v').parse().ok())
+}
+
+fn binary_attention(code: &str, detail: &str) -> BinaryBootstrapResult {
+    BinaryBootstrapResult {
+        entry: OutputEntry::new("binary", "unavailable").with_field("policy", "latest-compatible"),
+        attention: true,
+        warnings: vec![crate::Warning::new(code, detail)],
+        next_actions: vec![crate::NextAction::new(
+            "bootstrap_help",
+            "Run `skilltap bootstrap --help` for the release and platform requirements.",
+        )],
+    }
 }
 
 fn execute_system_daemon_run(_args: &crate::command::OutputArgs) -> Outcome {

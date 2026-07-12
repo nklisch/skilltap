@@ -170,6 +170,194 @@ pub trait ReleaseResolver {
     fn latest(&self) -> Result<ReleaseManifest, ArtifactError>;
 }
 
+/// Resolves a release manifest from an isolated local file.  The CLI uses
+/// this only for deterministic fixture/bootstrap environments; production
+/// callers use [`SystemReleaseResolver`].
+#[derive(Clone, Debug)]
+pub struct FileReleaseResolver {
+    path: AbsolutePath,
+    key: ArtifactKey,
+}
+
+impl FileReleaseResolver {
+    pub const fn new(path: AbsolutePath, key: ArtifactKey) -> Self {
+        Self { path, key }
+    }
+}
+
+impl ReleaseResolver for FileReleaseResolver {
+    fn latest(&self) -> Result<ReleaseManifest, ArtifactError> {
+        let bytes = fs::read(self.path.as_str()).map_err(|_| ArtifactError::DownloadFailed)?;
+        let value: serde_json::Value = serde_json::from_slice(&bytes)
+            .map_err(|_| ArtifactError::InvalidManifest("release manifest is not valid JSON"))?;
+        ReleaseManifest::parse(&value, self.key)
+    }
+}
+
+/// Bounded production resolver for the canonical GitHub latest-release
+/// endpoint. The fetched document is removed before returning to the caller.
+#[derive(Clone, Debug)]
+pub struct SystemReleaseResolver<F = SystemArtifactFetcher> {
+    url: SourceLocator,
+    key: ArtifactKey,
+    fetcher: F,
+}
+
+impl SystemReleaseResolver<SystemArtifactFetcher> {
+    pub fn current(key: ArtifactKey) -> Self {
+        Self {
+            url: SourceLocator::new(
+                "https://api.github.com/repos/nklisch/skilltap/releases/latest",
+            )
+            .expect("canonical release endpoint is valid"),
+            key,
+            fetcher: SystemArtifactFetcher,
+        }
+    }
+}
+
+impl<F> SystemReleaseResolver<F> {
+    pub fn with_fetcher(url: SourceLocator, key: ArtifactKey, fetcher: F) -> Self {
+        Self { url, key, fetcher }
+    }
+}
+
+impl<F: ArtifactFetcher> ReleaseResolver for SystemReleaseResolver<F> {
+    fn latest(&self) -> Result<ReleaseManifest, ArtifactError> {
+        let path = std::env::temp_dir().join(format!(
+            ".skilltap-release-manifest-{}-{}",
+            std::process::id(),
+            ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+        ));
+        let path = AbsolutePath::new(path.to_string_lossy().into_owned())
+            .map_err(|_| ArtifactError::DownloadFailed)?;
+        let result = self.fetcher.fetch(self.url.as_str(), &path).and_then(|()| {
+            let bytes = fs::read(path.as_str()).map_err(|_| ArtifactError::DownloadFailed)?;
+            let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| {
+                ArtifactError::InvalidManifest("release manifest is not valid JSON")
+            })?;
+            if value.get("tag_name").is_some() {
+                self.parse_github_release(&value)
+            } else {
+                ReleaseManifest::parse(&value, self.key)
+            }
+        });
+        let _ = fs::remove_file(path.as_str());
+        result
+    }
+}
+
+impl<F: ArtifactFetcher> SystemReleaseResolver<F> {
+    fn parse_github_release(
+        &self,
+        value: &serde_json::Value,
+    ) -> Result<ReleaseManifest, ArtifactError> {
+        let version_text = value
+            .get("tag_name")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ArtifactError::InvalidManifest(
+                "GitHub release tag is missing",
+            ))?;
+        let version = version_text
+            .strip_prefix('v')
+            .unwrap_or(version_text)
+            .parse()
+            .map_err(|_| ArtifactError::InvalidManifest("GitHub release tag is malformed"))?;
+        let expected_name = github_asset_name(self.key);
+        let assets = value
+            .get("assets")
+            .and_then(serde_json::Value::as_array)
+            .ok_or(ArtifactError::InvalidManifest(
+                "GitHub release assets are missing",
+            ))?;
+        let asset = assets
+            .iter()
+            .find(|asset| {
+                asset.get("name").and_then(serde_json::Value::as_str) == Some(expected_name)
+            })
+            .ok_or(ArtifactError::UnsupportedAsset)?;
+        let download_url = asset
+            .get("browser_download_url")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(ArtifactError::InvalidManifest(
+                "GitHub release asset URL is missing",
+            ))?;
+        let checksums_url = format!(
+            "https://github.com/nklisch/skilltap/releases/download/v{version}/checksums.txt"
+        );
+        let checksum_path = AbsolutePath::new(
+            std::env::temp_dir()
+                .join(format!(
+                    ".skilltap-release-checksums-{}-{}",
+                    std::process::id(),
+                    ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+                ))
+                .to_string_lossy()
+                .into_owned(),
+        )
+        .map_err(|_| ArtifactError::DownloadFailed)?;
+        let checksum = self
+            .fetcher
+            .fetch(&checksums_url, &checksum_path)
+            .and_then(|()| {
+                let contents = fs::read_to_string(checksum_path.as_str())
+                    .map_err(|_| ArtifactError::DownloadFailed)?;
+                parse_checksum(&contents, expected_name)
+            });
+        let _ = fs::remove_file(checksum_path.as_str());
+        let checksum = checksum?;
+        let artifact = ReleaseArtifact::new(
+            version,
+            self.key,
+            expected_name,
+            checksum,
+            SourceLocator::new(download_url)
+                .map_err(|_| ArtifactError::InvalidManifest("GitHub asset URL is invalid"))?,
+        )
+        .map_err(|_| ArtifactError::InvalidManifest("GitHub release asset metadata is invalid"))?;
+        ReleaseManifest::new(version, [artifact])
+    }
+}
+
+fn github_asset_name(key: ArtifactKey) -> &'static str {
+    match (key.platform, key.arch) {
+        (super::SupportedPlatform::Linux, crate::bootstrap::ArtifactArch::X86_64) => {
+            "skilltap-linux-x64"
+        }
+        (super::SupportedPlatform::Linux, crate::bootstrap::ArtifactArch::Aarch64) => {
+            "skilltap-linux-arm64"
+        }
+        (super::SupportedPlatform::MacOs, crate::bootstrap::ArtifactArch::X86_64) => {
+            "skilltap-darwin-x64"
+        }
+        (super::SupportedPlatform::MacOs, crate::bootstrap::ArtifactArch::Aarch64) => {
+            "skilltap-darwin-arm64"
+        }
+    }
+}
+
+fn parse_checksum(contents: &str, expected_name: &str) -> Result<String, ArtifactError> {
+    let mut found = None;
+    for line in contents.lines() {
+        let mut fields = line.split_whitespace();
+        let Some(digest) = fields.next() else {
+            continue;
+        };
+        let Some(name) = fields.next().map(|name| name.trim_start_matches('*')) else {
+            continue;
+        };
+        if name == expected_name {
+            if found.is_some() {
+                return Err(ArtifactError::InvalidManifest(
+                    "release checksums contain duplicate assets",
+                ));
+            }
+            found = Some(digest.to_owned());
+        }
+    }
+    found.ok_or(ArtifactError::UnsupportedAsset)
+}
+
 pub trait ArtifactFetcher {
     fn fetch(&self, url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError>;
 }

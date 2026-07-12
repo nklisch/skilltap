@@ -13,8 +13,9 @@ mod scope;
 mod strict_json;
 
 pub use artifact::{
-    ArtifactError, ArtifactFetcher, BinaryInstaller, InstalledBinary, ReleaseManifest,
-    ReleaseResolver, SystemArtifactFetcher, SystemBinaryInstaller,
+    ArtifactError, ArtifactFetcher, BinaryInstaller, FileReleaseResolver, InstalledBinary,
+    ReleaseManifest, ReleaseResolver, SystemArtifactFetcher, SystemBinaryInstaller,
+    SystemReleaseResolver,
 };
 pub use bounded_process::SystemNativeProcessRunner;
 pub use clock::{Clock, FakeClock, SystemClock};

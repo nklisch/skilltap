@@ -159,6 +159,29 @@ impl IsolatedMachine {
             .env_remove("CODEX_HOME")
             .output()
     }
+
+    /// Runs a compiled command with an isolated home and explicit additional
+    /// environment values. This is used for release/bootstrap fixtures and
+    /// never inherits caller-owned bootstrap overrides.
+    pub fn run_with_env<'a>(
+        &self,
+        binary: &Path,
+        arguments: &[&str],
+        values: impl IntoIterator<Item = (&'a str, &'a Path)>,
+    ) -> io::Result<Output> {
+        let mut command = Command::new(binary);
+        command
+            .args(arguments)
+            .current_dir(self.working_directory())
+            .env("HOME", &self.home)
+            .env("XDG_CONFIG_HOME", &self.configuration_home)
+            .env_remove("SKILLTAP_HOME")
+            .env_remove("CODEX_HOME");
+        for (name, value) in values {
+            command.env(name, value);
+        }
+        command.output()
+    }
 }
 
 /// Resolves the compiled test binary, honoring an absolute or working-directory-relative override.

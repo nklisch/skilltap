@@ -150,6 +150,19 @@ main() {
   ok "Installed skilltap ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
   echo ""
 
+  # Delegate harness detection and first-party plugin setup to the verified
+  # Rust boundary. Binary availability and optional harness attention remain
+  # separate, so an unsupported target never hides a valid install.
+  BOOTSTRAP_STATUS=0
+  BOOTSTRAP_RESULT="$(SKILLTAP_INSTALL="${INSTALL_DIR}/${BINARY_NAME}" "${INSTALL_DIR}/${BINARY_NAME}" bootstrap --target all --json 2>&1)" || BOOTSTRAP_STATUS=$?
+  if [ -n "$BOOTSTRAP_RESULT" ]; then
+    printf '%s\n' "$BOOTSTRAP_RESULT"
+  fi
+  if [ "$BOOTSTRAP_STATUS" -ne 0 ] && [ "$BOOTSTRAP_STATUS" -ne 2 ]; then
+    err "skilltap bootstrap failed before harness setup; rerun: ${INSTALL_DIR}/${BINARY_NAME} bootstrap --help"
+    exit "$BOOTSTRAP_STATUS"
+  fi
+
   # Update shell profiles if INSTALL_DIR isn't already on PATH
   case ":${PATH}:" in
     *":${INSTALL_DIR}:"*) ;;

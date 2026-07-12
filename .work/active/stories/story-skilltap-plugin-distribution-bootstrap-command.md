@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: implementing
+stage: review
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -45,10 +45,14 @@ website prose.
 ## Implementation notes
 - Execution capability: highest available local capability; this changes the public agent-facing CLI and composes security-sensitive adapters.
 - Review weight: standard (source: autopilot project default).
-- Files changed: `crates/cli/src/command.rs`, `crates/cli/src/dispatch.rs`, `crates/cli/src/entrypoint.rs`, command/compiled-binary tests.
-- Tests added: bootstrap grammar/help and isolated JSON attention result; target narrowing and `--allow-major` parse coverage.
-- Discrepancies from design: when no release manifest transport is available, binary state is reported as `unavailable` with attention and no mutation; the command never claims a no-op or successful binary installation without verified release evidence.
+- Files changed: `crates/cli/src/command.rs`, `crates/cli/src/dispatch.rs`, `crates/cli/src/entrypoint.rs`, command/compiled-binary tests, `crates/core/src/runtime/artifact.rs`.
+- Tests added: bootstrap grammar/help, isolated fixture install, same-major no-op, blocked major upgrade, unknown-version safety, harness attention separation, and failure-preserving artifact paths.
+- Discrepancies from design: release resolution accepts a strict local manifest override for isolated environments and otherwise uses the bounded canonical GitHub latest endpoint; existing executable versions are probed directly and unknown versions block replacement.
 - Adjacent issues parked: none.
+
+## Review resolution
+- Reconnected the binary path to `FileReleaseResolver`/`SystemReleaseResolver`, `ArtifactFetcher`, and `BinaryInstaller`.
+- Added GitHub latest-release and checksum parsing, direct version probing, major-safe decisioning, and isolated fixture coverage for install, no-op, and blocked major paths.
 
 ## Review findings (2026-07-12)
 
