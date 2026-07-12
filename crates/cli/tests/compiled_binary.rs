@@ -1701,6 +1701,78 @@ fn reconciliation_repairs_instruction_bridge_drift_with_target_and_scope_boundar
 }
 
 #[test]
+fn reconciliation_plan_and_sync_preserve_nested_project_claude_bridge() {
+    for (mode, expected_bytes) in [
+        ("symlink", None),
+        ("import", Some(b"@../AGENTS.md\n".as_slice())),
+    ] {
+        let machine = machine();
+        let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+        let mut config = native_config(fixture.executable(), fixture.executable());
+        config = config.replace(
+            "claude_mode = \"symlink\"",
+            &format!("claude_mode = \"{mode}\""),
+        );
+        write_owned(&machine, "config.toml", &config);
+
+        let project = machine.working_directory().to_owned();
+        fs::write(project.join("AGENTS.md"), b"canonical\n").unwrap();
+        fs::create_dir_all(project.join(".claude")).unwrap();
+        match expected_bytes {
+            None => std::os::unix::fs::symlink("../AGENTS.md", project.join(".claude/CLAUDE.md"))
+                .unwrap(),
+            Some(contents) => fs::write(project.join(".claude/CLAUDE.md"), contents).unwrap(),
+        }
+
+        let setup = run(&machine, &["instructions", "setup", "--project", "--json"]);
+        assert_code(&setup, 0);
+        assert_eq!(json(&setup)["summary"]["changed"], false);
+        assert!(!project.join("CLAUDE.md").exists());
+
+        let plan = run(
+            &machine,
+            &["plan", "--project", "--target", "claude", "--json"],
+        );
+        assert_code(&plan, 2);
+        let plan_value = json(&plan);
+        let operation = plan_value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|operation| operation["status"] == "no_change")
+            .expect("nested managed bridge is represented as no_change");
+        assert_eq!(
+            operation["fields"]["path"],
+            project.join(".claude/CLAUDE.md").to_str().unwrap()
+        );
+
+        let sync = run(
+            &machine,
+            &["sync", "--project", "--target", "claude", "--json"],
+        );
+        assert_code(&sync, 0);
+        assert_eq!(json(&sync)["summary"]["changed"], false);
+
+        let repeat = run(
+            &machine,
+            &["sync", "--project", "--target", "claude", "--json"],
+        );
+        assert_code(&repeat, 0);
+        assert_eq!(json(&repeat)["summary"]["changed"], false);
+        match expected_bytes {
+            None => assert_eq!(
+                fs::read_link(project.join(".claude/CLAUDE.md")).unwrap(),
+                PathBuf::from("../AGENTS.md")
+            ),
+            Some(contents) => assert_eq!(
+                fs::read(project.join(".claude/CLAUDE.md")).unwrap(),
+                contents
+            ),
+        }
+    }
+}
+
+#[test]
 fn daemon_run_accepts_json_output() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);

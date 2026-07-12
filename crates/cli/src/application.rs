@@ -3099,7 +3099,11 @@ impl StatusApplication<'_> {
                 }
                 return outcome;
             };
-            path = bridge;
+            // Project setup preserves a nested-only Claude bridge when the
+            // root `CLAUDE.md` does not exist.  The desired resource keeps
+            // the stable bridge identity, so preview must resolve the
+            // materialized path using the same policy before classifying it.
+            path = preferred_instruction_bridge_path(&filesystem, concrete_scope, target, bridge);
         }
 
         let health = if is_canonical {
@@ -4436,6 +4440,38 @@ fn instruction_locations(
             };
             (canonical, bridges)
         }
+    }
+}
+
+/// Resolve the materialized Claude bridge for a project using setup's
+/// nested-only preservation policy. The inventory identity remains the
+/// ordinary project bridge resource even when setup keeps `.claude/CLAUDE.md`.
+fn preferred_instruction_bridge_path(
+    filesystem: &dyn FileSystem,
+    scope: &Scope,
+    target: &HarnessId,
+    root_bridge: AbsolutePath,
+) -> AbsolutePath {
+    if target.as_str() != "claude" {
+        return root_bridge;
+    }
+    let Scope::Project(project) = scope else {
+        return root_bridge;
+    };
+    let nested = AbsolutePath::new(format!("{}/.claude/CLAUDE.md", project.as_str()))
+        .expect("nested project Claude bridge path is valid");
+    let root_missing = filesystem
+        .inspect(&root_bridge)
+        .map(|metadata| metadata.kind() == FileKind::Missing)
+        .unwrap_or(false);
+    let nested_present = filesystem
+        .inspect(&nested)
+        .map(|metadata| metadata.kind() != FileKind::Missing)
+        .unwrap_or(false);
+    if root_missing && nested_present {
+        nested
+    } else {
+        root_bridge
     }
 }
 
