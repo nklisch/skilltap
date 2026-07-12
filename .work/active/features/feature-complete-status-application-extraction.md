@@ -1,7 +1,7 @@
 ---
 id: feature-complete-status-application-extraction
 kind: feature
-stage: review
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -260,3 +260,21 @@ already verified.
 
 Both extraction stories are done with green verification and approved review
 records; the feature is ready for its aggregate review.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate feature review at standard effective weight, using a
+fresh-context same-harness deep review because no different model class was
+available. The aggregate extraction matches the designed private status
+boundary; projection, update, observation, resource identity, warning, and
+read-only behavior remain covered by the approved child reviews. An isolated
+worktree at 042e7ed passed `cargo fmt --all -- --check`, the full workspace
+offline test suite, and `cargo clippy --workspace --all-targets --offline --
+-D warnings`. Bootstrap edits in the main worktree were excluded from this
+refactor review.
