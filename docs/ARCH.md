@@ -47,7 +47,7 @@ skilltap/
 │   ├── .claude-plugin/
 │   ├── .codex-plugin/
 │   ├── skills/skilltap/    # complete shared skill directory
-│   └── marketplaces/       # channel-specific catalog sources
+│   └── .agents/plugins/    # Codex catalog (Claude catalog stays in .claude-plugin/)
 └── tests/
 ```
 
