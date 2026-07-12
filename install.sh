@@ -48,6 +48,44 @@ download() {
   fi
 }
 
+verify_checksum() {
+  CHECKSUMS_FILE="$1"
+  ARTIFACT="$2"
+  ARTIFACT_NAME="$3"
+
+  EXPECTED="$(awk -v artifact="$ARTIFACT_NAME" '$2 == artifact { print $1; found = 1; exit } END { if (!found) exit 1 }' "$CHECKSUMS_FILE")" || {
+    err "Release checksums do not contain ${ARTIFACT_NAME}"
+    exit 1
+  }
+
+  case "$EXPECTED" in
+    ''|*[!0-9a-fA-F]*)
+      err "Release checksum for ${ARTIFACT} is malformed"
+      exit 1
+      ;;
+  esac
+  if [ "$(printf '%s' "$EXPECTED" | awk '{ print length }')" -ne 64 ]; then
+    err "Release checksum for ${ARTIFACT} is malformed"
+    exit 1
+  fi
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    ACTUAL="$(sha256sum "$ARTIFACT" | awk '{ print $1 }')"
+  elif command -v shasum >/dev/null 2>&1; then
+    ACTUAL="$(shasum -a 256 "$ARTIFACT" | awk '{ print $1 }')"
+  else
+    err "sha256sum or shasum is required to verify release artifacts"
+    exit 1
+  fi
+
+  EXPECTED="$(printf '%s' "$EXPECTED" | tr '[:upper:]' '[:lower:]')"
+  ACTUAL="$(printf '%s' "$ACTUAL" | tr '[:upper:]' '[:lower:]')"
+  if [ "$ACTUAL" != "$EXPECTED" ]; then
+    err "Checksum verification failed for ${ARTIFACT}"
+    exit 1
+  fi
+}
+
 # --- Detect platform ---
 
 detect_platform() {
@@ -92,22 +130,22 @@ main() {
 
   ASSET="skilltap-${OS}-${ARCH}"
   URL="https://github.com/${REPO}/releases/download/${VERSION}/${ASSET}"
+  CHECKSUMS_URL="https://github.com/${REPO}/releases/download/${VERSION}/checksums.txt"
 
   info "Downloading ${ASSET} (${VERSION})..."
   TMPFILE="$(mktemp)"
-  trap 'rm -f "$TMPFILE"' EXIT
+  CHECKSUMS_FILE="$(mktemp)"
+  trap 'rm -f "$TMPFILE" "$CHECKSUMS_FILE"' EXIT
 
   download "$URL" "$TMPFILE"
+  download "$CHECKSUMS_URL" "$CHECKSUMS_FILE"
+  verify_checksum "$CHECKSUMS_FILE" "$TMPFILE" "$ASSET"
+  ok "Verified ${ASSET} checksum"
 
   # Install
   mkdir -p "$INSTALL_DIR"
   mv "$TMPFILE" "${INSTALL_DIR}/${BINARY_NAME}"
   chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
-
-  # macOS: strip quarantine attribute
-  if [ "$OS" = "darwin" ]; then
-    xattr -d com.apple.quarantine "${INSTALL_DIR}/${BINARY_NAME}" 2>/dev/null || true
-  fi
 
   ok "Installed skilltap ${VERSION} to ${INSTALL_DIR}/${BINARY_NAME}"
   echo ""

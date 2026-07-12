@@ -1,7 +1,7 @@
 ---
 id: gate-security-installer-integrity
 kind: story
-stage: implementing
+stage: review
 tags: [security]
 parent: null
 depends_on: []
@@ -37,3 +37,15 @@ attribute before execution.
 Download and verify the expected SHA-256 or attestation before installation,
 fail closed on mismatch, and stop clearing quarantine unless an explicit,
 documented opt-in requires it.
+
+## Implementation Notes
+
+- `install.sh` now downloads the release `checksums.txt` alongside the
+  platform asset and verifies the selected asset with `sha256sum` or the
+  portable macOS `shasum -a 256` fallback before moving it into the install
+  directory.
+- Verification fails closed when the asset is absent from the checksum file,
+  the digest is malformed, no SHA-256 utility is available, or the digest does
+  not match. Temporary files are cleaned up by the exit trap.
+- The installer no longer removes the macOS quarantine attribute.
+- Verification: `sh -n install.sh`.
