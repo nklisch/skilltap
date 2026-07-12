@@ -1,7 +1,7 @@
 ---
 id: gate-tests-safe-update-e2e
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -54,6 +54,14 @@ the daemon's inventory selector.
 Verification: the focused safe-update test passes against the fixed
 implementation, including no-op and changed-revision daemon records.
 
+Added `safe_update_policy_pins_drift_and_source_failures_remain_visible`.
+It covers check/off/apply-safe policy observations, a pinned resource blocked
+from automatic replacement, local destination drift preservation, unavailable
+Git source handling, and daemon-run state retention.
+
+Verification: both safe-update focused tests pass, including the existing
+Git revision transition regression.
+
 ## Review (2026-07-12)
 
 **Verdict**: Request changes
@@ -71,3 +79,11 @@ drifted resources, partial/lock/source failures, repeat no-op behavior, and
 available-revision plus daemon-run state assertions across those outcomes.
 Those cases are absent; extend the isolated matrix without weakening the
 existing regression.
+
+## Follow-up Resolution
+
+Added `safe_update_policy_pins_drift_and_source_failures_remain_visible`.
+It covers check/off/apply-safe policy observations, a pinned resource blocked
+from automatic replacement, local destination drift preservation, unavailable
+Git source handling, and daemon-run state retention. Both safe-update focused
+tests pass, including the Git revision transition regression.
