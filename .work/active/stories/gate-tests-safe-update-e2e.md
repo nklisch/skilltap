@@ -38,3 +38,16 @@ drifted resources, partial/lock/source failures, repeat no-op behavior, and
 ## Test location (suggested)
 
 `crates/cli/tests/compiled_binary.rs` and application integration tests.
+
+## Implementation Notes
+
+Added `safe_update_cycle_reports_changed_git_revision_and_records_daemon_result`.
+It creates an isolated Git-backed complete skill tree, verifies daemon no-op
+state journaling, advances the upstream commit, checks status update evidence,
+then verifies the daemon applies the new tree and records its run.
+
+The initial no-op assertion currently exposes a production defect: the daemon
+returns `attention_required` despite `changed=false` and safe work completing,
+because its aggregate outcome retains the document-load attention state.
+Parked as `idea-daemon-noop-result-class`; do not weaken or skip this test. The
+story remains blocked on that fix and review of the resulting regression.
