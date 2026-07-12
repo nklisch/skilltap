@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-harness-contract-coverage
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -46,3 +46,31 @@ coverage missing.
 - Tests added: isolated fake-binary vectors for present/missing/malformed resources, target isolation, Codex unsupported behavior, unknown capability narrowing, and executable replacement between detection and mutation.
 - Discrepancies from design: operation-specific capability checks are explicit while preserving fail-closed behavior for profiles that cannot attest either operation.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: malformed version output is still collapsed to
+`SetupReason::NotInstalled` (`crates/harnesses/src/bootstrap.rs:113-127`), so
+the promised malformed-version contract is neither covered nor truthful; add
+a fake version-output case and preserve an invalid/unknown-version result
+before approving setup (this item)
+
+**Important**: the fake-binary suite does not exercise a narrowed verified
+profile withdrawing `marketplace.register` or `plugin.install`, does not
+assert that no skilltap cache files are written, and its target-isolation
+assertion only runs the Claude adapter in isolation. Add deterministic seams
+or fixtures for those acceptance branches (this item)
+
+**Nits**: none
+
+**Notes**: Standard substrate review of `63d8bdb` at highest implementation
+capability with standard review weight. The six harness integration tests and
+all harness crate tests pass. They now prove Claude's canonical source,
+qualified identity, user-scoped vectors, present / missing / malformed-list
+handling, Codex unsupported behavior, and executable replacement blocking. The
+operation-specific guard itself is fail-closed for known profiles, but no test
+can currently withdraw either global capability; the malformed-version mapping
+remains a production diagnostic defect. Keep the item at `stage: implementing`
+until the missing acceptance evidence and truthful version result are addressed.
