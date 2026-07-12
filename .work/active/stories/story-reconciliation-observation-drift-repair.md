@@ -1,7 +1,7 @@
 ---
 id: story-reconciliation-observation-drift-repair
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: null
 depends_on: []
@@ -34,3 +34,21 @@ journal entry even after an external removal or corruption.
 
 This is a final-review finding promoted directly to an implementation story;
 the foundation synchronization contract remains authoritative.
+
+## Implementation notes
+
+- Added a bounded native `plugin list --json` observation adapter for Codex and
+  Claude lifecycle resources. Valid list output is classified as present or
+  missing; malformed, unsupported, or failed observations remain unknown and
+  never invalidate the successful journal optimistically.
+- Native lifecycle sync now reuses a prior apply result only when fresh list
+  evidence does not prove the managed resource missing. Proven missing
+  resources are re-planned and repaired through the existing lock, execution,
+  and journal path.
+- `plan` exposes `fresh_state` and classifies native lifecycle previews as
+  `no_change`, `repair`, or `planned` without mutating state.
+- Added an isolated compiled regression covering present → externally removed
+  → plan repair classification → sync repair → repeat no-change.
+- Verification: `cargo fmt --all`, focused harness and CLI unit tests,
+  `cargo clippy -p skilltap-harnesses -p skilltap --all-targets --offline -- -D warnings`,
+  and all 39 compiled-binary tests pass.
