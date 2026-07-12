@@ -131,3 +131,23 @@ preservation, or post-publish identity failure. Restore a test-only
 composition seam (or equivalent deterministic fixture harness) and cover the
 acceptance matrix without reintroducing ambient production overrides. The
 item remains at `stage: implementing`.
+
+## Review (2026-07-12, coverage follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: none in the composed command path (this review)
+**Important**: compiled bootstrap acceptance matrix remains absent ->
+`story-skilltap-plugin-distribution-bootstrap-command-coverage`
+
+**Nits**: none
+
+**Notes**: Standard fresh-context review of `9e8ab3c`/`ea49bec`. Binary
+attention now correctly gates harness mutation, and the command uses the
+canonical resolver with direct installed-version probes. The change adds no
+test-only composition seam or compiled coverage for first install, repeat,
+major guard/acknowledgment, target narrowing, mixed harness attention,
+pre-publish preservation, wrong-version artifacts, or post-publish identity
+failure. Keep the command at `stage: implementing` until the existing
+coverage follow-up restores deterministic isolated acceptance tests without
+reintroducing production environment overrides.

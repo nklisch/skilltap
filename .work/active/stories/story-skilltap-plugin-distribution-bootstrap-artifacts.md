@@ -96,3 +96,24 @@ replacement can overwrite an unrelated executable during rollback. No
 do not cover oversized/symlink responses, redirect hops, checksum cleanup,
 permission/interruption preservation, replacement races, or post-publish
 rollback. Item remains at `stage: implementing`.
+
+## Review (2026-07-12, coverage follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: none in the hardened implementation (this review)
+**Important**: required transport/publication regression coverage remains
+missing -> `story-skilltap-plugin-distribution-bootstrap-artifact-boundary-hardening`
+
+**Nits**: none
+
+**Notes**: Standard fresh-context review of `9e8ab3c`/`ea49bec`. The
+implementation now fetches each redirect hop with an attested-host check,
+uses private bounded temporary files, rejects duplicate selected assets, and
+revalidates publication and rollback identities. The new integration suite
+only exercises duplicate manifest assets and checksum preservation; it does
+not cover the redirect-hop loop, oversized or symlink payload rejection,
+temporary cleanup, permission/interruption paths, replacement races, or
+post-publish rollback preservation required by this story. Item remains at
+`stage: implementing` until the existing hardening follow-up adds those
+isolated fixtures.

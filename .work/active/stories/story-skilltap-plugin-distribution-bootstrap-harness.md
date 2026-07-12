@@ -92,3 +92,26 @@ scope/target isolation, present/missing/unknown list behavior, capability
 narrowing, or identity replacement handling. Add the operation-specific
 capability check and the required isolated tests. Item remains at
 `stage: implementing`.
+
+## Review (2026-07-12, coverage follow-up)
+
+**Verdict**: Request changes
+
+**Blockers**: marketplace mutation is still authorized by `plugin.install`
+alone; `marketplace.register` is not checked before the native add ->
+`story-skilltap-plugin-distribution-bootstrap-harness-contract-coverage`
+**Important**: required fake-binary lifecycle/identity regression suite is
+still missing -> `story-skilltap-plugin-distribution-bootstrap-harness-contract-coverage`
+
+**Nits**: none
+
+**Notes**: Standard fresh-context review of `9e8ab3c`/`ea49bec`. Canonical
+Claude source/qualified identity, read-first observation, Codex
+`Unsupported`, and last-moment executable identity revalidation are present.
+The adapter still checks only `plugin.install` and can invoke marketplace
+registration when the selected profile does not grant `marketplace.register`.
+The new integration test covers Codex unsupported only; no isolated fake
+binary tests assert exact Claude vectors, scope/target isolation,
+present/missing/unknown handling, capability narrowing, or replacement
+blocking. Item remains at `stage: implementing` until the existing contract
+coverage follow-up closes both gaps.
