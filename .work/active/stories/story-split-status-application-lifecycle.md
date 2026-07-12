@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-lifecycle
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-execution-ports]
@@ -53,3 +53,14 @@ import or call target could alter which adapter runs. Revert this commit only;
 execution ports remain safely extracted and lifecycle behavior returns to the
 pre-step layout.
 
+## Implementation Notes
+
+- Moved daemon/update orchestration, lifecycle preview, native lifecycle, and
+  standalone skill install/update/remove methods into the private
+  `application/lifecycle.rs` module.
+- Kept all supporting helpers, adapter construction, operation IDs, state
+  journal wiring, and entrypoint signatures unchanged; the child module uses
+  the parent support surface via `super`.
+- Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
+  `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
+  binary tests).
