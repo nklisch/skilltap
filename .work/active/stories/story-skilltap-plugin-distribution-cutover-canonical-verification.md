@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-cutover-canonical-verification
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: []
@@ -32,3 +32,16 @@ Acceptance criteria:
 - Tests added: offline release/installer/surface/package/bootstrap/harness evidence gate and complete skill-reference presence checks.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. The offline evidence gate
+passes release identity, installer/surface, package, CLI bootstrap, harness,
+and complete guidance-tree checks while explicitly leaving legacy retirement
+operator-gated.
