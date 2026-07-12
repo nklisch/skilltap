@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-installer
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: [story-skilltap-plugin-distribution-release-contract]
@@ -34,3 +34,17 @@ Acceptance criteria:
 - Tests added: isolated shell installer checks for redirect/checksum/metadata failures, destination safety, idempotent rerun, binary-attention preservation, and mixed harness attention.
 - Discrepancies from design: none; this story records and verifies the previously implemented parity boundary.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. Existing installer
+delegates verified publication and harness detection to bootstrap, preserves
+the prior binary on binary attention, and passes the isolated shell contract
+suite covering redirects, checksums, destination safety, reruns, and mixed
+harness attention.
