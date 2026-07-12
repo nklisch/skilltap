@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-dead-observation-scope-helper
 kind: story
-stage: drafting
+stage: implementing
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -34,3 +34,8 @@ search found no call sites beyond its definition.
 
 Delete the helper and remove any import made unused by its removal while
 preserving `ObservationKey` and its test usage.
+
+## Autopilot implementation note
+
+This is a bounded behavior-preserving cleanup with a complete removal scope;
+no separate design expansion is required.
