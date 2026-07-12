@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-version-decoding
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on: []
@@ -37,3 +37,13 @@ fallback, and update fake harness fixtures to model real version output.
 - Tests added: exact real Codex/Claude decoding with observe-only profiles; cross-harness and trailing-document rejection; direct version argv capture; distinct nonzero and timeout errors; exact fake payload coverage.
 - Discrepancies from design: the process-context story owns the explicit child-environment parameter and call-site integration, so this story leaves the existing empty environment at the merge seam for that parallel change.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at the project-default `standard` weight. The story was escalated to a fresh-context deep lane because it changes a native process contract. Commit `2783a4c` accepts only the attested Codex and Claude forms plus one bounded strict JSON document, preserves typed nonzero/runtime/format failures, and leaves newly recognized versions observe-only. `cargo test --workspace --all-targets`, formatting, and all-target/all-feature clippy completed green.

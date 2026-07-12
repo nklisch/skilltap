@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-process-context
 kind: story
-stage: review
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on: []
@@ -47,3 +47,13 @@ isolated test machines so every harness process is contained by explicit roots.
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 - `cargo fmt --all -- --check`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at the project-default `standard` weight. The story was escalated to a fresh-context deep lane because it changes the environment and native execution boundary. Commit `e3ceea0` resolves independent XDG/Codex/Claude roots, constructs the exact six-variable production child environment, and routes it through detection, observation, bootstrap, and lifecycle calls while the bounded runner clears ambient variables. Isolation and canary tests are green, as are `cargo test --workspace --all-targets`, formatting, and all-target/all-feature clippy.

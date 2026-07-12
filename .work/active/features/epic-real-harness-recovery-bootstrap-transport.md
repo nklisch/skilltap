@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-bootstrap-transport
 kind: feature
-stage: review
+stage: done
 tags: [correctness, security, infra, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: []
@@ -261,3 +261,13 @@ declared in this feature's brief.
   boundary remain unchanged.
 - Adjacent issues parked: none; the Codex plugin setup attention is already
   owned by sibling epic features.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at the project-default `standard` weight using a fresh-context deep lane for the feature's network, checksum, and executable-publication boundaries. Commit `b0cd79c` parses the exact curl frame without losing an empty redirect field, preserves strict per-hop host validation, recognizes GitHub's exact release-asset host, and verifies checksum before making a private payload executable. The deterministic bootstrap matrix and full workspace tests are green; the implementation record also captures a successful disposable live install/no-op repeat. Formatting and all-target/all-feature clippy are green.
