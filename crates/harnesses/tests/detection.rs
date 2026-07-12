@@ -406,6 +406,33 @@ fn project_resource_observation_stays_inside_documented_native_roots() {
 }
 
 #[test]
+fn empty_project_canonical_observation_is_healthy_and_empty() {
+    let root = TempRoot::new("skilltap-empty-project-canonical").unwrap();
+    let home = root.join("home");
+    let project = root.join("project");
+    fs::create_dir_all(&project).unwrap();
+    let environment = TestEnvironment::default()
+        .with(EnvironmentVariable::Home, home.to_str().unwrap())
+        .with(
+            EnvironmentVariable::CodexHome,
+            root.join("codex").to_str().unwrap(),
+        );
+    let platform = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
+    let paths = skilltap_harnesses::codex_observation_paths(
+        &platform,
+        &Scope::Project(AbsolutePath::new(project.to_str().unwrap()).unwrap()),
+    )
+    .unwrap();
+    let observations = observe_codex_canonical_resources(
+        &paths,
+        &Scope::Project(AbsolutePath::new(project.to_str().unwrap()).unwrap()),
+        ExternalTreeLimits::new(8, 64, 4096, 8192, 1024).unwrap(),
+    )
+    .unwrap();
+    assert!(observations.is_empty());
+}
+
+#[test]
 fn codex_canonical_global_observation_stays_inside_codex_roots() {
     let root = TempRoot::new("skilltap-codex-canonical").unwrap();
     let home = root.join("home");

@@ -1235,6 +1235,7 @@ impl StatusApplication<'_> {
         let mut operations = Vec::new();
         let mut requests = Vec::new();
         let mut seeds = BTreeMap::new();
+        let mut target_projection_keys = BTreeSet::new();
         let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
             .expect("bounded lifecycle process limits are valid");
         let json_limits =
@@ -1265,7 +1266,7 @@ impl StatusApplication<'_> {
                     .collect::<Vec<_>>(),
             };
             for request in scope_requests {
-                let resource = if request.is_update() {
+                let resource = if request.is_update() || removal {
                     let key = request.resource_key(concrete_scope).map_err(|_| {
                         ErrorDetail::new(
                             "resource_id_invalid",
@@ -1290,12 +1291,19 @@ impl StatusApplication<'_> {
                         },
                     }
                 } else {
-                    match request.desired_resource(concrete_scope, &targets.resolved) {
+                    let proposed = match request.desired_resource(concrete_scope, &targets.resolved)
+                    {
                         Ok(resource) => resource,
                         Err(error) => {
                             outcome.result = ResultClass::Invalid;
                             return outcome.with_error(error);
                         }
+                    };
+                    match inventory.resources().get(proposed.key()) {
+                        Some(existing) if existing.source() == proposed.source() => {
+                            existing.clone()
+                        }
+                        _ => proposed,
                     }
                 };
                 if request.retains_desired() && !request.is_update() {
@@ -1314,11 +1322,15 @@ impl StatusApplication<'_> {
                             ));
                         }
                     }
-                } else if let Some(next) = inventory.without_resource(resource.key()) {
-                    inventory = next;
                 }
 
-                let mut native_ids = BTreeMap::new();
+                let warning_count = outcome.warnings.len();
+                let mut native_ids = documents
+                    .state
+                    .as_ref()
+                    .and_then(|state| state.resources().get(resource.key()))
+                    .map(|state| state.native_ids().clone())
+                    .unwrap_or_default();
                 for target_id in targets.iter() {
                     let Some((harness, configured, executable, capability)) =
                         configured_native_profile(
@@ -1469,6 +1481,12 @@ impl StatusApplication<'_> {
                     };
                     seeds.insert(resource.key().clone(), native_state);
                 }
+                if removal
+                    && inventory.resources().contains_key(resource.key())
+                    && outcome.warnings.len() == warning_count
+                {
+                    target_projection_keys.insert(resource.key().clone());
+                }
             }
         }
 
@@ -1481,7 +1499,26 @@ impl StatusApplication<'_> {
             ));
         }
         if operations.is_empty() {
-            if inventory_changed && removal && self.inventory.replace(&inventory).is_err() {
+            if removal {
+                inventory = match project_inventory_targets(
+                    &inventory,
+                    &target_projection_keys,
+                    &targets.resolved,
+                ) {
+                    Ok(inventory) => inventory,
+                    Err(()) => {
+                        outcome.result = ResultClass::Invalid;
+                        return outcome.with_error(ErrorDetail::new(
+                            "inventory_publish_failed",
+                            "The desired inventory could not be updated safely.",
+                        ));
+                    }
+                };
+            }
+            if removal
+                && inventory != original_inventory
+                && self.inventory.replace(&inventory).is_err()
+            {
                 outcome.result = ResultClass::Invalid;
                 return outcome.with_error(ErrorDetail::new(
                     "inventory_publish_failed",
@@ -1493,6 +1530,20 @@ impl StatusApplication<'_> {
                 return outcome.with_error(ErrorDetail::new(
                     "state_seed_publish_failed",
                     "The native lifecycle state could not be recorded safely.",
+                ));
+            }
+            if removal
+                && project_state_targets_after_remove(
+                    self.state,
+                    &target_projection_keys,
+                    &targets.resolved,
+                )
+                .is_err()
+            {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_publish_failed",
+                    "The native lifecycle state could not be updated safely.",
                 ));
             }
             if outcome.errors.is_empty() && outcome.warnings.is_empty() {
@@ -1578,6 +1629,49 @@ impl StatusApplication<'_> {
                     | OperationOutcome::Pending
             ) {
                 outcome.result = ResultClass::AttentionRequired;
+            }
+        }
+        if removal
+            && report.result.operations().values().all(|result| {
+                matches!(
+                    result.outcome(),
+                    OperationOutcome::Applied | OperationOutcome::NoChange
+                )
+            })
+        {
+            inventory = match project_inventory_targets(
+                &inventory,
+                &target_projection_keys,
+                &targets.resolved,
+            ) {
+                Ok(inventory) => inventory,
+                Err(()) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_publish_failed",
+                        "The desired inventory could not be updated safely.",
+                    ));
+                }
+            };
+            if inventory != original_inventory && self.inventory.replace(&inventory).is_err() {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "inventory_publish_failed",
+                    "The desired inventory could not be updated safely.",
+                ));
+            }
+            if project_state_targets_after_remove(
+                self.state,
+                &target_projection_keys,
+                &targets.resolved,
+            )
+            .is_err()
+            {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_publish_failed",
+                    "The native lifecycle state could not be updated safely.",
+                ));
             }
         }
         let successful = report.result.operations().values().all(|result| {
@@ -1756,6 +1850,7 @@ impl StatusApplication<'_> {
                 ));
             }
         };
+        let mut compatibility_label = "compatible";
         for compatibility in SkillCompatibility::evaluate(&skill, &targets.resolved) {
             match compatibility.class() {
                 SkillCompatibilityClass::Blocked => {
@@ -1769,6 +1864,7 @@ impl StatusApplication<'_> {
                     );
                 }
                 SkillCompatibilityClass::Warning => {
+                    compatibility_label = "warning";
                     outcome = outcome.with_warning(
                         Warning::new(
                             "skill_frontmatter_warning",
@@ -1852,6 +1948,7 @@ impl StatusApplication<'_> {
         let mut operations = Vec::new();
         let mut entries = BTreeMap::new();
         let mut seeds = BTreeMap::new();
+        let mut old_revision = None;
         let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
             Ok(timestamp) => timestamp,
             Err(_) => {
@@ -1876,10 +1973,23 @@ impl StatusApplication<'_> {
                 },
                 concrete_scope.clone(),
             );
+            if old_revision.is_none() {
+                old_revision = documents
+                    .state
+                    .as_ref()
+                    .and_then(|state| state.resources().get(&key))
+                    .and_then(|state| state.installed_revision())
+                    .cloned();
+            }
+            let desired_targets = inventory
+                .resources()
+                .get(&key)
+                .map(|resource| resource.targets().clone())
+                .unwrap_or_else(|| targets.resolved.clone());
             let desired = match DesiredResource::new(
                 key.clone(),
                 ResourceKind::StandaloneSkill,
-                targets.resolved.clone(),
+                desired_targets,
                 DesiredOrigin::Direct,
                 Some(source.clone()),
                 update_intent,
@@ -1907,7 +2017,12 @@ impl StatusApplication<'_> {
                     ));
                 }
             };
-            let mut native_ids = BTreeMap::new();
+            let mut native_ids = documents
+                .state
+                .as_ref()
+                .and_then(|state| state.resources().get(&key))
+                .map(|state| state.native_ids().clone())
+                .unwrap_or_default();
             let destinations =
                 match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
                     Some(destinations) => destinations,
@@ -2111,7 +2226,12 @@ impl StatusApplication<'_> {
             ));
         }
         if operations.is_empty() {
-            if let Err(()) = seed_state_if_missing(self.state, &seeds) {
+            let seed_result = if command == "skill update" {
+                refresh_state_seeds(self.state, &seeds)
+            } else {
+                seed_state_if_missing(self.state, &seeds)
+            };
+            if let Err(()) = seed_result {
                 outcome.result = ResultClass::Invalid;
                 return outcome.with_error(ErrorDetail::new(
                     "state_seed_publish_failed",
@@ -2122,9 +2242,26 @@ impl StatusApplication<'_> {
                 outcome.result = ResultClass::Completed;
             }
             let operation_count = outcome.operations.len() as u64;
-            return outcome
+            let mut outcome = outcome
                 .with_summary("operations", operation_count)
-                .with_summary("changed", false);
+                .with_summary(
+                    "changed",
+                    command == "skill update"
+                        && git_revision_changed(old_revision.as_ref(), git_commit.as_ref()),
+                );
+            if command == "skill update" {
+                outcome = outcome
+                    .with_summary("compatibility", compatibility_label)
+                    .with_summary("affected_targets", harnesses_label(&targets.resolved));
+                if let Some(new_revision) = git_commit.as_ref() {
+                    if let Some(old_revision) = old_revision.as_ref() {
+                        outcome =
+                            outcome.with_summary("old_revision", revision_label(old_revision));
+                    }
+                    outcome = outcome.with_summary("new_revision", format!("git:{new_revision}"));
+                }
+            }
+            return outcome;
         }
         let plan = match Plan::new(operations) {
             Ok(plan) => plan,
@@ -2181,9 +2318,21 @@ impl StatusApplication<'_> {
         if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
             outcome.result = ResultClass::Completed;
         }
-        outcome
+        let mut outcome = outcome
             .with_summary("operations", report.result.operations().len() as u64)
-            .with_summary("changed", report.changed)
+            .with_summary("changed", report.changed);
+        if command == "skill update" {
+            outcome = outcome
+                .with_summary("compatibility", compatibility_label)
+                .with_summary("affected_targets", harnesses_label(&targets.resolved));
+            if let Some(new_revision) = git_commit.as_ref() {
+                if let Some(old_revision) = old_revision.as_ref() {
+                    outcome = outcome.with_summary("old_revision", revision_label(old_revision));
+                }
+                outcome = outcome.with_summary("new_revision", format!("git:{new_revision}"));
+            }
+        }
+        outcome
     }
 
     /// Refresh a managed skill from the source recorded in state. The normal
@@ -2441,6 +2590,7 @@ impl StatusApplication<'_> {
         let mut operations = Vec::new();
         let mut entries = BTreeMap::new();
         let seeds = BTreeMap::new();
+        let mut target_projection_keys = BTreeSet::new();
         for concrete_scope in &scope.resolved {
             let Some(key) = ResourceId::new(format!("skill:{}", name.as_str()))
                 .ok()
@@ -2478,6 +2628,7 @@ impl StatusApplication<'_> {
                 );
                 continue;
             }
+            let warning_count = outcome.warnings.len();
             let destinations =
                 match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
                     Some(destinations) => destinations,
@@ -2587,8 +2738,8 @@ impl StatusApplication<'_> {
                     },
                 );
             }
-            if inventory.resources().contains_key(&key) {
-                inventory = inventory.without_resource(&key).unwrap_or(inventory);
+            if outcome.warnings.len() == warning_count {
+                target_projection_keys.insert(key);
             }
         }
         if !acknowledged && !outcome.warnings.is_empty() {
@@ -2596,18 +2747,45 @@ impl StatusApplication<'_> {
                 .with_summary("operations", 0_u64)
                 .with_summary("changed", false);
         }
-        let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
-            InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
-                .expect("empty inventory is valid")
-        });
-        if inventory != empty_inventory && self.inventory.replace(&inventory).is_err() {
-            outcome.result = ResultClass::Invalid;
-            return outcome.with_error(ErrorDetail::new(
-                "inventory_publish_failed",
-                "The skill inventory could not be updated safely.",
-            ));
-        }
         if operations.is_empty() {
+            inventory = match project_inventory_targets(
+                &inventory,
+                &target_projection_keys,
+                &targets.resolved,
+            ) {
+                Ok(inventory) => inventory,
+                Err(()) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_publish_failed",
+                        "The skill inventory could not be updated safely.",
+                    ));
+                }
+            };
+            let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
+                InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                    .expect("empty inventory is valid")
+            });
+            if inventory != empty_inventory && self.inventory.replace(&inventory).is_err() {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "inventory_publish_failed",
+                    "The skill inventory could not be updated safely.",
+                ));
+            }
+            if project_state_targets_after_remove(
+                self.state,
+                &target_projection_keys,
+                &targets.resolved,
+            )
+            .is_err()
+            {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_publish_failed",
+                    "The skill state could not be updated safely.",
+                ));
+            }
             if outcome.errors.is_empty() && outcome.warnings.is_empty() {
                 outcome.result = ResultClass::Completed;
             }
@@ -2656,6 +2834,12 @@ impl StatusApplication<'_> {
                     return outcome.with_error(native_execution_error(&error));
                 }
             };
+        let report_successful = report.result.operations().values().all(|result| {
+            matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            )
+        });
         for result in report.result.operations().values() {
             outcome = outcome.with_operation(crate::OperationOutcome::new(
                 result.operation_id().to_string(),
@@ -2670,6 +2854,46 @@ impl StatusApplication<'_> {
         }
         if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
             outcome.result = ResultClass::Completed;
+        }
+        if report_successful {
+            inventory = match project_inventory_targets(
+                &inventory,
+                &target_projection_keys,
+                &targets.resolved,
+            ) {
+                Ok(inventory) => inventory,
+                Err(()) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "inventory_publish_failed",
+                        "The skill inventory could not be updated safely.",
+                    ));
+                }
+            };
+            let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
+                InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                    .expect("empty inventory is valid")
+            });
+            if inventory != empty_inventory && self.inventory.replace(&inventory).is_err() {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "inventory_publish_failed",
+                    "The skill inventory could not be updated safely.",
+                ));
+            }
+            if project_state_targets_after_remove(
+                self.state,
+                &target_projection_keys,
+                &targets.resolved,
+            )
+            .is_err()
+            {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "state_publish_failed",
+                    "The skill state could not be updated safely.",
+                ));
+            }
         }
         outcome
             .with_summary("operations", report.result.operations().len() as u64)
@@ -3989,8 +4213,31 @@ fn resolve_git_skill_source(
             let _ = SystemNativeProcessRunner.run(&set_head);
         }
     }
+    if let Some(revision) = requested_revision {
+        let fetch_revision = NativeProcessRequest::new(
+            executable.clone(),
+            [
+                OsString::from("-C"),
+                OsString::from(checkout.as_str()),
+                OsString::from("fetch"),
+                OsString::from("--depth"),
+                OsString::from("1"),
+                OsString::from("origin"),
+                OsString::from(revision.as_str()),
+            ],
+            BTreeMap::new(),
+            None,
+            limits,
+        );
+        let output = SystemNativeProcessRunner
+            .run(&fetch_revision)
+            .map_err(|_| ())?;
+        if !output.status().success() {
+            return Err(());
+        }
+    }
     let revision = requested_revision
-        .map(|revision| revision.as_str())
+        .map(|_| "FETCH_HEAD")
         .unwrap_or("origin/HEAD");
     let verify = NativeProcessRequest::new(
         executable.clone(),
@@ -4505,12 +4752,131 @@ fn seed_state_if_missing(
         .map_err(|_| ())?,
     };
     for (key, seed) in seeds {
-        if document.resources().contains_key(key) {
-            continue;
+        if !document.resources().contains_key(key) {
+            document = document.with_resource_state(seed.clone()).map_err(|_| ())?;
         }
-        document = document.with_resource_state(seed.clone()).map_err(|_| ())?;
     }
     repository.replace(&document).map_err(|_| ())
+}
+
+fn refresh_state_seeds(
+    repository: &dyn StateRepository,
+    seeds: &BTreeMap<ResourceKey, ResourceState>,
+) -> Result<(), ()> {
+    if seeds.is_empty() {
+        return Ok(());
+    }
+    let mut document = match repository.load().map_err(|_| ())? {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => StateDocument::new(
+            skilltap_core::storage::STATE_SCHEMA_VERSION,
+            [],
+            [],
+            None,
+            None,
+            None,
+        )
+        .map_err(|_| ())?,
+    };
+    for (key, seed) in seeds {
+        if let Some(existing) = document.resources().get(key) {
+            if state_seed_matches(existing, seed) {
+                continue;
+            }
+            document = document
+                .refresh_resource_state(seed.clone())
+                .map_err(|_| ())?;
+        } else {
+            document = document.with_resource_state(seed.clone()).map_err(|_| ())?;
+        }
+    }
+    repository.replace(&document).map_err(|_| ())
+}
+
+fn state_seed_matches(existing: &ResourceState, seed: &ResourceState) -> bool {
+    existing.native_ids() == seed.native_ids()
+        && existing.provenance() == seed.provenance()
+        && existing.ownership() == seed.ownership()
+        && existing.source() == seed.source()
+        && existing.managed_artifact() == seed.managed_artifact()
+        && existing.fingerprint() == seed.fingerprint()
+        && existing.installed_revision() == seed.installed_revision()
+        && existing.available_revision() == seed.available_revision()
+}
+
+fn project_inventory_targets(
+    inventory: &InventoryDocument,
+    keys: &BTreeSet<ResourceKey>,
+    selected: &HarnessSet,
+) -> Result<InventoryDocument, ()> {
+    let mut next = inventory.clone();
+    for key in keys {
+        let Some(existing) = next.resources().get(key).cloned() else {
+            continue;
+        };
+        let remaining = existing
+            .targets()
+            .iter()
+            .filter(|target| !selected.contains(target))
+            .cloned()
+            .collect::<Vec<_>>();
+        if remaining.is_empty() {
+            next = next.without_resource(key).ok_or(())?;
+        } else {
+            let targets = HarnessSet::new(remaining).map_err(|_| ())?;
+            let projected = existing.with_targets(targets).map_err(|_| ())?;
+            next = next.replace_resource(projected).map_err(|_| ())?;
+        }
+    }
+    Ok(next)
+}
+
+fn project_state_targets_after_remove(
+    repository: &dyn StateRepository,
+    keys: &BTreeSet<ResourceKey>,
+    selected: &HarnessSet,
+) -> Result<(), ()> {
+    if keys.is_empty() {
+        return Ok(());
+    }
+    let mut document = match repository.load().map_err(|_| ())? {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => return Ok(()),
+    };
+    let mut changed = false;
+    for key in keys {
+        let Some(existing) = document.resources().get(key).cloned() else {
+            continue;
+        };
+        let mut native_ids = existing.native_ids().clone();
+        native_ids.retain(|harness, _| !selected.contains(harness));
+        if native_ids.is_empty() {
+            document = document.without_resource(key).map_err(|_| ())?;
+        } else if native_ids != *existing.native_ids() {
+            let projected = ResourceState::new(
+                existing.key().clone(),
+                native_ids,
+                existing.provenance(),
+                existing.ownership(),
+                existing.source().cloned(),
+                existing.managed_artifact().cloned(),
+                existing.fingerprint().cloned(),
+                existing.installed_revision().cloned(),
+                existing.available_revision().cloned(),
+                existing.observed_at(),
+                existing.last_apply().cloned(),
+            )
+            .map_err(|_| ())?;
+            document = document.refresh_resource_state(projected).map_err(|_| ())?;
+        } else {
+            continue;
+        }
+        changed = true;
+    }
+    if changed {
+        repository.replace(&document).map_err(|_| ())?;
+    }
+    Ok(())
 }
 
 fn first_use_harness_report(
@@ -5016,6 +5382,25 @@ fn revision_label(revision: &skilltap_core::domain::ResolvedRevision) -> String 
             format!("native:{}", native.as_str())
         }
     }
+}
+
+fn git_revision_changed(
+    old: Option<&skilltap_core::domain::ResolvedRevision>,
+    new: Option<&GitCommit>,
+) -> bool {
+    match (old, new) {
+        (Some(skilltap_core::domain::ResolvedRevision::GitCommit(old)), Some(new)) => old != new,
+        (None, Some(_)) => true,
+        _ => false,
+    }
+}
+
+fn harnesses_label(harnesses: &HarnessSet) -> String {
+    harnesses
+        .iter()
+        .map(HarnessId::as_str)
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 #[derive(Default)]

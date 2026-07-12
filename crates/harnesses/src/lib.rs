@@ -330,7 +330,7 @@ pub fn observe_codex_canonical_resources(
             ("project.codex", absolute_child(project, ".codex")),
         ],
     };
-    observe_named_roots(roots, limits)
+    observe_named_roots(roots, limits, matches!(scope, Scope::Project(_)))
 }
 
 /// Observes only documented Claude roots. Settings are parsed separately by
@@ -347,12 +347,13 @@ pub fn observe_claude_canonical_resources(
         ],
         Scope::Project(project) => vec![("project.claude", absolute_child(project, ".claude"))],
     };
-    observe_named_roots(roots, limits)
+    observe_named_roots(roots, limits, matches!(scope, Scope::Project(_)))
 }
 
 fn observe_named_roots(
     roots: impl IntoIterator<Item = (&'static str, Option<skilltap_core::domain::AbsolutePath>)>,
     limits: skilltap_core::runtime::ExternalTreeLimits,
+    allow_empty: bool,
 ) -> Result<Vec<CanonicalObservation>, ObservationRuntimeError> {
     let mut observed = Vec::new();
     let mut aggregate_entries = 0_u64;
@@ -379,7 +380,7 @@ fn observe_named_roots(
             Err(error) => return Err(error),
         }
     }
-    if observed.is_empty() {
+    if observed.is_empty() && !allow_empty {
         Err(ObservationRuntimeError::TreeRootUnavailable)
     } else {
         Ok(observed)

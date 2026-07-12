@@ -7,7 +7,7 @@ use clap::{CommandFactory, Parser, error::ErrorKind};
 use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, NativeId},
     runtime::{
-        CommandGitRoot, ExecutableResolutionRequest, ExecutableResolver, FileKind, FileSystem,
+        CommandGitRoot, ExecutableResolutionRequest, ExecutableResolver, FileSystem,
         NativeProcessRequest, NativeProcessRunner, PlatformPaths, ProcessEnvironment,
         ProcessLimits, ScopeResolver, SystemCommandRunner, SystemExecutableResolver,
         SystemFileSystem, SystemNativeProcessRunner, SystemWorkingDirectory,
@@ -324,9 +324,10 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
             .with_context("detail", error.to_string()),
         );
     }
-    for (path, file) in &files {
+    let mut existing = Vec::with_capacity(files.len());
+    for (path, _file) in &files {
         match filesystem.read_regular_no_follow(path) {
-            Ok(Some(existing)) if !crate::daemon::owns(platform, &existing) => {
+            Ok(Some(contents)) if !crate::daemon::owns(platform, &contents) => {
                 return Outcome::new(command, ResultClass::AttentionRequired)
                     .with_resource(OutputEntry::new(path.as_str(), "conflict"))
                     .with_warning(Warning::new(
@@ -334,7 +335,7 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
                         "An unmanaged service definition already occupies the skilltap path.",
                     ));
             }
-            Ok(_) => {}
+            Ok(value) => existing.push(value),
             Err(_) => {
                 return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
                     Warning::new(
@@ -345,19 +346,48 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
                 );
             }
         }
-        if let Err(error) = filesystem.atomic_write(path, file.contents().as_bytes()) {
-            return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
-                Warning::new(
-                    "daemon_definition_write_failed",
-                    "The daemon service definition could not be published atomically.",
-                )
-                .with_context("path", path.as_str())
-                .with_context("detail", error.to_string()),
-            );
+    }
+    let changed_files = files
+        .iter()
+        .zip(existing.iter())
+        .filter(|((_, file), current)| current.as_deref() != Some(file.contents().as_bytes()))
+        .map(|((path, file), current)| {
+            (
+                path.clone(),
+                file.contents().as_bytes().to_vec(),
+                current.clone(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut written: Vec<(AbsolutePath, Vec<u8>, Option<Vec<u8>>)> = Vec::new();
+    for (path, contents, previous) in &changed_files {
+        if let Err(error) = filesystem.atomic_write(path, contents) {
+            for (written_path, _, written_previous) in written.iter().rev() {
+                match written_previous {
+                    Some(previous) => {
+                        let _ = filesystem.atomic_write(written_path, previous);
+                    }
+                    None => {
+                        let _ = filesystem.remove(written_path);
+                    }
+                }
+            }
+            return Outcome::new(command, ResultClass::AttentionRequired)
+                .with_summary("changed", false)
+                .with_warning(
+                    Warning::new(
+                        "daemon_definition_write_failed",
+                        "The daemon service definition could not be published atomically; prior files were restored.",
+                    )
+                    .with_context("path", path.as_str())
+                    .with_context("detail", error.to_string()),
+                );
         }
+        written.push((path.clone(), contents.clone(), previous.clone()));
     }
     if run_service_manager(platform, ServiceManagerAction::Enable, &files[0].0).is_err() {
         return Outcome::new(command, ResultClass::AttentionRequired)
+            .with_summary("changed", !changed_files.is_empty())
             .with_warning(Warning::new(
                 "daemon_manager_unavailable",
                 "The service definition was written, but the user service manager did not activate it.",
@@ -374,7 +404,7 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
                 .with_field("interval", interval.to_string())
                 .with_field("platform", format!("{platform:?}").to_lowercase()),
         )
-        .with_summary("changed", true)
+        .with_summary("changed", !changed_files.is_empty())
 }
 
 fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
@@ -398,9 +428,13 @@ fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
         .iter()
         .map(|name| AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap())
         .collect::<Vec<_>>();
+    let mut owned_present = false;
     for path in &files {
         match SystemFileSystem.read_regular_no_follow(path) {
-            Ok(Some(contents)) if !crate::daemon::owns(platform, &contents) => {
+            Ok(Some(contents)) if crate::daemon::owns(platform, &contents) => {
+                owned_present = true;
+            }
+            Ok(Some(_)) => {
                 return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
                     Warning::new(
                         "daemon_definition_conflict",
@@ -409,7 +443,7 @@ fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
                     .with_context("path", path.as_str()),
                 );
             }
-            Ok(_) => {}
+            Ok(None) => {}
             Err(_) => {
                 return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
                     Warning::new(
@@ -421,6 +455,11 @@ fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
             }
         }
     }
+    if !owned_present {
+        return Outcome::new(command, ResultClass::Completed)
+            .with_resource(OutputEntry::new(root.as_str(), "disabled"))
+            .with_summary("changed", false);
+    }
     if run_service_manager(platform, ServiceManagerAction::Disable, &files[0]).is_err() {
         return Outcome::new(command, ResultClass::AttentionRequired).with_warning(Warning::new(
             "daemon_manager_unavailable",
@@ -429,8 +468,8 @@ fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
     }
     let mut changed = false;
     for path in &files {
-        if let Ok(metadata) = SystemFileSystem.inspect(path)
-            && metadata.kind() != FileKind::Missing
+        if let Ok(Some(contents)) = SystemFileSystem.read_regular_no_follow(path)
+            && crate::daemon::owns(platform, &contents)
         {
             if SystemFileSystem.remove(path).is_err() {
                 return Outcome::new(command, ResultClass::AttentionRequired).with_warning(
@@ -466,12 +505,24 @@ fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
             skilltap_core::daemon::SYSTEMD_TIMER.to_owned(),
         ],
     };
-    let state_record = FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone())
-        .ok()
-        .and_then(|repository| match repository.load().ok()? {
-            DocumentState::Present(state) => state.daemon_run().cloned(),
-            DocumentState::Missing => None,
-        });
+    let state_record =
+        match FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone())
+            .and_then(|repository| repository.load())
+        {
+            Ok(DocumentState::Present(state)) => state.daemon_run().cloned(),
+            Ok(DocumentState::Missing) => None,
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_warning(Warning::new(
+                        "daemon_state_unavailable",
+                        "The daemon state document could not be loaded safely.",
+                    ))
+                    .with_next_action(NextAction::new(
+                        "repair_daemon_state",
+                        "Repair or remove the malformed skilltap state document before retrying.",
+                    ));
+            }
+        };
     let mut installed = true;
     for name in &names {
         let path = AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap();
@@ -486,7 +537,14 @@ fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
                         "An unmanaged service definition occupies the skilltap path.",
                     ));
             }
-            Err(_) => installed = false,
+            Err(_) => {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "unreadable"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_unreadable",
+                        "The daemon service definition could not be inspected safely.",
+                    ));
+            }
         }
     }
     if !installed {

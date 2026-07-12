@@ -9,6 +9,7 @@ use crate::{
 pub const SERVICE_LABEL: &str = "com.skilltap.daemon";
 pub const SYSTEMD_UNIT: &str = "skilltap-update.service";
 pub const SYSTEMD_TIMER: &str = "skilltap-update.timer";
+pub const SERVICE_MARKER: &str = "skilltap-managed-v3";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ServicePlatform {
@@ -139,21 +140,21 @@ fn interval_seconds(interval: UpdateInterval) -> u64 {
 
 fn launchd_contents(executable: &AbsolutePath, seconds: u64) -> String {
     format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key><string>{SERVICE_LABEL}</string>\n  <key>ProgramArguments</key>\n  <array><string>{}</string><string>daemon</string><string>run</string></array>\n  <key>StartInterval</key><integer>{seconds}</integer>\n  <key>RunAtLoad</key><false/>\n</dict>\n</plist>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n<plist version=\"1.0\">\n<dict>\n  <key>Label</key><string>{SERVICE_LABEL}</string>\n  <key>SkilltapManaged</key><string>{SERVICE_MARKER}</string>\n  <key>ProgramArguments</key>\n  <array><string>{}</string><string>daemon</string><string>run</string></array>\n  <key>StartInterval</key><integer>{seconds}</integer>\n  <key>RunAtLoad</key><false/>\n</dict>\n</plist>\n",
         xml_escape(executable.as_str())
     )
 }
 
 fn systemd_service_contents(executable: &AbsolutePath) -> String {
     format!(
-        "[Unit]\nDescription=skilltap safe update cycle\n\n[Service]\nType=oneshot\nExecStart={} daemon run\n",
+        "# {SERVICE_MARKER}\n[Unit]\nDescription=skilltap safe update cycle\n\n[Service]\nType=oneshot\nExecStart={} daemon run\n",
         systemd_escape(executable.as_str())
     )
 }
 
 fn systemd_timer_contents(seconds: u64) -> String {
     format!(
-        "[Unit]\nDescription=skilltap safe update timer\n\n[Timer]\nOnBootSec={seconds}s\nOnUnitActiveSec={seconds}s\nPersistent=true\nUnit={SYSTEMD_UNIT}\n\n[Install]\nWantedBy=timers.target\n"
+        "# {SERVICE_MARKER}\n[Unit]\nDescription=skilltap safe update timer\n\n[Timer]\nOnBootSec={seconds}s\nOnUnitActiveSec={seconds}s\nPersistent=true\nUnit={SYSTEMD_UNIT}\n\n[Install]\nWantedBy=timers.target\n"
     )
 }
 
@@ -173,7 +174,13 @@ fn systemd_escape(value: &str) -> String {
     {
         value.to_owned()
     } else {
-        format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\""))
+        format!(
+            "\"{}\"",
+            value
+                .replace('%', "%%")
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+        )
     }
 }
 
@@ -212,6 +219,21 @@ mod tests {
             definition.files()[1]
                 .contents()
                 .contains("OnUnitActiveSec=21600s")
+        );
+    }
+
+    #[test]
+    fn systemd_paths_escape_specifier_percent() {
+        let definition = render_service(&DaemonServiceSpec {
+            platform: ServicePlatform::SystemdUser,
+            interval: UpdateInterval::new(1, UpdateIntervalUnit::Hours).unwrap(),
+            executable: AbsolutePath::new("/tmp/skill%tap/bin/skilltap").unwrap(),
+        })
+        .unwrap();
+        assert!(
+            definition.files()[0]
+                .contents()
+                .contains("ExecStart=\"/tmp/skill%%tap/bin/skilltap\" daemon run")
         );
     }
 

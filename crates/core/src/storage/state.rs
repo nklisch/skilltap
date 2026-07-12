@@ -722,6 +722,28 @@ impl StateDocument {
             self.last_successful_application,
         )?)
     }
+
+    /// Return a copy without a resource state record. Removing an absent
+    /// record is idempotent and preserves the daemon journal.
+    pub fn without_resource(&self, key: &ResourceKey) -> Result<Self, SchemaError> {
+        if !self.resources.contains_key(key) {
+            return Ok(self.clone());
+        }
+        let resources = self
+            .resources
+            .iter()
+            .filter(|(resource_key, _)| *resource_key != key)
+            .map(|(_, resource)| resource.clone())
+            .collect::<Vec<_>>();
+        self.preserve_daemon_run(Self::new(
+            STATE_SCHEMA_VERSION,
+            self.harnesses.values().cloned(),
+            resources,
+            self.last_update_check,
+            self.last_successful_observation,
+            self.last_successful_application,
+        )?)
+    }
 }
 
 impl From<StateDocument> for StateWire {

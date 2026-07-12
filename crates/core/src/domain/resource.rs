@@ -465,6 +465,30 @@ impl DesiredResource {
     pub const fn dependencies(&self) -> &BTreeSet<ResourceKey> {
         &self.dependencies
     }
+
+    /// Return this desired resource projected onto a different target set.
+    /// Target-scoped lifecycle operations use this to preserve the definition
+    /// for harnesses that were not selected by the caller.
+    pub fn with_targets(&self, targets: HarnessSet) -> Result<Self, ResourceContractError> {
+        let accepted_consequences = self
+            .accepted_consequences
+            .iter()
+            .filter(|(harness, _)| targets.contains(harness))
+            .map(|(harness, consequences)| (harness.clone(), consequences.clone()))
+            .collect();
+        Self::new(
+            self.key.clone(),
+            self.kind,
+            targets,
+            self.origin.clone(),
+            self.source.clone(),
+            self.update,
+            self.components.clone(),
+            self.component_choices.clone(),
+            accepted_consequences,
+            self.dependencies.clone(),
+        )
+    }
 }
 
 impl From<DesiredResource> for DesiredResourceWire {

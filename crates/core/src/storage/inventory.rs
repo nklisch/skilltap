@@ -108,6 +108,28 @@ impl InventoryDocument {
         )
         .ok()
     }
+
+    /// Replace one desired resource while retaining all other inventory
+    /// entries. This is useful when a target-scoped operation narrows the
+    /// target projection of an existing resource.
+    pub fn replace_resource(&self, resource: DesiredResource) -> Result<Self, SchemaError> {
+        if self.resources.get(resource.key()) == Some(&resource) {
+            return Ok(self.clone());
+        }
+        let key = resource.key().clone();
+        let resources = self
+            .resources
+            .iter()
+            .filter(|(resource_key, _)| *resource_key != &key)
+            .map(|(_, value)| value.clone())
+            .chain(std::iter::once(resource))
+            .collect::<Vec<_>>();
+        Self::new(
+            INVENTORY_SCHEMA_VERSION,
+            self.projects.iter().cloned(),
+            resources,
+        )
+    }
 }
 
 impl From<InventoryDocument> for InventoryWire {

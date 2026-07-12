@@ -535,6 +535,51 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
 }
 
 #[test]
+fn targeted_native_remove_preserves_unselected_harness() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/skills")).unwrap();
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/skills")).unwrap();
+    let install = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            "https://example.invalid/team.git",
+            "--name",
+            "team",
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    let remove = run(
+        &machine,
+        &[
+            "marketplace",
+            "remove",
+            "team",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 0);
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(inventory.contains("marketplace:team"));
+    assert!(inventory.contains("targets = [\"claude\"]"));
+}
+
+#[test]
 fn local_skill_install_publishes_the_complete_canonical_tree() {
     let machine = machine();
     let source = machine.home().join("source-skill");
@@ -1161,6 +1206,230 @@ fn explicitly_named_git_skill_update_preserves_the_managed_name() {
 }
 
 #[test]
+fn targeted_skill_remove_preserves_unselected_target_inventory() {
+    let machine = machine();
+    let source = machine.home().join("targeted-skill");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: targeted-skill\ndescription: test\n---\nbody\n",
+    )
+    .unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source_text = source.to_str().unwrap();
+    let install = run(
+        &machine,
+        &["skill", "install", source_text, "--target", "all", "--json"],
+    );
+    assert_code(&install, 0);
+
+    let remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "targeted-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 0);
+    assert!(
+        !machine
+            .home()
+            .join(".agents/skills/targeted-skill")
+            .exists()
+    );
+    assert!(
+        machine
+            .home()
+            .join(".claude/skills/targeted-skill")
+            .exists()
+    );
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(inventory.contains("skill:targeted-skill"));
+    assert!(inventory.contains("targets = [\"claude\"]"));
+}
+
+#[test]
+fn targeted_skill_update_preserves_unselected_target_and_native_ids() {
+    let machine = machine();
+    let source = machine.home().join("targeted-update");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: targeted-update\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source_text = source.to_str().unwrap();
+    let install = run(
+        &machine,
+        &["skill", "install", source_text, "--target", "all", "--json"],
+    );
+    assert_code(&install, 0);
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: targeted-update\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+
+    let update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "targeted-update",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(
+            machine
+                .home()
+                .join(".agents/skills/targeted-update/SKILL.md")
+        )
+        .unwrap(),
+        "---\nname: targeted-update\ndescription: v2\n---\nv2\n"
+    );
+    assert_eq!(
+        fs::read_to_string(
+            machine
+                .home()
+                .join(".claude/skills/targeted-update/SKILL.md")
+        )
+        .unwrap(),
+        "---\nname: targeted-update\ndescription: v1\n---\nv1\n"
+    );
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(inventory.contains("skill:targeted-update"));
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("\"claude\": \"targeted-update\""));
+}
+
+#[test]
+fn non_default_git_ref_resolves_and_same_tree_commit_advances_sha() {
+    let machine = machine();
+    let repository = machine.home().join("ref-skill");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: ref-skill\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    for args in [
+        &["init", "--quiet", "--initial-branch", "main"][..],
+        &[
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ][..],
+        &[
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ][..],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+    }
+    let branch = Command::new("git")
+        .args(["branch", "feature"])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(branch.status.success());
+    let checkout_feature = Command::new("git")
+        .args(["switch", "feature"])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(checkout_feature.status.success());
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source = format!("file://{}", repository.to_str().unwrap());
+
+    let install = run(
+        &machine,
+        &[
+            "skill", "install", &source, "--ref", "feature", "--target", "codex", "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    let state_before = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    let old_sha = state_before
+        .split("\"value\": \"")
+        .nth(1)
+        .and_then(|value| value.split('"').next())
+        .unwrap()
+        .to_owned();
+
+    let empty = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--allow-empty",
+            "--quiet",
+            "-m",
+            "same-tree",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(empty.status.success());
+    let new_sha = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&repository)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_owned();
+    assert_ne!(old_sha, new_sha);
+
+    let update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "ref-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    let value = json(&update);
+    assert_eq!(value["summary"]["changed"], true);
+    assert_eq!(value["summary"]["old_revision"], format!("git:{old_sha}"));
+    assert_eq!(value["summary"]["new_revision"], format!("git:{new_sha}"));
+    let state_after = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state_after.contains(&new_sha));
+}
+
+#[test]
 fn skill_remove_blocks_all_targets_when_one_target_is_drifted() {
     let machine = machine();
     let source = machine.home().join("drifted-skill");
@@ -1288,6 +1557,52 @@ fn daemon_run_accepts_json_output() {
     assert_eq!(value["command"], "daemon run");
     assert_eq!(value["result"], "attention_required");
     assert_eq!(value["summary"]["pending_operations"], 0);
+}
+
+#[test]
+fn daemon_enable_is_idempotent_in_an_isolated_config_root() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+
+    let first = run(&machine, &["daemon", "enable", "--json"]);
+    assert!(first.status.code() == Some(0) || first.status.code() == Some(2));
+    let first_value = json(&first);
+    let root = machine.configuration_home().join("systemd/user");
+    let service = root.join("skilltap-update.service");
+    let timer = root.join("skilltap-update.timer");
+    assert!(service.is_file());
+    assert!(timer.is_file());
+    let service_bytes = fs::read(&service).unwrap();
+    let timer_bytes = fs::read(&timer).unwrap();
+    let service_mtime = fs::metadata(&service).unwrap().modified().unwrap();
+    let timer_mtime = fs::metadata(&timer).unwrap().modified().unwrap();
+
+    let second = run(&machine, &["daemon", "enable", "--json"]);
+    assert!(second.status.code() == Some(0) || second.status.code() == Some(2));
+    let second_value = json(&second);
+    assert_eq!(second_value["summary"]["changed"], false);
+    assert_eq!(first_value["command"], "daemon enable");
+    assert_eq!(fs::read(&service).unwrap(), service_bytes);
+    assert_eq!(fs::read(&timer).unwrap(), timer_bytes);
+    assert_eq!(
+        fs::metadata(&service).unwrap().modified().unwrap(),
+        service_mtime
+    );
+    assert_eq!(
+        fs::metadata(&timer).unwrap().modified().unwrap(),
+        timer_mtime
+    );
+}
+
+#[test]
+fn daemon_status_surfaces_malformed_state_instead_of_reporting_disabled() {
+    let machine = machine();
+    write_owned(&machine, "state.json", "not valid state");
+    let output = run(&machine, &["daemon", "status", "--json"]);
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert_eq!(value["result"], "attention_required");
+    assert_eq!(value["warnings"][0]["code"], "daemon_state_unavailable");
 }
 
 #[test]

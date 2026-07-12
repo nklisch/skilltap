@@ -48,13 +48,25 @@ pub fn owns(platform: ServicePlatform, contents: &[u8]) -> bool {
     };
     match platform {
         ServicePlatform::Launchd => {
-            contents.contains("com.skilltap.daemon")
+            contents.contains("<key>SkilltapManaged</key><string>skilltap-managed-v3</string>")
+                && contents.contains("<key>Label</key><string>com.skilltap.daemon</string>")
+                && contents.contains("<key>ProgramArguments</key>")
                 && contents.contains("<string>daemon</string><string>run</string>")
         }
         ServicePlatform::SystemdUser => {
-            contents.contains("skilltap safe update")
-                && (contents.contains("daemon run")
-                    || contents.contains("Unit=skilltap-update.service"))
+            if !contents.contains("# skilltap-managed-v3") {
+                return false;
+            }
+            (contents.contains("Description=skilltap safe update cycle")
+                && contents.contains("[Service]")
+                && contents.contains("Type=oneshot")
+                && contents.lines().any(|line| {
+                    line.strip_prefix("ExecStart=")
+                        .is_some_and(|value| value.ends_with(" daemon run"))
+                }))
+                || (contents.contains("Description=skilltap safe update timer")
+                    && contents.contains("[Timer]")
+                    && contents.contains("Unit=skilltap-update.service"))
         }
     }
 }
@@ -66,13 +78,15 @@ mod tests {
 
     #[test]
     fn systemd_ownership_accepts_skilltap_service_and_timer_files() {
-        let service = b"[Unit]\nDescription=skilltap safe update cycle\n[Service]\nExecStart=/bin/skilltap daemon run\n";
-        let timer = b"[Unit]\nDescription=skilltap safe update timer\n[Timer]\nUnit=skilltap-update.service\n";
+        let service = b"# skilltap-managed-v3\n[Unit]\nDescription=skilltap safe update cycle\n[Service]\nType=oneshot\nExecStart=/bin/skilltap daemon run\n";
+        let timer = b"# skilltap-managed-v3\n[Unit]\nDescription=skilltap safe update timer\n[Timer]\nUnit=skilltap-update.service\n";
         let unrelated =
-            b"[Unit]\nDescription=skilltap safe update timer\n[Timer]\nUnit=other.service\n";
+            b"# skilltap-managed-v3\n[Unit]\nDescription=skilltap safe update timer\n[Timer]\nUnit=other.service\n";
+        let lookalike = b"[Unit]\nDescription=skilltap safe update cycle\n[Service]\nExecStart=/tmp/evil daemon run\n";
 
         assert!(owns(ServicePlatform::SystemdUser, service));
         assert!(owns(ServicePlatform::SystemdUser, timer));
         assert!(!owns(ServicePlatform::SystemdUser, unrelated));
+        assert!(!owns(ServicePlatform::SystemdUser, lookalike));
     }
 }
