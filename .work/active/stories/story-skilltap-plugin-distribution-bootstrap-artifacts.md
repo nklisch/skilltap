@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifacts
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-contract]
@@ -117,6 +117,25 @@ temporary cleanup, permission/interruption paths, replacement races, or
 post-publish rollback preservation required by this story. Item remains at
 `stage: implementing` until the existing hardening follow-up adds those
 isolated fixtures.
+
+## Review (2026-07-12, hardened and portable boundary)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: the transport/publication fixes live in the linked hardening and
+portable follow-ups; those items are reviewed independently and preserve this
+story's original boundary rather than duplicating its body.
+
+**Notes**: Standard substrate review of the aggregate artifact boundary after
+`053cd1a` and `ac6dfbb`. Manifest parsing rejects duplicate or unsupported
+assets, fetches are bounded and validate every redirect hop, temporary payloads
+are private and no-follow, checksums and executable permissions are verified,
+and publication uses identity-safe atomic primitives on Linux/macOS while
+unsupported platforms fail closed. No-prior and prior rollback paths preserve
+raced replacements and clean the expected destination. Core artifact and
+bootstrap integration suites pass offline. Advancing the story to `stage: done`.
 
 ## Review (2026-07-12, fresh-context acceptance)
 
