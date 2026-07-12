@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-portable-rollback-safety
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -78,3 +78,28 @@ tests pass. The added no-prior test replaces the destination before calling the
 helper; it does not cover a replacement between the exchange and the unlink,
 which is the remaining correctness race. Keep the item at `stage: implementing`
 until that identity window is closed.
+
+## Review (2026-07-12, current rollback)
+
+**Verdict**: Request changes
+
+**Blockers**: `d78b343` makes `remove_published_if_identity_with` a no-op to
+avoid the unlink race. Consequently a no-prior `restore_destination` leaves
+the newly published (possibly invalid) binary at the destination after a
+parent-sync failure; this does not satisfy the required no-prior rollback or
+cleanup semantics (this item)
+
+**Important**: the prior hard-link-plus-unlink macOS `rename_noreplace`
+fallback remains a path race, and the current no-prior fixtures no longer
+assert that the destination is removed when no replacement exists (this item)
+
+**Nits**: none
+
+**Notes**: Standard substrate review of `d78b343` at highest implementation
+capability with standard review weight. The portable publication paths fail
+closed and existing exchange rollback remains replacement-preserving, but
+silently retaining a failed first publication is an observable partial install
+and leaves the rollback acceptance unmet. Keep the story at
+`stage: implementing` until an atomic no-replace move-to-private-marker
+rollback (or an explicitly documented equivalent) removes only the expected
+inode while preserving replacements.
