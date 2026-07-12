@@ -238,6 +238,8 @@ research-tagged items were present.
 | story-daemon-git-skill-update-path | story | active | done |
 | story-reconciliation-observation-drift-repair | story | active | done |
 | story-plan-nonempty-exit-class | story | active | done |
+| story-reconciliation-instruction-repair | story | active | done |
+| story-reconciliation-instruction-repair-nested-plan | story | active | done |
 
 ## Gate runs
 
@@ -262,10 +264,10 @@ research-tagged items were present.
 
 ## Readiness
 
-Quality gates and all bound remediation work are complete. Of 212 bound work
-items (excluding the release orchestration item), all 212 are done and none
-remain open. Three correctness stories were promoted from test-discovered
-backlog findings and included in the bundle:
+Quality gates and all bound remediation work are complete. Of 214 bound work
+items (excluding the release orchestration item), all 214 are done and none
+remain open. Late-bound correctness and contract stories promoted during
+autopilot are included in the bundle:
 
 - `story-scope-aware-lifecycle-operation-ids`
 - `story-daemon-noop-result-class`
