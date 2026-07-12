@@ -451,6 +451,11 @@ enum BinaryExecutionMode {
     ApplySafe,
 }
 
+struct BinaryUpdateTarget {
+    destination: AbsolutePath,
+    lock_path: AbsolutePath,
+}
+
 fn execute_binary_bootstrap(
     args: &BootstrapArgs,
     paths: &skilltap_core::runtime::PlatformPaths,
@@ -517,12 +522,14 @@ fn execute_binary_bootstrap_mode(
     };
     execute_binary_bootstrap_with_lock(
         args,
-        destination,
+        BinaryUpdateTarget {
+            destination,
+            lock_path,
+        },
         &resolver,
         &fetcher,
         &installer,
         &SystemConfigurationLock,
-        &lock_path,
         mode,
     )
 }
@@ -533,12 +540,11 @@ fn execute_binary_bootstrap_mode(
 /// be published to the current installation.
 fn execute_binary_bootstrap_with_lock<R, F, I, L>(
     args: &BootstrapArgs,
-    destination: AbsolutePath,
+    target: BinaryUpdateTarget,
     resolver: &R,
     fetcher: &F,
     installer: &I,
     lock: &L,
-    lock_path: &AbsolutePath,
     mode: BinaryExecutionMode,
 ) -> BinaryBootstrapResult
 where
@@ -547,7 +553,7 @@ where
     I: skilltap_core::runtime::BinaryInstaller,
     L: ConfigurationLock,
 {
-    if let Some(parent) = std::path::Path::new(lock_path.as_str()).parent()
+    if let Some(parent) = std::path::Path::new(target.lock_path.as_str()).parent()
         && std::fs::create_dir_all(parent).is_err()
     {
         return binary_attention(
@@ -555,7 +561,7 @@ where
             "The skilltap configuration directory could not be prepared for binary updates.",
         );
     }
-    let guard = match lock.try_acquire(lock_path) {
+    let guard = match lock.try_acquire(&target.lock_path) {
         Ok(guard) => guard,
         Err(skilltap_core::runtime::RuntimeError::LockContended { .. }) => {
             return binary_pending(
@@ -570,8 +576,14 @@ where
             );
         }
     };
-    let mut result =
-        execute_binary_bootstrap_with_mode(args, destination, resolver, fetcher, installer, mode);
+    let mut result = execute_binary_bootstrap_with_mode(
+        args,
+        target.destination,
+        resolver,
+        fetcher,
+        installer,
+        mode,
+    );
     if guard.release().is_err() {
         result.attention = true;
         result.pending = true;
@@ -1227,8 +1239,8 @@ mod bootstrap_tests {
     use skilltap_test_support::TempRoot;
 
     use super::{
-        BinaryBootstrapResult, BinaryExecutionMode, BootstrapArgs, OutputArgs, RollbackResult,
-        compose_bootstrap_outcome, execute_binary_bootstrap_with,
+        BinaryBootstrapResult, BinaryExecutionMode, BinaryUpdateTarget, BootstrapArgs, OutputArgs,
+        RollbackResult, compose_bootstrap_outcome, execute_binary_bootstrap_with,
         execute_binary_bootstrap_with_lock, execute_binary_bootstrap_with_mode,
         remove_published_binary, remove_published_binary_with_hooks, restore_previous_binary,
         restore_previous_binary_with_hook,
@@ -1459,12 +1471,14 @@ mod bootstrap_tests {
         let (resolver, fetcher) = fixture("3.0.0");
         let result = execute_binary_bootstrap_with_lock(
             &args(false),
-            destination,
+            BinaryUpdateTarget {
+                destination,
+                lock_path,
+            },
             &resolver,
             &fetcher,
             &SystemBinaryInstaller,
             &ContendedLock,
-            &lock_path,
             BinaryExecutionMode::ApplySafe,
         );
         assert_eq!(result.entry.status, "pending");
@@ -1484,12 +1498,14 @@ mod bootstrap_tests {
         let (resolver, fetcher) = fixture("3.0.0");
         let result = execute_binary_bootstrap_with_lock(
             &args(false),
-            destination.clone(),
+            BinaryUpdateTarget {
+                destination: destination.clone(),
+                lock_path,
+            },
             &resolver,
             &fetcher,
             &SystemBinaryInstaller,
             &SystemConfigurationLock,
-            &lock_path,
             BinaryExecutionMode::ApplySafe,
         );
         assert_eq!(result.entry.status, "installed");
@@ -1851,12 +1867,14 @@ fn execute_system_daemon_binary_policy() -> Outcome {
             };
             execute_binary_bootstrap_with_lock(
                 &args,
-                destination,
+                BinaryUpdateTarget {
+                    destination,
+                    lock_path,
+                },
                 &resolver,
                 &fetcher,
                 &installer,
                 &SystemConfigurationLock,
-                &lock_path,
                 match policy.mode {
                     BootstrapUpdateMode::Check => BinaryExecutionMode::Check,
                     BootstrapUpdateMode::ApplySafe => BinaryExecutionMode::ApplySafe,
