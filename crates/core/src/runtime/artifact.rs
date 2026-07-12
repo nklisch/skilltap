@@ -8,7 +8,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::os::unix::ffi::OsStrExt;
 
 use sha2::{Digest, Sha256};
@@ -492,18 +492,13 @@ impl ArtifactFetcher for SystemArtifactFetcher {
                 .next()
                 .and_then(|value| value.trim().parse::<u16>().ok())
                 .ok_or(ArtifactError::DownloadFailed)?;
-            if (300..400).contains(&status) {
-                if redirect.is_empty() {
-                    return Err(ArtifactError::InvalidLocator);
+            match redirect_target(status, redirect)? {
+                Some(next) => {
+                    current = next;
+                    continue;
                 }
-                validate_release_url(redirect)?;
-                current = redirect.to_owned();
-                continue;
+                None => return Ok(()),
             }
-            if (200..300).contains(&status) {
-                return Ok(());
-            }
-            return Err(ArtifactError::DownloadFailed);
         }
         Err(ArtifactError::InvalidLocator)
     }
@@ -519,6 +514,20 @@ fn validate_release_url(url: &str) -> Result<(), ArtifactError> {
         return Err(ArtifactError::InvalidLocator);
     }
     Ok(())
+}
+
+fn redirect_target(status: u16, redirect: &str) -> Result<Option<String>, ArtifactError> {
+    if (300..400).contains(&status) {
+        if redirect.is_empty() {
+            return Err(ArtifactError::InvalidLocator);
+        }
+        validate_release_url(redirect)?;
+        return Ok(Some(redirect.to_owned()));
+    }
+    if (200..300).contains(&status) {
+        return Ok(None);
+    }
+    Err(ArtifactError::DownloadFailed)
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -688,15 +697,48 @@ fn restore_destination(
                 return;
             }
         }
-        None if destination_identity(path).ok() == Some(expected) => {
-            // There is no prior payload to restore.  Keep the identity check
-            // immediately adjacent to removal; publication itself is
-            // conditional, so a replacement observed before rollback is left
-            // untouched.
-            let _ = fs::remove_file(path);
+        None => {
+            if let Some(expected) = expected {
+                remove_published_if_identity(path, expected);
+            }
         }
-        None => {}
     }
+}
+
+/// Remove a published file without unlinking a replacement that appeared
+/// after publication.  Swapping a private marker into the destination first
+/// gives us an atomic identity check on the displaced inode.  If the path is
+/// already occupied by an unrelated replacement, the published inode is
+/// cleaned up through the private marker and the replacement is left intact.
+fn remove_published_if_identity(path: &Path, expected: (u64, u64)) {
+    let Some(parent) = path.parent() else { return };
+    let sequence = ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let marker = parent.join(format!(".skilltap-rollback-marker-{sequence}"));
+    let Ok(mut file) = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&marker)
+    else {
+        return;
+    };
+    let _ = file.write_all(b"rollback-marker");
+    let _ = file.sync_all();
+    if exchange_paths(&marker, path).is_err() {
+        let _ = fs::remove_file(&marker);
+        return;
+    }
+    if destination_identity(&marker).ok().flatten() != Some(expected) {
+        // The displaced inode was not the expected publication (a replacement
+        // won before the exchange).  Exchange back, then remove only our
+        // private marker and preserve the unrelated destination.
+        let _ = exchange_paths(&marker, path);
+        let _ = fs::remove_file(&marker);
+        return;
+    }
+    // The destination still contains our marker.  Remove it and then remove
+    // the displaced published inode through the private marker path.
+    let _ = fs::remove_file(path);
+    let _ = fs::remove_file(&marker);
 }
 
 /// Publish a verified payload without overwriting a destination that changed
@@ -742,12 +784,20 @@ fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
     rename_with_flags(source, destination, libc::RENAME_NOREPLACE)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn rename_noreplace(source: &Path, destination: &Path) -> std::io::Result<()> {
-    // The supported release platforms currently expose Linux's atomic
-    // primitive.  Keep a conservative fallback for other Unix targets: the
-    // adjacent identity check still prevents ordinary stale writes.
-    fs::rename(source, destination)
+    // Hard-link publication is atomic and no-clobber on APFS/HFS+: an
+    // existing destination returns EEXIST without changing either path.
+    fs::hard_link(source, destination)?;
+    fs::remove_file(source)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn rename_noreplace(_source: &Path, _destination: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic no-replace publication is unavailable on this platform",
+    ))
 }
 
 #[cfg(target_os = "linux")]
@@ -755,11 +805,36 @@ fn exchange_paths(source: &Path, destination: &Path) -> std::io::Result<()> {
     rename_with_flags(source, destination, libc::RENAME_EXCHANGE)
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(target_os = "macos")]
 fn exchange_paths(source: &Path, destination: &Path) -> std::io::Result<()> {
-    // See `rename_noreplace`: non-Linux hosts use the best available atomic
-    // rename while retaining post-operation identity validation.
-    fs::rename(source, destination)
+    let source = CString::new(source.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    let destination = CString::new(destination.as_os_str().as_bytes())
+        .map_err(|_| std::io::Error::from_raw_os_error(libc::EINVAL))?;
+    // SAFETY: both C strings are NUL-free owned path bytes and AT_FDCWD
+    // scopes the operation to the process's current directory.
+    let result = unsafe {
+        libc::renameatx_np(
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            destination.as_ptr(),
+            libc::RENAME_SWAP,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn exchange_paths(_source: &Path, _destination: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "atomic exchange publication is unavailable on this platform",
+    ))
 }
 
 #[cfg(target_os = "linux")]
@@ -850,6 +925,19 @@ mod tests {
         );
     }
 
+    #[test]
+    fn every_redirect_hop_is_attested_before_the_next_fetch() {
+        assert_eq!(
+            redirect_target(302, "https://evil.example/asset"),
+            Err(ArtifactError::InvalidLocator)
+        );
+        assert_eq!(
+            redirect_target(302, "https://objects.githubusercontent.com/asset").unwrap(),
+            Some("https://objects.githubusercontent.com/asset".to_owned())
+        );
+        assert_eq!(redirect_target(200, "").unwrap(), None);
+    }
+
     #[cfg(target_os = "linux")]
     #[test]
     fn publication_exchange_preserves_a_replacement_observed_after_initial_identity() {
@@ -899,5 +987,27 @@ mod tests {
 
         restore_destination(&destination, Some(expected), Some(b"prior"), None);
         assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn no_prior_rollback_preserves_a_replacement_without_unlinking_by_stale_path() {
+        let root =
+            skilltap_test_support::TempRoot::new("bootstrap-rollback-no-prior-race").unwrap();
+        let destination = root.path().join("skilltap");
+        fs::write(&destination, b"published").unwrap();
+        let expected = destination_identity(&destination).unwrap().unwrap();
+        fs::remove_file(&destination).unwrap();
+        fs::write(&destination, b"unrelated replacement").unwrap();
+
+        remove_published_if_identity(&destination, expected);
+        assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
+        assert_eq!(
+            fs::read_dir(root.path())
+                .unwrap()
+                .filter_map(Result::ok)
+                .count(),
+            1
+        );
     }
 }

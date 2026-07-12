@@ -102,6 +102,29 @@ fn verified_install_is_atomic_and_rejects_checksum_mismatch() {
     assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
 }
 
+#[cfg(unix)]
+#[test]
+fn verified_install_rejects_non_executable_payload_without_touching_destination() {
+    let root = TempRoot::new("bootstrap-non-executable").unwrap();
+    let source = root.path().join("source");
+    let destination = root.path().join("bin").join("skilltap");
+    let prior = b"#!/bin/sh\nprintf 'skilltap 2.0.0\\n'\n";
+    let bytes = b"#!/bin/sh\nprintf 'skilltap 3.0.0\\n'\n";
+    fs::write(&source, bytes).unwrap();
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    fs::write(&destination, prior).unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&destination, fs::Permissions::from_mode(0o700)).unwrap();
+    let source = AbsolutePath::new(source.to_string_lossy().into_owned()).unwrap();
+    let destination = AbsolutePath::new(destination.to_string_lossy().into_owned()).unwrap();
+    let expected = artifact("3.0.0".parse().unwrap(), bytes);
+    assert_eq!(
+        SystemBinaryInstaller.install_verified(&source, &destination, &expected),
+        Err(ArtifactError::InvalidArtifact)
+    );
+    assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
+}
+
 #[test]
 fn release_manifest_rejects_duplicate_selected_assets() {
     let key = ArtifactKey {

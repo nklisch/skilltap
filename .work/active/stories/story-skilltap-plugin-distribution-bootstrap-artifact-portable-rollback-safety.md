@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-portable-rollback-safety
 kind: story
-stage: implementing
+stage: review
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -48,4 +48,7 @@ coverage for the full acceptance matrix.
 - Execution capability: highest; this is a cross-platform security-sensitive
   filesystem boundary.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `crates/core/src/runtime/artifact.rs`, `crates/core/tests/bootstrap_integration.rs`.
+- Tests added: offline redirect-hop attestation, no-prior rollback replacement preservation, and non-executable payload preservation.
+- Discrepancies from design: Linux uses `renameat2`, macOS uses `renameatx_np` exchange plus hard-link no-replace publication; unsupported platforms fail closed instead of falling back to overwrite-capable rename.
 - Adjacent issues parked: none.
