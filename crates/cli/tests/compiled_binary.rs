@@ -2300,6 +2300,65 @@ fn native_mutations_keep_project_and_all_scope_boundaries() {
         project.to_str().unwrap()
     );
 
+    // Equal logical ids in global and project scopes must remain distinct
+    // operations while an all-scopes request reconciles both instances.
+    let same_global = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "same@team",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&same_global, 0);
+    let same_project = run_in(
+        &machine,
+        &project,
+        &[
+            "plugin",
+            "install",
+            "same@team",
+            "--project",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&same_project, 0);
+    fs::write(project.join("untouched.txt"), "keep me").unwrap();
+    let native_before = snapshot_native_tree(&machine.home().join(".claude"));
+    let state_before = fs::read(config_root(&machine).join("state.json")).unwrap();
+    let same_remove = run(
+        &machine,
+        &[
+            "plugin",
+            "remove",
+            "same@team",
+            "--all-scopes",
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&same_remove, 0);
+    let same_inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    assert!(!same_inventory.contains("plugin:same@team"));
+    assert!(same_inventory.contains("plugin:project@team"));
+    let same_state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(!same_state.contains("plugin:same@team"));
+    assert_ne!(same_state.as_bytes(), state_before.as_slice());
+    assert_eq!(
+        snapshot_native_tree(&machine.home().join(".claude")),
+        native_before
+    );
+    assert_eq!(
+        fs::read_to_string(project.join("untouched.txt")).unwrap(),
+        "keep me"
+    );
+
     let inventory_before =
         fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
     assert!(inventory_before.contains("plugin:global@team"));
@@ -2504,6 +2563,275 @@ fn safe_update_cycle_reports_changed_git_revision_and_records_daemon_result() {
 }
 
 #[test]
+fn safe_update_policy_pins_drift_and_source_failures_remain_visible() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let repository = machine.home().join("policy-skill-source");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: policy-skill\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    for args in [
+        vec!["init", "--quiet", "--initial-branch", "main"],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()).replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    let source = format!("file://{}", repository.to_str().unwrap());
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            &source,
+            "--name",
+            "policy-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: policy-skill\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+    let add = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(add.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "update",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+
+    let check_config = fs::read_to_string(config_root(&machine).join("config.toml"))
+        .unwrap()
+        .replace("mode = \"apply-safe\"", "mode = \"check\"");
+    write_owned(&machine, "config.toml", &check_config);
+    let check = run(&machine, &["status", "--target", "codex", "--json"]);
+    assert_code(&check, 2);
+    let check_value = json(&check);
+    assert!(
+        check_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .starts_with("update:")
+                    && entry["fields"]["reason"] == "check_only"
+            })
+    );
+
+    let off_config = check_config.replace("mode = \"check\"", "mode = \"off\"");
+    write_owned(&machine, "config.toml", &off_config);
+    let off = run(&machine, &["status", "--target", "codex", "--json"]);
+    assert_code(&off, 2);
+    let off_value = json(&off);
+    assert!(
+        off_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .starts_with("update:")
+                    && entry["status"] == "up_to_date"
+            }),
+        "off status: {off_value}"
+    );
+
+    let apply_config = off_config.replace("mode = \"off\"", "mode = \"apply-safe\"");
+    write_owned(&machine, "config.toml", &apply_config);
+    fs::write(
+        machine.home().join(".agents/skills/policy-skill/SKILL.md"),
+        "---\nname: policy-skill\ndescription: local drift\n---\ndrift\n",
+    )
+    .unwrap();
+    let drift = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&drift, 2);
+    let drift_value = json(&drift);
+    assert!(
+        drift_value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| { warning["code"] == "skill_destination_drifted" })
+    );
+    assert_eq!(
+        fs::read_to_string(machine.home().join(".agents/skills/policy-skill/SKILL.md")).unwrap(),
+        "---\nname: policy-skill\ndescription: local drift\n---\ndrift\n"
+    );
+
+    let pinned_repository = machine.home().join("pinned-skill-source");
+    fs::create_dir_all(&pinned_repository).unwrap();
+    fs::write(
+        pinned_repository.join("SKILL.md"),
+        "---\nname: pinned-skill\ndescription: pinned\n---\npinned\n",
+    )
+    .unwrap();
+    for args in [
+        vec!["init", "--quiet", "--initial-branch", "main"],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ],
+        vec![
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&pinned_repository)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+    }
+    let pinned_sha = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&pinned_repository)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_owned();
+    let pinned_source = format!("file://{}", pinned_repository.to_str().unwrap());
+    let pinned = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            &pinned_source,
+            "--name",
+            "pinned-skill",
+            "--ref",
+            &pinned_sha,
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&pinned, 0);
+    let pinned_status = run(&machine, &["status", "--target", "codex", "--json"]);
+    assert_code(&pinned_status, 2);
+    let pinned_value = json(&pinned_status);
+    assert!(
+        pinned_value["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| {
+                entry["id"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .contains("pinned-skill")
+                    && entry["status"] == "blocked"
+                    && entry["fields"]["reason"] == "resolution_failed"
+            }),
+        "pinned status: {pinned_value}"
+    );
+
+    fs::remove_dir_all(&repository).unwrap();
+    fs::remove_dir_all(&pinned_repository).unwrap();
+    let unavailable = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&unavailable, 2);
+    let unavailable_value = json(&unavailable);
+    assert!(
+        unavailable_value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| {
+                warning["code"] == "git_skill_source_unavailable"
+                    || warning["code"] == "skill_source_unavailable"
+            })
+    );
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("\"daemon_run\""));
+}
+
+#[test]
 fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
@@ -2530,17 +2858,15 @@ fn daemon_service_failure_paths_preserve_unmanaged_and_nonregular_definitions() 
     );
 
     fs::remove_file(&service).unwrap();
-    fs::write(&service, b"# skilltap-managed-v3\nmalformed definition\n").unwrap();
+    let malformed_definition = b"# skilltap-managed-v3\n[Unit]\nDescription=skilltap safe update cycle\n[Service]\nType=oneshot\nExecStart=/bin/skilltap daemon run\nExecStart=/bin/skilltap daemon run\n";
+    fs::write(&service, malformed_definition).unwrap();
     let malformed = run(&machine, &["daemon", "enable", "--json"]);
     assert_code(&malformed, 2);
     assert_eq!(
         json(&malformed)["warnings"][0]["code"],
-        "daemon_definition_conflict"
+        "daemon_definition_malformed"
     );
-    assert_eq!(
-        fs::read(&service).unwrap(),
-        b"# skilltap-managed-v3\nmalformed definition\n"
-    );
+    assert_eq!(fs::read(&service).unwrap(), malformed_definition);
 
     fs::remove_file(&service).unwrap();
     fs::create_dir(&timer).unwrap();

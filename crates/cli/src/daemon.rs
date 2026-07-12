@@ -71,6 +71,53 @@ pub fn owns(platform: ServicePlatform, contents: &[u8]) -> bool {
     }
 }
 
+/// Check the small, generated service grammar after ownership has been
+/// established. Ownership markers alone are not enough to safely overwrite a
+/// malformed user-service definition.
+pub fn valid(platform: ServicePlatform, contents: &[u8]) -> bool {
+    if !owns(platform, contents) {
+        return false;
+    }
+    let Ok(contents) = std::str::from_utf8(contents) else {
+        return false;
+    };
+    match platform {
+        ServicePlatform::Launchd => {
+            contents.matches("<key>Label</key>").count() == 1
+                && contents.matches("<key>ProgramArguments</key>").count() == 1
+                && contents.matches("<key>StartInterval</key>").count() == 1
+        }
+        ServicePlatform::SystemdUser => {
+            let is_service = contents.contains("[Service]");
+            let is_timer = contents.contains("[Timer]");
+            let count = |needle: &str| contents.lines().filter(|line| *line == needle).count();
+            if is_service {
+                count("[Unit]") == 1
+                    && count("[Service]") == 1
+                    && count("Description=skilltap safe update cycle") == 1
+                    && count("Type=oneshot") == 1
+                    && contents
+                        .lines()
+                        .filter(|line| {
+                            line.strip_prefix("ExecStart=")
+                                .is_some_and(|value| value.ends_with(" daemon run"))
+                        })
+                        .count()
+                        == 1
+            } else if is_timer {
+                count("[Unit]") == 1
+                    && count("[Timer]") == 1
+                    && count("Description=skilltap safe update timer") == 1
+                    && count("Unit=skilltap-update.service") == 1
+                    && count("[Install]") == 1
+                    && count("WantedBy=timers.target") == 1
+            } else {
+                false
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

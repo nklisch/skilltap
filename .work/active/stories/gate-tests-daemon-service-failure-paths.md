@@ -1,7 +1,7 @@
 ---
 id: gate-tests-daemon-service-failure-paths
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -99,3 +99,10 @@ malformed definition that passes ownership detection but fails validation.
 Add an isolated owned-marker/expected-field fixture with malformed syntax and
 assert typed attention plus preservation, while retaining the existing
 unmanaged, non-regular, manager, and rollback cases.
+
+## Follow-up Resolution
+
+Added a duplicate `ExecStart` fixture that passes ownership detection but
+fails the generated service grammar. The daemon now reports typed
+`daemon_definition_malformed` attention and preserves the bytes. Clippy also
+passes for the extracted pair-publication helper.

@@ -329,6 +329,17 @@ fn execute_system_daemon_enable(args: &crate::command::DaemonEnableArgs) -> Outc
     let mut existing = Vec::with_capacity(files.len());
     for (path, _file) in &files {
         match filesystem.read_regular_no_follow(path) {
+            Ok(Some(contents))
+                if crate::daemon::owns(platform, &contents)
+                    && !crate::daemon::valid(platform, &contents) =>
+            {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "malformed"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_malformed",
+                        "An owned daemon service definition is malformed; it was not replaced.",
+                    ));
+            }
             Ok(Some(contents)) if !crate::daemon::owns(platform, &contents) => {
                 return Outcome::new(command, ResultClass::AttentionRequired)
                     .with_resource(OutputEntry::new(path.as_str(), "conflict"))
@@ -408,7 +419,7 @@ fn publish_daemon_files(
     for changed in changed_files {
         let (path, contents, _previous) = changed;
         if let Err(error) = filesystem.atomic_write(path, contents) {
-            for (written_path, _, written_previous) in written.iter().rev().map(|entry| *entry) {
+            for (written_path, _, written_previous) in written.iter().rev().copied() {
                 match written_previous {
                     Some(previous) => {
                         let _ = filesystem.atomic_write(written_path, previous);
@@ -449,6 +460,17 @@ fn execute_system_daemon_disable(_args: &OutputArgs) -> Outcome {
     let mut owned_present = false;
     for path in &files {
         match SystemFileSystem.read_regular_no_follow(path) {
+            Ok(Some(contents))
+                if crate::daemon::owns(platform, &contents)
+                    && !crate::daemon::valid(platform, &contents) =>
+            {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "malformed"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_malformed",
+                        "An owned daemon service definition is malformed; it was not removed.",
+                    ));
+            }
             Ok(Some(contents)) if crate::daemon::owns(platform, &contents) => {
                 owned_present = true;
             }
@@ -545,6 +567,17 @@ fn execute_system_daemon_status(_args: &OutputArgs) -> Outcome {
     for name in &names {
         let path = AbsolutePath::new(format!("{}/{}", root.as_str(), name)).unwrap();
         match SystemFileSystem.read_regular_no_follow(&path) {
+            Ok(Some(contents))
+                if crate::daemon::owns(platform, &contents)
+                    && !crate::daemon::valid(platform, &contents) =>
+            {
+                return Outcome::new(command, ResultClass::AttentionRequired)
+                    .with_resource(OutputEntry::new(path.as_str(), "malformed"))
+                    .with_warning(Warning::new(
+                        "daemon_definition_malformed",
+                        "An owned daemon service definition is malformed; inspect it before retrying.",
+                    ));
+            }
             Ok(Some(contents)) if crate::daemon::owns(platform, &contents) => {}
             Ok(None) => installed = false,
             Ok(Some(_)) => {
