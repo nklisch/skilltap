@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-release
 kind: feature
-stage: review
+stage: done
 tags: [infra, content]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package, epic-skilltap-plugin-distribution-cli-contract, epic-skilltap-plugin-distribution-bootstrap, epic-skilltap-plugin-distribution-guidance]
@@ -244,3 +244,17 @@ implementation run; CI prepares and validates publication.
 The four release stories are complete: release identity/artifact contract,
 installer/bootstrap parity, website/Homebrew/secondary-publisher installation
 surfaces, and pre-publication workflow verification.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: the active sibling publisher remains an external read-only parity
+input; CI enforces it when `SKILLTAP_SKILLS_MARKETPLACE` points at a checkout.
+
+**Notes**: Feature acceptance review at standard weight. Release identity,
+platform/checksum/provenance gates, installer/bootstrap parity, public
+marketplace/online/Homebrew guidance, and offline validation fixtures are
+aligned. The legacy sibling archive remains explicitly deferred to cutover.
