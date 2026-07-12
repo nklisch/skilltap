@@ -711,6 +711,14 @@ fn restore_destination(
 /// already occupied by an unrelated replacement, the published inode is
 /// cleaned up through the private marker and the replacement is left intact.
 fn remove_published_if_identity(path: &Path, expected: (u64, u64)) {
+    remove_published_if_identity_with(path, expected, || {});
+}
+
+fn remove_published_if_identity_with(
+    path: &Path,
+    expected: (u64, u64),
+    after_exchange: impl FnOnce(),
+) {
     let Some(parent) = path.parent() else { return };
     let sequence = ARTIFACT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
     let marker = parent.join(format!(".skilltap-rollback-marker-{sequence}"));
@@ -723,15 +731,23 @@ fn remove_published_if_identity(path: &Path, expected: (u64, u64)) {
     };
     let _ = file.write_all(b"rollback-marker");
     let _ = file.sync_all();
+    let marker_identity = destination_identity(&marker).ok().flatten();
     if exchange_paths(&marker, path).is_err() {
         let _ = fs::remove_file(&marker);
         return;
     }
+    after_exchange();
     if destination_identity(&marker).ok().flatten() != Some(expected) {
         // The displaced inode was not the expected publication (a replacement
         // won before the exchange).  Exchange back, then remove only our
         // private marker and preserve the unrelated destination.
         let _ = exchange_paths(&marker, path);
+        let _ = fs::remove_file(&marker);
+        return;
+    }
+    if destination_identity(path).ok().flatten() != marker_identity {
+        // A replacement arrived after the exchange.  Do not unlink the
+        // replacement; only clean up the displaced published inode.
         let _ = fs::remove_file(&marker);
         return;
     }
@@ -1009,5 +1025,21 @@ mod tests {
                 .count(),
             1
         );
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn no_prior_rollback_preserves_replacement_arriving_after_exchange() {
+        let root =
+            skilltap_test_support::TempRoot::new("bootstrap-rollback-post-exchange").unwrap();
+        let destination = root.path().join("skilltap");
+        fs::write(&destination, b"published").unwrap();
+        let expected = destination_identity(&destination).unwrap().unwrap();
+
+        remove_published_if_identity_with(&destination, expected, || {
+            fs::remove_file(&destination).unwrap();
+            fs::write(&destination, b"unrelated replacement").unwrap();
+        });
+        assert_eq!(fs::read(&destination).unwrap(), b"unrelated replacement");
     }
 }
