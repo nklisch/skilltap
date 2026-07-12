@@ -1,7 +1,7 @@
 ---
 id: story-complete-status-application-extraction-observation-support
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-complete-status-application-extraction
 depends_on: [story-complete-status-application-extraction-status-projection]
@@ -68,3 +68,12 @@ Moving a helper still consumed by lifecycle or instruction code can create a
 visibility regression, while changing hash/helper context can change resource
 identity. Revert this extraction commit and restore the helper blocks to the
 parent; retain the verified status-projection step if already complete.
+
+## Implementation
+
+Implemented in commit 0d155dc. Native observation tree/path and surface
+projection helpers now live beside NativeObservation in application/status.rs;
+stable_hash, scope_label, and configured_binary remain shared parent support.
+cargo test -p skilltap --offline passes, including status, adoption,
+observation, and compiled-binary coverage. Formatting and clippy are pending
+concurrent bootstrap changes outside this refactor.
