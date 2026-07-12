@@ -40,6 +40,23 @@ management policy merely because a Codex or Claude executable is installed.
 
 ## Quick Start
 
+Install skilltap through either first-party path:
+
+```bash
+# Native Claude Code or Codex marketplace, then:
+skilltap bootstrap
+
+# Or verify/install the binary and invoke the same bootstrap boundary:
+curl -fsSL https://skilltap.dev/install.sh | sh
+```
+
+The plugin path and online installer report binary availability separately
+from Claude/Codex harness setup. A missing harness or unsupported native
+plugin lifecycle is an explicit next action, not a reason to write a native
+cache. Homebrew installs the binary only (`brew install
+nklisch/skilltap/skilltap`); run `skilltap bootstrap` afterward when you want
+the plugin/skill setup.
+
 Enable the harnesses you want skilltap to manage:
 
 ```bash

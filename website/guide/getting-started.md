@@ -31,9 +31,13 @@ command discovery surface:
 skilltap bootstrap --help
 ```
 
-If you installed the plugin through either native marketplace, use the same
-command. Marketplace installation and the one-line installer are equivalent
-first-party setup paths; neither path writes native harness caches.
+If you installed the plugin through a native marketplace, use the same
+command. Claude's native path is the qualified plugin install from the
+registered `skilltap` marketplace; Codex's marketplace source can expose the
+complete skill even when its installed host has no non-interactive native
+plugin mutation. Follow the harness result and next action printed by
+`bootstrap`; never write a harness cache by hand. Marketplace installation and
+the one-line installer are equivalent first-party setup paths.
 
 Or use Homebrew:
 

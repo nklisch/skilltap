@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-install-surfaces
 kind: story
-stage: implementing
+stage: review
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: [story-skilltap-plugin-distribution-release-contract]
@@ -30,3 +30,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: standard; public installation prose and parity checks.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `README.md`, `website/guide/getting-started.md`, `scripts/verify-install-surfaces.sh`, `.github/workflows/ci.yml`.
+- Tests added: offline public-surface parity checks for marketplace/installer/bootstrap/update/Homebrew wording; optional read-only sibling pointer validation via `SKILLTAP_SKILLS_MARKETPLACE`.
+- Discrepancies from design: active sibling checkout is not modified; pointer validation is opt-in when a parity checkout is supplied.
+- Adjacent issues parked: none.

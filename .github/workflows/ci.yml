@@ -68,5 +68,8 @@ jobs:
       - name: Install website dependencies
         run: npm --prefix website ci
 
+      - name: Verify installation surface parity
+        run: scripts/verify-install-surfaces.sh
+
       - name: Build website
         run: npm --prefix website run build
