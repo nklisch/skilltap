@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-bootstrap
 kind: feature
-stage: review
+stage: done
 tags: [infra, security]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package]
@@ -490,3 +490,28 @@ direct child stories were done and the full offline workspace test, clippy,
 format, installer contract, shell syntax, website build, and diff checks were
 green. Foundation-doc and product-contract review found the two follow-ups
 above; the feature remains implementing until both are closed.
+
+## Review (2026-07-12, final feature acceptance)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Deep substrate review at standard weight in fresh context. All
+direct and follow-up child stories are terminal and carry approval evidence,
+including bounded artifact transport and portable rollback, native harness
+capability guards, installer redirect and identity checks, daemon policy
+consumption with service-derived destination locking, and CLI rollback race
+preservation. The feature-level implementation matches the bootstrap contract:
+manual bootstrap resolves the latest release, blocks major upgrades without
+explicit acknowledgment, publishes atomically, and reports binary and
+harness outcomes separately; daemon `off`, `check`, and `apply-safe` reuse the
+same bounded resolver/installer and shared lock; Codex's unsupported native
+plugin mutation remains actionable; the installer delegates to the verified
+Rust boundary and website guidance presents equivalent setup paths. Verified
+with `cargo fmt --all -- --check`, full offline workspace tests (including
+compiled CLI, core artifact integration, harness bootstrap, and installer
+contract coverage), clippy with warnings denied, `sh -n install.sh`,
+`scripts/verify-installer.sh`, website build, and `git diff --check`.
