@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-daemon-target-lock
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy]
@@ -68,3 +68,17 @@ coverage.
   validated managed launchd/systemd definition; a missing or malformed service
   fails closed rather than guessing a destination.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate standard review of service-derived executable targeting,
+shared configuration-lock contention, and custom-destination publication.
+Service definitions are validated before extraction and unsafe targets fail
+closed. `cargo fmt --all -- --check`, full offline workspace tests, and
+`cargo clippy --workspace --all-targets --offline -- -D warnings` are green.

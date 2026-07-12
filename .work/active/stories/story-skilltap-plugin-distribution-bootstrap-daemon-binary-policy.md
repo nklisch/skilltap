@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-daemon-binary-policy
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -85,3 +85,18 @@ and `docs/SPEC.md` daemon promise unimplemented.
   leave the compiled fixtures on `bootstrap.mode = off` only as ambient-network
   protection, not as the policy test.
 - **Follow-up**: `story-skilltap-plugin-distribution-bootstrap-daemon-target-lock`.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate standard review of daemon policy composition and reuse of
+the foreground resolver, fetcher, installer, identity checks, and lock
+boundary. The target-lock follow-up closes the publication-target and
+serialization findings. `cargo fmt --all -- --check`, full offline workspace
+tests, and `cargo clippy --workspace --all-targets --offline -- -D warnings`
+are green.

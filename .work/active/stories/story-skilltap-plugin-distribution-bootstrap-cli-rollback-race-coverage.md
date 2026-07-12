@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-cli-rollback-race-coverage
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety]
@@ -61,3 +61,18 @@ clean restoration when a replacement arrived after the first exchange.
   Unix helpers use injected post-exchange/cleanup hooks in tests while the
   production path remains hook-free.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate standard review of replacement-during-exchange,
+first-install cleanup races, residual cleanup, normal restoration, and
+unsupported-platform fail-closed paths. The implementation preserves foreign
+replacement identities and reports recovery attention. `cargo fmt --all
+-- --check`, full offline workspace tests, and `cargo clippy
+--workspace --all-targets --offline -- -D warnings` are green.

@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-command]
@@ -70,3 +70,17 @@ overwrite an unrelated destination during a race.
   synchronization seam or deterministic hook, preserve the replacement, and
   classify that outcome as attention while retaining safe residuals.
 - **Follow-up**: `story-skilltap-plugin-distribution-bootstrap-cli-rollback-race-coverage`.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate standard review of the identity-safe rollback boundary and
+its deterministic replacement-preservation coverage. The follow-up race seam
+now closes the previously identified gap. `cargo fmt --all -- --check`, full
+offline workspace tests, and `cargo clippy --workspace --all-targets --offline
+-- -D warnings` are green.
