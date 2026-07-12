@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-status-adoption
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-reconciliation]
@@ -48,3 +48,14 @@ Warning/resource ordering and observation helper visibility are easy to disturb.
 If behavior moves, revert this extraction commit while retaining earlier module
 steps; no state or native migration is required.
 
+## Implementation Notes
+
+- Moved status/adoption entrypoints, document loading, scope/target models,
+  native observation, projection, and adoption error mapping into private
+  `application/status.rs`.
+- Exposed only the narrow `pub(super)` status support surface required by
+  lifecycle, instruction, and reconciliation siblings; status remains
+  read-only while adoption retains its existing lock/revalidation path.
+- Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
+  `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
+  binary tests).
