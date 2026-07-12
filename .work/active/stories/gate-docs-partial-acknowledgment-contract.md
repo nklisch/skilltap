@@ -1,7 +1,7 @@
 ---
 id: gate-docs-partial-acknowledgment-contract
 kind: story
-stage: review
+stage: done
 tags: [documentation]
 parent: null
 depends_on: []
@@ -112,3 +112,19 @@ core selector; no CLI behavior currently changes under `sync --yes` (this item)
 CLI semantics. Core unit tests are green, but they only prove an unused API;
 the acceptance criterion requires end-to-end command behavior. Foundation docs
 remain correct and should not be weakened.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review with correctness, tests, breaking-change,
+and foundation-doc lenses. The generic acknowledgment now reaches the
+foreground skill install/update path used by reconciliation sync; `--yes`
+selects eligible partial entries while blocked entries still fail closed.
+Core coverage exercises generic acceptance, exact selector acceptance,
+unexpected selectors, and blocked work; the compiled CLI regression verifies
+the public `skill install --yes` behavior. Focused core and compiled tests pass.
