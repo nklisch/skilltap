@@ -1,7 +1,7 @@
 ---
 id: story-feature-extract-cli-bootstrap-boundary-publication
 kind: story
-stage: implementing
+stage: review
 tags: [refactor, infra]
 parent: feature-extract-cli-bootstrap-boundary
 depends_on: [story-feature-extract-cli-bootstrap-boundary-composition]
@@ -67,3 +67,23 @@ an unrelated executable. Revert this source-only extraction and restore the
 helper/test block to `entrypoint.rs`; no installed binary or persisted state is
 part of the rollback.
 
+## Implementation notes
+
+- Execution capability: highest available local implementation; mechanical
+  extraction preserved every publication helper and fixture.
+- Review weight: standard (autopilot default).
+- Files changed: `crates/cli/src/bootstrap_commands.rs`,
+  `crates/cli/src/entrypoint.rs`.
+- Tests added: none; binary matrix, lock, identity, rollback, cleanup, and
+  daemon-check fixtures moved unchanged with their implementation.
+- Discrepancies from design: this publication boundary moved in the same
+  source-only commit as composition and daemon policy to avoid an intermediate
+  duplicate implementation; no runtime or output contract changed.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo fmt --all`
+- `cargo test -p skilltap --offline` (59 unit/compiled/package tests passed)
+- `cargo clippy -p skilltap --all-targets --offline -- -D warnings`
+- `git diff --check`
