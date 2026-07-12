@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-boundary-hardening
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -74,3 +74,21 @@ symlink resolver payloads plus basic checksum/install behavior, but do not
 cover redirect-hop rejection, permission/interruption cleanup, or the complete
 race/rollback matrix required by this story. Item remains at `stage:
 implementing` pending the follow-up.
+
+## Review (2026-07-12, current boundary)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review of the hardened transport/publication
+boundary after `053cd1a` and the portable rollback follow-up `0ada0bf`.
+Redirect hops are attested before each fetch, bounded private workspaces reject
+oversized and symlink payloads, and checksum/permission failures preserve the
+prior destination and clean temporary state. Linux and macOS publication use
+no-replace/exchange primitives; replacement races and both prior/no-prior
+rollback paths preserve unrelated files, with explicit no-prior cleanup
+coverage in `ac6dfbb`. Core artifact and integration tests plus clippy pass
+offline. Advancing this follow-up to `stage: done`.
