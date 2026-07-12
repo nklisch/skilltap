@@ -1,0 +1,34 @@
+---
+id: story-share-cli-composition-bootstrap
+kind: story
+stage: implementing
+tags: [refactor]
+parent: null
+depends_on: []
+release_binding: 3.0.0
+gate_origin: refactor-design
+created: 2026-07-12
+updated: 2026-07-12
+---
+
+# Share CLI application composition bootstrap
+
+## Value
+
+The CLI entrypoint repeats repository, runner, path, scope, and
+`StatusApplication` composition in reconciliation, adopt, and status wrappers.
+A shared private bootstrap reduces drift while preserving status's distinct
+platform-path error mapping.
+
+## Scope
+
+Extract the repeated setup around `crates/cli/src/entrypoint.rs:881-997` into
+one private composition helper. Keep command-specific error/result handling
+and borrowed lifetimes unchanged.
+
+## Acceptance
+
+- Reconciliation, adopt, and status use the shared bootstrap.
+- Existing output, errors, and command behavior remain unchanged.
+- Workspace tests, formatting, and clippy stay green.
+
