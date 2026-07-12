@@ -1,7 +1,7 @@
 ---
 id: story-complete-status-application-extraction-observation-support
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: feature-complete-status-application-extraction
 depends_on: [story-complete-status-application-extraction-status-projection]
@@ -77,3 +77,20 @@ stable_hash, scope_label, and configured_binary remain shared parent support.
 cargo test -p skilltap --offline passes, including status, adoption,
 observation, and compiled-binary coverage. Formatting and clippy are pending
 concurrent bootstrap changes outside this refactor.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review, standard effective weight, Fast lane for this
+low-risk behavior-preserving story. Fresh-context review confirmed the
+observation and surface helpers have one definition in status.rs and retain
+path selection, limits, malformed-state mapping, stable IDs, resource order,
+and read-only boundaries. A detached worktree at 042e7ed passed `cargo fmt
+--all -- --check`, the full workspace offline test suite, and `cargo clippy
+--workspace --all-targets --offline -- -D warnings`; current bootstrap edits
+were outside this refactor and were not included in that baseline.

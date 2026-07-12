@@ -1,7 +1,7 @@
 ---
 id: story-complete-status-application-extraction-status-projection
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: feature-complete-status-application-extraction
 depends_on: []
@@ -73,3 +73,19 @@ Implemented in commit 0d155dc (with the visibility bridge correction in
 application/status.rs; the parent exposes only the narrow first-use bridge
 used by reconciliation. cargo test -p skilltap --offline passes, including
 status/update and compiled-binary coverage.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review, standard effective weight, Fast lane for this
+low-risk behavior-preserving story. Fresh-context review inspected the
+extraction and visibility bridge; the helper bodies remain single-definition
+and output ordering, update classification, first-use behavior, and
+reconciliation call contracts are unchanged. A detached worktree at 042e7ed
+passed `cargo fmt --all -- --check`, the full workspace offline test suite,
+and `cargo clippy --workspace --all-targets --offline -- -D warnings`.
