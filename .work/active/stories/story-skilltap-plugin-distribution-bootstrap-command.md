@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-command
 kind: story
-stage: review
+stage: implementing
 tags: [infra, content, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-artifacts, story-skilltap-plugin-distribution-bootstrap-harness]
@@ -49,3 +49,41 @@ website prose.
 - Tests added: bootstrap grammar/help and isolated JSON attention result; target narrowing and `--allow-major` parse coverage.
 - Discrepancies from design: when no release manifest transport is available, binary state is reported as `unavailable` with attention and no mutation; the command never claims a no-op or successful binary installation without verified release evidence.
 - Adjacent issues parked: none.
+
+## Review findings (2026-07-12)
+
+- **Blocker**: The public command does not compose or execute the binary
+  bootstrap boundary. `execute_system_bootstrap` only checks whether
+  `SKILLTAP_RELEASE_MANIFEST` is present, reports `planned` when it is set,
+  and never resolves a release manifest, selects the platform artifact,
+  fetches it, verifies its checksum, installs it atomically, or probes the
+  installed identity. The environment variable is not even read as a
+  manifest path or transport input. Consequently `--allow-major` has no
+  effect, fresh installs and same-major updates cannot succeed, major updates
+  cannot be blocked based on an observed version, and the command can report
+  an apparently planned binary operation without any corresponding mutation
+  or verified result. Wire the existing `ReleaseResolver`, artifact fetcher,
+  and `BinaryInstaller` ports (or an equivalent application composition) into
+  the command, add isolated first-install/update/no-op/blocked-major and
+  failure-preservation coverage, and report the actual binary result before
+  advancing this story.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: binary bootstrap boundary is disconnected from the command (this item)
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review at standard weight, escalated to a focused
+correctness/public-contract pass because this is the agent-facing bootstrap
+command and a security-sensitive release boundary. Reviewed commit `176e812`,
+the bootstrap feature design, `docs/SPEC.md`, `docs/ARCH.md`, the core artifact
+ports, harness adapter, CLI implementation, help output, and the compiled
+attention test. The CLI grammar and separate per-harness result shape are
+present, but the only binary-path test proves the deliberate unavailable
+fallback; setting `SKILLTAP_RELEASE_MANIFEST` merely changes the label to
+`planned` and still performs no binary operation. The item remains at
+`stage: implementing` until the command is wired to verified artifact
+resolution/installation and its acceptance matrix is covered.
