@@ -1,7 +1,7 @@
 ---
 id: gate-tests-safe-update-e2e
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -46,15 +46,10 @@ It creates an isolated Git-backed complete skill tree, verifies daemon no-op
 state journaling, advances the upstream commit, checks status update evidence,
 then verifies the daemon applies the new tree and records its run.
 
-The initial daemon result classification defect was fixed in `24c3ffc`, but the
-SPEC-backed test now reaches a deeper production gap: a Git-backed skill is
-left pending with `skill_update_required` when the daemon invokes the
-installer through the `daemon run` command, before the safe revision cycle can
-run. Parked as `idea-daemon-git-skill-update-path`; do not weaken or skip this
-test. The story remains blocked on that fix and review of the resulting
-regression.
+The daemon result-classification and Git-backed update-path fixes landed in
+`24c3ffc` and `314eed5`. The fixture now passes the explicit `--name
+daemon-skill` so the managed destination matches the frontmatter identity and
+the daemon's inventory selector.
 
-## Blocker
-
-The regression cannot pass until the daemon reuses the safe Git-backed skill
-update path. See parked item `idea-daemon-git-skill-update-path`.
+Verification: the focused safe-update test passes against the fixed
+implementation, including no-op and changed-revision daemon records.

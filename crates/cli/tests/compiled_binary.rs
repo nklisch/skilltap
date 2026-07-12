@@ -2421,7 +2421,16 @@ fn safe_update_cycle_reports_changed_git_revision_and_records_daemon_result() {
     let source = format!("file://{}", repository.to_str().unwrap());
     let install = run(
         &machine,
-        &["skill", "install", &source, "--target", "codex", "--json"],
+        &[
+            "skill",
+            "install",
+            &source,
+            "--name",
+            "daemon-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
     );
     assert_code(&install, 0);
     let first_daemon = run(&machine, &["daemon", "run", "--json"]);
