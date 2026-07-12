@@ -91,6 +91,17 @@ pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
                 )
                 .expect("canonical source is valid"),
             ),
+            environment: match paths.native_process_environment(search_path.clone()) {
+                Ok(environment) => environment,
+                Err(_) => {
+                    return Outcome::new("bootstrap", ResultClass::Invalid).with_error(
+                        ErrorDetail::new(
+                            "native_environment_unavailable",
+                            "The bounded native process environment could not be resolved.",
+                        ),
+                    );
+                }
+            },
         };
         let result = setup_first_party_plugin(kind, &bootstrap_policy);
         harness_results.push((kind, result));

@@ -1102,10 +1102,15 @@ fn configured_native_profile(
     };
     let configured = configured_binary(binary).ok()?;
     let executable = NativeId::new(binary).ok()?;
+    let environment = PlatformPaths::resolve(&ProcessEnvironment)
+        .ok()?
+        .native_process_environment(search_path.clone())
+        .ok()?;
     let installation = detect_configured_installation(
         harness,
         configured.clone(),
         search_path,
+        &environment,
         process_limits,
         json_limits,
     )
@@ -1209,9 +1214,17 @@ fn lifecycle_preview_presence(
         .expect("bounded lifecycle process limits are valid");
     let json_limits =
         JsonLimits::new(256 * 1024, 64).expect("bounded lifecycle JSON limits are valid");
+    let Ok(paths) = PlatformPaths::resolve(&ProcessEnvironment) else {
+        return NativeResourcePresence::Unknown;
+    };
+    let search_path = std::env::var_os("PATH");
+    let Ok(environment) = paths.native_process_environment(search_path.clone()) else {
+        return NativeResourcePresence::Unknown;
+    };
     observe_native_resource(
         configured,
-        std::env::var_os("PATH"),
+        search_path,
+        &environment,
         &request,
         process_limits,
         json_limits,

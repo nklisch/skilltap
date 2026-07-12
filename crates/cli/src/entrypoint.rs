@@ -476,6 +476,10 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
         let json_limits = skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
             .expect("bounded list JSON limits are valid");
         let search_path = std::env::var_os("PATH");
+        let native_environment = match paths.native_process_environment(search_path.clone()) {
+            Ok(environment) => environment,
+            Err(_) => return repository_composition_error("harness list"),
+        };
         let mut outcome = Outcome::new("harness list", ResultClass::Completed);
         for (id, kind, policy, native_root) in [
             (
@@ -516,6 +520,7 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                     kind,
                     configured,
                     search_path.clone(),
+                    &native_environment,
                     process_limits,
                     json_limits,
                 )

@@ -225,6 +225,7 @@ fn executable_replacement_after_detection_blocks_native_mutation() {
         HarnessKind::Claude,
         configured.clone(),
         None,
+        &std::collections::BTreeMap::new(),
         skilltap_core::runtime::ProcessLimits::new(30_000, 64 * 1024, 64 * 1024, 128 * 1024)
             .unwrap(),
         skilltap_core::runtime::JsonLimits::new(128 * 1024, 32).unwrap(),

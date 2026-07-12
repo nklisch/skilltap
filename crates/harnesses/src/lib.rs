@@ -76,6 +76,7 @@ impl std::error::Error for DetectionError {}
 pub fn detect_installation(
     harness: HarnessKind,
     search_path: OsString,
+    environment: &BTreeMap<OsString, OsString>,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
@@ -87,6 +88,7 @@ pub fn detect_installation(
         harness,
         configured,
         Some(search_path),
+        environment,
         process_limits,
         json_limits,
     )
@@ -99,6 +101,7 @@ pub fn detect_configured_installation(
     harness: HarnessKind,
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
+    environment: &BTreeMap<OsString, OsString>,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
@@ -112,7 +115,7 @@ pub fn detect_configured_installation(
         .run(&NativeProcessRequest::new(
             resolved.clone(),
             version_arguments(harness),
-            BTreeMap::new(),
+            environment.clone(),
             None,
             process_limits,
         ))

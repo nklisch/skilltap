@@ -1,7 +1,10 @@
 use std::{collections::BTreeMap, ffi::OsString, fs, path::Path};
 
 use skilltap_core::{
-    domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, Scope, UnreachableReason},
+    domain::{
+        AbsolutePath, ConfiguredBinary, HarnessInstallation, HarnessReachability, Scope,
+        UnreachableReason,
+    },
     runtime::{
         Environment, EnvironmentVariable, ExecutableResolutionRequest, ExecutableResolver,
         ExternalTreeLimits, JsonLimits, NativeProcessRequest, ObservationRuntimeError,
@@ -9,11 +12,12 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    CodexConfigError, DetectionError, HarnessKind, ProbeError, detect_configured_installation,
-    detect_installation, observe_codex_canonical_resources, observe_codex_config, probe_profile,
-    select_profile, unreachable_installation,
+    CodexConfigError, DetectionError, HarnessKind, ProbeError,
+    detect_configured_installation as detect_configured_installation_with_environment,
+    detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
+    observe_codex_config, probe_profile, select_profile, unreachable_installation,
 };
-use skilltap_test_support::{FakeNativeMode, FakeNativeProcess, TempRoot};
+use skilltap_test_support::{FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, TempRoot};
 
 #[derive(Default)]
 struct TestEnvironment(BTreeMap<&'static str, OsString>);
@@ -38,11 +42,103 @@ fn limits() -> (ProcessLimits, JsonLimits) {
     )
 }
 
+fn detect_installation(
+    harness: HarnessKind,
+    search_path: OsString,
+    process_limits: ProcessLimits,
+    json_limits: JsonLimits,
+) -> Result<HarnessInstallation, DetectionError> {
+    detect_installation_with_environment(
+        harness,
+        search_path,
+        &BTreeMap::new(),
+        process_limits,
+        json_limits,
+    )
+}
+
+fn detect_configured_installation(
+    harness: HarnessKind,
+    configured: ConfiguredBinary,
+    search_path: Option<OsString>,
+    process_limits: ProcessLimits,
+    json_limits: JsonLimits,
+) -> Result<HarnessInstallation, DetectionError> {
+    detect_configured_installation_with_environment(
+        harness,
+        configured,
+        search_path,
+        &BTreeMap::new(),
+        process_limits,
+        json_limits,
+    )
+}
+
 fn install(mode: FakeNativeMode, name: &str) -> (TempRoot, FakeNativeProcess) {
     let fixture = FakeNativeProcess::new(mode).unwrap();
     let root = TempRoot::new("skilltap-detection").unwrap();
     fixture.install_alias(root.path(), name).unwrap();
     (root, fixture)
+}
+
+#[test]
+fn detection_forwards_only_the_explicit_native_environment() {
+    let fixture = FakeNativeBuilder::new(FakeNativeMode::CodexVersion)
+        .capture_environment([
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_CACHE_HOME",
+            "CODEX_HOME",
+            "CLAUDE_CONFIG_DIR",
+            "PATH",
+            "UNLISTED",
+        ])
+        .unwrap()
+        .build()
+        .unwrap();
+    let configured = ConfiguredBinary::absolute(
+        AbsolutePath::new(fixture.executable().to_string_lossy()).unwrap(),
+    );
+    let environment = BTreeMap::from([
+        (OsString::from("HOME"), OsString::from("/isolated/home")),
+        (
+            OsString::from("XDG_CONFIG_HOME"),
+            OsString::from("/isolated/config"),
+        ),
+        (
+            OsString::from("XDG_CACHE_HOME"),
+            OsString::from("/isolated/cache"),
+        ),
+        (
+            OsString::from("CODEX_HOME"),
+            OsString::from("/isolated/codex"),
+        ),
+        (
+            OsString::from("CLAUDE_CONFIG_DIR"),
+            OsString::from("/isolated/claude"),
+        ),
+        (OsString::from("PATH"), OsString::from("/isolated/bin")),
+    ]);
+
+    detect_configured_installation_with_environment(
+        HarnessKind::Codex,
+        configured,
+        None,
+        &environment,
+        limits().0,
+        limits().1,
+    )
+    .unwrap();
+
+    let capture = fixture.captured_invocation().unwrap();
+    for (name, expected) in &environment {
+        let name = name.to_str().unwrap();
+        assert_eq!(
+            capture.environment().get(name).unwrap().as_deref(),
+            Some(expected.as_encoded_bytes())
+        );
+    }
+    assert_eq!(capture.environment().get("UNLISTED"), Some(&None));
 }
 
 #[test]

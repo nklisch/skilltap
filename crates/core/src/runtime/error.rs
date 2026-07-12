@@ -17,7 +17,10 @@ pub enum RuntimeBoundary {
 pub enum EnvironmentVariable {
     Home,
     XdgConfigHome,
+    XdgCacheHome,
     CodexHome,
+    ClaudeConfigDir,
+    Path,
 }
 
 impl EnvironmentVariable {
@@ -25,7 +28,10 @@ impl EnvironmentVariable {
         match self {
             Self::Home => "HOME",
             Self::XdgConfigHome => "XDG_CONFIG_HOME",
+            Self::XdgCacheHome => "XDG_CACHE_HOME",
             Self::CodexHome => "CODEX_HOME",
+            Self::ClaudeConfigDir => "CLAUDE_CONFIG_DIR",
+            Self::Path => "PATH",
         }
     }
 }
@@ -44,6 +50,7 @@ pub enum PathRole {
     GitRoot,
     Home,
     ConfigHome,
+    CacheHome,
     SkilltapConfig,
     GlobalAgents,
     CodexHome,
@@ -59,6 +66,7 @@ impl fmt::Display for PathRole {
             Self::GitRoot => "Git root",
             Self::Home => "home directory",
             Self::ConfigHome => "configuration home",
+            Self::CacheHome => "cache home",
             Self::SkilltapConfig => "skilltap configuration directory",
             Self::GlobalAgents => "global AGENTS.md",
             Self::CodexHome => "Codex home",

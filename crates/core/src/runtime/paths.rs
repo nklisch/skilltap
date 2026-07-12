@@ -1,4 +1,4 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::{collections::BTreeMap, ffi::OsString, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +47,7 @@ pub struct PlatformPaths {
     platform: SupportedPlatform,
     home: AbsolutePath,
     config_home: AbsolutePath,
+    cache_home: AbsolutePath,
     skilltap_config: AbsolutePath,
     global_agents: AbsolutePath,
     codex_home: AbsolutePath,
@@ -66,17 +67,23 @@ impl PlatformPaths {
         let config_home =
             optional_environment_path(environment, EnvironmentVariable::XdgConfigHome)?
                 .map_or_else(|| join(&home, ".config", PathRole::ConfigHome), Ok)?;
+        let cache_home = optional_environment_path(environment, EnvironmentVariable::XdgCacheHome)?
+            .map_or_else(|| join(&home, ".cache", PathRole::CacheHome), Ok)?;
         let codex_home = optional_environment_path(environment, EnvironmentVariable::CodexHome)?
             .map_or_else(|| join(&home, ".codex", PathRole::CodexHome), Ok)?;
+        let claude_home =
+            optional_environment_path(environment, EnvironmentVariable::ClaudeConfigDir)?
+                .map_or_else(|| join(&home, ".claude", PathRole::ClaudeHome), Ok)?;
 
         Ok(Self {
             platform,
             skilltap_config: join(&config_home, "skilltap", PathRole::SkilltapConfig)?,
             global_agents: join(&home, "AGENTS.md", PathRole::GlobalAgents)?,
             codex_home,
-            claude_home: join(&home, ".claude", PathRole::ClaudeHome)?,
+            claude_home,
             home,
             config_home,
+            cache_home,
         })
     }
 
@@ -90,6 +97,10 @@ impl PlatformPaths {
 
     pub const fn config_home(&self) -> &AbsolutePath {
         &self.config_home
+    }
+
+    pub const fn cache_home(&self) -> &AbsolutePath {
+        &self.cache_home
     }
 
     pub const fn skilltap_config(&self) -> &AbsolutePath {
@@ -106,6 +117,43 @@ impl PlatformPaths {
 
     pub const fn claude_home(&self) -> &AbsolutePath {
         &self.claude_home
+    }
+
+    pub fn native_process_environment(
+        &self,
+        search_path: Option<OsString>,
+    ) -> Result<BTreeMap<OsString, OsString>, RuntimeError> {
+        let search_path = search_path.filter(|value| !value.is_empty()).ok_or(
+            RuntimeError::MissingEnvironment {
+                variable: EnvironmentVariable::Path,
+            },
+        )?;
+        Ok(BTreeMap::from([
+            (
+                OsString::from(EnvironmentVariable::Home.as_str()),
+                OsString::from(self.home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::XdgConfigHome.as_str()),
+                OsString::from(self.config_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::XdgCacheHome.as_str()),
+                OsString::from(self.cache_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::CodexHome.as_str()),
+                OsString::from(self.codex_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::ClaudeConfigDir.as_str()),
+                OsString::from(self.claude_home.as_str()),
+            ),
+            (
+                OsString::from(EnvironmentVariable::Path.as_str()),
+                search_path,
+            ),
+        ]))
     }
 }
 
@@ -149,7 +197,7 @@ fn join(base: &AbsolutePath, child: &str, role: PathRole) -> Result<AbsolutePath
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use std::{collections::BTreeMap, ffi::OsStr};
 
     use super::*;
 
@@ -173,18 +221,21 @@ mod tests {
     fn xdg_override_resolves_every_required_location() {
         let environment = TestEnvironment::default()
             .with(EnvironmentVariable::Home, "/home/nathan")
-            .with(EnvironmentVariable::XdgConfigHome, "/var/config/nathan");
+            .with(EnvironmentVariable::XdgConfigHome, "/var/config/nathan")
+            .with(EnvironmentVariable::XdgCacheHome, "/var/cache/nathan")
+            .with(EnvironmentVariable::ClaudeConfigDir, "/opt/claude/nathan");
         let paths = PlatformPaths::resolve_for(SupportedPlatform::Linux, &environment).unwrap();
 
         assert_eq!(paths.home().as_str(), "/home/nathan");
         assert_eq!(paths.config_home().as_str(), "/var/config/nathan");
+        assert_eq!(paths.cache_home().as_str(), "/var/cache/nathan");
         assert_eq!(
             paths.skilltap_config().as_str(),
             "/var/config/nathan/skilltap"
         );
         assert_eq!(paths.global_agents().as_str(), "/home/nathan/AGENTS.md");
         assert_eq!(paths.codex_home().as_str(), "/home/nathan/.codex");
-        assert_eq!(paths.claude_home().as_str(), "/home/nathan/.claude");
+        assert_eq!(paths.claude_home().as_str(), "/opt/claude/nathan");
     }
 
     #[test]
@@ -197,6 +248,7 @@ mod tests {
         ] {
             let paths = PlatformPaths::resolve_for(SupportedPlatform::MacOs, &environment).unwrap();
             assert_eq!(paths.config_home().as_str(), "/Users/nathan/.config");
+            assert_eq!(paths.cache_home().as_str(), "/Users/nathan/.cache");
             assert_eq!(
                 paths.skilltap_config().as_str(),
                 "/Users/nathan/.config/skilltap"
@@ -235,6 +287,60 @@ mod tests {
     }
 
     #[test]
+    fn absent_or_empty_claude_config_uses_home_fallback() {
+        for environment in [
+            TestEnvironment::default().with(EnvironmentVariable::Home, "/Users/nathan"),
+            TestEnvironment::default()
+                .with(EnvironmentVariable::Home, "/Users/nathan")
+                .with(EnvironmentVariable::ClaudeConfigDir, ""),
+        ] {
+            let paths = PlatformPaths::resolve_for(SupportedPlatform::MacOs, &environment).unwrap();
+            assert_eq!(paths.claude_home().as_str(), "/Users/nathan/.claude");
+            assert_eq!(paths.global_agents().as_str(), "/Users/nathan/AGENTS.md");
+        }
+    }
+
+    #[test]
+    fn native_process_environment_is_explicit_and_complete() {
+        let paths = PlatformPaths::resolve_for(
+            SupportedPlatform::Linux,
+            &TestEnvironment::default()
+                .with(EnvironmentVariable::Home, "/home/nathan")
+                .with(EnvironmentVariable::XdgConfigHome, "/var/config/nathan")
+                .with(EnvironmentVariable::XdgCacheHome, "/var/cache/nathan")
+                .with(EnvironmentVariable::CodexHome, "/opt/codex/nathan")
+                .with(EnvironmentVariable::ClaudeConfigDir, "/opt/claude/nathan"),
+        )
+        .unwrap();
+
+        let environment = paths
+            .native_process_environment(Some(OsString::from("/usr/local/bin:/usr/bin")))
+            .unwrap();
+        assert_eq!(environment.len(), 6);
+        assert_eq!(environment[OsStr::new("HOME")], "/home/nathan");
+        assert_eq!(
+            environment[OsStr::new("XDG_CONFIG_HOME")],
+            "/var/config/nathan"
+        );
+        assert_eq!(
+            environment[OsStr::new("XDG_CACHE_HOME")],
+            "/var/cache/nathan"
+        );
+        assert_eq!(environment[OsStr::new("CODEX_HOME")], "/opt/codex/nathan");
+        assert_eq!(
+            environment[OsStr::new("CLAUDE_CONFIG_DIR")],
+            "/opt/claude/nathan"
+        );
+        assert_eq!(environment[OsStr::new("PATH")], "/usr/local/bin:/usr/bin");
+        assert!(matches!(
+            paths.native_process_environment(None),
+            Err(RuntimeError::MissingEnvironment {
+                variable: EnvironmentVariable::Path
+            })
+        ));
+    }
+
+    #[test]
     fn missing_relative_and_noncanonical_environment_paths_fail_fast() {
         let missing =
             PlatformPaths::resolve_for(SupportedPlatform::Linux, &TestEnvironment::default())
@@ -251,8 +357,12 @@ mod tests {
             (EnvironmentVariable::Home, "/home/nathan/../other"),
             (EnvironmentVariable::XdgConfigHome, "relative/config"),
             (EnvironmentVariable::XdgConfigHome, "/var//config"),
+            (EnvironmentVariable::XdgCacheHome, "relative/cache"),
+            (EnvironmentVariable::XdgCacheHome, "/var/cache/../other"),
             (EnvironmentVariable::CodexHome, "relative/codex"),
             (EnvironmentVariable::CodexHome, "/opt/codex/../other"),
+            (EnvironmentVariable::ClaudeConfigDir, "relative/claude"),
+            (EnvironmentVariable::ClaudeConfigDir, "/opt/claude/../other"),
         ] {
             let environment = TestEnvironment::default()
                 .with(EnvironmentVariable::Home, "/home/nathan")

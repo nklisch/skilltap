@@ -2131,7 +2131,13 @@ fn first_use_status_is_read_only_and_reports_no_enabled_harnesses() {
     let machine = machine();
     assert!(!config_root(&machine).exists());
 
-    let output = run(&machine, &["status", "--json"]);
+    let output = machine
+        .run_with_path(
+            &binary(),
+            &["status", "--json"],
+            machine.working_directory(),
+        )
+        .expect("run first-use status with an isolated executable path");
     assert_code(&output, 2);
     let value = json(&output);
     assert_eq!(value["command"], "status");

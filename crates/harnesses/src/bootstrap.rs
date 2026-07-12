@@ -1,6 +1,6 @@
 //! Read-first bootstrap setup for the canonical skilltap plugin.
 
-use std::{ffi::OsString, fmt};
+use std::{collections::BTreeMap, ffi::OsString, fmt};
 
 use skilltap_core::{
     domain::{
@@ -89,6 +89,7 @@ pub struct HarnessBootstrapPolicy {
     pub json_limits: JsonLimits,
     pub plugin_name: NativeId,
     pub canonical_source: Option<SourceLocator>,
+    pub environment: BTreeMap<OsString, OsString>,
 }
 
 impl HarnessBootstrapPolicy {
@@ -105,7 +106,13 @@ impl HarnessBootstrapPolicy {
                 SourceLocator::new("https://github.com/nklisch/skilltap/tree/main/plugin")
                     .expect("canonical source is valid"),
             ),
+            environment: BTreeMap::new(),
         }
+    }
+
+    pub fn with_environment(mut self, environment: BTreeMap<OsString, OsString>) -> Self {
+        self.environment = environment;
+        self
     }
 }
 
@@ -117,6 +124,7 @@ pub fn setup_first_party_plugin(
         target,
         policy.configured.clone(),
         policy.search_path.clone(),
+        &policy.environment,
         policy.process_limits,
         policy.json_limits,
     ) {
@@ -194,6 +202,7 @@ pub fn setup_detected_plugin(
     match observe_native_resource(
         observed_configured.clone(),
         None,
+        &policy.environment,
         &marketplace_request,
         policy.process_limits,
         policy.json_limits,
@@ -202,6 +211,7 @@ pub fn setup_detected_plugin(
         Ok(NativeResourcePresence::Missing) => {
             match run_native_lifecycle_bound(
                 observed_executable,
+                &policy.environment,
                 &marketplace_request,
                 policy.process_limits,
             ) {
@@ -238,6 +248,7 @@ pub fn setup_detected_plugin(
     let presence = observe_native_resource(
         observed_configured.clone(),
         None,
+        &policy.environment,
         &request,
         policy.process_limits,
         policy.json_limits,
@@ -257,7 +268,12 @@ pub fn setup_detected_plugin(
         }
         Ok(NativeResourcePresence::Missing) => {}
     }
-    match run_native_lifecycle_bound(observed_executable, &request, policy.process_limits) {
+    match run_native_lifecycle_bound(
+        observed_executable,
+        &policy.environment,
+        &request,
+        policy.process_limits,
+    ) {
         Ok(output) if output.status().success() => HarnessSetupResult::Installed {
             harness: target,
             version: native_version.clone(),

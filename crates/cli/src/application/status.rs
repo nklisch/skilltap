@@ -530,6 +530,22 @@ impl NativeObservation {
             ExternalTreeLimits::new(16, 10_000, 4 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024)
                 .expect("bounded status tree limits are valid");
         let search_path = std::env::var_os("PATH");
+        let native_environment = match paths.native_process_environment(search_path.clone()) {
+            Ok(environment) => environment,
+            Err(_) => {
+                return Self {
+                    resources: Vec::new(),
+                    warnings: vec![Warning::new(
+                        "native_environment_unavailable",
+                        "The bounded native process environment could not be resolved for read-only status.",
+                    )],
+                    observed_targets: 0,
+                    failed_targets: targets.iter().len() * scope.resolved.len(),
+                    native_entries: 0,
+                    environment: None,
+                };
+            }
+        };
         let mut result = Self::default();
         let mut requests = Vec::new();
         let mut outcomes = Vec::new();
@@ -575,6 +591,7 @@ impl NativeObservation {
                 kind,
                 configured,
                 search_path.clone(),
+                &native_environment,
                 process_limits,
                 json_limits,
             ) {
@@ -891,6 +908,8 @@ pub(crate) fn first_use_harness_report(
     let json_limits =
         JsonLimits::new(256 * 1024, 64).expect("bounded status JSON limits are valid");
     let search_path = std::env::var_os("PATH");
+    let native_environment = PlatformPaths::resolve(&ProcessEnvironment)
+        .and_then(|paths| paths.native_process_environment(search_path.clone()));
     let all_harnesses = [
         HarnessId::new("codex").expect("known harness"),
         HarnessId::new("claude").expect("known harness"),
@@ -933,10 +952,22 @@ pub(crate) fn first_use_harness_report(
                 continue;
             }
         };
+        let Ok(native_environment) = native_environment.as_ref() else {
+            outcome = outcome.with_warning(
+                Warning::new(
+                    "native_environment_unavailable",
+                    "The bounded native process environment could not be resolved.",
+                )
+                .with_context("harness", harness),
+            );
+            outcome = outcome.with_resource(entry.with_field("reachable", false));
+            continue;
+        };
         match detect_configured_installation(
             kind,
             configured,
             search_path.clone(),
+            native_environment,
             process_limits,
             json_limits,
         ) {

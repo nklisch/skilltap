@@ -295,6 +295,16 @@ impl StatusApplication<'_> {
         let json_limits =
             JsonLimits::new(256 * 1024, 64).expect("bounded lifecycle JSON limits are valid");
         let search_path = std::env::var_os("PATH");
+        let native_environment = match paths.native_process_environment(search_path.clone()) {
+            Ok(environment) => environment,
+            Err(_) => {
+                outcome.result = ResultClass::Invalid;
+                return outcome.with_error(ErrorDetail::new(
+                    "native_environment_unavailable",
+                    "The bounded native process environment could not be resolved.",
+                ));
+            }
+        };
         let timestamp = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| ());
 
         for concrete_scope in &scope.resolved {
@@ -460,6 +470,7 @@ impl StatusApplication<'_> {
                         observe_native_resource(
                             configured.clone(),
                             search_path.clone(),
+                            &native_environment,
                             &native_request,
                             process_limits,
                             json_limits,
@@ -638,7 +649,8 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let port = NativeLifecyclePort::new_per_operation(requests);
+        let port =
+            NativeLifecyclePort::new_per_operation_with_environment(requests, native_environment);
         let journal = StateExecutionJournal {
             plan: &plan,
             state: self.state,

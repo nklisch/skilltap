@@ -113,6 +113,7 @@ pub fn native_arguments(
 pub fn run_native_lifecycle(
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
+    environment: &BTreeMap<OsString, OsString>,
     request: &NativeLifecycleRequest,
     limits: ProcessLimits,
 ) -> Result<NativeProcessOutput, NativeLifecycleError> {
@@ -125,7 +126,7 @@ pub fn run_native_lifecycle(
     Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable,
         native_arguments(request)?,
-        std::collections::BTreeMap::new(),
+        environment.clone(),
         working_directory,
         limits,
     ))?)
@@ -136,6 +137,7 @@ pub fn run_native_lifecycle(
 /// the PATH replacement window between read-first detection and mutation.
 pub fn run_native_lifecycle_bound(
     executable: &ExecutableIdentity,
+    environment: &BTreeMap<OsString, OsString>,
     request: &NativeLifecycleRequest,
     limits: ProcessLimits,
 ) -> Result<NativeProcessOutput, NativeLifecycleError> {
@@ -147,7 +149,7 @@ pub fn run_native_lifecycle_bound(
     Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable.clone(),
         native_arguments(request)?,
-        std::collections::BTreeMap::new(),
+        environment.clone(),
         working_directory,
         limits,
     ))?)
@@ -161,6 +163,7 @@ pub fn run_native_lifecycle_bound(
 pub fn observe_native_resource(
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
+    environment: &BTreeMap<OsString, OsString>,
     request: &NativeLifecycleRequest,
     process_limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
@@ -170,7 +173,7 @@ pub fn observe_native_resource(
     let output = SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable,
         native_list_arguments(request),
-        BTreeMap::new(),
+        environment.clone(),
         match &request.scope {
             Scope::Global => None,
             Scope::Project(path) => Some(path.clone()),
@@ -291,6 +294,7 @@ fn resource_presence(value: &serde_json::Value, name: &str) -> NativeResourcePre
 /// and direct-argument only.
 pub struct NativeLifecyclePort {
     entries: BTreeMap<OperationId, NativeLifecycleEntry>,
+    environment: BTreeMap<OsString, OsString>,
 }
 
 struct NativeLifecycleEntry {
@@ -340,7 +344,25 @@ impl NativeLifecyclePort {
                     )
                 })
                 .collect(),
+            environment: BTreeMap::new(),
         }
+    }
+
+    pub fn new_per_operation_with_environment(
+        entries: impl IntoIterator<
+            Item = (
+                OperationId,
+                ConfiguredBinary,
+                Option<OsString>,
+                ProcessLimits,
+                NativeLifecycleRequest,
+            ),
+        >,
+        environment: BTreeMap<OsString, OsString>,
+    ) -> Self {
+        let mut port = Self::new_per_operation(entries);
+        port.environment = environment;
+        port
     }
 }
 
@@ -401,6 +423,7 @@ impl ExecutionPort for NativeLifecyclePort {
         let output = run_native_lifecycle(
             entry.configured.clone(),
             entry.search_path.clone(),
+            &self.environment,
             &entry.request,
             entry.limits,
         )

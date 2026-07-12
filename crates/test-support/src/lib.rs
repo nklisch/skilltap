@@ -88,6 +88,9 @@ pub struct IsolatedMachine {
     _root: TempRoot,
     home: PathBuf,
     configuration_home: PathBuf,
+    cache_home: PathBuf,
+    codex_home: PathBuf,
+    claude_home: PathBuf,
     working_directory: PathBuf,
 }
 
@@ -96,14 +99,23 @@ impl IsolatedMachine {
         let root = TempRoot::new(prefix)?;
         let home = root.join("home");
         let configuration_home = root.join("xdg");
+        let cache_home = root.join("cache");
+        let codex_home = home.join(".codex");
+        let claude_home = home.join(".claude");
         let working_directory = root.join("work");
         fs::create_dir_all(&home)?;
         fs::create_dir_all(&configuration_home)?;
+        fs::create_dir_all(&cache_home)?;
+        fs::create_dir_all(&codex_home)?;
+        fs::create_dir_all(&claude_home)?;
         fs::create_dir_all(&working_directory)?;
         Ok(Self {
             _root: root,
             home,
             configuration_home,
+            cache_home,
+            codex_home,
+            claude_home,
             working_directory,
         })
     }
@@ -114,6 +126,18 @@ impl IsolatedMachine {
 
     pub fn configuration_home(&self) -> &Path {
         &self.configuration_home
+    }
+
+    pub fn cache_home(&self) -> &Path {
+        &self.cache_home
+    }
+
+    pub fn codex_home(&self) -> &Path {
+        &self.codex_home
+    }
+
+    pub fn claude_home(&self) -> &Path {
+        &self.claude_home
     }
 
     pub fn working_directory(&self) -> &Path {
@@ -135,8 +159,10 @@ impl IsolatedMachine {
             .current_dir(working_directory)
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.configuration_home)
+            .env("XDG_CACHE_HOME", &self.cache_home)
+            .env("CODEX_HOME", &self.codex_home)
+            .env("CLAUDE_CONFIG_DIR", &self.claude_home)
             .env_remove("SKILLTAP_HOME")
-            .env_remove("CODEX_HOME")
             .output()
     }
 
@@ -154,9 +180,11 @@ impl IsolatedMachine {
             .current_dir(self.working_directory())
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.configuration_home)
+            .env("XDG_CACHE_HOME", &self.cache_home)
+            .env("CODEX_HOME", &self.codex_home)
+            .env("CLAUDE_CONFIG_DIR", &self.claude_home)
             .env("PATH", search_path)
             .env_remove("SKILLTAP_HOME")
-            .env_remove("CODEX_HOME")
             .output()
     }
 
@@ -175,8 +203,10 @@ impl IsolatedMachine {
             .current_dir(self.working_directory())
             .env("HOME", &self.home)
             .env("XDG_CONFIG_HOME", &self.configuration_home)
-            .env_remove("SKILLTAP_HOME")
-            .env_remove("CODEX_HOME");
+            .env("XDG_CACHE_HOME", &self.cache_home)
+            .env("CODEX_HOME", &self.codex_home)
+            .env("CLAUDE_CONFIG_DIR", &self.claude_home)
+            .env_remove("SKILLTAP_HOME");
         for (name, value) in values {
             command.env(name, value);
         }
@@ -228,6 +258,9 @@ mod tests {
 
         assert!(machine.home().is_dir());
         assert!(machine.configuration_home().is_dir());
+        assert!(machine.cache_home().is_dir());
+        assert!(machine.codex_home().is_dir());
+        assert!(machine.claude_home().is_dir());
         assert!(machine.working_directory().is_dir());
         assert_ne!(machine.home(), machine.configuration_home());
         assert_ne!(machine.home(), machine.working_directory());
