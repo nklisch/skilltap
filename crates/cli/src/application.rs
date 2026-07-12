@@ -88,6 +88,7 @@ pub(crate) enum NativeLifecycleKind {
 pub(crate) struct SkillInstallRequest<'a> {
     pub(crate) source: &'a str,
     pub(crate) name: Option<&'a str>,
+    pub(crate) preserve_name: bool,
     pub(crate) requested_revision: Option<&'a str>,
     pub(crate) subdirectory: Option<&'a str>,
 }
@@ -1790,7 +1791,10 @@ impl StatusApplication<'_> {
                 "The skill name could not be derived; provide --name.",
             ));
         };
-        if request.name.is_some() && skill.declared_name().as_ref() != Some(&name) {
+        if request.name.is_some()
+            && !request.preserve_name
+            && skill.declared_name().as_ref() != Some(&name)
+        {
             outcome.result = ResultClass::Invalid;
             return outcome.with_error(ErrorDetail::new(
                 "skill_name_mismatch",
@@ -2344,7 +2348,8 @@ impl StatusApplication<'_> {
             target,
             SkillInstallRequest {
                 source: source.locator().as_str(),
-                name: None,
+                name: Some(name.as_str()),
+                preserve_name: true,
                 requested_revision: source.requested_revision().map(|value| value.as_str()),
                 subdirectory: source.subdirectory().map(|value| value.as_str()),
             },
@@ -2585,6 +2590,11 @@ impl StatusApplication<'_> {
             if inventory.resources().contains_key(&key) {
                 inventory = inventory.without_resource(&key).unwrap_or(inventory);
             }
+        }
+        if !acknowledged && !outcome.warnings.is_empty() {
+            return outcome
+                .with_summary("operations", 0_u64)
+                .with_summary("changed", false);
         }
         let empty_inventory = documents.inventory.clone().unwrap_or_else(|| {
             InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])

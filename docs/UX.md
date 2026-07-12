@@ -51,7 +51,7 @@ skilltap instructions repair
 skilltap daemon enable
 skilltap daemon disable
 skilltap daemon status
-skilltap daemon run
+skilltap daemon run [--json]
 ```
 
 There is no bare interactive experience and no `init` command. Running `skilltap` without a subcommand prints concise help and exits with an input error.

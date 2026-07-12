@@ -33,7 +33,7 @@ pub(crate) enum Dispatch {
     DaemonEnable(crate::command::DaemonEnableArgs),
     DaemonDisable(OutputArgs),
     DaemonStatus(OutputArgs),
-    DaemonRun,
+    DaemonRun(OutputArgs),
 }
 
 impl Dispatch {
@@ -75,7 +75,7 @@ impl Dispatch {
                 DaemonCommand::Enable(args) => Self::DaemonEnable(args),
                 DaemonCommand::Disable(args) => Self::DaemonDisable(args),
                 DaemonCommand::Status(args) => Self::DaemonStatus(args),
-                DaemonCommand::Run => Self::DaemonRun,
+                DaemonCommand::Run(args) => Self::DaemonRun(args),
             },
         }
     }
@@ -106,7 +106,7 @@ impl Dispatch {
             Self::HarnessDisable(args) => args.output.json,
             Self::DaemonEnable(args) => args.output.json,
             Self::DaemonDisable(args) | Self::DaemonStatus(args) => args.json,
-            Self::DaemonRun => false,
+            Self::DaemonRun(args) => args.json,
         }
     }
 }

@@ -338,7 +338,7 @@ pub enum DaemonCommand {
     /// Inspect the user update service.
     Status(OutputArgs),
     /// Run one foreground daemon cycle.
-    Run,
+    Run(OutputArgs),
 }
 
 #[derive(Debug, Args)]

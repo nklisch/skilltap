@@ -1039,6 +1039,182 @@ fn git_skill_subdirectory_is_reused_by_unnamed_update() {
 }
 
 #[test]
+fn explicitly_named_git_skill_update_preserves_the_managed_name() {
+    let machine = machine();
+    let repository = machine.home().join("source-skill");
+    fs::create_dir_all(&repository).unwrap();
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: example-skill\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    for args in [
+        &["init", "--quiet"][..],
+        &[
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ][..],
+        &[
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "initial",
+        ][..],
+    ] {
+        let result = Command::new("git")
+            .args(args)
+            .current_dir(&repository)
+            .output()
+            .unwrap();
+        assert!(result.status.success());
+    }
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source = format!("file://{}", repository.to_str().unwrap());
+
+    let local = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            repository.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&local, 0);
+    let named = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            &source,
+            "--name",
+            "example-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&named, 0);
+
+    fs::write(
+        repository.join("SKILL.md"),
+        "---\nname: example-skill\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "add",
+            ".",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+    let commit = Command::new("git")
+        .args([
+            "-c",
+            "user.name=skilltap-test",
+            "-c",
+            "user.email=skilltap@example.invalid",
+            "commit",
+            "--quiet",
+            "-m",
+            "update",
+        ])
+        .current_dir(&repository)
+        .output()
+        .unwrap();
+    assert!(commit.status.success());
+
+    let update = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "example-skill",
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&update, 0);
+    assert_eq!(json(&update)["result"], "completed");
+    assert_eq!(json(&update)["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(machine.home().join(".agents/skills/example-skill/SKILL.md")).unwrap(),
+        "---\nname: example-skill\ndescription: v2\n---\nv2\n"
+    );
+}
+
+#[test]
+fn skill_remove_blocks_all_targets_when_one_target_is_drifted() {
+    let machine = machine();
+    let source = machine.home().join("drifted-skill");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: drifted-skill\ndescription: test\n---\nbody\n",
+    )
+    .unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let source_text = source.to_str().unwrap();
+    let install = run(
+        &machine,
+        &["skill", "install", source_text, "--target", "all", "--json"],
+    );
+    assert_code(&install, 0);
+    let inventory_before =
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    fs::write(
+        machine.home().join(".agents/skills/drifted-skill/SKILL.md"),
+        "---\nname: drifted-skill\ndescription: externally changed\n---\nchanged\n",
+    )
+    .unwrap();
+
+    let remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "drifted-skill",
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 2);
+    let value = json(&remove);
+    assert_eq!(value["result"], "attention_required");
+    assert_eq!(value["summary"]["changed"], false);
+    assert_eq!(value["summary"]["operations"], 0);
+    assert!(
+        value["warnings"].as_array().unwrap().iter().any(|warning| {
+            warning["code"] == "skill_destination_drifted_requires_acknowledgment"
+        })
+    );
+    assert!(machine.home().join(".agents/skills/drifted-skill").exists());
+    assert!(machine.home().join(".claude/skills/drifted-skill").exists());
+    assert_eq!(
+        fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap(),
+        inventory_before
+    );
+}
+
+#[test]
 fn instruction_setup_creates_canonical_global_file_and_bridges() {
     let machine = machine();
     write_owned(&machine, "config.toml", ENABLED_CONFIG);
@@ -1098,6 +1274,20 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
             .next()
             .is_some()
     );
+}
+
+#[test]
+fn daemon_run_accepts_json_output() {
+    let machine = machine();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+
+    let output = run(&machine, &["daemon", "run", "--json"]);
+
+    assert_code(&output, 2);
+    let value = json(&output);
+    assert_eq!(value["command"], "daemon run");
+    assert_eq!(value["result"], "attention_required");
+    assert_eq!(value["summary"]["pending_operations"], 0);
 }
 
 #[test]

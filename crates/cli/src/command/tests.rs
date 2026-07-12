@@ -313,10 +313,22 @@ fn irrelevant_flags_are_rejected_by_their_commands() {
         &["skilltap", "plugin", "remove", "name", "--yes"][..],
         &["skilltap", "skill", "list", "--ref", "main"][..],
         &["skilltap", "instructions", "status", "--target", "codex"][..],
-        &["skilltap", "daemon", "run", "--json"][..],
     ] {
         rejects(args, ErrorKind::UnknownArgument);
     }
+}
+
+#[test]
+fn daemon_run_accepts_structured_output() {
+    let Command::Daemon(DaemonArgs {
+        command: DaemonCommand::Run(args),
+    }) = parse(&["skilltap", "daemon", "run", "--json"])
+        .command
+        .unwrap()
+    else {
+        panic!("expected daemon run")
+    };
+    assert!(args.json);
 }
 
 #[test]

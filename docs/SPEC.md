@@ -464,7 +464,7 @@ Setup behavior:
 skilltap daemon enable [--interval <duration>] [--json]
 skilltap daemon disable [--json]
 skilltap daemon status [--json]
-skilltap daemon run
+skilltap daemon run [--json]
 ```
 
 The daemon is optional and disabled until explicitly enabled.

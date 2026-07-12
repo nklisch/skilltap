@@ -183,6 +183,7 @@ where
                 SkillInstallRequest {
                     source: args.source.as_str(),
                     name: args.name.as_ref().map(|value| value.as_str()),
+                    preserve_name: false,
                     requested_revision: args
                         .requested_revision
                         .as_ref()
@@ -247,7 +248,7 @@ where
         Dispatch::DaemonStatus(args) => {
             (execute_system_daemon_status(&args), OutputChannel::Stdout)
         }
-        Dispatch::DaemonRun => (execute_system_daemon_run(), OutputChannel::Stdout),
+        Dispatch::DaemonRun(args) => (execute_system_daemon_run(&args), OutputChannel::Stdout),
     };
     render(outcome, json, plain_channel)
 }
@@ -260,7 +261,7 @@ fn execute_system_sync(args: &SyncArgs) -> Outcome {
     execute_system_reconciliation("sync", |application| application.execute_sync(args))
 }
 
-fn execute_system_daemon_run() -> Outcome {
+fn execute_system_daemon_run(_args: &crate::command::OutputArgs) -> Outcome {
     execute_system_reconciliation("daemon run", |application| {
         application.execute_daemon_cycle()
     })

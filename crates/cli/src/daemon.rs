@@ -52,7 +52,27 @@ pub fn owns(platform: ServicePlatform, contents: &[u8]) -> bool {
                 && contents.contains("<string>daemon</string><string>run</string>")
         }
         ServicePlatform::SystemdUser => {
-            contents.contains("skilltap safe update") && contents.contains("daemon run")
+            contents.contains("skilltap safe update")
+                && (contents.contains("daemon run")
+                    || contents.contains("Unit=skilltap-update.service"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skilltap_core::daemon::ServicePlatform;
+
+    #[test]
+    fn systemd_ownership_accepts_skilltap_service_and_timer_files() {
+        let service = b"[Unit]\nDescription=skilltap safe update cycle\n[Service]\nExecStart=/bin/skilltap daemon run\n";
+        let timer = b"[Unit]\nDescription=skilltap safe update timer\n[Timer]\nUnit=skilltap-update.service\n";
+        let unrelated =
+            b"[Unit]\nDescription=skilltap safe update timer\n[Timer]\nUnit=other.service\n";
+
+        assert!(owns(ServicePlatform::SystemdUser, service));
+        assert!(owns(ServicePlatform::SystemdUser, timer));
+        assert!(!owns(ServicePlatform::SystemdUser, unrelated));
     }
 }
