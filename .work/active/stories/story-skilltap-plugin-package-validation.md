@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-package-validation
 kind: story
-stage: review
+stage: done
 tags: [testing, architecture]
 parent: epic-skilltap-plugin-distribution-package
 depends_on: [story-skilltap-plugin-package-assets]
@@ -53,3 +53,18 @@ contract so release failures are actionable.
 - Focused verification passes: `cargo test -p skilltap --test plugin_package
   --offline` and `cargo clippy -p skilltap --test plugin_package --offline --
   -D warnings`.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard substrate review. The isolated package fixtures exercise
+valid channel-specific metadata, complete skill trees, malformed documents,
+version/name drift, traversal, missing/non-regular `SKILL.md`, invalid
+frontmatter, and symlink rejection. Focused and full workspace tests pass;
+the validator reports channel-relative boundary failures without touching
+native state, home directories, or the sibling publisher.
