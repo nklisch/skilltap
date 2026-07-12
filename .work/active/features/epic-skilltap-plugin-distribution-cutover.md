@@ -1,7 +1,7 @@
 ---
 id: epic-skilltap-plugin-distribution-cutover
 kind: feature
-stage: review
+stage: done
 tags: [infra, content, cleanup]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-release]
@@ -184,3 +184,17 @@ for CI/operator use and skips safely when the sibling checkout is unavailable.
 
 The three cutover stories are complete: canonical evidence gate, legacy
 deprecation/archive handoff record, and read-only active sibling pointer parity.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: external `nklisch/skilltap-skills` deletion/archive remains an
+operator-controlled handoff and is not claimed complete by this workspace.
+**Nits**: none
+
+**Notes**: Feature acceptance review at standard weight. Canonical release
+evidence is repeatable and offline; the legacy record explicitly names
+superseded surfaces and replacements; active `../skills` is preserved and
+checked read-only. No destructive external action was performed.
