@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-reconciliation
 kind: story
-stage: implementing
+stage: review
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-lifecycle, story-split-status-application-instructions]
@@ -50,3 +50,14 @@ Outcome merge or helper import changes may compile while changing result
 classification. Revert this commit and restore orchestration to the parent;
 lifecycle and instruction modules remain independently usable.
 
+## Implementation Notes
+
+- Moved plan/sync entrypoints and reconciliation orchestration into private
+  `application/reconciliation.rs`, including selector/source projection and
+  outcome aggregation helpers.
+- Plan and sync continue to route through lifecycle/instruction adapters with
+  unchanged scope/target filtering, acknowledgment, observation, and result
+  classification behavior.
+- Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
+  `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
+  binary tests).
