@@ -244,10 +244,15 @@ fn executable_replacement_after_detection_blocks_native_mutation() {
     .unwrap();
     let binary = root.path().join("claude");
     let replacement = root.path().join("replacement");
+    let original = root.path().join("claude.original");
     fs::copy(&binary, &replacement).unwrap();
     fs::set_permissions(&replacement, fs::Permissions::from_mode(0o700)).unwrap();
-    fs::remove_file(&binary).unwrap();
+    // Keep the original inode alive while creating the replacement.  Removing
+    // it first lets filesystems immediately recycle the inode, turning this
+    // fixture into a false negative for identity revalidation.
+    fs::rename(&binary, &original).unwrap();
     fs::rename(replacement, &binary).unwrap();
+    fs::remove_file(original).unwrap();
 
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
     let result = setup_detected_plugin(HarnessKind::Claude, &installation, &policy);
