@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-reconciliation
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-lifecycle, story-split-status-application-instructions]
@@ -61,3 +61,17 @@ lifecycle and instruction modules remain independently usable.
 - Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
   `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
   binary tests).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard same-harness fresh-context review. Reconciliation remains
+an orchestrator over existing adapters; plan stays mutation-free and sync
+preserves candidate ordering, selectors, target/scope boundaries, outcomes,
+and generic acknowledgment. Workspace fmt, tests, clippy, and diff checks are
+green.

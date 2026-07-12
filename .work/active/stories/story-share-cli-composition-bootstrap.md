@@ -1,7 +1,7 @@
 ---
 id: story-share-cli-composition-bootstrap
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -40,3 +40,16 @@ and borrowed lifetimes unchanged.
   status's distinct `platform_paths_unavailable` mapping.
 - Verification: `cargo fmt --all -- --check` and `cargo check -p skilltap --offline`
   passed.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard same-harness fresh-context review. The shared bootstrap
+retains repository construction, scope resolver wiring, borrowed lifetimes,
+and status-specific platform-path errors; workspace fmt, tests, clippy, and
+diff checks are green.

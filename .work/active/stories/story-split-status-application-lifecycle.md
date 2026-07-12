@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-lifecycle
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-execution-ports]
@@ -64,3 +64,18 @@ pre-step layout.
 - Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
   `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
   binary tests).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: Lifecycle helper types and projections remain in `application.rs`
+as shared private support rather than moving into `lifecycle.rs`; this is a
+structural deviation only and does not alter public behavior.
+
+**Notes**: Standard same-harness fresh-context review. Native lifecycle,
+standalone skill, Git revision, daemon, state journal, operation IDs, and
+acknowledgment paths remain unchanged; workspace fmt, tests, clippy, and diff
+checks are green.

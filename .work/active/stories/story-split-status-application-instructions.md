@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-instructions
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-execution-ports]
@@ -59,3 +59,18 @@ needed.
 - Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
   `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
   binary tests).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: The bridge helper functions remain in `application.rs` as shared
+private support rather than moving into `instructions.rs`; this does not alter
+the private module boundary or behavior.
+
+**Notes**: Standard same-harness fresh-context review. Instruction entrypoints
+and execution-port calls preserve path selection, ordering, duplicate handling,
+backup/write semantics, and acknowledgment behavior; workspace fmt, tests,
+clippy, and diff checks are green.

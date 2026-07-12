@@ -1,7 +1,7 @@
 ---
 id: story-centralize-stable-hash
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -39,3 +39,15 @@ replace the equivalent loops around lines 4482-4512, 4698-4702, 4857-4892,
   resource identifier loops with it while preserving labels and formatting.
 - Verification: `cargo fmt --all` and `cargo test -p skilltap --offline`
   passed (40 unit tests and 41 compiled-binary tests).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard same-harness fresh-context review. The helper preserves the
+FNV-1a seed, byte order, wrapping arithmetic, labels, prefixes, and formatting;
+the workspace fmt, tests, clippy, and diff checks are green.

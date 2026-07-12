@@ -1,7 +1,7 @@
 ---
 id: story-share-reconciliation-selection
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: null
 depends_on: []
@@ -39,3 +39,16 @@ and resource-kind semantics identical.
   desired resource count remains deduplicated independently of target count.
 - Verification: `cargo fmt --all` and `cargo test -p skilltap --offline`
   passed (40 unit tests and 41 compiled-binary tests).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Standard same-harness fresh-context review. Plan and sync consume
+the same BTreeSet-backed resource/target order, preserve selector and scope
+filters, and keep resource counts deduplicated; workspace fmt, tests, clippy,
+and diff checks are green.

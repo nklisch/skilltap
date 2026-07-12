@@ -1,7 +1,7 @@
 ---
 id: story-split-status-application-status-adoption
 kind: story
-stage: review
+stage: done
 tags: [refactor]
 parent: feature-split-status-application
 depends_on: [story-split-status-application-reconciliation]
@@ -59,3 +59,18 @@ steps; no state or native migration is required.
 - Verification: `cargo fmt --all`, `cargo check -p skilltap --offline`, and
   `cargo test -p skilltap --offline` passed (40 unit tests and 41 compiled-
   binary tests).
+
+## Review (2026-07-12)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+**Important**: none
+**Nits**: Shared observation/projection helpers remain in `application.rs`
+rather than moving into `status.rs`; this is a structural deviation only and
+does not alter the private boundary or behavior.
+
+**Notes**: Standard same-harness fresh-context review. Status remains
+read-only, adoption retains lock/revalidation, and first-use, malformed
+document, scope/target, ordering, and native observation behavior are
+unchanged; workspace fmt, tests, clippy, and diff checks are green.
