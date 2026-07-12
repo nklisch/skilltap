@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-artifact-portable-rollback-safety
 kind: story
-stage: review
+stage: implementing
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
@@ -52,3 +52,29 @@ coverage for the full acceptance matrix.
 - Tests added: offline redirect-hop attestation, no-prior rollback replacement preservation, and non-executable payload preservation.
 - Discrepancies from design: Linux uses `renameat2`, macOS uses `renameatx_np` exchange plus hard-link no-replace publication; unsupported platforms fail closed instead of falling back to overwrite-capable rename.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: `remove_published_if_identity` exchanges the marker into the
+destination, verifies the displaced inode at the private marker, then
+unconditionally removes the destination pathname (`crates/core/src/runtime/artifact.rs:728-737`).
+An unrelated replacement can win that pathname after the exchange and before
+the remove, so no-prior rollback can still delete the replacement. Revalidate
+the destination marker identity immediately before removal (or remove only via
+an atomic identity-safe exchange) and add a deterministic post-exchange race
+fixture (this item)
+
+**Important**: none
+
+**Nits**: none
+
+**Notes**: Standard substrate review of `9c87afb` at highest implementation
+capability with standard review weight. Redirect-hop validation now rejects an
+unattested intermediate host, macOS uses hard-link no-replace publication and
+`renameatx_np` exchange, unsupported platforms fail closed, and the existing
+tests pass. The added no-prior test replaces the destination before calling the
+helper; it does not cover a replacement between the exchange and the unlink,
+which is the remaining correctness race. Keep the item at `stage: implementing`
+until that identity window is closed.
