@@ -1020,7 +1020,7 @@ mod bootstrap_tests {
             version,
             key,
             "skilltap-fixture",
-            format!("{:x}", sha2::Sha256::digest(b"wrong payload")),
+            format!("{:x}", sha2::Sha256::digest(wrong_bytes.as_ref())),
             SourceLocator::new(
                 "https://github.com/nklisch/skilltap/releases/download/v3.0.0/skilltap-fixture",
             )
