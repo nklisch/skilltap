@@ -56,6 +56,21 @@ skilltap daemon run [--json]
 
 There is no bare interactive experience and no `init` command. Running `skilltap` without a subcommand prints concise help and exits with an input error.
 
+## Help and Diagnostic Discovery
+
+Help is the executable discovery surface for agents. The root command, every
+command group, and every leaf command must describe its purpose, required
+arguments, scope and target behavior, acknowledgment flags, output modes, and
+the exit classes callers can expect. Help stays concise enough to request
+directly during a recovery workflow; the website and self-hosted plugin may
+explain concepts and common sequences but do not replace it.
+
+Errors use the same non-interactive contract as successful output. A plain
+error identifies the boundary and the next safe command or decision. A JSON
+error carries the same information in the stable result, errors, warnings, and
+next_actions fields. Neither form includes secrets, raw native payloads, or
+debug-only paths.
+
 ## Target and Scope
 
 Target and scope are independent.

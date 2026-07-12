@@ -15,8 +15,58 @@ It manages:
 - MCP servers contributed by managed plugins.
 - Global and project instructions.
 - Compatibility, ownership, drift, health, and updates.
+- Its own optional Claude Code and Codex plugin distribution, including the
+  high-level skill that teaches agents how to operate the binary.
 
 skilltap does not search, rank, recommend, or browse available skills and plugins. The caller supplies an explicit marketplace source, plugin selector, skill source, or local path.
+
+The self-hosted plugin is an explicit product distribution, not a discovery
+catalog. It does not search or recommend other skills, plugins, or marketplaces.
+
+## Self-Hosted Plugin Distribution
+
+The skilltap repository is the canonical publisher for one public plugin
+identity with distinct native channel artifacts:
+
+- Claude Code uses a `.claude-plugin/plugin.json` manifest and a
+  `.claude-plugin/marketplace.json` catalog.
+- Codex uses a `.codex-plugin/plugin.json` manifest and its documented
+  `.agents/plugins/marketplace.json` catalog.
+- Both channels carry the same complete `skilltap` skill directory, including
+  its top-level `SKILL.md` and any supporting references. The channel manifests
+  and catalogs remain native documents; one is never treated as the other's
+  schema.
+
+The skill is a high-level discovery and operations guide. It explains the
+binary's purpose, command families, scope and target selection, configuration
+layout, status/plan/sync workflow, update and daemon behavior, and how an agent
+should turn a diagnostic into a user-facing decision. It does not duplicate
+the full CLI reference, search marketplace contents, or make recommendations.
+Exact syntax and behavior are learned from `skilltap --help` and the relevant
+leaf command's help output.
+
+The plugin release must provide a deterministic binary bootstrap path for the
+supported macOS and Linux platforms. Where a native harness supports a
+documented automatic setup hook, installation may invoke it. Otherwise the
+plugin supplies one explicit, agent-invocable bootstrap command. In either
+case, plugin installation and binary availability are separate observed facts:
+the plugin must verify the release artifact, checksum, platform, and installed
+binary before claiming setup succeeded. It must not assume that an arbitrary
+post-install script executes in both harnesses, write native plugin caches, or
+require elevated privileges.
+
+Plugin metadata and binary artifacts are versioned from the same skilltap
+release and retain the repository's checksum and provenance guarantees. The
+former sibling `../skills` repository is a temporary migration mirror only; it
+is not a second long-term source of truth and is archived after the canonical
+plugin publication is live.
+
+Help and error output are part of this distribution contract. Every public
+command and leaf command exposes concise, non-interactive help with its
+purpose, accepted scope/target flags, acknowledgment requirements, output
+shape, and exit behavior. Errors name the failing boundary, redact secrets,
+and provide an actionable next command or user decision. JSON remains one
+stable document derived from the same outcome as plain output.
 
 ## Terminology
 

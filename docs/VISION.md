@@ -29,6 +29,14 @@ It can adopt existing Codex and Claude Code configuration into that state, compa
 
 The normalized state is a control plane, not a replacement plugin format. Native harness behavior remains authoritative at the integration boundary.
 
+The skilltap repository also publishes a small native plugin for the supported
+harnesses. That plugin is an agent-facing entry point to skilltap itself: it
+explains the binary, command families, configuration layout, and diagnostic
+workflow at a high level. It is a delivery and discovery surface, not a second
+control plane, a marketplace browser, or a universal plugin format. The
+skilltap repository is its canonical publisher; any other copy exists only for
+the deprecation handoff of the former skills repository.
+
 ## Native First
 
 skilltap uses a harness's native marketplace, plugin, and configuration mechanisms whenever they exist.
@@ -50,6 +58,11 @@ Commands produce concise output that an agent can interpret and convey to the us
 - How to proceed after that decision.
 
 Agents do not need a separate operating mode. The same command contract serves people, agents, scripts, and automation.
+
+The self-hosted skill follows the same boundary. It teaches an agent when to
+use `skilltap`, which command family answers a question, where state lives, and
+how to interpret status or errors. Direct `skilltap --help` and leaf-command
+help remain the executable source of truth for exact flags and behavior.
 
 ## Instructions as Shared Infrastructure
 

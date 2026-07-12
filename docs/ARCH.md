@@ -43,8 +43,34 @@ skilltap/
 │   └── test-support/
 │       └── src/
 ├── docs/
+├── plugin/                 # native Claude/Codex publication assets
+│   ├── .claude-plugin/
+│   ├── .codex-plugin/
+│   ├── skills/skilltap/    # complete shared skill directory
+│   └── marketplaces/       # channel-specific catalog sources
 └── tests/
 ```
+
+## Plugin Publication Boundary
+
+The optional self-hosted plugin is a repository and release boundary, not a
+core domain module. Its source of truth lives in this repository and contains
+one complete, portable `skilltap` skill plus channel-specific Claude and Codex
+manifests and marketplace catalogs. The catalogs may point at the release
+repository or a release subdirectory, but they preserve each harness's native
+schema and identity.
+
+The publication boundary also owns the platform-aware binary bootstrap
+assets. It consumes the same release version, checksums, and provenance as the
+standalone installers. Bootstrap code uses direct, bounded operations and
+never edits harness caches; native plugin installation and binary installation
+are observed and reported as separate steps. The plugin's high-level guidance
+is intentionally outside the reconciliation core and cannot grant mutation
+authority to either harness adapter.
+
+The former sibling skills repository may mirror the plugin during the cutover,
+but publication is one-way from skilltap. The mirror is removed or archived
+once the skilltap marketplace entries and release assets are authoritative.
 
 ### `skilltap-core`
 
