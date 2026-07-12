@@ -236,14 +236,15 @@ Complete v3 Rust control-plane release bundle: 193 done items (185 active items 
 
 ## Readiness
 
-Quality gates and all bound remediation work are complete. Of 210 bound work
-items (excluding the release orchestration item), all 210 are done and none
+Quality gates and all bound remediation work are complete. Of 211 bound work
+items (excluding the release orchestration item), all 211 are done and none
 remain open. Three correctness stories were promoted from test-discovered
 backlog findings and included in the bundle:
 
 - `story-scope-aware-lifecycle-operation-ids`
 - `story-daemon-noop-result-class`
 - `story-daemon-git-skill-update-path`
+- `story-reconciliation-observation-drift-repair`
 
 The release remains at `quality-gate` until release-deploy is rerun to draft
 the changelog and request shipping confirmation.
