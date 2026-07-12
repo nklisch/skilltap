@@ -1,14 +1,14 @@
 ---
 id: story-fix-daemon-json-output
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Accept JSON Output for One Daemon Cycle
@@ -44,3 +44,15 @@ document and a valid daemon result.
 - Service-manager invocation remains unchanged because the no-flag form still
   parses identically.
 - Full workspace tests and clippy with `-D warnings` pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. Implementation notes and green compiled
+CLI/workspace verification were confirmed; no lens walk was needed for this
+story.

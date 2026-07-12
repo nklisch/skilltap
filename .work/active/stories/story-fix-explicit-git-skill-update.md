@@ -1,14 +1,14 @@
 ---
 id: story-fix-explicit-git-skill-update
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Preserve Explicit Git Skill Names During Update
@@ -45,3 +45,15 @@ tree.
 - Regression coverage passes, including the existing unnamed Git and local
   update suites.
 - Full workspace tests and clippy with `-D warnings` pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. The explicit-name Git update regression
+and green full workspace verification were confirmed; no lens walk was needed
+for this story.

@@ -1,14 +1,14 @@
 ---
 id: story-fix-git-revision-lifecycle
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Resolve Git refs and advance same-tree revisions
@@ -44,3 +44,15 @@ commit that advances the source SHA without changing the skill tree.
 - Same-tree update operations refresh source provenance without rewriting the
   materialized tree and report old/new revisions, compatibility, and targets.
 - Added the non-default-ref and same-tree SHA regression.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. The non-default-ref and same-tree SHA
+regressions plus green full workspace verification were confirmed; no lens walk
+was needed for this story.

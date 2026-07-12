@@ -1,14 +1,14 @@
 ---
 id: story-fix-project-observation-empty
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Treat absent project harness roots as an empty observation
@@ -39,3 +39,15 @@ cover an empty project with enabled harnesses.
   optional project roots are absent; required global first-use behavior remains
   strict.
 - Added a harness detection regression for an empty project.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. The empty-project observation regression
+and green harness/workspace verification were confirmed; no lens walk was
+needed for this story.

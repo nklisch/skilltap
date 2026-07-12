@@ -1,14 +1,14 @@
 ---
 id: story-fix-target-aware-skill-lifecycle
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Preserve unselected harnesses during targeted skill lifecycle operations
@@ -44,3 +44,15 @@ Codex and Claude.
   and native IDs, and only publish removals after successful operations.
 - Added compiled-binary regressions for targeted skill remove/update and native
   marketplace removal.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. Targeted skill/native regressions and
+green full workspace verification were confirmed; no lens walk was needed for
+this story.

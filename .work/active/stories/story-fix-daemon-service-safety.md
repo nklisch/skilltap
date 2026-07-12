@@ -1,14 +1,14 @@
 ---
 id: story-fix-daemon-service-safety
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Harden daemon service ownership and publication
@@ -44,3 +44,15 @@ repeat enable idempotence, and no-op disable behavior.
   prior writes on failure, and disable skips manager calls when nothing owned is
   installed.
 - Status now surfaces malformed state and unreadable definitions as attention.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. Implementation notes and green daemon,
+compiled-binary, workspace, and clippy verification were confirmed; no lens
+walk was needed for this story.

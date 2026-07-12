@@ -1,14 +1,14 @@
 ---
 id: story-fix-drifted-skill-removal
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
 release_binding: null
 gate_origin: null
 created: 2026-07-11
-updated: 2026-07-11
+updated: 2026-07-12
 ---
 
 # Fail Closed on Partial Drifted Skill Removal
@@ -44,3 +44,14 @@ target trees and inventory remain unchanged.
 - Regression coverage confirms drift leaves every target and desired entry
   intact.
 - Full workspace tests and clippy with `-D warnings` pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast-lane substrate review. The drift regression and green full
+workspace verification were confirmed; no lens walk was needed for this story.
