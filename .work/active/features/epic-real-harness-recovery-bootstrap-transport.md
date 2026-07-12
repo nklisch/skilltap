@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-bootstrap-transport
 kind: feature
-stage: implementing
+stage: review
 tags: [correctness, security, infra, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: []
@@ -221,3 +221,43 @@ test.
 - **Residual uncertainty:** The live canonical-release check depends on network
   and GitHub availability, so deterministic regression coverage remains the
   merge gate while the clean-room run supplies release evidence.
+
+## Implementation discovery
+
+The clean-room canonical-release run exposed two release-boundary facts that
+were not visible in the original `200\n` failure:
+
+- Current GitHub release downloads redirect to the exact host
+  `release-assets.githubusercontent.com`, not only
+  `objects.githubusercontent.com`. The production allowlist now attests that
+  exact HTTPS host while rejecting lookalike neighbors.
+- HTTP download metadata does not carry a trustworthy executable mode; curl
+  creates the private payload as `0600`. Bootstrap now requires a bounded
+  regular file, verifies its signed checksum, and only then changes the private
+  payload to `0700` for version probing and atomic publication. A checksum
+  mismatch remains non-executable and is never run.
+
+The live binary phase installed release `3.0.1` into a disposable destination
+and the immediate rerun returned `no-op`, with no binary warnings or pending
+work. The overall command still reported attention because the separate Codex
+first-party plugin setup lane classified the current native lifecycle as
+unsupported; that outcome belongs to the runtime/native lifecycle features as
+declared in this feature's brief.
+
+## Implementation notes
+
+- Execution capability: direct inline implementation; the parser, verified
+  payload preparation, and bootstrap assertions form one bounded release
+  transport surface.
+- Review weight: standard (project default).
+- Files changed: `crates/core/src/runtime/artifact.rs`,
+  `crates/cli/src/bootstrap_commands.rs`, and this feature item.
+- Tests added: exact success and redirect frame parsing, malformed frame and
+  hostile-host rejection, install/no-op result semantics, verified promotion
+  of a non-executable HTTP payload, and checksum-before-execution behavior.
+- Discrepancies from design: the live canonical release required the exact
+  `release-assets.githubusercontent.com` redirect host and checksum-then-mode
+  preparation described above; the public ports and atomic publication
+  boundary remain unchanged.
+- Adjacent issues parked: none; the Codex plugin setup attention is already
+  owned by sibling epic features.

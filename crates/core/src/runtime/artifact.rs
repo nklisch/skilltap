@@ -432,6 +432,32 @@ pub struct InstalledBinary {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct SystemArtifactFetcher;
 
+const CURL_RESPONSE_WRITE_OUT: &str = "%{http_code}\n%{redirect_url}";
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct CurlResponseFrame<'a> {
+    status: u16,
+    redirect: &'a str,
+}
+
+fn parse_curl_response_frame(response: &[u8]) -> Result<CurlResponseFrame<'_>, ArtifactError> {
+    let response = std::str::from_utf8(response).map_err(|_| ArtifactError::DownloadFailed)?;
+    let (status, redirect) = response
+        .split_once('\n')
+        .ok_or(ArtifactError::DownloadFailed)?;
+    if redirect.contains(['\n', '\r']) {
+        return Err(ArtifactError::DownloadFailed);
+    }
+    let status = status
+        .trim()
+        .parse::<u16>()
+        .map_err(|_| ArtifactError::DownloadFailed)?;
+    Ok(CurlResponseFrame {
+        status,
+        redirect: redirect.trim(),
+    })
+}
+
 impl ArtifactFetcher for SystemArtifactFetcher {
     fn fetch(&self, url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError> {
         validate_release_url(url)?;
@@ -470,7 +496,7 @@ impl ArtifactFetcher for SystemArtifactFetcher {
                         "--output",
                         destination.as_str(),
                         "--write-out",
-                        "%{http_code}\n%{redirect_url}",
+                        CURL_RESPONSE_WRITE_OUT,
                         "--",
                         &current,
                     ]
@@ -484,15 +510,8 @@ impl ArtifactFetcher for SystemArtifactFetcher {
             if !output.status().success() {
                 return Err(ArtifactError::DownloadFailed);
             }
-            let response =
-                std::str::from_utf8(output.stdout()).map_err(|_| ArtifactError::DownloadFailed)?;
-            let mut lines = response.lines().rev();
-            let redirect = lines.next().unwrap_or_default().trim();
-            let status = lines
-                .next()
-                .and_then(|value| value.trim().parse::<u16>().ok())
-                .ok_or(ArtifactError::DownloadFailed)?;
-            match redirect_target(status, redirect)? {
+            let frame = parse_curl_response_frame(output.stdout())?;
+            match redirect_target(frame.status, frame.redirect)? {
                 Some(next) => {
                     current = next;
                     continue;
@@ -509,6 +528,7 @@ fn validate_release_url(url: &str) -> Result<(), ArtifactError> {
         "https://github.com/",
         "https://api.github.com/",
         "https://objects.githubusercontent.com/",
+        "https://release-assets.githubusercontent.com/",
     ];
     if url.starts_with('-') || !allowed.iter().any(|prefix| url.starts_with(prefix)) {
         return Err(ArtifactError::InvalidLocator);
@@ -937,6 +957,11 @@ mod tests {
             validate_release_url("--url"),
             Err(ArtifactError::InvalidLocator)
         );
+        assert!(validate_release_url("https://release-assets.githubusercontent.com/asset").is_ok());
+        assert_eq!(
+            validate_release_url("https://release-assets.githubusercontent.com.evil/asset"),
+            Err(ArtifactError::InvalidLocator)
+        );
     }
 
     #[test]
@@ -950,6 +975,60 @@ mod tests {
             Some("https://objects.githubusercontent.com/asset".to_owned())
         );
         assert_eq!(redirect_target(200, "").unwrap(), None);
+    }
+
+    #[test]
+    fn curl_response_frame_preserves_an_empty_redirect_for_success() {
+        assert_eq!(CURL_RESPONSE_WRITE_OUT, "%{http_code}\n%{redirect_url}");
+        let frame = parse_curl_response_frame(b"200\n").unwrap();
+        assert_eq!(
+            frame,
+            CurlResponseFrame {
+                status: 200,
+                redirect: "",
+            }
+        );
+        assert_eq!(redirect_target(frame.status, frame.redirect).unwrap(), None);
+    }
+
+    #[test]
+    fn curl_response_frame_advances_an_attested_redirect() {
+        let frame =
+            parse_curl_response_frame(b"302\nhttps://objects.githubusercontent.com/asset").unwrap();
+        assert_eq!(
+            redirect_target(frame.status, frame.redirect).unwrap(),
+            Some("https://objects.githubusercontent.com/asset".to_owned())
+        );
+    }
+
+    #[test]
+    fn malformed_curl_response_frames_fail_closed_without_echoing_input() {
+        for response in [
+            b"200".as_slice(),
+            b"\n".as_slice(),
+            b"not-a-status\n".as_slice(),
+            b"200\n\nextra".as_slice(),
+            b"200\nredirect\rfield".as_slice(),
+        ] {
+            let error = parse_curl_response_frame(response).unwrap_err();
+            assert_eq!(error, ArtifactError::DownloadFailed);
+            assert_eq!(error.to_string(), "release asset download failed");
+        }
+    }
+
+    #[test]
+    fn curl_response_frame_rejects_redirects_without_an_attested_target() {
+        let empty = parse_curl_response_frame(b"302\n").unwrap();
+        assert_eq!(
+            redirect_target(empty.status, empty.redirect),
+            Err(ArtifactError::InvalidLocator)
+        );
+
+        let hostile = parse_curl_response_frame(b"302\nhttps://evil.example/asset").unwrap();
+        assert_eq!(
+            redirect_target(hostile.status, hostile.redirect),
+            Err(ArtifactError::InvalidLocator)
+        );
     }
 
     #[cfg(target_os = "linux")]

@@ -470,29 +470,18 @@ where
             "The release artifact could not be downloaded; the existing binary was preserved.",
         );
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let executable = match std::fs::metadata(temporary.as_str()) {
-            Ok(metadata) => metadata.permissions().mode() & 0o111 != 0,
-            Err(_) => false,
+    if let Err(error) = prepare_downloaded_release(&temporary, artifact) {
+        let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
+        return match error {
+            skilltap_core::runtime::ArtifactError::ChecksumMismatch => binary_attention(
+                "release_checksum_failed",
+                "The downloaded release artifact did not match the signed release checksum; the existing binary was preserved.",
+            ),
+            _ => binary_attention(
+                "release_permissions_failed",
+                "The downloaded release artifact could not be validated and made runnable safely; the existing binary was preserved.",
+            ),
         };
-        if !executable {
-            let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
-            return binary_attention(
-                "release_permissions_failed",
-                "The downloaded release artifact is not executable; the existing binary was preserved.",
-            );
-        }
-        if std::fs::set_permissions(temporary.as_str(), std::fs::Permissions::from_mode(0o700))
-            .is_err()
-        {
-            let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
-            return binary_attention(
-                "release_permissions_failed",
-                "The downloaded executable could not be made runnable safely.",
-            );
-        }
     }
     if probe_installed_version(&temporary).as_ref() != Some(&manifest.version) {
         let _ = std::fs::remove_dir_all(temporary_workspace.as_str());
@@ -561,6 +550,37 @@ where
         warnings: Vec::new(),
         next_actions: Vec::new(),
     }
+}
+
+fn prepare_downloaded_release(
+    path: &AbsolutePath,
+    expected: &skilltap_core::bootstrap::ReleaseArtifact,
+) -> Result<(), skilltap_core::runtime::ArtifactError> {
+    use skilltap_core::runtime::ArtifactError;
+
+    let path = std::path::Path::new(path.as_str());
+    let metadata = std::fs::symlink_metadata(path).map_err(|_| ArtifactError::InvalidArtifact)?;
+    if metadata.file_type().is_symlink()
+        || !metadata.file_type().is_file()
+        || metadata.len() > 64 * 1024 * 1024
+    {
+        return Err(ArtifactError::InvalidArtifact);
+    }
+    let digest = binary_file_digest(path).ok_or(ArtifactError::InvalidArtifact)?;
+    let digest = digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    if digest != expected.sha256() {
+        return Err(ArtifactError::ChecksumMismatch);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+            .map_err(|_| ArtifactError::InvalidArtifact)?;
+    }
+    Ok(())
 }
 
 fn binary_policy_label(mode: BinaryExecutionMode) -> &'static str {
@@ -1172,6 +1192,26 @@ mod bootstrap_tests {
         }
     }
 
+    #[cfg(unix)]
+    struct ObservedChecksumMismatchFetcher {
+        bytes: Vec<u8>,
+        observed: std::path::PathBuf,
+    }
+
+    #[cfg(unix)]
+    impl ArtifactFetcher for ObservedChecksumMismatchFetcher {
+        fn fetch(&self, _url: &str, destination: &AbsolutePath) -> Result<(), ArtifactError> {
+            use std::os::unix::fs::PermissionsExt;
+
+            fs::write(destination.as_str(), &self.bytes)
+                .map_err(|_| ArtifactError::DownloadFailed)?;
+            fs::set_permissions(destination.as_str(), fs::Permissions::from_mode(0o600))
+                .map_err(|_| ArtifactError::DownloadFailed)?;
+            fs::hard_link(destination.as_str(), &self.observed)
+                .map_err(|_| ArtifactError::DownloadFailed)
+        }
+    }
+
     struct WrongPublisher;
 
     struct ContendedLock;
@@ -1272,6 +1312,11 @@ mod bootstrap_tests {
             &SystemBinaryInstaller,
         );
         assert_eq!(result.entry.status, "installed");
+        assert!(result.changed);
+        assert!(!result.attention);
+        assert!(!result.pending);
+        assert!(result.warnings.is_empty());
+        assert!(result.next_actions.is_empty());
 
         let (resolver, fetcher) = fixture("3.0.0");
         let result = execute_binary_bootstrap_with(
@@ -1282,6 +1327,11 @@ mod bootstrap_tests {
             &SystemBinaryInstaller,
         );
         assert_eq!(result.entry.status, "no-op");
+        assert!(!result.changed);
+        assert!(!result.attention);
+        assert!(!result.pending);
+        assert!(result.warnings.is_empty());
+        assert!(result.next_actions.is_empty());
 
         let (resolver, fetcher) = fixture("3.1.0");
         let result = execute_binary_bootstrap_with(
@@ -1314,6 +1364,74 @@ mod bootstrap_tests {
             &SystemBinaryInstaller,
         );
         assert_eq!(result.entry.status, "updated");
+    }
+
+    #[test]
+    fn non_executable_download_is_verified_before_being_made_runnable() {
+        let root = TempRoot::new("bootstrap-non-executable-download").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        let (resolver, _) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination.clone(),
+            &resolver,
+            &NonExecutableFetcher {
+                bytes: b"#!/bin/sh\nprintf 'skilltap 3.0.0\\n'\n".to_vec(),
+            },
+            &SystemBinaryInstaller,
+        );
+
+        assert_eq!(result.entry.status, "installed");
+        assert!(result.changed);
+        assert!(!result.attention);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(
+                fs::metadata(destination.as_str())
+                    .unwrap()
+                    .permissions()
+                    .mode()
+                    & 0o777,
+                0o700
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn checksum_mismatch_is_neither_made_executable_nor_run() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = TempRoot::new("bootstrap-checksum-before-execution").unwrap();
+        let destination =
+            AbsolutePath::new(root.path().join("bin/skilltap").display().to_string()).unwrap();
+        let observed = root.path().join("downloaded-payload");
+        let marker = root.path().join("payload-ran");
+        let (resolver, _) = fixture("3.0.0");
+        let result = execute_binary_bootstrap_with(
+            &args(false),
+            destination,
+            &resolver,
+            &ObservedChecksumMismatchFetcher {
+                bytes: format!(
+                    "#!/bin/sh\ntouch '{}'\nprintf 'skilltap 3.0.0\\n'\n",
+                    marker.display()
+                )
+                .into_bytes(),
+                observed: observed.clone(),
+            },
+            &SystemBinaryInstaller,
+        );
+
+        assert_eq!(result.entry.status, "unavailable");
+        assert_eq!(result.warnings[0].code, "release_checksum_failed");
+        assert_eq!(
+            fs::metadata(&observed).unwrap().permissions().mode() & 0o111,
+            0
+        );
+        assert!(!marker.exists());
     }
 
     #[test]
@@ -1556,19 +1674,6 @@ mod bootstrap_tests {
             destination.clone(),
             &resolver,
             &FixtureFetcher { bytes: wrong_bytes },
-            &SystemBinaryInstaller,
-        );
-        assert_eq!(result.entry.status, "unavailable");
-        assert_eq!(fs::read(destination.as_str()).unwrap(), prior);
-
-        let (resolver, _) = fixture("3.2.0");
-        let result = execute_binary_bootstrap_with(
-            &args(false),
-            destination.clone(),
-            &resolver,
-            &NonExecutableFetcher {
-                bytes: b"#!/bin/sh\nprintf 'skilltap 3.2.0\\n'\n".to_vec(),
-            },
             &SystemBinaryInstaller,
         );
         assert_eq!(result.entry.status, "unavailable");
