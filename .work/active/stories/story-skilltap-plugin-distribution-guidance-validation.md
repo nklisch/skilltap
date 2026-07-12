@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-guidance-validation
 kind: story
-stage: implementing
+stage: review
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-guidance
 depends_on: [story-skilltap-plugin-distribution-guidance-layout, story-skilltap-plugin-distribution-guidance-diagnostics]
@@ -31,3 +31,7 @@ Acceptance criteria:
 ## Implementation notes
 - Execution capability: highest; package validation is a publication boundary and must reject unsafe trees.
 - Review weight: standard (autopilot caller policy).
+- Files changed: `crates/cli/tests/plugin_package.rs`.
+- Tests added: required guidance references, complete-tree links, and rejection of duplicate command/discovery language.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.

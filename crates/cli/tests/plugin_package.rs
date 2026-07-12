@@ -262,6 +262,40 @@ fn validated_skill(root: &Path) -> Result<ValidatedSkillTree, String> {
     Ok(skill)
 }
 
+fn validate_guidance(skill_root: &Path) -> Result<(), String> {
+    let body = fs::read_to_string(skill_root.join("SKILL.md"))
+        .map_err(|error| format!("guidance SKILL.md: {error}"))?;
+    for reference in [
+        "references/configuration.md",
+        "references/instructions.md",
+        "references/diagnostics.md",
+    ] {
+        let path = skill_root.join(reference);
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("guidance reference {reference}: {error}"))?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            return Err(format!("guidance reference {reference} must be regular"));
+        }
+        if !body.contains(&format!(
+            "references/{}",
+            reference.rsplit('/').next().unwrap()
+        )) {
+            return Err(format!("SKILL.md does not link {reference}"));
+        }
+    }
+    if body.contains("skilltap skill install --source") {
+        return Err("SKILL.md contains a duplicated command grammar".to_owned());
+    }
+    let normalized = body.to_ascii_lowercase();
+    if normalized.contains("search for skills")
+        || normalized.contains("browse marketplace contents")
+        || normalized.contains("recommend a skill")
+    {
+        return Err("SKILL.md contains discovery instructions".to_owned());
+    }
+    Ok(())
+}
+
 fn validate_package(root: &Path) -> Result<ValidatedSkillTree, String> {
     let expected_version = expected_version();
     assert_manifest(
@@ -290,7 +324,9 @@ fn validate_package(root: &Path) -> Result<ValidatedSkillTree, String> {
         Channel::Codex,
         expected_version,
     )?;
-    validated_skill(&root.join("skills/skilltap"))
+    let skill = validated_skill(&root.join("skills/skilltap"))?;
+    validate_guidance(&root.join("skills/skilltap"))?;
+    Ok(skill)
 }
 
 fn copy_tree(source: &Path, destination: &Path) -> std::io::Result<()> {
@@ -438,4 +474,25 @@ fn package_validation_rejects_incomplete_or_unsafe_skill_trees() {
         std::os::unix::fs::symlink(&outside, root.join("skills/skilltap/escape.md")).unwrap();
         assert!(validate_package(&root).unwrap_err().contains("symlink"));
     }
+}
+
+#[test]
+fn guidance_validation_requires_references_and_rejects_discovery_or_duplicate_grammar() {
+    let (_temporary, root) = fixture();
+    fs::remove_file(root.join("skills/skilltap/references/diagnostics.md")).unwrap();
+    assert!(validate_package(&root).unwrap_err().contains("diagnostics"));
+
+    let (_temporary, root) = fixture();
+    let skill = root.join("skills/skilltap/SKILL.md");
+    let mut body = fs::read_to_string(&skill).unwrap();
+    body.push_str("\nRun `skilltap skill install --source` directly.\n");
+    fs::write(&skill, body).unwrap();
+    assert!(validate_package(&root).unwrap_err().contains("duplicated"));
+
+    let (_temporary, root) = fixture();
+    let skill = root.join("skills/skilltap/SKILL.md");
+    let mut body = fs::read_to_string(&skill).unwrap();
+    body.push_str("\nSearch for skills in every marketplace.\n");
+    fs::write(&skill, body).unwrap();
+    assert!(validate_package(&root).unwrap_err().contains("discovery"));
 }
