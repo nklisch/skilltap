@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-release-verification
 kind: story
-stage: review
+stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: [story-skilltap-plugin-distribution-release-installer, story-skilltap-plugin-distribution-release-install-surfaces]
@@ -35,3 +35,16 @@ Acceptance criteria:
 - Tests added: release validate job runs offline plugin package, installer, and public installation-surface fixtures before asset publication.
 - Discrepancies from design: sibling pointer remains an explicit external parity input and is not mutated by CI.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fast substrate review at standard weight. Release validation now
+runs package, installer, and public installation-surface fixtures before
+publication; release identity, checksums, platform assets, and provenance
+attestation checks remain gated in the workflow.
