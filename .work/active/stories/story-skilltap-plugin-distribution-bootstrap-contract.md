@@ -1,7 +1,7 @@
 ---
 id: story-skilltap-plugin-distribution-bootstrap-contract
 kind: story
-stage: review
+stage: done
 tags: [infra, security]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [epic-skilltap-plugin-distribution-package]
@@ -46,5 +46,15 @@ this item before implementation.
 - Review weight: standard (source: autopilot project default).
 - Files changed: `crates/core/src/bootstrap.rs`, `crates/core/src/lib.rs`, `crates/core/src/runtime/paths.rs`, `crates/core/src/storage/config.rs`.
 - Tests added: pure release/version, artifact validation, decision-policy, and bootstrap config round-trip tests.
-- Discrepancies from design: the binary policy is an optional `[bootstrap]` config table with deterministic defaults, preserving legacy config serialization when defaults are unchanged.
+- Discrepancies from design: the binary policy is an optional `[bootstrap]` config table with deterministic defaults, preserving legacy config serialization when defaults are unchanged. Review also added validating wire deserialization and preserves the policy during harness edits.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Substrate review, deep lane for a security-sensitive story at standard weight, fresh context. Initial review found that harness policy edits reset a configured binary update policy and that `ReleaseArtifact` serde bypassed constructor validation; both were fixed with focused regression coverage. Core workspace tests pass (300 unit tests plus integration suites). Foundation and design alignment are preserved.

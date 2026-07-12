@@ -4,6 +4,7 @@ use std::{
 };
 
 use super::*;
+use crate::bootstrap::BootstrapUpdateMode;
 use crate::domain::{
     ComponentGraph, DesiredOrigin, DesiredResource, EvidenceCode, Fingerprint,
     FingerprintAlgorithm, HarnessId, HarnessSet, NativeId, OperationId, OperationOutcome,
@@ -306,6 +307,27 @@ fn harness_policy_updates_one_target_and_preserves_the_other() {
             .with_harness_enabled(&HarnessId::new("pi").unwrap(), true)
             .is_err()
     );
+}
+
+#[test]
+fn harness_policy_updates_preserve_binary_update_policy() {
+    let config = ConfigDocument::defaults().with_bootstrap_policy(BinaryUpdatePolicy {
+        mode: BootstrapUpdateMode::Check,
+        allow_major: true,
+    });
+    let codex = HarnessId::new("codex").unwrap();
+
+    let enabled = config.with_harness_enabled(&codex, true).unwrap();
+    assert_eq!(enabled.bootstrap(), config.bootstrap());
+
+    let disabled = enabled.with_harness_enabled(&codex, false).unwrap();
+    assert_eq!(disabled.bootstrap(), config.bootstrap());
+
+    let binary = HarnessBinary::new("/opt/bin/codex").unwrap();
+    let updated = disabled
+        .with_harness_policy(&codex, true, Some(&binary))
+        .unwrap();
+    assert_eq!(updated.bootstrap(), config.bootstrap());
 }
 
 #[test]

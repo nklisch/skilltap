@@ -144,14 +144,24 @@ impl ArtifactKey {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "ReleaseArtifactWire")]
 pub struct ReleaseArtifact {
-    pub version: ReleaseVersion,
-    pub key: ArtifactKey,
-    pub asset_name: String,
-    pub sha256: String,
-    pub download_url: SourceLocator,
+    version: ReleaseVersion,
+    key: ArtifactKey,
+    asset_name: String,
+    sha256: String,
+    download_url: SourceLocator,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ReleaseArtifactWire {
+    version: ReleaseVersion,
+    key: ArtifactKey,
+    asset_name: String,
+    sha256: String,
+    download_url: SourceLocator,
 }
 
 impl ReleaseArtifact {
@@ -163,14 +173,25 @@ impl ReleaseArtifact {
         download_url: SourceLocator,
     ) -> Result<Self, ValidationError> {
         let asset_name = asset_name.into();
-        if asset_name.is_empty() || asset_name.contains('/') || asset_name.starts_with('-') {
+        if asset_name.is_empty()
+            || asset_name == "."
+            || asset_name == ".."
+            || asset_name.contains(['/', '\\'])
+            || asset_name.starts_with('-')
+        {
             return Err(ValidationError::InvalidFormat {
                 kind: "release asset name",
-                expected: "be a non-empty filename without path traversal or option prefixes",
+                expected: "be a non-empty filename without path traversal, separators, or option prefixes",
             });
         }
-        let sha256 = sha256.into();
-        Fingerprint::new(FingerprintAlgorithm::Sha256, sha256.clone())?;
+        if let Some(index) = asset_name.bytes().position(|byte| byte.is_ascii_control()) {
+            return Err(ValidationError::ControlCharacter {
+                kind: "release asset name",
+                index,
+            });
+        }
+        let fingerprint = Fingerprint::new(FingerprintAlgorithm::Sha256, sha256.into())?;
+        let sha256 = fingerprint.digest().to_owned();
         if download_url.as_str().starts_with('-') {
             return Err(ValidationError::InvalidFormat {
                 kind: "release download URL",
@@ -186,9 +207,66 @@ impl ReleaseArtifact {
         })
     }
 
+    pub const fn version(&self) -> ReleaseVersion {
+        self.version
+    }
+
+    pub const fn key(&self) -> &ArtifactKey {
+        &self.key
+    }
+
+    pub fn asset_name(&self) -> &str {
+        &self.asset_name
+    }
+
+    pub fn sha256(&self) -> &str {
+        &self.sha256
+    }
+
+    pub const fn download_url(&self) -> &SourceLocator {
+        &self.download_url
+    }
+
     pub fn fingerprint(&self) -> Fingerprint {
         Fingerprint::new(FingerprintAlgorithm::Sha256, self.sha256.clone())
             .expect("ReleaseArtifact validates its checksum")
+    }
+}
+
+impl From<ReleaseArtifact> for ReleaseArtifactWire {
+    fn from(value: ReleaseArtifact) -> Self {
+        Self {
+            version: value.version,
+            key: value.key,
+            asset_name: value.asset_name,
+            sha256: value.sha256,
+            download_url: value.download_url,
+        }
+    }
+}
+
+impl TryFrom<ReleaseArtifactWire> for ReleaseArtifact {
+    type Error = ValidationError;
+
+    fn try_from(value: ReleaseArtifactWire) -> Result<Self, Self::Error> {
+        Self::new(
+            value.version,
+            value.key,
+            value.asset_name,
+            value.sha256,
+            value.download_url,
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for ReleaseArtifact {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        ReleaseArtifactWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -350,6 +428,52 @@ mod tests {
             )
             .is_err()
         );
+
+        for asset_name in [".", "..", "skilltap/path", "skilltap\\path", "skilltap\n"] {
+            assert!(
+                ReleaseArtifact::new(
+                    version("3.0.0"),
+                    key,
+                    asset_name,
+                    "a".repeat(64),
+                    source.clone()
+                )
+                .is_err(),
+                "unsafe asset name accepted: {asset_name:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn release_artifact_deserialization_revalidates_wire_values() {
+        let key = ArtifactKey {
+            platform: SupportedPlatform::Linux,
+            arch: ArtifactArch::X86_64,
+        };
+        let source = SourceLocator::new(
+            "https://github.com/nklisch/skilltap/releases/download/v3.0.0/skilltap",
+        )
+        .unwrap();
+        let artifact =
+            ReleaseArtifact::new(version("3.0.0"), key, "skilltap", "A".repeat(64), source)
+                .unwrap();
+        let encoded = serde_json::to_value(&artifact).unwrap();
+        let decoded: ReleaseArtifact = serde_json::from_value(encoded).unwrap();
+        assert_eq!(decoded.sha256(), "a".repeat(64));
+        assert_eq!(decoded.fingerprint().digest(), "a".repeat(64));
+
+        for (field, value) in [
+            ("asset_name", serde_json::Value::String("..".into())),
+            ("asset_name", serde_json::Value::String("skilltap\n".into())),
+            ("sha256", serde_json::Value::String("not-a-checksum".into())),
+        ] {
+            let mut invalid = serde_json::to_value(&artifact).unwrap();
+            invalid[field] = value;
+            assert!(
+                serde_json::from_value::<ReleaseArtifact>(invalid).is_err(),
+                "invalid wire field accepted: {field}"
+            );
+        }
     }
 
     #[test]

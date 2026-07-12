@@ -346,6 +346,12 @@ impl ConfigDocument {
             self.instructions.clone(),
             self.updates.clone(),
         )
+        .map(|mut config| {
+            // Harness policy edits must not reset the independent skilltap
+            // binary update policy that was already persisted by the user.
+            config.bootstrap = self.bootstrap.clone();
+            config
+        })
     }
 
     /// Returns a policy copy with only one known harness enabled/disabled.
