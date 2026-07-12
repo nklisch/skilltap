@@ -194,44 +194,69 @@ fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
 }
 
 fn resource_presence(value: &serde_json::Value, name: &str) -> NativeResourcePresence {
-    fn walk(value: &serde_json::Value, name: &str, recognized: &mut bool) -> bool {
+    const LIST_FIELDS: &[&str] = &["plugins", "marketplaces", "installed", "resources", "items"];
+    const IDENTITY_FIELDS: &[&str] = &["name", "id", "plugin", "marketplace", "qualifiedName"];
+
+    // Return Ok only when the value has a documented list shape. A list entry
+    // must carry a string identity (or itself be a string); malformed entries
+    // are not evidence that the resource is missing.
+    fn parse_list(
+        value: &serde_json::Value,
+        name: &str,
+        list_fields: &[&str],
+        identity_fields: &[&str],
+    ) -> Result<bool, ()> {
         match value {
-            serde_json::Value::Array(values) => {
-                *recognized = true;
-                values.iter().any(|value| walk(value, name, recognized))
-            }
+            serde_json::Value::Array(values) => values.iter().try_fold(false, |found, value| {
+                let matches = match value {
+                    serde_json::Value::String(value) => value == name,
+                    serde_json::Value::Object(fields) => {
+                        let identities = fields
+                            .iter()
+                            .filter(|(field, _)| identity_fields.contains(&field.as_str()))
+                            .map(|(_, value)| value.as_str().ok_or(()))
+                            .collect::<Result<Vec<_>, _>>()?;
+                        if identities.is_empty() {
+                            return Err(());
+                        }
+                        identities.into_iter().any(|value| value == name)
+                    }
+                    _ => return Err(()),
+                };
+                Ok(found || matches)
+            }),
             serde_json::Value::Object(fields) => {
-                let mut matched = false;
-                for (field, value) in fields {
-                    let field_is_identity = matches!(
-                        field.as_str(),
-                        "name" | "id" | "plugin" | "marketplace" | "qualifiedName"
-                    );
-                    if field_is_identity && value.as_str() == Some(name) {
-                        matched = true;
-                    }
-                    if matches!(
-                        field.as_str(),
-                        "plugins" | "marketplaces" | "installed" | "resources" | "items"
-                    ) {
-                        *recognized = true;
-                    }
-                    matched |= walk(value, name, recognized);
+                let list_values = fields
+                    .iter()
+                    .filter(|(field, _)| list_fields.contains(&field.as_str()))
+                    .map(|(_, value)| value)
+                    .collect::<Vec<_>>();
+                if !list_values.is_empty() {
+                    return list_values.into_iter().try_fold(false, |found, value| {
+                        if !value.is_array() {
+                            return Err(());
+                        }
+                        Ok(found || parse_list(value, name, list_fields, identity_fields)?)
+                    });
                 }
-                matched
+                let identities = fields
+                    .iter()
+                    .filter(|(field, _)| identity_fields.contains(&field.as_str()))
+                    .map(|(_, value)| value.as_str().ok_or(()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                if identities.is_empty() {
+                    return Err(());
+                }
+                Ok(identities.into_iter().any(|value| value == name))
             }
-            _ => false,
+            _ => Err(()),
         }
     }
 
-    let mut recognized = false;
-    let present = walk(value, name, &mut recognized);
-    if present {
-        NativeResourcePresence::Present
-    } else if recognized {
-        NativeResourcePresence::Missing
-    } else {
-        NativeResourcePresence::Unknown
+    match parse_list(value, name, LIST_FIELDS, IDENTITY_FIELDS) {
+        Ok(true) => NativeResourcePresence::Present,
+        Ok(false) => NativeResourcePresence::Missing,
+        Err(()) => NativeResourcePresence::Unknown,
     }
 }
 
@@ -601,5 +626,17 @@ mod tests {
             resource_presence(&serde_json::json!({"version": "3.0.0"}), "formatter@team"),
             NativeResourcePresence::Unknown
         );
+        for malformed in [
+            serde_json::json!([1]),
+            serde_json::json!([{}]),
+            serde_json::json!({"plugins": "garbage"}),
+            serde_json::json!({"plugins": [{}]}),
+        ] {
+            assert_eq!(
+                resource_presence(&malformed, "formatter@team"),
+                NativeResourcePresence::Unknown,
+                "malformed list payload: {malformed}"
+            );
+        }
     }
 }
