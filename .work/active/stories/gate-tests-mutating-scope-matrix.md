@@ -36,3 +36,15 @@ state, native trees, and untouched global/project bytes.
 ## Test location (suggested)
 
 `crates/cli/tests/compiled_binary.rs`
+
+## Implementation Notes
+
+Added `native_mutations_keep_project_and_all_scope_boundaries`, covering
+global and Claude project installs, all-scopes removal, target-subset removal,
+inventory scope retention, and project isolation.
+
+The SPEC-backed test currently exposes a production defect: all-scopes removal
+with same-named global/project resources returns `operation_plan_invalid`
+because lifecycle operation IDs omit scope and collide. Parked as
+`idea-scope-aware-lifecycle-operation-ids`; do not weaken or skip this test.
+The story remains blocked on that fix and review of the resulting regression.
