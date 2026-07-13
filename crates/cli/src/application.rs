@@ -34,12 +34,12 @@ use skilltap_core::{
     lifecycle_operation::native_operation,
     plugin_graph::{ComponentDeclaration, PluginGraphReader},
     runtime::{
-        DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
-        ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, FileKind, FileSystem,
-        JsonLimits, NativeProcessRequest, NativeProcessRunner, PlatformPaths, ProcessEnvironment,
-        ProcessLimits, RelativeSymlinkTarget, ScopeRequest, ScopeResolver, SystemConfigurationLock,
-        SystemExecutableResolver, SystemExternalTreeObserver, SystemFileSystem,
-        SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
+        ConfinedFileSystem, DirectoryTreeFileSystem, ExecutableResolutionRequest,
+        ExecutableResolver, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
+        FileKind, FileSystem, JsonLimits, NativeProcessRequest, NativeProcessRunner, PlatformPaths,
+        ProcessEnvironment, ProcessLimits, RelativeSymlinkTarget, ScopeRequest, ScopeResolver,
+        SystemConfigurationLock, SystemExecutableResolver, SystemExternalTreeObserver,
+        SystemFileSystem, SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
     },
     skill::ValidatedSkillTree,
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
@@ -1697,7 +1697,7 @@ fn resolve_codex_marketplace_source(
 }
 
 fn read_codex_catalog_at_root(
-    filesystem: &dyn FileSystem,
+    filesystem: &SystemFileSystem,
     root: AbsolutePath,
     limits: JsonLimits,
 ) -> Result<(AbsolutePath, ManagedCodexCatalog), ErrorDetail> {
@@ -1705,18 +1705,27 @@ fn read_codex_catalog_at_root(
         ".agents/plugins/marketplace.json",
         ".claude-plugin/marketplace.json",
     ] {
-        let path = AbsolutePath::new(format!("{}/{}", root.as_str(), relative)).map_err(|_| {
-            managed_project_error(
-                "managed_project_source_invalid",
-                "The marketplace document path is invalid.",
+        let destination =
+            skilltap_core::domain::RelativeArtifactPath::new(relative).map_err(|_| {
+                managed_project_error(
+                    "managed_project_source_invalid",
+                    "The marketplace document path is invalid.",
+                )
+            })?;
+        if let Some(bytes) =
+            skilltap_core::runtime::ConfinedFileSystem::read_regular_bounded_no_follow(
+                filesystem,
+                &root,
+                &destination,
+                limits.bytes(),
             )
-        })?;
-        if let Some(bytes) = filesystem.read_regular_no_follow(&path).map_err(|_| {
-            managed_project_error(
-                "managed_project_source_unreadable",
-                "The selected marketplace document could not be read safely.",
-            )
-        })? {
+            .map_err(|_| {
+                managed_project_error(
+                    "managed_project_source_unreadable",
+                    "The selected marketplace document could not be read safely.",
+                )
+            })?
+        {
             let catalog = ManagedCodexCatalog::parse(&bytes, limits).map_err(|_| {
                 managed_project_error(
                     "managed_project_catalog_invalid",
@@ -1742,6 +1751,9 @@ fn plan_codex_component_projections(
     acknowledged: bool,
 ) -> Result<CodexComponentProjectionPlan, ErrorDetail> {
     let removal = kind == NativeLifecycleKind::PluginRemove;
+    let observation_limits =
+        ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
+            .expect("bounded project tree limits are valid");
     let mut skill_names = BTreeSet::new();
     let mut unsupported_optional = BTreeSet::new();
     for declaration in declarations {
@@ -1815,7 +1827,7 @@ fn plan_codex_component_projections(
             )
         })?;
         let current = filesystem
-            .load_tree_no_follow(&root, &destination)
+            .load_tree_bounded_no_follow(&root, &destination, observation_limits)
             .ok()
             .and_then(|(identity, files)| {
                 ArtifactTree::new(

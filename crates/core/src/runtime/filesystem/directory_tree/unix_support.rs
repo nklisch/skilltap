@@ -105,6 +105,20 @@ pub(super) fn open_relative_parent(
 }
 
 pub(super) fn directory_names(directory: &File) -> io::Result<Vec<String>> {
+    directory_names_with_limit(directory, None)
+}
+
+pub(super) fn directory_names_bounded(
+    directory: &File,
+    maximum_entries: u64,
+) -> io::Result<Vec<String>> {
+    directory_names_with_limit(directory, Some(maximum_entries))
+}
+
+fn directory_names_with_limit(
+    directory: &File,
+    maximum_entries: Option<u64>,
+) -> io::Result<Vec<String>> {
     let duplicate = cvt(unsafe { libc::dup(directory.as_raw_fd()) })?;
     let stream = unsafe { libc::fdopendir(duplicate) };
     if stream.is_null() {
@@ -135,6 +149,15 @@ pub(super) fn directory_names(directory: &File) -> io::Result<Vec<String>> {
             }
         };
         names.push(name);
+        if maximum_entries
+            .is_some_and(|maximum| u64::try_from(names.len()).unwrap_or(u64::MAX) > maximum)
+        {
+            unsafe { libc::closedir(stream) };
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "artifact tree exceeds its entry limit",
+            ));
+        }
     }
     names.sort();
     Ok(names)

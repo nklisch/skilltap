@@ -12,6 +12,8 @@ use std::{
 
 use skilltap_test_support::TempRoot;
 
+use crate::runtime::ExternalTreeLimits;
+
 use super::*;
 
 #[test]
@@ -493,4 +495,82 @@ fn confined_file_operations_reject_symlink_ancestors_without_touching_the_target
             .is_err()
     );
     assert!(!outside.join("plugins/marketplace.json").exists());
+}
+
+#[test]
+fn confined_observation_enforces_every_tree_and_document_limit() {
+    let temporary = TempRoot::new("skilltap-confined-observation-limits").unwrap();
+    let project = temporary.join("project");
+    fs::create_dir(&project).unwrap();
+    let project = AbsolutePath::new(project.to_str().unwrap()).unwrap();
+    let filesystem = SystemFileSystem;
+
+    let document = temporary.join("project/config.toml");
+    fs::write(&document, b"12345").unwrap();
+    assert!(
+        filesystem
+            .read_regular_bounded_no_follow(
+                &project,
+                &RelativeArtifactPath::new("config.toml").unwrap(),
+                4,
+            )
+            .is_err()
+    );
+
+    let entries = temporary.join("project/entries");
+    fs::create_dir(&entries).unwrap();
+    fs::write(entries.join("one"), b"1").unwrap();
+    fs::write(entries.join("two"), b"2").unwrap();
+    let limits = ExternalTreeLimits::new(1, 1, 4, 4, 4).unwrap();
+    assert!(
+        filesystem
+            .load_tree_bounded_no_follow(
+                &project,
+                &RelativeArtifactPath::new("entries").unwrap(),
+                limits,
+            )
+            .is_err()
+    );
+
+    let deep = temporary.join("project/deep/one/two");
+    fs::create_dir_all(&deep).unwrap();
+    fs::write(deep.join("file"), b"1").unwrap();
+    let limits = ExternalTreeLimits::new(1, 4, 4, 4, 4).unwrap();
+    assert!(
+        filesystem
+            .load_tree_bounded_no_follow(
+                &project,
+                &RelativeArtifactPath::new("deep").unwrap(),
+                limits,
+            )
+            .is_err()
+    );
+
+    let bytes = temporary.join("project/bytes");
+    fs::create_dir(&bytes).unwrap();
+    fs::write(bytes.join("large"), b"12345").unwrap();
+    let per_file = ExternalTreeLimits::new(1, 1, 4, 8, 4).unwrap();
+    assert!(
+        filesystem
+            .load_tree_bounded_no_follow(
+                &project,
+                &RelativeArtifactPath::new("bytes").unwrap(),
+                per_file,
+            )
+            .is_err()
+    );
+
+    fs::remove_file(bytes.join("large")).unwrap();
+    fs::write(bytes.join("one"), b"123").unwrap();
+    fs::write(bytes.join("two"), b"456").unwrap();
+    let total = ExternalTreeLimits::new(1, 2, 4, 5, 4).unwrap();
+    assert!(
+        filesystem
+            .load_tree_bounded_no_follow(
+                &project,
+                &RelativeArtifactPath::new("bytes").unwrap(),
+                total,
+            )
+            .is_err()
+    );
 }

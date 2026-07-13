@@ -27,7 +27,8 @@ mod unix_support;
 
 #[cfg(unix)]
 use tree_io::{
-    TreeRemovalError, read_tree, remove_open_tree, remove_open_tree_tracked, write_tree,
+    TreeRemovalError, read_tree, read_tree_bounded, remove_open_tree, remove_open_tree_tracked,
+    write_tree,
 };
 #[cfg(all(unix, test))]
 use tree_io::{read_tree_with, remove_open_tree_with};
@@ -99,6 +100,19 @@ pub trait ConfinedFileSystem {
         root: &AbsolutePath,
         destination: &RelativeArtifactPath,
     ) -> Result<(), RuntimeError>;
+
+    fn load_tree_bounded_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        limits: crate::runtime::ExternalTreeLimits,
+    ) -> Result<
+        (
+            DirectoryIdentity,
+            BTreeMap<RelativeArtifactPath, ArtifactFile>,
+        ),
+        RuntimeError,
+    >;
 }
 
 impl ConfinedFileSystem for SystemFileSystem {
@@ -127,6 +141,62 @@ impl ConfinedFileSystem for SystemFileSystem {
     ) -> Result<(), RuntimeError> {
         remove_confined_file(root, destination)
     }
+
+    fn load_tree_bounded_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        limits: crate::runtime::ExternalTreeLimits,
+    ) -> Result<
+        (
+            DirectoryIdentity,
+            BTreeMap<RelativeArtifactPath, ArtifactFile>,
+        ),
+        RuntimeError,
+    > {
+        load_confined_tree(root, destination, limits)
+    }
+}
+
+#[cfg(unix)]
+fn load_confined_tree(
+    root: &AbsolutePath,
+    destination: &RelativeArtifactPath,
+    limits: crate::runtime::ExternalTreeLimits,
+) -> Result<
+    (
+        DirectoryIdentity,
+        BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    ),
+    RuntimeError,
+> {
+    let root_directory = open_absolute_directory_preserve_mode(root, false)
+        .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))?;
+    let directory = open_relative_directory(&root_directory, destination)
+        .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))?;
+    let identity = require_directory(&directory)
+        .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))?;
+    let mut files = BTreeMap::new();
+    read_tree_bounded(&directory, &mut files, limits)
+        .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))?;
+    Ok((identity, files))
+}
+
+#[cfg(not(unix))]
+fn load_confined_tree(
+    _root: &AbsolutePath,
+    _destination: &RelativeArtifactPath,
+    _limits: crate::runtime::ExternalTreeLimits,
+) -> Result<
+    (
+        DirectoryIdentity,
+        BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    ),
+    RuntimeError,
+> {
+    Err(RuntimeError::UnsupportedPlatform {
+        platform: std::env::consts::OS.to_owned(),
+    })
 }
 
 impl DirectoryTreeFileSystem for SystemFileSystem {

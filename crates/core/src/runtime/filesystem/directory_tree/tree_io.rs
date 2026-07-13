@@ -6,12 +6,16 @@ use std::{
     os::fd::{AsRawFd, FromRawFd},
 };
 
-use crate::domain::{ArtifactFile, RelativeArtifactPath};
+use crate::{
+    domain::{ArtifactFile, RelativeArtifactPath},
+    runtime::ExternalTreeLimits,
+};
 
 use super::ancestor_paths;
 use super::unix_support::{
-    create_dir_at_verified, cvt, directory_names, open_dir_at, open_relative_directory,
-    open_relative_parent, require_directory, require_regular, stat_at, unlink_at, verify_at,
+    create_dir_at_verified, cvt, directory_names, directory_names_bounded, open_dir_at,
+    open_relative_directory, open_relative_parent, require_directory, require_regular, stat_at,
+    unlink_at, verify_at,
 };
 
 pub(super) fn write_tree(
@@ -80,6 +84,135 @@ pub(super) fn read_tree(
     files: &mut BTreeMap<RelativeArtifactPath, ArtifactFile>,
 ) -> io::Result<()> {
     read_tree_with(directory, prefix, files, &mut |_| {})
+}
+
+pub(super) fn read_tree_bounded(
+    directory: &File,
+    files: &mut BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    limits: ExternalTreeLimits,
+) -> io::Result<()> {
+    let mut state = BoundedReadState {
+        limits,
+        entries: 0,
+        total_bytes: 0,
+    };
+    read_tree_bounded_at(directory, None, 0, files, &mut state)
+}
+
+struct BoundedReadState {
+    limits: ExternalTreeLimits,
+    entries: u64,
+    total_bytes: u64,
+}
+
+fn read_tree_bounded_at(
+    directory: &File,
+    prefix: Option<&str>,
+    depth: u32,
+    files: &mut BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    state: &mut BoundedReadState,
+) -> io::Result<()> {
+    let remaining = state.limits.entries().saturating_sub(state.entries);
+    let names = directory_names_bounded(directory, remaining)?;
+    if prefix.is_some() && names.is_empty() {
+        return Err(io::Error::other(
+            "artifact tree contains an empty directory",
+        ));
+    }
+    for name in names {
+        state.entries = state
+            .entries
+            .checked_add(1)
+            .ok_or_else(|| io::Error::other("artifact entry count overflow"))?;
+        if state.entries > state.limits.entries() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "artifact tree exceeds its entry limit",
+            ));
+        }
+        let relative = match prefix {
+            Some(prefix) => format!("{prefix}/{name}"),
+            None => name.clone(),
+        };
+        let name = CString::new(name).map_err(|_| io::Error::other("NUL in directory entry"))?;
+        let metadata = stat_at(directory.as_raw_fd(), &name)?;
+        match metadata.st_mode & libc::S_IFMT {
+            libc::S_IFDIR => {
+                let next_depth = depth
+                    .checked_add(1)
+                    .ok_or_else(|| io::Error::other("artifact depth overflow"))?;
+                if next_depth > state.limits.depth() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "artifact tree exceeds its depth limit",
+                    ));
+                }
+                let child = open_dir_at(directory.as_raw_fd(), &name)?;
+                let identity = require_directory(&child)?;
+                verify_at(directory.as_raw_fd(), &name, identity)?;
+                read_tree_bounded_at(&child, Some(&relative), next_depth, files, state)?;
+                verify_at(directory.as_raw_fd(), &name, identity)?;
+            }
+            libc::S_IFREG => {
+                let file_length = u64::try_from(metadata.st_size).map_err(|_| {
+                    io::Error::new(io::ErrorKind::InvalidData, "negative artifact file length")
+                })?;
+                if file_length > state.limits.file_bytes()
+                    || state
+                        .total_bytes
+                        .checked_add(file_length)
+                        .is_none_or(|total| total > state.limits.total_bytes())
+                {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "artifact tree exceeds its byte limit",
+                    ));
+                }
+                let fd = cvt(unsafe {
+                    libc::openat(
+                        directory.as_raw_fd(),
+                        name.as_ptr(),
+                        libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK,
+                    )
+                })?;
+                let mut file = unsafe { File::from_raw_fd(fd) };
+                let identity = require_regular(&file)?;
+                verify_at(directory.as_raw_fd(), &name, identity)?;
+                let mut contents = Vec::with_capacity(usize::try_from(file_length).unwrap_or(0));
+                Read::by_ref(&mut file)
+                    .take(state.limits.file_bytes().saturating_add(1))
+                    .read_to_end(&mut contents)?;
+                let actual_length = u64::try_from(contents.len()).unwrap_or(u64::MAX);
+                let total = state
+                    .total_bytes
+                    .checked_add(actual_length)
+                    .ok_or_else(|| io::Error::other("artifact byte count overflow"))?;
+                if actual_length > state.limits.file_bytes() || total > state.limits.total_bytes() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        "artifact tree exceeds its byte limit",
+                    ));
+                }
+                if require_regular(&file)? != identity {
+                    return Err(io::Error::other(
+                        "artifact file identity changed during read",
+                    ));
+                }
+                verify_at(directory.as_raw_fd(), &name, identity)?;
+                let path = RelativeArtifactPath::new(relative)
+                    .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
+                let executable = metadata.st_mode & 0o111 != 0;
+                files.insert(path, ArtifactFile::new(contents, executable));
+                state.total_bytes = total;
+            }
+            _ => {
+                return Err(io::Error::other(
+                    "artifact tree contains a non-regular entry",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub(super) fn read_tree_with(
