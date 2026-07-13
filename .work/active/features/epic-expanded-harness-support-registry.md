@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: []
@@ -928,4 +928,116 @@ Sibling adapter features that `depends_on: [epic-expanded-harness-support-
 registry, ...]` are now unblocked at the dependency-graph level; they still
 wait on their other declared dependencies (e.g. managed fallback parity)
 before becoming ready.
+
+## Review (2026-07-13)
+
+**Verdict**: Approve
+**Review weight**: standard (caller/default), risk-escalated to fresh-context
+aggregate review because this feature becomes the architectural dispatch
+boundary for every future harness adapter.
+**Reviewer context**: cross-model — Kimi K2.7 Code fresh-context aggregate
+review of the OpenAI-host implementation and Z.AI GLM 5.2 story reviews.
+
+**Blockers**: none
+**Important**: none
+
+**Nits (non-blocking, below the material current-cycle bar)**:
+
+1. `crates/core/src/storage/config.rs` `stable_iter` is O(n²) over the harness
+   table. The table is bounded to a handful of registered targets and the
+   clarity-for-byte-stability trade is documented; revisit only if the
+   adapter count grows into the dozens.
+2. `crates/cli/src/application/status.rs:1231` infers `ResourceKind::Plugin`
+   from `root.ends_with("claude")`. This is presentation-layer suffix
+   inference from adapter-authored root names, not behavior dispatch, and
+   the CLI story reviewer already noted it as non-blocking. An
+   adapter-declared surface-kind mapping would be cleaner once more targets
+   grow non-suffix-derivable roots.
+
+**Verified** (aggregate end-to-end capability, not per-story line-by-line):
+
+- **Single source of truth**: `TargetRegistry::canonical()` in
+  `crates/harnesses/src/registry.rs` is the sole production registry.
+  `TargetRegistry::new()` exists only as the documented composition seam for
+  adapter-contract tests. No second registry or parallel target list lives in
+  CLI, core, or test-support.
+- **Generic `HarnessId` retained**: `HarnessId` remains the opaque validated
+  newtype in `crates/core/src/domain/identity.rs`. The registry, config map,
+  CLI parser, and dispatch layer all operate on typed `HarnessId`; membership
+  (“is this id registered?”) is enforced at the composition boundary, not by
+  re-derived literals.
+- **Registry-derived derivation verified across all claimed surfaces**:
+  - Help: `crates/cli/src/entrypoint.rs::augment_target_help` recursively
+    derives `--target`, `--from`, and `harness` positional help from
+    `registry.ids()`; compiled-binary tests assert the rendered help.
+  - Enabled resolution: `crates/cli/src/application.rs::enabled_harnesses` derives
+    from `HarnessPolicyMap::enabled()`.
+  - `--target all`: still expands via the generic `resolve_targets` against the
+    enabled map.
+  - Composition/dispatch: `crates/cli/src/dispatch.rs::validate_targets`
+    rejects unregistered ids with `target_not_registered` before any state
+    write, and rejects non-first-party ids for `bootstrap`.
+  - Observation/status: `StatusApplication` and submodules resolve every target
+    through `registry.adapter(id)` and call adapter ports.
+  - Lifecycle: `NativeLifecycleDispatch` binds the selected `HarnessId` and
+    `NativeLifecycleVector`; `NativeLifecyclePort` revalidates under lock.
+  - Instructions: `InstructionBridgePort` global/project/alternate bridges drive
+    instruction locations with no CLI-side target literal.
+  - Skills: `SkillProjectionPort::destination` drives per-target skill
+    destinations.
+  - Test fixtures: `FakeHarnessProfile` derives Codex/Claude identity and
+    lifecycle dialect; `acceptance_matrix` is the reusable contract future
+    adapter features will invoke.
+- **Codex/Claude behavior preserved**: `adapter_helpers::select_profile` pins
+  the verified Codex `0.144.1` and Claude `2.1.201` capability matrices;
+  `adapters/codex.rs` includes a regression test pinning the Codex
+  PluginUpdate-before-project-scope precedence; version decoding, observation
+  paths, instruction bridges, and skill destinations reproduce prior
+  behavior. Full workspace tests pass without assertion drift.
+- **Self-hosted bootstrap stays narrow**: `DistributionSurface::FirstPartyPlugin`
+  is set only on `CodexAdapter` and `ClaudeAdapter`; `bootstrap --target`
+  filters `registry.first_party_targets()`. No other id is bootstrap-eligible.
+- **Unknown targets/versions fail safely**: Unregistered ids fail at
+  `Dispatch::validate_targets` before writes; config layer accepts any
+  structurally valid `HarnessId` and defers membership to composition;
+  unknown versions receive an observe-only `unknown_version` profile.
+- **Config schema remains compatible**: `CONFIG_SCHEMA_VERSION` stays `1`;
+  `HarnessPolicyMap` serializes as `[harnesses.<id>]` tables; golden fixture
+  and round-trip tests pass; `defaults()` still seeds exactly codex/claude
+  disabled with PATH-lookup binaries.
+- **Native adapters remain distinct**: `CodexAdapter` and `ClaudeAdapter` are
+  separate structs with private lifecycle vectors, instruction bridges, and
+  skill projections; shared helpers live in `adapter_helpers`.
+- **No second target list or string dispatch**: `git grep -n HarnessKind --
+  crates` returns no matches. The only hardcoded codex/claude pairs outside
+  tests are the canonical registry itself and the `config.rs` `stable_iter`
+  shim (documented for schema-1 byte stability). No behavior-dispatching
+  `match target.as_str()` remains in `crates/cli/src`.
+- **Accepted contract extensions are coherent and sufficient**:
+  `decode_version_with_limits` defaults to `decode_version`, preserving the
+  compact contract for text-only adapters; `observation_scope` keeps Claude's
+  native scope evidence adapter-owned; `surface_labels`, `native_root`,
+  `managed_project_lifecycle`, and bootstrap next-action metadata are all
+  adapter-private or metadata-driven; `NativeLifecycleDispatch` plus
+  `NativeLifecyclePort::with_foreign_operations` supports mixed native/managed
+  plans without introducing a new CLI dispatch list.
+- **Test matrix and full workspace evidence trustworthy**:
+  - `cargo test --workspace --all-targets` — 558 passed, 18 suites.
+  - `cargo clippy --workspace --all-targets -- -D warnings` — clean.
+  - `cargo fmt --all -- --check` and `git diff --check` — clean.
+  - `git grep -n HarnessKind -- crates` — no matches.
+  - Focused compiled-binary tests for registered-harness help and
+    unregistered-target pre-write rejection both pass.
+  - Test-support parallel-stress test (`8 workers × 24 builds`) proves the
+    cross-device fixture publication path avoids the `ETXTBSY` race.
+- **No false/stale/contradictory foundation assertion**: `docs/SPEC.md`
+  Terminology, `docs/HARNESS-CONTRACTS.md` Expanded Target Set, and
+  `docs/ARCH.md` Harness Adapter Contract are consistent with the realized
+  registry trait (the ARCH sketch is explicitly subsumed by the richer
+  optional-port contract). No `HarnessKind` or `HarnessPolicies` references
+  remain in `docs/` or `.agents/`.
+
+**Outcome**: Feature advances `review → done`. Parent epic
+`epic-expanded-harness-support` is intentionally not rolled because sibling
+features remain nonterminal.
 
