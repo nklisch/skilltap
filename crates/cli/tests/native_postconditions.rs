@@ -91,15 +91,16 @@ if [ "${{1-}} ${{2-}}" = "plugin uninstall" ]; then
   printf '%s' "$count" > '{count}'
   current=good
   if [ -f '{mode}' ]; then read current < '{mode}'; fi
-  if [ "$current" != "expected_missing" ]; then /bin/rm -f '{present}'; fi
+  if [ "$current" != "expected_missing" ] && [ "$current" != "remove_post_invalid_present" ]; then /bin/rm -f '{present}'; fi
   if [ "$current" = "remove_post_invalid" ]; then printf '%s' 'invalid_json' > '{mode}'; fi
+  if [ "$current" = "remove_post_invalid_present" ]; then printf '%s' 'invalid_json' > '{mode}'; fi
   exit 0
 fi
 if [ "${{1-}} ${{2-}}" = "plugin list" ]; then
   current=good
   if [ -f '{mode}' ]; then read current < '{mode}'; fi
   case "$current" in
-    good|remove_post_invalid)
+    good|remove_post_invalid|remove_post_invalid_present)
       if [ -f '{present}' ]; then printf '%s' '{{"plugins":[{{"name":"formatter@team","scope":"user"}}]}}'; else printf '%s' '{{"plugins":[]}}'; fi
       exit 0 ;;
     command_failed) exit 17 ;;
@@ -520,6 +521,36 @@ fn failed_remove_postobservation_recovers_as_verified_noop_without_duplicate_mut
     assert_eq!(value["summary"]["changed"], false);
     assert_eq!(value["operations"][0]["status"], "no_change");
     assert_eq!(fs::read_to_string(&count).unwrap(), "2");
+}
+
+#[test]
+fn failed_remove_postobservation_retries_once_when_resource_is_still_present() {
+    let machine = IsolatedMachine::new("skilltap-native-failed-remove-retry").unwrap();
+    let mode = machine.home().join("mode");
+    let present = machine.home().join("present");
+    let count = machine.home().join("mutation-count");
+    fs::write(&mode, "good").unwrap();
+    let fixture = write_fixture(&machine, &mode, &present, &count);
+    configure(&machine, &fixture);
+
+    assert_eq!(install(&machine).status.code(), Some(0));
+    fs::write(&mode, "remove_post_invalid_present").unwrap();
+    let failed = remove(&machine);
+    assert_eq!(failed.status.code(), Some(2));
+    assert!(present.is_file());
+    assert_eq!(fs::read_to_string(&count).unwrap(), "2");
+
+    fs::write(&mode, "good").unwrap();
+    let retried = remove(&machine);
+    assert_eq!(retried.status.code(), Some(0));
+    assert_eq!(json(&retried)["summary"]["changed"], true);
+    assert!(!present.exists());
+    assert_eq!(fs::read_to_string(&count).unwrap(), "3");
+
+    let repeat = remove(&machine);
+    assert_eq!(repeat.status.code(), Some(0));
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+    assert_eq!(fs::read_to_string(&count).unwrap(), "3");
 }
 
 #[test]
