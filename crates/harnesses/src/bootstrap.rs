@@ -12,7 +12,7 @@ use skilltap_core::{
 
 use crate::{
     DetectionError, HarnessKind, NativeLifecycleAction, NativeLifecycleRequest,
-    NativeResourcePresence, detect_configured_installation, observe_native_resource,
+    NativeResourceObservation, detect_configured_installation, observe_native_resource,
     run_native_lifecycle_bound, select_profile,
 };
 
@@ -207,8 +207,8 @@ pub fn setup_detected_plugin(
         policy.process_limits,
         policy.json_limits,
     ) {
-        Ok(NativeResourcePresence::Present) => {}
-        Ok(NativeResourcePresence::Missing) => {
+        Ok(NativeResourceObservation::Present { .. }) => {}
+        Ok(NativeResourceObservation::Missing) => {
             match run_native_lifecycle_bound(
                 observed_executable,
                 &policy.environment,
@@ -230,7 +230,7 @@ pub fn setup_detected_plugin(
                 }
             }
         }
-        Ok(NativeResourcePresence::Unknown) | Err(_) => {
+        Ok(NativeResourceObservation::Indeterminate(_)) | Err(_) => {
             return HarnessSetupResult::Failed {
                 harness: target,
                 reason: SetupReason::UnknownNativeState,
@@ -254,19 +254,19 @@ pub fn setup_detected_plugin(
         policy.json_limits,
     );
     match presence {
-        Ok(NativeResourcePresence::Present) => {
+        Ok(NativeResourceObservation::Present { .. }) => {
             return HarnessSetupResult::AlreadyPresent {
                 harness: target,
                 version: native_version.clone(),
             };
         }
-        Ok(NativeResourcePresence::Unknown) | Err(_) => {
+        Ok(NativeResourceObservation::Indeterminate(_)) | Err(_) => {
             return HarnessSetupResult::Failed {
                 harness: target,
                 reason: SetupReason::UnknownNativeState,
             };
         }
-        Ok(NativeResourcePresence::Missing) => {}
+        Ok(NativeResourceObservation::Missing) => {}
     }
     match run_native_lifecycle_bound(
         observed_executable,

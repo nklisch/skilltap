@@ -8,8 +8,8 @@ use std::{
 
 use skilltap_core::{
     domain::{
-        ConfiguredBinary, EvidenceCode, EvidenceDetail, ExecutableIdentity, HarnessId, NativeId,
-        Operation, OperationId, OperationOutcome, Plan, Scope, SourceLocator,
+        CapabilityScope, ConfiguredBinary, EvidenceCode, EvidenceDetail, ExecutableIdentity,
+        HarnessId, NativeId, Operation, OperationId, OperationOutcome, Plan, Scope, SourceLocator,
     },
     executor::{ExecutionError, ExecutionPort},
     runtime::{
@@ -31,14 +31,27 @@ pub enum NativeLifecycleAction {
     PluginUpdate,
 }
 
-/// Fresh native evidence for a managed lifecycle resource.  Unknown is
-/// intentionally conservative: an unreadable or shape-changing native list
-/// must not cause a previously successful operation to run again.
+/// Fresh native evidence for one exact managed lifecycle resource.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum NativeResourcePresence {
-    Present,
+pub enum NativeResourceObservation {
+    Present { scope: Option<CapabilityScope> },
     Missing,
-    Unknown,
+    Indeterminate(NativeObservationFailure),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NativeObservationFailure {
+    CommandFailed,
+    InvalidJson,
+    UnsupportedShape,
+    AmbiguousScope,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum LifecyclePostconditionError {
+    ObservationFailed(NativeObservationFailure),
+    ExpectedPresent,
+    ExpectedMissing,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -178,7 +191,7 @@ pub fn observe_native_resource(
     request: &NativeLifecycleRequest,
     process_limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
-) -> Result<NativeResourcePresence, NativeLifecycleError> {
+) -> Result<NativeResourceObservation, NativeLifecycleError> {
     let executable = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
     let output = SystemNativeProcessRunner.run(&NativeProcessRequest::new(
@@ -192,13 +205,53 @@ pub fn observe_native_resource(
         process_limits,
     ))?;
     if !output.status().success() {
-        return Ok(NativeResourcePresence::Unknown);
+        return Ok(NativeResourceObservation::Indeterminate(
+            NativeObservationFailure::CommandFailed,
+        ));
     }
     let decoded = match StrictJson.decode(output.stdout(), json_limits) {
         Ok(decoded) => decoded,
-        Err(_) => return Ok(NativeResourcePresence::Unknown),
+        Err(_) => {
+            return Ok(NativeResourceObservation::Indeterminate(
+                NativeObservationFailure::InvalidJson,
+            ));
+        }
     };
-    Ok(resource_presence(decoded.value(), request))
+    Ok(resource_observation(decoded.value(), request))
+}
+
+pub fn verify_lifecycle_postcondition(
+    action: NativeLifecycleAction,
+    observation: NativeResourceObservation,
+) -> Result<(), LifecyclePostconditionError> {
+    match observation {
+        NativeResourceObservation::Indeterminate(failure) => {
+            Err(LifecyclePostconditionError::ObservationFailed(failure))
+        }
+        NativeResourceObservation::Present { .. }
+            if matches!(
+                action,
+                NativeLifecycleAction::MarketplaceAdd
+                    | NativeLifecycleAction::MarketplaceUpdate
+                    | NativeLifecycleAction::PluginInstall
+                    | NativeLifecycleAction::PluginUpdate
+            ) =>
+        {
+            Ok(())
+        }
+        NativeResourceObservation::Missing
+            if matches!(
+                action,
+                NativeLifecycleAction::MarketplaceRemove | NativeLifecycleAction::PluginRemove
+            ) =>
+        {
+            Ok(())
+        }
+        NativeResourceObservation::Missing => Err(LifecyclePostconditionError::ExpectedPresent),
+        NativeResourceObservation::Present { .. } => {
+            Err(LifecyclePostconditionError::ExpectedMissing)
+        }
+    }
 }
 
 fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
@@ -222,10 +275,10 @@ fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
     args
 }
 
-fn resource_presence(
+fn resource_observation(
     value: &serde_json::Value,
     request: &NativeLifecycleRequest,
-) -> NativeResourcePresence {
+) -> NativeResourceObservation {
     const LIST_FIELDS: &[&str] = &["plugins", "marketplaces", "installed", "resources", "items"];
     const IDENTITY_FIELDS: &[&str] = &["name", "id", "plugin", "marketplace", "qualifiedName"];
 
@@ -301,16 +354,20 @@ fn resource_presence(
 
     let entries = match parse_list(value, LIST_FIELDS, IDENTITY_FIELDS) {
         Ok(entries) => entries,
-        Err(()) => return NativeResourcePresence::Unknown,
+        Err(()) => {
+            return NativeResourceObservation::Indeterminate(
+                NativeObservationFailure::UnsupportedShape,
+            );
+        }
     };
     if request.harness == HarnessKind::Codex {
         return if entries
             .iter()
             .any(|entry| entry.identity == request.name.as_str())
         {
-            NativeResourcePresence::Present
+            NativeResourceObservation::Present { scope: None }
         } else {
-            NativeResourcePresence::Missing
+            NativeResourceObservation::Missing
         };
     }
 
@@ -322,7 +379,7 @@ fn resource_presence(
         .iter()
         .any(|entry| !matches!(entry.scope, Some("user" | "local")))
     {
-        return NativeResourcePresence::Unknown;
+        return NativeResourceObservation::Indeterminate(NativeObservationFailure::AmbiguousScope);
     }
     match entries
         .iter()
@@ -331,9 +388,11 @@ fn resource_presence(
         })
         .count()
     {
-        0 => NativeResourcePresence::Missing,
-        1 => NativeResourcePresence::Present,
-        _ => NativeResourcePresence::Unknown,
+        0 => NativeResourceObservation::Missing,
+        1 => NativeResourceObservation::Present {
+            scope: Some(CapabilityScope::from(&request.scope)),
+        },
+        _ => NativeResourceObservation::Indeterminate(NativeObservationFailure::AmbiguousScope),
     }
 }
 
@@ -354,6 +413,7 @@ struct NativeLifecycleEntry {
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     limits: ProcessLimits,
+    json_limits: skilltap_core::runtime::JsonLimits,
     request: NativeLifecycleRequest,
 }
 
@@ -392,6 +452,8 @@ impl NativeLifecyclePort {
                             configured,
                             search_path,
                             limits,
+                            json_limits: skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
+                                .expect("static lifecycle JSON limits are valid"),
                             request,
                         },
                     )
@@ -496,6 +558,17 @@ impl ExecutionPort for NativeLifecyclePort {
         )
         .map_err(|_| native_apply_failure("The native lifecycle command could not be run."))?;
         if output.status().success() {
+            let observation = observe_native_resource(
+                entry.configured.clone(),
+                entry.search_path.clone(),
+                &self.environment,
+                &entry.request,
+                entry.limits,
+                entry.json_limits,
+            )
+            .map_err(|_| native_observation_failure(NativeObservationFailure::CommandFailed))?;
+            verify_lifecycle_postcondition(entry.request.action, observation)
+                .map_err(lifecycle_postcondition_failure)?;
             Ok(OperationOutcome::Applied)
         } else {
             Err(native_apply_failure(
@@ -503,6 +576,51 @@ impl ExecutionPort for NativeLifecyclePort {
             ))
         }
     }
+}
+
+fn lifecycle_postcondition_failure(error: LifecyclePostconditionError) -> ExecutionError {
+    match error {
+        LifecyclePostconditionError::ObservationFailed(failure) => {
+            native_observation_failure(failure)
+        }
+        LifecyclePostconditionError::ExpectedPresent => native_postcondition_failure(
+            "native.postcondition.expected_present",
+            "The native command succeeded, but the resource was not present in the requested scope.",
+        ),
+        LifecyclePostconditionError::ExpectedMissing => native_postcondition_failure(
+            "native.postcondition.expected_missing",
+            "The native command succeeded, but the resource remained present in the requested scope.",
+        ),
+    }
+}
+
+fn native_observation_failure(failure: NativeObservationFailure) -> ExecutionError {
+    let (code, detail) = match failure {
+        NativeObservationFailure::CommandFailed => (
+            "native.observation.command_failed",
+            "The native list command failed after mutation.",
+        ),
+        NativeObservationFailure::InvalidJson => (
+            "native.observation.invalid_json",
+            "The native list command returned invalid JSON after mutation.",
+        ),
+        NativeObservationFailure::UnsupportedShape => (
+            "native.observation.unsupported_shape",
+            "The native list command returned an unsupported JSON shape after mutation.",
+        ),
+        NativeObservationFailure::AmbiguousScope => (
+            "native.observation.ambiguous_scope",
+            "The native list command did not identify one unambiguous requested scope after mutation.",
+        ),
+    };
+    native_postcondition_failure(code, detail)
+}
+
+fn native_postcondition_failure(code: &'static str, detail: &'static str) -> ExecutionError {
+    ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
+        EvidenceCode::new(code).expect("static evidence code is valid"),
+        EvidenceDetail::new(detail).expect("static evidence detail is valid"),
+    ))
 }
 
 fn native_apply_failure(detail: &'static str) -> ExecutionError {
@@ -763,21 +881,21 @@ mod tests {
             Scope::Global,
         );
         assert_eq!(
-            resource_presence(
+            resource_observation(
                 &serde_json::json!({
                     "plugins": [{"name": "formatter@team"}]
                 }),
                 &request,
             ),
-            NativeResourcePresence::Present
+            NativeResourceObservation::Present { scope: None }
         );
         assert_eq!(
-            resource_presence(&serde_json::json!({"plugins": []}), &request),
-            NativeResourcePresence::Missing
+            resource_observation(&serde_json::json!({"plugins": []}), &request),
+            NativeResourceObservation::Missing
         );
         assert_eq!(
-            resource_presence(&serde_json::json!({"version": "3.0.0"}), &request),
-            NativeResourcePresence::Unknown
+            resource_observation(&serde_json::json!({"version": "3.0.0"}), &request),
+            NativeResourceObservation::Indeterminate(NativeObservationFailure::UnsupportedShape)
         );
         for malformed in [
             serde_json::json!([1]),
@@ -786,8 +904,10 @@ mod tests {
             serde_json::json!({"plugins": [{}]}),
         ] {
             assert_eq!(
-                resource_presence(&malformed, &request),
-                NativeResourcePresence::Unknown,
+                resource_observation(&malformed, &request),
+                NativeResourceObservation::Indeterminate(
+                    NativeObservationFailure::UnsupportedShape
+                ),
                 "malformed list payload: {malformed}"
             );
         }
@@ -809,12 +929,14 @@ mod tests {
             "plugins": [{"name": "formatter@team", "scope": "user"}]
         });
         assert_eq!(
-            resource_presence(&global_only, &global),
-            NativeResourcePresence::Present
+            resource_observation(&global_only, &global),
+            NativeResourceObservation::Present {
+                scope: Some(CapabilityScope::Global)
+            }
         );
         assert_eq!(
-            resource_presence(&global_only, &project),
-            NativeResourcePresence::Missing
+            resource_observation(&global_only, &project),
+            NativeResourceObservation::Missing
         );
 
         let siblings = serde_json::json!({
@@ -824,12 +946,16 @@ mod tests {
             ]
         });
         assert_eq!(
-            resource_presence(&siblings, &global),
-            NativeResourcePresence::Present
+            resource_observation(&siblings, &global),
+            NativeResourceObservation::Present {
+                scope: Some(CapabilityScope::Global)
+            }
         );
         assert_eq!(
-            resource_presence(&siblings, &project),
-            NativeResourcePresence::Present
+            resource_observation(&siblings, &project),
+            NativeResourceObservation::Present {
+                scope: Some(CapabilityScope::Project)
+            }
         );
     }
 
@@ -842,12 +968,20 @@ mod tests {
         );
         for uncertain in [
             serde_json::json!({"plugins": [{"name": "formatter@team"}]}),
-            serde_json::json!({"plugins": [{"name": "formatter@team", "scope": 3}]}),
             serde_json::json!({"plugins": [{"name": "formatter@team", "scope": "project"}]}),
             serde_json::json!({"plugins": [
                 {"name": "formatter@team", "scope": "local"},
                 {"name": "formatter@team", "scope": "local"}
             ]}),
+        ] {
+            assert_eq!(
+                resource_observation(&uncertain, &project),
+                NativeResourceObservation::Indeterminate(NativeObservationFailure::AmbiguousScope),
+                "uncertain scoped payload: {uncertain}"
+            );
+        }
+        for unsupported in [
+            serde_json::json!({"plugins": [{"name": "formatter@team", "scope": 3}]}),
             serde_json::json!({"plugins": [{
                 "name": "formatter@team",
                 "id": "different@team",
@@ -855,10 +989,46 @@ mod tests {
             }]}),
         ] {
             assert_eq!(
-                resource_presence(&uncertain, &project),
-                NativeResourcePresence::Unknown,
-                "uncertain scoped payload: {uncertain}"
+                resource_observation(&unsupported, &project),
+                NativeResourceObservation::Indeterminate(
+                    NativeObservationFailure::UnsupportedShape
+                ),
+                "unsupported scoped payload: {unsupported}"
             );
         }
+    }
+
+    #[test]
+    fn lifecycle_postconditions_require_fresh_expected_presence() {
+        assert_eq!(
+            verify_lifecycle_postcondition(
+                NativeLifecycleAction::PluginInstall,
+                NativeResourceObservation::Present { scope: None },
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            verify_lifecycle_postcondition(
+                NativeLifecycleAction::PluginInstall,
+                NativeResourceObservation::Missing,
+            ),
+            Err(LifecyclePostconditionError::ExpectedPresent)
+        );
+        assert_eq!(
+            verify_lifecycle_postcondition(
+                NativeLifecycleAction::PluginRemove,
+                NativeResourceObservation::Present { scope: None },
+            ),
+            Err(LifecyclePostconditionError::ExpectedMissing)
+        );
+        assert_eq!(
+            verify_lifecycle_postcondition(
+                NativeLifecycleAction::PluginRemove,
+                NativeResourceObservation::Indeterminate(NativeObservationFailure::InvalidJson,),
+            ),
+            Err(LifecyclePostconditionError::ObservationFailed(
+                NativeObservationFailure::InvalidJson,
+            ))
+        );
     }
 }

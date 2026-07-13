@@ -7,7 +7,8 @@ use skilltap_core::{
     runtime::{JsonLimits, ProcessLimits},
 };
 use skilltap_harnesses::{
-    HarnessKind, NativeLifecycleAction, NativeLifecycleRequest, NativeResourcePresence,
+    HarnessKind, NativeLifecycleAction, NativeLifecycleRequest, NativeObservationFailure,
+    NativeResourceObservation,
     observe_native_resource,
 };
 use skilltap_test_support::TempRoot;
@@ -63,7 +64,9 @@ fn same_name_user_plugin_does_not_satisfy_missing_local_plugin() {
             json_limits,
         )
         .unwrap(),
-        NativeResourcePresence::Present
+        NativeResourceObservation::Present {
+            scope: Some(skilltap_core::domain::CapabilityScope::Global),
+        }
     );
     assert_eq!(
         observe_native_resource(
@@ -77,7 +80,7 @@ fn same_name_user_plugin_does_not_satisfy_missing_local_plugin() {
             json_limits,
         )
         .unwrap(),
-        NativeResourcePresence::Missing
+        NativeResourceObservation::Missing
     );
 }
 
@@ -107,7 +110,7 @@ fn scope_less_or_duplicate_native_entries_are_not_presence_evidence() {
                 json_limits,
             )
             .unwrap(),
-            NativeResourcePresence::Unknown,
+            NativeResourceObservation::Indeterminate(NativeObservationFailure::AmbiguousScope),
             "{label} scope evidence must fail closed"
         );
     }

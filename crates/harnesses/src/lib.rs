@@ -28,9 +28,10 @@ pub use update_resolution::{GitSourceRevisionResolver, ObservedNativeRevisionRes
 
 mod lifecycle;
 pub use lifecycle::{
-    NativeLifecycleAction, NativeLifecycleError, NativeLifecyclePort, NativeLifecycleRequest,
-    NativeResourcePresence, native_arguments, observe_native_resource, run_native_lifecycle,
-    run_native_lifecycle_bound,
+    LifecyclePostconditionError, NativeLifecycleAction, NativeLifecycleError, NativeLifecyclePort,
+    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation, native_arguments,
+    observe_native_resource, run_native_lifecycle, run_native_lifecycle_bound,
+    verify_lifecycle_postcondition,
 };
 mod bootstrap;
 pub use bootstrap::{
