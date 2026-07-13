@@ -125,3 +125,23 @@ are materially improved. The remaining blocker is lifecycle identity across
 source revisions. The compiled scenario is temporarily red at `6c657f0`
 because the concurrently repaired native post-observation fixture reports the
 managed operation's harness unreachable; that fallout is not duplicated here.
+
+## Review findings (2026-07-12, final integrated pass)
+
+- **Blocker — successful managed publication is not recoverable after its
+  terminal state boundary fails**: the retry predicate and regression do not
+  match the Pending representation produced by the journal. Tracked by
+  `epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery`.
+
+## Review (2026-07-12, final integrated pass)
+
+**Verdict**: Request changes
+
+**Blockers**:
+`epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery`
+**Important**: none
+**Nits**: none
+
+**Notes**: The effective skill/MCP load contract, Git acquisition, partial
+disclosure, source-independent removal, and clean-path rollback behavior pass
+on cumulative main. The remaining journal-boundary mismatch prevents approval.

@@ -1,10 +1,11 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
-depends_on: []
+depends_on:
+  - epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery
 release_binding: null
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
@@ -76,3 +77,29 @@ can strand effective owned components or make uninstall impossible.
   repeat no-op, per-component drift refusal, Git SHA provenance, partial MCP
   disclosure, foreign MCP collision, catalog-deletion uninstall, cache
   non-mutation, and exact state/output evidence.
+
+## Review findings (2026-07-12, final integrated pass)
+
+- **Blocker — the managed Pending recovery predicate rejects the real journal
+  shape**: first-install Pending state retains the attempted manifest/revision,
+  while updates retain the previous effective binding. The recovery predicate
+  accepts neither, and the regression manually deletes those fields before
+  retrying. A successful apply followed by terminal state-publication failure
+  therefore becomes self-authored drift. Tracked by
+  `epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery`.
+
+## Review (2026-07-12, final integrated pass)
+
+**Verdict**: Request changes
+
+**Blockers**:
+`epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery`
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the caller's highest
+(maximum-equivalent) weight. The cumulative 8679f8b workspace suite and strict
+Clippy pass, and source-independent removal, old-versus-new cleanup, exact
+omissions, Git/local isolation, schema conflict rejection, cache non-mutation,
+and bounded rollback reporting are sound. The blocker is a direct mismatch
+between the journal writer, recovery predicate, and its fixture.

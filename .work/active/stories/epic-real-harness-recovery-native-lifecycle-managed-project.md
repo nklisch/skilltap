@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: [epic-real-harness-recovery-native-lifecycle-managed-project-load-contract]
@@ -147,3 +147,26 @@ coverage, and rollback behavior.
 **Notes**: Fresh-context deep review at the project-default `standard` weight.
 Effective load surfaces and transaction handling are sound for an unchanged
 source shape, but update/remove require exact prior component identity.
+
+## Review findings (2026-07-12, final integrated pass)
+
+- **Blocker — managed terminal-journal recovery is not closed over its actual
+  Pending state**: the cumulative implementation handles ordinary install,
+  update, remove, omissions, drift, and source disappearance, but an applied
+  operation whose terminal state write fails cannot be recovered without a
+  false drift result. Tracked by
+  `epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery`.
+
+## Review (2026-07-12, final integrated pass)
+
+**Verdict**: Request changes
+
+**Blockers**:
+`epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery`
+**Important**: none
+**Nits**: none
+
+**Notes**: Cumulative main through 8679f8b passes the full workspace suite,
+strict Clippy, and diff checks. This parent remains implementing until the one
+exact state-publication recovery blocker is fixed with the journal-produced
+fixture shape.
