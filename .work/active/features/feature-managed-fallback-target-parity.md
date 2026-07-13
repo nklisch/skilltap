@@ -1028,9 +1028,11 @@ here, that revises the public contract types in place:
    existing `resolve_git_skill_source` machinery and hands it to the
    adapter via the input enum. `SourceRevisionResolver` stays
    revision-only and leaves the managed-projection context.
-- **Marketplace source on the input.** `ManagedProjectionInput::Apply {
-   checkout, marketplace_source }` surfaces the orchestrator-resolved
-   selected marketplace source explicitly for fresh plugin installs.
+- **One authoritative source per checkout.** For a fresh plugin install, the
+   orchestrator resolves the selected marketplace source into
+   `ResolvedSourceCheckout`. The adapter reads from `checkout.root()` and uses
+   `checkout.source()` as provenance. `Apply` carries no second source field
+   that could disagree with the checkout.
 - **Complete projection evidence.** `ManagedProjectionPlan` gains
    `manifest: Vec<ManagedProjection>`, `current_fingerprint:
    Option<Fingerprint>`, and `desired_fingerprint: Option<Fingerprint>`.
@@ -1068,8 +1070,7 @@ pub struct ManagedProjectionPlan {
 
 // skilltap-harnesses
 pub enum ManagedProjectionInput<'a> {
-    Apply { checkout: &'a ResolvedSourceCheckout,
-            marketplace_source: Option<&'a Source> },
+    Apply { checkout: &'a ResolvedSourceCheckout },
     Remove,
 }
 
@@ -1107,7 +1108,7 @@ acceptance stories inherit the amended port shape when they implement.
    amendment) — `depends_on: [feature-managed-fallback-target-parity-
    contract]`. Revises the public contract types in place to carry the
    four pieces of evidence the Codex relocation requires: caller-resolved
-   checkout, marketplace source, complete projection evidence, and
+   checkout with one authoritative source, complete projection evidence, and
    removal-without-source. Collapses acquire/project into one `plan`
    method. Does not touch production Codex behavior.
 3. `feature-managed-fallback-target-parity-codex-adapter` (Unit 2, Codex

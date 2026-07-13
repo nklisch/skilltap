@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract-evidence
 kind: story
-stage: drafting
+stage: implementing
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract]
@@ -39,11 +39,12 @@ contract layer:
    existing `resolve_git_skill_source` machinery, and hands to the adapter. The
    `SourceRevisionResolver` trait stays revision-only and is removed from the
    managed-projection context.
-2. **Selected marketplace source for fresh plugin installs.** A fresh plugin
-   install carries no source on the plugin resource or `NativeLifecycleRequest`;
-   the existing orchestrator resolves the selected marketplace source from
-   inventory. The amendment surfaces it explicitly as
-   `ManagedProjectionInput::Apply::marketplace_source`.
+2. **One authoritative marketplace checkout for fresh plugin installs.** A
+   fresh plugin install carries no source on the plugin resource or
+   `NativeLifecycleRequest`; the existing orchestrator resolves the selected
+   marketplace source from inventory into `ResolvedSourceCheckout`. The
+   adapter uses `checkout.source()` for provenance and reads from
+   `checkout.root()`. No second source field can disagree with that checkout.
 3. **Complete projection evidence.** The approved plan carried writes and
    omissions only. The adapter also produces the exact current aggregate
    fingerprint, desired aggregate fingerprint, and the complete
@@ -104,8 +105,7 @@ the Implementation discovery and contract amendment section).
     unchanged (codes, summaries, `Other` discipline, and the existing test
     coverage all stay).
 - `crates/harnesses/src/managed_projection.rs` (modified):
-  - Add `ManagedProjectionInput<'a>` enum (`Apply { checkout, marketplace_source
-    }` | `Remove`).
+  - Add `ManagedProjectionInput<'a>` enum (`Apply { checkout }` | `Remove`).
   - Replace `ManagedAcquisitionContext` + `ManagedProjectionContext` with one
     `ManagedProjectionContext` carrying `input: ManagedProjectionInput<'a>`.
   - Replace `acquire` + `project` on `ManagedProjectionPort` with one `plan`
@@ -208,15 +208,13 @@ use crate::lifecycle::NativeLifecycleRequest;
 /// no checkout; Apply always carries one.
 #[derive(Clone, Debug)]
 pub enum ManagedProjectionInput<'a> {
-    /// Install or update. The orchestrator resolved a confined source
-    /// checkout; the adapter reads catalog/plugin trees from
-    /// `checkout.root()`. `marketplace_source` is present for fresh plugin
-    /// installs whose plugin resource carries no source of its own — the
-    /// adapter resolves the plugin tree as a sub-path of the marketplace
-    /// checkout (matching the existing Codex catalog `plugin_source` path).
+    /// Install or update. The orchestrator resolves the operation's single
+    /// authoritative source into this checkout. For fresh plugin installs it
+    /// resolves the selected marketplace source; the adapter reads the catalog
+    /// and contained plugin tree from `checkout.root()` and records provenance
+    /// from `checkout.source()`.
     Apply {
         checkout: &'a ResolvedSourceCheckout,
-        marketplace_source: Option<&'a Source>,
     },
     /// Remove. No source acquisition; the adapter plans exclusively from
     /// `prior` plus current filesystem observation of its own projected
@@ -334,8 +332,8 @@ unambiguous before becoming a public cross-crate contract.
       `crates/core/src/managed_projection.rs`; `ManagedProjectionPlan::omitted`
       is gone (omissions live in `manifest` as `ManagedProjection::Omitted`).
 - [ ] `crates/harnesses/src/managed_projection.rs` defines
-      `ManagedProjectionInput<'a>` (`Apply { checkout, marketplace_source }` |
-      `Remove`) and one `ManagedProjectionContext` carrying
+      `ManagedProjectionInput<'a>` (`Apply { checkout }` | `Remove`) and one
+      `ManagedProjectionContext` carrying
       `input: ManagedProjectionInput<'a>`; `ManagedAcquisitionContext` no
       longer exists.
 - [ ] `ManagedProjectionPort` exposes a single `plan` method taking

@@ -79,22 +79,20 @@ fixture that succeeds against an observable catalog).
 
 `CodexManagedProjection::plan` matches on `context.input`:
 
-- `ManagedProjectionInput::Apply { checkout, marketplace_source }`:
+- `ManagedProjectionInput::Apply { checkout }`:
   - `ResourceKind::Marketplace`: read the catalog at `checkout.root()` via
     `CODEX_CATALOG_DESTINATIONS` → one `ManagedFileWrite` whose `desired` is
     the catalog bytes (relocated from the marketplace branch of
     `plan_managed_codex_project_lifecycle` and `read_codex_catalog_at_root`).
-    `marketplace_source` is unused (the resource's own source drove the
-    checkout).
   - `ResourceKind::Plugin`: derive the plugin selector from
     `context.request.name.as_str()` (it carries the spec's `native_name`,
-    verified at `application.rs:1199-1203`); use `marketplace_source` (the
-    orchestrator-resolved selected marketplace source) to resolve the catalog
-    at `checkout.root()`; `catalog.plugin_source(selector.plugin(),
-    checkout.root())` → plugin_root; `read_complete_codex_plugin(plugin_root,
-    marketplace_source)` → tree + declarations; then plan skill trees + MCP
-    config (relocated from `plan_codex_component_projections` +
-    `plan_codex_mcp_config`).
+    verified at `application.rs:1199-1203`). The orchestrator resolves the
+    selected marketplace source into the one authoritative checkout; resolve
+    the catalog at `checkout.root()`, call `catalog.plugin_source(selector.plugin(),
+    checkout.root())` for the contained plugin root, and pass
+    `checkout.source()` as provenance to `read_complete_codex_plugin`. Then
+    plan skill trees + MCP config (relocated from
+    `plan_codex_component_projections` + `plan_codex_mcp_config`).
   - For both, the returned `ManagedProjectionPlan` carries `manifest`,
     `current_fingerprint`, and `desired_fingerprint` directly from the
     relocated helpers (the intermediate `CodexComponentProjectionPlan` /
