@@ -98,11 +98,21 @@ fn custom_codex_home_uses_and_validates_the_effective_canonical_target() {
         &custom_codex_home,
         &["instructions", "repair", "--yes", "--json"],
     );
-    assert!(matches!(repair.status.code(), Some(0 | 2)));
+    assert_code(&repair, 0);
+    assert_eq!(json(&repair)["result"], "completed");
     assert_eq!(
         fs::read_link(&bridge).unwrap(),
         Path::new("../home/AGENTS.md")
     );
+
+    let repeat = run(
+        &machine,
+        &custom_codex_home,
+        &["instructions", "repair", "--yes", "--json"],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["result"], "completed");
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
 
     fs::remove_file(&bridge).unwrap();
     std::os::unix::fs::symlink(&canonical, &bridge).unwrap();
