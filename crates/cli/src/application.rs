@@ -11,15 +11,15 @@ use skilltap_core::{
     },
     domain::{
         AbsolutePath, ArtifactFile, CapabilityId, CapabilitySupport, CommandArgument,
-        ComponentGraph, ConfiguredBinary, DesiredOrigin, DesiredResource, Fingerprint, GitCommit,
-        HarnessId, HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet,
-        NativeId, ObservationAdapterError, ObservationBatch, ObservationEvidence,
-        ObservationFields, ObservationFinding, ObservationFindingCode, ObservationKey,
-        ObservationLayer, ObservationRequest, ObservationSeverity, ObservationSubject,
-        ObservationSummary, ObservationTarget, ObservedResource, OperationAction, OperationId,
-        OperationOutcome, OperationResult, OperationSelector, Ownership, Plan, ProfileAuthority,
-        Provenance, ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope, Source,
-        SourceKind, SourceLocator, UpdateIntent,
+        ComponentGraph, ComponentKind, ConfiguredBinary, DesiredOrigin, DesiredResource,
+        Fingerprint, GitCommit, HarnessId, HarnessObservation, HarnessObservationOutcome,
+        HarnessReachability, HarnessSet, NativeId, ObservationAdapterError, ObservationBatch,
+        ObservationEvidence, ObservationFields, ObservationFinding, ObservationFindingCode,
+        ObservationKey, ObservationLayer, ObservationRequest, ObservationSeverity,
+        ObservationSubject, ObservationSummary, ObservationTarget, ObservedResource,
+        OperationAction, OperationId, OperationOutcome, OperationResult, OperationSelector,
+        Ownership, Plan, ProfileAuthority, Provenance, ResourceHealth, ResourceId, ResourceKey,
+        ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
     },
     executor::{ExecutionError, ExecutionJournal, ExecutionPort, execute_plan},
     foreground_update::{
@@ -32,6 +32,7 @@ use skilltap_core::{
         fingerprint_contents, relative_symlink_target, resolve_symlink_target,
     },
     lifecycle_operation::native_operation,
+    plugin_graph::{ComponentDeclaration, PluginGraphReader},
     runtime::{
         DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
         ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, FileKind, FileSystem,
@@ -1409,6 +1410,7 @@ fn plan_managed_codex_project_lifecycle(
                     project,
                     &filesystem,
                     None,
+                    &[],
                     prior_projections,
                     kind,
                     true,
@@ -1471,12 +1473,13 @@ fn plan_managed_codex_project_lifecycle(
                         "The selected plugin source is not a contained local marketplace entry.",
                     )
                 })?;
-                let plugin_tree =
+                let plugin =
                     read_complete_codex_plugin(&plugin_root, &marketplace_source, json_limits)?;
                 let projection = plan_codex_component_projections(
                     project,
                     &filesystem,
-                    Some(&plugin_tree),
+                    Some(&plugin.tree),
+                    &plugin.declarations,
                     prior_projections,
                     kind,
                     acknowledged,
@@ -1548,18 +1551,19 @@ fn plan_managed_codex_project_lifecycle(
         }
     };
 
-    validate_managed_project_ownership(
-        kind,
-        existing_state,
-        current_fingerprint.as_ref(),
-        fingerprint.as_ref(),
-    )?;
     let operation_id = lifecycle_operation_id(
         kind,
         &codex,
         &Scope::Project(project.clone()),
         resource.key(),
     );
+    validate_managed_project_ownership(
+        kind,
+        existing_state,
+        current_fingerprint.as_ref(),
+        fingerprint.as_ref(),
+        &operation_id,
+    )?;
     let mut surfaces = files
         .iter()
         .map(|file| file.path.clone())
@@ -1714,6 +1718,7 @@ fn plan_codex_component_projections(
     project: &AbsolutePath,
     filesystem: &SystemFileSystem,
     plugin: Option<&ArtifactTree>,
+    declarations: &[ComponentDeclaration],
     prior: &[ManagedProjection],
     kind: NativeLifecycleKind,
     acknowledged: bool,
@@ -1721,27 +1726,16 @@ fn plan_codex_component_projections(
     let removal = kind == NativeLifecycleKind::PluginRemove;
     let mut skill_names = BTreeSet::new();
     let mut unsupported_optional = BTreeSet::new();
-    for path in plugin.into_iter().flat_map(|tree| tree.files().keys()) {
-        let value = path.as_str();
-        if let Some(rest) = value.strip_prefix("skills/") {
-            if let Some((name, _)) = rest.split_once('/') {
-                skill_names.insert(name.to_owned());
+    for declaration in declarations {
+        match declaration.kind {
+            ComponentKind::Skill => {
+                if let Some(name) = &declaration.declared_name {
+                    skill_names.insert(name.clone());
+                }
             }
-        } else if value.starts_with("hooks/")
-            || value.starts_with("agents/")
-            || value.starts_with("commands/")
-            || value.starts_with("apps/")
-            || value.starts_with("connectors/")
-            || value.starts_with("lsp/")
-            || value.starts_with("output-styles/")
-            || value.starts_with("themes/")
-            || value.starts_with("monitors/")
-            || value.starts_with("executables/")
-            || value.starts_with("settings/")
-        {
-            let root = value.split('/').next().unwrap_or(value);
-            if let Ok(path) = skilltap_core::domain::RelativeArtifactPath::new(root) {
-                unsupported_optional.insert(path);
+            ComponentKind::McpServer => {}
+            _ => {
+                unsupported_optional.insert(declaration.id.clone());
             }
         }
     }
@@ -2011,8 +2005,7 @@ fn plan_codex_mcp_config(
                     "An MCP server depends on a plugin-root-relative executable that cannot be projected faithfully; rerun with `--yes` to omit it.",
                 ));
             }
-            if let Ok(id) = skilltap_core::domain::RelativeArtifactPath::new(format!("mcp/{name}"))
-            {
+            if let Ok(id) = skilltap_core::domain::ComponentId::new(format!("mcp:{name}")) {
                 manifest.push(ManagedProjection::Omitted {
                     id,
                     consequence: skilltap_core::domain::EvidenceCode::new(
@@ -2063,7 +2056,12 @@ fn plan_codex_mcp_config(
         }
     }
     if compatible_servers == 0 {
-        return Ok(CodexMcpConfigPlan::empty());
+        return Ok(CodexMcpConfigPlan {
+            write: None,
+            current_fingerprint_bytes: Vec::new(),
+            desired_fingerprint_bytes: Vec::new(),
+            manifest,
+        });
     }
     if mcp_servers.is_empty() {
         document.remove("mcp_servers");
@@ -2099,17 +2097,6 @@ struct CodexMcpConfigPlan {
     current_fingerprint_bytes: Vec<u8>,
     desired_fingerprint_bytes: Vec<u8>,
     manifest: Vec<ManagedProjection>,
-}
-
-impl CodexMcpConfigPlan {
-    fn empty() -> Self {
-        Self {
-            write: None,
-            current_fingerprint_bytes: Vec::new(),
-            desired_fingerprint_bytes: Vec::new(),
-            manifest: Vec::new(),
-        }
-    }
 }
 
 fn mcp_depends_on_plugin_root(server: &serde_json::Value) -> bool {
@@ -2164,12 +2151,11 @@ fn read_complete_codex_plugin(
     root: &AbsolutePath,
     source: &Source,
     json_limits: JsonLimits,
-) -> Result<ArtifactTree, ErrorDetail> {
+) -> Result<CompleteCodexPlugin, ErrorDetail> {
     let tree_limits =
         ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
             .expect("bounded plugin tree limits are valid");
-    use skilltap_core::plugin_graph::PluginGraphReader;
-    CodexPluginGraphReader::new(root.clone(), tree_limits, json_limits)
+    let declarations = CodexPluginGraphReader::new(root.clone(), tree_limits, json_limits)
         .read(source)
         .map_err(|_| managed_project_error("managed_project_plugin_invalid", "The selected plugin does not contain a valid Codex manifest and complete component graph."))?;
     let snapshot = SystemExternalTreeObserver
@@ -2199,12 +2185,18 @@ fn read_complete_codex_plugin(
             }
         }
     }
-    ArtifactTree::new(files).map_err(|_| {
+    let tree = ArtifactTree::new(files).map_err(|_| {
         managed_project_error(
             "managed_project_plugin_invalid",
             "The selected plugin tree is invalid.",
         )
-    })
+    })?;
+    Ok(CompleteCodexPlugin { tree, declarations })
+}
+
+struct CompleteCodexPlugin {
+    tree: ArtifactTree,
+    declarations: Vec<ComponentDeclaration>,
 }
 
 fn validate_managed_project_ownership(
@@ -2212,6 +2204,7 @@ fn validate_managed_project_ownership(
     state: Option<&ResourceState>,
     current_fingerprint: Option<&Fingerprint>,
     desired_fingerprint: Option<&Fingerprint>,
+    operation_id: &OperationId,
 ) -> Result<(), ErrorDetail> {
     if let Some(current_fingerprint) = current_fingerprint {
         let state = state.ok_or_else(|| {
@@ -2235,7 +2228,16 @@ fn validate_managed_project_ownership(
                 "The existing managed destination is not owned by skilltap.",
             ));
         }
-        if state.fingerprint() != Some(current_fingerprint) {
+        let recoverable_pending_attempt = state.fingerprint().is_none()
+            && state.managed_projections().is_empty()
+            && desired_fingerprint == Some(current_fingerprint)
+            && state.last_apply().is_some_and(|apply| {
+                apply
+                    .operations()
+                    .get(operation_id)
+                    .is_some_and(|result| matches!(result.outcome(), OperationOutcome::Pending))
+            });
+        if state.fingerprint() != Some(current_fingerprint) && !recoverable_pending_attempt {
             return Err(managed_project_error(
                 "managed_project_drifted",
                 "The managed project destination drifted; no files were changed.",

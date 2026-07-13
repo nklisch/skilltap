@@ -7,8 +7,8 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::{ArtifactRole, ManagedArtifactRecord, STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
-    EvidenceCode, Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership,
-    Provenance, RelativeArtifactPath, ResolvedRevision, ResourceKey, Source,
+    ComponentId, EvidenceCode, Fingerprint, HarnessId, NativeId, OperationId, OperationResult,
+    Ownership, Provenance, RelativeArtifactPath, ResolvedRevision, ResourceKey, Source,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -23,7 +23,7 @@ pub enum ManagedProjection {
         fingerprint: Fingerprint,
     },
     Omitted {
-        id: RelativeArtifactPath,
+        id: ComponentId,
         consequence: EvidenceCode,
     },
 }
@@ -465,6 +465,7 @@ impl TryFrom<TargetResourceStateWire> for TargetResourceState {
     type Error = SchemaError;
 
     fn try_from(value: TargetResourceStateWire) -> Result<Self, Self::Error> {
+        validate_managed_projections(&value.managed_projections)?;
         Self::new(
             value.harness,
             value.native_id,
@@ -480,6 +481,23 @@ impl TryFrom<TargetResourceStateWire> for TargetResourceState {
         )
         .map(|state| state.with_managed_projections(value.managed_projections))
     }
+}
+
+fn validate_managed_projections(projections: &[ManagedProjection]) -> Result<(), SchemaError> {
+    let mut identities = BTreeMap::<String, &ManagedProjection>::new();
+    for projection in projections {
+        let identity = match projection {
+            ManagedProjection::Skill { id, .. } => format!("skill:{}", id.as_str()),
+            ManagedProjection::Mcp { id, .. } => format!("mcp:{}", id.as_str()),
+            ManagedProjection::Omitted { id, .. } => format!("omitted:{}", id.as_str()),
+        };
+        if let Some(previous) = identities.insert(identity, projection)
+            && previous != projection
+        {
+            return Err(SchemaError::ConflictingManagedProjection);
+        }
+    }
+    Ok(())
 }
 
 impl<'de> Deserialize<'de> for TargetResourceState {

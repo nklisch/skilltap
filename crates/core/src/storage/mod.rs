@@ -116,6 +116,7 @@ pub enum SchemaError {
     DuplicateManagedPath {
         path: crate::domain::RelativeArtifactPath,
     },
+    ConflictingManagedProjection,
     Validation(ValidationError),
 }
 
@@ -215,6 +216,9 @@ impl fmt::Display for SchemaError {
             }
             Self::DuplicateManagedPath { path } => {
                 write!(formatter, "duplicate managed artifact path `{path}`")
+            }
+            Self::ConflictingManagedProjection => {
+                formatter.write_str("conflicting managed projection evidence")
             }
             Self::Validation(source) => source.fmt(formatter),
         }

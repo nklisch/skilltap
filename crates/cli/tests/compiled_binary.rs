@@ -595,8 +595,7 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
         fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap(),
         inventory
     );
-    let repeated_state =
-        fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    let repeated_state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(repeated_state.contains("\"status\": \"no_change\""));
 
     let update = run(
@@ -901,6 +900,46 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     assert!(state.contains("\"ownership\": \"skilltap\""));
     assert!(state.contains("managed_projections"), "state: {state}");
 
+    let state_path = config_root(&machine).join("state.json");
+    let mut interrupted: serde_json::Value = serde_json::from_str(&state).unwrap();
+    let binding = interrupted["resources"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|resource| resource["key"]["id"] == "plugin:demo@team")
+        .unwrap()["targets"][0]["binding"]
+        .as_object_mut()
+        .unwrap();
+    binding.remove("fingerprint");
+    binding.remove("managed_projections");
+    binding.remove("installed_revision");
+    binding["last_apply"]["operations"][0]["outcome"] = serde_json::json!({"status":"pending"});
+    fs::write(
+        &state_path,
+        serde_json::to_vec_pretty(&interrupted).unwrap(),
+    )
+    .unwrap();
+    let recovered_attempt = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&recovered_attempt, 0);
+    assert_eq!(json(&recovered_attempt)["summary"]["changed"], false);
+    assert!(
+        fs::read_to_string(&state_path)
+            .unwrap()
+            .contains("managed_projections")
+    );
+
     let repeat = run(
         &machine,
         &[
@@ -1036,6 +1075,16 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
         r#"{"mcpServers":{"demo-docs":{"command":"demo-mcp","args":["serve"]},"plugin-relative":{"command":"${CLAUDE_PLUGIN_ROOT}/bin/server"}}}"#,
     )
     .unwrap();
+    for (component, file) in [
+        ("hooks/first", "hook.sh"),
+        ("hooks/second", "hook.sh"),
+        ("lsp-servers/rust", "server.json"),
+        ("output_styles/warm", "style.md"),
+    ] {
+        let root = source.join("plugins/demo").join(component);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join(file), "fixture\n").unwrap();
+    }
 
     for arguments in [
         vec!["init"],
@@ -1147,6 +1196,15 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
             .any(|resource| resource["id"] == "omitted:mcp:plugin-relative"
                 && resource["fields"]["consequence"] == "plugin_root_relative_mcp_omitted")
     );
+    for component in ["hook:first", "hook:second", "lsp:rust", "output-style:warm"] {
+        assert!(
+            json(&git_install)["resources"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|resource| resource["id"] == format!("omitted:{component}"))
+        );
+    }
     assert!(git_project.join(".agents/skills/demo/SKILL.md").is_file());
     let git_config = fs::read_to_string(git_project.join(".codex/config.toml")).unwrap();
     assert!(git_config.contains("demo-docs"));
@@ -1177,6 +1235,63 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     assert_code(&git_remove, 0);
     assert!(!git_project.join(".agents/skills/demo/SKILL.md").exists());
     assert!(!git_project.join(".codex/config.toml").exists());
+
+    fs::write(
+        source.join(".agents/plugins/marketplace.json"),
+        r#"{"name":"team","plugins":[{"name":"demo","source":{"source":"local","path":"./plugins/demo"}}]}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"plugin-relative":{"command":"${CLAUDE_PLUGIN_ROOT}/bin/server"}}}"#,
+    )
+    .unwrap();
+    let omission_project = machine.home().join("omission-only-project");
+    fs::create_dir_all(&omission_project).unwrap();
+    let omission_add = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "omission-team",
+            "--project",
+            omission_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&omission_add, 0);
+    let omission_install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@omission-team",
+            "--project",
+            omission_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&omission_install, 0);
+    assert!(
+        omission_project
+            .join(".agents/skills/demo/SKILL.md")
+            .is_file()
+    );
+    assert!(!omission_project.join(".codex/config.toml").exists());
+    assert!(
+        json(&omission_install)["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| resource["id"] == "omitted:mcp:plugin-relative")
+    );
 }
 
 #[test]

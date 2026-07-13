@@ -699,6 +699,30 @@ fn constructor_and_deserialization_enforce_state_invariants_equally() {
 }
 
 #[test]
+fn managed_projection_wire_rejects_conflicting_duplicate_identities() {
+    let target = managed_resource("skill:review")
+        .target(&codex())
+        .unwrap()
+        .clone()
+        .with_managed_projections([ManagedProjection::Skill {
+            id: RelativeArtifactPath::new("review").unwrap(),
+            fingerprint: fingerprint(),
+        }]);
+    let mut value = serde_json::to_value(&target).unwrap();
+    let identical = value["managed_projections"][0].clone();
+    value["managed_projections"]
+        .as_array_mut()
+        .unwrap()
+        .push(identical);
+    let decoded: TargetResourceState = serde_json::from_value(value.clone()).unwrap();
+    assert_eq!(decoded.managed_projections().len(), 1);
+
+    value["managed_projections"][1]["id"]["fingerprint"]["digest"] =
+        serde_json::json!("b".repeat(64));
+    assert!(serde_json::from_value::<TargetResourceState>(value).is_err());
+}
+
+#[test]
 fn daemon_run_record_round_trips_and_survives_state_updates() {
     let state = StateDocument::new(STATE_SCHEMA_VERSION, [], [], None, None, None).unwrap();
     let record = DaemonRunRecord::new(

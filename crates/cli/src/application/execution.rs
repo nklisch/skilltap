@@ -89,11 +89,52 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                     .expect("static evidence detail is valid"),
                 )
             })?
+        } else if let Some(seed) = self.seeds.get(resource) {
+            let attempt_targets = seed
+                .targets()
+                .values()
+                .map(|target| {
+                    TargetResourceState::new(
+                        target.harness().clone(),
+                        target.native_id().cloned(),
+                        target.provenance(),
+                        target.ownership(),
+                        target.source().cloned(),
+                        None,
+                        None,
+                        target.installed_revision().cloned(),
+                        None,
+                        target.observed_at(),
+                        None,
+                    )
+                    .map(|attempt| {
+                        attempt
+                            .with_managed_projections(target.managed_projections().iter().cloned())
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+                .and_then(|targets| ResourceState::new(resource.clone(), targets))
+                .map_err(|_| {
+                    ExecutionError::journal_failure(
+                        skilltap_core::domain::EvidenceCode::new("state.attempt_seed_invalid")
+                            .expect("static evidence code is valid"),
+                        skilltap_core::domain::EvidenceDetail::new(
+                            "The managed operation attempt could not be recorded safely.",
+                        )
+                        .expect("static evidence detail is valid"),
+                    )
+                })?;
+            current.with_resource_state(attempt_targets).map_err(|_| {
+                ExecutionError::journal_failure(
+                    skilltap_core::domain::EvidenceCode::new("state.attempt_seed_conflict")
+                        .expect("static evidence code is valid"),
+                    skilltap_core::domain::EvidenceDetail::new(
+                        "The managed operation attempt conflicted with current state.",
+                    )
+                    .expect("static evidence detail is valid"),
+                )
+            })?
         } else {
-            // A pre-apply or failed first managed install has no durable
-            // effective projection to journal. Native attempts are retained
-            // above because their target binding is recovery evidence, not a
-            // claim that a skilltap-owned projection became effective.
             return Ok(());
         };
         let at = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| {
@@ -254,8 +295,10 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
         let mut applied_trees: Vec<&ManagedProjectPluginWrite> = Vec::new();
         for plugin in &entry.trees {
             if let Err(detail) = apply_managed_project_tree(self.filesystem, plugin) {
-                rollback_managed_project(self.filesystem, &[], &applied_trees);
-                return Err(managed_project_apply_failure(detail));
+                let mut attempted = applied_trees.clone();
+                attempted.push(plugin);
+                let residuals = rollback_managed_project(self.filesystem, &[], &attempted);
+                return Err(managed_project_rollback_failure(detail, residuals));
             }
             applied_trees.push(plugin);
         }
@@ -276,9 +319,11 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     None => self.filesystem.remove(&file.path).is_err(),
                 }
             {
-                rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
-                return Err(managed_project_apply_failure(
-                    "A managed project file could not be published; earlier changes were rolled back.",
+                let residuals =
+                    rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_project_rollback_failure(
+                    "A managed project file could not be published.",
+                    residuals,
                 ));
             }
             applied_files.push(file);
@@ -286,9 +331,11 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
         for file in &entry.files {
             if self.filesystem.read_regular_no_follow(&file.path).ok() != Some(file.desired.clone())
             {
-                rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
-                return Err(managed_project_apply_failure(
+                let residuals =
+                    rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_project_rollback_failure(
                     "Managed project file verification failed.",
+                    residuals,
                 ));
             }
         }
@@ -299,9 +346,11 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                 .ok()
                 .and_then(|(_, files)| artifact_tree_from_loaded(files));
             if observed != tree.desired_tree {
-                rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
-                return Err(managed_project_apply_failure(
+                let residuals =
+                    rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_project_rollback_failure(
                     "Managed project skill verification failed.",
+                    residuals,
                 ));
             }
         }
@@ -355,25 +404,76 @@ fn rollback_managed_project(
     filesystem: &dyn ManagedProjectFileSystem,
     files: &[&ManagedProjectFileWrite],
     trees: &[&ManagedProjectPluginWrite],
-) {
+) -> Vec<String> {
+    let mut residuals = Vec::new();
     for file in files.iter().rev() {
-        match &file.expected {
-            Some(bytes) => {
-                let _ = filesystem.atomic_write(&file.path, bytes);
-            }
-            None => {
-                let _ = filesystem.remove(&file.path);
-            }
+        let restored = match &file.expected {
+            Some(bytes) => filesystem.atomic_write(&file.path, bytes),
+            None => filesystem.remove(&file.path),
+        };
+        if restored.is_err()
+            || filesystem.read_regular_no_follow(&file.path).ok() != Some(file.expected.clone())
+        {
+            residuals.push(file.path.as_str().to_owned());
         }
     }
     for tree in trees.iter().rev() {
-        if let Ok((identity, _)) = filesystem.load_tree_no_follow(&tree.root, &tree.destination) {
-            let _ = filesystem.remove_tree_no_follow(&tree.root, &tree.destination, identity);
+        if let Ok((identity, _)) = filesystem.load_tree_no_follow(&tree.root, &tree.destination)
+            && filesystem
+                .remove_tree_no_follow(&tree.root, &tree.destination, identity)
+                .is_err()
+        {
+            residuals.push(managed_project_tree_path(tree));
+            continue;
         }
         if let Some(previous) = &tree.expected_tree {
             let _ =
                 filesystem.publish_tree_no_follow(&tree.root, &tree.destination, previous.files());
         }
+        let observed = filesystem
+            .load_tree_no_follow(&tree.root, &tree.destination)
+            .ok()
+            .and_then(|(_, files)| artifact_tree_from_loaded(files));
+        if observed != tree.expected_tree {
+            residuals.push(managed_project_tree_path(tree));
+        }
+    }
+    residuals.sort();
+    residuals.dedup();
+    residuals
+}
+
+fn managed_project_tree_path(tree: &ManagedProjectPluginWrite) -> String {
+    format!("{}/{}", tree.root.as_str(), tree.destination.as_str())
+}
+
+fn managed_project_rollback_failure(
+    detail: &'static str,
+    residuals: Vec<String>,
+) -> ExecutionError {
+    if residuals.is_empty() {
+        managed_project_apply_failure(format!("{detail} Rollback restored every prior surface."))
+    } else {
+        let total = residuals.len();
+        let mut listed = Vec::new();
+        let mut used = detail.len() + 96;
+        for residual in residuals {
+            if used + residual.len() + 2 > 900 {
+                break;
+            }
+            used += residual.len() + 2;
+            listed.push(residual);
+        }
+        let omitted = total.saturating_sub(listed.len());
+        let suffix = if omitted == 0 {
+            String::new()
+        } else {
+            format!("; {omitted} additional residual surfaces require fresh observation")
+        };
+        managed_project_apply_failure(format!(
+            "{detail} Rollback left {total} residual surfaces: {}{suffix}.",
+            listed.join(", ")
+        ))
     }
 }
 
@@ -414,12 +514,17 @@ fn artifact_tree_from_loaded(
     .ok()
 }
 
-fn managed_project_apply_failure(detail: &'static str) -> ExecutionError {
+fn managed_project_apply_failure(detail: impl Into<String>) -> ExecutionError {
+    let detail = skilltap_core::domain::EvidenceDetail::new(detail.into()).unwrap_or_else(|_| {
+        skilltap_core::domain::EvidenceDetail::new(
+            "Managed project lifecycle failed and residual surfaces require fresh observation.",
+        )
+        .expect("static evidence detail is valid")
+    });
     ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
         skilltap_core::domain::EvidenceCode::new("managed.project_lifecycle_failed")
             .expect("static evidence code is valid"),
-        skilltap_core::domain::EvidenceDetail::new(detail)
-            .expect("static evidence detail is valid"),
+        detail,
     ))
 }
 
