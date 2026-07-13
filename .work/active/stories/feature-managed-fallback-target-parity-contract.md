@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: []
@@ -15,6 +15,103 @@ updated: 2026-07-13
 ---
 
 # Managed Projection Port Contract and Pure Types
+
+## Review (standard, bounce — 2026-07-13)
+
+Cross-model GLM review of the OpenAI host implementation at commit `1443a1c1`.
+Verification re-ran clean: 2 new core tests + 328 existing, 2 new harnesses
+tests + 24 existing, clippy `-D warnings` clean, `cargo fmt --check` clean,
+`git diff --check` clean, `CodexAdapter` does not override
+`managed_projection()` (Codex behavior unchanged), workspace compiles. Two
+material contract defects block approval; one minor consistency note.
+
+### Material 1 — Codex leak in target-agnostic contract summaries
+
+`crates/core/src/managed_projection.rs`:
+
+- `CatalogMissing.summary()` -> "The selected source has no **Codex**-compatible
+  marketplace document."
+- `PluginMissing.summary()` -> "The selected plugin does not contain a valid
+  **Codex** manifest and complete component graph."
+
+These strings live in `skilltap-core`, the target-agnostic layer, and the
+word "Codex" will surface to users of ANY future adapter (Gemini, OpenCode,
+file-managed) that returns these variants. This is precisely the Codex-shape
+leak the parent feature's pre-mortem commits to avoiding ("exchanges only
+normalized plans ... no path logic crosses the boundary"). The contract is
+the wrong layer for target-specific diagnostic vocabulary.
+
+Fix: drop "Codex" from both (e.g., "...has no compatible marketplace
+document." / "...does not contain a valid manifest and complete component
+graph."). The summaries are not pinned by a test, so this is a one-line edit
+per variant with no downstream breakage — but it must land now, before Unit 2
+consumes the contract.
+
+### Material 2 — The "byte-identical user-facing output" claim is false
+
+The story body asserts the summaries make Unit 3's mapping one-to-one and
+"user-facing output byte-identical." This is not achievable with the
+implemented shape. The existing Codex orchestrator emits many DISTINCT
+summary strings under the SAME code, and the enum provides exactly ONE summary
+per code:
+
+- `managed_project_mcp_invalid` -> 6 distinct summaries
+  (`application.rs:2072, 2081, 2117, 2146, 2191, 2225`)
+- `managed_project_drifted` -> 3 distinct summaries
+  (`application.rs:1922, 2181, 2399`)
+- `managed_project_plugin_invalid` -> 4 distinct summaries
+  (`application.rs:1879, 1890, 2311, 2341`)
+- `managed_project_plugin_source_invalid` -> 3 distinct summaries
+  (`application.rs:1566, 1599, 1614/1623`)
+- `managed_project_plugin_unreadable` -> 2 distinct summaries
+  (`application.rs:2013, 2316`)
+- `managed_project_catalog_invalid` -> 2 distinct summaries
+  (`application.rs:1463, 1805`)
+
+Unit 3's planned `managed_project_error(error.code(), error.summary())` would
+therefore collapse every context-specific summary to the enum's single fixed
+text — a user-facing behavior regression — OR force the Codex adapter to
+bypass every typed variant via `Other { code, summary }`, which defeats the
+typed enum's purpose (the primary adapter would use the escape hatch for
+almost every error site).
+
+Fix (pick one, record the choice in the body):
+
+1. Drop the byte-identical claim. State that codes are byte-identical and
+   summaries are CANONICAL defaults; adapters use `Other` for context-specific
+   summaries. Document the `Other` discipline: `Other` is for adapter-specific
+   codes only, never for replicating a canonical code string (silent drift
+   otherwise). This is the smallest honest fix.
+2. Add a per-call summary override to the variants that carry context (e.g.,
+   `McpInvalid { detail: &'static str }`, `Drifted { detail: &'static str }`,
+   `PluginInvalid { detail: &'static str }`, `PluginSourceInvalid { detail:
+   &'static str }`, `PluginUnreadable { detail: &'static str }`,
+   `CatalogInvalid { detail: &'static str }`), keeping `code()` stable. This
+   preserves byte-identity at the cost of more verbose variants.
+
+Either resolves the false guarantee; option 1 is the lower-friction contract
+for a foundation story and option 2 can be revisited if Unit 2 finds the
+escape hatch too coarse.
+
+### Minor — `'static` bound diverges from the established optional-port pattern
+
+`registry.rs`: the three existing optional ports return `Option<&dyn Port>`
+(elided lifetime, borrowing from `&self`); the new `managed_projection()`
+returns `Option<&'static dyn ManagedProjectionPort>`. The choice is sound for
+a stateless port and the Unit 2 design returns `&Self` (a promoted
+unit-struct ref), but it is inconsistent with the pattern this story claims
+to mirror and forecloses instance-bound ports (e.g., one holding a
+detected binary path). Not blocking; align to `Option<&dyn
+ManagedProjectionPort>` for consistency unless a recorded reason demands
+`'static`.
+
+### Action required
+
+Resolve Material 1 (drop "Codex" from the two summaries) and Material 2
+(correct the byte-identical claim per option 1 or 2). Minor is optional.
+Re-run `cargo test -p skilltap-core --lib` and `cargo test -p skilltap-
+harnesses --lib`; if option 2 is chosen, add per-variant `detail` coverage.
+Then return to review.
 
 ## Scope
 
