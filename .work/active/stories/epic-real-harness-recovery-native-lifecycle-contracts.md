@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-contracts
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -69,3 +69,12 @@ rules. This story owns blocker 2 and blockers 5-7.
 **Nits**: none
 
 **Notes**: Fresh-context deep review at the project-default `standard` weight for the public native command and scope contract. Commit `8f0b333` correctly attests exact versions, removes unsupported Claude scope flags, and blocks Codex plugin update. An isolated real Claude invocation confirmed list entries carry explicit scope; the observation parser must use it to preserve exact global/project identity. Harness-focused tests otherwise pass.
+
+## Review follow-up (2026-07-12)
+
+The blocking scope-identity finding is implemented by
+`epic-real-harness-recovery-native-lifecycle-scope-aware-presence`. Claude
+presence now requires the exact qualified identity plus the requested `user`
+or `local` scope; missing, malformed, duplicate, or contradictory evidence is
+unknown. Adapter and isolated subprocess suites pass, and the compiled repair
+regression is present for the coordinating state-migration pass to execute.

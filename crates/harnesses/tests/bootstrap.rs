@@ -103,8 +103,8 @@ fn claude_bootstrap_presence_matrix_is_read_first_and_target_isolated() {
     let root = TempRoot::new("harness-bootstrap-presence").unwrap();
     let (configured, log) = write_fake_claude(
         &root,
-        r#"{"marketplaces":["skilltap"]}"#,
-        r#"{"plugins":["skilltap@skilltap"]}"#,
+        r#"{"marketplaces":[{"name":"skilltap","scope":"user"}]}"#,
+        r#"{"plugins":[{"id":"skilltap@skilltap","scope":"user"}]}"#,
     );
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
     let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);

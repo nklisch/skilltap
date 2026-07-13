@@ -198,7 +198,7 @@ pub fn observe_native_resource(
         Ok(decoded) => decoded,
         Err(_) => return Ok(NativeResourcePresence::Unknown),
     };
-    Ok(resource_presence(decoded.value(), request.name.as_str()))
+    Ok(resource_presence(decoded.value(), request))
 }
 
 fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
@@ -222,38 +222,60 @@ fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
     args
 }
 
-fn resource_presence(value: &serde_json::Value, name: &str) -> NativeResourcePresence {
+fn resource_presence(
+    value: &serde_json::Value,
+    request: &NativeLifecycleRequest,
+) -> NativeResourcePresence {
     const LIST_FIELDS: &[&str] = &["plugins", "marketplaces", "installed", "resources", "items"];
     const IDENTITY_FIELDS: &[&str] = &["name", "id", "plugin", "marketplace", "qualifiedName"];
 
-    // Return Ok only when the value has a documented list shape. A list entry
-    // must carry a string identity (or itself be a string); malformed entries
-    // are not evidence that the resource is missing.
-    fn parse_list(
-        value: &serde_json::Value,
-        name: &str,
+    #[derive(Clone, Copy)]
+    struct Entry<'a> {
+        identity: &'a str,
+        scope: Option<&'a str>,
+    }
+
+    fn parse_entry<'a>(
+        value: &'a serde_json::Value,
+        identity_fields: &[&str],
+    ) -> Result<Entry<'a>, ()> {
+        match value {
+            serde_json::Value::String(identity) => Ok(Entry {
+                identity,
+                scope: None,
+            }),
+            serde_json::Value::Object(fields) => {
+                let identities = fields
+                    .iter()
+                    .filter(|(field, _)| identity_fields.contains(&field.as_str()))
+                    .map(|(_, value)| value.as_str().ok_or(()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let Some(identity) = identities.first().copied() else {
+                    return Err(());
+                };
+                if identities.iter().any(|candidate| *candidate != identity) {
+                    return Err(());
+                }
+                let scope = fields
+                    .get("scope")
+                    .map(|value| value.as_str().ok_or(()))
+                    .transpose()?;
+                Ok(Entry { identity, scope })
+            }
+            _ => Err(()),
+        }
+    }
+
+    fn parse_list<'a>(
+        value: &'a serde_json::Value,
         list_fields: &[&str],
         identity_fields: &[&str],
-    ) -> Result<bool, ()> {
+    ) -> Result<Vec<Entry<'a>>, ()> {
         match value {
-            serde_json::Value::Array(values) => values.iter().try_fold(false, |found, value| {
-                let matches = match value {
-                    serde_json::Value::String(value) => value == name,
-                    serde_json::Value::Object(fields) => {
-                        let identities = fields
-                            .iter()
-                            .filter(|(field, _)| identity_fields.contains(&field.as_str()))
-                            .map(|(_, value)| value.as_str().ok_or(()))
-                            .collect::<Result<Vec<_>, _>>()?;
-                        if identities.is_empty() {
-                            return Err(());
-                        }
-                        identities.into_iter().any(|value| value == name)
-                    }
-                    _ => return Err(()),
-                };
-                Ok(found || matches)
-            }),
+            serde_json::Value::Array(values) => values
+                .iter()
+                .map(|value| parse_entry(value, identity_fields))
+                .collect(),
             serde_json::Value::Object(fields) => {
                 let list_values = fields
                     .iter()
@@ -261,31 +283,57 @@ fn resource_presence(value: &serde_json::Value, name: &str) -> NativeResourcePre
                     .map(|(_, value)| value)
                     .collect::<Vec<_>>();
                 if !list_values.is_empty() {
-                    return list_values.into_iter().try_fold(false, |found, value| {
-                        if !value.is_array() {
-                            return Err(());
-                        }
-                        Ok(found || parse_list(value, name, list_fields, identity_fields)?)
-                    });
+                    return list_values
+                        .into_iter()
+                        .try_fold(Vec::new(), |mut entries, value| {
+                            if !value.is_array() {
+                                return Err(());
+                            }
+                            entries.extend(parse_list(value, list_fields, identity_fields)?);
+                            Ok(entries)
+                        });
                 }
-                let identities = fields
-                    .iter()
-                    .filter(|(field, _)| identity_fields.contains(&field.as_str()))
-                    .map(|(_, value)| value.as_str().ok_or(()))
-                    .collect::<Result<Vec<_>, _>>()?;
-                if identities.is_empty() {
-                    return Err(());
-                }
-                Ok(identities.into_iter().any(|value| value == name))
+                Ok(vec![parse_entry(value, identity_fields)?])
             }
             _ => Err(()),
         }
     }
 
-    match parse_list(value, name, LIST_FIELDS, IDENTITY_FIELDS) {
-        Ok(true) => NativeResourcePresence::Present,
-        Ok(false) => NativeResourcePresence::Missing,
-        Err(()) => NativeResourcePresence::Unknown,
+    let entries = match parse_list(value, LIST_FIELDS, IDENTITY_FIELDS) {
+        Ok(entries) => entries,
+        Err(()) => return NativeResourcePresence::Unknown,
+    };
+    if request.harness == HarnessKind::Codex {
+        return if entries
+            .iter()
+            .any(|entry| entry.identity == request.name.as_str())
+        {
+            NativeResourcePresence::Present
+        } else {
+            NativeResourcePresence::Missing
+        };
+    }
+
+    let expected_scope = match request.scope {
+        Scope::Global => "user",
+        Scope::Project(_) => "local",
+    };
+    if entries
+        .iter()
+        .any(|entry| !matches!(entry.scope, Some("user" | "local")))
+    {
+        return NativeResourcePresence::Unknown;
+    }
+    match entries
+        .iter()
+        .filter(|entry| {
+            entry.identity == request.name.as_str() && entry.scope == Some(expected_scope)
+        })
+        .count()
+    {
+        0 => NativeResourcePresence::Missing,
+        1 => NativeResourcePresence::Present,
+        _ => NativeResourcePresence::Unknown,
     }
 }
 
@@ -709,21 +757,26 @@ mod tests {
 
     #[test]
     fn native_resource_presence_is_conservative_and_identity_bound() {
+        let request = request(
+            HarnessKind::Codex,
+            NativeLifecycleAction::PluginInstall,
+            Scope::Global,
+        );
         assert_eq!(
             resource_presence(
                 &serde_json::json!({
                     "plugins": [{"name": "formatter@team"}]
                 }),
-                "formatter@team"
+                &request,
             ),
             NativeResourcePresence::Present
         );
         assert_eq!(
-            resource_presence(&serde_json::json!({"plugins": []}), "formatter@team"),
+            resource_presence(&serde_json::json!({"plugins": []}), &request),
             NativeResourcePresence::Missing
         );
         assert_eq!(
-            resource_presence(&serde_json::json!({"version": "3.0.0"}), "formatter@team"),
+            resource_presence(&serde_json::json!({"version": "3.0.0"}), &request),
             NativeResourcePresence::Unknown
         );
         for malformed in [
@@ -733,9 +786,78 @@ mod tests {
             serde_json::json!({"plugins": [{}]}),
         ] {
             assert_eq!(
-                resource_presence(&malformed, "formatter@team"),
+                resource_presence(&malformed, &request),
                 NativeResourcePresence::Unknown,
                 "malformed list payload: {malformed}"
+            );
+        }
+    }
+
+    #[test]
+    fn claude_presence_matches_identity_and_concrete_scope() {
+        let global = request(
+            HarnessKind::Claude,
+            NativeLifecycleAction::PluginInstall,
+            Scope::Global,
+        );
+        let project = request(
+            HarnessKind::Claude,
+            NativeLifecycleAction::PluginInstall,
+            Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
+        );
+        let global_only = serde_json::json!({
+            "plugins": [{"name": "formatter@team", "scope": "user"}]
+        });
+        assert_eq!(
+            resource_presence(&global_only, &global),
+            NativeResourcePresence::Present
+        );
+        assert_eq!(
+            resource_presence(&global_only, &project),
+            NativeResourcePresence::Missing
+        );
+
+        let siblings = serde_json::json!({
+            "plugins": [
+                {"name": "formatter@team", "scope": "user"},
+                {"name": "formatter@team", "scope": "local"}
+            ]
+        });
+        assert_eq!(
+            resource_presence(&siblings, &global),
+            NativeResourcePresence::Present
+        );
+        assert_eq!(
+            resource_presence(&siblings, &project),
+            NativeResourcePresence::Present
+        );
+    }
+
+    #[test]
+    fn claude_scope_evidence_fails_closed_when_missing_malformed_or_duplicate() {
+        let project = request(
+            HarnessKind::Claude,
+            NativeLifecycleAction::PluginInstall,
+            Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
+        );
+        for uncertain in [
+            serde_json::json!({"plugins": [{"name": "formatter@team"}]}),
+            serde_json::json!({"plugins": [{"name": "formatter@team", "scope": 3}]}),
+            serde_json::json!({"plugins": [{"name": "formatter@team", "scope": "project"}]}),
+            serde_json::json!({"plugins": [
+                {"name": "formatter@team", "scope": "local"},
+                {"name": "formatter@team", "scope": "local"}
+            ]}),
+            serde_json::json!({"plugins": [{
+                "name": "formatter@team",
+                "id": "different@team",
+                "scope": "local"
+            }]}),
+        ] {
+            assert_eq!(
+                resource_presence(&uncertain, &project),
+                NativeResourcePresence::Unknown,
+                "uncertain scoped payload: {uncertain}"
             );
         }
     }

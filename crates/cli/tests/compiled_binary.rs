@@ -3900,6 +3900,68 @@ fn reconciliation_reobserves_missing_native_plugin_before_reusing_journal() {
     assert_eq!(json(&repeat)["summary"]["changed"], false);
 }
 
+#[test]
+fn claude_project_reobservation_does_not_borrow_same_name_user_presence() {
+    let machine = machine();
+    let harness = machine.home().join("fake-claude-scoped-presence");
+    let project = machine.home().join("claude-project");
+    let local_marker = machine.home().join("claude-local-plugin-present");
+    fs::create_dir_all(&project).unwrap();
+    let marker = local_marker.to_str().unwrap().replace('\'', "'\\''");
+    fs::write(
+        &harness,
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '%s' '2.1.201 (Claude Code)'; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"list\" ]; then if [ -f '{marker}' ]; then printf '%s' '{{\"plugins\":[{{\"id\":\"formatter@team\",\"scope\":\"user\"}},{{\"id\":\"formatter@team\",\"scope\":\"local\"}}]}}'; else printf '%s' '{{\"plugins\":[{{\"id\":\"formatter@team\",\"scope\":\"user\"}}]}}'; fi; exit 0; fi\nif [ \"$1\" = \"plugin\" ] && [ \"$2\" = \"install\" ] && [ \"$5\" = \"local\" ]; then : > '{marker}'; exit 0; fi\nexit 0\n"
+        ),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&harness).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&harness, permissions).unwrap();
+    }
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(&harness, &harness)
+            .replace(
+                "[harnesses.codex]\nenabled = true",
+                "[harnesses.codex]\nenabled = false",
+            )
+            .replace(
+                "[harnesses.claude]\nenabled = false",
+                "[harnesses.claude]\nenabled = true",
+            ),
+    );
+    fs::create_dir_all(machine.claude_home().join("plugins")).unwrap();
+
+    let args = [
+        "plugin",
+        "install",
+        "formatter@team",
+        "--project",
+        project.to_str().unwrap(),
+        "--target",
+        "claude",
+        "--json",
+    ];
+    let install = run(&machine, &args);
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["summary"]["changed"], true);
+    assert!(local_marker.is_file());
+
+    fs::remove_file(&local_marker).unwrap();
+    let repair = run(&machine, &args);
+    assert_code(&repair, 0);
+    assert_eq!(json(&repair)["summary"]["changed"], true);
+    assert!(
+        local_marker.is_file(),
+        "the missing local resource must be reapplied even while its user sibling exists"
+    );
+}
+
 fn run_in(machine: &IsolatedMachine, cwd: &Path, arguments: &[&str]) -> Output {
     machine
         .run_in(&binary(), cwd, arguments)

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-scope-aware-presence
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -40,3 +40,27 @@ re-observation.
 - Native presence evidence never crosses a concrete global/project boundary.
 - A removed project resource is reapplied even when its global sibling exists.
 - Malformed scope evidence fails closed without exposing raw payloads.
+
+## Implementation notes
+
+- Execution capability: strongest available; this is a correctness boundary
+  that decides whether a previously applied native mutation may be skipped.
+- Review weight: highest, inherited from the recovery/autopilot run.
+- Files changed: `crates/harnesses/src/lifecycle.rs`,
+  `crates/harnesses/tests/lifecycle_scope.rs`,
+  `crates/harnesses/tests/bootstrap.rs`, and
+  `crates/cli/tests/compiled_binary.rs`.
+- Tests added: exact global/project sibling matching, user/local coexistence,
+  missing and malformed scope, duplicate same-scope entries, contradictory
+  identity fields, isolated native subprocess observation, and a compiled CLI
+  journal-repair scenario where the same-name user plugin remains present
+  after the local plugin is removed.
+- Discrepancies from design: none. Codex retains identity-only matching because
+  its verified global lifecycle request is scope-unambiguous; Claude requires
+  an exact `user` or `local` scope on every list entry before absence is
+  authoritative.
+- Verification: `cargo test -p skilltap-harnesses --all-targets` passes (49
+  tests). The focused compiled CLI regression is temporarily blocked by the
+  concurrent per-target state migration's unfinished CLI call sites and is
+  ready to run when that shared transition compiles.
+- Adjacent issues parked: none.
