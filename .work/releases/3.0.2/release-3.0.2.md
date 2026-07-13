@@ -68,7 +68,7 @@ No cross-version conflicts were found.
 - **Items shipped:** 77
 - **Gate findings:** 19 findings or coverage gaps fixed/reconciled, plus 4
   implementation patterns codified.
-- **Publishing:** signed source tag and GitHub Actions release artifacts,
+- **Publishing:** versioned source tag and GitHub Actions release artifacts,
   website deployment, and Homebrew formula handoff.
 
 ## Shipped items
