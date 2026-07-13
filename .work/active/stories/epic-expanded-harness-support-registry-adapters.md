@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-adapters
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -362,3 +362,124 @@ evidence, instruction bridges, and skill destinations are unchanged.
 
 Review-fix verification: 56 harness tests passed across six suites; clippy with
 `-D warnings`, formatting, and `git diff --check` all passed.
+
+## Convergence review (2026-07-12)
+
+**Verdict**: Approve
+**Review weight**: standard, risk-escalated to Deep fresh-context (carried from
+the bounce review).
+**Reviewer context**: cross-model — Z.AI GLM 5.2 fresh-context review of an
+OpenAI-host run (different model class).
+
+**Blockers**: none. **Important**: none.
+
+Each receiver-confirmed finding from the bounce review (`6c58e476`) is resolved
+and re-verified against the actual code and substrate state:
+
+### Ownership blocker — resolved and durable
+
+Commit `3119913c` extends the active `epic-expanded-harness-support-registry-cli`
+story so the seam elimination is no longer aspirational. Verified directly:
+
+- Its `Units` now include "Final compatibility-seam removal across
+  `crates/harnesses/`": migrate `bootstrap.rs`, `lib.rs`, `lifecycle.rs`;
+  drop `NativeLifecycleRequest.harness` after CLI callers select the adapter;
+  remove `HarnessKind` compatibility wrappers; migrate
+  `crates/harnesses/tests/{bootstrap,detection,lifecycle_scope}.rs`.
+- Its `Implementation notes` state: "This story owns the final `HarnessKind`
+  compatibility-seam removal across both CLI consumers and harnesses-crate
+  producers/tests. … this integration story must leave
+  `git grep -n \"HarnessKind\" crates/` empty."
+- Its `Acceptance criteria` add two new durable checks: (a)
+  `git grep -n "HarnessKind" crates/` returns no matches after CLI and
+  harnesses producer/test migration; (b) `NativeLifecycleRequest` no longer
+carries
+  a `HarnessKind` field.
+
+Every previously-unowned site — `bootstrap.rs` production dispatch
+(`if target == HarnessKind::Codex`, per-harness `unsupported_next_action`),
+the lifecycle request field, the `lib.rs` seam and `detect_*`/
+`select_profile` wrappers, and the three harnesses integration test files —
+now has a named owner with acceptance that fires before the parent feature
+can roll up. Parent feature Unit 2 acceptance at line 442 still carries
+`git grep -n "HarnessKind" crates/` returns no matches, so the parent
+roll-up independently re-enforces zero matches even if the CLI story's own
+checks were weakened. The three-way approval test is met: the seam preserves
+behavior, its elimination is explicitly and safely owned by an active story,
+and parent acceptance still enforces zero matches.
+
+The intentionally staged seam is not elevated to a blocker. It exists solely
+so this story's intermediate commit stays independently compilable —
+confirmed by `cargo check -p skilltap-harnesses -p skilltap-core` succeeding
+while `cargo check --workspace` fails only inside `crates/cli/src/`
+(consuming the removed `HarnessPolicyMap.{codex,claude}` fields and
+`HarnessKind` consumers). Removing the seam here would force this story to
+land the CLI migration it explicitly defers, racing the registry-cli story.
+
+### Contract extensions — acknowledged and justified
+
+The new "Approved contract extensions and deviations" section documents both
+post-approval trait additions with their semantic rationale:
+
+- `HarnessAdapter::decode_version_with_limits(stdout, limits)`: preserves
+  the prior strict-JSON boundary's caller-supplied `JsonLimits`, which the
+  approved `decode_version(stdout)` signature could not reproduce; default
+  delegates to `decode_version`, so text-only adapters and existing
+  implementations remain source-compatible.
+- `NativeLifecycleVector::observation_scope(&Scope) -> Option<CapabilityScope>`:
+  keeps Claude's native `user`/`local` scope evidence adapter-owned and
+  scope-safe (Codex returns `None`). Without it, `lifecycle.rs::
+  resource_observation` would either reintroduce a Claude string/enum branch
+  or accept a same-name resource from the wrong scope.
+
+Both are bounded interface additions required to relocate existing boundary
+semantics, not new product behavior. The contract story's review did not
+anticipate them, but the implementation notes now make the deviation explicit
+and traceable. No further contract-amendment stride is warranted: the
+additions are minimal, default-safe where possible, and behavior-preserving.
+
+### Lifecycle precedence — resolved and pinned
+
+`CodexLifecycle::arguments` (codex.rs lines 96–104) restores the original
+`native_arguments` ordering: `validate_native_request` →
+`PluginUpdate => UnsupportedAction` → `Project(_) => UnsupportedProjectScope`.
+The regression test `adapters::codex::tests::
+plugin_update_is_rejected_before_project_scope` constructs
+`Codex + PluginUpdate + Project` and asserts `UnsupportedAction`. The case
+was previously uncovered; it is now pinned.
+
+### Verification reproduced
+
+- `cargo test -p skilltap-harnesses` → 56 passed (6 suites).
+- Focused run of
+  `adapters::codex::tests::plugin_update_is_rejected_before_project_scope`
+  → 1 passed.
+- `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings` → clean.
+- `cargo fmt -p skilltap-harnesses -- --check` → clean.
+- `cargo check -p skilltap-harnesses -p skilltap-core` → clean; workspace
+  `cargo check` failures confined to `crates/cli/src/` (expected
+  registry-cli integration seam).
+
+### Byte-equivalence re-confirmed
+
+Capability matrices (`Codex = compiled_capabilities(false, false)`,
+`Claude = compiled_capabilities(true, true)`), exact known/unknown profile
+ids, version decoder (control-char rejection, `\n`/`\r` strip,
+`is_single_version_token`, strict-JSON path with caller limits), Claude
+lifecycle argv including the `MarketplaceUpdate` skips-`--scope` special case,
+canonical observation roots, instruction bridges, and skill projection
+destinations remain byte-equivalent to the pre-migration behavior.
+
+### Notes
+
+- The temporary `HarnessKind` seam and `NativeLifecycleRequest.harness` field
+  are the load-bearing intermediate-state surface. They are owned by
+  `registry-cli`; this story must not be re-opened for them.
+- The contract story (`registry-contract`) remains `done`; the two approved
+  trait extensions live in its deliverable file but are documented here as
+  the justifying story. No retrospective edit to the contract story's review
+  is required — the deviation is now traceable from this body.
+
+**Outcome**: story advances `review → done`. Parent feature
+`epic-expanded-harness-support-registry` remains `implementing` (sibling
+stories still nonterminal).
