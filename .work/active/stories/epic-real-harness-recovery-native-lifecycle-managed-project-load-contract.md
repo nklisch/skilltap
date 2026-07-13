@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-load-contract
 kind: story
-stage: review
+stage: done
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -145,3 +145,16 @@ managed operation's harness unreachable; that fallout is not duplicated here.
 **Notes**: The effective skill/MCP load contract, Git acquisition, partial
 disclosure, source-independent removal, and clean-path rollback behavior pass
 on cumulative main. The remaining journal-boundary mismatch prevents approval.
+
+## Review (2026-07-12, blocker closure)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: `730faf2` closes the sole journal-boundary blocker while preserving
+the previously reviewed effective skill/MCP projections, bounded Git/local
+acquisition, partial disclosure, source-independent removal, and transactional
+publication behavior. Full workspace tests and strict Clippy pass.

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics
 kind: feature
-stage: implementing
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on:
@@ -423,3 +423,20 @@ pub struct PluginRemoveArgs {
 - **Aggregation risk:** deduplicating by code alone could remove materially
   distinct instructions. Exact value equality and first-seen order avoid that
   loss.
+
+## Children complete (2026-07-12)
+
+All direct stories are terminal; the feature advanced through review.
+
+## Review (2026-07-12, bounded final pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep aggregate review. Per-target state, actionable
+update counts, dual-native widening, exact output normalization, and typed
+post-mutation diagnostics satisfy the feature contract. Focused output/native
+tests, the full workspace suite, and strict Clippy pass.

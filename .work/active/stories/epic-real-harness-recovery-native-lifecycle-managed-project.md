@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: [epic-real-harness-recovery-native-lifecycle-managed-project-load-contract]
@@ -170,3 +170,16 @@ source shape, but update/remove require exact prior component identity.
 strict Clippy, and diff checks. This parent remains implementing until the one
 exact state-publication recovery blocker is fixed with the journal-produced
 fixture shape.
+
+## Review (2026-07-12, blocker closure)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: The final integrated blocker is resolved by writer-shaped Pending
+attempt evidence and exact recovery in `730faf2`. The cumulative managed Codex
+project lifecycle now passes its isolated compiled coverage, the full workspace
+suite, and strict Clippy without cache or operator-root mutation.

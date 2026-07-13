@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -80,3 +80,19 @@ recovery predicate accepts rather than the representation the journal emits.
 - Direct journal tests exercise the real writer-produced first-install and
   update shapes, validate recovery, and prove terminal NoChange publishes the
   desired binding. The fabricated compiled state rewrite was removed.
+
+## Review (2026-07-12, bounded final pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep correctness review of commit `730faf2`. The
+production journal writes distinct attempted evidence for both first install
+and update without replacing confirmed evidence; recovery requires the exact
+operation, fingerprint, projection manifest, revision, target, and scope. A
+terminal `Applied` or `NoChange` refresh promotes the desired binding and
+clears Pending. The writer-shaped focused regression, full workspace suite,
+and strict workspace Clippy pass.

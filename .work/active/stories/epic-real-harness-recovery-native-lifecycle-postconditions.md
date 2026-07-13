@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-postconditions
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -82,3 +82,16 @@ proved the retry mutation; no operator configuration was read or written.
 - Every prior lifecycle attempt is freshly observed before retry. Desired state becomes a journaled no-op, opposite state permits one mutation, and indeterminate state remains mutation-free.
 - Verified no-op evidence is re-observed by the native port under the configuration lock before `NoChange` is journaled, closing the planning-to-apply race.
 - Isolated regressions cover install and removal recovery, opposite-state retry, mutation counts, journal transitions, and a deliberate revalidation race.
+
+## Review (2026-07-12, blocker closure)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: The retry-safety blocker is closed and remains green alongside the
+managed Pending recovery change. Typed postconditions, failure journaling,
+locked no-op revalidation, and plain/JSON recovery diagnostics pass the focused
+native-postcondition target and full workspace suite.

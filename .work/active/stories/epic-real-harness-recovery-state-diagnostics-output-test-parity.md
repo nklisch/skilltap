@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-output-test-parity
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -49,3 +49,15 @@ behavior.
 - Tests changed: every typed failure now asserts the error code, one top-level `reobserve_before_retry` command, no nested duplicate, and failed-state/no-applied safety.
 - Discrepancies from design: none.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12, bounded final pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: All nine native-postcondition tests preserve typed error and
+state-safety assertions while rendering the exact recovery action once at the
+top level. Full workspace tests and strict Clippy pass.

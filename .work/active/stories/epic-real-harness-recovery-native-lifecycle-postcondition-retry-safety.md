@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-postcondition-retry-safety
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -57,3 +57,16 @@ presence already holds.
 - Tests added: recovered install/remove no-op, opposite-state single retry, indeterminate no-mutation, and under-lock observation race coverage.
 - Discrepancies from design: native failed-attempt bindings are retained as recovery evidence while managed projection seeds remain success-only; this preserves the ownership safety introduced by the managed projection work.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12, bounded final pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Cumulative retry behavior remains exact after `730faf2`: recovered
+desired state is reobserved under lock and journaled as no-change, opposite
+state permits one mutation, and indeterminate state stays mutation-free. All
+nine isolated native-postcondition tests and the full workspace suite pass.

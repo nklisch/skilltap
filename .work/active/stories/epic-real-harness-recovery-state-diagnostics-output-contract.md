@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-output-contract
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing, documentation]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -105,3 +105,16 @@ focused test target is red on its stale nested-action assertion.
 - The typed postcondition regression now asserts one canonical top-level recovery action and no duplicate nested copy.
 - Typed error codes, state-safety assertions, distinct-action preservation, and plain/JSON parity remain covered.
 - The complete native postcondition target and workspace suite pass.
+
+## Review (2026-07-12, blocker closure)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: The stale-test blocker is closed. Exact one-copy recovery actions,
+typed nested error codes, first-seen ordering, distinct-action preservation,
+exit-class stability, and multi-target/all-scope plain/JSON parity all pass in
+the focused and full suites.

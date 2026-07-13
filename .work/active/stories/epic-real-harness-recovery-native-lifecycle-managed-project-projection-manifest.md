@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest
 kind: story
-stage: review
+stage: done
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -103,3 +103,16 @@ Clippy pass, and source-independent removal, old-versus-new cleanup, exact
 omissions, Git/local isolation, schema conflict rejection, cache non-mutation,
 and bounded rollback reporting are sound. The blocker is a direct mismatch
 between the journal writer, recovery predicate, and its fixture.
+
+## Review (2026-07-12, blocker closure)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: The sole final blocker is closed by the exact Pending-attempt model
+in `730faf2`. Cumulative manifest reconciliation, source-independent removal,
+omission evidence, drift protection, and rollback coverage remain green in the
+full workspace suite and strict Clippy.

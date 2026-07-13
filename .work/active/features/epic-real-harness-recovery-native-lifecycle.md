@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle
 kind: feature
-stage: implementing
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: [epic-real-harness-recovery-runtime-boundary]
@@ -366,3 +366,20 @@ pub fn verify_lifecycle_postcondition(
 - **Partial native success:** a command can mutate successfully and then become
   unobservable. Preserve the attention result without claiming success or
   automatically undoing a change whose final native state is unknown.
+
+## Children complete (2026-07-12)
+
+All direct stories are terminal; the feature advanced through review.
+
+## Review (2026-07-12, bounded final pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep aggregate review. Native vectors, scope-aware
+presence, managed Codex project projections, postcondition retry safety, and
+exact journal recovery are complete and mutually consistent. Full workspace
+tests and strict Clippy pass in isolated roots.
