@@ -48,6 +48,16 @@ pub(super) fn write_tree(
         let identity = require_regular(&file)?;
         verify_at(parent.as_raw_fd(), &name, identity)?;
         file.write_all(artifact.contents())?;
+        cvt(unsafe {
+            libc::fchmod(
+                file.as_raw_fd(),
+                if artifact.is_executable() {
+                    0o700
+                } else {
+                    0o600
+                },
+            )
+        })?;
         file.sync_all()?;
         if require_regular(&file)? != identity {
             return Err(io::Error::other(

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-executable-intent
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -58,3 +58,15 @@ and destination drift checks.
 **Nits**: none
 
 **Notes**: Substrate review at the project-default `standard` weight using a fresh-context deep lane for the security-sensitive filesystem boundary. Commit `a8084ab` correctly carries typed executable intent through observation, fingerprints, storage, drift, and whole-directory projections, and the full workspace suite is green under the ordinary test umask. The missing descriptor-relative exact-mode normalization remains a correctness blocker; formatting and all-target/all-feature clippy are otherwise green.
+
+## Bounce resolution (2026-07-12)
+
+- The open artifact descriptor is normalized with `fchmod` to exactly `0700`
+  or `0600` after content is written and before it is synced and identity-checked.
+  No path reopen or followable metadata operation was introduced.
+- A restrictive-umask regression runs in an isolated single-test child process,
+  restores the prior umask with an unwind-safe guard, and proves exact modes,
+  typed reload, and unchanged repeat behavior.
+- The focused directory-tree tests, full workspace suite, formatting check, and
+  all-target/all-feature Clippy pass. The blocker is ready for re-review through
+  `epic-real-harness-recovery-filesystem-instructions-umask-independent-modes`.

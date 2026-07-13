@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-umask-independent-modes
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -44,3 +44,28 @@ private owner permissions promised by the artifact contract.
   path.
 - Publication failure remains fail-closed and cleans only the proven owned
   destination.
+
+## Implementation notes
+
+- Execution capability: direct inline implementation; the change is narrowly
+  owned by the descriptor-relative publication boundary but security-sensitive.
+- Review weight: standard (project default), with full workspace verification
+  after the focused restrictive-umask regression.
+- Files changed: `crates/core/src/runtime/filesystem/directory_tree/tree_io.rs`
+  and its colocated tests.
+- Tests added: isolated single-test child execution under umask `0777`, exact
+  `0600`/`0700` assertions, typed reload, and unchanged repeat behavior; the
+  existing publication test now also asserts the repeat is an immutable
+  `AlreadyExists` outcome.
+- Discrepancies from design: the regression invokes `write_tree` against a
+  pre-opened fixture directory so owner execute bits can be stripped from file
+  creation without also making newly created parent directories inaccessible.
+  The production path remains the complete `publish_tree` cleanup pipeline.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo test -p skilltap-core 'runtime::filesystem::directory_tree::tests::' -- --nocapture`
+- `cargo fmt --all -- --check`
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`

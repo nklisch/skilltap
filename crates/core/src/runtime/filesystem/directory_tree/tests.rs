@@ -2,10 +2,12 @@
 
 use std::{
     collections::BTreeMap,
+    env,
     ffi::CString,
     fs::{self, File},
     io,
     os::unix::fs::{FileTypeExt, PermissionsExt},
+    process::Command,
 };
 
 use skilltap_test_support::TempRoot;
@@ -28,7 +30,10 @@ fn publication_normalizes_file_modes_and_loading_preserves_only_executable_inten
         ),
     ]);
 
-    publish_tree(&managed, &destination, &files).unwrap();
+    assert!(matches!(
+        publish_tree(&managed, &destination, &files).unwrap(),
+        DirectoryPublishOutcome::Published(_)
+    ));
     let root = temporary.join("managed/artifact");
     assert_eq!(
         fs::metadata(root.join("SKILL.md"))
@@ -48,6 +53,109 @@ fn publication_normalizes_file_modes_and_loading_preserves_only_executable_inten
     );
     let (_, loaded) = load_tree(&managed, &destination).unwrap();
     assert_eq!(loaded, files);
+
+    assert_eq!(
+        publish_tree(&managed, &destination, &files).unwrap(),
+        DirectoryPublishOutcome::AlreadyExists
+    );
+    assert_eq!(
+        fs::metadata(root.join("SKILL.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o600
+    );
+    assert_eq!(
+        fs::metadata(root.join("scripts/run"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o700
+    );
+}
+
+#[test]
+fn descriptor_publication_normalizes_modes_under_a_restrictive_umask() {
+    const CHILD_MARKER: &str = "SKILLTAP_RESTRICTIVE_UMASK_TEST_CHILD";
+
+    if env::var_os(CHILD_MARKER).is_none() {
+        let status = Command::new(env::current_exe().unwrap())
+            .args([
+                "descriptor_publication_normalizes_modes_under_a_restrictive_umask",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env(CHILD_MARKER, "1")
+            .status()
+            .unwrap();
+        assert!(status.success(), "restrictive-umask child test failed");
+        return;
+    }
+
+    struct UmaskGuard(libc::mode_t);
+
+    impl Drop for UmaskGuard {
+        fn drop(&mut self) {
+            unsafe {
+                libc::umask(self.0);
+            }
+        }
+    }
+
+    let temporary = TempRoot::new("skilltap-restrictive-umask-test").unwrap();
+    let root = temporary.join("artifact");
+    fs::create_dir(&root).unwrap();
+    let directory = File::open(&root).unwrap();
+    let files = BTreeMap::from([
+        (
+            RelativeArtifactPath::new("SKILL.md").unwrap(),
+            ArtifactFile::new(b"guidance".to_vec(), false),
+        ),
+        (
+            RelativeArtifactPath::new("run").unwrap(),
+            ArtifactFile::new(b"#!/bin/sh\n".to_vec(), true),
+        ),
+    ]);
+
+    {
+        let _umask = UmaskGuard(unsafe { libc::umask(0o777) });
+        write_tree(&directory, &files).unwrap();
+    }
+
+    assert_eq!(
+        fs::metadata(root.join("SKILL.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o600
+    );
+    assert_eq!(
+        fs::metadata(root.join("run")).unwrap().permissions().mode() & 0o7777,
+        0o700
+    );
+    let mut loaded = BTreeMap::new();
+    read_tree(&directory, None, &mut loaded).unwrap();
+    assert_eq!(loaded, files);
+
+    assert_eq!(
+        write_tree(&directory, &files).unwrap_err().kind(),
+        io::ErrorKind::AlreadyExists
+    );
+    assert_eq!(
+        fs::metadata(root.join("SKILL.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o600
+    );
+    assert_eq!(
+        fs::metadata(root.join("run")).unwrap().permissions().mode() & 0o7777,
+        0o700
+    );
 }
 
 #[test]
