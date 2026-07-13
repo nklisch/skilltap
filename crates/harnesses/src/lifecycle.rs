@@ -47,6 +47,30 @@ pub enum NativeObservationFailure {
     AmbiguousScope,
 }
 
+impl NativeObservationFailure {
+    pub const fn diagnostic_code(self) -> &'static str {
+        match self {
+            Self::CommandFailed => "native_observation_command_failed",
+            Self::InvalidJson => "native_observation_invalid_json",
+            Self::UnsupportedShape => "native_observation_unsupported_shape",
+            Self::AmbiguousScope => "native_observation_ambiguous_scope",
+        }
+    }
+
+    pub const fn summary(self) -> &'static str {
+        match self {
+            Self::CommandFailed => "The native list command returned a nonzero status.",
+            Self::InvalidJson => "The native list command returned invalid JSON.",
+            Self::UnsupportedShape => {
+                "The native list command returned an unsupported JSON shape."
+            }
+            Self::AmbiguousScope => {
+                "The native list command did not identify one unambiguous requested scope."
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum LifecyclePostconditionError {
     ObservationFailed(NativeObservationFailure),
@@ -595,25 +619,7 @@ fn lifecycle_postcondition_failure(error: LifecyclePostconditionError) -> Execut
 }
 
 fn native_observation_failure(failure: NativeObservationFailure) -> ExecutionError {
-    let (code, detail) = match failure {
-        NativeObservationFailure::CommandFailed => (
-            "native.observation.command_failed",
-            "The native list command failed after mutation.",
-        ),
-        NativeObservationFailure::InvalidJson => (
-            "native.observation.invalid_json",
-            "The native list command returned invalid JSON after mutation.",
-        ),
-        NativeObservationFailure::UnsupportedShape => (
-            "native.observation.unsupported_shape",
-            "The native list command returned an unsupported JSON shape after mutation.",
-        ),
-        NativeObservationFailure::AmbiguousScope => (
-            "native.observation.ambiguous_scope",
-            "The native list command did not identify one unambiguous requested scope after mutation.",
-        ),
-    };
-    native_postcondition_failure(code, detail)
+    native_postcondition_failure(failure.diagnostic_code(), failure.summary())
 }
 
 fn native_postcondition_failure(code: &'static str, detail: &'static str) -> ExecutionError {
