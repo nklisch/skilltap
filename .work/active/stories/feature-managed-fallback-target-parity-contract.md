@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract
 kind: story
-stage: drafting
+stage: implementing
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: []
