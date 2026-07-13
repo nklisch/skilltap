@@ -1,7 +1,7 @@
 ---
 id: gate-tests-managed-project-publication-failures
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -71,3 +71,10 @@ implementation, and the rollback residual reporting code re-observes restored
 surfaces rather than assuming success. The correctly qualified focused test
 passes. Security was limited to the changed filesystem/state seams; no public
 CLI, schema, or foundation-doc change was introduced by this story.
+
+## Review resolution
+
+- The state-boundary case now snapshots `state.json` immediately before the
+  injected pending write failure and requires exact byte equality afterward.
+- The existing retry still performs one real publication and its immediate
+  repeat remains a no-op.

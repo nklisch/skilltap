@@ -633,6 +633,10 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
         }
         assert_eq!(add.result, ResultClass::Completed, "{add:?}");
 
+        let state_before_failure = matches!(boundary, Boundary::State).then(|| {
+            fs::read(Path::new(paths.skilltap_config().as_str()).join("state.json")).unwrap()
+        });
+
         match boundary {
             Boundary::Tree => managed_filesystem.fail_next_tree_publish(),
             Boundary::Config => managed_filesystem.fail_next_confined_write("config.toml"),
@@ -657,6 +661,13 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
             !project.join(".codex/config.toml").exists(),
             "boundary={boundary:?} outcome={failed:?}"
         );
+        if let Some(state_before_failure) = state_before_failure {
+            assert_eq!(
+                fs::read(Path::new(paths.skilltap_config().as_str()).join("state.json")).unwrap(),
+                state_before_failure,
+                "the failed pending-state publication must preserve the exact prior state document"
+            );
+        }
         if matches!(boundary, Boundary::Config) {
             assert!(
                 format!("{failed:?}").contains("Rollback restored every prior surface"),
