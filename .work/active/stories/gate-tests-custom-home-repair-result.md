@@ -1,7 +1,7 @@
 ---
 id: gate-tests-custom-home-repair-result
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -34,3 +34,14 @@ attention-required.
 ## Verification
 
 - `cargo test -p skilltap --test instruction_bridges custom_codex_home_uses_and_validates_the_effective_canonical_target -- --exact --nocapture`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate review at effective weight `standard` (caller), Standard lane because the assertions cover a custom-home path contract. The tightened test now rejects the former ambiguous exit, proves the successful repair reports `completed`, and proves the immediate repeat is an exit-0 no-op. The exact isolated test passes in a detached clean worktree; no production or foundation-doc change was introduced by this item.
