@@ -1,5 +1,13 @@
 # Changelog
 
+## v3.0.3
+
+### Fixes
+
+- Make managed-project lifecycle tests honor their disabled-observation fixture
+  mode, eliminating accidental dependence on a developer-installed Codex binary
+  while preserving production post-mutation observation.
+
 ## v3.0.2
 
 ### Features
