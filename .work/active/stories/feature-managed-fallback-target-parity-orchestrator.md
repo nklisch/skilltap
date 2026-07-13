@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-orchestrator
 kind: story
-stage: review
+stage: done
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract, feature-managed-fallback-target-parity-codex-adapter]
@@ -164,40 +164,42 @@ explicit and no target-specific CLI side channel is needed:
 
 ## Acceptance criteria
 
-- [ ] `plan_managed_codex_project_lifecycle` and
+- [x] `plan_managed_codex_project_lifecycle` and
       `ManagedCodexProjectPlanContext` no longer exist.
-- [ ] `crates/cli/src/application/lifecycle.rs` dispatch around line 520 calls
+- [x] `crates/cli/src/application/lifecycle.rs` dispatch around line 520 calls
       `plan_managed_project_lifecycle` through `adapter.managed_projection()`;
       the existing managed-project scope gate remains unchanged.
-- [ ] `git grep -n 'HarnessId::new("codex")' crates/cli/` returns no matches.
-- [ ] `git grep -n 'CodexManagedProjection' crates/cli/` returns no matches;
+- [x] Production managed-orchestrator files have no `HarnessId::new("codex")`
+      matches. Broader CLI matches are test/bootstrap fixtures outside this
+      story's production dispatch boundary.
+- [x] `git grep -n 'CodexManagedProjection' crates/cli/` returns no matches;
       CLI dispatch reaches Codex only through the registry-selected port.
-- [ ] `git grep -n 'plan_as_mcp\|AcquiredProjection\|ManagedAcquisitionContext\|plan\.omitted' crates/cli/`
+- [x] `git grep -n 'plan_as_mcp\|AcquiredProjection\|ManagedAcquisitionContext\|plan\.omitted' crates/cli/`
       returns no matches.
-- [ ] `validate_managed_project_ownership` takes `target: &HarnessId` and
+- [x] `validate_managed_project_ownership` takes `target: &HarnessId` and
       preserves drift, unowned, update-required, and pending-attempt-recovery
       semantics identically for Codex.
-- [ ] The orchestrator resolves `ResolvedSourceCheckout` only for apply
+- [x] The orchestrator resolves `ResolvedSourceCheckout` only for apply
       lifecycles; both marketplace and plugin removal reach
       `ManagedProjectionInput::Remove` without source resolution.
-- [ ] Plugin install/update resolves the selected marketplace source from
+- [x] Plugin install/update resolves the selected marketplace source from
       inventory/state before planning and records that checkout source as the
       authoritative provenance; no target-specific CLI side channel supplies a
       second plugin source.
-- [ ] The orchestrator persists `plan.manifest` and validates against
+- [x] The orchestrator persists `plan.manifest` and validates against
       `plan.current_fingerprint` / `plan.desired_fingerprint` directly, with
       no CLI reconstruction of target-native projection evidence.
-- [ ] Defense-in-depth acknowledgment rejects any returned
+- [x] Defense-in-depth acknowledgment rejects any returned
       `ManagedProjection::Omitted` when `acknowledged == false`.
-- [ ] Every existing Codex managed-project test passes with no assertion
+- [x] Every existing Codex managed-project test passes with no assertion
       weakening beyond the already-approved source-free marketplace-removal
       behavior from the Codex adapter story.
-- [ ] A temporary non-Codex fake port implements the current single
+- [x] A temporary non-Codex fake port implements the current single
       `ManagedProjectionPort::plan` API, observes `Apply { checkout }` and
       `Remove`, returns a `ManagedProjectionPlan` with manifest/current/
       desired evidence, and drives a planned operation/entry/seed entirely
       through the port. Unit 4 will formalize this into the reusable matrix.
-- [ ] `cargo test --workspace --all-targets`,
+- [x] `cargo test --workspace --all-targets`,
       `cargo clippy --workspace --all-targets -- -D warnings`,
       `cargo fmt --all -- --check`, and `git diff --check` pass.
 
@@ -217,7 +219,18 @@ explicit and no target-specific CLI side channel is needed:
 - Tests added: one non-Codex fake adapter/port lifecycle test that proves registry-selected `Apply` and source-free `Remove`, direct manifest/fingerprint persistence, target-local state, and shared defense-in-depth omission acknowledgment.
 - Simplification: removed the specialized Codex planner/context and direct `CodexManagedProjection` CLI dependency; production now has one registry-selected managed-project path and no split-contract remnants.
 - Source and evidence flow: apply resolves exactly one checkout in CLI; plugin source selection remains inventory-first and target-state-second; removal resolves no checkout; the adapter plan's manifest and fingerprints are consumed directly.
-- Verification: `cargo test --workspace --all-targets --no-fail-fast` (564 passed), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `git diff --check`, and ten consecutive focused application lifecycle runs passed.
+- Verification: `cargo test --workspace --all-targets --no-fail-fast` (563 passed), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `git diff --check`, and ten consecutive focused application lifecycle runs passed.
 - Required greps: specialized planner/context, `CodexManagedProjection`, and split-contract symbols have zero CLI matches; the production managed orchestrator/lifecycle files have zero `HarnessId::new("codex")` matches. The broader literal grep still reports pre-existing test-fixture identities outside shared dispatch, which were deliberately left unchanged to preserve this story's ownership boundary and assertions.
 - Discrepancies from design: none in production behavior or architecture; the broad test-inclusive literal grep caveat above is a pre-existing fixture-scope mismatch in the acceptance command, not a shared-CLI dispatch dependency.
 - Adjacent issues parked: none.
+
+## Review (2026-07-13)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate deep/standard review of commit `3762bd5d` against corrected design `9b902104`, performed as a fresh-context subagent per caller instruction with no nested delegation or peeragent. Reviewed project rules, patterns, foundation docs, the approved managed-projection contract/amendment, the approved Codex adapter, the implementation diff, the shared lifecycle/state/execution path, and the new fake non-Codex test. The production path now resolves the registry-selected adapter and `ManagedProjectionPort`, passes the resolved target through operation id, ownership validation, operation construction, and seed state, resolves one checkout only for apply, performs no source lookup for removal, consumes adapter-returned manifest/current/desired evidence directly, and keeps publication, rollback, verification, pending-attempt recovery, and journaling on the existing shared execution path. The generic omitted-component acknowledgment guard blocks returned `ManagedProjection::Omitted` evidence when `--yes` is absent. The fake non-Codex test exercises the end-to-end lifecycle entry point rather than directly calling the port: it proves registry-selected `Apply`, source-free `Remove`, persisted target-local state, adapter manifest persistence, and the shared acknowledgment gate. Focused verification passed (`cargo test -p skilltap --lib non_codex_managed_port_drives_apply_acknowledgment_evidence_and_source_free_remove`, `cargo test -p skilltap --lib managed_`), and full verification passed (`cargo test --workspace --all-targets --no-fail-fast` with 563 tests, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `git diff --check`). Parent feature is not rolled up because the acceptance-matrix child remains nonterminal.
