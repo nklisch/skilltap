@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract-evidence
 kind: story
-stage: review
+stage: done
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract]
@@ -403,3 +403,16 @@ unambiguous before becoming a public cross-crate contract.
 - Any change to `ManagedProjection` / `PendingManagedAttempt` /
   `TargetResourceState` state shape or `STATE_SCHEMA_VERSION`.
 - Claude managed-project lifecycle changes.
+
+## Review (2026-07-13)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate deep review at standard weight for public core/harnesses contract risk, performed inline per caller instruction with no nested delegation. Reviewed foundation and harness contracts, the approved base contract, the Codex adapter implementation discovery, and implementation diff `73c5ac4e..68eb2fe4`. The amended contract is ready for the Codex adapter and shared orchestrator: `ResolvedSourceCheckout` carries one authoritative source/root/revision bundle; `ManagedProjectionInput::Apply` cannot carry a second marketplace source; `ManagedProjectionInput::Remove` carries no checkout; `ManagedProjectionPlan` carries the complete `ManagedProjection` manifest plus current/desired aggregate fingerprints; removed split-acquisition public types and parallel omission state are gone; `ManagedProjectionPort` remains object-safe; harness reexports are updated; `HarnessAdapter::managed_projection()` remains absent by default and Codex still does not override it. No target-specific Codex codec or path leakage was introduced into core.
+
+Focused verification run: `cargo test -p skilltap-core --lib` (332 passed), `cargo test -p skilltap-harnesses --lib` (26 passed), `cargo check --workspace`, `cargo clippy -p skilltap-core -p skilltap-harnesses --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `git diff --check`, residual removed-symbol grep for `OmittedComponent|AcquiredProjection|ManagedAcquisitionContext`, duplicate-source grep over core/harnesses, and Codex override grep. All passed; only unrelated update-resolution `revision_resolver` test-local names remain. Parent feature is not rolled up because downstream sibling stories remain nonterminal.
