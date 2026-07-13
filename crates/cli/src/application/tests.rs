@@ -333,3 +333,43 @@ fn daemon_noop_normalization_requires_clean_safe_operations() {
     normalize_daemon_noop_result(&mut pending, 1, 1);
     assert_eq!(pending.result, ResultClass::AttentionRequired);
 }
+
+#[test]
+fn detection_diagnostics_are_typed_actionable_and_source_free() {
+    let cases = [
+        (
+            DetectionError::Runtime(
+                skilltap_core::runtime::ObservationRuntimeError::ExecutableNotFound,
+            ),
+            "native_executable_not_found",
+            "configure_harness_binary",
+        ),
+        (
+            DetectionError::InvalidVersion,
+            "native_version_invalid",
+            "inspect_harness_version",
+        ),
+        (
+            DetectionError::NonZeroExit,
+            "native_version_command_failed",
+            "inspect_harness_version",
+        ),
+        (
+            DetectionError::Runtime(
+                skilltap_core::runtime::ObservationRuntimeError::ProcessDeadlineExceeded,
+            ),
+            "native_detection_bounded",
+            "inspect_harness_version",
+        ),
+    ];
+
+    for (error, warning_code, action_code) in cases {
+        let diagnostic = detection_diagnostic(&error, "codex");
+        assert_eq!(diagnostic.warning.code, warning_code);
+        assert_eq!(diagnostic.next_action.code, action_code);
+        let rendered = format!("{:?}{:?}", diagnostic.warning, diagnostic.next_action);
+        assert!(!rendered.contains("secret-native-output"));
+        assert!(!rendered.contains("argv"));
+        assert!(!rendered.contains("environment"));
+    }
+}

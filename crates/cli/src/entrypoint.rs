@@ -20,6 +20,7 @@ use crate::{
     Renderer, ResultClass,
     application::{
         NativeLifecycleKind, NativeObservationMode, SkillInstallRequest, StatusApplication,
+        detection_diagnostic,
     },
     command::{
         AdoptArgs, BootstrapArgs, Cli, HarnessChangeArgs, HarnessEnableArgs, OutputArgs, PlanArgs,
@@ -515,17 +516,30 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                     .map_err(|_| ())
                     .and_then(|id| ConfiguredBinary::path_lookup(id).map_err(|_| ()))
             };
-            match configured.and_then(|configured| {
-                detect_configured_installation(
-                    kind,
-                    configured,
-                    search_path.clone(),
-                    &native_environment,
-                    process_limits,
-                    json_limits,
-                )
-                .map_err(|_| ())
-            }) {
+            let configured = match configured {
+                Ok(configured) => configured,
+                Err(()) => {
+                    entry = entry.with_field("reachable", false);
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        crate::Warning::new(
+                            "invalid_harness_binary",
+                            "The configured harness binary is invalid.",
+                        )
+                        .with_context("harness", id),
+                    );
+                    outcome = outcome.with_resource(entry);
+                    continue;
+                }
+            };
+            match detect_configured_installation(
+                kind,
+                configured,
+                search_path.clone(),
+                &native_environment,
+                process_limits,
+                json_limits,
+            ) {
                 Ok(installation) => {
                     if let HarnessReachability::Reachable { native_version, .. } =
                         installation.reachability()
@@ -557,16 +571,13 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                         }
                     }
                 }
-                Err(_) => {
+                Err(error) => {
                     entry = entry.with_field("reachable", false);
                     outcome.result = ResultClass::AttentionRequired;
-                    outcome = outcome.with_warning(
-                        crate::Warning::new(
-                            "native_detection_failed",
-                            "The configured harness could not be detected.",
-                        )
-                        .with_context("harness", id),
-                    );
+                    let diagnostic = detection_diagnostic(&error, id);
+                    outcome = outcome
+                        .with_warning(diagnostic.warning)
+                        .with_next_action(diagnostic.next_action);
                 }
             }
             outcome = outcome.with_resource(entry);

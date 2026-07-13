@@ -54,12 +54,66 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    CanonicalObservation, GitSourceRevisionResolver, HarnessKind, NativeLifecycleAction,
-    NativeLifecyclePort, NativeLifecycleRequest, NativeResourcePresence,
+    CanonicalObservation, DetectionError, GitSourceRevisionResolver, HarnessKind,
+    NativeLifecycleAction, NativeLifecyclePort, NativeLifecycleRequest, NativeResourcePresence,
     ObservedNativeRevisionResolver, detect_configured_installation, native_arguments,
     normalize_observations, observe_claude_canonical_resources, observe_codex_canonical_resources,
     observe_native_resource, select_profile,
 };
+
+pub(super) struct DetectionDiagnostic {
+    pub(super) warning: Warning,
+    pub(super) next_action: NextAction,
+}
+
+pub(super) fn detection_diagnostic(error: &DetectionError, harness: &str) -> DetectionDiagnostic {
+    use skilltap_core::runtime::ObservationRuntimeError;
+
+    let (code, summary, action_code, action_summary, command) = match error {
+        DetectionError::InvalidVersion => (
+            "native_version_invalid",
+            "The harness returned an invalid version response.",
+            "inspect_harness_version",
+            "Inspect the harness version response and configure a supported binary.",
+            format!("{harness} --version"),
+        ),
+        DetectionError::NonZeroExit => (
+            "native_version_command_failed",
+            "The harness version command returned a nonzero status.",
+            "inspect_harness_version",
+            "Run the harness version command directly and resolve its failure.",
+            format!("{harness} --version"),
+        ),
+        DetectionError::Runtime(ObservationRuntimeError::ExecutableNotFound) => (
+            "native_executable_not_found",
+            "The configured harness executable was not found.",
+            "configure_harness_binary",
+            "Configure an installed harness executable and retry.",
+            format!("skilltap harness enable {harness} --binary <path>"),
+        ),
+        DetectionError::Runtime(
+            ObservationRuntimeError::ProcessDeadlineExceeded
+            | ObservationRuntimeError::ProcessOutputLimitExceeded { .. },
+        ) => (
+            "native_detection_bounded",
+            "Harness detection exceeded a safety limit.",
+            "inspect_harness_version",
+            "Run the harness version command directly and resolve the bounded failure.",
+            format!("{harness} --version"),
+        ),
+        DetectionError::Runtime(_) => (
+            "native_detection_runtime_failed",
+            "The configured harness could not be started or inspected safely.",
+            "inspect_harness_binary",
+            "Inspect the configured harness executable and retry.",
+            format!("skilltap harness enable {harness} --binary <path>"),
+        ),
+    };
+    DetectionDiagnostic {
+        warning: Warning::new(code, summary).with_context("harness", harness),
+        next_action: NextAction::new(action_code, action_summary).with_command(command),
+    }
+}
 
 use crate::{
     ErrorDetail, NextAction, Outcome, OutputEntry, OutputScope, OutputValue, ResultClass, Warning,

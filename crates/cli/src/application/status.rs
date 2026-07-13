@@ -393,6 +393,9 @@ impl StatusProjection<'_> {
         for warning in observation.warnings.iter().cloned() {
             outcome = outcome.with_warning(warning);
         }
+        for action in observation.next_actions.iter().cloned() {
+            outcome = outcome.with_next_action(action);
+        }
         for entry in update_entries {
             outcome = outcome.with_resource(entry);
         }
@@ -497,6 +500,7 @@ pub(super) struct NativeObservation {
     pub(super) failed_targets: usize,
     pub(super) native_entries: usize,
     pub(super) environment: Option<skilltap_core::domain::ObservedEnvironment>,
+    pub(super) next_actions: Vec<NextAction>,
 }
 
 impl NativeObservation {
@@ -518,6 +522,7 @@ impl NativeObservation {
                     failed_targets: targets.iter().len() * scope.resolved.len(),
                     native_entries: 0,
                     environment: None,
+                    next_actions: Vec::new(),
                 };
             }
         };
@@ -543,6 +548,7 @@ impl NativeObservation {
                     failed_targets: targets.iter().len() * scope.resolved.len(),
                     native_entries: 0,
                     environment: None,
+                    next_actions: Vec::new(),
                 };
             }
         };
@@ -596,20 +602,16 @@ impl NativeObservation {
                 json_limits,
             ) {
                 Ok(installation) => installation,
-                Err(_error) => {
+                Err(error) => {
                     result.failed_targets += scope.resolved.len();
                     result.resources.extend(scope.resolved.iter().map(|scope| {
                         OutputEntry::new(observation_id(target, scope), "unreachable")
                             .with_field("harness", target.as_str())
                             .with_field("scope", scope_label(scope))
                     }));
-                    result.warnings.push(
-                        Warning::new(
-                            "native_detection_failed",
-                            "The configured harness could not be detected.",
-                        )
-                        .with_context("harness", target.as_str()),
-                    );
+                    let diagnostic = detection_diagnostic(&error, target.as_str());
+                    result.warnings.push(diagnostic.warning);
+                    result.next_actions.push(diagnostic.next_action);
                     continue;
                 }
             };
@@ -981,16 +983,13 @@ pub(crate) fn first_use_harness_report(
                         .with_field("version", native_version.as_str());
                 }
             }
-            Err(_error) => {
+            Err(error) => {
                 entry.status = "unreachable".to_owned();
                 entry = entry.with_field("reachable", false);
-                outcome = outcome.with_warning(
-                    Warning::new(
-                        "native_detection_failed",
-                        "The known harness could not be detected during first-use status.",
-                    )
-                    .with_context("harness", harness),
-                );
+                let diagnostic = detection_diagnostic(&error, harness);
+                outcome = outcome
+                    .with_warning(diagnostic.warning)
+                    .with_next_action(diagnostic.next_action);
             }
         }
         outcome = outcome.with_resource(entry);
