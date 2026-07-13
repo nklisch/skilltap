@@ -1,7 +1,7 @@
 ---
 id: gate-tests-managed-terminal-journal-recovery
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -86,3 +86,25 @@ changed in this story.
 - The update must change the skill projection fingerprint while preserving the
   MCP projection, and each recovered binding must equal its pending manifest
   exactly.
+
+## Re-review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep re-review at effective `standard` weight (explicit
+caller selection), performed in same-harness fresh context over follow-up commit
+`34d301c`. Before recovery equality is checked, each pending manifest is
+independently constrained to exactly two strictly sorted projections:
+`skill:demo` followed by `mcp:demo-docs`. The update must change the skill
+projection fingerprint while preserving the MCP projection, and recovered
+bindings must equal the corresponding pending evidence exactly. Git revisions,
+pending/confirmed separation, publication counters, and immediate repeat
+no-ops remain asserted for install and update. The test reaches these states
+only through the public application lifecycle with fail-on-terminal-write
+storage, so the promotion assertions are not direct-state or constructor
+tautologies. The correctly qualified focused test ran one test and passed.
