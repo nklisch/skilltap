@@ -66,12 +66,13 @@ canonical plugin publication is live. The active sibling `../skills`
 development repository is unrelated to this retirement and must not be
 archived or modified by this feature.
 
-The website and the one-line installer are equal first-class installation
-surfaces with the native plugin marketplaces. The installer downloads and
-verifies the current binary, detects installed Claude Code and Codex binaries,
-and invokes the same self-setup flow to install or repair the skilltap skill
-and plugin resources that those harnesses can load. Detection never implies
-that a harness is enabled for ordinary skilltap reconciliation.
+Native plugin marketplaces are the primary distribution surface. The verified
+one-line installer and Homebrew are direct binary alternatives when the plugin
+flow cannot provide an executable. The installer downloads and verifies the
+current binary, detects installed Claude Code and Codex binaries, and invokes
+the same bootstrap flow to report or repair resources those harnesses can
+load. Detection never implies that a harness is enabled for ordinary skilltap
+reconciliation.
 
 Help and error output are part of this distribution contract. Every public
 command and leaf command exposes concise, non-interactive help with its

@@ -5,7 +5,7 @@ stage: done
 tags: [correctness, testing, architecture]
 parent: null
 depends_on: []
-release_binding: null
+release_binding: 3.0.2
 research_refs:
   - .research/analysis/briefs/harness-adapter-candidates-2026-07-12.md
 research_origin: null

@@ -14,11 +14,12 @@ observed rather than assumed:
   or symlink bridge to the project's `AGENTS.md`.
 
 The configured Claude bridge mode is either a symlink to the canonical file or
-an import shim containing `@AGENTS.md`. Use `instructions status` to inspect
-the effective paths and `instructions setup`/`repair` only after reviewing the
-plan. A divergent native file, effective Codex override, broken link, or
-unexpected owner is drift. skilltap reports it and preserves user-authored
-content; an agent must not replace it silently.
+an import shim. Global import mode contains `@~/AGENTS.md`; project import mode
+contains `@AGENTS.md`. Use `instructions status` to inspect the effective paths
+and `instructions setup`/`repair` only after reviewing the plan. A divergent
+native file, effective Codex override, broken link, or unexpected owner is
+drift. skilltap reports it and preserves user-authored content; an agent must
+not replace it silently.
 
 Global and project scopes are independent. A project bridge does not make a
 shared repository policy or ask collaborators to install skilltap. Explain

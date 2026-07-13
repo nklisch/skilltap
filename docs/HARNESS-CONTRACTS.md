@@ -191,7 +191,13 @@ Native global installation uses `codex plugin add` only when the verified
 compiled profile grants that scoped operation and runtime evidence has not
 narrowed it.
 
-When Codex lacks an explicit project-scoped install operation, a project plugin may be represented through a managed project marketplace and a managed plugin directory. This is materialization, not a native marketplace installation, and provenance reflects that distinction.
+When Codex lacks an explicit project-scoped install operation, skilltap may
+own a project marketplace registration and project complete plugin skills into
+`<project>/.agents/skills/` plus portable MCP definitions into
+`<project>/.codex/config.toml`. Those effective destinations are verified
+fresh after mutation. A copied plugin directory is not installation evidence;
+the marketplace registration and each projected load surface retain separate
+ownership evidence.
 
 Plugin caches are read only for observation, provenance, and drift detection.
 

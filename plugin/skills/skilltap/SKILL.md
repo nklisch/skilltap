@@ -13,9 +13,13 @@ recommend skills, plugins, or marketplaces.
 
 ## Start with the user's intent
 
-- First-time setup or a missing binary: run `skilltap bootstrap --help`, then
-  `skilltap bootstrap`. Treat the binary result and each harness result as
-  separate facts; Codex may report an unsupported native plugin-install path.
+- First-time setup: first check whether `skilltap` is available. If it is
+  missing, explain that the plugin does not bundle an executable and use the
+  verified installer from `https://skilltap.dev/install.sh` (or Homebrew) only
+  with the user's authorization. After the binary exists, run `skilltap
+  bootstrap --help`, then `skilltap bootstrap`. Treat the binary result and
+  each harness result as separate facts; Codex may report an unsupported
+  native plugin-install path.
 - “What is wrong?” or a health check: run `skilltap status --help`, then
   `skilltap status --json` when structured output is useful.
 - Existing native resources should become managed: use `skilltap adopt` after
