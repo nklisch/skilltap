@@ -19,7 +19,7 @@ use skilltap_core::{
     },
 };
 
-use crate::HarnessKind;
+use crate::NativeLifecycleVector;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeLifecycleAction {
@@ -78,11 +78,41 @@ pub enum LifecyclePostconditionError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NativeLifecycleRequest {
-    pub harness: HarnessKind,
     pub action: NativeLifecycleAction,
     pub scope: Scope,
     pub name: NativeId,
     pub source: Option<SourceLocator>,
+}
+
+/// Binds one semantic lifecycle request to the exact registered adapter that
+/// owns its target-specific argv and scope-observation contract.
+#[derive(Clone)]
+pub struct NativeLifecycleDispatch {
+    target: HarnessId,
+    lifecycle: &'static dyn NativeLifecycleVector,
+    request: NativeLifecycleRequest,
+}
+
+impl NativeLifecycleDispatch {
+    pub fn new(
+        target: HarnessId,
+        lifecycle: &'static dyn NativeLifecycleVector,
+        request: NativeLifecycleRequest,
+    ) -> Self {
+        Self {
+            target,
+            lifecycle,
+            request,
+        }
+    }
+
+    pub fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub fn request(&self) -> &NativeLifecycleRequest {
+        &self.request
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -125,14 +155,9 @@ impl From<ObservationRuntimeError> for NativeLifecycleError {
 /// caller still owns executable resolution, profile authority, bounded
 /// execution, and post-mutation observation; this function never shells out.
 pub fn native_arguments(
-    request: &NativeLifecycleRequest,
+    dispatch: &NativeLifecycleDispatch,
 ) -> Result<Vec<OsString>, NativeLifecycleError> {
-    request
-        .harness
-        .adapter()
-        .native_lifecycle()
-        .ok_or(NativeLifecycleError::UnsupportedAction)?
-        .arguments(request)
+    dispatch.lifecycle.arguments(&dispatch.request)
 }
 
 pub(crate) fn validate_native_request(
@@ -158,18 +183,18 @@ pub fn run_native_lifecycle(
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     environment: &BTreeMap<OsString, OsString>,
-    request: &NativeLifecycleRequest,
+    dispatch: &NativeLifecycleDispatch,
     limits: ProcessLimits,
 ) -> Result<NativeProcessOutput, NativeLifecycleError> {
     let executable = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
-    let working_directory = match &request.scope {
+    let working_directory = match &dispatch.request.scope {
         Scope::Global => None,
         Scope::Project(path) => Some(path.clone()),
     };
     Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable,
-        native_arguments(request)?,
+        native_arguments(dispatch)?,
         environment.clone(),
         working_directory,
         limits,
@@ -182,17 +207,17 @@ pub fn run_native_lifecycle(
 pub fn run_native_lifecycle_bound(
     executable: &ExecutableIdentity,
     environment: &BTreeMap<OsString, OsString>,
-    request: &NativeLifecycleRequest,
+    dispatch: &NativeLifecycleDispatch,
     limits: ProcessLimits,
 ) -> Result<NativeProcessOutput, NativeLifecycleError> {
     SystemExecutableResolver.revalidate(executable)?;
-    let working_directory = match &request.scope {
+    let working_directory = match &dispatch.request.scope {
         Scope::Global => None,
         Scope::Project(path) => Some(path.clone()),
     };
     Ok(SystemNativeProcessRunner.run(&NativeProcessRequest::new(
         executable.clone(),
-        native_arguments(request)?,
+        native_arguments(dispatch)?,
         environment.clone(),
         working_directory,
         limits,
@@ -208,10 +233,11 @@ pub fn observe_native_resource(
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     environment: &BTreeMap<OsString, OsString>,
-    request: &NativeLifecycleRequest,
+    dispatch: &NativeLifecycleDispatch,
     process_limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
 ) -> Result<NativeResourceObservation, NativeLifecycleError> {
+    let request = dispatch.request();
     let executable = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(configured, search_path))?;
     let output = SystemNativeProcessRunner.run(&NativeProcessRequest::new(
@@ -237,7 +263,7 @@ pub fn observe_native_resource(
             ));
         }
     };
-    Ok(resource_observation(decoded.value(), request))
+    Ok(resource_observation(decoded.value(), dispatch))
 }
 
 pub fn verify_lifecycle_postcondition(
@@ -297,8 +323,9 @@ fn native_list_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
 
 fn resource_observation(
     value: &serde_json::Value,
-    request: &NativeLifecycleRequest,
+    dispatch: &NativeLifecycleDispatch,
 ) -> NativeResourceObservation {
+    let request = dispatch.request();
     const LIST_FIELDS: &[&str] = &["plugins", "marketplaces", "installed", "resources", "items"];
     const IDENTITY_FIELDS: &[&str] = &["name", "id", "plugin", "marketplace", "qualifiedName"];
 
@@ -380,12 +407,7 @@ fn resource_observation(
             );
         }
     };
-    let native_lifecycle = request
-        .harness
-        .adapter()
-        .native_lifecycle()
-        .expect("compatibility target has a lifecycle adapter");
-    let Some(expected_scope) = native_lifecycle.observation_scope(&request.scope) else {
+    let Some(expected_scope) = dispatch.lifecycle.observation_scope(&request.scope) else {
         return if entries
             .iter()
             .any(|entry| entry.identity == request.name.as_str())
@@ -439,7 +461,7 @@ struct NativeLifecycleEntry {
     search_path: Option<OsString>,
     limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
-    request: NativeLifecycleRequest,
+    dispatch: NativeLifecycleDispatch,
 }
 
 impl NativeLifecyclePort {
@@ -447,13 +469,17 @@ impl NativeLifecyclePort {
         configured: ConfiguredBinary,
         search_path: Option<OsString>,
         limits: ProcessLimits,
-        requests: impl IntoIterator<Item = (OperationId, NativeLifecycleRequest)>,
+        requests: impl IntoIterator<Item = (OperationId, NativeLifecycleDispatch)>,
     ) -> Self {
-        Self::new_per_operation(
-            requests.into_iter().map(|(id, request)| {
-                (id, configured.clone(), search_path.clone(), limits, request)
-            }),
-        )
+        Self::new_per_operation(requests.into_iter().map(|(id, dispatch)| {
+            (
+                id,
+                configured.clone(),
+                search_path.clone(),
+                limits,
+                dispatch,
+            )
+        }))
     }
 
     pub fn new_per_operation(
@@ -463,14 +489,14 @@ impl NativeLifecyclePort {
                 ConfiguredBinary,
                 Option<OsString>,
                 ProcessLimits,
-                NativeLifecycleRequest,
+                NativeLifecycleDispatch,
             ),
         >,
     ) -> Self {
         Self {
             entries: entries
                 .into_iter()
-                .map(|(id, configured, search_path, limits, request)| {
+                .map(|(id, configured, search_path, limits, dispatch)| {
                     (
                         id,
                         NativeLifecycleEntry {
@@ -479,7 +505,7 @@ impl NativeLifecyclePort {
                             limits,
                             json_limits: skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
                                 .expect("static lifecycle JSON limits are valid"),
-                            request,
+                            dispatch,
                         },
                     )
                 })
@@ -496,7 +522,7 @@ impl NativeLifecyclePort {
                 ConfiguredBinary,
                 Option<OsString>,
                 ProcessLimits,
-                NativeLifecycleRequest,
+                NativeLifecycleDispatch,
             ),
         >,
         environment: BTreeMap<OsString, OsString>,
@@ -544,11 +570,9 @@ impl ExecutionPort for NativeLifecyclePort {
                     .expect("static evidence detail is valid"),
                 ));
             };
-            if entry.request.scope != *operation.scope()
-                || !action_matches(operation.action(), entry.request.action)
-                || HarnessId::new(entry.request.harness.id())
-                    .expect("harness kind identifier is valid")
-                    != *operation.target()
+            if entry.dispatch.request.scope != *operation.scope()
+                || !action_matches(operation.action(), entry.dispatch.request.action)
+                || entry.dispatch.target != *operation.target()
             {
                 return Err(ExecutionError::revalidation(
                     EvidenceCode::new("native.request_mismatch")
@@ -564,7 +588,7 @@ impl ExecutionPort for NativeLifecyclePort {
                     entry.configured.clone(),
                     entry.search_path.clone(),
                     &self.environment,
-                    &entry.request,
+                    &entry.dispatch,
                     entry.limits,
                     entry.json_limits,
                 )
@@ -574,7 +598,7 @@ impl ExecutionPort for NativeLifecyclePort {
                         "Fresh native no-change evidence could not be re-observed under the configuration lock.",
                     )
                 })?;
-                verify_lifecycle_postcondition(entry.request.action, observation).map_err(
+                verify_lifecycle_postcondition(entry.dispatch.request.action, observation).map_err(
                     |error| match error {
                         LifecyclePostconditionError::ObservationFailed(failure) => {
                             native_noop_revalidation_failure(
@@ -616,7 +640,7 @@ impl ExecutionPort for NativeLifecyclePort {
             entry.configured.clone(),
             entry.search_path.clone(),
             &self.environment,
-            &entry.request,
+            &entry.dispatch,
             entry.limits,
         )
         .map_err(|_| native_apply_failure("The native lifecycle command could not be run."))?;
@@ -625,12 +649,12 @@ impl ExecutionPort for NativeLifecyclePort {
                 entry.configured.clone(),
                 entry.search_path.clone(),
                 &self.environment,
-                &entry.request,
+                &entry.dispatch,
                 entry.limits,
                 entry.json_limits,
             )
             .map_err(|_| native_observation_failure(NativeObservationFailure::CommandFailed))?;
-            verify_lifecycle_postcondition(entry.request.action, observation)
+            verify_lifecycle_postcondition(entry.dispatch.request.action, observation)
                 .map_err(lifecycle_postcondition_failure)?;
             Ok(OperationOutcome::Applied)
         } else {
@@ -715,40 +739,39 @@ mod tests {
     use super::*;
     use skilltap_core::domain::AbsolutePath;
 
-    fn request(
-        harness: HarnessKind,
+    fn dispatch(
+        adapter: &'static dyn crate::HarnessAdapter,
         action: NativeLifecycleAction,
         scope: Scope,
-    ) -> NativeLifecycleRequest {
-        NativeLifecycleRequest {
-            harness,
-            action,
-            scope,
-            name: NativeId::new("formatter@team").unwrap(),
-            source: Some(SourceLocator::new("https://example.invalid/team.git").unwrap()),
-        }
+    ) -> NativeLifecycleDispatch {
+        NativeLifecycleDispatch::new(
+            adapter.identity().id,
+            adapter.native_lifecycle().expect("test adapter lifecycle"),
+            NativeLifecycleRequest {
+                action,
+                scope,
+                name: NativeId::new("formatter@team").unwrap(),
+                source: Some(SourceLocator::new("https://example.invalid/team.git").unwrap()),
+            },
+        )
+    }
+
+    fn codex(action: NativeLifecycleAction, scope: Scope) -> NativeLifecycleDispatch {
+        dispatch(crate::CodexAdapter::static_ref(), action, scope)
+    }
+
+    fn claude(action: NativeLifecycleAction, scope: Scope) -> NativeLifecycleDispatch {
+        dispatch(crate::ClaudeAdapter::static_ref(), action, scope)
     }
 
     #[test]
     fn native_vectors_use_direct_arguments_and_scope_mapping() {
-        let claude = native_arguments(&request(
-            HarnessKind::Claude,
-            NativeLifecycleAction::PluginInstall,
-            Scope::Global,
-        ))
-        .unwrap();
         assert_eq!(
-            claude,
+            native_arguments(&claude(NativeLifecycleAction::PluginInstall, Scope::Global)).unwrap(),
             ["plugin", "install", "formatter@team", "--scope", "user"].map(OsString::from)
         );
-        let codex = native_arguments(&request(
-            HarnessKind::Codex,
-            NativeLifecycleAction::MarketplaceAdd,
-            Scope::Global,
-        ))
-        .unwrap();
         assert_eq!(
-            codex,
+            native_arguments(&codex(NativeLifecycleAction::MarketplaceAdd, Scope::Global)).unwrap(),
             [
                 "plugin",
                 "marketplace",
@@ -757,89 +780,63 @@ mod tests {
             ]
             .map(OsString::from)
         );
-        let claude_update = native_arguments(&request(
-            HarnessKind::Claude,
-            NativeLifecycleAction::PluginUpdate,
-            Scope::Global,
-        ))
-        .unwrap();
         assert_eq!(
-            claude_update,
+            native_arguments(&claude(NativeLifecycleAction::PluginUpdate, Scope::Global)).unwrap(),
             ["plugin", "update", "formatter@team", "--scope", "user"].map(OsString::from)
         );
-        let claude_marketplace_update = native_arguments(&request(
-            HarnessKind::Claude,
-            NativeLifecycleAction::MarketplaceUpdate,
-            Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
-        ))
-        .unwrap();
+        let project = Scope::Project(AbsolutePath::new("/tmp/project").unwrap());
         assert_eq!(
-            claude_marketplace_update,
+            native_arguments(&claude(
+                NativeLifecycleAction::MarketplaceUpdate,
+                project.clone()
+            ))
+            .unwrap(),
             ["plugin", "marketplace", "update", "formatter@team"].map(OsString::from)
         );
         assert_eq!(
-            native_list_arguments(&request(
-                HarnessKind::Claude,
-                NativeLifecycleAction::MarketplaceUpdate,
-                Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
-            )),
+            native_list_arguments(
+                claude(NativeLifecycleAction::MarketplaceUpdate, project).request()
+            ),
             ["plugin", "marketplace", "list", "--json"].map(OsString::from)
         );
         assert_eq!(
-            native_list_arguments(&request(
-                HarnessKind::Claude,
-                NativeLifecycleAction::PluginInstall,
-                Scope::Global,
-            )),
+            native_list_arguments(
+                claude(NativeLifecycleAction::PluginInstall, Scope::Global).request()
+            ),
             ["plugin", "list", "--json"].map(OsString::from)
         );
-        let codex_remove = native_arguments(&request(
-            HarnessKind::Codex,
-            NativeLifecycleAction::MarketplaceRemove,
-            Scope::Global,
-        ))
-        .unwrap();
         assert_eq!(
-            codex_remove,
+            native_arguments(&codex(
+                NativeLifecycleAction::MarketplaceRemove,
+                Scope::Global
+            ))
+            .unwrap(),
             ["plugin", "marketplace", "remove", "formatter@team"].map(OsString::from)
         );
-        assert!(matches!(
-            native_arguments(&request(
-                HarnessKind::Codex,
+        assert_eq!(
+            native_arguments(&codex(
                 NativeLifecycleAction::PluginInstall,
-                Scope::Project(AbsolutePath::new("/tmp/project").unwrap())
+                Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
             )),
             Err(NativeLifecycleError::UnsupportedProjectScope)
-        ));
+        );
         assert_eq!(
-            native_arguments(&request(
-                HarnessKind::Codex,
-                NativeLifecycleAction::PluginUpdate,
-                Scope::Global,
-            )),
+            native_arguments(&codex(NativeLifecycleAction::PluginUpdate, Scope::Global)),
             Err(NativeLifecycleError::UnsupportedAction)
         );
     }
 
     #[test]
     fn native_vectors_reject_option_like_untrusted_values() {
-        let mut name = request(
-            HarnessKind::Claude,
-            NativeLifecycleAction::PluginInstall,
-            Scope::Global,
-        );
-        name.name = NativeId::new("--help").unwrap();
+        let mut name = claude(NativeLifecycleAction::PluginInstall, Scope::Global);
+        name.request.name = NativeId::new("--help").unwrap();
         assert_eq!(
             native_arguments(&name),
             Err(NativeLifecycleError::OptionLikeArgument("name"))
         );
 
-        let mut source = request(
-            HarnessKind::Codex,
-            NativeLifecycleAction::MarketplaceAdd,
-            Scope::Global,
-        );
-        source.source = Some(SourceLocator::new("--upload-pack=evil").unwrap());
+        let mut source = codex(NativeLifecycleAction::MarketplaceAdd, Scope::Global);
+        source.request.source = Some(SourceLocator::new("--upload-pack=evil").unwrap());
         assert_eq!(
             native_arguments(&source),
             Err(NativeLifecycleError::OptionLikeArgument("source"))
@@ -848,16 +845,10 @@ mod tests {
 
     #[test]
     fn native_resource_presence_is_conservative_and_identity_bound() {
-        let request = request(
-            HarnessKind::Codex,
-            NativeLifecycleAction::PluginInstall,
-            Scope::Global,
-        );
+        let request = codex(NativeLifecycleAction::PluginInstall, Scope::Global);
         assert_eq!(
             resource_observation(
-                &serde_json::json!({
-                    "plugins": [{"name": "formatter@team"}]
-                }),
+                &serde_json::json!({"plugins": [{"name": "formatter@team"}]}),
                 &request,
             ),
             NativeResourceObservation::Present { scope: None }
@@ -888,13 +879,8 @@ mod tests {
 
     #[test]
     fn claude_presence_matches_identity_and_concrete_scope() {
-        let global = request(
-            HarnessKind::Claude,
-            NativeLifecycleAction::PluginInstall,
-            Scope::Global,
-        );
-        let project = request(
-            HarnessKind::Claude,
+        let global = claude(NativeLifecycleAction::PluginInstall, Scope::Global);
+        let project = claude(
             NativeLifecycleAction::PluginInstall,
             Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
         );
@@ -911,7 +897,6 @@ mod tests {
             resource_observation(&global_only, &project),
             NativeResourceObservation::Missing
         );
-
         let siblings = serde_json::json!({
             "plugins": [
                 {"name": "formatter@team", "scope": "user"},
@@ -934,8 +919,7 @@ mod tests {
 
     #[test]
     fn claude_scope_evidence_fails_closed_when_missing_malformed_or_duplicate() {
-        let project = request(
-            HarnessKind::Claude,
+        let project = claude(
             NativeLifecycleAction::PluginInstall,
             Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
         );
@@ -997,7 +981,7 @@ mod tests {
         assert_eq!(
             verify_lifecycle_postcondition(
                 NativeLifecycleAction::PluginRemove,
-                NativeResourceObservation::Indeterminate(NativeObservationFailure::InvalidJson,),
+                NativeResourceObservation::Indeterminate(NativeObservationFailure::InvalidJson),
             ),
             Err(LifecyclePostconditionError::ObservationFailed(
                 NativeObservationFailure::InvalidJson,

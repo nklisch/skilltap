@@ -57,12 +57,11 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    CanonicalObservation, CodexPluginGraphReader, DetectionError, GitSourceRevisionResolver,
-    HarnessKind, ManagedCodexCatalog, NativeLifecycleAction, NativeLifecyclePort,
-    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation,
-    ObservedNativeRevisionResolver, detect_configured_installation, native_arguments,
-    normalize_observations, observe_claude_canonical_resources, observe_codex_canonical_resources,
-    observe_native_resource, select_profile,
+    CodexPluginGraphReader, DetectionError, GitSourceRevisionResolver, ManagedCodexCatalog,
+    NativeLifecycleAction, NativeLifecycleDispatch, NativeLifecyclePort, NativeLifecycleRequest,
+    NativeObservationFailure, NativeResourceObservation, ObservedNativeRevisionResolver,
+    detect_configured_installation, native_arguments, normalize_observations,
+    observe_native_resource,
 };
 
 pub(super) struct DetectionDiagnostic {
@@ -166,6 +165,7 @@ pub(crate) struct StatusApplication<'a> {
     pub(crate) scopes: &'a ScopeResolver<'a>,
     pub(crate) working_directory: &'a dyn WorkingDirectory,
     pub(crate) native_observation: NativeObservationMode,
+    pub(crate) registry: &'a skilltap_harnesses::TargetRegistry,
     #[cfg(test)]
     pub(crate) test_platform_paths: Option<PlatformPaths>,
     #[cfg(test)]
@@ -331,8 +331,8 @@ impl StatusApplication<'_> {
                         "No harness is enabled in skilltap configuration.",
                     ))
                     .with_next_action(
-                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                            .with_command("skilltap harness enable <codex|claude>"),
+                        NextAction::new("enable_harness", "Enable a registered harness.")
+                            .with_command("skilltap harness enable <registered-harness>"),
                     );
             }
             Err(StatusTargetError::NotEnabled) => {
@@ -445,77 +445,100 @@ enum InstructionBridgeHealth {
 }
 
 fn instruction_locations(
+    registry: &skilltap_harnesses::TargetRegistry,
     paths: &PlatformPaths,
     scope: &Scope,
     enabled: &[HarnessId],
 ) -> (AbsolutePath, Vec<(HarnessId, AbsolutePath)>) {
-    match scope {
-        Scope::Global => {
-            let canonical = paths.global_agents().clone();
-            let mut bridges = Vec::new();
-            if enabled.iter().any(|target| target.as_str() == "codex") {
-                bridges.push((
-                    HarnessId::new("codex").expect("known harness id is valid"),
-                    AbsolutePath::new(format!("{}/AGENTS.md", paths.codex_home().as_str()))
-                        .expect("codex bridge path is valid"),
-                ));
-            }
-            if enabled.iter().any(|target| target.as_str() == "claude") {
-                bridges.push((
-                    HarnessId::new("claude").expect("known harness id is valid"),
-                    AbsolutePath::new(format!("{}/CLAUDE.md", paths.claude_home().as_str()))
-                        .expect("claude bridge path is valid"),
-                ));
-            }
-            (canonical, bridges)
-        }
-        Scope::Project(project) => {
-            let canonical = AbsolutePath::new(format!("{}/AGENTS.md", project.as_str()))
-                .expect("project canonical path is valid");
-            let bridges = if enabled.iter().any(|target| target.as_str() == "claude") {
-                vec![(
-                    HarnessId::new("claude").expect("known harness id is valid"),
-                    AbsolutePath::new(format!("{}/CLAUDE.md", project.as_str()))
-                        .expect("project Claude bridge path is valid"),
-                )]
-            } else {
-                Vec::new()
-            };
-            (canonical, bridges)
-        }
-    }
+    let canonical = match scope {
+        Scope::Global => paths.global_agents().clone(),
+        Scope::Project(project) => AbsolutePath::new(format!("{}/AGENTS.md", project.as_str()))
+            .expect("project canonical path is valid"),
+    };
+    let bridges = enabled
+        .iter()
+        .filter_map(|target| {
+            let port = registry.adapter(target)?.instruction_bridge()?;
+            let bridge = match scope {
+                Scope::Global => port.global_bridge(paths),
+                Scope::Project(project) => port.project_bridge(project),
+            }?;
+            Some((target.clone(), bridge))
+        })
+        .collect();
+    (canonical, bridges)
 }
 
-/// Resolve the materialized Claude bridge for a project using setup's
-/// nested-only preservation policy. The inventory identity remains the
-/// ordinary project bridge resource even when setup keeps `.claude/CLAUDE.md`.
+fn alternate_instruction_bridges(
+    registry: &skilltap_harnesses::TargetRegistry,
+    project: &AbsolutePath,
+    enabled: &[HarnessId],
+) -> Vec<(HarnessId, AbsolutePath, AbsolutePath)> {
+    enabled
+        .iter()
+        .filter_map(|target| {
+            let port = registry.adapter(target)?.instruction_bridge()?;
+            Some((target, port, port.project_bridge(project)?))
+        })
+        .flat_map(|(target, port, root)| {
+            port.alternate_project_bridges(project)
+                .into_iter()
+                .map(move |alternate| (target.clone(), root.clone(), alternate))
+        })
+        .collect()
+}
+
+fn is_alternate_instruction_bridge(
+    registry: &skilltap_harnesses::TargetRegistry,
+    scope: &Scope,
+    target: &HarnessId,
+    bridge: &AbsolutePath,
+) -> bool {
+    let Scope::Project(project) = scope else {
+        return false;
+    };
+    registry
+        .adapter(target)
+        .and_then(skilltap_harnesses::HarnessAdapter::instruction_bridge)
+        .is_some_and(|port| {
+            port.alternate_project_bridges(project)
+                .iter()
+                .any(|candidate| candidate == bridge)
+        })
+}
+
+/// Resolve a materialized alternative project bridge using the adapter's
+/// preservation policy. The inventory identity remains the ordinary project
+/// bridge resource even when setup keeps an alternate native location.
 fn preferred_instruction_bridge_path(
+    registry: &skilltap_harnesses::TargetRegistry,
     filesystem: &dyn FileSystem,
     scope: &Scope,
     target: &HarnessId,
     root_bridge: AbsolutePath,
 ) -> AbsolutePath {
-    if target.as_str() != "claude" {
-        return root_bridge;
-    }
     let Scope::Project(project) = scope else {
         return root_bridge;
     };
-    let nested = AbsolutePath::new(format!("{}/.claude/CLAUDE.md", project.as_str()))
-        .expect("nested project Claude bridge path is valid");
     let root_missing = filesystem
         .inspect(&root_bridge)
         .map(|metadata| metadata.kind() == FileKind::Missing)
         .unwrap_or(false);
-    let nested_present = filesystem
-        .inspect(&nested)
-        .map(|metadata| metadata.kind() != FileKind::Missing)
-        .unwrap_or(false);
-    if root_missing && nested_present {
-        nested
-    } else {
-        root_bridge
+    if !root_missing {
+        return root_bridge;
     }
+    registry
+        .adapter(target)
+        .and_then(skilltap_harnesses::HarnessAdapter::instruction_bridge)
+        .into_iter()
+        .flat_map(|port| port.alternate_project_bridges(project))
+        .find(|candidate| {
+            filesystem
+                .inspect(candidate)
+                .map(|metadata| metadata.kind() != FileKind::Missing)
+                .unwrap_or(false)
+        })
+        .unwrap_or(root_bridge)
 }
 
 fn instruction_resource_key(scope: &Scope, role: &str, target: &str) -> Option<ResourceKey> {
@@ -641,25 +664,20 @@ fn instruction_bridge_status_with_target(
 }
 
 fn skill_destination(
+    registry: &skilltap_harnesses::TargetRegistry,
     paths: &PlatformPaths,
     scope: &Scope,
     target: &HarnessId,
     destination: &skilltap_core::domain::RelativeArtifactPath,
 ) -> Option<(AbsolutePath, AbsolutePath)> {
-    let root = match (scope, target.as_str()) {
-        (Scope::Global, "codex") => {
-            AbsolutePath::new(format!("{}/.agents", paths.home().as_str())).ok()?
-        }
-        (Scope::Global, "claude") => paths.claude_home().clone(),
-        (Scope::Project(project), "codex") => {
-            AbsolutePath::new(format!("{}/.agents", project.as_str())).ok()?
-        }
-        (Scope::Project(project), "claude") => {
-            AbsolutePath::new(format!("{}/.claude", project.as_str())).ok()?
-        }
-        _ => return None,
-    };
-    let full = AbsolutePath::new(format!("{}/{}", root.as_str(), destination.as_str())).ok()?;
+    let projection = registry
+        .adapter(target)?
+        .skill_projection()?
+        .destination(paths, scope)?;
+    let root = Path::new(projection.as_str()).parent()?.to_str()?;
+    let name = destination.as_str().strip_prefix("skills/")?;
+    let root = AbsolutePath::new(root).ok()?;
+    let full = AbsolutePath::new(format!("{}/{name}", projection.as_str())).ok()?;
     Some((root, full))
 }
 
@@ -679,32 +697,39 @@ fn canonical_skill_destination(
 }
 
 fn skill_destinations(
+    registry: &skilltap_harnesses::TargetRegistry,
     paths: &PlatformPaths,
     scope: &Scope,
     targets: &HarnessSet,
     destination: &skilltap_core::domain::RelativeArtifactPath,
 ) -> Option<Vec<SkillDestination>> {
+    let native = targets
+        .iter()
+        .map(|target| {
+            skill_destination(registry, paths, scope, target, destination).map(
+                |(root, full_path)| SkillDestination {
+                    target: target.clone(),
+                    canonical: false,
+                    root,
+                    full_path,
+                },
+            )
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let (canonical_root, canonical_path) = canonical_skill_destination(paths, scope, destination)?;
     let mut destinations = Vec::new();
-    let codex_selected = targets.iter().any(|target| target.as_str() == "codex");
-    if !codex_selected {
-        let target = targets.iter().next()?.clone();
-        let (root, full_path) = canonical_skill_destination(paths, scope, destination)?;
+    if !native
+        .iter()
+        .any(|destination| destination.full_path == canonical_path)
+    {
         destinations.push(SkillDestination {
-            target,
+            target: targets.iter().next()?.clone(),
             canonical: true,
-            root,
-            full_path,
+            root: canonical_root,
+            full_path: canonical_path,
         });
     }
-    for target in targets.iter() {
-        let (root, full_path) = skill_destination(paths, scope, target, destination)?;
-        destinations.push(SkillDestination {
-            target: target.clone(),
-            canonical: false,
-            root,
-            full_path,
-        });
-    }
+    destinations.extend(native);
     Some(destinations)
 }
 
@@ -1170,9 +1195,8 @@ impl NativeLifecycleSpec {
         })
     }
 
-    fn native_request(&self, harness: HarnessKind, scope: Scope) -> NativeLifecycleRequest {
+    fn native_request(&self, scope: Scope) -> NativeLifecycleRequest {
         NativeLifecycleRequest {
-            harness,
             action: self.native_action,
             scope,
             name: self.native_name.clone(),
@@ -1206,23 +1230,38 @@ fn derive_skill_name(
     NativeId::new(segment).ok()
 }
 
-fn configured_native_profile(
-    config: &ConfigDocument,
-    target: &HarnessId,
-    scope: &Scope,
+struct NativeProfileRequest<'a> {
+    scope: &'a Scope,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
     search_path: Option<std::ffi::OsString>,
-    capability_name: &str,
-) -> Result<Option<(HarnessKind, ConfiguredBinary, NativeId, CapabilitySupport)>, DetectionError> {
-    let (harness, binary) = match target.as_str() {
-        "codex" => (HarnessKind::Codex, config.harnesses().codex.binary.as_str()),
-        "claude" => (
-            HarnessKind::Claude,
-            config.harnesses().claude.binary.as_str(),
-        ),
-        _ => return Ok(None),
+    capability_name: &'a str,
+}
+
+struct ConfiguredNativeProfile {
+    target: HarnessId,
+    lifecycle: &'static dyn skilltap_harnesses::NativeLifecycleVector,
+    configured: ConfiguredBinary,
+    executable: NativeId,
+    capability: CapabilitySupport,
+}
+
+fn configured_native_profile(
+    registry: &skilltap_harnesses::TargetRegistry,
+    config: &ConfigDocument,
+    target: &HarnessId,
+    request: NativeProfileRequest<'_>,
+) -> Result<Option<ConfiguredNativeProfile>, DetectionError> {
+    let Some(adapter) = registry.adapter(target) else {
+        return Ok(None);
     };
+    let Some(lifecycle) = adapter.native_lifecycle() else {
+        return Ok(None);
+    };
+    let Some(policy) = config.harnesses().get(target) else {
+        return Ok(None);
+    };
+    let binary = policy.binary.as_str();
     let Some(configured) = configured_binary(binary).ok() else {
         return Ok(None);
     };
@@ -1231,30 +1270,44 @@ fn configured_native_profile(
     };
     let Some(environment) = PlatformPaths::resolve(&ProcessEnvironment)
         .ok()
-        .and_then(|paths| paths.native_process_environment(search_path.clone()).ok())
+        .and_then(|paths| {
+            paths
+                .native_process_environment(request.search_path.clone())
+                .ok()
+        })
     else {
         return Ok(None);
     };
     let installation = detect_configured_installation(
-        harness,
+        adapter,
         configured.clone(),
-        search_path,
+        request.search_path,
         &environment,
-        process_limits,
-        json_limits,
+        request.process_limits,
+        request.json_limits,
     )?;
     let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
         return Ok(None);
     };
-    let profile = select_profile(harness, native_version);
-    let Some(capability_id) = CapabilityId::new(capability_name).ok() else {
+    let profile = adapter.select_profile(native_version);
+    let Some(capability_id) = CapabilityId::new(request.capability_name).ok() else {
         return Ok(None);
     };
     let capability = profile
         .mutation_capabilities()
-        .and_then(|capabilities| capabilities.for_scope(scope).support(&capability_id))
+        .and_then(|capabilities| {
+            capabilities
+                .for_scope(request.scope)
+                .support(&capability_id)
+        })
         .unwrap_or(CapabilitySupport::Unverified);
-    Ok(Some((harness, configured, executable, capability)))
+    Ok(Some(ConfiguredNativeProfile {
+        target: target.clone(),
+        lifecycle,
+        configured,
+        executable,
+        capability,
+    }))
 }
 
 fn command_arguments(arguments: Vec<std::ffi::OsString>) -> Result<Vec<CommandArgument>, ()> {
@@ -2385,6 +2438,7 @@ fn previously_applied(
 }
 
 fn lifecycle_preview_presence(
+    registry: &skilltap_harnesses::TargetRegistry,
     documents: &StatusDocuments,
     kind: ResourceKind,
     harness: &HarnessId,
@@ -2402,21 +2456,22 @@ fn lifecycle_preview_presence(
             );
         }
     };
-    let harness_kind = match harness.as_str() {
-        "codex" => HarnessKind::Codex,
-        "claude" => HarnessKind::Claude,
-        _ => {
-            return NativeResourceObservation::Indeterminate(
-                NativeObservationFailure::UnsupportedShape,
-            );
-        }
+    let Some(adapter) = registry.adapter(harness) else {
+        return NativeResourceObservation::Indeterminate(
+            NativeObservationFailure::UnsupportedShape,
+        );
     };
-    let configured = match harness_kind {
-        HarnessKind::Codex => configured_binary(documents.config.harnesses().codex.binary.as_str()),
-        HarnessKind::Claude => {
-            configured_binary(documents.config.harnesses().claude.binary.as_str())
-        }
+    let Some(lifecycle) = adapter.native_lifecycle() else {
+        return NativeResourceObservation::Indeterminate(
+            NativeObservationFailure::UnsupportedShape,
+        );
     };
+    let configured = documents
+        .config
+        .harnesses()
+        .get(harness)
+        .ok_or(())
+        .and_then(|policy| configured_binary(policy.binary.as_str()));
     let Ok(configured) = configured else {
         return NativeResourceObservation::Indeterminate(NativeObservationFailure::CommandFailed);
     };
@@ -2426,12 +2481,12 @@ fn lifecycle_preview_presence(
         );
     };
     let request = NativeLifecycleRequest {
-        harness: harness_kind,
         action,
         scope: scope.clone(),
         name,
         source: None,
     };
+    let dispatch = NativeLifecycleDispatch::new(harness.clone(), lifecycle, request);
     let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
         .expect("bounded lifecycle process limits are valid");
     let json_limits =
@@ -2447,7 +2502,7 @@ fn lifecycle_preview_presence(
         configured,
         search_path,
         &environment,
-        &request,
+        &dispatch,
         process_limits,
         json_limits,
     )
@@ -2769,14 +2824,7 @@ fn storage_error(error: &StorageError) -> ErrorDetail {
 }
 
 fn enabled_harnesses(config: &ConfigDocument) -> Vec<HarnessId> {
-    [
-        ("codex", config.harnesses().codex.enabled),
-        ("claude", config.harnesses().claude.enabled),
-    ]
-    .into_iter()
-    .filter(|(_, enabled)| *enabled)
-    .map(|(name, _)| HarnessId::new(name).expect("known harness identifier"))
-    .collect()
+    config.harnesses().enabled().cloned().collect()
 }
 
 fn output_scope(requested: &ScopeArgument, resolved: &[Scope]) -> OutputScope {

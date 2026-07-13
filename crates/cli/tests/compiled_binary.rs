@@ -38,10 +38,33 @@ fn machine() -> IsolatedMachine {
     IsolatedMachine::new("skilltap-compiled-cli").expect("create isolated machine")
 }
 
-fn fake_harness(machine: &IsolatedMachine, profile: &FakeHarnessProfile) -> FakeNativeProcess {
-    profile
-        .build(machine.working_directory(), FakeNativeMode::VersionKnown)
-        .expect("build isolated fake harness")
+struct InstalledFakeHarness {
+    _fixture: FakeNativeProcess,
+    executable: PathBuf,
+}
+
+impl InstalledFakeHarness {
+    fn executable(&self) -> &Path {
+        &self.executable
+    }
+}
+
+fn fake_harness(machine: &IsolatedMachine, profile: &FakeHarnessProfile) -> InstalledFakeHarness {
+    // Executable resolution canonicalizes symlinks. Publish the profile's
+    // ordinary alias so the sealed wrapper still finds its sibling behavior
+    // file after canonicalization.
+    let fixture = profile
+        .builder(FakeNativeMode::VersionKnown)
+        .build()
+        .expect("build isolated fake harness");
+    let destination = machine.working_directory().join(profile.id());
+    let executable = fixture
+        .install_alias(&destination, profile.id())
+        .expect("install isolated fake harness alias");
+    InstalledFakeHarness {
+        _fixture: fixture,
+        executable,
+    }
 }
 
 fn binary() -> std::path::PathBuf {
@@ -184,6 +207,10 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
     assert_code(&version, 0);
     assert_eq!(stdout(&version).trim(), format!("skilltap {VERSION}"));
     assert!(version.stderr.is_empty());
+
+    let root_help = run(&machine, &["--help"]);
+    assert_code(&root_help, 0);
+    assert!(stdout(&root_help).contains("Registered harnesses: codex|claude"));
 
     for arguments in [
         vec!["--help"],
@@ -394,20 +421,15 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
     assert_code(&plain, 1);
     assert!(plain.stdout.is_empty());
     let plain_error = stderr(&plain);
-    assert!(plain_error.contains("boundary  skilltap status"));
-    assert!(plain_error.contains("skilltap status --help"));
-    assert!(!plain_error.contains("pi"));
+    assert!(plain_error.contains("Code: target_not_registered"));
+    assert!(plain_error.contains("harness  pi"));
 
     let json_output = run(&machine, &["status", "--target", "pi", "--json"]);
     assert_code(&json_output, 1);
     let value = json(&json_output);
     assert_eq!(value["command"], "status");
-    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap status");
-    assert_eq!(
-        value["next_actions"][0]["command"],
-        "skilltap status --help"
-    );
-    assert!(!stdout(&json_output).contains("pi"));
+    assert_eq!(value["errors"][0]["code"], "target_not_registered");
+    assert_eq!(value["errors"][0]["context"]["harness"], "pi");
 
     let source = run(
         &machine,
@@ -423,6 +445,18 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
     assert_eq!(source_value["command"], "marketplace add");
     assert!(!stdout(&source).contains("user:token"));
     assert!(!stdout(&source).contains("example.invalid"));
+}
+
+#[test]
+fn unregistered_harness_is_rejected_before_state_creation() {
+    let machine = machine();
+    let result = run(&machine, &["harness", "enable", "gemini", "--json"]);
+
+    assert_code(&result, 1);
+    let value = json(&result);
+    assert_eq!(value["errors"][0]["code"], "target_not_registered");
+    assert_eq!(value["errors"][0]["context"]["harness"], "gemini");
+    assert!(!config_root(&machine).exists());
 }
 
 #[test]
@@ -4689,8 +4723,8 @@ fn json_and_plain_modes_use_stable_channels_and_exit_classes() {
     let invalid = run(&machine, &["status", "--target", "pi"]);
     assert_code(&invalid, 1);
     assert!(invalid.stdout.is_empty());
-    assert!(stderr(&invalid).contains("Code: invalid_arguments"));
-    assert!(!stderr(&invalid).contains("pi"));
+    assert!(stderr(&invalid).contains("Code: target_not_registered"));
+    assert!(stderr(&invalid).contains("harness  pi"));
 
     for arguments in [
         &["status", "--json"][..],

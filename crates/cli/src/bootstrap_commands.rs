@@ -4,7 +4,10 @@
 //! policy projection; runtime ports remain in skilltap-core.
 
 use super::*;
-pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
+pub(super) fn execute_system_bootstrap(
+    registry: &skilltap_harnesses::TargetRegistry,
+    args: &BootstrapArgs,
+) -> Outcome {
     use skilltap_core::domain::{ConfiguredBinary, TargetSelection};
     use skilltap_harnesses::{
         HarnessBootstrapPolicy, HarnessSetupResult, setup_first_party_plugin,
@@ -24,10 +27,13 @@ pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
         Ok(DocumentState::Present(value)) => value,
         Err(_) => return repository_composition_error("bootstrap"),
     };
+    if let Some(error) = config_membership_error(registry, &config) {
+        return Outcome::new("bootstrap", ResultClass::Invalid).with_error(error);
+    }
     let selected = args.target.clone().unwrap_or(TargetSelection::All);
-    let includes = |kind: HarnessKind| match &selected {
+    let includes = |target: &skilltap_core::domain::HarnessId| match &selected {
         TargetSelection::All => true,
-        TargetSelection::Only(target) => target.as_str() == kind.id(),
+        TargetSelection::Only(selected) => selected == target,
     };
     let binary = execute_binary_bootstrap(args, &paths);
     // Do not mutate native harness state when the binary boundary did not
@@ -43,21 +49,22 @@ pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
     let json_limits = skilltap_core::runtime::JsonLimits::new(128 * 1024, 32)
         .expect("bootstrap JSON limits are valid");
     let mut harness_results = Vec::new();
-    for (kind, policy) in [
-        (HarnessKind::Codex, &config.harnesses().codex),
-        (HarnessKind::Claude, &config.harnesses().claude),
-    ] {
-        if !includes(kind) {
+    for adapter in registry.first_party_targets() {
+        let harness = adapter.identity().id;
+        if !includes(&harness) {
             continue;
         }
+        let Some(policy) = config.harnesses().get(&harness) else {
+            continue;
+        };
         let configured = if std::path::Path::new(policy.binary.as_str()).is_absolute() {
             match AbsolutePath::new(policy.binary.as_str()) {
                 Ok(path) => ConfiguredBinary::absolute(path),
                 Err(_) => {
                     harness_results.push((
-                        kind,
+                        harness.clone(),
                         HarnessSetupResult::Unavailable {
-                            harness: kind,
+                            harness: harness.clone(),
                             reason: skilltap_harnesses::SetupReason::InvalidVersion,
                         },
                     ));
@@ -69,9 +76,9 @@ pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
                 Ok(binary) => binary,
                 Err(_) => {
                     harness_results.push((
-                        kind,
+                        harness.clone(),
                         HarnessSetupResult::Unavailable {
-                            harness: kind,
+                            harness: harness.clone(),
                             reason: skilltap_harnesses::SetupReason::InvalidVersion,
                         },
                     ));
@@ -103,8 +110,8 @@ pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
                 }
             },
         };
-        let result = setup_first_party_plugin(kind, &bootstrap_policy);
-        harness_results.push((kind, result));
+        let result = setup_first_party_plugin(adapter, &bootstrap_policy);
+        harness_results.push((harness, result));
     }
     compose_bootstrap_outcome(args, binary, harness_results)
 }
@@ -112,7 +119,10 @@ pub(super) fn execute_system_bootstrap(args: &BootstrapArgs) -> Outcome {
 fn compose_bootstrap_outcome(
     args: &BootstrapArgs,
     binary: BinaryBootstrapResult,
-    harness_results: Vec<(HarnessKind, skilltap_harnesses::HarnessSetupResult)>,
+    harness_results: Vec<(
+        skilltap_core::domain::HarnessId,
+        skilltap_harnesses::HarnessSetupResult,
+    )>,
 ) -> Outcome {
     use skilltap_core::domain::TargetSelection;
     use skilltap_harnesses::HarnessSetupResult;
@@ -136,10 +146,10 @@ fn compose_bootstrap_outcome(
         return outcome;
     }
     let selected = args.target.clone().unwrap_or(TargetSelection::All);
-    for (kind, result) in harness_results {
+    for (harness, result) in harness_results {
         let included = match &selected {
             TargetSelection::All => true,
-            TargetSelection::Only(target) => target.as_str() == kind.id(),
+            TargetSelection::Only(target) => target == &harness,
         };
         if !included {
             continue;
@@ -155,10 +165,10 @@ fn compose_bootstrap_outcome(
             }
             HarnessSetupResult::Failed { reason, .. } => ("failed", true, Some(reason.to_string())),
         };
-        outcome = outcome.with_resource(OutputEntry::new(kind.id(), status));
+        outcome = outcome.with_resource(OutputEntry::new(harness.as_str(), status));
         if let Some(next_action) = next_action {
             outcome = outcome.with_next_action(NextAction::new(
-                format!("bootstrap_{}", kind.id()),
+                format!("bootstrap_{}", harness.as_str()),
                 next_action,
             ));
         }
@@ -1725,16 +1735,16 @@ mod bootstrap_tests {
             completed_binary(),
             vec![
                 (
-                    skilltap_harnesses::HarnessKind::Codex,
+                    HarnessId::new("codex").unwrap(),
                     skilltap_harnesses::HarnessSetupResult::Installed {
-                        harness: skilltap_harnesses::HarnessKind::Codex,
+                        harness: HarnessId::new("codex").unwrap(),
                         version: skilltap_core::domain::NativeVersion::new("3.0.0").unwrap(),
                     },
                 ),
                 (
-                    skilltap_harnesses::HarnessKind::Claude,
+                    HarnessId::new("claude").unwrap(),
                     skilltap_harnesses::HarnessSetupResult::AlreadyPresent {
-                        harness: skilltap_harnesses::HarnessKind::Claude,
+                        harness: HarnessId::new("claude").unwrap(),
                         version: skilltap_core::domain::NativeVersion::new("3.0.0").unwrap(),
                     },
                 ),
@@ -1765,16 +1775,16 @@ mod bootstrap_tests {
             completed_binary(),
             vec![
                 (
-                    skilltap_harnesses::HarnessKind::Claude,
+                    HarnessId::new("claude").unwrap(),
                     skilltap_harnesses::HarnessSetupResult::Installed {
-                        harness: skilltap_harnesses::HarnessKind::Claude,
+                        harness: HarnessId::new("claude").unwrap(),
                         version: skilltap_core::domain::NativeVersion::new("3.0.0").unwrap(),
                     },
                 ),
                 (
-                    skilltap_harnesses::HarnessKind::Codex,
+                    HarnessId::new("codex").unwrap(),
                     skilltap_harnesses::HarnessSetupResult::Unavailable {
-                        harness: skilltap_harnesses::HarnessKind::Codex,
+                        harness: HarnessId::new("codex").unwrap(),
                         reason: skilltap_harnesses::SetupReason::NotInstalled,
                     },
                 ),

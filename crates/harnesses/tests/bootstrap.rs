@@ -1,9 +1,10 @@
 use skilltap_core::domain::{
-    AbsolutePath, ConfiguredBinary, ExecutableFileIdentity, ExecutableIdentity, HarnessId,
+    AbsolutePath, ConfiguredBinary, ExecutableFileIdentity, ExecutableIdentity,
     HarnessInstallation, HarnessReachability, NativeVersion,
 };
 use skilltap_harnesses::{
-    HarnessBootstrapPolicy, HarnessKind, HarnessSetupResult, setup_detected_plugin,
+    ClaudeAdapter, CodexAdapter, HarnessAdapter, HarnessBootstrapPolicy, HarnessSetupResult,
+    setup_detected_plugin,
 };
 use skilltap_test_support::TempRoot;
 use std::fs;
@@ -51,9 +52,9 @@ fn write_fake_claude_version(
     )
 }
 
-fn installation(target: HarnessKind) -> HarnessInstallation {
+fn installation(target: &'static dyn HarnessAdapter) -> HarnessInstallation {
     HarnessInstallation::new(
-        HarnessId::new(target.id()).unwrap(),
+        target.identity().id,
         ConfiguredBinary::absolute(AbsolutePath::new("/tmp/skilltap-fake-harness").unwrap()),
         HarnessReachability::Reachable {
             executable: ExecutableIdentity::new(
@@ -72,8 +73,8 @@ fn codex_plugin_setup_preserves_the_interactive_contract_gap() {
         None,
     );
     let result = setup_detected_plugin(
-        HarnessKind::Codex,
-        &installation(HarnessKind::Codex),
+        CodexAdapter::static_ref(),
+        &installation(CodexAdapter::static_ref()),
         &policy,
     );
     assert!(matches!(result, HarnessSetupResult::Unsupported { .. }));
@@ -85,7 +86,7 @@ fn claude_setup_uses_marketplace_then_qualified_plugin_vectors() {
     let root = TempRoot::new("harness-bootstrap").unwrap();
     let (configured, log) = write_fake_claude(&root, r#"{"marketplaces":[]}"#, r#"{"plugins":[]}"#);
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
-    let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
+    let result = skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy);
     assert!(matches!(result, HarnessSetupResult::Installed { .. }));
     let calls = fs::read_to_string(log).unwrap();
     assert!(calls.contains("plugin marketplace list --json"));
@@ -107,7 +108,7 @@ fn claude_bootstrap_presence_matrix_is_read_first_and_target_isolated() {
         r#"{"plugins":[{"id":"skilltap@skilltap","scope":"user"}]}"#,
     );
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
-    let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
+    let result = skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy);
     assert!(matches!(result, HarnessSetupResult::AlreadyPresent { .. }));
     let calls = fs::read_to_string(&log).unwrap();
     assert!(calls.lines().any(|line| line == "--version"));
@@ -136,7 +137,7 @@ fn claude_bootstrap_missing_resources_uses_exact_native_vectors() {
     let root = TempRoot::new("harness-bootstrap-missing").unwrap();
     let (configured, log) = write_fake_claude(&root, r#"{"marketplaces":[]}"#, r#"{"plugins":[]}"#);
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
-    let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
+    let result = skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy);
     assert!(matches!(result, HarnessSetupResult::Installed { .. }));
     let calls = fs::read_to_string(log).unwrap();
     assert!(
@@ -153,7 +154,7 @@ fn malformed_or_unknown_native_lists_block_mutation_and_codex_stays_unsupported(
     let root = TempRoot::new("harness-bootstrap-malformed").unwrap();
     let (configured, log) = write_fake_claude(&root, "{malformed", r#"{"plugins":[]}"#);
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
-    let result = skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy);
+    let result = skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy);
     assert!(matches!(
         result,
         HarnessSetupResult::Failed {
@@ -166,8 +167,8 @@ fn malformed_or_unknown_native_lists_block_mutation_and_codex_stays_unsupported(
     assert!(!calls.contains("plugin install"));
 
     let codex = setup_detected_plugin(
-        HarnessKind::Codex,
-        &installation(HarnessKind::Codex),
+        CodexAdapter::static_ref(),
+        &installation(CodexAdapter::static_ref()),
         &HarnessBootstrapPolicy::skilltap(
             ConfiguredBinary::absolute(AbsolutePath::new("/tmp/fake-codex").unwrap()),
             None,
@@ -188,7 +189,7 @@ fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
     );
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
     assert!(matches!(
-        skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy),
+        skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy),
         HarnessSetupResult::Unavailable {
             reason: skilltap_harnesses::SetupReason::InvalidVersion,
             ..
@@ -204,7 +205,7 @@ fn malformed_version_is_invalid_and_unknown_version_narrows_capabilities() {
     );
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
     assert!(matches!(
-        skilltap_harnesses::setup_first_party_plugin(HarnessKind::Claude, &policy),
+        skilltap_harnesses::setup_first_party_plugin(ClaudeAdapter::static_ref(), &policy),
         HarnessSetupResult::Unsupported { .. }
     ));
     let calls = fs::read_to_string(log).unwrap();
@@ -222,7 +223,7 @@ fn executable_replacement_after_detection_blocks_native_mutation() {
     let root = TempRoot::new("harness-bootstrap-replacement").unwrap();
     let (configured, log) = write_fake_claude(&root, r#"{"marketplaces":[]}"#, r#"{"plugins":[]}"#);
     let installation = skilltap_harnesses::detect_configured_installation(
-        HarnessKind::Claude,
+        ClaudeAdapter::static_ref(),
         configured.clone(),
         None,
         &std::collections::BTreeMap::new(),
@@ -244,7 +245,7 @@ fn executable_replacement_after_detection_blocks_native_mutation() {
     fs::remove_file(original).unwrap();
 
     let policy = HarnessBootstrapPolicy::skilltap(configured, None);
-    let result = setup_detected_plugin(HarnessKind::Claude, &installation, &policy);
+    let result = setup_detected_plugin(ClaudeAdapter::static_ref(), &installation, &policy);
     assert!(matches!(result, HarnessSetupResult::Failed { .. }));
     let calls = fs::read_to_string(log).unwrap();
     assert!(!calls.contains("marketplace add"));

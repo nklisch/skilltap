@@ -86,6 +86,22 @@ impl HarnessAdapter for CodexAdapter {
     fn skill_projection(&self) -> Option<&dyn SkillProjectionPort> {
         Some(&SKILLS)
     }
+
+    fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
+        Some(paths.codex_home().clone())
+    }
+
+    fn managed_project_lifecycle(&self) -> bool {
+        true
+    }
+
+    fn bootstrap_next_action(&self) -> Option<&'static str> {
+        Some(self.bootstrap_capability_next_action())
+    }
+
+    fn bootstrap_capability_next_action(&self) -> &'static str {
+        "Run the documented Codex plugin flow, or use the standalone skill under `.agents/skills/skilltap/`; skilltap will not write Codex caches."
+    }
 }
 
 impl NativeLifecycleVector for CodexLifecycle {
@@ -174,12 +190,9 @@ mod tests {
     use skilltap_core::domain::{NativeId, SourceLocator};
 
     use super::*;
-    use crate::HarnessKind;
-
     #[test]
     fn plugin_update_is_rejected_before_project_scope() {
         let request = NativeLifecycleRequest {
-            harness: HarnessKind::Codex,
             action: NativeLifecycleAction::PluginUpdate,
             scope: Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
             name: NativeId::new("formatter@team").unwrap(),

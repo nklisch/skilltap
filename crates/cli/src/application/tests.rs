@@ -17,7 +17,7 @@ use skilltap_core::{
     },
     storage::{
         ConfigDocument, ConfigRepository, FileConfigRepository, FileInventoryRepository,
-        FileStateRepository, HarnessPolicies, HarnessPolicy, StateRepository,
+        FileStateRepository, StateRepository,
     },
 };
 use skilltap_test_support::TempRoot;
@@ -314,22 +314,11 @@ fn enable_codex_only(paths: &PlatformPaths) {
     let defaults = ConfigDocument::defaults();
     repository
         .replace(
-            &ConfigDocument::new(
-                defaults.schema(),
-                HarnessPolicies {
-                    codex: HarnessPolicy {
-                        enabled: true,
-                        binary: defaults.harnesses().codex.binary.clone(),
-                    },
-                    claude: HarnessPolicy {
-                        enabled: false,
-                        binary: defaults.harnesses().claude.binary.clone(),
-                    },
-                },
-                defaults.instructions().clone(),
-                defaults.updates().clone(),
-            )
-            .unwrap(),
+            &defaults
+                .with_harness_enabled(&HarnessId::new("codex").unwrap(), true)
+                .unwrap()
+                .with_harness_enabled(&HarnessId::new("claude").unwrap(), false)
+                .unwrap(),
         )
         .unwrap();
 }
@@ -471,6 +460,7 @@ fn execute_managed_lifecycle(
     let working_directory = FixedWorkingDirectory(absolute(project));
     let git = NoGitRoot;
     let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    let registry = skilltap_harnesses::TargetRegistry::canonical();
     StatusApplication {
         config: &config,
         inventory: &inventory,
@@ -478,6 +468,7 @@ fn execute_managed_lifecycle(
         scopes: &scopes,
         working_directory: &working_directory,
         native_observation: NativeObservationMode::Disabled,
+        registry: &registry,
         test_platform_paths: Some(paths.clone()),
         test_managed_project_filesystem: Some(managed_filesystem),
     }
@@ -1042,6 +1033,7 @@ fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outc
     let working_directory = FixedWorkingDirectory(cwd);
     let git = NoGitRoot;
     let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    let registry = skilltap_harnesses::TargetRegistry::canonical();
     StatusApplication {
         config: &config,
         inventory: &inventory,
@@ -1049,6 +1041,7 @@ fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outc
         scopes: &scopes,
         working_directory: &working_directory,
         native_observation: NativeObservationMode::Disabled,
+        registry: &registry,
         test_platform_paths: None,
         test_managed_project_filesystem: None,
     }
@@ -1092,22 +1085,11 @@ fn enable_all_harnesses(root: &std::path::Path) {
     let filesystem = SystemFileSystem;
     let repository = FileConfigRepository::new(&filesystem, absolute(root)).unwrap();
     let defaults = ConfigDocument::defaults();
-    let enabled = ConfigDocument::new(
-        defaults.schema(),
-        HarnessPolicies {
-            codex: HarnessPolicy {
-                enabled: true,
-                binary: defaults.harnesses().codex.binary.clone(),
-            },
-            claude: HarnessPolicy {
-                enabled: true,
-                binary: defaults.harnesses().claude.binary.clone(),
-            },
-        },
-        defaults.instructions().clone(),
-        defaults.updates().clone(),
-    )
-    .unwrap();
+    let enabled = defaults
+        .with_harness_enabled(&HarnessId::new("codex").unwrap(), true)
+        .unwrap()
+        .with_harness_enabled(&HarnessId::new("claude").unwrap(), true)
+        .unwrap();
     repository.replace(&enabled).unwrap();
 }
 
@@ -1176,22 +1158,11 @@ fn zero_enabled_harnesses_requires_attention_without_panicking() {
     let filesystem = SystemFileSystem;
     let repository = FileConfigRepository::new(&filesystem, absolute(&root)).unwrap();
     let defaults = ConfigDocument::defaults();
-    let disabled = ConfigDocument::new(
-        defaults.schema(),
-        HarnessPolicies {
-            codex: HarnessPolicy {
-                enabled: false,
-                binary: defaults.harnesses().codex.binary.clone(),
-            },
-            claude: HarnessPolicy {
-                enabled: false,
-                binary: defaults.harnesses().claude.binary.clone(),
-            },
-        },
-        defaults.instructions().clone(),
-        defaults.updates().clone(),
-    )
-    .unwrap();
+    let disabled = defaults
+        .with_harness_enabled(&HarnessId::new("codex").unwrap(), false)
+        .unwrap()
+        .with_harness_enabled(&HarnessId::new("claude").unwrap(), false)
+        .unwrap();
     repository.replace(&disabled).unwrap();
     let cwd = AbsolutePath::new(std::env::current_dir().unwrap().to_str().unwrap()).unwrap();
 
@@ -1239,22 +1210,11 @@ fn explicit_disabled_target_is_invalid_and_actionable() {
     let filesystem = SystemFileSystem;
     let repository = FileConfigRepository::new(&filesystem, absolute(&root)).unwrap();
     let defaults = ConfigDocument::defaults();
-    let config = ConfigDocument::new(
-        defaults.schema(),
-        HarnessPolicies {
-            codex: HarnessPolicy {
-                enabled: true,
-                binary: defaults.harnesses().codex.binary.clone(),
-            },
-            claude: HarnessPolicy {
-                enabled: false,
-                binary: defaults.harnesses().claude.binary.clone(),
-            },
-        },
-        defaults.instructions().clone(),
-        defaults.updates().clone(),
-    )
-    .unwrap();
+    let config = defaults
+        .with_harness_enabled(&HarnessId::new("codex").unwrap(), true)
+        .unwrap()
+        .with_harness_enabled(&HarnessId::new("claude").unwrap(), false)
+        .unwrap();
     repository.replace(&config).unwrap();
     let mut args = status_args(ScopeArgs::default());
     args.target.target = Some(skilltap_core::domain::TargetSelection::Only(

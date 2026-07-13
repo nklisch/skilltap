@@ -3,9 +3,9 @@ use std::{collections::BTreeMap, ffi::OsString};
 use skilltap_core::{
     domain::{
         CapabilityId, CapabilityProfileSelection, CapabilitySet, CapabilitySupport,
-        ConfiguredBinary, HarnessId, HarnessInstallation, HarnessObservationOutcome,
-        HarnessReachability, NativeId, NativeVersion, ObservationBatch, ObservedEnvironment,
-        ProfileContractError, Scope, ScopedCapabilitySets, UnreachableReason,
+        ConfiguredBinary, HarnessInstallation, HarnessObservationOutcome, HarnessReachability,
+        NativeId, ObservationBatch, ObservedEnvironment, ProfileContractError, Scope,
+        ScopedCapabilitySets, UnreachableReason,
     },
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, ExternalTreeObserver, JsonLimits,
@@ -35,10 +35,10 @@ pub use update_resolution::{GitSourceRevisionResolver, ObservedNativeRevisionRes
 
 mod lifecycle;
 pub use lifecycle::{
-    LifecyclePostconditionError, NativeLifecycleAction, NativeLifecycleError, NativeLifecyclePort,
-    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation, native_arguments,
-    observe_native_resource, run_native_lifecycle, run_native_lifecycle_bound,
-    verify_lifecycle_postcondition,
+    LifecyclePostconditionError, NativeLifecycleAction, NativeLifecycleDispatch,
+    NativeLifecycleError, NativeLifecyclePort, NativeLifecycleRequest, NativeObservationFailure,
+    NativeResourceObservation, native_arguments, observe_native_resource, run_native_lifecycle,
+    run_native_lifecycle_bound, verify_lifecycle_postcondition,
 };
 pub mod registry;
 pub use registry::{
@@ -53,32 +53,6 @@ pub use bootstrap::{
 };
 
 pub use skilltap_core::VERSION;
-
-/// Transitional identifier retained while the CLI and test-support stories
-/// migrate their public call sites to `HarnessId` plus `TargetRegistry`.
-/// Concrete behavior is resolved from the registry; this enum carries only
-/// the legacy identifier shape needed by those out-of-scope callers.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HarnessKind {
-    Codex,
-    Claude,
-}
-
-impl HarnessKind {
-    pub const fn id(self) -> &'static str {
-        match self {
-            Self::Codex => "codex",
-            Self::Claude => "claude",
-        }
-    }
-
-    pub fn adapter(self) -> &'static dyn HarnessAdapter {
-        let id = HarnessId::new(self.id()).expect("compatibility harness id is valid");
-        TargetRegistry::canonical()
-            .adapter(&id)
-            .expect("compatibility harness is registered")
-    }
-}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DetectionError {
@@ -101,18 +75,19 @@ impl std::error::Error for DetectionError {}
 
 /// Detects one configured harness without observing resources or mutating state.
 pub fn detect_installation(
-    harness: HarnessKind,
+    adapter: &dyn HarnessAdapter,
     search_path: OsString,
     environment: &BTreeMap<OsString, OsString>,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
     let configured = ConfiguredBinary::path_lookup(
-        NativeId::new(harness.id()).map_err(|_| DetectionError::InvalidVersion)?,
+        NativeId::new(adapter.identity().id.as_str())
+            .map_err(|_| DetectionError::InvalidVersion)?,
     )
     .map_err(|_| DetectionError::InvalidVersion)?;
     detect_configured_installation(
-        harness,
+        adapter,
         configured,
         Some(search_path),
         environment,
@@ -125,14 +100,13 @@ pub fn detect_installation(
 /// read-only: it resolves and invokes the executable's version command but does
 /// not create or update any native or skilltap-owned files.
 pub fn detect_configured_installation(
-    harness: HarnessKind,
+    adapter: &dyn HarnessAdapter,
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     environment: &BTreeMap<OsString, OsString>,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
-    let adapter = harness.adapter();
     let resolved = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(
             configured.clone(),
@@ -164,17 +138,14 @@ pub fn detect_configured_installation(
 
 /// Represents an absent or unusable binary without probing resources.
 pub fn unreachable_installation(
-    harness: HarnessKind,
+    adapter: &dyn HarnessAdapter,
     reason: UnreachableReason,
 ) -> HarnessInstallation {
+    let id = adapter.identity().id;
     let configured =
-        ConfiguredBinary::path_lookup(NativeId::new(harness.id()).expect("static harness id"))
-            .expect("static harness id is a path name");
-    HarnessInstallation::new(
-        HarnessId::new(harness.id()).expect("static harness id"),
-        configured,
-        HarnessReachability::Unreachable { reason },
-    )
+        ConfiguredBinary::path_lookup(NativeId::new(id.as_str()).expect("registered harness id"))
+            .expect("registered harness id is a path name");
+    HarnessInstallation::new(id, configured, HarnessReachability::Unreachable { reason })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -584,12 +555,6 @@ fn absolute_child(
     child: &str,
 ) -> Option<skilltap_core::domain::AbsolutePath> {
     skilltap_core::domain::AbsolutePath::new(format!("{}/{}", root.as_str(), child)).ok()
-}
-
-/// Compatibility wrapper for callers being migrated by the CLI and
-/// test-support stories. Capability authority belongs to the concrete adapter.
-pub fn select_profile(harness: HarnessKind, version: &NativeVersion) -> CapabilityProfileSelection {
-    harness.adapter().select_profile(version)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

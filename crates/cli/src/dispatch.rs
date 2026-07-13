@@ -1,10 +1,16 @@
-use crate::command::{
-    AdoptArgs, BootstrapArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand,
-    HarnessEnableArgs, InstructionsCommand, InstructionsRepairArgs, InstructionsSetupArgs,
-    MarketplaceAddArgs, MarketplaceCommand, MarketplaceNamedArgs, MarketplaceUpdateArgs,
-    OutputArgs, PlanArgs, PluginCommand, PluginInstallArgs, PluginNamedArgs, PluginUpdateArgs,
-    ScopedOutputArgs, ScopedTargetArgs, SkillCommand, SkillInstallArgs, SkillNamedArgs,
-    SkillUpdateArgs, StatusArgs, SyncArgs,
+use skilltap_core::domain::{HarnessId, TargetSelection};
+use skilltap_harnesses::TargetRegistry;
+
+use crate::{
+    ErrorDetail, NextAction,
+    command::{
+        AdoptArgs, BootstrapArgs, Command, DaemonCommand, HarnessChangeArgs, HarnessCommand,
+        HarnessEnableArgs, InstructionsCommand, InstructionsRepairArgs, InstructionsSetupArgs,
+        MarketplaceAddArgs, MarketplaceCommand, MarketplaceNamedArgs, MarketplaceUpdateArgs,
+        OutputArgs, PlanArgs, PluginCommand, PluginInstallArgs, PluginNamedArgs, PluginUpdateArgs,
+        ScopedOutputArgs, ScopedTargetArgs, SkillCommand, SkillInstallArgs, SkillNamedArgs,
+        SkillUpdateArgs, StatusArgs, SyncArgs,
+    },
 };
 
 pub(crate) enum Dispatch {
@@ -82,6 +88,104 @@ impl Dispatch {
         }
     }
 
+    pub(crate) const fn command_name(&self) -> &'static str {
+        match self {
+            Self::Status(_) => "status",
+            Self::Adopt(_) => "adopt",
+            Self::Plan(_) => "plan",
+            Self::Sync(_) => "sync",
+            Self::Bootstrap(_) => "bootstrap",
+            Self::SkillList(_) => "skill list",
+            Self::MarketplaceList(_) => "marketplace list",
+            Self::PluginList(_) => "plugin list",
+            Self::InstructionStatus(_) => "instructions status",
+            Self::MarketplaceAdd(_) => "marketplace add",
+            Self::MarketplaceRemove(_) => "marketplace remove",
+            Self::MarketplaceUpdate(_) => "marketplace update",
+            Self::PluginInstall(_) => "plugin install",
+            Self::PluginRemove(_) => "plugin remove",
+            Self::PluginUpdate(_) => "plugin update",
+            Self::SkillInstall(_) => "skill install",
+            Self::SkillRemove(_) => "skill remove",
+            Self::SkillUpdate(_) => "skill update",
+            Self::InstructionSetup(_) => "instructions setup",
+            Self::InstructionRepair(_) => "instructions repair",
+            Self::HarnessList(_) => "harness list",
+            Self::HarnessEnable(_) => "harness enable",
+            Self::HarnessDisable(_) => "harness disable",
+            Self::DaemonEnable(_) => "daemon enable",
+            Self::DaemonDisable(_) => "daemon disable",
+            Self::DaemonStatus(_) => "daemon status",
+            Self::DaemonRun(_) => "daemon run",
+        }
+    }
+
+    pub(crate) fn validate_targets(&self, registry: &TargetRegistry) -> Result<(), ErrorDetail> {
+        if let Some(harness) = self.harness_argument()
+            && !registry.contains(harness)
+        {
+            return Err(target_not_registered(harness, self.command_name()));
+        }
+        let Some(TargetSelection::Only(target)) = self.target_selection() else {
+            return Ok(());
+        };
+        if !registry.contains(target) {
+            return Err(target_not_registered(target, self.command_name()));
+        }
+        if matches!(self, Self::Bootstrap(_))
+            && !registry
+                .first_party_targets()
+                .any(|adapter| adapter.identity().id == *target)
+        {
+            return Err(ErrorDetail::new(
+                "bootstrap_target_unavailable",
+                "The requested harness has no first-party skilltap plugin distribution.",
+            )
+            .with_context("harness", target.as_str()));
+        }
+        Ok(())
+    }
+
+    fn harness_argument(&self) -> Option<&HarnessId> {
+        match self {
+            Self::HarnessEnable(args) => Some(&args.harness),
+            Self::HarnessDisable(args) => Some(&args.harness),
+            _ => None,
+        }
+    }
+
+    fn target_selection(&self) -> Option<&TargetSelection> {
+        match self {
+            Self::Status(args) => args.target.target.as_ref(),
+            Self::Adopt(args) => args.from.as_ref(),
+            Self::Plan(args) => args.target.target.as_ref(),
+            Self::Sync(args) => args.target.target.as_ref(),
+            Self::Bootstrap(args) => args.target.as_ref(),
+            Self::SkillList(args) | Self::MarketplaceList(args) | Self::PluginList(args) => {
+                args.target.target.as_ref()
+            }
+            Self::MarketplaceAdd(args) => args.common.target.target.as_ref(),
+            Self::MarketplaceRemove(args) => args.common.target.target.as_ref(),
+            Self::MarketplaceUpdate(args) => args.common.target.target.as_ref(),
+            Self::PluginInstall(args) => args.target.target.as_ref(),
+            Self::PluginRemove(args) => args.common.target.target.as_ref(),
+            Self::PluginUpdate(args) => args.target.target.as_ref(),
+            Self::SkillInstall(args) => args.target.target.as_ref(),
+            Self::SkillRemove(args) => args.common.target.target.as_ref(),
+            Self::SkillUpdate(args) => args.target.target.as_ref(),
+            Self::InstructionStatus(_)
+            | Self::InstructionSetup(_)
+            | Self::InstructionRepair(_)
+            | Self::HarnessList(_)
+            | Self::HarnessEnable(_)
+            | Self::HarnessDisable(_)
+            | Self::DaemonEnable(_)
+            | Self::DaemonDisable(_)
+            | Self::DaemonStatus(_)
+            | Self::DaemonRun(_) => None,
+        }
+    }
+
     pub(crate) const fn json(&self) -> bool {
         match self {
             Self::Status(args) => args.output.json,
@@ -112,4 +216,19 @@ impl Dispatch {
             Self::DaemonRun(args) => args.json,
         }
     }
+}
+
+fn target_not_registered(target: &HarnessId, command: &'static str) -> ErrorDetail {
+    ErrorDetail::new(
+        "target_not_registered",
+        "The requested harness is not registered in this build.",
+    )
+    .with_context("harness", target.as_str())
+    .with_next_action(
+        NextAction::new(
+            "inspect_registered_targets",
+            "Inspect command help for the harnesses registered in this build.",
+        )
+        .with_command(format!("skilltap {command} --help")),
+    )
 }

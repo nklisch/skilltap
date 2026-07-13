@@ -36,20 +36,15 @@ fn first_use_plain_status_is_an_attention_report_on_stdout() {
 }
 
 #[test]
-fn parse_failures_are_normalized_as_one_json_document_when_requested() {
+fn unregistered_targets_are_rejected_at_composition_before_dispatch() {
     let execution = run_from(["skilltap", "status", "--target", "pi", "--json"]);
 
     assert_eq!(execution.exit_code, 1);
     assert_eq!(execution.channel, OutputChannel::Stdout);
     let value: Value = serde_json::from_str(&execution.document).unwrap();
     assert_eq!(value["result"], "invalid");
-    assert_eq!(value["errors"][0]["code"], "invalid_arguments");
-    assert_eq!(value["errors"][0]["context"]["boundary"], "skilltap status");
-    assert_eq!(
-        value["next_actions"][0]["command"],
-        "skilltap status --help"
-    );
-    assert!(!execution.document.contains("pi"));
+    assert_eq!(value["errors"][0]["code"], "target_not_registered");
+    assert_eq!(value["errors"][0]["context"]["harness"], "pi");
     assert_eq!(execution.document.lines().count(), 1);
 }
 
@@ -159,6 +154,13 @@ fn json_requested_without_a_command_remains_one_normalized_document() {
 
 #[test]
 fn help_and_version_complete_on_stdout() {
+    let root_help = run_from(["skilltap", "--help"]);
+    assert!(
+        root_help
+            .document
+            .contains("Registered harnesses: codex|claude")
+    );
+
     for arguments in [
         &["skilltap", "--help"][..],
         &["skilltap", "--version"][..],

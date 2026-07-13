@@ -7,8 +7,8 @@ use skilltap_core::{
     runtime::{JsonLimits, ProcessLimits},
 };
 use skilltap_harnesses::{
-    HarnessKind, NativeLifecycleAction, NativeLifecycleRequest, NativeObservationFailure,
-    NativeResourceObservation, observe_native_resource,
+    ClaudeAdapter, NativeLifecycleAction, NativeLifecycleDispatch, NativeLifecycleRequest,
+    NativeObservationFailure, NativeResourceObservation, observe_native_resource,
 };
 use skilltap_test_support::TempRoot;
 
@@ -32,14 +32,18 @@ fn fake_claude(root: &TempRoot, payload: &str) -> ConfiguredBinary {
     ConfiguredBinary::absolute(AbsolutePath::new(executable.to_string_lossy()).unwrap())
 }
 
-fn request(scope: Scope) -> NativeLifecycleRequest {
-    NativeLifecycleRequest {
-        harness: HarnessKind::Claude,
-        action: NativeLifecycleAction::PluginInstall,
-        scope,
-        name: NativeId::new("formatter@team").unwrap(),
-        source: None,
-    }
+fn request(scope: Scope) -> NativeLifecycleDispatch {
+    let adapter = ClaudeAdapter::static_ref();
+    NativeLifecycleDispatch::new(
+        adapter.identity().id,
+        adapter.native_lifecycle().unwrap(),
+        NativeLifecycleRequest {
+            action: NativeLifecycleAction::PluginInstall,
+            scope,
+            name: NativeId::new("formatter@team").unwrap(),
+            source: None,
+        },
+    )
 }
 
 #[test]

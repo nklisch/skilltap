@@ -1,6 +1,6 @@
 use std::ffi::{OsStr, OsString};
 
-use clap::{CommandFactory, Parser, error::ErrorKind};
+use clap::{CommandFactory, FromArgMatches, error::ErrorKind};
 use skilltap_core::{
     domain::{AbsolutePath, ConfiguredBinary, HarnessReachability, NativeId},
     runtime::{
@@ -13,7 +13,7 @@ use skilltap_core::{
         FileInventoryRepository, FileStateRepository,
     },
 };
-use skilltap_harnesses::{HarnessKind, detect_configured_installation, select_profile};
+use skilltap_harnesses::{TargetRegistry, detect_configured_installation};
 
 use crate::{
     ErrorDetail, JsonRenderer, NextAction, Outcome, OutputEntry, OutputScope, PlainRenderer,
@@ -47,6 +47,36 @@ pub struct CommandExecution {
     pub channel: OutputChannel,
 }
 
+fn augment_target_help(mut command: clap::Command, registry: &TargetRegistry) -> clap::Command {
+    let registered = registry
+        .ids()
+        .map(skilltap_core::domain::HarnessId::as_str)
+        .collect::<Vec<_>>()
+        .join("|");
+    let targets =
+        format!("Select one registered harness ({registered}) or every enabled harness (`all`).");
+    let harness = format!("Registered harness ({registered}).");
+    if command.get_name() == "skilltap" {
+        command = command.after_help(format!("Registered harnesses: {registered}"));
+    }
+    let argument_ids = command
+        .get_arguments()
+        .map(|argument| argument.get_id().clone())
+        .collect::<Vec<_>>();
+    for id in argument_ids {
+        let name = id.as_str();
+        if matches!(name, "target" | "from") {
+            command = command.mut_arg(id, |argument| argument.help(targets.clone()));
+        } else if name == "harness" {
+            command = command.mut_arg(id, |argument| argument.help(harness.clone()));
+        }
+    }
+    for subcommand in command.get_subcommands_mut() {
+        *subcommand = augment_target_help(subcommand.clone(), registry);
+    }
+    command
+}
+
 pub fn run_from<I, T>(arguments: I) -> CommandExecution
 where
     I: IntoIterator<Item = T>,
@@ -57,7 +87,12 @@ where
         .map(Into::into)
         .collect::<Vec<OsString>>();
     let json_requested = arguments.iter().any(|value| value == OsStr::new("--json"));
-    let dispatch = match Cli::try_parse_from(arguments.clone()) {
+    let registry = TargetRegistry::canonical();
+    let command = augment_target_help(Cli::command(), &registry);
+    let dispatch = match command
+        .try_get_matches_from(arguments.clone())
+        .and_then(|matches| Cli::from_arg_matches(&matches))
+    {
         Ok(cli) => Dispatch::from_command(cli.command.expect("Clap requires a subcommand")),
         Err(error)
             if matches!(
@@ -101,18 +136,39 @@ where
         }
     };
     let json = dispatch.json();
+    if let Err(error) = dispatch.validate_targets(&registry) {
+        return render(
+            Outcome::new(dispatch.command_name(), ResultClass::Invalid).with_error(error),
+            json,
+            if json {
+                OutputChannel::Stdout
+            } else {
+                OutputChannel::Stderr
+            },
+        );
+    }
     let (outcome, plain_channel) = match dispatch {
-        Dispatch::Status(args) => (execute_system_status(&args), OutputChannel::Stdout),
-        Dispatch::Adopt(args) => (execute_system_adopt(&args), OutputChannel::Stdout),
-        Dispatch::Plan(args) => (execute_system_plan(&args), OutputChannel::Stdout),
-        Dispatch::Sync(args) => (execute_system_sync(&args), OutputChannel::Stdout),
-        Dispatch::Bootstrap(args) => (
-            bootstrap_commands::execute_system_bootstrap(&args),
+        Dispatch::Status(args) => (
+            execute_system_status(&registry, &args),
             OutputChannel::Stdout,
         ),
-        Dispatch::SkillList(args) => (execute_system_skill_list(&args), OutputChannel::Stdout),
+        Dispatch::Adopt(args) => (
+            execute_system_adopt(&registry, &args),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::Plan(args) => (execute_system_plan(&registry, &args), OutputChannel::Stdout),
+        Dispatch::Sync(args) => (execute_system_sync(&registry, &args), OutputChannel::Stdout),
+        Dispatch::Bootstrap(args) => (
+            bootstrap_commands::execute_system_bootstrap(&registry, &args),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::SkillList(args) => (
+            execute_system_skill_list(&registry, &args),
+            OutputChannel::Stdout,
+        ),
         Dispatch::MarketplaceList(args) => (
             execute_system_resource_list(
+                &registry,
                 "marketplace list",
                 &args,
                 skilltap_core::domain::ResourceKind::Marketplace,
@@ -121,6 +177,7 @@ where
         ),
         Dispatch::PluginList(args) => (
             execute_system_resource_list(
+                &registry,
                 "plugin list",
                 &args,
                 skilltap_core::domain::ResourceKind::Plugin,
@@ -128,83 +185,102 @@ where
             OutputChannel::Stdout,
         ),
         Dispatch::InstructionStatus(args) => (
-            execute_system_instruction_status(&args),
+            execute_system_instruction_status(&registry, &args),
             OutputChannel::Stdout,
         ),
         Dispatch::MarketplaceAdd(args) => (
             execute_system_native_lifecycle(
+                &registry,
                 "marketplace add",
                 NativeLifecycleKind::MarketplaceAdd,
                 &args.common.scope,
                 &args.common.target,
-                Some(args.source.as_str()),
-                args.name.as_ref().map(|value| value.as_str()),
+                crate::application::NativeLifecycleValues {
+                    source: Some(args.source.as_str()),
+                    name: args.name.as_ref().map(|value| value.as_str()),
+                },
                 false,
             ),
             OutputChannel::Stdout,
         ),
         Dispatch::MarketplaceRemove(args) => (
             execute_system_native_lifecycle(
+                &registry,
                 "marketplace remove",
                 NativeLifecycleKind::MarketplaceRemove,
                 &args.common.scope,
                 &args.common.target,
-                None,
-                Some(args.name.as_str()),
+                crate::application::NativeLifecycleValues {
+                    source: None,
+                    name: Some(args.name.as_str()),
+                },
                 false,
             ),
             OutputChannel::Stdout,
         ),
         Dispatch::MarketplaceUpdate(args) => (
             execute_system_native_lifecycle(
+                &registry,
                 "marketplace update",
                 NativeLifecycleKind::MarketplaceUpdate,
                 &args.common.scope,
                 &args.common.target,
-                None,
-                args.name.as_ref().map(|value| value.as_str()),
+                crate::application::NativeLifecycleValues {
+                    source: None,
+                    name: args.name.as_ref().map(|value| value.as_str()),
+                },
                 false,
             ),
             OutputChannel::Stdout,
         ),
         Dispatch::PluginInstall(args) => (
             execute_system_native_lifecycle(
+                &registry,
                 "plugin install",
                 NativeLifecycleKind::PluginInstall,
                 &args.scope,
                 &args.target,
-                Some(args.plugin.as_str()),
-                None,
+                crate::application::NativeLifecycleValues {
+                    source: Some(args.plugin.as_str()),
+                    name: None,
+                },
                 args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
         Dispatch::PluginRemove(args) => (
             execute_system_native_lifecycle(
+                &registry,
                 "plugin remove",
                 NativeLifecycleKind::PluginRemove,
                 &args.common.scope,
                 &args.common.target,
-                None,
-                Some(args.plugin.as_str()),
+                crate::application::NativeLifecycleValues {
+                    source: None,
+                    name: Some(args.plugin.as_str()),
+                },
                 false,
             ),
             OutputChannel::Stdout,
         ),
         Dispatch::PluginUpdate(args) => (
             execute_system_native_lifecycle(
+                &registry,
                 "plugin update",
                 NativeLifecycleKind::PluginUpdate,
                 &args.scope,
                 &args.target,
-                None,
-                args.plugin.as_ref().map(|value| value.as_str()),
+                crate::application::NativeLifecycleValues {
+                    source: None,
+                    name: args.plugin.as_ref().map(|value| value.as_str()),
+                },
                 args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
         Dispatch::SkillInstall(args) => (
             execute_system_skill_install(
+                &registry,
                 "skill install",
                 &args.scope,
                 &args.target,
@@ -224,6 +300,7 @@ where
         ),
         Dispatch::SkillRemove(args) => (
             execute_system_skill_remove(
+                &registry,
                 "skill remove",
                 &args.common.scope,
                 &args.common.target,
@@ -234,6 +311,7 @@ where
         ),
         Dispatch::SkillUpdate(args) => (
             execute_system_skill_update(
+                &registry,
                 "skill update",
                 &args.scope,
                 &args.target,
@@ -244,6 +322,7 @@ where
         ),
         Dispatch::InstructionSetup(args) => (
             execute_system_instruction_setup(
+                &registry,
                 "instructions setup",
                 &args.scope,
                 args.mode,
@@ -254,6 +333,7 @@ where
         ),
         Dispatch::InstructionRepair(args) => (
             execute_system_instruction_setup(
+                &registry,
                 "instructions repair",
                 &args.scope,
                 None,
@@ -262,13 +342,18 @@ where
             ),
             OutputChannel::Stdout,
         ),
-        Dispatch::HarnessList(args) => (execute_system_harness_list(&args), OutputChannel::Stdout),
-        Dispatch::HarnessEnable(args) => {
-            (execute_system_harness_enable(&args), OutputChannel::Stdout)
-        }
-        Dispatch::HarnessDisable(args) => {
-            (execute_system_harness_disable(&args), OutputChannel::Stdout)
-        }
+        Dispatch::HarnessList(args) => (
+            execute_system_harness_list(&registry, &args),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::HarnessEnable(args) => (
+            execute_system_harness_enable(&registry, &args),
+            OutputChannel::Stdout,
+        ),
+        Dispatch::HarnessDisable(args) => (
+            execute_system_harness_disable(&registry, &args),
+            OutputChannel::Stdout,
+        ),
         Dispatch::DaemonEnable(args) => (
             daemon_commands::execute_system_daemon_enable(&args),
             OutputChannel::Stdout,
@@ -281,125 +366,138 @@ where
             daemon_commands::execute_system_daemon_status(&args),
             OutputChannel::Stdout,
         ),
-        Dispatch::DaemonRun(args) => (execute_system_daemon_run(&args), OutputChannel::Stdout),
+        Dispatch::DaemonRun(args) => (
+            execute_system_daemon_run(&registry, &args),
+            OutputChannel::Stdout,
+        ),
     };
     render(outcome, json, plain_channel)
 }
 
-fn execute_system_plan(args: &PlanArgs) -> Outcome {
-    execute_system_reconciliation("plan", |application| application.execute_plan(args))
+fn execute_system_plan(registry: &TargetRegistry, args: &PlanArgs) -> Outcome {
+    execute_system_reconciliation(registry, "plan", |application| {
+        application.execute_plan(args)
+    })
 }
 
-fn execute_system_sync(args: &SyncArgs) -> Outcome {
-    execute_system_reconciliation("sync", |application| application.execute_sync(args))
+fn execute_system_sync(registry: &TargetRegistry, args: &SyncArgs) -> Outcome {
+    execute_system_reconciliation(registry, "sync", |application| {
+        application.execute_sync(args)
+    })
 }
 
-fn execute_system_daemon_run(_args: &crate::command::OutputArgs) -> Outcome {
+fn execute_system_daemon_run(
+    registry: &TargetRegistry,
+    _args: &crate::command::OutputArgs,
+) -> Outcome {
     let binary = bootstrap_commands::execute_system_daemon_binary_policy();
-    execute_system_reconciliation("daemon run", |application| {
+    execute_system_reconciliation(registry, "daemon run", |application| {
         application.execute_daemon_cycle_with_binary(Some(binary))
     })
 }
 
-fn execute_system_skill_list(args: &ScopedTargetArgs) -> Outcome {
-    execute_system_reconciliation("skill list", |application| {
+fn execute_system_skill_list(registry: &TargetRegistry, args: &ScopedTargetArgs) -> Outcome {
+    execute_system_reconciliation(registry, "skill list", |application| {
         application.execute_skill_list(args)
     })
 }
 
 fn execute_system_resource_list(
+    registry: &TargetRegistry,
     command: &'static str,
     args: &ScopedTargetArgs,
     kind: skilltap_core::domain::ResourceKind,
 ) -> Outcome {
-    execute_system_reconciliation(command, |application| {
+    execute_system_reconciliation(registry, command, |application| {
         application.execute_resource_list(command, args, kind)
     })
 }
 
-fn execute_system_instruction_status(args: &ScopedOutputArgs) -> Outcome {
-    execute_system_reconciliation("instructions status", |application| {
+fn execute_system_instruction_status(
+    registry: &TargetRegistry,
+    args: &ScopedOutputArgs,
+) -> Outcome {
+    execute_system_reconciliation(registry, "instructions status", |application| {
         application.execute_instruction_status(args)
     })
 }
 
 fn execute_system_skill_install(
+    registry: &TargetRegistry,
     command: &'static str,
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
     acknowledged: bool,
     request: SkillInstallRequest<'_>,
 ) -> Outcome {
-    execute_system_reconciliation(command, |application| {
+    execute_system_reconciliation(registry, command, |application| {
         application.execute_skill_install(command, scope, target, acknowledged, request)
     })
 }
 
 fn execute_system_skill_remove(
+    registry: &TargetRegistry,
     command: &'static str,
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
     skill: &str,
     acknowledged: bool,
 ) -> Outcome {
-    execute_system_reconciliation(command, |application| {
+    execute_system_reconciliation(registry, command, |application| {
         application.execute_skill_remove(command, scope, target, skill, acknowledged)
     })
 }
 
 fn execute_system_skill_update(
+    registry: &TargetRegistry,
     command: &'static str,
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
     skill: Option<&str>,
     acknowledged: bool,
 ) -> Outcome {
-    execute_system_reconciliation(command, |application| {
+    execute_system_reconciliation(registry, command, |application| {
         application.execute_skill_update(command, scope, target, skill, acknowledged)
     })
 }
 
 fn execute_system_instruction_setup(
+    registry: &TargetRegistry,
     command: &'static str,
     scope: &crate::command::ScopeArgs,
     mode: Option<skilltap_core::storage::ClaudeInstructionMode>,
     acknowledged: bool,
     repair: bool,
 ) -> Outcome {
-    execute_system_reconciliation(command, |application| {
+    execute_system_reconciliation(registry, command, |application| {
         application.execute_instruction_setup(command, scope, mode, acknowledged, repair)
     })
 }
 
 fn execute_system_native_lifecycle(
+    registry: &TargetRegistry,
     command: &'static str,
     kind: NativeLifecycleKind,
     scope: &crate::command::ScopeArgs,
     target: &crate::command::TargetArgs,
-    source: Option<&str>,
-    name: Option<&str>,
+    values: crate::application::NativeLifecycleValues<'_>,
     acknowledged: bool,
 ) -> Outcome {
-    execute_system_reconciliation(command, |application| {
-        application.execute_native_lifecycle(
-            command,
-            kind,
-            scope,
-            target,
-            crate::application::NativeLifecycleValues { source, name },
-            acknowledged,
-        )
+    execute_system_reconciliation(registry, command, |application| {
+        application.execute_native_lifecycle(command, kind, scope, target, values, acknowledged)
     })
 }
 
 fn execute_system_reconciliation(
+    registry: &TargetRegistry,
     command: &'static str,
     execute: impl FnOnce(StatusApplication<'_>) -> Outcome,
 ) -> Outcome {
-    with_system_application(command, repository_composition_error, execute)
+    with_system_application(registry, command, repository_composition_error, execute)
 }
 
 fn with_system_application(
+    registry: &TargetRegistry,
     command: &'static str,
     paths_error: fn(&'static str) -> Outcome,
     execute: impl FnOnce(StatusApplication<'_>) -> Outcome,
@@ -436,6 +534,7 @@ fn with_system_application(
         scopes: &scopes,
         working_directory: &working_directory,
         native_observation: NativeObservationMode::System,
+        registry,
         #[cfg(test)]
         test_platform_paths: None,
         #[cfg(test)]
@@ -443,14 +542,17 @@ fn with_system_application(
     })
 }
 
-fn execute_system_adopt(args: &AdoptArgs) -> Outcome {
-    with_system_application("adopt", repository_composition_error, |application| {
-        application.execute_adopt(args)
-    })
+fn execute_system_adopt(registry: &TargetRegistry, args: &AdoptArgs) -> Outcome {
+    with_system_application(
+        registry,
+        "adopt",
+        repository_composition_error,
+        |application| application.execute_adopt(args),
+    )
 }
 
-fn execute_system_status(args: &crate::command::StatusArgs) -> Outcome {
-    with_system_application("status", status_paths_error, |application| {
+fn execute_system_status(registry: &TargetRegistry, args: &crate::command::StatusArgs) -> Outcome {
+    with_system_application(registry, "status", status_paths_error, |application| {
         application.execute(args)
     })
 }
@@ -478,13 +580,34 @@ fn with_harness_repository(
     operation(&repository)
 }
 
-fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
+fn config_membership_error(
+    registry: &TargetRegistry,
+    config: &ConfigDocument,
+) -> Option<ErrorDetail> {
+    config
+        .harnesses()
+        .iter()
+        .map(|(target, _)| target)
+        .find(|target| !registry.contains(target))
+        .map(|target| {
+            ErrorDetail::new(
+                "target_not_registered",
+                "The configuration contains a harness that is not registered in this build.",
+            )
+            .with_context("harness", target.as_str())
+        })
+}
+
+fn execute_system_harness_list(registry: &TargetRegistry, _args: &OutputArgs) -> Outcome {
     with_harness_repository("harness list", |repository| {
         let config = match repository.load() {
             Ok(DocumentState::Missing) => ConfigDocument::defaults(),
             Ok(DocumentState::Present(value)) => value,
             Err(_) => return repository_composition_error("harness list"),
         };
+        if let Some(error) = config_membership_error(registry, &config) {
+            return Outcome::new("harness list", ResultClass::Invalid).with_error(error);
+        }
         let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
             Ok(paths) => paths,
             Err(_) => return repository_composition_error("harness list"),
@@ -500,37 +623,28 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
             Err(_) => return repository_composition_error("harness list"),
         };
         let mut outcome = Outcome::new("harness list", ResultClass::Completed);
-        for (id, kind, policy, native_root) in [
-            (
-                "codex",
-                HarnessKind::Codex,
-                &config.harnesses().codex,
-                paths.codex_home().as_str(),
-            ),
-            (
-                "claude",
-                HarnessKind::Claude,
-                &config.harnesses().claude,
-                paths.claude_home().as_str(),
-            ),
-        ] {
+        for adapter in registry.iter() {
+            let identity = adapter.identity();
+            let policy = config.harnesses().get(&identity.id);
+            let enabled = policy.is_some_and(|policy| policy.enabled);
+            let binary = policy
+                .map(|policy| policy.binary.as_str())
+                .unwrap_or_else(|| identity.id.as_str());
             let mut entry = OutputEntry::new(
-                id,
-                if policy.enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                },
+                identity.id.as_str(),
+                if enabled { "enabled" } else { "disabled" },
             )
-            .with_field("enabled", policy.enabled)
-            .with_field("binary", policy.binary.as_str())
-            .with_field("native_root", native_root);
-            let configured = if std::path::Path::new(policy.binary.as_str()).is_absolute() {
-                AbsolutePath::new(policy.binary.as_str())
+            .with_field("enabled", enabled)
+            .with_field("binary", binary);
+            if let Some(native_root) = adapter.native_root(&paths) {
+                entry = entry.with_field("native_root", native_root.as_str());
+            }
+            let configured = if std::path::Path::new(binary).is_absolute() {
+                AbsolutePath::new(binary)
                     .map(ConfiguredBinary::absolute)
                     .map_err(|_| ())
             } else {
-                NativeId::new(policy.binary.as_str())
+                NativeId::new(binary)
                     .map_err(|_| ())
                     .and_then(|id| ConfiguredBinary::path_lookup(id).map_err(|_| ()))
             };
@@ -544,14 +658,14 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                             "invalid_harness_binary",
                             "The configured harness binary is invalid.",
                         )
-                        .with_context("harness", id),
+                        .with_context("harness", identity.id.as_str()),
                     );
                     outcome = outcome.with_resource(entry);
                     continue;
                 }
             };
             match detect_configured_installation(
-                kind,
+                adapter,
                 configured,
                 search_path.clone(),
                 &native_environment,
@@ -562,7 +676,7 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                     if let HarnessReachability::Reachable { native_version, .. } =
                         installation.reachability()
                     {
-                        let profile = select_profile(kind, native_version);
+                        let profile = adapter.select_profile(native_version);
                         entry = entry
                             .with_field("reachable", true)
                             .with_field("version", native_version.as_str())
@@ -584,7 +698,7 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                                     "harness_profile_observe_only",
                                     "The detected harness version is observable but not mutation-authorized.",
                                 )
-                                .with_context("harness", id),
+                                .with_context("harness", identity.id.as_str()),
                             );
                         }
                     }
@@ -592,7 +706,7 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                 Err(error) => {
                     entry = entry.with_field("reachable", false);
                     outcome.result = ResultClass::AttentionRequired;
-                    let diagnostic = detection_diagnostic(&error, id, policy.binary.as_str());
+                    let diagnostic = detection_diagnostic(&error, identity.id.as_str(), binary);
                     outcome = outcome
                         .with_warning(diagnostic.warning)
                         .with_next_action(diagnostic.next_action);
@@ -604,15 +718,22 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
     })
 }
 
-fn execute_system_harness_enable(args: &HarnessEnableArgs) -> Outcome {
-    execute_harness_change("harness enable", &args.harness, true, args.binary.as_ref())
+fn execute_system_harness_enable(registry: &TargetRegistry, args: &HarnessEnableArgs) -> Outcome {
+    execute_harness_change(
+        registry,
+        "harness enable",
+        &args.harness,
+        true,
+        args.binary.as_ref(),
+    )
 }
 
-fn execute_system_harness_disable(args: &HarnessChangeArgs) -> Outcome {
-    execute_harness_change("harness disable", &args.harness, false, None)
+fn execute_system_harness_disable(registry: &TargetRegistry, args: &HarnessChangeArgs) -> Outcome {
+    execute_harness_change(registry, "harness disable", &args.harness, false, None)
 }
 
 fn execute_harness_change(
+    registry: &TargetRegistry,
     command: &'static str,
     harness: &skilltap_core::domain::HarnessId,
     enabled: bool,
@@ -624,6 +745,9 @@ fn execute_harness_change(
             Ok(DocumentState::Present(value)) => value,
             Err(_) => return repository_composition_error(command),
         };
+        if let Some(error) = config_membership_error(registry, &current) {
+            return Outcome::new(command, ResultClass::Invalid).with_error(error);
+        }
         let next = match current.with_harness_policy(harness, enabled, binary) {
             Ok(value) => value,
             Err(_) => {

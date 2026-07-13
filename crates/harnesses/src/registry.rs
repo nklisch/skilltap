@@ -34,6 +34,10 @@ pub struct TargetIdentity {
 pub struct AdapterObservationPaths {
     pub canonical: Vec<CanonicalObservation>,
     pub project_entry_count: Option<usize>,
+    /// Existing native surfaces that status renders in addition to bounded
+    /// tree snapshots. Labels are adapter-authored so composition never
+    /// reinterprets target-specific paths.
+    pub surface_labels: Vec<&'static str>,
 }
 
 #[derive(Clone, Debug)]
@@ -113,6 +117,28 @@ pub trait HarnessAdapter: Sync {
     fn skill_projection(&self) -> Option<&dyn SkillProjectionPort> {
         None
     }
+
+    /// Root shown by `harness list` for this target's native state.
+    fn native_root(&self, _paths: &PlatformPaths) -> Option<AbsolutePath> {
+        None
+    }
+
+    /// Whether project lifecycle falls back to skilltap-owned managed
+    /// projection when verified native lifecycle is unavailable.
+    fn managed_project_lifecycle(&self) -> bool {
+        false
+    }
+
+    /// An agent action returned instead of unattended first-party bootstrap.
+    fn bootstrap_next_action(&self) -> Option<&'static str> {
+        None
+    }
+
+    /// Agent action when a first-party target is eligible for distribution but
+    /// its detected profile does not authorize unattended bootstrap.
+    fn bootstrap_capability_next_action(&self) -> &'static str {
+        "Use the harness's documented first-party plugin flow after installing a mutation-authorized version."
+    }
 }
 
 /// Native marketplace/plugin lifecycle argument vector for one request.
@@ -131,6 +157,12 @@ pub trait NativeLifecycleVector: Sync {
 pub trait InstructionBridgePort: Sync {
     fn global_bridge(&self, paths: &PlatformPaths) -> Option<AbsolutePath>;
     fn project_bridge(&self, project: &AbsolutePath) -> Option<AbsolutePath>;
+
+    /// Supported legacy/project alternatives that must be observed and
+    /// preserved or consolidated without hard-coding adapter paths in CLI.
+    fn alternate_project_bridges(&self, _project: &AbsolutePath) -> Vec<AbsolutePath> {
+        Vec::new()
+    }
 }
 
 /// Where skilltap projects a standalone skill for this target.
@@ -262,6 +294,7 @@ mod tests {
             Ok(AdapterObservationPaths {
                 canonical: Vec::new(),
                 project_entry_count: None,
+                surface_labels: Vec::new(),
             })
         }
     }

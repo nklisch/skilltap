@@ -86,6 +86,14 @@ impl HarnessAdapter for ClaudeAdapter {
     fn skill_projection(&self) -> Option<&dyn SkillProjectionPort> {
         Some(&SKILLS)
     }
+
+    fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
+        Some(paths.claude_home().clone())
+    }
+
+    fn bootstrap_capability_next_action(&self) -> &'static str {
+        "Run `claude plugin install skilltap --scope user` through Claude's native consent flow."
+    }
 }
 
 impl NativeLifecycleVector for ClaudeLifecycle {
@@ -155,6 +163,12 @@ impl InstructionBridgePort for ClaudeInstructionBridge {
 
     fn project_bridge(&self, project: &AbsolutePath) -> Option<AbsolutePath> {
         adapter_helpers::absolute_child(project, "CLAUDE.md")
+    }
+
+    fn alternate_project_bridges(&self, project: &AbsolutePath) -> Vec<AbsolutePath> {
+        adapter_helpers::absolute_child(project, ".claude/CLAUDE.md")
+            .into_iter()
+            .collect()
     }
 }
 

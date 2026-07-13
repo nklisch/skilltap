@@ -12,10 +12,10 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    CodexConfigError, DetectionError, HarnessKind, ProbeError,
+    ClaudeAdapter, CodexAdapter, CodexConfigError, DetectionError, HarnessAdapter, ProbeError,
     detect_configured_installation as detect_configured_installation_with_environment,
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
-    observe_codex_config, probe_profile, select_profile, unreachable_installation,
+    observe_codex_config, probe_profile, unreachable_installation,
 };
 use skilltap_test_support::{FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, TempRoot};
 
@@ -43,7 +43,7 @@ fn limits() -> (ProcessLimits, JsonLimits) {
 }
 
 fn detect_installation(
-    harness: HarnessKind,
+    harness: &'static dyn HarnessAdapter,
     search_path: OsString,
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
@@ -58,7 +58,7 @@ fn detect_installation(
 }
 
 fn detect_configured_installation(
-    harness: HarnessKind,
+    harness: &'static dyn HarnessAdapter,
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     process_limits: ProcessLimits,
@@ -131,7 +131,7 @@ fn detection_forwards_only_the_explicit_native_environment() {
     ]);
 
     detect_configured_installation_with_environment(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         configured,
         None,
         &environment,
@@ -156,7 +156,7 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
     let (known_root, _known_fixture) = install(FakeNativeMode::VersionKnown, "codex");
     let (process_limits, json_limits) = limits();
     let known = detect_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         known_root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
@@ -171,7 +171,7 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
 
     let (unknown_root, _unknown_fixture) = install(FakeNativeMode::VersionUnknown, "codex");
     let unknown = detect_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         unknown_root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
@@ -189,13 +189,13 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
 fn exact_real_versions_are_reachable_and_select_exact_profiles() {
     for (harness, profile, binary, expected) in [
         (
-            HarnessKind::Codex,
+            CodexAdapter::static_ref(),
             FakeHarnessProfile::codex(),
             "codex",
             "0.144.1",
         ),
         (
-            HarnessKind::Claude,
+            ClaudeAdapter::static_ref(),
             FakeHarnessProfile::claude(),
             "claude",
             "2.1.201",
@@ -216,7 +216,8 @@ fn exact_real_versions_are_reachable_and_select_exact_profiles() {
         };
         assert_eq!(native_version.as_str(), expected);
         assert!(
-            select_profile(harness, native_version)
+            harness
+                .select_profile(native_version)
                 .mutation_capabilities()
                 .is_some()
         );
@@ -231,7 +232,7 @@ fn configured_absolute_binary_is_used_for_detection_without_path_lookup() {
         AbsolutePath::new(root.join("codex").to_str().unwrap()).unwrap(),
     );
     let installation = detect_configured_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         configured,
         None,
         process_limits,
@@ -251,8 +252,16 @@ fn configured_absolute_binary_is_used_for_detection_without_path_lookup() {
 #[test]
 fn cross_harness_and_extra_document_versions_are_rejected() {
     for (harness, profile, binary) in [
-        (HarnessKind::Codex, FakeHarnessProfile::claude(), "codex"),
-        (HarnessKind::Claude, FakeHarnessProfile::codex(), "claude"),
+        (
+            CodexAdapter::static_ref(),
+            FakeHarnessProfile::claude(),
+            "codex",
+        ),
+        (
+            ClaudeAdapter::static_ref(),
+            FakeHarnessProfile::codex(),
+            "claude",
+        ),
     ] {
         let (root, _fixture) = install_profile(&profile, binary);
         let (process_limits, json_limits) = limits();
@@ -272,7 +281,7 @@ fn cross_harness_and_extra_document_versions_are_rejected() {
     let (process_limits, json_limits) = limits();
     assert_eq!(
         detect_installation(
-            HarnessKind::Codex,
+            CodexAdapter::static_ref(),
             root.path().as_os_str().to_os_string(),
             process_limits,
             json_limits,
@@ -287,7 +296,7 @@ fn malformed_native_output_is_typed_and_secret_safe() {
     let (root, _fixture) = install(FakeNativeMode::DuplicateJson, "claude");
     let (process_limits, json_limits) = limits();
     let error = detect_installation(
-        HarnessKind::Claude,
+        ClaudeAdapter::static_ref(),
         root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
@@ -308,7 +317,7 @@ fn flood_native_output_is_bounded_and_secret_safe() {
     );
     let (process_limits, json_limits) = limits();
     let error = detect_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
@@ -330,7 +339,7 @@ fn nonzero_and_timeout_version_commands_remain_distinct_failures() {
     let (process_limits, json_limits) = limits();
     assert_eq!(
         detect_installation(
-            HarnessKind::Codex,
+            CodexAdapter::static_ref(),
             nonzero_root.path().as_os_str().to_os_string(),
             process_limits,
             json_limits,
@@ -343,7 +352,7 @@ fn nonzero_and_timeout_version_commands_remain_distinct_failures() {
     let timeout_limits = ProcessLimits::new(50, 4_096, 4_096, 8_192).unwrap();
     assert_eq!(
         detect_installation(
-            HarnessKind::Claude,
+            ClaudeAdapter::static_ref(),
             timeout_root.path().as_os_str().to_os_string(),
             timeout_limits,
             json_limits,
@@ -358,7 +367,7 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
     let (process_limits, json_limits) = limits();
     let missing = TempRoot::new("skilltap-detection-missing").unwrap();
     let error = detect_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         missing.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
@@ -369,7 +378,8 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
         DetectionError::Runtime(ObservationRuntimeError::ExecutableNotFound)
     );
 
-    let unavailable = unreachable_installation(HarnessKind::Claude, UnreachableReason::NotFound);
+    let unavailable =
+        unreachable_installation(ClaudeAdapter::static_ref(), UnreachableReason::NotFound);
     assert!(matches!(
         unavailable.reachability(),
         HarnessReachability::Unreachable {
@@ -383,7 +393,7 @@ fn missing_binary_and_explicit_unreachable_results_do_not_probe() {
 fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
     let known = skilltap_core::domain::NativeVersion::new("0.144.1").unwrap();
     let unknown = skilltap_core::domain::NativeVersion::new("99.0.0").unwrap();
-    let known_profile = select_profile(HarnessKind::Codex, &known);
+    let known_profile = CodexAdapter::static_ref().select_profile(&known);
     assert!(known_profile.mutation_capabilities().is_some());
     assert_eq!(
         known_profile.profile_id().unwrap().as_str(),
@@ -392,17 +402,15 @@ fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
 
     for version in ["3.0.0", "0.144.0", "0.144.2", "2.1.201"] {
         assert!(
-            select_profile(
-                HarnessKind::Codex,
-                &skilltap_core::domain::NativeVersion::new(version).unwrap()
-            )
-            .mutation_capabilities()
-            .is_none(),
+            CodexAdapter::static_ref()
+                .select_profile(&skilltap_core::domain::NativeVersion::new(version).unwrap())
+                .mutation_capabilities()
+                .is_none(),
             "{version} must not select the exact Codex profile"
         );
     }
 
-    let unknown_profile = select_profile(HarnessKind::Codex, &unknown);
+    let unknown_profile = CodexAdapter::static_ref().select_profile(&unknown);
     assert!(unknown_profile.mutation_capabilities().is_none());
     assert!(unknown_profile.profile_id().is_none());
 }
@@ -410,7 +418,7 @@ fn known_profiles_grant_mutation_and_unknown_versions_remain_observe_only() {
 #[test]
 fn probe_narrowing_is_strict_and_never_widens_profiles() {
     let known = skilltap_core::domain::NativeVersion::new("0.144.1").unwrap();
-    let profile = select_profile(HarnessKind::Codex, &known);
+    let profile = CodexAdapter::static_ref().select_profile(&known);
     let narrowed = skilltap_harnesses::narrow_profile(
         &profile,
         &serde_json::json!({
@@ -463,14 +471,14 @@ fn detection_pipeline_is_repeatable_and_keeps_sibling_failures_isolated() {
     let (process_limits, json_limits) = limits();
     let codex_before = fs::read_dir(codex_root.path()).unwrap().count();
     let first = detect_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         codex_root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
     )
     .unwrap();
     let second = detect_installation(
-        HarnessKind::Codex,
+        CodexAdapter::static_ref(),
         codex_root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,
@@ -482,7 +490,7 @@ fn detection_pipeline_is_repeatable_and_keeps_sibling_failures_isolated() {
         codex_before
     );
     let claude = detect_installation(
-        HarnessKind::Claude,
+        ClaudeAdapter::static_ref(),
         claude_root.path().as_os_str().to_os_string(),
         process_limits,
         json_limits,

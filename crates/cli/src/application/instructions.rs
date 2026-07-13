@@ -41,7 +41,8 @@ impl StatusApplication<'_> {
         let mut path_count = 0_u64;
         let mut healthy = true;
         for concrete_scope in &scope.resolved {
-            let (canonical, bridges) = instruction_locations(&paths, concrete_scope, &enabled);
+            let (canonical, bridges) =
+                instruction_locations(self.registry, &paths, concrete_scope, &enabled);
             let canonical_status = match filesystem.inspect(&canonical) {
                 Ok(metadata) => match metadata.kind() {
                     FileKind::Missing => "missing",
@@ -103,57 +104,62 @@ impl StatusApplication<'_> {
                     );
                 }
             }
-            if let Scope::Project(project) = concrete_scope
-                && enabled.iter().any(|target| target.as_str() == "claude")
-            {
-                let nested = AbsolutePath::new(format!("{}/.claude/CLAUDE.md", project.as_str()))
-                    .expect("nested project Claude bridge path is valid");
-                let nested_exists = filesystem
-                    .inspect(&nested)
-                    .map(|metadata| metadata.kind() != FileKind::Missing)
-                    .unwrap_or(false);
-                if nested_exists {
-                    let root = AbsolutePath::new(format!("{}/CLAUDE.md", project.as_str()))
-                        .expect("project Claude bridge path is valid");
+            if let Scope::Project(project) = concrete_scope {
+                for (target, root, alternate) in
+                    alternate_instruction_bridges(self.registry, project, &enabled)
+                {
+                    let alternate_exists = filesystem
+                        .inspect(&alternate)
+                        .map(|metadata| metadata.kind() != FileKind::Missing)
+                        .unwrap_or(false);
+                    if !alternate_exists {
+                        continue;
+                    }
                     let root_exists = filesystem
                         .inspect(&root)
                         .map(|metadata| metadata.kind() != FileKind::Missing)
                         .unwrap_or(false);
                     path_count += 1;
-                    let nested_status = instruction_bridge_status_with_target(
+                    let alternate_status = instruction_bridge_status_with_target(
                         &filesystem,
                         &canonical,
-                        &nested,
+                        &alternate,
                         mode,
                         b"@../AGENTS.md\n",
                     );
                     outcome = outcome.with_resource(
                         OutputEntry::new(
-                            instruction_resource_key(concrete_scope, "bridge-nested", "claude")
-                                .map(|key| key.to_string())
-                                .unwrap_or_else(|| "instructions:bridge-nested:claude".to_owned()),
+                            instruction_resource_key(
+                                concrete_scope,
+                                "bridge-nested",
+                                target.as_str(),
+                            )
+                            .map(|key| key.to_string())
+                            .unwrap_or_else(|| format!("instructions:bridge-nested:{target}")),
                             if root_exists {
                                 "duplicate"
                             } else {
-                                nested_status
+                                alternate_status
                             },
                         )
-                        .with_field("path", nested.as_str())
-                        .with_field("target", "claude")
+                        .with_field("path", alternate.as_str())
+                        .with_field("target", target.as_str())
                         .with_field("scope", scope_label(concrete_scope)),
                     );
                     healthy = false;
-                    outcome = outcome.with_warning(Warning::new(
-                        "instruction_duplicate_claude_bridge",
-                        if root_exists {
-                            "Both project Claude instruction locations exist; consolidate to one managed bridge."
-                        } else if nested_status == "managed" {
-                            "The project uses the nested Claude instruction bridge; setup should preserve that location."
-                        } else {
-                            "The nested project Claude instruction bridge is missing or divergent."
-                        },
-                    )
-                    .with_context("scope", scope_label(concrete_scope)));
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "instruction_duplicate_claude_bridge",
+                            if root_exists {
+                                "Both project Claude instruction locations exist; consolidate to one managed bridge."
+                            } else if alternate_status == "managed" {
+                                "The project uses the nested Claude instruction bridge; setup should preserve that location."
+                            } else {
+                                "The nested project Claude instruction bridge is missing or divergent."
+                            },
+                        )
+                        .with_context("scope", scope_label(concrete_scope)),
+                    );
                 }
             }
         }
@@ -214,8 +220,12 @@ impl StatusApplication<'_> {
                 "The instruction resource scope could not be resolved.",
             ));
         };
-        let (canonical, bridges) =
-            instruction_locations(&paths, concrete_scope, std::slice::from_ref(target));
+        let (canonical, bridges) = instruction_locations(
+            self.registry,
+            &paths,
+            concrete_scope,
+            std::slice::from_ref(target),
+        );
         let is_canonical = resource.id().as_str().contains(":canonical:");
         let operation_id = format!("reconcile:{target}:{}", resource.key());
         let status;
@@ -246,7 +256,13 @@ impl StatusApplication<'_> {
             // root `CLAUDE.md` does not exist.  The desired resource keeps
             // the stable bridge identity, so preview must resolve the
             // materialized path using the same policy before classifying it.
-            path = preferred_instruction_bridge_path(&filesystem, concrete_scope, target, bridge);
+            path = preferred_instruction_bridge_path(
+                self.registry,
+                &filesystem,
+                concrete_scope,
+                target,
+                bridge,
+            );
         }
 
         let health = if is_canonical {
@@ -259,8 +275,8 @@ impl StatusApplication<'_> {
                 Err(_) => "unreadable",
             }
         } else {
-            let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
-                && path.as_str().ends_with("/.claude/CLAUDE.md");
+            let nested_project_bridge =
+                is_alternate_instruction_bridge(self.registry, concrete_scope, target, &path);
             let expected_bytes =
                 if documents.config.instructions().claude_mode == ClaudeInstructionMode::Import {
                     if matches!(concrete_scope, Scope::Global) {
@@ -402,66 +418,65 @@ impl StatusApplication<'_> {
             }
         };
         for concrete_scope in &scope.resolved {
-            let (canonical, mut bridges) = instruction_locations(&paths, concrete_scope, &enabled);
-            let mut duplicate_nested = None;
-            if let Scope::Project(project) = concrete_scope
-                && enabled.iter().any(|target| target.as_str() == "claude")
-            {
-                let root = AbsolutePath::new(format!("{}/CLAUDE.md", project.as_str()))
-                    .expect("project Claude bridge path is valid");
-                let nested = AbsolutePath::new(format!("{}/.claude/CLAUDE.md", project.as_str()))
-                    .expect("nested project Claude bridge path is valid");
-                let root_missing = filesystem
-                    .inspect(&root)
-                    .map(|metadata| metadata.kind() == FileKind::Missing)
-                    .unwrap_or(false);
-                let nested_present = filesystem
-                    .inspect(&nested)
-                    .map(|metadata| metadata.kind() != FileKind::Missing)
-                    .unwrap_or(false);
-                if !root_missing && nested_present {
-                    let nested_kind = filesystem
-                        .inspect(&nested)
-                        .ok()
-                        .map(|metadata| metadata.kind());
-                    if !matches!(nested_kind, Some(FileKind::RegularFile | FileKind::Symlink)) {
-                        outcome.result = ResultClass::AttentionRequired;
-                        outcome = outcome
-                            .with_warning(
-                                Warning::new(
-                                    "instruction_duplicate_bridge_broken",
-                                    "The nested project Claude entry is not a removable regular file or symlink; consolidation is blocked.",
+            let (canonical, mut bridges) =
+                instruction_locations(self.registry, &paths, concrete_scope, &enabled);
+            let mut duplicate_alternate = None;
+            if let Scope::Project(project) = concrete_scope {
+                for (target, root, alternate) in
+                    alternate_instruction_bridges(self.registry, project, &enabled)
+                {
+                    let root_missing = filesystem
+                        .inspect(&root)
+                        .map(|metadata| metadata.kind() == FileKind::Missing)
+                        .unwrap_or(false);
+                    let alternate_present = filesystem
+                        .inspect(&alternate)
+                        .map(|metadata| metadata.kind() != FileKind::Missing)
+                        .unwrap_or(false);
+                    if !root_missing && alternate_present {
+                        let alternate_kind = filesystem
+                            .inspect(&alternate)
+                            .ok()
+                            .map(|metadata| metadata.kind());
+                        if !matches!(
+                            alternate_kind,
+                            Some(FileKind::RegularFile | FileKind::Symlink)
+                        ) {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome
+                                .with_warning(
+                                    Warning::new(
+                                        "instruction_duplicate_bridge_broken",
+                                        "The nested project Claude entry is not a removable regular file or symlink; consolidation is blocked.",
+                                    )
+                                    .with_context("scope", scope_label(concrete_scope)),
                                 )
-                                .with_context("scope", scope_label(concrete_scope)),
-                            )
-                            .with_next_action(NextAction::new(
-                                "repair_duplicate_bridge_manually",
-                                "Replace the broken nested Claude entry with a regular file or symlink, then retry repair.",
-                            ));
-                        continue;
-                    }
-                    duplicate_nested = Some(nested.clone());
-                    if !(repair && acknowledged) {
-                        outcome.result = ResultClass::AttentionRequired;
-                        outcome = outcome
-                            .with_warning(
-                                Warning::new(
-                                    "instruction_duplicate_claude_bridge",
-                                    "Both project Claude instruction locations exist; use repair with --yes to consolidate to the root bridge.",
+                                .with_next_action(NextAction::new(
+                                    "repair_duplicate_bridge_manually",
+                                    "Replace the broken nested Claude entry with a regular file or symlink, then retry repair.",
+                                ));
+                            continue;
+                        }
+                        duplicate_alternate = Some((target.clone(), alternate.clone()));
+                        if !(repair && acknowledged) {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome
+                                .with_warning(
+                                    Warning::new(
+                                        "instruction_duplicate_claude_bridge",
+                                        "Both project Claude instruction locations exist; use repair with --yes to consolidate to the root bridge.",
+                                    )
+                                    .with_context("scope", scope_label(concrete_scope)),
                                 )
-                                .with_context("scope", scope_label(concrete_scope)),
-                            )
-                            .with_next_action(NextAction::new(
-                                "repair_duplicate_bridge",
-                                "Run instructions repair --project --yes to keep the root Claude bridge and remove the nested duplicate.",
-                            ));
-                        continue;
+                                .with_next_action(NextAction::new(
+                                    "repair_duplicate_bridge",
+                                    "Run instructions repair --project --yes to keep the root Claude bridge and remove the nested duplicate.",
+                                ));
+                            continue;
+                        }
+                    } else if root_missing && alternate_present {
+                        bridges = vec![(target, alternate)];
                     }
-                } else if root_missing && nested_present {
-                    bridges = vec![(
-                        HarnessId::new("claude").expect("known harness id is valid"),
-                        nested,
-                    )];
                 }
             }
             let canonical_id = instruction_operation_id(concrete_scope, "canonical", "root");
@@ -570,11 +585,11 @@ impl StatusApplication<'_> {
                 seeds.insert(state.key().clone(), state);
             }
 
-            if let Some(nested) = duplicate_nested {
+            if let Some((alternate_target, nested)) = duplicate_alternate {
                 let nested_resource = match instruction_resource_key(
                     concrete_scope,
                     "bridge-nested",
-                    "claude",
+                    alternate_target.as_str(),
                 ) {
                     Some(key) => key,
                     None => {
@@ -585,11 +600,15 @@ impl StatusApplication<'_> {
                         ));
                     }
                 };
-                let nested_id = instruction_operation_id(concrete_scope, "bridge-nested", "claude");
+                let nested_id = instruction_operation_id(
+                    concrete_scope,
+                    "bridge-nested",
+                    alternate_target.as_str(),
+                );
                 let nested_operation =
                     match skilltap_core::lifecycle_operation::faithful_file_operation(
                         nested_id.clone(),
-                        HarnessId::new("claude").expect("known harness id is valid"),
+                        alternate_target.clone(),
                         nested_resource.clone(),
                         OperationAction::InstructionRepair,
                         nested.clone(),
@@ -614,7 +633,7 @@ impl StatusApplication<'_> {
                     .and_then(|_| filesystem.read(&nested).ok())
                     .unwrap_or_default();
                 let nested_target = TargetResourceState::new(
-                    HarnessId::new("claude").expect("known harness id is valid"),
+                    alternate_target,
                     Some(NativeId::new(nested.as_str()).expect("absolute path is valid native id")),
                     Provenance::Direct,
                     Ownership::Skilltap,
@@ -650,8 +669,12 @@ impl StatusApplication<'_> {
             }
 
             for (target, bridge) in bridges {
-                let nested_project_bridge = matches!(concrete_scope, Scope::Project(_))
-                    && bridge.as_str().ends_with("/.claude/CLAUDE.md");
+                let nested_project_bridge = is_alternate_instruction_bridge(
+                    self.registry,
+                    concrete_scope,
+                    &target,
+                    &bridge,
+                );
                 let expected_symlink = relative_symlink_target(&bridge, &canonical);
                 let (write, expected_bytes) = match mode {
                     ClaudeInstructionMode::Symlink => (

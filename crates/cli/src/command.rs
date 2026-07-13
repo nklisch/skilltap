@@ -22,7 +22,7 @@ pub(crate) const EXIT_STATUS_HELP: &str = concat!(
 #[command(
     name = "skilltap",
     version = skilltap_core::VERSION,
-    about = "Manage local Codex and Claude Code environments",
+    about = "Manage local agent harness environments",
     subcommand_required = true
 )]
 pub struct Cli {
@@ -48,7 +48,7 @@ pub enum Command {
     Sync(SyncArgs),
     /// Install or repair the skilltap binary and first-party harness plugin.
     #[command(
-        after_help = "Bootstrap is non-interactive. It detects Claude/Codex independently; use --allow-major to acknowledge an existing major-version upgrade.\nExit status: 0 completed; 1 invalid or pre-mutation failure; 2 attention or user decision required; 3 partial mutation requiring recovery."
+        after_help = "Bootstrap is non-interactive. It detects first-party plugin targets independently; use --allow-major to acknowledge an existing major-version upgrade.\nExit status: 0 completed; 1 invalid or pre-mutation failure; 2 attention or user decision required; 3 partial mutation requiring recovery."
     )]
     Bootstrap(BootstrapArgs),
     /// Manage registered native marketplaces.
@@ -84,7 +84,7 @@ pub enum HarnessCommand {
 
 #[derive(Debug, Args)]
 pub struct HarnessEnableArgs {
-    /// Harness to enable (`codex` or `claude`).
+    /// Registered harness to enable.
     #[arg(value_parser = parse_harness)]
     pub harness: HarnessId,
     /// Override the harness executable name or absolute path.
@@ -96,7 +96,7 @@ pub struct HarnessEnableArgs {
 
 #[derive(Debug, Args)]
 pub struct HarnessChangeArgs {
-    /// Harness to disable (`codex` or `claude`).
+    /// Registered harness to disable.
     #[arg(value_parser = parse_harness)]
     pub harness: HarnessId,
     #[command(flatten)]
@@ -150,7 +150,7 @@ pub struct SyncArgs {
 
 #[derive(Debug, Args)]
 pub struct BootstrapArgs {
-    /// Detect and set up Codex, Claude Code, or both harnesses.
+    /// Detect and set up one or all first-party plugin targets.
     #[arg(long, value_name = "TARGET", value_parser = parse_target)]
     pub target: Option<TargetSelection>,
     /// Allow an existing binary to cross a major release boundary.
@@ -420,7 +420,7 @@ pub struct DaemonEnableArgs {
 
 #[derive(Clone, Debug, Default, Args)]
 pub struct TargetArgs {
-    /// Select Codex, Claude Code, or all enabled harnesses.
+    /// Select one registered harness or all enabled harnesses.
     #[arg(long, value_name = "TARGET", value_parser = parse_target)]
     pub target: Option<TargetSelection>,
 }
@@ -504,17 +504,13 @@ pub struct ScopedOutputArgs {
 }
 
 fn parse_harness(value: &str) -> Result<HarnessId, String> {
-    match value {
-        "codex" | "claude" => HarnessId::new(value).map_err(|error| error.to_string()),
-        _ => Err("expected `codex` or `claude`".to_owned()),
-    }
+    HarnessId::new(value).map_err(|error| error.to_string())
 }
 
 fn parse_target(value: &str) -> Result<TargetSelection, String> {
     match value {
         "all" => Ok(TargetSelection::All),
-        "codex" | "claude" => parse_harness(value).map(TargetSelection::Only),
-        _ => Err("expected `codex`, `claude`, or `all`".to_owned()),
+        _ => parse_harness(value).map(TargetSelection::Only),
     }
 }
 

@@ -191,8 +191,8 @@ impl StatusApplication<'_> {
                         "No harness is enabled in skilltap configuration.",
                     ))
                     .with_next_action(
-                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                            .with_command("skilltap harness enable <codex|claude>"),
+                        NextAction::new("enable_harness", "Enable a registered harness.")
+                            .with_command("skilltap harness enable <registered-harness>"),
                     );
             }
             Err(StatusTargetError::NotEnabled) => {
@@ -209,8 +209,14 @@ impl StatusApplication<'_> {
         for concrete_scope in &scope.resolved {
             for harness in targets.iter() {
                 operation_count += 1;
-                let presence =
-                    lifecycle_preview_presence(&documents, kind, harness, concrete_scope, name);
+                let presence = lifecycle_preview_presence(
+                    self.registry,
+                    &documents,
+                    kind,
+                    harness,
+                    concrete_scope,
+                    name,
+                );
                 let recorded = lifecycle_recorded_state(&documents, kind, concrete_scope, name);
                 let status = match (presence, recorded) {
                     (NativeResourceObservation::Present { .. }, true) => "no_change",
@@ -280,8 +286,8 @@ impl StatusApplication<'_> {
                         "No harness is enabled in skilltap configuration.",
                     ))
                     .with_next_action(
-                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                            .with_command("skilltap harness enable <codex|claude>"),
+                        NextAction::new("enable_harness", "Enable a registered harness.")
+                            .with_command("skilltap harness enable <registered-harness>"),
                     );
             }
             Err(StatusTargetError::NotEnabled) => {
@@ -479,7 +485,10 @@ impl StatusApplication<'_> {
                     .unwrap_or_default();
                 let mut native_route_selected = false;
                 for target_id in targets.iter() {
-                    if target_id.as_str() == "codex"
+                    if self
+                        .registry
+                        .adapter(target_id)
+                        .is_some_and(skilltap_harnesses::HarnessAdapter::managed_project_lifecycle)
                         && let Scope::Project(project) = concrete_scope
                     {
                         let desired_here = documents.inventory.as_ref().is_some_and(|inventory| {
@@ -541,30 +550,34 @@ impl StatusApplication<'_> {
                         continue;
                     }
                     let profile = configured_native_profile(
+                        self.registry,
                         &documents.config,
                         target_id,
-                        concrete_scope,
-                        process_limits,
-                        json_limits,
-                        search_path.clone(),
-                        match kind {
-                            NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
-                            NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
-                            NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
-                            NativeLifecycleKind::PluginInstall => "plugin.install",
-                            NativeLifecycleKind::PluginRemove => "plugin.remove",
-                            NativeLifecycleKind::PluginUpdate => "plugin.update",
+                        NativeProfileRequest {
+                            scope: concrete_scope,
+                            process_limits,
+                            json_limits,
+                            search_path: search_path.clone(),
+                            capability_name: match kind {
+                                NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+                                NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
+                                NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+                                NativeLifecycleKind::PluginInstall => "plugin.install",
+                                NativeLifecycleKind::PluginRemove => "plugin.remove",
+                                NativeLifecycleKind::PluginUpdate => "plugin.update",
+                            },
                         },
                     );
-                    let (harness, configured, executable, capability) = match profile {
+                    let profile = match profile {
                         Ok(Some(profile)) => profile,
                         Err(error) => {
                             outcome.result = ResultClass::AttentionRequired;
-                            let binary = match target_id.as_str() {
-                                "codex" => documents.config.harnesses().codex.binary.as_str(),
-                                "claude" => documents.config.harnesses().claude.binary.as_str(),
-                                _ => target_id.as_str(),
-                            };
+                            let binary = documents
+                                .config
+                                .harnesses()
+                                .get(target_id)
+                                .map(|policy| policy.binary.as_str())
+                                .unwrap_or_else(|| target_id.as_str());
                             let diagnostic =
                                 detection_diagnostic(&error, target_id.as_str(), binary);
                             outcome = outcome
@@ -601,7 +614,7 @@ impl StatusApplication<'_> {
                             continue;
                         }
                     };
-                    if capability != CapabilitySupport::Supported {
+                    if profile.capability != CapabilitySupport::Supported {
                         outcome.result = ResultClass::AttentionRequired;
                         outcome = outcome.with_warning(
                             Warning::new(
@@ -614,8 +627,13 @@ impl StatusApplication<'_> {
                         continue;
                     }
                     native_route_selected = true;
-                    let native_request = request.native_request(harness, concrete_scope.clone());
-                    let arguments = match native_arguments(&native_request) {
+                    let native_request = request.native_request(concrete_scope.clone());
+                    let native_dispatch = NativeLifecycleDispatch::new(
+                        profile.target.clone(),
+                        profile.lifecycle,
+                        native_request,
+                    );
+                    let arguments = match native_arguments(&native_dispatch) {
                         Ok(arguments) => arguments,
                         Err(_) => {
                             outcome.result = ResultClass::AttentionRequired;
@@ -642,10 +660,10 @@ impl StatusApplication<'_> {
                     let requires_fresh_precondition = journal_has_attempt || removal;
                     let fresh_presence = if requires_fresh_precondition {
                         observe_native_resource(
-                            configured.clone(),
+                            profile.configured.clone(),
                             search_path.clone(),
                             &native_environment,
-                            &native_request,
+                            &native_dispatch,
                             process_limits,
                             json_limits,
                         )
@@ -679,7 +697,7 @@ impl StatusApplication<'_> {
                                         target_id.clone(),
                                         resource.key().clone(),
                                         request.operation_action(),
-                                        executable,
+                                        profile.executable,
                                         command_arguments,
                                     ) {
                                         Ok(operation) => operation,
@@ -694,10 +712,10 @@ impl StatusApplication<'_> {
                                     operations.push(operation);
                                     requests.push((
                                         operation_id,
-                                        configured,
+                                        profile.configured,
                                         search_path.clone(),
                                         process_limits,
-                                        native_request,
+                                        native_dispatch,
                                     ));
                                 } else {
                                     outcome = outcome.with_operation(
@@ -759,7 +777,7 @@ impl StatusApplication<'_> {
                         target_id.clone(),
                         resource.key().clone(),
                         request.operation_action(),
-                        executable,
+                        profile.executable,
                         command_arguments,
                     ) {
                         Ok(operation) => operation,
@@ -774,10 +792,10 @@ impl StatusApplication<'_> {
                     operations.push(operation);
                     requests.push((
                         operation_id,
-                        configured,
+                        profile.configured,
                         search_path.clone(),
                         process_limits,
-                        native_request,
+                        native_dispatch,
                     ));
                 }
                 if native_route_selected && !native_ids.is_empty() {
@@ -998,7 +1016,9 @@ impl StatusApplication<'_> {
             };
         let observation = match self.native_observation {
             NativeObservationMode::Disabled => NativeObservation::default(),
-            NativeObservationMode::System => NativeObservation::run(&documents, &scope, &targets),
+            NativeObservationMode::System => {
+                NativeObservation::run(self.registry, &documents, &scope, &targets)
+            }
         };
         for resource in observation.resources.iter().cloned() {
             outcome = outcome.with_resource(resource);
@@ -1532,17 +1552,22 @@ impl StatusApplication<'_> {
                 }
             };
             let mut native_ids: BTreeMap<HarnessId, NativeId> = BTreeMap::new();
-            let destinations =
-                match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
-                    Some(destinations) => destinations,
-                    None => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "skill_destination_invalid",
-                            "The selected harness skill destination could not be resolved.",
-                        ));
-                    }
-                };
+            let destinations = match skill_destinations(
+                self.registry,
+                &paths,
+                concrete_scope,
+                &targets.resolved,
+                &destination,
+            ) {
+                Some(destinations) => destinations,
+                None => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "skill_destination_invalid",
+                        "The selected harness skill destination could not be resolved.",
+                    ));
+                }
+            };
             for destination_entry in destinations {
                 let SkillDestination {
                     target,
@@ -2175,17 +2200,22 @@ impl StatusApplication<'_> {
                 continue;
             }
             let warning_count = outcome.warnings.len();
-            let destinations =
-                match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
-                    Some(destinations) => destinations,
-                    None => {
-                        outcome.result = ResultClass::Invalid;
-                        return outcome.with_error(ErrorDetail::new(
-                            "skill_destination_invalid",
-                            "The selected harness skill destination could not be resolved.",
-                        ));
-                    }
-                };
+            let destinations = match skill_destinations(
+                self.registry,
+                &paths,
+                concrete_scope,
+                &targets.resolved,
+                &destination,
+            ) {
+                Some(destinations) => destinations,
+                None => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "skill_destination_invalid",
+                        "The selected harness skill destination could not be resolved.",
+                    ));
+                }
+            };
             for destination_entry in destinations {
                 let SkillDestination {
                     target,

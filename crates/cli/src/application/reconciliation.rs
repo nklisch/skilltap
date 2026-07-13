@@ -54,6 +54,7 @@ impl StatusApplication<'_> {
             Ok(targets) => targets,
             Err(StatusTargetError::NoneEnabled) => {
                 return first_use_harness_report(
+                    self.registry,
                     &documents.config,
                     outcome,
                     self.native_observation,
@@ -62,8 +63,8 @@ impl StatusApplication<'_> {
                 .with_summary("scopes", scope.count)
                 .with_summary("targets", 0_u64)
                 .with_next_action(
-                    NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                        .with_command("skilltap harness enable <codex|claude>"),
+                    NextAction::new("enable_harness", "Enable a registered harness.")
+                        .with_command("skilltap harness enable <registered-harness>"),
                 );
             }
             Err(StatusTargetError::NotEnabled) => {
@@ -75,7 +76,7 @@ impl StatusApplication<'_> {
                     )
                     .with_next_action(
                         NextAction::new("enable_harness", "Enable the requested harness.")
-                            .with_command("skilltap harness enable <codex|claude>"),
+                            .with_command("skilltap harness enable <registered-harness>"),
                     ),
                 );
             }
@@ -83,7 +84,9 @@ impl StatusApplication<'_> {
 
         let observation = match self.native_observation {
             NativeObservationMode::Disabled => NativeObservation::default(),
-            NativeObservationMode::System => NativeObservation::run(&documents, &scope, &targets),
+            NativeObservationMode::System => {
+                NativeObservation::run(self.registry, &documents, &scope, &targets)
+            }
         };
         for resource in observation.resources.iter().cloned() {
             outcome = outcome.with_resource(resource);

@@ -20,6 +20,7 @@ impl StatusApplication<'_> {
             Ok(targets) => targets,
             Err(StatusTargetError::NoneEnabled) => {
                 return first_use_harness_report(
+                    self.registry,
                     &documents.config,
                     outcome,
                     self.native_observation,
@@ -31,8 +32,8 @@ impl StatusApplication<'_> {
                     "No harness is enabled in skilltap configuration.",
                 ))
                 .with_next_action(
-                    NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                        .with_command("skilltap harness enable <codex|claude>"),
+                    NextAction::new("enable_harness", "Enable a registered harness.")
+                        .with_command("skilltap harness enable <registered-harness>"),
                 );
             }
             Err(StatusTargetError::NotEnabled) => {
@@ -44,7 +45,7 @@ impl StatusApplication<'_> {
                     ))
                     .with_next_action(
                         NextAction::new("enable_harness", "Enable the requested harness.")
-                            .with_command("skilltap harness enable <codex|claude>"),
+                            .with_command("skilltap harness enable <registered-harness>"),
                     );
             }
         };
@@ -54,6 +55,7 @@ impl StatusApplication<'_> {
             scope: &scope,
             targets: &targets,
             native_observation: self.native_observation,
+            registry: self.registry,
         }
         .apply(outcome)
     }
@@ -88,8 +90,8 @@ impl StatusApplication<'_> {
                         "No harness is enabled in skilltap configuration.",
                     ))
                     .with_next_action(
-                        NextAction::new("enable_harness", "Enable Codex or Claude management.")
-                            .with_command("skilltap harness enable <codex|claude>"),
+                        NextAction::new("enable_harness", "Enable a registered harness.")
+                            .with_command("skilltap harness enable <registered-harness>"),
                     );
             }
             Err(StatusTargetError::NotEnabled) => {
@@ -102,7 +104,7 @@ impl StatusApplication<'_> {
         };
         outcome.scope = Some(scope.output.clone());
 
-        let observation = NativeObservation::run(&documents, &scope, &targets);
+        let observation = NativeObservation::run(self.registry, &documents, &scope, &targets);
         let Some(environment) = observation.environment.clone() else {
             outcome.result = ResultClass::AttentionRequired;
             return outcome
@@ -181,7 +183,7 @@ impl StatusApplication<'_> {
             self.inventory,
             &initial_plan,
             |evidence| {
-                let refreshed = NativeObservation::run(&documents, &scope, &targets);
+                let refreshed = NativeObservation::run(self.registry, &documents, &scope, &targets);
                 if refreshed.environment.is_none() {
                     return Err(AdoptionObservationError::Unavailable);
                 }
@@ -214,7 +216,25 @@ impl StatusApplication<'_> {
         let loaded = DocumentLoadPhase::execute(self);
         let mut outcome = loaded.project(Outcome::new(command, ResultClass::AttentionRequired));
         match loaded.finish() {
-            Ok(documents) => Ok((documents, outcome)),
+            Ok(documents) => {
+                if let Some(target) = documents
+                    .config
+                    .harnesses()
+                    .iter()
+                    .map(|(target, _)| target)
+                    .find(|target| !self.registry.contains(target))
+                {
+                    outcome.result = ResultClass::Invalid;
+                    return Err(Box::new(outcome.with_error(
+                        ErrorDetail::new(
+                            "target_not_registered",
+                            "The configuration contains a harness that is not registered in this build.",
+                        )
+                        .with_context("harness", target.as_str()),
+                    )));
+                }
+                Ok((documents, outcome))
+            }
             Err(errors) => {
                 outcome.result = ResultClass::Invalid;
                 for error in errors {
@@ -375,6 +395,7 @@ pub(super) struct StatusProjection<'a> {
     scope: &'a StatusScope,
     targets: &'a StatusTargets,
     native_observation: NativeObservationMode,
+    registry: &'a skilltap_harnesses::TargetRegistry,
 }
 
 impl StatusProjection<'_> {
@@ -385,7 +406,7 @@ impl StatusProjection<'_> {
         let observation = match self.native_observation {
             NativeObservationMode::Disabled => NativeObservation::default(),
             NativeObservationMode::System => {
-                NativeObservation::run(self.documents, self.scope, self.targets)
+                NativeObservation::run(self.registry, self.documents, self.scope, self.targets)
             }
         };
         for resource in observation.resources.iter().cloned() {
@@ -508,6 +529,7 @@ pub(super) struct NativeObservation {
 
 impl NativeObservation {
     pub(super) fn run(
+        registry: &skilltap_harnesses::TargetRegistry,
         documents: &StatusDocuments,
         scope: &StatusScope,
         targets: &StatusTargets,
@@ -561,27 +583,22 @@ impl NativeObservation {
         let mut metadata = Vec::new();
 
         for target in targets.iter() {
-            let (kind, binary) = match target.as_str() {
-                "codex" => (
-                    HarnessKind::Codex,
-                    documents.config.harnesses().codex.binary.as_str(),
-                ),
-                "claude" => (
-                    HarnessKind::Claude,
-                    documents.config.harnesses().claude.binary.as_str(),
-                ),
-                _ => {
-                    result.failed_targets += scope.resolved.len();
-                    result.warnings.push(
-                        Warning::new(
-                            "unsupported_harness",
-                            "The selected harness is not supported.",
-                        )
-                        .with_context("harness", target.as_str()),
-                    );
-                    continue;
-                }
+            let Some(adapter) = registry.adapter(target) else {
+                result.failed_targets += scope.resolved.len();
+                result.warnings.push(
+                    Warning::new(
+                        "unsupported_harness",
+                        "The selected harness is not supported.",
+                    )
+                    .with_context("harness", target.as_str()),
+                );
+                continue;
             };
+            let Some(policy) = documents.config.harnesses().get(target) else {
+                result.failed_targets += scope.resolved.len();
+                continue;
+            };
+            let binary = policy.binary.as_str();
             let configured = match configured_binary(binary) {
                 Ok(binary) => binary,
                 Err(_) => {
@@ -597,7 +614,7 @@ impl NativeObservation {
                 }
             };
             let installation = match detect_configured_installation(
-                kind,
+                adapter,
                 configured,
                 search_path.clone(),
                 &native_environment,
@@ -624,7 +641,7 @@ impl NativeObservation {
                 result.failed_targets += scope.resolved.len();
                 continue;
             };
-            let profile = select_profile(kind, native_version);
+            let profile = adapter.select_profile(native_version);
             for current_scope in &scope.resolved {
                 let evidence = match ObservationEvidence::new(&installation, profile.clone()) {
                     Ok(value) => value,
@@ -641,9 +658,10 @@ impl NativeObservation {
                     native_version.clone(),
                     profile.clone(),
                 ));
-                match observe_trees(kind, &paths, current_scope, tree_limits) {
-                    Ok(snapshots) => {
-                        let mut resources = snapshots
+                match adapter.observe(&paths, current_scope, tree_limits) {
+                    Ok(observed_paths) => {
+                        let mut resources = observed_paths
+                            .canonical
                             .iter()
                             .map(|snapshot| {
                                 native_surface_resource(
@@ -655,19 +673,15 @@ impl NativeObservation {
                                 )
                             })
                             .collect::<Vec<_>>();
-                        resources.extend(
-                            instruction_surface_labels(kind, &paths, current_scope)
-                                .into_iter()
-                                .map(|root| {
-                                    native_surface_resource(
-                                        target,
-                                        current_scope,
-                                        root,
-                                        profile.authority(),
-                                        0,
-                                    )
-                                }),
-                        );
+                        resources.extend(observed_paths.surface_labels.into_iter().map(|root| {
+                            native_surface_resource(
+                                target,
+                                current_scope,
+                                root,
+                                profile.authority(),
+                                0,
+                            )
+                        }));
                         let findings = if profile.authority() == ProfileAuthority::ObserveOnly {
                             vec![ObservationFinding::new(
                                 ObservationFindingCode::CapabilityUnverified,
@@ -903,6 +917,7 @@ fn adoption_next_action(error: &AdoptionApplyError) -> NextAction {
     }
 }
 pub(crate) fn first_use_harness_report(
+    registry: &skilltap_harnesses::TargetRegistry,
     config: &ConfigDocument,
     mut outcome: Outcome,
     mode: NativeObservationMode,
@@ -915,30 +930,22 @@ pub(crate) fn first_use_harness_report(
     let search_path = std::env::var_os("PATH");
     let native_environment = PlatformPaths::resolve(&ProcessEnvironment)
         .and_then(|paths| paths.native_process_environment(search_path.clone()));
-    let all_harnesses = [
-        HarnessId::new("codex").expect("known harness"),
-        HarnessId::new("claude").expect("known harness"),
-    ];
+    let all_harnesses = registry.ids().cloned().collect::<Vec<_>>();
     let selected = skilltap_core::runtime::resolve_targets(requested, all_harnesses.clone())
         .unwrap_or_else(|_| {
-            skilltap_core::domain::HarnessSet::new(all_harnesses).expect("known harnesses")
+            skilltap_core::domain::HarnessSet::new(all_harnesses).expect("registry is non-empty")
         });
-    for (harness, kind, binary) in [
-        (
-            "codex",
-            HarnessKind::Codex,
-            config.harnesses().codex.binary.as_str(),
-        ),
-        (
-            "claude",
-            HarnessKind::Claude,
-            config.harnesses().claude.binary.as_str(),
-        ),
-    ]
-    .into_iter()
-    .filter(|(harness, _, _)| selected.iter().any(|value| value.as_str() == *harness))
+    for adapter in registry
+        .iter()
+        .filter(|adapter| selected.contains(&adapter.identity().id))
     {
-        let mut entry = OutputEntry::new(harness, "not_enabled").with_field("enabled", false);
+        let harness = adapter.identity().id;
+        let Some(policy) = config.harnesses().get(&harness) else {
+            continue;
+        };
+        let binary = policy.binary.as_str();
+        let mut entry =
+            OutputEntry::new(harness.as_str(), "not_enabled").with_field("enabled", false);
         if mode == NativeObservationMode::Disabled {
             outcome = outcome.with_resource(entry);
             continue;
@@ -951,7 +958,7 @@ pub(crate) fn first_use_harness_report(
                         "invalid_harness_binary",
                         "The configured harness binary could not be resolved.",
                     )
-                    .with_context("harness", harness),
+                    .with_context("harness", harness.as_str()),
                 );
                 outcome = outcome.with_resource(entry.with_field("reachable", false));
                 continue;
@@ -963,13 +970,13 @@ pub(crate) fn first_use_harness_report(
                     "native_environment_unavailable",
                     "The bounded native process environment could not be resolved.",
                 )
-                .with_context("harness", harness),
+                .with_context("harness", harness.as_str()),
             );
             outcome = outcome.with_resource(entry.with_field("reachable", false));
             continue;
         };
         match detect_configured_installation(
-            kind,
+            adapter,
             configured,
             search_path.clone(),
             native_environment,
@@ -989,7 +996,7 @@ pub(crate) fn first_use_harness_report(
             Err(error) => {
                 entry.status = "unreachable".to_owned();
                 entry = entry.with_field("reachable", false);
-                let diagnostic = detection_diagnostic(&error, harness, binary);
+                let diagnostic = detection_diagnostic(&error, harness.as_str(), binary);
                 outcome = outcome
                     .with_warning(diagnostic.warning)
                     .with_next_action(diagnostic.next_action);
@@ -1178,137 +1185,6 @@ fn resolution_error_label(error: &ResolutionError) -> &'static str {
         ResolutionError::TargetDisagreement => "target_disagreement",
     }
 }
-fn observe_trees(
-    kind: HarnessKind,
-    paths: &PlatformPaths,
-    scope: &Scope,
-    limits: ExternalTreeLimits,
-) -> Result<Vec<CanonicalObservation>, skilltap_core::runtime::ObservationRuntimeError> {
-    match kind {
-        HarnessKind::Codex => {
-            let inputs =
-                skilltap_harnesses::codex_observation_paths(paths, scope).map_err(|_| {
-                    skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
-                })?;
-            observe_codex_canonical_resources(&inputs, scope, limits)
-        }
-        HarnessKind::Claude => {
-            let inputs =
-                skilltap_harnesses::claude_observation_paths(paths, scope).map_err(|_| {
-                    skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable
-                })?;
-            observe_claude_canonical_resources(&inputs, scope, limits)
-        }
-    }
-}
-
-fn instruction_surface_labels(
-    kind: HarnessKind,
-    paths: &PlatformPaths,
-    scope: &Scope,
-) -> Vec<&'static str> {
-    match kind {
-        HarnessKind::Codex => {
-            let inputs = match skilltap_harnesses::codex_observation_paths(paths, scope) {
-                Ok(inputs) => inputs,
-                Err(_) => return Vec::new(),
-            };
-            match scope {
-                Scope::Global => {
-                    let mut labels = Vec::new();
-                    if path_exists(inputs.global_agents.as_str()) {
-                        labels.push("codex.global.instructions");
-                    }
-                    if child_path_exists(paths.home().as_str(), ".agents/plugins/marketplace.json")
-                    {
-                        labels.push("codex.global.marketplace");
-                    }
-                    if child_path_exists(paths.codex_home().as_str(), "config.toml") {
-                        labels.push("codex.global.config");
-                    }
-                    labels
-                }
-                Scope::Project(_) => {
-                    let mut labels = Vec::new();
-                    let project = match scope {
-                        Scope::Project(project) => project,
-                        Scope::Global => unreachable!(),
-                    };
-                    if inputs
-                        .project_agents
-                        .as_ref()
-                        .is_some_and(|path| path_exists(path.as_str()))
-                    {
-                        labels.push("project.agents.instructions");
-                    }
-                    if inputs
-                        .project_override
-                        .as_ref()
-                        .is_some_and(|path| path_exists(path.as_str()))
-                    {
-                        labels.push("project.agents.override");
-                    }
-                    if child_path_exists(project.as_str(), ".agents/plugins/marketplace.json") {
-                        labels.push("project.marketplace");
-                    }
-                    if child_path_exists(project.as_str(), ".codex/config.toml") {
-                        labels.push("project.codex.config");
-                    }
-                    labels
-                }
-            }
-        }
-        HarnessKind::Claude => {
-            let inputs = match skilltap_harnesses::claude_observation_paths(paths, scope) {
-                Ok(inputs) => inputs,
-                Err(_) => return Vec::new(),
-            };
-            match scope {
-                Scope::Global => {
-                    let mut labels = Vec::new();
-                    if path_exists(inputs.global_settings.as_str()) {
-                        labels.push("claude.settings");
-                    }
-                    if child_path_exists(
-                        paths.claude_home().as_str(),
-                        "plugins/known_marketplaces.json",
-                    ) {
-                        labels.push("claude.marketplace");
-                    }
-                    if child_path_exists(paths.claude_home().as_str(), "CLAUDE.md") {
-                        labels.push("claude.instructions");
-                    }
-                    labels
-                }
-                Scope::Project(project) => {
-                    let mut labels = Vec::new();
-                    if inputs
-                        .project_settings
-                        .as_ref()
-                        .is_some_and(|path| path_exists(path.as_str()))
-                    {
-                        labels.push("project.claude.settings");
-                    }
-                    if child_path_exists(project.as_str(), "CLAUDE.md")
-                        || child_path_exists(project.as_str(), ".claude/CLAUDE.md")
-                    {
-                        labels.push("project.claude.instructions");
-                    }
-                    labels
-                }
-            }
-        }
-    }
-}
-
-fn path_exists(path: &str) -> bool {
-    std::fs::symlink_metadata(path).is_ok()
-}
-
-fn child_path_exists(root: &str, child: &str) -> bool {
-    path_exists(Path::new(root).join(child).to_string_lossy().as_ref())
-}
-
 fn native_surface_resource(
     harness: &HarnessId,
     scope: &Scope,
@@ -1359,10 +1235,11 @@ fn native_surface_kind(root: &str) -> ResourceKind {
     }
 }
 
-fn observation_error(
-    error: skilltap_core::runtime::ObservationRuntimeError,
-) -> ObservationAdapterError {
+fn observation_error(error: skilltap_harnesses::ObservationPathError) -> ObservationAdapterError {
     use skilltap_core::runtime::ObservationRuntimeError as RuntimeError;
+    let skilltap_harnesses::ObservationPathError::Runtime(error) = error else {
+        return ObservationAdapterError::NativeShapeUnsupported {};
+    };
     match error {
         RuntimeError::TreeDepthLimitExceeded
         | RuntimeError::TreeEntryLimitExceeded

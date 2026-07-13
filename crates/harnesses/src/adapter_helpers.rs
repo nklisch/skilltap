@@ -133,13 +133,19 @@ pub(crate) fn observe_codex(
     let inputs = crate::codex_observation_paths(paths, scope)?;
     let canonical = crate::observe_codex_canonical_resources(&inputs, scope, limits)?;
     let project_entry_count = if matches!(scope, skilltap_core::domain::Scope::Project(_)) {
-        Some(crate::observe_codex_project_resources(&inputs, limits)?)
+        match crate::observe_codex_project_resources(&inputs, limits) {
+            Ok(entries) => Some(entries),
+            Err(skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable) => None,
+            Err(error) => return Err(error.into()),
+        }
     } else {
         None
     };
+    let surface_labels = codex_surface_labels(paths, scope, &inputs);
     Ok(crate::registry::AdapterObservationPaths {
         canonical,
         project_entry_count,
+        surface_labels,
     })
 }
 
@@ -151,14 +157,129 @@ pub(crate) fn observe_claude(
     let inputs = crate::claude_observation_paths(paths, scope)?;
     let canonical = crate::observe_claude_canonical_resources(&inputs, scope, limits)?;
     let project_entry_count = if matches!(scope, skilltap_core::domain::Scope::Project(_)) {
-        Some(crate::observe_claude_project_resources(&inputs, limits)?)
+        match crate::observe_claude_project_resources(&inputs, limits) {
+            Ok(entries) => Some(entries),
+            Err(skilltap_core::runtime::ObservationRuntimeError::TreeRootUnavailable) => None,
+            Err(error) => return Err(error.into()),
+        }
     } else {
         None
     };
+    let surface_labels = claude_surface_labels(paths, scope, &inputs);
     Ok(crate::registry::AdapterObservationPaths {
         canonical,
         project_entry_count,
+        surface_labels,
     })
+}
+
+fn codex_surface_labels(
+    paths: &skilltap_core::runtime::PlatformPaths,
+    scope: &skilltap_core::domain::Scope,
+    inputs: &crate::CodexObservationPaths,
+) -> Vec<&'static str> {
+    let mut labels = Vec::new();
+    match scope {
+        skilltap_core::domain::Scope::Global => {
+            push_if_exists(
+                &mut labels,
+                "codex.global.instructions",
+                &inputs.global_agents,
+            );
+            push_child_if_exists(
+                &mut labels,
+                "codex.global.marketplace",
+                paths.home(),
+                ".agents/plugins/marketplace.json",
+            );
+            push_child_if_exists(
+                &mut labels,
+                "codex.global.config",
+                paths.codex_home(),
+                "config.toml",
+            );
+        }
+        skilltap_core::domain::Scope::Project(project) => {
+            if let Some(path) = inputs.project_agents.as_ref() {
+                push_if_exists(&mut labels, "project.agents.instructions", path);
+            }
+            if let Some(path) = inputs.project_override.as_ref() {
+                push_if_exists(&mut labels, "project.agents.override", path);
+            }
+            push_child_if_exists(
+                &mut labels,
+                "project.marketplace",
+                project,
+                ".agents/plugins/marketplace.json",
+            );
+            push_child_if_exists(
+                &mut labels,
+                "project.codex.config",
+                project,
+                ".codex/config.toml",
+            );
+        }
+    }
+    labels
+}
+
+fn claude_surface_labels(
+    paths: &skilltap_core::runtime::PlatformPaths,
+    scope: &skilltap_core::domain::Scope,
+    inputs: &crate::ClaudeObservationPaths,
+) -> Vec<&'static str> {
+    let mut labels = Vec::new();
+    match scope {
+        skilltap_core::domain::Scope::Global => {
+            push_if_exists(&mut labels, "claude.settings", &inputs.global_settings);
+            push_child_if_exists(
+                &mut labels,
+                "claude.marketplace",
+                paths.claude_home(),
+                "plugins/known_marketplaces.json",
+            );
+            push_child_if_exists(
+                &mut labels,
+                "claude.instructions",
+                paths.claude_home(),
+                "CLAUDE.md",
+            );
+        }
+        skilltap_core::domain::Scope::Project(project) => {
+            if let Some(path) = inputs.project_settings.as_ref() {
+                push_if_exists(&mut labels, "project.claude.settings", path);
+            }
+            if path_exists(project, "CLAUDE.md") || path_exists(project, ".claude/CLAUDE.md") {
+                labels.push("project.claude.instructions");
+            }
+        }
+    }
+    labels
+}
+
+fn push_if_exists(
+    labels: &mut Vec<&'static str>,
+    label: &'static str,
+    path: &skilltap_core::domain::AbsolutePath,
+) {
+    if std::fs::symlink_metadata(path.as_str()).is_ok() {
+        labels.push(label);
+    }
+}
+
+fn push_child_if_exists(
+    labels: &mut Vec<&'static str>,
+    label: &'static str,
+    root: &skilltap_core::domain::AbsolutePath,
+    child: &str,
+) {
+    if path_exists(root, child) {
+        labels.push(label);
+    }
+}
+
+fn path_exists(root: &skilltap_core::domain::AbsolutePath, child: &str) -> bool {
+    std::fs::symlink_metadata(std::path::Path::new(root.as_str()).join(child)).is_ok()
 }
 
 pub(crate) fn absolute_child(

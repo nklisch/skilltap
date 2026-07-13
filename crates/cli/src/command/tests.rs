@@ -282,7 +282,7 @@ fn explicit_project_path_is_validated_at_the_boundary() {
 }
 
 #[test]
-fn targets_are_restricted_and_converted_to_core_types() {
+fn targets_are_structurally_parsed_and_converted_to_core_types() {
     let Command::Plan(args) = parse(&["skilltap", "plan", "--target", "codex"])
         .command
         .unwrap()
@@ -293,14 +293,26 @@ fn targets_are_restricted_and_converted_to_core_types() {
         args.target.target,
         Some(TargetSelection::Only(HarnessId::new("codex").unwrap()))
     );
-    rejects(
-        &["skilltap", "plan", "--target", "pi"],
-        ErrorKind::ValueValidation,
+    let Command::Plan(args) = parse(&["skilltap", "plan", "--target", "pi"])
+        .command
+        .unwrap()
+    else {
+        panic!("expected plan")
+    };
+    assert_eq!(
+        args.target.target,
+        Some(TargetSelection::Only(HarnessId::new("pi").unwrap()))
     );
-    rejects(
-        &["skilltap", "harness", "enable", "all"],
-        ErrorKind::ValueValidation,
-    );
+
+    let Command::Harness(HarnessArgs {
+        command: HarnessCommand::Enable(unregistered),
+    }) = parse(&["skilltap", "harness", "enable", "all"])
+        .command
+        .unwrap()
+    else {
+        panic!("expected harness enable")
+    };
+    assert_eq!(unregistered.harness, HarnessId::new("all").unwrap());
 
     let Command::Harness(HarnessArgs {
         command: HarnessCommand::Enable(enable),
