@@ -1,7 +1,7 @@
 ---
 id: gate-security-project-ancestor-symlink-escape
 kind: story
-stage: review
+stage: done
 tags: [security]
 parent: null
 depends_on: []
@@ -32,3 +32,22 @@ external catalog.
 - Discrepancies from design: none; shared bounded-read support landed here because the descriptor-confined primitive also underpins the bounded-observation item.
 - Adjacent issues parked: none.
 - Verification: focused core adversarial test and `cargo check -p skilltap` pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep review at effective review weight `standard` (explicit
+caller selection), performed in fresh context because this is a security
+boundary. The project root and every descendant ancestor are opened one
+component at a time with `O_DIRECTORY | O_NOFOLLOW`; catalog/config mutation,
+verification, and rollback remain relative to the opened parent descriptor.
+The adversarial `.agents` symlink test proves read/write/remove reject the
+escape and leave the external target untouched. Focused confined and full
+directory-tree tests passed. No public-contract, foundation-doc, or release
+drift found; product/UX lenses were inapplicable to this internal boundary.
