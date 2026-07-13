@@ -1,7 +1,7 @@
 ---
 id: gate-tests-managed-unsupported-only-plugin
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -42,3 +42,14 @@ and skilltap inventory/state byte-for-byte unchanged.
 ## Verification
 
 - `cargo test -p skilltap --test compiled_binary unsupported_only_managed_project_plugin_stays_blocked_with_acknowledgment -- --exact --nocapture`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate review at effective weight `standard` (caller), escalated to the Deep lane because the regression required a production lifecycle correction. Fresh-context review covered planning/inventory ordering, both acknowledgment branches, filesystem/state immutability, successful managed-install regression risk, CLI output, and release-contract alignment. The exact unsupported-only test and the successful managed-project lifecycle test both pass in a detached clean worktree. No foundation-doc or public-contract drift found.
