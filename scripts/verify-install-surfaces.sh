@@ -18,6 +18,7 @@ for surface in "$LANDING" "$GETTING_STARTED" "$README"; do
   grep -Fq 'codex plugin add skilltap@skilltap' "$surface" || { echo "error: $surface lacks the Codex plugin install command" >&2; exit 1; }
   grep -Fq 'curl -fsSL https://skilltap.dev/install.sh | sh' "$surface" || { echo "error: $surface lacks the one-line installer path" >&2; exit 1; }
   grep -Fq 'skilltap bootstrap' "$surface" || { echo "error: $surface lacks the bootstrap handoff" >&2; exit 1; }
+  grep -Fq 'Use skilltap to' "$surface" || { echo "error: $surface lacks an agent-directed human usage example" >&2; exit 1; }
 done
 grep -Fq -- '--allow-major' "$UPDATES" || { echo "error: website lacks major-update policy" >&2; exit 1; }
 grep -Fq 'daemon' "$UPDATES" || { echo "error: website lacks daemon policy" >&2; exit 1; }

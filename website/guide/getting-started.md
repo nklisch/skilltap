@@ -51,6 +51,30 @@ Verify the binary:
 skilltap --version
 ```
 
+## Use skilltap through your agent
+
+The easiest human workflow is to describe the result you want. Your Codex or
+Claude agent can inspect the CLI, plan the work, and use skilltap on your
+behalf. Try prompts such as:
+
+> Use skilltap to check whether this computer's Codex and Claude environments
+> are healthy.
+
+> Use skilltap to adopt my existing Claude configuration and show what would
+> change before syncing it to Codex.
+
+> Use skilltap to sync my global plugins, skills, and shared instructions.
+> Explain any drift or incompatibility and ask before accepting a partial
+> result.
+
+> Use skilltap to install `formatter@example-plugins` for this project in both
+> harnesses.
+
+Agents should use `skilltap --help` and leaf-command help for exact syntax,
+start with `status` or `plan` when appropriate, and bring judgment calls back
+to you. You can still run every command directly; there is no separate agent
+mode.
+
 ## Inspect before configuring
 
 `status` works before skilltap configuration exists and does not mutate the

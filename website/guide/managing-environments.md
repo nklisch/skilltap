@@ -82,3 +82,16 @@ components, drift, or native harness policy.
 
 After mutation, skilltap observes the targets again. Repeating the same sync
 against unchanged inputs produces no changes.
+
+## Delegate the workflow, not the decision
+
+Humans can ask an agent for a high-level outcome instead of assembling a
+command sequence. For example:
+
+> Use skilltap to make this project's Codex and Claude plugin setup match, but
+> show me anything partial or incompatible before you proceed.
+
+The agent should inspect status, produce a plan, apply only authorized work,
+and explain any next action skilltap reports. A request to use skilltap does
+not authorize the agent to conceal drift, bypass a required acknowledgment, or
+choose which unsupported behavior is acceptable.

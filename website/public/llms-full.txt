@@ -103,6 +103,30 @@ Verify the binary:
 skilltap --version
 ```
 
+## Use skilltap through your agent
+
+The easiest human workflow is to describe the result you want. Your Codex or
+Claude agent can inspect the CLI, plan the work, and use skilltap on your
+behalf. Try prompts such as:
+
+> Use skilltap to check whether this computer's Codex and Claude environments
+> are healthy.
+
+> Use skilltap to adopt my existing Claude configuration and show what would
+> change before syncing it to Codex.
+
+> Use skilltap to sync my global plugins, skills, and shared instructions.
+> Explain any drift or incompatibility and ask before accepting a partial
+> result.
+
+> Use skilltap to install `formatter@example-plugins` for this project in both
+> harnesses.
+
+Agents should use `skilltap --help` and leaf-command help for exact syntax,
+start with `status` or `plan` when appropriate, and bring judgment calls back
+to you. You can still run every command directly; there is no separate agent
+mode.
+
 ## Inspect before configuring
 
 `status` works before skilltap configuration exists and does not mutate the
@@ -245,6 +269,19 @@ components, drift, or native harness policy.
 
 After mutation, skilltap observes the targets again. Repeating the same sync
 against unchanged inputs produces no changes.
+
+## Delegate the workflow, not the decision
+
+Humans can ask an agent for a high-level outcome instead of assembling a
+command sequence. For example:
+
+> Use skilltap to make this project's Codex and Claude plugin setup match, but
+> show me anything partial or incompatible before you proceed.
+
+The agent should inspect status, produce a plan, apply only authorized work,
+and explain any next action skilltap reports. A request to use skilltap does
+not authorize the agent to conceal drift, bypass a required acknowledgment, or
+choose which unsupported behavior is acceptable.
 
 ---
 

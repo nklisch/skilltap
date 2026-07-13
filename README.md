@@ -38,6 +38,20 @@ Read-only `status` works before configuration exists and creates nothing. A
 missing `config.toml` means neither harness is enabled; skilltap never infers
 management policy merely because a Codex or Claude executable is installed.
 
+For normal human use, ask your agent for the outcome instead of translating it
+into flags yourself. For example:
+
+> Use skilltap to check the health of my Codex and Claude environment.
+
+> Use skilltap to sync my global plugins and shared instructions. Show me the
+> plan first, and ask before accepting any partial result.
+
+> Use skilltap to install `formatter@example-plugins` in this project and tell
+> me if any part will not work in both harnesses.
+
+The agent can learn exact syntax from `skilltap --help`, run read-only status
+and planning commands, and convey any required decision before mutation.
+
 ## Quick Start
 
 The native plugin is the primary installation path. Add this repository as a

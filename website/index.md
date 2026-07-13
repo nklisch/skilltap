@@ -56,6 +56,26 @@ Then let skilltap check the setup:
 skilltap bootstrap
 ```
 
+## Tell your agent what you want
+
+You do not need to memorize the CLI. Once the plugin is installed, describe
+the outcome to your Codex or Claude agent and let it use skilltap for you:
+
+> Use skilltap to check whether my Codex and Claude setup is healthy.
+
+> Use skilltap to sync my global plugins and shared instructions across Codex
+> and Claude. Show me the plan first.
+
+> Use skilltap to install `formatter@example-plugins` in this project. If
+> anything cannot carry over faithfully, explain it and ask before proceeding.
+
+> Use skilltap to adopt my current Claude setup, then tell me what would change
+> in Codex.
+
+The agent can discover exact commands through `skilltap --help`, inspect with
+`status` and `plan`, and bring incompatibilities, drift, or partial operations
+back to you for a decision.
+
 Older Codex builds without `plugin add` can finish installation through
 `/plugins`. The bootstrap result explains the next step for the installed
 harness versions.
