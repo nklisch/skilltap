@@ -22,6 +22,14 @@ pub(super) fn write_tree(
     root: &File,
     files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
 ) -> io::Result<()> {
+    write_tree_with(root, files, &mut |_| {})
+}
+
+pub(super) fn write_tree_with(
+    root: &File,
+    files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    after_open: &mut impl FnMut(&str),
+) -> io::Result<()> {
     let directories = files
         .keys()
         .flat_map(|path| ancestor_paths(path.as_str()))
@@ -51,6 +59,7 @@ pub(super) fn write_tree(
         let mut file = unsafe { File::from_raw_fd(fd) };
         let identity = require_regular(&file)?;
         verify_at(parent.as_raw_fd(), &name, identity)?;
+        after_open(path.as_str());
         file.write_all(artifact.contents())?;
         cvt(unsafe {
             libc::fchmod(

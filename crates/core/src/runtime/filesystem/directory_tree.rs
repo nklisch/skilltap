@@ -31,7 +31,7 @@ use tree_io::{
     write_tree,
 };
 #[cfg(all(unix, test))]
-use tree_io::{read_tree_with, remove_open_tree_with};
+use tree_io::{read_tree_with, remove_open_tree_with, write_tree_with};
 
 #[cfg(unix)]
 use unix_support::{

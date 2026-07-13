@@ -574,3 +574,47 @@ fn confined_observation_enforces_every_tree_and_document_limit() {
             .is_err()
     );
 }
+
+#[test]
+fn descriptor_mode_change_does_not_follow_a_replaced_path() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = TempRoot::new("skilltap-descriptor-mode-replacement").unwrap();
+    let root = temporary.join("published");
+    fs::create_dir(&root).unwrap();
+    let outside = temporary.join("outside");
+    fs::write(&outside, b"outside").unwrap();
+    fs::set_permissions(&outside, fs::Permissions::from_mode(0o644)).unwrap();
+    let root_directory = File::open(&root).unwrap();
+    let files = BTreeMap::from([(
+        RelativeArtifactPath::new("run").unwrap(),
+        ArtifactFile::new(b"#!/bin/sh\n".to_vec(), true),
+    )]);
+
+    let error = write_tree_with(&root_directory, &files, &mut |path| {
+        assert_eq!(path, "run");
+        fs::rename(root.join("run"), root.join("owned-open-file")).unwrap();
+        symlink(&outside, root.join("run")).unwrap();
+    })
+    .unwrap_err();
+
+    assert_eq!(error.kind(), io::ErrorKind::Other);
+    assert_eq!(
+        fs::metadata(&outside).unwrap().permissions().mode() & 0o777,
+        0o644
+    );
+    assert_eq!(
+        fs::metadata(root.join("owned-open-file"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o700
+    );
+    assert!(
+        fs::symlink_metadata(root.join("run"))
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+}
