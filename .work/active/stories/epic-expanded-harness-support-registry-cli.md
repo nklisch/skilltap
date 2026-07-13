@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-cli
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -159,3 +159,129 @@ rather than from Codex/Claude string matches.
 
 - The test-support acceptance contract (Unit 5).
 - Any new target adapter.
+
+## Review (standard, cross-model GLM-over-OpenAI fresh context)
+
+Cross-model review of an OpenAI-host implementation by GLM 5.2. Verified
+end-to-end at commit `2b2ffc17` against the story body, parent feature
+design, sibling child reviews, foundation docs, project rules, the
+`patterns` skill, and the actual diff. Reran focused and full checks.
+
+Verified claims:
+
+- One authoritative registry: `TargetRegistry::canonical()` is the sole
+  production constructor, built once in `entrypoint::run_from` and threaded
+  through `StatusApplication`. No second registry exists in CLI.
+- CLI parsing vs composition membership: `parse_harness`/`parse_target`
+  (`command.rs`) only do structural validation; `Dispatch::validate_targets`
+  enforces registry membership and emits `target_not_registered` before any
+  state write. `Dispatch::harness_argument` covers `harness enable|disable`.
+- Recursive help augmentation: `augment_target_help` walks `--target`, `--from`,
+  and the harness positional across the root and every subcommand; the
+  `Registered harnesses: codex|claude` after-help is asserted in entrypoint
+  tests.
+- Pre-write unknown-target rejection: `validate_targets` runs in `run_from`
+  before dispatch; `execute_harness_change` and `load_documents` re-check
+  `config_membership_error` so even a config file containing an unregistered
+  key fails closed at the composition boundary. The compiled
+  `unregistered_harness_is_rejected_before_state_creation` test confirms
+  `harness enable gemini` writes no configuration.
+- enabled/all semantics: `enabled_harnesses` derives from
+  `HarnessPolicyMap::enabled()`; `--target all` still expands through the
+  generic `resolve_targets`.
+- First-use status: `first_use_harness_report` iterates `registry.iter()`
+  filtered by the requested selection, dispatching detection through
+  `detect_configured_installation`.
+- Detection and strict observation: `NativeObservation::run` and
+  `StatusProjection::apply` resolve every adapter through
+  `registry.adapter(target)`; capability, surface, and finding rendering
+  stay registry-driven.
+- Instruction bridge set including alternates: `InstructionBridgePort`
+  exposes `global_bridge`, `project_bridge`, and `alternate_project_bridges`;
+  the Claude `.claude/CLAUDE.md` alternate is observed, preserved, and
+  consolidated via adapter metadata, with no CLI-side Claude literal.
+- Skill destination: `SkillProjectionPort::destination` drives
+  `skill_destination`; canonical `~/.agents/skills` projection is preserved
+  alongside per-target destinations.
+- Lifecycle request/dispatch/revalidation under lock: `NativeLifecyclePort`
+  stores `NativeLifecycleDispatch` entries by `OperationId` and
+  revalidates `scope`, `action`, and `target` against each planned
+  operation in `ExecutionPort::revalidate` under `SystemConfigurationLock`.
+  NoOp operations re-observe fresh native evidence before being honored.
+- Native argv and scope: `NativeLifecycleVector::arguments` is fully owned
+  by each adapter; Codex precedence (PluginUpdate before project scope) is
+  regression-tested, and `observation_scope` carries Claude's user/local
+  scope evidence.
+- Status labels/subjects: `AdapterObservationPaths::surface_labels` are
+  adapter-authored; the CLI never reinterprets target-specific paths.
+- Bootstrap eligibility/actions: `bootstrap_commands` iterates
+  `registry.first_party_targets()`; `Dispatch::validate_targets` rejects
+  non-first-party registered targets with `bootstrap_target_unavailable`.
+  Codex's `bootstrap_next_action` preserves the interactive gap; Claude
+  keeps the capability-fallback path.
+- Managed Codex fallback: `CodexAdapter::managed_project_lifecycle` returns
+  true and `application/lifecycle.rs` routes project plugin/marketplace
+  work through `plan_managed_codex_project_lifecycle` when the selected
+  adapter opts in. Codex literals there are managed-fallback contracts,
+  not behavior dispatch.
+- No behavior-dispatch lists outside adapter metadata: `git grep` confirms
+  no `match target.as_str()` / `match harness.as_str()` in `crates/cli/src`;
+  remaining Codex/Claude literals are display text, managed Codex
+  projection contracts, or wire-compat ordering in `HarnessPolicyMap`.
+
+Verified removals:
+
+- `git grep -n HarnessKind -- crates` returns no matches.
+- `NativeLifecycleRequest` carries only `action`, `scope`, `name`, `source`;
+  `NativeLifecycleDispatch` binds the semantic request to the
+  already-selected `HarnessId` and `NativeLifecycleVector`.
+
+Contract extensions inspected (all adapter-private, no new CLI dispatch):
+
+- `HarnessAdapter::decode_version_with_limits` (defaulted), `native_root`,
+  `managed_project_lifecycle`, `bootstrap_next_action`,
+  `bootstrap_capability_next_action`.
+- `NativeLifecycleVector::observation_scope`.
+- `InstructionBridgePort::alternate_project_bridges`.
+- `AdapterObservationPaths::surface_labels`.
+- `NativeLifecycleDispatch` (target binding) and the `NativeLifecyclePort`
+  `with_foreign_operations` seam for mixed native/managed plans.
+
+Error/exit/plain/JSON compatibility: `entrypoint/tests.rs` pins the
+`target_not_registered` plain/JSON split, the missing-subcommand usage
+fallback, and the stdout/stderr channel rules; compiled-binary tests pin
+the same codes at the process boundary.
+
+Compiled-test `install_alias` workaround: `FakeNativeProcess::install_alias`
+uses `fs::copy` for both the executable and the sibling behavior file so
+the production canonicalizing resolver still finds the behavior file at
+the destination. This accommodates the existing symlink-canonicalization
+security property of `SystemExecutableResolver` (which is unchanged by
+this story) and does not mask any production executable-resolution
+defect; production resolution and the test-support public API are
+unchanged.
+
+Re-run verification at `2b2ffc17`:
+
+- `cargo test --workspace --all-targets` — 558 passed across 18 suites.
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean.
+- `cargo fmt --all -- --check` and `git diff --check` — clean.
+- `git grep -n HarnessKind -- crates` — no matches.
+
+Non-blocking observations (parked, not blockers):
+
+- `bootstrap_target_unavailable` has no direct test because every currently
+  registered target is `FirstPartyPlugin`; the path is structurally covered
+  by the registry `first_party_targets` tests and will gain coverage when a
+  `Managed` adapter lands.
+- `native_surface_kind` in `application/status.rs` classifies the
+  `.claude` project root as `Plugin` via `root.ends_with("claude")`. This
+  is presentation-layer ResourceKind inference from adapter-authored root
+  names, not behavior dispatch, so it does not violate the no-dispatch
+  contract; an adapter-declared kind mapping would be cleaner if more
+  targets grow non-suffix-derivable roots.
+
+Verdict: approve. All acceptance criteria met; Codex/Claude behavior,
+wire compatibility, error/exit contracts, and the no-write-on-reject
+invariant are preserved; `HarnessKind` and request-target duplication are
+fully removed.
