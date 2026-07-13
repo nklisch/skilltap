@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-update-eligibility
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on: []
@@ -46,3 +46,13 @@ as available updates.
   candidates.
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context substrate review at the project-default `standard` weight. Commit `62dadc7` makes safe and decision-required changed revisions the sole authoritative actionable-update predicate; unresolved, disabled, unchanged, policy-blocked, and drift-blocked decisions remain visible without inflating the count. Core update coverage passed.

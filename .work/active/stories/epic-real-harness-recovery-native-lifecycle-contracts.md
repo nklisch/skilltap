@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-contracts
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -55,3 +55,17 @@ rules. This story owns blocker 2 and blockers 5-7.
   isolated roots for every lifecycle/list command.
 - `cargo test -p skilltap-harnesses --all-targets`
 - `cargo test -p skilltap --test compiled_binary`
+
+## Review findings (2026-07-12)
+
+- **Blocker — Claude native presence ignores concrete scope**: current Claude `plugin list --json` output includes a `scope` field, but `resource_presence` matches only the resource identity. A global plugin or marketplace with the same name can therefore satisfy a project/local re-observation, causing a drifted or removed project resource to be reported present and skipped. Tracked by `epic-real-harness-recovery-native-lifecycle-scope-aware-presence`.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: `epic-real-harness-recovery-native-lifecycle-scope-aware-presence`
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight for the public native command and scope contract. Commit `8f0b333` correctly attests exact versions, removes unsupported Claude scope flags, and blocks Codex plugin update. An isolated real Claude invocation confirmed list entries carry explicit scope; the observation parser must use it to preserve exact global/project identity. Harness-focused tests otherwise pass.

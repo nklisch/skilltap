@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-umask-independent-modes
 kind: story
-stage: review
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -69,3 +69,13 @@ private owner permissions promised by the artifact contract.
 - `cargo fmt --all -- --check`
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context substrate review at the project-default `standard` weight using the deep lane for descriptor-relative permission handling. Commit `a0bb263` applies exact `0600`/`0700` modes through the already-open descriptor, retains identity checks and cleanup propagation, and proves behavior in an isolated child with umask `0777`. Focused core tests passed.

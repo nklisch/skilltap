@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
@@ -52,3 +52,18 @@ safe output and isolated compiled-binary coverage.
   search path.
 - `cargo test -p skilltap`
 - `cargo clippy -p skilltap --all-targets --all-features -- -D warnings`
+
+## Review findings (2026-07-12)
+
+- **Blocker — lifecycle capability lookup still collapses typed detection failures**: `configured_native_profile` converts `detect_configured_installation` with `.ok()?`; its caller emits generic `native_profile_unavailable`. Lifecycle commands therefore do not expose the same absent/nonzero/invalid/bounded category required by harness list and status. Tracked by `epic-real-harness-recovery-runtime-boundary-diagnostics-completion`.
+- **Blocker — compiled diagnostics regressions are stale**: the exact second-wave baseline fails `adopt_reports_partial_sibling_and_still_publishes_healthy_candidates` and `status_preserves_successful_sibling_observation_and_never_mutates_native_trees` because both still require the removed generic `native_detection_failed` code. The typed replacement behavior needs exact assertions on warning and next action.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: `epic-real-harness-recovery-runtime-boundary-diagnostics-completion`
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight for the public diagnostic contract. Commit `ac89e49` correctly centralizes safe projections for harness list and observation/status paths, but does not carry the typed error through lifecycle capability lookup and leaves two compiled regressions red. Verification used a detached second-wave worktree to avoid concurrent third-wave edits.

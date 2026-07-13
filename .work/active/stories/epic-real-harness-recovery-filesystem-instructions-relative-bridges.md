@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-relative-bridges
 kind: story
-stage: review
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -57,3 +57,13 @@ classifier.
   repairable without backup because removing the link itself cannot follow or
   alter its target; divergent regular files retain recoverable backups.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context substrate review at the project-default `standard` weight, escalated to the deep lane for the filesystem identity and repair boundary. Commit `2757575` computes bridge targets from actual paths, classifies only the exact live regular canonical destination as healthy, rejects absolute/escaping targets, and safely replaces divergent symlinks without following them. Core and isolated compiled bridge coverage passed; the exact second-wave baseline's only full-suite failures belong to the separately bounced diagnostics story.

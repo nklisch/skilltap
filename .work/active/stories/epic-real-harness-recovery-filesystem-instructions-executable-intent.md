@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-executable-intent
 kind: story
-stage: review
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on: []
@@ -70,3 +70,13 @@ and destination drift checks.
 - The focused directory-tree tests, full workspace suite, formatting check, and
   all-target/all-feature Clippy pass. The blocker is ready for re-review through
   `epic-real-harness-recovery-filesystem-instructions-umask-independent-modes`.
+
+## Re-review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none; the prior umask blocker is resolved by `a0bb263`.
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep re-review at the project-default `standard` weight. Typed executable intent now survives observation, fingerprints, managed storage, publication, reload, drift, replacement, and global/project projections while publication normalizes exact private modes independently of umask. Focused core and compiled whole-skill coverage passed.
