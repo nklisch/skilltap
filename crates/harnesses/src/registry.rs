@@ -1,12 +1,15 @@
 use std::{ffi::OsString, fmt};
 
 use skilltap_core::{
-    domain::{AbsolutePath, CapabilityProfileSelection, HarnessId, NativeVersion, Scope},
-    runtime::{ExternalTreeLimits, ObservationRuntimeError, PlatformPaths},
+    domain::{
+        AbsolutePath, CapabilityProfileSelection, CapabilityScope, HarnessId, NativeVersion, Scope,
+    },
+    runtime::{ExternalTreeLimits, JsonLimits, ObservationRuntimeError, PlatformPaths},
 };
 
 use crate::{
     CanonicalObservation, DetectionError,
+    adapters::{ClaudeAdapter, CodexAdapter},
     lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
 };
 
@@ -80,6 +83,16 @@ pub trait HarnessAdapter: Sync {
     fn version_arguments(&self) -> Vec<OsString>;
     fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, DetectionError>;
 
+    /// Detection callers with an explicit JSON boundary use this method. The
+    /// default preserves the compact public contract for text-only adapters.
+    fn decode_version_with_limits(
+        &self,
+        stdout: &[u8],
+        _limits: JsonLimits,
+    ) -> Result<NativeVersion, DetectionError> {
+        self.decode_version(stdout)
+    }
+
     fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection;
 
     fn observe(
@@ -108,6 +121,10 @@ pub trait NativeLifecycleVector: Sync {
         &self,
         request: &NativeLifecycleRequest,
     ) -> Result<Vec<OsString>, NativeLifecycleError>;
+
+    /// Returns the native scope evidence required in list output. `None`
+    /// means this lifecycle has no independently encoded scope dimension.
+    fn observation_scope(&self, scope: &Scope) -> Option<CapabilityScope>;
 }
 
 /// Harness-native instruction bridge location for one scope.
@@ -150,12 +167,8 @@ impl TargetRegistry {
         }
     }
 
-    /// The adapters story populates this constructor once concrete Codex and
-    /// Claude adapter implementations exist.
     pub fn canonical() -> Self {
-        Self {
-            entries: Vec::new(),
-        }
+        Self::new([CodexAdapter::static_ref(), ClaudeAdapter::static_ref()])
     }
 
     pub fn contains(&self, id: &HarnessId) -> bool {
@@ -301,12 +314,20 @@ mod tests {
     }
 
     #[test]
-    fn canonical_registry_stays_empty_until_concrete_adapters_land() {
+    fn canonical_registry_contains_only_current_concrete_adapters() {
         let registry = TargetRegistry::canonical();
 
-        assert_eq!(registry.ids().count(), 0);
-        assert_eq!(registry.iter().count(), 0);
-        assert_eq!(registry.first_party_targets().count(), 0);
+        assert_eq!(
+            registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
+            ["codex", "claude"]
+        );
+        assert_eq!(registry.iter().count(), 2);
+        assert_eq!(registry.first_party_targets().count(), 2);
+        assert!(
+            registry
+                .adapter(&HarnessId::new("gemini").unwrap())
+                .is_none()
+        );
     }
 
     #[test]

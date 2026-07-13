@@ -121,12 +121,23 @@ impl From<ObservationRuntimeError> for NativeLifecycleError {
     }
 }
 
-/// Build a direct native argument vector. The caller still owns executable
-/// resolution, profile authority, bounded execution, and post-mutation
-/// observation; this function never shells out.
+/// Build a direct native argument vector through the owning adapter. The
+/// caller still owns executable resolution, profile authority, bounded
+/// execution, and post-mutation observation; this function never shells out.
 pub fn native_arguments(
     request: &NativeLifecycleRequest,
 ) -> Result<Vec<OsString>, NativeLifecycleError> {
+    request
+        .harness
+        .adapter()
+        .native_lifecycle()
+        .ok_or(NativeLifecycleError::UnsupportedAction)?
+        .arguments(request)
+}
+
+pub(crate) fn validate_native_request(
+    request: &NativeLifecycleRequest,
+) -> Result<(), NativeLifecycleError> {
     if request.name.as_str().starts_with('-') {
         return Err(NativeLifecycleError::OptionLikeArgument("name"));
     }
@@ -137,20 +148,7 @@ pub fn native_arguments(
     {
         return Err(NativeLifecycleError::OptionLikeArgument("source"));
     }
-    let project = matches!(request.scope, Scope::Project(_));
-    if request.harness == HarnessKind::Codex
-        && request.action == NativeLifecycleAction::PluginUpdate
-    {
-        return Err(NativeLifecycleError::UnsupportedAction);
-    }
-    match request.harness {
-        HarnessKind::Codex if project => Err(NativeLifecycleError::UnsupportedProjectScope),
-        HarnessKind::Claude => {
-            let scope = if project { "local" } else { "user" };
-            Ok(claude_arguments(request, scope))
-        }
-        HarnessKind::Codex => Ok(codex_arguments(request)),
-    }
+    Ok(())
 }
 
 /// Execute one already-authorized lifecycle vector through the bounded native
@@ -382,7 +380,12 @@ fn resource_observation(
             );
         }
     };
-    if request.harness == HarnessKind::Codex {
+    let native_lifecycle = request
+        .harness
+        .adapter()
+        .native_lifecycle()
+        .expect("compatibility target has a lifecycle adapter");
+    let Some(expected_scope) = native_lifecycle.observation_scope(&request.scope) else {
         return if entries
             .iter()
             .any(|entry| entry.identity == request.name.as_str())
@@ -391,11 +394,11 @@ fn resource_observation(
         } else {
             NativeResourceObservation::Missing
         };
-    }
+    };
 
-    let expected_scope = match request.scope {
-        Scope::Global => "user",
-        Scope::Project(_) => "local",
+    let expected_scope_name = match expected_scope {
+        CapabilityScope::Global => "user",
+        CapabilityScope::Project => "local",
     };
     if entries
         .iter()
@@ -406,13 +409,13 @@ fn resource_observation(
     match entries
         .iter()
         .filter(|entry| {
-            entry.identity == request.name.as_str() && entry.scope == Some(expected_scope)
+            entry.identity == request.name.as_str() && entry.scope == Some(expected_scope_name)
         })
         .count()
     {
         0 => NativeResourceObservation::Missing,
         1 => NativeResourceObservation::Present {
-            scope: Some(CapabilityScope::from(&request.scope)),
+            scope: Some(expected_scope),
         },
         _ => NativeResourceObservation::Indeterminate(NativeObservationFailure::AmbiguousScope),
     }
@@ -705,85 +708,6 @@ fn action_matches(
             NativeLifecycleAction::PluginUpdate
         )
     )
-}
-
-fn codex_arguments(request: &NativeLifecycleRequest) -> Vec<OsString> {
-    let mut args = vec![OsString::from("plugin")];
-    match request.action {
-        NativeLifecycleAction::MarketplaceAdd => {
-            args.extend(["marketplace", "add"].into_iter().map(OsString::from));
-            args.push(OsString::from(
-                request.source.as_ref().expect("validated source").as_str(),
-            ));
-        }
-        NativeLifecycleAction::MarketplaceRemove => args.extend(
-            ["marketplace", "remove", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::MarketplaceUpdate => args.extend(
-            ["marketplace", "upgrade", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::PluginInstall => args.extend(
-            ["add", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::PluginRemove => args.extend(
-            ["remove", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::PluginUpdate => args.extend(
-            ["update", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-    }
-    args
-}
-
-fn claude_arguments(request: &NativeLifecycleRequest, scope: &str) -> Vec<OsString> {
-    let mut args = vec![OsString::from("plugin")];
-    match request.action {
-        NativeLifecycleAction::MarketplaceAdd => {
-            args.extend(["marketplace", "add"].into_iter().map(OsString::from));
-            args.push(OsString::from(
-                request.source.as_ref().expect("validated source").as_str(),
-            ));
-        }
-        NativeLifecycleAction::MarketplaceRemove => args.extend(
-            ["marketplace", "remove", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::MarketplaceUpdate => args.extend(
-            ["marketplace", "update", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::PluginInstall => args.extend(
-            ["install", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::PluginRemove => args.extend(
-            ["uninstall", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-        NativeLifecycleAction::PluginUpdate => args.extend(
-            ["update", request.name.as_str()]
-                .into_iter()
-                .map(OsString::from),
-        ),
-    }
-    if request.action != NativeLifecycleAction::MarketplaceUpdate {
-        args.extend(["--scope", scope].into_iter().map(OsString::from));
-    }
-    args
 }
 
 #[cfg(test)]

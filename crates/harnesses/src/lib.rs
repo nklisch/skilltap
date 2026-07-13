@@ -2,10 +2,10 @@ use std::{collections::BTreeMap, ffi::OsString};
 
 use skilltap_core::{
     domain::{
-        CapabilityId, CapabilityProfileId, CapabilityProfileSelection, CapabilitySet,
-        CapabilitySupport, ConfiguredBinary, HarnessId, HarnessInstallation,
-        HarnessObservationOutcome, HarnessReachability, NativeId, NativeVersion, ObservationBatch,
-        ObservedEnvironment, ProfileContractError, Scope, ScopedCapabilitySets, UnreachableReason,
+        CapabilityId, CapabilityProfileSelection, CapabilitySet, CapabilitySupport,
+        ConfiguredBinary, HarnessId, HarnessInstallation, HarnessObservationOutcome,
+        HarnessReachability, NativeId, NativeVersion, ObservationBatch, ObservedEnvironment,
+        ProfileContractError, Scope, ScopedCapabilitySets, UnreachableReason,
     },
     runtime::{
         ExecutableResolutionRequest, ExecutableResolver, ExternalTreeObserver, JsonLimits,
@@ -13,6 +13,13 @@ use skilltap_core::{
         StrictJson, StrictJsonDecoder, SystemExecutableResolver, SystemExternalTreeObserver,
         SystemNativeProcessRunner,
     },
+};
+
+mod adapter_helpers;
+pub mod adapters;
+pub use adapters::{
+    ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
+    CodexInstructionBridge, CodexLifecycle, CodexSkillProjection,
 };
 
 mod plugin_graph;
@@ -47,6 +54,10 @@ pub use bootstrap::{
 
 pub use skilltap_core::VERSION;
 
+/// Transitional identifier retained while the CLI and test-support stories
+/// migrate their public call sites to `HarnessId` plus `TargetRegistry`.
+/// Concrete behavior is resolved from the registry; this enum carries only
+/// the legacy identifier shape needed by those out-of-scope callers.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum HarnessKind {
     Codex,
@@ -59,6 +70,13 @@ impl HarnessKind {
             Self::Codex => "codex",
             Self::Claude => "claude",
         }
+    }
+
+    pub fn adapter(self) -> &'static dyn HarnessAdapter {
+        let id = HarnessId::new(self.id()).expect("compatibility harness id is valid");
+        TargetRegistry::canonical()
+            .adapter(&id)
+            .expect("compatibility harness is registered")
     }
 }
 
@@ -114,6 +132,7 @@ pub fn detect_configured_installation(
     process_limits: ProcessLimits,
     json_limits: JsonLimits,
 ) -> Result<HarnessInstallation, DetectionError> {
+    let adapter = harness.adapter();
     let resolved = SystemExecutableResolver
         .resolve(&ExecutableResolutionRequest::new(
             configured.clone(),
@@ -123,7 +142,7 @@ pub fn detect_configured_installation(
     let output = SystemNativeProcessRunner
         .run(&NativeProcessRequest::new(
             resolved.clone(),
-            version_arguments(harness),
+            adapter.version_arguments(),
             environment.clone(),
             None,
             process_limits,
@@ -132,64 +151,15 @@ pub fn detect_configured_installation(
     if !output.status().success() {
         return Err(DetectionError::NonZeroExit);
     }
-    let native_version = decode_native_version(harness, output.stdout(), json_limits)?;
+    let native_version = adapter.decode_version_with_limits(output.stdout(), json_limits)?;
     Ok(HarnessInstallation::new(
-        HarnessId::new(harness.id()).map_err(|_| DetectionError::InvalidVersion)?,
+        adapter.identity().id,
         configured,
         HarnessReachability::Reachable {
             executable: resolved,
             native_version,
         },
     ))
-}
-
-fn version_arguments(_harness: HarnessKind) -> Vec<OsString> {
-    vec![OsString::from("--version")]
-}
-
-fn decode_native_version(
-    harness: HarnessKind,
-    stdout: &[u8],
-    json_limits: JsonLimits,
-) -> Result<NativeVersion, DetectionError> {
-    let text = std::str::from_utf8(stdout).map_err(|_| DetectionError::InvalidVersion)?;
-    let text = text.strip_suffix('\n').unwrap_or(text);
-    let text = text.strip_suffix('\r').unwrap_or(text);
-    if text.is_empty() || text.chars().any(char::is_control) {
-        return Err(DetectionError::InvalidVersion);
-    }
-
-    let version = if text.starts_with('{') {
-        let decoded = StrictJson
-            .decode(stdout, json_limits)
-            .map_err(|_| DetectionError::InvalidVersion)?;
-        decoded
-            .value()
-            .as_object()
-            .and_then(|object| object.get("version"))
-            .and_then(serde_json::Value::as_str)
-            .ok_or(DetectionError::InvalidVersion)?
-            .to_owned()
-    } else {
-        match harness {
-            HarnessKind::Codex => text
-                .strip_prefix("codex-cli ")
-                .filter(|version| is_single_version_token(version))
-                .ok_or(DetectionError::InvalidVersion)?
-                .to_owned(),
-            HarnessKind::Claude => text
-                .strip_suffix(" (Claude Code)")
-                .filter(|version| is_single_version_token(version))
-                .ok_or(DetectionError::InvalidVersion)?
-                .to_owned(),
-        }
-    };
-
-    NativeVersion::new(&version).map_err(|_| DetectionError::InvalidVersion)
-}
-
-fn is_single_version_token(version: &str) -> bool {
-    !version.is_empty() && !version.chars().any(char::is_whitespace)
 }
 
 /// Represents an absent or unusable binary without probing resources.
@@ -616,72 +586,10 @@ fn absolute_child(
     skilltap_core::domain::AbsolutePath::new(format!("{}/{}", root.as_str(), child)).ok()
 }
 
-/// Selects one immutable compiled profile, or an observe-only unknown-version profile.
+/// Compatibility wrapper for callers being migrated by the CLI and
+/// test-support stories. Capability authority belongs to the concrete adapter.
 pub fn select_profile(harness: HarnessKind, version: &NativeVersion) -> CapabilityProfileSelection {
-    let capabilities = compiled_capabilities(harness);
-    let known = matches!(
-        (harness, version.as_str()),
-        (HarnessKind::Codex, "0.144.1") | (HarnessKind::Claude, "2.1.201")
-    );
-    if known {
-        CapabilityProfileSelection::verified(
-            CapabilityProfileId::new(match harness {
-                HarnessKind::Codex => "codex-0-144-1",
-                HarnessKind::Claude => "claude-2-1-201",
-            })
-            .expect("compiled profile identifiers are valid"),
-            capabilities,
-        )
-    } else {
-        CapabilityProfileSelection::unknown_version(unknown_capabilities(harness))
-    }
-}
-
-fn compiled_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
-    let support = |capability: &str, supported: bool| {
-        (
-            CapabilityId::new(capability).expect("compiled capability is valid"),
-            if supported {
-                CapabilitySupport::Supported
-            } else {
-                CapabilitySupport::Unverified
-            },
-        )
-    };
-    let codex = harness == HarnessKind::Codex;
-    let global = CapabilitySet::new([
-        support("harness.observe", true),
-        support("plugin.install", true),
-        support("plugin.remove", true),
-        support("plugin.update", !codex),
-        support("marketplace.register", true),
-        support("marketplace.remove", true),
-        support("marketplace.update", true),
-    ]);
-    let project = CapabilitySet::new([
-        support("harness.observe", true),
-        support("plugin.install", !codex),
-        support("plugin.remove", !codex),
-        support("plugin.update", !codex),
-        support("marketplace.register", !codex),
-        support("marketplace.remove", !codex),
-        support("marketplace.update", !codex),
-    ]);
-    ScopedCapabilitySets::new(global, project)
-}
-
-fn unknown_capabilities(harness: HarnessKind) -> ScopedCapabilitySets {
-    let baseline = compiled_capabilities(harness);
-    let unverified = |set: &CapabilitySet| {
-        CapabilitySet::new(
-            set.iter()
-                .map(|(id, _)| (id.clone(), CapabilitySupport::Unverified)),
-        )
-    };
-    ScopedCapabilitySets::new(
-        unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Global)),
-        unverified(baseline.for_scope_kind(skilltap_core::domain::CapabilityScope::Project)),
-    )
+    harness.adapter().select_profile(version)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

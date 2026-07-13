@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-adapters
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -77,3 +77,48 @@ preserved byte-for-byte. It does not implement any new target adapter.
 - The CLI parser/help/config changes (Unit 3/4) and the test-support contract
   (Unit 5) land in their own stories.
 - Any new target adapter.
+
+## Implementation notes
+
+Implemented concrete stateless `CodexAdapter` and `ClaudeAdapter` singletons and
+registered them, in stable order, in `TargetRegistry::canonical()`. Detection,
+version decoding, exact-version capability selection, unknown-version
+observe-only profiles, bounded canonical observation, native lifecycle vectors,
+instruction bridges, and skill projection destinations now dispatch through the
+adapter ports. Shared decoding, profile, path, and observation composition lives
+in the private `adapter_helpers` module. Existing lifecycle execution remains a
+direct argument-vector boundary; Codex project lifecycle and plugin-update
+constraints now live on `CodexLifecycle`, while Claude's user/local scope mapping
+lives on `ClaudeLifecycle`.
+
+The exact capability table is pinned by an adapter matrix test for Codex
+`0.144.1`, Claude `2.1.201`, and unknown versions. Existing detection,
+observation, lifecycle, instruction-adjacent, and projection-adjacent harness
+tests retain their assertions and pass.
+
+### Compatibility seam
+
+`HarnessKind` and the `harness` field on `NativeLifecycleRequest` remain as a
+narrow public compatibility token because the out-of-scope CLI, bootstrap
+rendering, and test-support/integration callers still construct and exhaustively
+match that surface. The token no longer owns detection, profile, observation,
+or lifecycle-vector behavior: it resolves its adapter through
+`TargetRegistry::canonical()`. Removing the token now would require edits in
+`crates/cli/src/**` and `crates/harnesses/tests/**`, violating this worker's
+ownership and racing the registry CLI/config/test-support stories. Those owning
+stories must migrate callers to `HarnessId` plus registry adapter dispatch, drop
+the compatibility wrappers/request field, and then satisfy the repository-wide
+`git grep -n "HarnessKind" crates/` and CLI string-dispatch checks.
+
+This is an intentional sequencing seam rather than a new compatibility layer:
+no additional target behavior may be added to `HarnessKind`.
+
+### Verification
+
+- `cargo test -p skilltap-harnesses` — 55 passed across six suites.
+- `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings` — passed.
+- `cargo fmt --package skilltap-harnesses -- --check` — passed.
+- `cargo check --workspace` is temporarily blocked by the concurrent config-map
+  migration: current CLI code still accesses removed `HarnessPolicyMap.codex`
+  and `.claude` fields. That failure is wholly outside this story's ownership
+  and is the expected Unit 3 → Unit 4 integration seam.
