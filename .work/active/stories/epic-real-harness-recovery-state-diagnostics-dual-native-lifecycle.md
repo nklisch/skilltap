@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-dual-native-lifecycle
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -54,3 +54,18 @@ falls back to a managed copy.
 - Full compiled lifecycle suite.
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight,
+escalated for cross-target inventory and journal correctness. The exact
+sequential widening regression passes at native integration commit `29afee5`,
+including both target bindings and target-all repeat no-op. Existing narrowed
+lifecycle coverage establishes sibling preservation, while the state model
+keeps native ownership per target and creates no managed plugin artifact.

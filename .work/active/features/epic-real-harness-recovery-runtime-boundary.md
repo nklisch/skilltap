@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary
 kind: feature
-stage: implementing
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: []
@@ -241,3 +241,23 @@ Acceptance criteria:
   the environment implicitly.
 - Real version presentation can change. Unknown forms remain a typed observable
   failure and cannot grant mutation authority until attested.
+
+## Children complete (2026-07-12)
+
+All direct stories completed review; the feature advanced through its own
+aggregate review.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep aggregate review at the project-default
+`standard` weight. The four direct stories collectively implement the intended
+plain/JSON version decoding, explicit process environment, root precedence,
+and closed actionable diagnostic projection. Detached focused regressions at
+`29afee5` cover all failure categories and healthy sibling preservation; no
+foundation drift was found.

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics-completion
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
@@ -119,3 +119,17 @@ the missing plan projection prevents approval and parent roll-up.
 
 - `cargo test -p skilltap application::tests::detection_diagnostics_are_typed_actionable_and_source_free --lib`
 - `cargo test -p skilltap --test compiled_binary native_lifecycle_projects_each_detection_failure_without_sensitive_context -- --exact`
+
+## Review (2026-07-12, repair pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+The exact configured executable is safely rendered, plan and lifecycle retain
+typed actions, and unsupported profile/capability remains distinct. At native
+integration commit `29afee5`, the lifecycle failure matrix plus the adoption
+and status sibling baselines pass in a detached isolated worktree.

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics
 kind: story
-stage: implementing
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
@@ -116,3 +116,17 @@ next actions; recovery must name the configured executable
 Lifecycle, status, and adoption focused tests plus full workspace tests and
 all-feature Clippy are green; the untested plan aggregation seam still violates
 the public diagnostic contract.
+
+## Review (2026-07-12, final repair pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+The completion child closes all six prior findings across lifecycle lookup,
+plan aggregation, post-mutation aggregation, configured executable identity,
+and stale sibling regressions. Typed failures remain bounded and source-free;
+the focused detached suite is green at `29afee5`.
