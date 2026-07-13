@@ -1,7 +1,7 @@
 ---
 id: gate-tests-managed-project-publication-failures
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -78,3 +78,22 @@ CLI, schema, or foundation-doc change was introduced by this story.
   injected pending write failure and requires exact byte equality afterward.
 - The existing retry still performs one real publication and its immediate
   repeat remains a no-op.
+
+## Re-review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep re-review at effective `standard` weight (explicit
+caller selection), performed in same-harness fresh context over follow-up commit
+`4a0a392`. The state failure snapshot is taken immediately before injection and
+compared as exact `state.json` bytes after the failed public lifecycle call, so
+stale pending/apply evidence or serialization drift cannot pass. The test then
+retains the independently recorded publication count across one successful
+retry and an immediate no-op. Fault injection wraps the production filesystem
+and state repository boundaries; it does not construct the asserted state
+directly. The correctly qualified focused test ran one test and passed.
