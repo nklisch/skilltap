@@ -658,239 +658,110 @@ through shared harnesses-owned functions.
 
 **Files**: `crates/cli/src/application.rs` (modified — replace
 `plan_managed_codex_project_lifecycle` with `plan_managed_project_lifecycle`,
-generalize `validate_managed_project_ownership`, lift `NativeLifecycleKind`);
-`crates/cli/src/application/lifecycle.rs:520` (modified — call the new
-orchestrator through `adapter.managed_projection()`).
+generalize `validate_managed_project_ownership`, and consume the amended
+single-method managed-projection port); `crates/cli/src/application/lifecycle.rs:520`
+(modified — call the new orchestrator through `adapter.managed_projection()`).
 
 **Story**: `feature-managed-fallback-target-parity-orchestrator`.
 
-```rust
-// crates/cli/src/application.rs
+**Design correction**: this section supersedes the earlier Unit 3
+`acquire`/`project` instructions. The active amended contract is
+`ManagedProjectionPort::plan` with `ManagedProjectionInput::{Apply { checkout },
+Remove}` and `ManagedProjectionPlan { trees, files, manifest,
+current_fingerprint, desired_fingerprint }`. The CLI orchestrator resolves
+source checkouts; adapters plan target-native writes and evidence in one pass;
+the orchestrator consumes that evidence directly.
 
-/// Target-agnostic managed-project lifecycle planner. Dispatches acquisition
-/// and projection through the adapter port; owns state lookup, operation id,
-/// ownership validation, drift detection, pending-attempt recovery,
-/// observation, manifest building, and foreground acknowledgment.
-fn plan_managed_project_lifecycle(
-    registry: &TargetRegistry,
-    target: &HarnessId,
-    kind: NativeLifecycleKind,
-    request: &NativeLifecycleSpec,
-    resource: &DesiredResource,
-    context: ManagedProjectPlanContext<'_>,
-) -> Result<PlannedManagedProjectLifecycle, ErrorDetail> {
-    let ManagedProjectPlanContext {
-        project, documents, paths, timestamp, json_limits, acknowledged, filesystem,
-        revision_resolver,
-    } = context;
-    let adapter = registry.adapter(target).ok_or_else(|| {
-        managed_project_error("target_not_registered",
-            "The managed project target is not registered.")
-    })?;
-    let port = adapter.managed_projection().ok_or_else(|| {
-        managed_project_error("managed_project_unsupported_target",
-            "The selected target does not participate in managed project lifecycle.")
-    })?;
+Target-neutral flow:
 
-    let scope = Scope::Project(project.clone());
-    let operation_id = lifecycle_operation_id(kind, target, &scope, resource.key());
-    let existing_state = documents.state.as_ref()
-        .and_then(|state| state.resources().get(resource.key()));
-    let prior_projections = existing_state
-        .and_then(|state| state.target(target))
-        .map(|t| {
-            t.pending_managed_attempt()
-                .filter(|attempt| {
-                    attempt.operation_id() == &operation_id
-                        && t.last_apply().is_some_and(|apply| {
-                            apply.operations().get(&operation_id)
-                                .is_some_and(|r| matches!(r.outcome(), OperationOutcome::Pending))
-                        })
-                })
-                .map(PendingManagedAttempt::managed_projections)
-                .unwrap_or_else(|| t.managed_projections())
-        })
-        .unwrap_or_default();
+1. Resolve `registry.adapter(target)` and then `adapter.managed_projection()`;
+   return typed attention errors for missing registry entries or unsupported
+   managed projection targets. No CLI `match target` table is introduced.
+2. Build the project scope, operation id, existing resource state,
+   target-local state, pending-attempt-aware prior manifest, and `removal`
+   flag for the resolved `HarnessId`.
+3. Choose the port input from lifecycle kind:
+   - marketplace add/update resolves the marketplace resource's source
+     (`resource.source()` first, then existing target state) into
+     `ResolvedSourceCheckout`;
+   - plugin install/update resolves the selected marketplace source from
+     inventory first and state second, then resolves that source into one
+     authoritative checkout; no second plugin-subdirectory source is invented;
+   - marketplace/plugin remove use `ManagedProjectionInput::Remove` and do no
+     source resolution. Plugin removal keeps the existing unowned and missing-
+     manifest guards; marketplace removal remains source-free per the contract
+     amendment.
+4. Resolve apply sources with the existing CLI source machinery:
+   local sources validate into checkout roots; Git sources reuse
+   `resolve_git_skill_source`; remote catalog payloads remain unsupported for
+   managed plugin checkout. The checkout is owned by the orchestrator local
+   variable, borrowed only for `port.plan`, then cloned for seed provenance and
+   installed revision.
+5. Build one `ManagedProjectionContext` (`target`, `project`, `paths`,
+   `resource_key`, `resource_kind`, `NativeLifecycleRequest`, converted
+   `ManagedLifecycleKind`, input, prior, `acknowledged`, filesystem,
+   `json_limits`) and call `port.plan`.
+6. Consume `plan.manifest`, `plan.current_fingerprint`, and
+   `plan.desired_fingerprint` directly. Do not reconstruct MCP entries,
+   omitted entries, current fingerprints, or desired fingerprints from target-
+   native file writes.
+7. Defense-in-depth: if `acknowledged == false` and the returned manifest
+   contains any `ManagedProjection::Omitted`, block with the existing partial-
+   operation acknowledgment error. Required-unsupported components surface as
+   `ManagedProjectionError::RequiredUnsupported`, not as omissions.
+8. Generalize `validate_managed_project_ownership` with a `target: &HarnessId`
+   parameter replacing the two hardcoded Codex lookups; its drift, unowned,
+   update-required, and pending-attempt recovery semantics otherwise stay the
+   same.
+9. Translate `plan.files` and `plan.trees` into the existing CLI-private
+   execution-port entry types, derive operation surfaces from those writes,
+   and build the managed-materialization operation for the resolved target.
+10. For non-removal, seed target-local state from the resolved target,
+    checkout/prior source and revision, `plan.desired_fingerprint`, and the
+    returned manifest. For removal, keep `seed = None`. Existing state,
+    pending/retry, publication, rollback, load verification, and rendering
+    flows remain unchanged.
 
-    // 1. Acquire through the adapter port (was: resolve_codex_marketplace_source
-    //    + read_codex_catalog_at_root + read_complete_codex_plugin, inlined).
-    let acquired = port.acquire(&ManagedAcquisitionContext {
-        target, project, paths, resource_key: resource.key(),
-        resource_kind: resource.kind(), request,
-        source: resource.source()
-            .or_else(|| existing_state.and_then(|s| s.target(target)).and_then(TargetResourceState::source)),
-        json_limits, filesystem, revision_resolver,
-    }).map_err(|error| managed_project_error(error.code(), error.summary()))?;
+Implementation notes:
 
-    // 2. Observe the current managed destination(s) the adapter will write.
-    //    Target-agnostic; uses observe_managed_project_tree unchanged.
-    let current_fingerprint = observe_current_projection_fingerprint(
-        filesystem, project, &acquired, json_limits,
-    )?;
-
-    // 3. Validate ownership / drift / update-required / pending recovery.
-    //    Generalized: takes `target` instead of hardcoding "codex".
-    validate_managed_project_ownership(
-        kind, existing_state.map(|s| s as &ResourceState),
-        current_fingerprint.as_ref(),
-        Some(acquired.fingerprint()),
-        &prior_projections,           // desired_projections computed below in step 4
-        acquired.installed_revision(),
-        &operation_id, target,        // <-- new parameter
-    )?;
-
-    // 4. Project through the adapter port (was: plan_codex_component_projections
-    //    + plan_codex_mcp_config). The orchestrator enforces foreground
-    //    acknowledgment BEFORE the adapter lists optional omissions.
-    let removal = matches!(kind, NativeLifecycleKind::MarketplaceRemove
-        | NativeLifecycleKind::PluginRemove);
-    let plan = port.project(&ManagedProjectionContext {
-        target, project, acquired: &acquired, prior: &prior_projections,
-        kind: kind.into(), acknowledged, filesystem, json_limits,
-    }).map_err(|error| managed_project_error(error.code(), error.summary()))?;
-
-    // 5. Build the manifest + execution-port entry. Target-agnostic; uses
-    //    managed_projection_manifest unchanged.
-    let managed_projections = managed_projection_manifest(&plan.trees, &plan_as_mcp(&plan, &prior_projections));
-    let mut manifest_with_omissions = managed_projections;
-    manifest_with_omissions.extend(plan.omitted.iter().map(|o| ManagedProjection::Omitted {
-        id: o.id.clone(), consequence: o.consequence.clone(),
-    }));
-
-    // 6. Seed state for the new ownership record (target-parameterized).
-    let seed = Some(
-        TargetResourceState::new(
-            target.clone(), Some(request.native_name.clone()),
-            Provenance::Materialized, Ownership::Skilltap,
-            Some(acquired.source().clone()), None,
-            Some(acquired.fingerprint().clone()),
-            acquired.installed_revision().cloned(), None, timestamp, None,
-        )
-        .map(|t| t.with_managed_projections(manifest_with_omissions))
-        .and_then(|t| ResourceState::new(resource.key().clone(), [t]))
-        .map_err(|_| managed_project_error("state_seed_invalid",
-            "The managed project state evidence is invalid."))?,
-    );
-
-    // 7. Translate core ManagedPluginWrite/ManagedFileWrite -> CLI execution-
-    //    port ManagedProjectPluginWrite/ManagedProjectFileWrite.
-    let entry = ManagedProjectLifecycleEntry {
-        files: plan.files.into_iter().map(Into::into).collect(),
-        trees: plan.trees.into_iter().map(Into::into).collect(),
-    };
-    let operation = build_lifecycle_operation(kind, target, &scope, resource.key(), &operation_id, removal);
-    Ok(PlannedManagedProjectLifecycle { operation, entry, seed })
-}
-```
-
-`validate_managed_project_ownership` generalized (the only change is the
-`target: &HarnessId` parameter replacing both `HarnessId::new("codex")`
-literals):
-
-```rust
-fn validate_managed_project_ownership(
-    kind: NativeLifecycleKind,
-    state: Option<&ResourceState>,
-    current_fingerprint: Option<&Fingerprint>,
-    desired_fingerprint: Option<&Fingerprint>,
-    desired_projections: &[ManagedProjection],
-    installed_revision: Option<&ResolvedRevision>,
-    operation_id: &OperationId,
-    target: &HarnessId,                          // <-- was hardcoded "codex"
-) -> Result<(), ErrorDetail> {
-    // Body unchanged except: state.target(target) instead of
-    // state.target(&HarnessId::new("codex").expect(...)).
-}
-```
-
-The lifecycle.rs dispatch site (line 520) drops its Codex-only call and
-dispatches through the registry:
-
-```rust
-// crates/cli/src/application/lifecycle.rs — replaces the plan_managed_codex_project_lifecycle call
-let adapter = self.registry.adapter(target_id)
-    .expect("managed-project gate already checked registry membership");
-let planned = match plan_managed_project_lifecycle(
-    &self.registry, target_id, kind, &request, &resource,
-    ManagedProjectPlanContext {
-        project, documents: &documents, paths: &paths,
-        timestamp: observed_at, json_limits, acknowledged,
-        filesystem: self.managed_project_filesystem(),
-        revision_resolver: self.revision_resolver(),
-    },
-) {
-    Ok(planned) => planned,
-    Err(error) => {
-        outcome.result = ResultClass::AttentionRequired;
-        outcome = outcome.with_error(error);
-        continue;
-    }
-};
-```
-
-The `if adapter.managed_project_lifecycle() && Scope::Project` gate at line
-491 stays exactly as today; it is already target-agnostic.
-
-`NativeLifecycleKind` lifts from CLI-private to a small shared enum so the
-port context does not depend on CLI:
-
-```rust
-// crates/harnesses/src/lib.rs (or managed_projection.rs) — lift + re-export
-pub enum ManagedLifecycleKind {
-    MarketplaceAdd,
-    MarketplaceRemove,
-    MarketplaceUpdate,
-    PluginInstall,
-    PluginRemove,
-    PluginUpdate,
-}
-// crates/cli/src/application.rs keeps `NativeLifecycleKind` as a CLI-internal
-// alias that `From<NativeLifecycleKind> for ManagedLifecycleKind` converts.
-```
-
-**Implementation Notes**:
-
-- The orchestrator is intentionally spelled out long-form above to make the
-  target-agnosticism auditable: the only `target`-aware line is the
-  `registry.adapter(target)` lookup at the top; everything below operates on
-  the port and the resolved `HarnessId`.
 - `plan_managed_codex_project_lifecycle` and `ManagedCodexProjectPlanContext`
-  are deleted. `ManagedProjectPlanContext` replaces the latter (adds
-  `revision_resolver`; renames the type to drop "Codex").
-- `observe_current_projection_fingerprint` is a small target-agnostic helper
-  extracted from the existing inline observation in the Codex planner: it
-  observes the destination(s) implied by `AcquiredProjection` and returns the
-  current fingerprint (None when absent). It reuses
-  `observe_managed_project_tree` and `managed_project_tree_observation_limits`
-  unchanged.
-- The `From<ManagedPluginWrite> for ManagedProjectPluginWrite` (and the file
-  analogue) is a mechanical translation in CLI; the core types and CLI
-  execution-port types stay separate so core does not depend on CLI.
-- `plan_as_mcp` rebuilds the MCP `ManagedProjection` entries from the plan's
-  file writes + prior projections, preserving the existing
-  `managed_projection_manifest` behavior. It is a thin adapter; the heavy
-  lifting stays in `managed_projection_manifest`.
-- Ownership validation's signature change is the only API break for callers;
-  the single existing caller is the orchestrator itself, updated in the same
-  commit.
+  are deleted. `ManagedProjectPlanContext` replaces the latter without adding
+  `SourceRevisionResolver`; source checkout ownership stays in CLI through the
+  existing `resolve_git_skill_source` path.
+- `CodexManagedProjection` must disappear from CLI imports and call sites. The
+  CLI reaches Codex only because the registry-selected adapter returns a port.
+- The stale helpers implied by the old design (`observe_current_projection_
+  fingerprint`, `plan_as_mcp`, CLI-side `managed_projection_manifest`
+  reconstruction, `ManagedAcquisitionContext`, `AcquiredProjection`, and
+  `plan.omitted`) are not part of Unit 3's implementation path.
+- `NativeLifecycleKind` remains CLI-internal; the already-added
+  `ManagedLifecycleKind` is populated by conversion at the port boundary.
+- Shared error text in the orchestrator must be target-neutral; adapter-owned
+  details continue to flow through `ManagedProjectionError::{code, summary}`.
 
-**Acceptance Criteria**:
+Acceptance criteria:
 
-- [ ] `plan_managed_codex_project_lifecycle` no longer exists; the lifecycle.rs
-      dispatch calls `plan_managed_project_lifecycle` through
-      `adapter.managed_projection()`.
-- [ ] `git grep -n 'HarnessId::new("codex")' crates/cli/` returns no matches
-      (the two ownership-validation literals are gone).
-- [ ] `git grep -n '"codex"' crates/cli/src/application.rs` returns no behavior
-      matches (display labels aside, if any remain).
-- [ ] Every existing Codex managed-project test passes without assertion
-      changes — the dispatch now flows through the adapter port but produces
-      identical operations, entries, seeds, and error codes.
-- [ ] A temporary test that registers a throwaway `ManagedProjectionPort`
-      adapter for a fake `HarnessId` (e.g. `gemini`) and runs the lifecycle
-      produces a planned operation/entry/seed driven entirely by the port —
-      proving the orchestrator is target-agnostic. (This becomes the
-      acceptance matrix in Unit 4.)
+- [ ] `plan_managed_codex_project_lifecycle` and
+      `ManagedCodexProjectPlanContext` no longer exist; lifecycle dispatch calls
+      `plan_managed_project_lifecycle` through `adapter.managed_projection()`.
+- [ ] `git grep -n 'HarnessId::new("codex")' crates/cli/` and
+      `git grep -n 'CodexManagedProjection' crates/cli/` return no matches.
+- [ ] `git grep -n 'plan_as_mcp\|AcquiredProjection\|ManagedAcquisitionContext\|plan\.omitted' crates/cli/`
+      returns no matches.
+- [ ] `validate_managed_project_ownership` takes `target: &HarnessId` and
+      preserves drift/unowned/update-required/pending-attempt-recovery
+      semantics.
+- [ ] Apply lifecycles resolve exactly one `ResolvedSourceCheckout` with no
+      target-specific CLI side channel; remove lifecycles perform no source
+      resolution.
+- [ ] The orchestrator persists the adapter-returned manifest and validates
+      directly against adapter-returned current/desired fingerprints.
+- [ ] Defense-in-depth acknowledgment rejects returned `ManagedProjection::Omitted`
+      entries when `acknowledged == false`.
+- [ ] Existing Codex managed-project tests pass without assertion weakening
+      beyond the approved source-free marketplace-removal behavior, and a
+      temporary non-Codex fake port proves the current `plan` API can drive a
+      planned operation/entry/seed through the shared path.
 
 ---
 
@@ -928,8 +799,8 @@ pub struct ManagedProjectionProfile {
     pub catalog_destinations: &'static [&'static str],
     pub mcp_destination: Option<&'static str>,
     pub skill_destination: &'static str,
-    /// Drives a throwaway `ManagedProjectionPort` impl that exercises the
-    /// full target-agnostic path against this profile.
+    /// Drives a throwaway `ManagedProjectionPort::plan` impl that exercises
+    /// the full target-agnostic path against this profile.
     pub port: fn() -> &'static dyn ManagedProjectionPort,
 }
 ```
@@ -949,9 +820,10 @@ into managed fallback get the full matrix; adapters that do not are skipped.
   without assertion changes.
 - The fake-adapter test (Unit 3's temporary test, formalized) registers a
   throwaway `ManagedProjectionProfile` for a non-Codex `HarnessId` and
-  asserts the orchestrator drives acquisition, projection, ownership,
-  drift, and idempotency through the port — proving the path is target-
-  agnostic before any concrete adapter feature lands.
+  asserts the orchestrator resolves an apply checkout, passes remove with no
+  checkout, consumes returned manifest/current/desired fingerprint evidence
+  directly, and drives ownership, drift, and idempotency through the port —
+  proving the path is target-agnostic before any concrete adapter feature lands.
 - Low-value tests are not added: no per-field test of `ManagedPluginWrite`
   round-trip beyond the port contract test (Unit 1), no snapshot of MCP TOML
   bytes (the existing Codex tests already pin the format), and no separate
@@ -964,7 +836,9 @@ into managed fallback get the full matrix; adapters that do not are skipped.
       update-required/pending-recovery/verification/idempotency suite, with
       assertions byte-identical to today's Codex tests.
 - [ ] A fake-adapter profile for a non-Codex `HarnessId` passes the same
-      matrix, proving the orchestrator is target-agnostic.
+      matrix through `ManagedProjectionPort::plan`, proving the orchestrator
+      is target-agnostic, `Apply` receives exactly one `ResolvedSourceCheckout`,
+      and `Remove` receives no checkout.
 - [ ] `FakeHarnessProfile::codex().managed_projection` is `Some` and
       `FakeHarnessProfile::claude().managed_projection` matches Claude's
       managed-fallback opt-in (Claude's managed-project lifecycle state is
@@ -1211,24 +1085,25 @@ part of that story.
   story that removes the symbol; no tautological replacement is introduced.
 
 Low-value tests are not added: no per-field serialization test for
-`AcquiredProjection` (it is not serialized — it is a planning currency), no
-exhaustive `ManagedProjectionError` code table beyond what the orchestrator
-surfacing already exercises, and no separate test of the `From` conversions
-beyond the orchestrator integration.
+`ResolvedSourceCheckout` or `ManagedProjectionPlan` (they are planning
+currency, not serialized), no exhaustive `ManagedProjectionError` code table
+beyond what the orchestrator surfacing already exercises, and no separate test
+of the `From` conversions beyond the orchestrator integration.
 
 ## Pre-mortem
 
-- **Riskiest assumption**: that the port's `acquire`/`project` split cleanly
-  separates target-specific from target-agnostic concerns without leaking
-  Codex shape. *Failure mode*: a future adapter (e.g., a JSONC-MCP target)
-  cannot implement the port without working around Codex-shaped fields.
-  *Mitigation*: the port exchanges only normalized plans
-  (`ManagedProjectionPlan`, `AcquiredProjection`); MCP document bytes are
-  opaque (`ManagedFileWrite::desired: Option<Vec<u8>>`) and the orchestrator
-  never parses them; skill destinations reuse the existing
-  `SkillProjectionPort`, so no path logic crosses the boundary. The Unit 4
-  fake-adapter test is the canary: if it cannot exercise the full matrix
-  through a non-Codex profile, the abstraction has leaked.
+- **Riskiest assumption**: that the single `ManagedProjectionPort::plan`
+  boundary cleanly separates target-specific projection from target-agnostic
+  orchestration without leaking Codex shape. *Failure mode*: a future adapter
+  (e.g., a JSONC-MCP target) cannot implement the port without working around
+  Codex-shaped fields. *Mitigation*: the port exchanges only normalized
+  inputs/evidence (`ManagedProjectionInput`, `ManagedProjectionContext`, and
+  `ManagedProjectionPlan`); MCP document bytes are opaque
+  (`ManagedFileWrite::desired: Option<Vec<u8>>`) and the orchestrator never
+  parses them; skill destinations reuse the existing `SkillProjectionPort`, so
+  no path logic crosses the boundary. The Unit 4 fake-adapter test is the
+  canary: if it cannot exercise the full matrix through a non-Codex profile,
+  the abstraction has leaked.
 - **Migration ordering hazard**: Unit 2 (relocate Codex helpers) and Unit 3
   (flip the dispatch) could be merged into one large change, risking a
   behavior regression in the same commit that changes the call path.
@@ -1247,25 +1122,26 @@ beyond the orchestrator integration.
 - **Foreground acknowledgment regression**: the
   `partial_operation_requires_acknowledgment` gate must fire identically
   after the port owns projection. *Failure mode*: the adapter lists an
-  optional omission when `acknowledged` is false, and the orchestrator
-  accepts it. *Mitigation*: the port contract specifies optional omissions
-  appear in `plan.omitted` only when `context.acknowledged` is true; the
-  orchestrator additionally re-checks that any `Omitted` entry with
-  `acknowledged == false` blocks with `partial_operation_requires_acknow-
-  ledgment` before producing a plan. The existing MCP acknowledgment test
-  pins this for Codex; the Unit 4 matrix pins it for any adapter.
+  optional omission in `plan.manifest` when `acknowledged` is false, and the
+  orchestrator accepts it. *Mitigation*: the port contract specifies optional
+  omissions appear as `ManagedProjection::Omitted` manifest entries only when
+  `context.acknowledged` is true; the orchestrator additionally re-checks that
+  any `Omitted` entry with `acknowledged == false` blocks with
+  `partial_operation_requires_acknowledgment` before producing a plan. The
+  existing MCP acknowledgment test pins this for Codex; the Unit 4 matrix pins
+  it for any adapter.
 - **Required-unsupported leakage**: a target that cannot represent a
   required component must block even with `--yes`. *Failure mode*: the
   adapter returns a plan omitting a required component. *Mitigation*: the
   port contract requires required-unsupported to surface as
   `ManagedProjectionError::RequiredUnsupported` (mapped to
   `managed_project_unsupported_required`), never as an `Omitted` entry. The
-  orchestrator treats any `Err` from `project` as a block. The Unit 4 matrix
+  orchestrator treats any `Err` from `plan` as a block. The Unit 4 matrix
   includes a required-unsupported fixture.
 - **Marketplace-kind drift for non-Codex targets**: a future adapter that
   does not support `ResourceKind::Marketplace` could be asked to project one
   if the inventory is misconfigured. *Failure mode*: silent wrong behavior.
-  *Mitigation*: the port's `acquire` returns
+  *Mitigation*: the port's `plan` returns
   `ManagedProjectionError::UnsupportedResourceKind` for kinds the adapter
   does not handle, which the orchestrator surfaces as a typed attention
   result. The orchestrator never assumes a target supports marketplace

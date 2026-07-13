@@ -24,7 +24,8 @@ reusable `managed_acceptance_matrix` in `skilltap-test-support` that every
 `acceptance_matrix` for native lifecycle. Port the existing Codex
 managed-project tests onto the matrix via `ManagedProjectionProfile::codex()`
 without assertion changes, and add a fake-adapter profile that proves the
-orchestrator is target-agnostic.
+orchestrator is target-agnostic through the current single-method
+`ManagedProjectionPort::plan` API.
 
 This story is the reusable contract every sibling adapter feature
 (file-managed, native-coexistence, configuration-constrained,
@@ -47,7 +48,10 @@ Parent design: `feature-managed-fallback-target-parity` Unit 4.
   managed-project tests are ported onto
   `ManagedProjectionProfile::codex()` without assertion changes; the
   temporary fake-adapter proof from Unit 3 is formalized as a
-  `ManagedProjectionProfile` for a non-Codex `HarnessId`.
+  `ManagedProjectionProfile` for a non-Codex `HarnessId` whose port observes
+  `ManagedProjectionInput::Apply { checkout }` and `Remove`, and returns a
+  `ManagedProjectionPlan` carrying `files`, `trees`, `manifest`,
+  `current_fingerprint`, and `desired_fingerprint`.
 
 The matrix covers (per the parent design):
 
@@ -80,18 +84,20 @@ The matrix covers (per the parent design):
   without assertion changes.
 - The fake-adapter profile (the formalization of Unit 3's temporary proof)
   registers a throwaway `ManagedProjectionPort` for a non-Codex `HarnessId`
-  and asserts the orchestrator drives acquisition, projection, ownership,
-  drift, and idempotency through the port. This is the canary for
-  abstraction leakage: if it cannot exercise the full matrix through a
-  non-Codex profile, the port has leaked Codex shape.
+  and asserts the orchestrator resolves the apply checkout, passes removal
+  with no checkout, consumes the returned manifest/current/desired
+  fingerprint evidence directly, and drives ownership, drift, and idempotency
+  through the port. This is the canary for abstraction leakage: if it cannot
+  exercise the full matrix through a non-Codex profile without a target-
+  specific CLI side channel, the port has leaked Codex shape.
 - `FakeHarnessProfile::codex().managed_projection` is `Some`; Claude's
   profile reflects Claude's managed-fallback opt-in state (preserved as-is).
 - Low-value tests are not added: no per-field serialization test for
-  `AcquiredProjection` (it is a planning currency, not serialized), no
-  exhaustive `ManagedProjectionError` code table beyond what the
-  orchestrator surfacing exercises, no snapshot of MCP TOML bytes (the Codex
-  regression already pins the format), and no separate test of the `From`
-  conversions beyond the orchestrator integration.
+  `ResolvedSourceCheckout` or `ManagedProjectionPlan` (they are planning
+  currency, not serialized), no exhaustive `ManagedProjectionError` code table
+  beyond what the orchestrator surfacing exercises, no snapshot of MCP TOML
+  bytes (the Codex regression already pins the format), and no separate test
+  of the `From` conversions beyond the orchestrator integration.
 
 ## Acceptance criteria
 
@@ -100,8 +106,10 @@ The matrix covers (per the parent design):
       update-required/pending-recovery/verification/idempotency suite, with
       assertions byte-identical to today's Codex tests.
 - [ ] A fake-adapter `ManagedProjectionProfile` for a non-Codex `HarnessId`
-      passes the same matrix, proving the orchestrator is target-agnostic
-      and the port does not leak Codex shape.
+      passes the same matrix through `ManagedProjectionPort::plan`, proving
+      the orchestrator is target-agnostic, `Apply` receives exactly one
+      `ResolvedSourceCheckout`, `Remove` receives no checkout, and the port
+      does not leak Codex shape.
 - [ ] `FakeHarnessProfile::codex().managed_projection` is `Some`; Claude's
       matches its managed-fallback opt-in.
 - [ ] Immediate-repeat idempotency holds: running the matrix twice produces
