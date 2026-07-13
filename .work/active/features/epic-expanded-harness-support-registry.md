@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry
 kind: feature
-stage: implementing
+stage: drafting
 tags: []
 parent: epic-expanded-harness-support
 depends_on: []
@@ -805,6 +805,15 @@ Low-value tests are not added: no per-adapter unit test for `version_arguments`
   (it is one literal), no exhaustive `HarnessPolicyMap` iteration test (the
   interface test covers the contract), and no separate test for help-string
   formatting beyond one assertion that a registered id appears in `--help`.
+
+## Implementation discovery
+
+The initial decomposition made Unit 1 an inline parent-feature stride while
+making every child story depend on the parent feature id. Since a parent feature
+must remain nonterminal until its children complete, that graph leaves every
+child blocked forever. The corrected design must represent Unit 1 as its own
+foundation story and point sibling dependencies at that story, never at their
+nonterminal parent.
 
 ## Risks
 
