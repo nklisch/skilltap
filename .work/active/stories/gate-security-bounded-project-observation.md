@@ -1,7 +1,7 @@
 ---
 id: gate-security-bounded-project-observation
 kind: story
-stage: review
+stage: done
 tags: [security]
 parent: null
 depends_on: []
@@ -88,3 +88,25 @@ or public API break found; product/UX lenses were inapplicable.
 - Adjacent issues parked: none.
 - Verification: focused managed-project security/recovery tests, CLI library
   tests, formatting, and strict CLI test Clippy.
+
+## Re-review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep re-review at effective `standard` weight (explicit
+caller selection), performed in same-harness fresh context over commit
+`f77392d`. Planning, locked revalidation, post-apply verification, and both
+rollback observations all use `load_tree_bounded_no_follow` with the shared
+entry/depth/per-file/total/document limits. Missing is distinguished from an
+unreadable planning surface; execution failures remain typed attention results,
+and rollback treats an unreadable tree as a named residual rather than absence.
+The adversarial fixture grows a sparse oversized tree before planning and at
+the locked revalidation read, proves no tree publication is attempted, and
+preserves the hostile surface. The focused application regression passes.
+Security, correctness, lifecycle, and test-integrity lenses were applied; no
+public schema, CLI, or foundation-doc change required separate review.
