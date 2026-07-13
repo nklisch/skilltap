@@ -2132,7 +2132,18 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
     fs::remove_file(machine.home().join(".claude/CLAUDE.md")).unwrap();
     fs::write(machine.home().join(".claude/CLAUDE.md"), "legacy bridge\n").unwrap();
     let repair = run(&machine, &["instructions", "repair", "--yes", "--json"]);
-    assert_code(&repair, 2);
+    assert_code(&repair, 0);
+    let repair_value = json(&repair);
+    assert_eq!(repair_value["result"], "completed");
+    assert_eq!(repair_value["summary"]["changed"], true);
+    let backup = repair_value["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["status"] == "preserved")
+        .and_then(|entry| entry["fields"]["path"].as_str())
+        .expect("successful repair discloses its recoverable backup");
+    assert_eq!(fs::read_to_string(backup).unwrap(), "legacy bridge\n");
     assert!(
         fs::symlink_metadata(machine.home().join(".claude/CLAUDE.md"))
             .unwrap()
@@ -2145,6 +2156,9 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
             .next()
             .is_some()
     );
+    let repeat_repair = run(&machine, &["instructions", "repair", "--yes", "--json"]);
+    assert_code(&repeat_repair, 0);
+    assert_eq!(json(&repeat_repair)["summary"]["changed"], false);
 }
 
 #[test]
@@ -2531,8 +2545,8 @@ fn instruction_repair_consolidates_duplicate_project_claude_bridges() {
         &machine,
         &["instructions", "repair", "--project", "--yes", "--json"],
     );
-    assert_code(&output, 2);
-    assert_eq!(json(&output)["result"], "attention_required");
+    assert_code(&output, 0);
+    assert_eq!(json(&output)["result"], "completed");
     assert_eq!(
         fs::read_link(machine.working_directory().join("CLAUDE.md")).unwrap(),
         PathBuf::from("AGENTS.md")

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-repair-outcome
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
@@ -33,3 +33,21 @@ instruction outcome from execution plus post-apply bridge and backup health.
 - Repeating a successful repair creates no backup, reports no change, and exits
   successfully in plain and JSON output.
 
+## Implementation
+
+- Successful repair/consolidation warnings are treated as disclosures, while
+  every other warning remains unresolved attention.
+- Final result now requires successful operation outcomes plus fresh checks of
+  the canonical file, exact symlink/import representation, removed duplicates,
+  and any promised regular-file backup.
+- Recoverable backups are projected as explicit `preserved` resources with
+  their managed path, and regression coverage verifies the original bytes.
+- Repeating the repaired command is a completed zero-change operation with no
+  additional backup.
+
+## Verification
+
+- Focused compiled-binary global repair and repeat coverage.
+- Existing project duplicate, mixed blocker, and broken-entry regressions.
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`

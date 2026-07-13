@@ -907,11 +907,90 @@ impl StatusApplication<'_> {
                 outcome.result = ResultClass::AttentionRequired;
             }
         }
-        if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
+        let successful = report.result.operations().values().all(|result| {
+            matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            )
+        });
+        let post_apply_healthy = successful
+            && port
+                .entries
+                .values()
+                .all(|entry| instruction_entry_postcondition(&filesystem, entry));
+        if !post_apply_healthy {
+            outcome.result = ResultClass::AttentionRequired;
+            outcome = outcome
+                .with_warning(Warning::new(
+                    "instruction_postcondition_failed",
+                    "An instruction operation completed without the expected healthy bridge or backup.",
+                ))
+                .with_next_action(NextAction::new(
+                    "inspect_instruction_status",
+                    "Run instruction status and inspect the reported path before retrying.",
+                ));
+        }
+        for backup in port
+            .entries
+            .values()
+            .filter_map(|entry| entry.backup.as_ref())
+            .filter(|backup| {
+                filesystem
+                    .inspect(backup)
+                    .is_ok_and(|metadata| metadata.kind() == FileKind::RegularFile)
+            })
+        {
+            outcome = outcome.with_resource(
+                OutputEntry::new(
+                    format!("instruction-backup:{:016x}", stable_hash(backup.as_str())),
+                    "preserved",
+                )
+                .with_field("path", backup.as_str()),
+            );
+        }
+        let unresolved_warning = outcome.warnings.iter().any(|warning| {
+            !matches!(
+                warning.code.as_str(),
+                "instruction_bridge_repair" | "instruction_bridge_consolidation"
+            )
+        });
+        if successful && post_apply_healthy && outcome.errors.is_empty() && !unresolved_warning {
             outcome.result = ResultClass::Completed;
         }
         outcome
             .with_summary("operations", report.result.operations().len() as u64)
             .with_summary("changed", report.changed)
     }
+}
+
+fn instruction_entry_postcondition(filesystem: &dyn FileSystem, entry: &InstructionEntry) -> bool {
+    let path_healthy = match &entry.write {
+        InstructionWrite::Canonical => filesystem
+            .inspect(&entry.path)
+            .is_ok_and(|metadata| metadata.kind() == FileKind::RegularFile),
+        InstructionWrite::Symlink { target } => {
+            let metadata = filesystem.inspect(&entry.path).ok();
+            let target_matches = metadata.as_ref().is_some_and(|metadata| {
+                metadata.kind() == FileKind::Symlink
+                    && metadata.link_target() == Some(target.as_path())
+            });
+            let destination_regular = resolve_symlink_target(&entry.path, target.as_path())
+                .ok()
+                .and_then(|destination| filesystem.inspect(&destination).ok())
+                .is_some_and(|metadata| metadata.kind() == FileKind::RegularFile);
+            target_matches && destination_regular
+        }
+        InstructionWrite::Import { contents } => filesystem
+            .read(&entry.path)
+            .is_ok_and(|observed| observed == *contents),
+        InstructionWrite::Remove => filesystem
+            .inspect(&entry.path)
+            .is_ok_and(|metadata| metadata.kind() == FileKind::Missing),
+    };
+    let backup_healthy = entry.backup.as_ref().is_none_or(|backup| {
+        filesystem
+            .inspect(backup)
+            .is_ok_and(|metadata| metadata.kind() == FileKind::RegularFile)
+    });
+    path_healthy && backup_healthy
 }
