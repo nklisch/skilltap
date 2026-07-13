@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -55,3 +55,24 @@ can strand effective owned components or make uninstall impossible.
 - Local and Git isolated E2Es cover source-shape evolution, catalog deletion,
   partial disclosure/state evidence, repeat no-ops, rollback, and cache
   non-mutation.
+
+## Implementation notes
+
+- Added a backward-compatible typed per-target manifest for owned skill and
+  MCP projections, each with its component fingerprint, plus exact
+  acknowledged omission/consequence records. State refresh and operation
+  journaling preserve the manifest; older state defaults to no manifest.
+- Update reconciles the union of prior and desired component identities,
+  verifies every prior projection before mutation, removes deleted/renamed
+  skills and MCP entries, and preserves unrelated TOML fields and servers.
+- Removal plans entirely from installed state, so a missing catalog entry or
+  source does not prevent cleanup. Pre-manifest installations fail with the
+  actionable `managed_project_projection_manifest_missing` diagnostic instead
+  of guessing ownership.
+- Accepted omissions appear as exact `omitted:<component>` output resources
+  and remain persisted as target evidence. Removal ignores prior omission
+  acknowledgment because omitted surfaces were never installed.
+- The compiled isolated scenario covers local skill/MCP rename and restoration,
+  repeat no-op, per-component drift refusal, Git SHA provenance, partial MCP
+  disclosure, foreign MCP collision, catalog-deletion uninstall, cache
+  non-mutation, and exact state/output evidence.

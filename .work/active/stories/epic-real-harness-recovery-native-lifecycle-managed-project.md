@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: [epic-real-harness-recovery-native-lifecycle-managed-project-load-contract]
@@ -76,6 +76,11 @@ owns blocker 9.
 - The isolated local/Git compiled lifecycle scenario and full 521-test
   workspace suite pass. The three review blockers below are resolved and this
   parent is returned to review.
+- A second fresh review identified missing durable component identity behind
+  the aggregate projection fingerprint. The projection-manifest follow-up now
+  records per-component ownership/omission evidence, reconciles old versus new
+  load surfaces, and supports source-independent uninstall after catalog
+  deletion. The parent is returned to review with that blocker resolved.
 
 ## Review findings (2026-07-12)
 

@@ -44,9 +44,9 @@ use skilltap_core::{
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
     storage::{
         ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DocumentState,
-        InventoryDocument, InventoryRepository, ManagedArtifactRepository, ResourceState,
-        StateDocument, StateRepository, StorageError, StorageFailure, TargetResourceState,
-        Timestamp,
+        InventoryDocument, InventoryRepository, ManagedArtifactRepository, ManagedProjection,
+        ResourceState, StateDocument, StateRepository, StorageError, StorageFailure,
+        TargetResourceState, Timestamp,
     },
     updates::{
         ResolutionError, SourceRevisionResolver, UpdateCandidate, UpdateDecision,
@@ -1332,52 +1332,101 @@ fn plan_managed_codex_project_lifecycle(
         .state
         .as_ref()
         .and_then(|state| state.resources().get(resource.key()));
+    let prior_projections = existing_state
+        .and_then(|state| state.target(&codex))
+        .map(TargetResourceState::managed_projections)
+        .unwrap_or_default();
 
-    let (files, trees, current_fingerprint, fingerprint, source, installed_revision) =
-        match resource.kind() {
-            ResourceKind::Marketplace => {
-                let source = resource
-                    .source()
-                    .or_else(|| {
-                        existing_state
-                            .and_then(|state| state.target(&codex))
-                            .and_then(TargetResourceState::source)
-                    })
-                    .cloned()
+    let (
+        files,
+        trees,
+        current_fingerprint,
+        fingerprint,
+        source,
+        installed_revision,
+        managed_projections,
+    ) = match resource.kind() {
+        ResourceKind::Marketplace => {
+            let source = resource
+                .source()
+                .or_else(|| {
+                    existing_state
+                        .and_then(|state| state.target(&codex))
+                        .and_then(TargetResourceState::source)
+                })
+                .cloned()
+                .ok_or_else(|| {
+                    managed_project_error(
+                        "managed_project_source_missing",
+                        "The managed project marketplace has no explicit source.",
+                    )
+                })?;
+            let resolved = resolve_codex_marketplace_source(paths, &source, json_limits)?;
+            let desired = if kind == NativeLifecycleKind::MarketplaceRemove {
+                None
+            } else {
+                Some(resolved.catalog.into_bytes().map_err(|_| {
+                    managed_project_error(
+                        "managed_project_catalog_invalid",
+                        "The selected Codex marketplace is invalid.",
+                    )
+                })?)
+            };
+            let fingerprint = desired.as_deref().map(fingerprint_contents);
+            (
+                vec![ManagedProjectFileWrite {
+                    path: catalog_path.clone(),
+                    expected: current_catalog.clone(),
+                    desired,
+                }],
+                Vec::new(),
+                current_catalog.as_deref().map(fingerprint_contents),
+                fingerprint,
+                Some(source),
+                resolved
+                    .commit
+                    .map(skilltap_core::domain::ResolvedRevision::GitCommit),
+                Vec::new(),
+            )
+        }
+        ResourceKind::Plugin => {
+            if kind == NativeLifecycleKind::PluginRemove {
+                let target = existing_state
+                    .and_then(|state| state.target(&codex))
                     .ok_or_else(|| {
                         managed_project_error(
-                            "managed_project_source_missing",
-                            "The managed project marketplace has no explicit source.",
+                            "managed_project_unowned",
+                            "The plugin has no installed managed projection manifest.",
                         )
                     })?;
-                let resolved = resolve_codex_marketplace_source(paths, &source, json_limits)?;
-                let desired = if kind == NativeLifecycleKind::MarketplaceRemove {
-                    None
-                } else {
-                    Some(resolved.catalog.into_bytes().map_err(|_| {
-                        managed_project_error(
-                            "managed_project_catalog_invalid",
-                            "The selected Codex marketplace is invalid.",
-                        )
-                    })?)
-                };
-                let fingerprint = desired.as_deref().map(fingerprint_contents);
+                if prior_projections.is_empty() {
+                    return Err(managed_project_error(
+                        "managed_project_projection_manifest_missing",
+                        "This installation predates projection manifests; run plugin update while its source is available, then retry removal.",
+                    ));
+                }
+                let projection = plan_codex_component_projections(
+                    project,
+                    &filesystem,
+                    None,
+                    prior_projections,
+                    kind,
+                    true,
+                )?;
+                let mut files = Vec::new();
+                if let Some(config) = projection.config {
+                    files.push(config);
+                }
                 (
-                    vec![ManagedProjectFileWrite {
-                        path: catalog_path.clone(),
-                        expected: current_catalog.clone(),
-                        desired,
-                    }],
+                    files,
+                    projection.trees,
+                    projection.current_fingerprint,
+                    projection.desired_fingerprint,
+                    target.source().cloned(),
+                    target.installed_revision().cloned(),
                     Vec::new(),
-                    current_catalog.as_deref().map(fingerprint_contents),
-                    fingerprint,
-                    Some(source),
-                    resolved
-                        .commit
-                        .map(skilltap_core::domain::ResolvedRevision::GitCommit),
                 )
-            }
-            ResourceKind::Plugin => {
+            } else {
                 let selector =
                     skilltap_core::marketplace::PluginSelector::parse(request.native_name.as_str())
                         .map_err(|_| {
@@ -1427,7 +1476,8 @@ fn plan_managed_codex_project_lifecycle(
                 let projection = plan_codex_component_projections(
                     project,
                     &filesystem,
-                    &plugin_tree,
+                    Some(&plugin_tree),
+                    prior_projections,
                     kind,
                     acknowledged,
                 )?;
@@ -1436,6 +1486,7 @@ fn plan_managed_codex_project_lifecycle(
                     files.push(config);
                 }
                 let trees = projection.trees;
+                let managed_projections = projection.manifest;
                 let current_fingerprint = projection.current_fingerprint;
                 let fingerprint = projection.desired_fingerprint;
                 let source = if marketplace_source.kind() == SourceKind::Git {
@@ -1485,15 +1536,17 @@ fn plan_managed_codex_project_lifecycle(
                     resolved
                         .commit
                         .map(skilltap_core::domain::ResolvedRevision::GitCommit),
+                    managed_projections,
                 )
             }
-            _ => {
-                return Err(managed_project_error(
-                    "managed_project_resource_invalid",
-                    "Only Codex project marketplace and plugin resources can use this managed lifecycle.",
-                ));
-            }
-        };
+        }
+        _ => {
+            return Err(managed_project_error(
+                "managed_project_resource_invalid",
+                "Only Codex project marketplace and plugin resources can use this managed lifecycle.",
+            ));
+        }
+    };
 
     validate_managed_project_ownership(
         kind,
@@ -1552,6 +1605,7 @@ fn plan_managed_codex_project_lifecycle(
                 timestamp,
                 None,
             )
+            .map(|target| target.with_managed_projections(managed_projections))
             .and_then(|target| ResourceState::new(resource.key().clone(), [target]))
             .map_err(|_| {
                 managed_project_error(
@@ -1659,14 +1713,15 @@ fn read_codex_catalog_at_root(
 fn plan_codex_component_projections(
     project: &AbsolutePath,
     filesystem: &SystemFileSystem,
-    plugin: &ArtifactTree,
+    plugin: Option<&ArtifactTree>,
+    prior: &[ManagedProjection],
     kind: NativeLifecycleKind,
     acknowledged: bool,
 ) -> Result<CodexComponentProjectionPlan, ErrorDetail> {
     let removal = kind == NativeLifecycleKind::PluginRemove;
     let mut skill_names = BTreeSet::new();
-    let mut unsupported_optional = false;
-    for path in plugin.files().keys() {
+    let mut unsupported_optional = BTreeSet::new();
+    for path in plugin.into_iter().flat_map(|tree| tree.files().keys()) {
         let value = path.as_str();
         if let Some(rest) = value.strip_prefix("skills/") {
             if let Some((name, _)) = rest.split_once('/') {
@@ -1684,10 +1739,18 @@ fn plan_codex_component_projections(
             || value.starts_with("executables/")
             || value.starts_with("settings/")
         {
-            unsupported_optional = true;
+            let root = value.split('/').next().unwrap_or(value);
+            if let Ok(path) = skilltap_core::domain::RelativeArtifactPath::new(root) {
+                unsupported_optional.insert(path);
+            }
         }
     }
-    if unsupported_optional && !acknowledged {
+    for projection in prior {
+        if let ManagedProjection::Skill { id, .. } = projection {
+            skill_names.insert(id.as_str().to_owned());
+        }
+    }
+    if !unsupported_optional.is_empty() && !acknowledged && !removal {
         return Err(managed_project_error(
             "partial_operation_requires_acknowledgment",
             "The plugin has optional components outside Codex project skill/MCP load paths; rerun with `--yes` to accept their omission.",
@@ -1704,20 +1767,30 @@ fn plan_codex_component_projections(
     let mut desired_parts = Vec::new();
     for name in skill_names {
         let prefix = format!("skills/{name}/");
-        let tree = ArtifactTree::new(plugin.files().iter().filter_map(|(path, file)| {
-            path.as_str()
-                .strip_prefix(&prefix)
-                .map(|relative| (relative.to_owned(), file.clone()))
-        }))
-        .map_err(|_| {
-            managed_project_error(
-                "managed_project_plugin_invalid",
-                "A plugin skill is not a complete artifact tree.",
+        let desired_files = plugin
+            .into_iter()
+            .flat_map(|tree| tree.files())
+            .filter_map(|(path, file)| {
+                path.as_str()
+                    .strip_prefix(&prefix)
+                    .map(|relative| (relative.to_owned(), file.clone()))
+            })
+            .collect::<Vec<_>>();
+        let desired_tree = if desired_files.is_empty() {
+            None
+        } else {
+            Some(ArtifactTree::new(desired_files).map_err(|_| {
+                managed_project_error(
+                    "managed_project_plugin_invalid",
+                    "A plugin skill is not a complete artifact tree.",
+                )
+            })?)
+        };
+        if desired_tree.as_ref().is_some_and(|tree| {
+            !tree.files().contains_key(
+                &skilltap_core::domain::RelativeArtifactPath::new("SKILL.md").expect("static path"),
             )
-        })?;
-        if !tree.files().contains_key(
-            &skilltap_core::domain::RelativeArtifactPath::new("SKILL.md").expect("static path"),
-        ) {
+        }) {
             return Err(managed_project_error(
                 "managed_project_plugin_invalid",
                 "A required plugin skill is missing top-level SKILL.md.",
@@ -1741,21 +1814,37 @@ fn plan_codex_component_projections(
                 .ok()
                 .map(|tree| (identity, tree))
             });
+        if let Some(expected) = prior.iter().find_map(|projection| match projection {
+            ManagedProjection::Skill { id, fingerprint } if id == &destination => Some(fingerprint),
+            _ => None,
+        }) {
+            let observed = current.as_ref().map(|(_, tree)| {
+                let mut bytes = Vec::new();
+                append_projection_tree(&mut bytes, &destination, tree);
+                fingerprint_contents(&bytes)
+            });
+            if observed.as_ref() != Some(expected) {
+                return Err(managed_project_error(
+                    "managed_project_drifted",
+                    "An owned project skill projection is missing or was replaced.",
+                ));
+            }
+        }
         if let Some((_, tree)) = &current {
             append_projection_tree(&mut current_parts, &destination, tree);
         }
-        if !removal {
-            append_projection_tree(&mut desired_parts, &destination, &tree);
+        if !removal && let Some(tree) = &desired_tree {
+            append_projection_tree(&mut desired_parts, &destination, tree);
         }
         trees.push(ManagedProjectPluginWrite {
             root: root.clone(),
             destination,
-            desired_tree: (!removal).then_some(tree),
+            desired_tree: (!removal).then_some(desired_tree).flatten(),
             expected_tree: current.as_ref().map(|(_, tree)| tree.clone()),
             expected_identity: current.map(|(identity, _)| identity),
         });
     }
-    let mcp = plan_codex_mcp_config(project, filesystem, plugin, removal, acknowledged)?;
+    let mcp = plan_codex_mcp_config(project, filesystem, plugin, prior, removal, acknowledged)?;
     current_parts.extend(mcp.current_fingerprint_bytes);
     desired_parts.extend(mcp.desired_fingerprint_bytes);
     if trees.is_empty() && mcp.write.is_none() {
@@ -1764,12 +1853,28 @@ fn plan_codex_component_projections(
             "The plugin has no faithful project skill or MCP projection.",
         ));
     }
+    let manifest = if removal {
+        Vec::new()
+    } else {
+        let mut manifest = managed_projection_manifest(&trees, &mcp.manifest);
+        manifest.extend(unsupported_optional.into_iter().map(|id| {
+            ManagedProjection::Omitted {
+                id,
+                consequence: skilltap_core::domain::EvidenceCode::new(
+                    "unsupported_optional_component_omitted",
+                )
+                .expect("static evidence code is valid"),
+            }
+        }));
+        manifest
+    };
     Ok(CodexComponentProjectionPlan {
         trees,
         config: mcp.write,
         current_fingerprint: (!current_parts.is_empty())
             .then(|| fingerprint_contents(&current_parts)),
         desired_fingerprint: (!removal).then(|| fingerprint_contents(&desired_parts)),
+        manifest,
     })
 }
 
@@ -1778,6 +1883,25 @@ struct CodexComponentProjectionPlan {
     config: Option<ManagedProjectFileWrite>,
     current_fingerprint: Option<Fingerprint>,
     desired_fingerprint: Option<Fingerprint>,
+    manifest: Vec<ManagedProjection>,
+}
+
+fn managed_projection_manifest(
+    trees: &[ManagedProjectPluginWrite],
+    mcp: &[ManagedProjection],
+) -> Vec<ManagedProjection> {
+    let mut manifest = mcp.to_vec();
+    for tree in trees {
+        if let Some(desired) = &tree.desired_tree {
+            let mut bytes = Vec::new();
+            append_projection_tree(&mut bytes, &tree.destination, desired);
+            manifest.push(ManagedProjection::Skill {
+                id: tree.destination.clone(),
+                fingerprint: fingerprint_contents(&bytes),
+            });
+        }
+    }
+    manifest
 }
 
 fn append_projection_tree(
@@ -1796,26 +1920,29 @@ fn append_projection_tree(
 fn plan_codex_mcp_config(
     project: &AbsolutePath,
     filesystem: &SystemFileSystem,
-    plugin: &ArtifactTree,
+    plugin: Option<&ArtifactTree>,
+    prior: &[ManagedProjection],
     removal: bool,
     acknowledged: bool,
 ) -> Result<CodexMcpConfigPlan, ErrorDetail> {
     let mcp_file = [".codex-plugin/mcp.json", ".mcp.json", "mcp.json"]
         .iter()
         .find_map(|path| {
-            plugin
+            plugin?
                 .files()
                 .get(&skilltap_core::domain::RelativeArtifactPath::new(*path).ok()?)
         });
-    let Some(mcp_file) = mcp_file else {
-        return Ok(CodexMcpConfigPlan::empty());
-    };
-    let value: serde_json::Value = serde_json::from_slice(mcp_file.contents()).map_err(|_| {
-        managed_project_error(
-            "managed_project_mcp_invalid",
-            "The plugin MCP declaration is invalid JSON.",
+    let value: serde_json::Value = mcp_file
+        .map_or_else(
+            || Ok(serde_json::json!({"mcpServers": {}})),
+            |mcp_file| serde_json::from_slice(mcp_file.contents()),
         )
-    })?;
+        .map_err(|_| {
+            managed_project_error(
+                "managed_project_mcp_invalid",
+                "The plugin MCP declaration is invalid JSON.",
+            )
+        })?;
     let servers = value
         .get("mcpServers")
         .and_then(serde_json::Value::as_object)
@@ -1863,29 +1990,60 @@ fn plan_codex_mcp_config(
     let mut current_parts = Vec::new();
     let mut desired_parts = Vec::new();
     let mut compatible_servers = 0usize;
-    for (name, server) in servers {
-        NativeId::new(name).map_err(|_| {
+    let mut names = servers.keys().cloned().collect::<BTreeSet<_>>();
+    names.extend(prior.iter().filter_map(|projection| match projection {
+        ManagedProjection::Mcp { id, .. } => Some(id.as_str().to_owned()),
+        _ => None,
+    }));
+    let mut manifest = Vec::new();
+    for name in names {
+        let server = servers.get(&name);
+        let native_id = NativeId::new(&name).map_err(|_| {
             managed_project_error(
                 "managed_project_mcp_invalid",
                 "An MCP server name is invalid.",
             )
         })?;
-        if !removal && mcp_depends_on_plugin_root(server) {
+        if !removal && server.is_some_and(mcp_depends_on_plugin_root) {
             if !acknowledged {
                 return Err(managed_project_error(
                     "partial_operation_requires_acknowledgment",
                     "An MCP server depends on a plugin-root-relative executable that cannot be projected faithfully; rerun with `--yes` to omit it.",
                 ));
             }
+            if let Ok(id) = skilltap_core::domain::RelativeArtifactPath::new(format!("mcp/{name}"))
+            {
+                manifest.push(ManagedProjection::Omitted {
+                    id,
+                    consequence: skilltap_core::domain::EvidenceCode::new(
+                        "plugin_root_relative_mcp_omitted",
+                    )
+                    .expect("static evidence code is valid"),
+                });
+            }
             continue;
         }
         compatible_servers += 1;
-        if let Some(current) = mcp_servers.get(name) {
+        if let Some(current) = mcp_servers.get(&name) {
             current_parts.extend(toml::to_string(current).unwrap_or_default().into_bytes());
         }
+        if let Some(expected) = prior.iter().find_map(|projection| match projection {
+            ManagedProjection::Mcp { id, fingerprint } if id.as_str() == name => Some(fingerprint),
+            _ => None,
+        }) {
+            let observed = mcp_servers.get(&name).map(|current| {
+                fingerprint_contents(toml::to_string(current).unwrap_or_default().as_bytes())
+            });
+            if observed.as_ref() != Some(expected) {
+                return Err(managed_project_error(
+                    "managed_project_drifted",
+                    "An owned project MCP projection is missing or was replaced.",
+                ));
+            }
+        }
         if removal {
-            mcp_servers.remove(name);
-        } else {
+            mcp_servers.remove(&name);
+        } else if let Some(server) = server {
             let mapped = json_to_toml(server).ok_or_else(|| {
                 managed_project_error(
                     "managed_project_mcp_invalid",
@@ -1893,7 +2051,15 @@ fn plan_codex_mcp_config(
                 )
             })?;
             desired_parts.extend(toml::to_string(&mapped).unwrap_or_default().into_bytes());
-            mcp_servers.insert(name.clone(), mapped);
+            manifest.push(ManagedProjection::Mcp {
+                id: native_id,
+                fingerprint: fingerprint_contents(
+                    toml::to_string(&mapped).unwrap_or_default().as_bytes(),
+                ),
+            });
+            mcp_servers.insert(name, mapped);
+        } else {
+            mcp_servers.remove(&name);
         }
     }
     if compatible_servers == 0 {
@@ -1924,6 +2090,7 @@ fn plan_codex_mcp_config(
         }),
         current_fingerprint_bytes: current_parts,
         desired_fingerprint_bytes: desired_parts,
+        manifest,
     })
 }
 
@@ -1931,6 +2098,7 @@ struct CodexMcpConfigPlan {
     write: Option<ManagedProjectFileWrite>,
     current_fingerprint_bytes: Vec<u8>,
     desired_fingerprint_bytes: Vec<u8>,
+    manifest: Vec<ManagedProjection>,
 }
 
 impl CodexMcpConfigPlan {
@@ -1939,6 +2107,7 @@ impl CodexMcpConfigPlan {
             write: None,
             current_fingerprint_bytes: Vec::new(),
             desired_fingerprint_bytes: Vec::new(),
+            manifest: Vec::new(),
         }
     }
 }
@@ -2331,6 +2500,7 @@ fn state_seed_matches(existing: &ResourceState, seed: &ResourceState) -> bool {
                 && existing_target.source() == seed_target.source()
                 && existing_target.managed_artifact() == seed_target.managed_artifact()
                 && existing_target.fingerprint() == seed_target.fingerprint()
+                && existing_target.managed_projections() == seed_target.managed_projections()
                 && existing_target.installed_revision() == seed_target.installed_revision()
                 && existing_target.available_revision() == seed_target.available_revision()
         })

@@ -8,8 +8,25 @@ use serde::{Deserialize, Deserializer, Serialize};
 use super::{ArtifactRole, ManagedArtifactRecord, STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
     EvidenceCode, Fingerprint, HarnessId, NativeId, OperationId, OperationResult, Ownership,
-    Provenance, ResolvedRevision, ResourceKey, Source,
+    Provenance, RelativeArtifactPath, ResolvedRevision, ResourceKey, Source,
 };
+
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind", content = "id")]
+pub enum ManagedProjection {
+    Skill {
+        id: RelativeArtifactPath,
+        fingerprint: Fingerprint,
+    },
+    Mcp {
+        id: NativeId,
+        fingerprint: Fingerprint,
+    },
+    Omitted {
+        id: RelativeArtifactPath,
+        consequence: EvidenceCode,
+    },
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(try_from = "TimestampWire", into = "TimestampWire")]
@@ -285,6 +302,8 @@ pub struct TargetResourceState {
     managed_artifact: Option<ManagedArtifactRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
     fingerprint: Option<Fingerprint>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    managed_projections: Vec<ManagedProjection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     installed_revision: Option<ResolvedRevision>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -308,6 +327,8 @@ struct TargetResourceStateWire {
     managed_artifact: Option<ManagedArtifactRecord>,
     #[serde(skip_serializing_if = "Option::is_none")]
     fingerprint: Option<Fingerprint>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    managed_projections: Vec<ManagedProjection>,
     #[serde(skip_serializing_if = "Option::is_none")]
     installed_revision: Option<ResolvedRevision>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -367,6 +388,7 @@ impl TargetResourceState {
             source,
             managed_artifact,
             fingerprint,
+            managed_projections: Vec::new(),
             installed_revision,
             available_revision,
             observed_at,
@@ -394,6 +416,18 @@ impl TargetResourceState {
     pub const fn fingerprint(&self) -> Option<&Fingerprint> {
         self.fingerprint.as_ref()
     }
+    pub fn managed_projections(&self) -> &[ManagedProjection] {
+        &self.managed_projections
+    }
+    pub fn with_managed_projections(
+        mut self,
+        projections: impl IntoIterator<Item = ManagedProjection>,
+    ) -> Self {
+        self.managed_projections = projections.into_iter().collect();
+        self.managed_projections.sort();
+        self.managed_projections.dedup();
+        self
+    }
     pub const fn installed_revision(&self) -> Option<&ResolvedRevision> {
         self.installed_revision.as_ref()
     }
@@ -418,6 +452,7 @@ impl From<TargetResourceState> for TargetResourceStateWire {
             source: value.source,
             managed_artifact: value.managed_artifact,
             fingerprint: value.fingerprint,
+            managed_projections: value.managed_projections,
             installed_revision: value.installed_revision,
             available_revision: value.available_revision,
             observed_at: value.observed_at,
@@ -443,6 +478,7 @@ impl TryFrom<TargetResourceStateWire> for TargetResourceState {
             value.observed_at,
             value.last_apply,
         )
+        .map(|state| state.with_managed_projections(value.managed_projections))
     }
 }
 
@@ -749,7 +785,8 @@ impl StateDocument {
             current_target.available_revision().cloned(),
             current_target.observed_at(),
             Some(apply),
-        )?;
+        )?
+        .with_managed_projections(current_target.managed_projections().iter().cloned());
         let updated = current.with_target(updated_target)?;
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
@@ -800,7 +837,8 @@ impl StateDocument {
             available,
             current_target.observed_at(),
             current_target.last_apply().cloned(),
-        )?;
+        )?
+        .with_managed_projections(current_target.managed_projections().iter().cloned());
         let updated = current.with_target(updated_target)?;
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
@@ -862,6 +900,7 @@ impl StateDocument {
                         incoming.observed_at(),
                         previous.last_apply().cloned(),
                     )?
+                    .with_managed_projections(incoming.managed_projections().iter().cloned())
                 } else {
                     incoming.clone()
                 }

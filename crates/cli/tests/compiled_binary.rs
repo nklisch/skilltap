@@ -900,6 +900,7 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(state.contains("\"provenance\": \"materialized\""));
     assert!(state.contains("\"ownership\": \"skilltap\""));
+    assert!(state.contains("managed_projections"), "state: {state}");
 
     let repeat = run(
         &machine,
@@ -932,6 +933,80 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     );
     assert_code(&catalog_update, 0);
     assert_eq!(json(&catalog_update)["summary"]["changed"], false);
+
+    fs::rename(
+        source.join("plugins/demo/skills/demo"),
+        source.join("plugins/demo/skills/renamed"),
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"renamed-docs":{"command":"demo-mcp","args":["serve"]}}}"#,
+    )
+    .unwrap();
+    let evolved = run(
+        &machine,
+        &[
+            "plugin",
+            "update",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&evolved, 0);
+    assert!(
+        !project.join(".agents/skills/demo/SKILL.md").exists(),
+        "evolved output: {}",
+        stdout(&evolved)
+    );
+    assert!(project.join(".agents/skills/renamed/SKILL.md").is_file());
+    let evolved_config = fs::read_to_string(project.join(".codex/config.toml")).unwrap();
+    assert!(!evolved_config.contains("demo-docs"));
+    assert!(evolved_config.contains("renamed-docs"));
+    let evolved_repeat = run(
+        &machine,
+        &[
+            "plugin",
+            "update",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&evolved_repeat, 0);
+    assert_eq!(json(&evolved_repeat)["summary"]["changed"], false);
+
+    fs::rename(
+        source.join("plugins/demo/skills/renamed"),
+        source.join("plugins/demo/skills/demo"),
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"demo-docs":{"command":"demo-mcp","args":["serve"]}}}"#,
+    )
+    .unwrap();
+    let restored = run(
+        &machine,
+        &[
+            "plugin",
+            "update",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&restored, 0);
 
     fs::write(installed.join("SKILL.md"), "drift\n").unwrap();
     let drifted = run(
@@ -1065,13 +1140,44 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
         ],
     );
     assert_code(&git_install, 0);
+    assert!(
+        json(&git_install)["resources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|resource| resource["id"] == "omitted:mcp/plugin-relative"
+                && resource["fields"]["consequence"] == "plugin_root_relative_mcp_omitted")
+    );
     assert!(git_project.join(".agents/skills/demo/SKILL.md").is_file());
     let git_config = fs::read_to_string(git_project.join(".codex/config.toml")).unwrap();
     assert!(git_config.contains("demo-docs"));
     assert!(!git_config.contains("plugin-relative"));
     let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(state.contains(revision.trim()));
+    assert!(state.contains("plugin_root_relative_mcp_omitted"));
     assert!(config_root(&machine).join("managed/sources").is_dir());
+
+    fs::write(
+        source.join(".agents/plugins/marketplace.json"),
+        r#"{"name":"team","plugins":[]}"#,
+    )
+    .unwrap();
+    let git_remove = run(
+        &machine,
+        &[
+            "plugin",
+            "remove",
+            "demo@git-team",
+            "--project",
+            git_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&git_remove, 0);
+    assert!(!git_project.join(".agents/skills/demo/SKILL.md").exists());
+    assert!(!git_project.join(".codex/config.toml").exists());
 }
 
 #[test]
@@ -2928,8 +3034,7 @@ fn status_preserves_successful_sibling_observation_and_never_mutates_native_tree
             .iter()
             .any(|action| {
                 action["code"] == "inspect_harness_version"
-                    && action["command"]
-                        == format!("{} --version", claude.executable().display())
+                    && action["command"] == format!("{} --version", claude.executable().display())
             }),
         "unexpected adoption diagnostics: {value}"
     );
@@ -3014,8 +3119,7 @@ fn adopt_reports_partial_sibling_and_still_publishes_healthy_candidates() {
             .iter()
             .any(|action| {
                 action["code"] == "inspect_harness_version"
-                    && action["command"]
-                        == format!("{} --version", claude.executable().display())
+                    && action["command"] == format!("{} --version", claude.executable().display())
             }),
         "unexpected partial adoption diagnostics: {value}"
     );
@@ -4168,7 +4272,12 @@ fn populated_plan_and_sync_apply_the_desired_inventory_resource() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|entry| { entry["status"] == "planned" || entry["status"] == "pending" })
+            .any(|entry| {
+                matches!(
+                    entry["status"].as_str(),
+                    Some("planned" | "pending" | "repair")
+                )
+            })
     );
     assert_eq!(fs::read(&inventory_path).unwrap(), inventory_before);
     assert!(!config_root(&machine).join("state.json").exists());
