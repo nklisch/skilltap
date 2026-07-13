@@ -1,7 +1,7 @@
 ---
 id: gate-security-bounded-project-observation
 kind: story
-stage: review
+stage: implementing
 tags: [security]
 parent: null
 depends_on: []
@@ -31,3 +31,36 @@ existing project catalogs, MCP configuration, or skill trees.
 - Discrepancies from design: item began at drafting because Medium gate findings route there, but its required-fix brief was complete and the caller explicitly commissioned implementation.
 - Adjacent issues parked: none.
 - Verification: focused core limit test and `cargo check -p skilltap` pass; the latter reports a temporary dead-code warning in another worker's uncommitted test seam.
+
+## Review findings (2026-07-12)
+
+- **Blocker — managed skill-tree call paths are not consistently bounded or
+  correctly typed.** Planning converts every
+  `load_tree_bounded_no_follow` failure into absence with `.ok()`
+  (`crates/cli/src/application.rs:1849`), so a byte/entry/depth violation or
+  no-follow rejection does not reach the caller as an observation failure.
+  Revalidation, post-apply verification, and rollback still call the unbounded
+  `load_tree_no_follow` API (`crates/cli/src/application/execution.rs:276`,
+  `:378`, `:461`, `:474`). A hostile tree introduced or enlarged after planning
+  can therefore be fully allocated under the execution lock, contrary to the
+  required pre-allocation bounds. Keep this item implementing until every
+  managed-project skill-tree observation uses the bounded port and preserves a
+  typed failure instead of treating errors as missing.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: managed skill-tree observation is unbounded on execution paths
+and bounded planning errors are erased (`gate-security-bounded-project-observation`)
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep review at effective review weight `standard` (explicit
+caller selection), performed in fresh context because hostile-input allocation
+is a security surface. The core bounded reader correctly checks directory
+entry, depth, metadata length, per-file, total-byte, and document limits before
+large allocation, and its focused adversarial tests pass. The blocker is in
+application/execution composition, not the primitive. No foundation-doc drift
+or public API break found; product/UX lenses were inapplicable.
