@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-contract
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on: []
@@ -12,6 +12,80 @@ gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12
 ---
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+**Review weight**: standard (caller/default); risk-escalated to Deep fresh-context
+because this contract becomes the architectural dispatch boundary for every
+future harness adapter.
+**Reviewer context**: cross-model — Z.AI GLM 5.2 fresh-context review of an
+OpenAI-host run (different model class).
+
+**Blockers**: none
+**Important**: none
+
+**Nits (parked, below the material current-cycle bar)**:
+
+1. Story-body Scope parenthetical claims `canonical()` carries a "two-entry
+   literal list (which Codex/Claude migration in `registry-adapters`
+   populates)" — but `canonical()` returns an empty `Vec` here, exactly as the
+   Implementation-notes section describes. The parenthetical should be reworded
+   to remove the "two-entry literal list" wording so the body is internally
+   consistent. Pure documentation; no code or contract impact.
+2. `pub mod registry;` (lib.rs:36) deviates from this crate's convention —
+   every other submodule (`plugin_graph`, `lifecycle`, `bootstrap`, ...) is
+   private `mod foo;` plus a selective `pub use foo::{...};`. The accompanying
+   `pub use registry::{...}` already exposes the consumed top-level surface,
+   so `pub mod` additionally publishes the whole `registry::` path namespace.
+   Worth confirming whether the namespace exposure is intentional or whether
+   collapsing to `mod registry;` matches crate convention; deferring unless a
+   downstream consumer needs the `skilltap_harnesses::registry::*` path.
+
+**Verified**:
+
+- Trait shape, port traits, and `TargetRegistry` method signatures match the
+  parent feature's Unit 1 design (imports qualified vs. fully-spelled are
+  equivalent).
+- The three deliberate deviations from the parent design — empty `canonical()`,
+  added `TargetRegistry::new()` composition seam, and cached `RegistryEntry` —
+  are documented in the story body, justified, and do not change the public
+  contract surface. The `RegistryEntry` identity cache is the correct fix for
+  `identity()` returning an owned `TargetIdentity` while `ids()` yields
+  `&HarnessId` (the design's literal `&a.identity().id` would not compile).
+- Manual `Display` / `Error` (with `source()`) / `From` impls on
+  `ObservationPathError` are semantically equivalent to the designed
+  `#[error(transparent)]` + `#[from]`. Justified: this crate does not depend
+  on `thiserror` (verified — no workspace Cargo.toml pulls it in).
+- Manual `Debug` for `TargetRegistry` is justified: `&'static dyn
+  HarnessAdapter` is not `Debug`.
+- `HarnessAdapter` is object-safe and `Sync`-bounded; the test adapter
+  (`static FIRST_PARTY / MANAGED`) confirms `&'static dyn HarnessAdapter`
+  construction.
+- Purely additive change: no existing public symbol in `skilltap-harnesses`
+  is removed or renamed; `HarnessKind`, `select_profile`, the `observe_*` free
+  functions, etc. are unchanged (their elimination is correctly deferred to
+  `registry-adapters`).
+- Foundation alignment: `docs/ARCH.md` Harness Adapter Contract is a
+  future-state sketch whose responsibilities (`harness(&self) -> &HarnessId`,
+  bounded `observe`) are subsumed by `HarnessAdapter::identity()` and the
+  required/optional port set — consistent, not drift. The expanded-target-set
+  intent in `HARNESS-CONTRACTS.md` is accommodated by the registry accepting
+  any validated `HarnessId`.
+- Tests cover the contract: insertion order via `ids()`, `contains`, `adapter`
+  lookup (hit + miss), `iter().count()`, `first_party_targets` filter, empty
+  `canonical()`, and default-absent optional ports. Coverage matches the
+  story's reframed acceptance criteria (throwaway test adapter rather than
+  real Codex/Claude entries, which land in `registry-adapters`).
+- Verification reproduced: `cargo test -p skilltap-harnesses --lib` → 21 passed.
+
+**Notes**: Parent feature Unit 1 acceptance criteria (`canonical().ids()`
+yields codex+claude, `first_party_targets()` yields codex+claude, gemini
+returns None) are deferred to `registry-adapters`; the contract story's own
+acceptance criteria correctly reframe those against a throwaway test adapter,
+which is the right scope split for an independently-compilable foundation
+story. Parent feature is intentionally NOT rolled to review — four sibling
+stories (adapters, config, cli, test-support) remain nonterminal.
 
 # Target Registry and Adapter Contract
 
