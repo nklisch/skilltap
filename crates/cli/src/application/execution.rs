@@ -720,14 +720,24 @@ impl ExecutionPort for ManagedSkillPort<'_> {
                     Ok(OperationOutcome::NoChange)
                 }
                 Err(_) => {
-                    let _ = self.filesystem.publish_tree_no_follow(
+                    let restored = restore_managed_skill_tree(
+                        self.filesystem,
                         &entry.root,
                         &entry.destination,
-                        backup_tree.files(),
+                        backup_tree,
                     );
-                    Err(managed_skill_apply_failure(
-                        "The replacement skill tree could not be published after backup.",
-                    ))
+                    let destination =
+                        format!("{}/{}", entry.root.as_str(), entry.destination.as_str());
+                    let detail = if restored {
+                        format!(
+                            "The replacement skill tree could not be published after backup. The prior managed skill was restored at `{destination}`."
+                        )
+                    } else {
+                        format!(
+                            "The replacement skill tree could not be published after backup, and restoration could not be proven. The managed destination `{destination}` requires recovery before retrying."
+                        )
+                    };
+                    Err(managed_skill_apply_failure(detail))
                 }
             }
         } else {
@@ -772,12 +782,40 @@ impl ExecutionPort for ManagedSkillPort<'_> {
     }
 }
 
-fn managed_skill_apply_failure(detail: &'static str) -> ExecutionError {
+fn restore_managed_skill_tree(
+    filesystem: &dyn DirectoryTreeFileSystem,
+    root: &AbsolutePath,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+    backup_tree: &ArtifactTree,
+) -> bool {
+    let published_identity =
+        match filesystem.publish_tree_no_follow(root, destination, backup_tree.files()) {
+            Ok(skilltap_core::runtime::DirectoryPublishOutcome::Published(identity)) => {
+                Some(identity)
+            }
+            Ok(skilltap_core::runtime::DirectoryPublishOutcome::AlreadyExists) => None,
+            Err(_) => return false,
+        };
+    let Ok((observed_identity, files)) = filesystem.load_tree_no_follow(root, destination) else {
+        return false;
+    };
+    if published_identity.is_some_and(|identity| identity != observed_identity) {
+        return false;
+    }
+    artifact_tree_from_loaded(files).as_ref() == Some(backup_tree)
+}
+
+fn managed_skill_apply_failure(detail: impl Into<String>) -> ExecutionError {
+    let detail = skilltap_core::domain::EvidenceDetail::new(detail.into()).unwrap_or_else(|_| {
+        skilltap_core::domain::EvidenceDetail::new(
+            "Managed skill publication failed and the destination requires fresh observation.",
+        )
+        .expect("static evidence detail is valid")
+    });
     ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
         skilltap_core::domain::EvidenceCode::new("managed.skill_publish_failed")
             .expect("static evidence code is valid"),
-        skilltap_core::domain::EvidenceDetail::new(detail)
-            .expect("static evidence detail is valid"),
+        detail,
     ))
 }
 

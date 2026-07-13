@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     ffi::OsString,
     fs, io,
     path::{Path, PathBuf},
@@ -27,7 +27,7 @@ use crate::command::{OutputArgs, ScopeArgs, TargetArgs};
 
 struct RecordingFaultFileSystem {
     delegate: SystemFileSystem,
-    fail_tree_publish: Cell<bool>,
+    fail_tree_publish_at: RefCell<BTreeSet<usize>>,
     fail_confined_write_suffix: RefCell<Option<String>>,
     fail_atomic_write_at: Cell<Option<usize>>,
     atomic_write_calls: Cell<usize>,
@@ -39,7 +39,7 @@ impl RecordingFaultFileSystem {
     fn new() -> Self {
         Self {
             delegate: SystemFileSystem,
-            fail_tree_publish: Cell::new(false),
+            fail_tree_publish_at: RefCell::new(BTreeSet::new()),
             fail_confined_write_suffix: RefCell::new(None),
             fail_atomic_write_at: Cell::new(None),
             atomic_write_calls: Cell::new(0),
@@ -49,7 +49,14 @@ impl RecordingFaultFileSystem {
     }
 
     fn fail_next_tree_publish(&self) {
-        self.fail_tree_publish.set(true);
+        self.fail_tree_publish_offsets(&[1]);
+    }
+
+    fn fail_tree_publish_offsets(&self, offsets: &[usize]) {
+        let current = self.tree_publish_attempts.get();
+        self.fail_tree_publish_at
+            .borrow_mut()
+            .extend(offsets.iter().map(|offset| current + offset));
     }
 
     fn fail_next_confined_write(&self, suffix: &str) {
@@ -141,9 +148,9 @@ impl DirectoryTreeFileSystem for RecordingFaultFileSystem {
         destination: &RelativeArtifactPath,
         files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
     ) -> Result<DirectoryPublishOutcome, RuntimeError> {
-        self.tree_publish_attempts
-            .set(self.tree_publish_attempts.get() + 1);
-        if self.fail_tree_publish.replace(false) {
+        let attempt = self.tree_publish_attempts.get() + 1;
+        self.tree_publish_attempts.set(attempt);
+        if self.fail_tree_publish_at.borrow_mut().remove(&attempt) {
             return Err(Self::injected(
                 FileSystemAction::Write,
                 Self::confined_path(managed_root, destination),
@@ -469,6 +476,94 @@ fn assert_changed(outcome: &Outcome, expected: bool) {
         Some(&OutputValue::Boolean(expected)),
         "outcome: {outcome:?}"
     );
+}
+
+#[test]
+fn managed_skill_replacement_reports_clean_and_uncertain_restoration() {
+    for restore_fails in [false, true] {
+        let root = TempRoot::new(if restore_fails {
+            "skilltap-managed-skill-restore-failed"
+        } else {
+            "skilltap-managed-skill-restore-clean"
+        })
+        .unwrap();
+        let filesystem = RecordingFaultFileSystem::new();
+        let managed_root = absolute(&root.join("managed"));
+        let config_root = absolute(&root.join("config"));
+        let destination = RelativeArtifactPath::new("skills/demo").unwrap();
+        let destination_path = AbsolutePath::new(format!(
+            "{}/{}",
+            managed_root.as_str(),
+            destination.as_str()
+        ))
+        .unwrap();
+        let previous = ArtifactTree::new([
+            ("SKILL.md", b"---\nname: demo\n---\nold".to_vec()),
+            ("reference.md", b"prior reference".to_vec()),
+        ])
+        .unwrap();
+        let replacement = ArtifactTree::new([
+            ("SKILL.md", b"---\nname: demo\n---\nnew".to_vec()),
+            ("reference.md", b"replacement reference".to_vec()),
+        ])
+        .unwrap();
+        let expected_identity = match filesystem
+            .publish_tree_no_follow(&managed_root, &destination, previous.files())
+            .unwrap()
+        {
+            DirectoryPublishOutcome::Published(identity) => identity,
+            DirectoryPublishOutcome::AlreadyExists => unreachable!(),
+        };
+        let owner = ResourceKey::new(ResourceId::new("skill:demo").unwrap(), Scope::Global);
+        let operation = skilltap_core::lifecycle_operation::faithful_file_operation(
+            OperationId::new("managed:skill:replace:demo").unwrap(),
+            HarnessId::new("codex").unwrap(),
+            owner.clone(),
+            OperationAction::SkillInstall,
+            destination_path.clone(),
+        )
+        .unwrap();
+        filesystem.fail_tree_publish_offsets(if restore_fails { &[2, 3] } else { &[2] });
+        let port = ManagedSkillPort {
+            filesystem: &filesystem,
+            entries: BTreeMap::from([(
+                operation.id().clone(),
+                ManagedSkillEntry {
+                    root: managed_root.clone(),
+                    destination: destination.clone(),
+                    tree: replacement,
+                    backup_tree: Some(previous.clone()),
+                    action: ManagedSkillAction::Replace,
+                    expected_identity: Some(expected_identity),
+                    owner: Some(owner),
+                    config_root: Some(config_root),
+                },
+            )]),
+        };
+
+        let failure = port.apply(&operation).unwrap_err();
+        let ExecutionError::Apply { reason } = failure else {
+            panic!("expected managed skill apply failure");
+        };
+        let detail = reason.detail().unwrap().as_str();
+        assert!(detail.contains(destination_path.as_str()), "{detail}");
+
+        if restore_fails {
+            assert!(detail.contains("could not be proven"), "{detail}");
+            assert!(!detail.contains("was restored"), "{detail}");
+            assert!(
+                filesystem
+                    .load_tree_no_follow(&managed_root, &destination)
+                    .is_err()
+            );
+        } else {
+            assert!(detail.contains("was restored"), "{detail}");
+            let (_, restored_files) = filesystem
+                .load_tree_no_follow(&managed_root, &destination)
+                .unwrap();
+            assert_eq!(restored_files, previous.files().clone());
+        }
+    }
 }
 
 #[test]
