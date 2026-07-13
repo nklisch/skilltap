@@ -722,6 +722,55 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
 }
 
 #[test]
+fn managed_marketplace_removal_uses_observed_projection_without_source() {
+    let root = TempRoot::new("skilltap-managed-marketplace-source-free-remove").unwrap();
+    let paths = isolated_platform_paths(&root);
+    enable_codex_only(&paths);
+    let project = root.join("project");
+    let source = root.join("marketplace");
+    fs::create_dir_all(&project).unwrap();
+    write_managed_marketplace(&source);
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+
+    let add = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+    );
+    assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+    assert!(project.join(".agents/plugins/marketplace.json").is_file());
+
+    // Removal is grounded in the owned project projection, not the upstream
+    // checkout, so an unavailable source must not prevent safe cleanup.
+    fs::remove_dir_all(&source).unwrap();
+    let remove = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceRemove,
+        None,
+        Some("team"),
+    );
+
+    assert_eq!(remove.result, ResultClass::Completed, "{remove:?}");
+    assert_changed(&remove, true);
+    assert!(!project.join(".agents/plugins/marketplace.json").exists());
+    assert!(
+        remove
+            .errors
+            .iter()
+            .all(|error| error.code != "managed_project_source_missing"),
+        "{remove:?}"
+    );
+}
+
+#[test]
 fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
     for post_plan_growth in [false, true] {
         let root = TempRoot::new("skilltap-managed-tree-limit-failure").unwrap();

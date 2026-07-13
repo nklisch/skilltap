@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-codex-adapter
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract-evidence]
@@ -155,43 +155,43 @@ pub(crate) const CODEX_MCP_DESTINATION: &str = ".codex/config.toml";
 
 ## Acceptance criteria
 
-- [ ] `CodexManagedProjection` implements the amended single-method
+- [x] `CodexManagedProjection` implements the amended single-method
       `ManagedProjectionPort::plan` and `CodexAdapter::managed_projection()`
       returns its static ref.
-- [ ] For `ManagedProjectionInput::Apply`, every existing Codex managed-
+- [x] For `ManagedProjectionInput::Apply`, every existing Codex managed-
       project install/update test in `crates/cli/src/application/tests.rs`
       passes without modification to its assertions — the tests at lines 582
       (publication failure retry + noop), 725 (tree-limit revalidation),
       833-969 (pending-attempt recovery for install/update), 1360-1506
       (ownership validation), and the drift/unowned/unsupported-partial
       cases all stay green.
-- [ ] The Codex catalog destination search order (`.agents/plugins/
+- [x] The Codex catalog destination search order (`.agents/plugins/
       marketplace.json` then `.claude-plugin/marketplace.json`), the MCP
       destination (`.codex/config.toml`), the MCP TOML table name
       (`mcp_servers`), and the plugin-root-relative evidence code
       (`plugin_root_relative_mcp_omitted`) are byte-identical, pinned by
       the existing tests. The evidence code is emitted as a
       `ManagedProjection::Omitted` entry inside `plan.manifest`.
-- [ ] For `ManagedProjectionInput::Remove`, plugin removal behaves
+- [x] For `ManagedProjectionInput::Remove`, plugin removal behaves
       byte-identically to today (plans from `prior`, no source). Marketplace
       removal no longer fails with `managed_project_source_missing` when the
       source is absent; the previously source-gated removal regression test
       is updated to a source-absent fixture that succeeds against an
       observable catalog projection, and that change is documented in the
       test.
-- [ ] The returned `ManagedProjectionPlan` carries `manifest`,
+- [x] The returned `ManagedProjectionPlan` carries `manifest`,
       `current_fingerprint`, and `desired_fingerprint` matching the values
       the existing Codex helpers compute, so the CLI orchestrator (still
       driving Codex through the relocated helpers) and the port produce
       identical evidence.
-- [ ] `git grep -n "plan_codex_component_projections\|plan_codex_mcp_config\
+- [x] `git grep -n "plan_codex_component_projections\|plan_codex_mcp_config\
       |read_complete_codex_plugin\|read_codex_catalog_at_root\|mcp_depends_\
       on_plugin_root" crates/cli/` returns no matches (helpers fully
       relocated to harnesses).
-- [ ] `CodexComponentProjectionPlan` and `CodexMcpConfigPlan` no longer
+- [x] `CodexComponentProjectionPlan` and `CodexMcpConfigPlan` no longer
       exist; their fields fold into `ManagedProjectionPlan`'s writes and
       evidence fields.
-- [ ] `cargo test --workspace --all-targets`,
+- [x] `cargo test --workspace --all-targets`,
       `cargo clippy --workspace --all-targets -- -D warnings`,
       `cargo fmt --all -- --check`, and `git diff --check` pass.
 
@@ -238,6 +238,48 @@ Dispatch: direct-read only, as required by the caller. No production or test
 files changed, and no assertions were weakened. The story returned to
 `stage:drafting` so design can amend the contract rather than add stringly
 escape hatches.
+
+## Implementation completion notes
+
+- Execution capability: highest, inherited from the active autopilot run; this
+  relocation controls persisted ownership evidence and target-native file
+  codecs used by every managed Codex project mutation.
+- Review weight: standard (project/autopilot default).
+- Dispatch: direct implementation only, as required by the caller; no agent or
+  peer delegation.
+- Files changed: added
+  `crates/harnesses/src/adapters/codex_managed.rs`; updated the Codex adapter,
+  adapter exports, the temporary CLI Codex orchestrator integration,
+  `crates/cli/src/application/tests.rs`, and this story.
+- Tests added: `managed_marketplace_removal_uses_observed_projection_without_source`
+  proves removal succeeds after the upstream checkout disappears while the
+  owned catalog projection remains observable. Existing managed publication
+  retry/no-op, tree-limit revalidation, pending install/update recovery,
+  ownership, drift, unowned, partial-acknowledgment, and unsupported-component
+  assertions were not weakened.
+- Simplification: removed all Codex catalog/plugin/MCP path and codec helpers
+  from CLI, removed the `ResolvedCodexMarketplace`,
+  `CodexComponentProjectionPlan`, and `CodexMcpConfigPlan` intermediates, and
+  folded writes, manifest, and aggregate fingerprints directly into
+  `ManagedProjectionPlan`.
+- Contract integration: the temporary Codex orchestrator resolves one
+  `ResolvedSourceCheckout`, invokes `CodexManagedProjection::plan` directly,
+  and translates only normalized writes into the existing revalidated
+  execution-port entries. Registry-driven shared dispatch remains owned by the
+  orchestrator story.
+- Narrow behavior corrections: marketplace removal is source-free as designed.
+  Plugin provenance now records the one authoritative selected marketplace
+  checkout source instead of synthesizing a second plugin-subdirectory source;
+  projected bytes, operations, manifests, and fingerprints are unchanged. The
+  catalog-missing diagnostic keeps the approved typed code and uses the
+  contract's target-neutral summary rather than the old Codex-specific wording.
+- Verification: 563 workspace tests passed; the six focused managed lifecycle
+  tests passed ten consecutive runs (60 executions); workspace clippy with
+  warnings denied, formatting, helper/type elimination greps, and diff checks
+  passed.
+- Discrepancies from design: none beyond the two explicitly approved/narrow
+  contract corrections above.
+- Adjacent issues parked: none.
 
 ## Out of scope
 

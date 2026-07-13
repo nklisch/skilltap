@@ -19,7 +19,7 @@ mod adapter_helpers;
 pub mod adapters;
 pub use adapters::{
     ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection, CodexAdapter,
-    CodexInstructionBridge, CodexLifecycle, CodexSkillProjection,
+    CodexInstructionBridge, CodexLifecycle, CodexManagedProjection, CodexSkillProjection,
 };
 
 mod plugin_graph;

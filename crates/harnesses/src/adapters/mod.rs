@@ -1,8 +1,10 @@
 mod claude;
 mod codex;
+mod codex_managed;
 
 pub use claude::{ClaudeAdapter, ClaudeInstructionBridge, ClaudeLifecycle, ClaudeSkillProjection};
 pub use codex::{CodexAdapter, CodexInstructionBridge, CodexLifecycle, CodexSkillProjection};
+pub use codex_managed::CodexManagedProjection;
 
 #[cfg(test)]
 mod tests {
@@ -131,6 +133,8 @@ mod tests {
         assert!(codex.native_lifecycle().is_some());
         assert!(codex.instruction_bridge().is_some());
         assert!(codex.skill_projection().is_some());
+        assert!(codex.managed_projection().is_some());
+        assert!(claude.managed_projection().is_none());
         assert!(claude.native_lifecycle().is_some());
         assert!(claude.instruction_bridge().is_some());
         assert!(claude.skill_projection().is_some());

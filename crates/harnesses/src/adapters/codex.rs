@@ -10,11 +10,14 @@ use skilltap_core::{
 use crate::{
     adapter_helpers,
     lifecycle::{NativeLifecycleAction, NativeLifecycleError, NativeLifecycleRequest},
+    managed_projection::ManagedProjectionPort,
     registry::{
         AdapterObservationPaths, DistributionSurface, HarnessAdapter, InstructionBridgePort,
         NativeLifecycleVector, ObservationPathError, SkillProjectionPort, TargetIdentity,
     },
 };
+
+use super::codex_managed::CodexManagedProjection;
 
 pub struct CodexAdapter;
 pub struct CodexLifecycle;
@@ -85,6 +88,10 @@ impl HarnessAdapter for CodexAdapter {
 
     fn skill_projection(&self) -> Option<&dyn SkillProjectionPort> {
         Some(&SKILLS)
+    }
+
+    fn managed_projection(&self) -> Option<&dyn ManagedProjectionPort> {
+        Some(CodexManagedProjection::static_ref())
     }
 
     fn native_root(&self, paths: &PlatformPaths) -> Option<AbsolutePath> {
