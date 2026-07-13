@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-config
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -110,3 +110,81 @@ membership is enforced at the CLI composition boundary (Unit 4).
 - Acceptance evidence includes legacy schema-1 parse and byte-stable default
   serialization, defaults and two-enabled round trips, generic `gemini`
   insertion, deterministic enabled ordering, and exact first-use defaults.
+
+## Review
+
+Cross-model review (GLM reviewer of an OpenAI host implementation),
+review_weight `standard`, risk-escalated to focused Deep because the change
+rewrites persisted configuration internals while claiming schema-1 wire and
+byte compatibility. Re-read the story, parent feature design (Unit 3), full
+`crates/core/src/storage/config.rs` diff at `43464e1c`, `storage/mod.rs`,
+`storage/tests.rs`, `storage/repository/tests.rs`, the golden fixture, the
+prior `HarnessPolicies` shape, `domain/identity.rs`, and the `validate_identifier`
+contract. Re-ran `cargo test -p skilltap-core` (346 passed), `cargo fmt -p
+skilltap-core -- --check` (clean), and `cargo check -p skilltap-core` (clean).
+The other worker's Unit 2 adapter work landed as `256189a8` during the review
+and does not touch `crates/core`; the config commit `43464e1c` is intact and the
+review verdict is unchanged. `.pi/` and the (now-committed) harness crate
+changes were left untouched.
+
+Verdict: **approve**. Every acceptance criterion is met with explicit tests,
+and the design's riskiest assumption (wire/byte compatibility) is pinned by the
+golden fixture assertion.
+
+Verified dimensions:
+
+- Legacy TOML parsing: `config_defaults_are_explicit_strict_and_golden` parses
+  `fixtures/config.toml` (codex/claude only) into a `ConfigDocument` equal to
+  `defaults()`. The derived `Deserialize` for `HarnessPolicyMap(BTreeMap<…>)`
+  consumes the same `[harnesses.<id>]` tables the old struct produced.
+- Unknown-field behavior: `HarnessPolicy` retains `#[serde(deny_unknown_fields)]`,
+  so extra keys within a `[harnesses.<id>]` table still error. Top-level
+  `deny_unknown_fields` on `ConfigWire` is unchanged.
+- Unknown-harness behavior at the core boundary: an extra `[harnesses.<id>]`
+  table is now accepted at the config layer. This is the intended design — core
+  validates structure only and id membership is a CLI composition concern — and
+  is correctly paired with the Unit 4 membership-validation handoff noted in the
+  implementation record. The CLI still references `HarnessPolicies`/`.codex`/
+  `.claude` and will not compile against this change until Unit 4 lands; that is
+  the declared dependency-chain state, not a defect in this story.
+- Duplicate tables: rejected by the TOML parser itself, so behavior is unchanged
+  from the prior struct shape.
+- Serialization order/bytes: `stable_iter()` emits `codex` then `claude` in fixed
+  order before any additional ids in BTreeMap order, and the byte-equality
+  assertion `toml::to_string_pretty(&defaults()) == fixtures/config.toml` holds
+  against the pre-change golden file — proving byte stability across the
+  struct→map migration, not just within the new shape.
+- Defaults: `defaults()` seeds exactly `codex` and `claude`, both disabled, with
+  PATH-lookup binaries `"codex"`/`"claude"`; asserted explicitly.
+- Generic insertion: `with_harness_policy(&HarnessId::new("gemini"), true, None)`
+  succeeds and the new entry appears in the map; asserted.
+- Binary default derivation: a newly inserted entry without an explicit binary
+  falls back to the existing entry's binary when present, otherwise to the id as
+  a PATH-lookup name; the gemini case asserts `binary == "gemini"` and the codex
+  enable/disable case asserts the prior `/opt/bin/codex` binary is retained.
+  The `expect("validated harness id is a PATH name")` is sound on this crate's
+  Linux target: `validate_identifier` restricts `HarnessId` to `[a-z0-9._:-]`
+  starting with `[a-z0-9]`, so every valid id is a single `Component::Normal`
+  PATH name and `HarnessBinary::new` accepts it.
+- Independent bootstrap/update policy: `with_harness_policy`/`with_harness_enabled`
+  operate by cloning the whole `ConfigDocument`, so `bootstrap` survives
+  harness edits. `harness_policy_updates_preserve_binary_update_policy` pins
+  this across enable, disable, and binary replacement.
+- API compatibility: the public-surface break (`HarnessPolicies` removed,
+  `harnesses()` now returns `&HarnessPolicyMap`, `.codex`/`.claude` field access
+  gone) is deliberate and the consuming migration is owned by Unit 4. The
+  breaking change is contained to core and does not affect persisted state.
+- Boundary split: `crates/core` has no dependency on `skilltap-harnesses`; the
+  registry is never referenced. Membership validation is deferred to the CLI
+  composition boundary exactly as the parent design specifies.
+
+Non-blocking observations (below the material current-cycle bar; no backlog
+item warranted):
+
+- No explicit TOML round-trip test for a three-harness document (the suite pins
+  defaults and the two-enabled case). The inverse `stable_iter` serialize /
+  derived-BTreeMap deserialize makes a three-harness round trip mechanically
+  identity, so this is coverage polish rather than a gap.
+- `stable_iter` is O(n²) over the harness table. The map is bounded to a handful
+  of registered targets, so this is a clarity-for-byte-stability trade that
+  earns its keep; revisit only if adapter count grows into the dozens.
