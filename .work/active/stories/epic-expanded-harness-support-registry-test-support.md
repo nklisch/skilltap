@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-test-support
 kind: story
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -343,3 +343,162 @@ ownership are all sound.
 
 Review fix is complete and the story has re-entered `stage: review` at the
 caller-selected standard review weight.
+
+## Convergence review (2026-07-12)
+
+**Verdict**: Approve (review -> done)
+**Review weight**: standard, continued at the focused-Deep fresh-context tier the
+bounce escalated to, because the reusable acceptance contract is still the
+evidence surface every future adapter feature will claim against.
+**Reviewer context**: cross-model - Z.AI GLM 5.2 fresh-context review of an
+OpenAI-host run (different model class). No delegation or peeragent was used.
+
+### Bounce resolution confirmed
+
+The bounce required the cross-device copy/execve race in `publish_executable`
+to be eliminated and proved deterministic under a parallel stress test. The
+review-fix commit `07cff0bd` replaces `fs::copy(source, destination)` in the
+`CrossesDevices` arm with `std::os::unix::fs::symlink(source, destination)`:
+
+```rust
+fn publish_executable(source: &Path, destination: &Path) -> io::Result<()> {
+    match fs::hard_link(source, destination) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::CrossesDevices => {
+            std::os::unix::fs::symlink(source, destination)
+        }
+        Err(error) => Err(error),
+    }
+}
+```
+
+Direct verification (not just code reading) confirms the strategy:
+
+- A throwaway `examples/probe_pub.rs` (built, run, then deleted; no tracked
+  changes left behind) built Codex and Claude profiles under a `/tmp` TempRoot
+  and printed `symlink_metadata` + immediate-exec results. Both published
+  executables are symbolic links whose target is
+  `/storage/cargo-target/.../skilltap-test-support-<hash>/out/fake-native` -
+  the sealed Cargo `OUT_DIR` artifact. Immediate `--version` exec through each
+  symlink returned status 0 with byte-identical output (`codex-cli 0.144.1\n`,
+  `2.1.201 (Claude Code)\n`).
+- `df`/`stat -c '%m'` confirms the boundary the bounce depended on:
+  `OUT_DIR` is on `/storage`; `std::env::temp_dir()` is `/tmp` (tmpfs). The
+  cross-device arm is therefore genuinely exercised on this machine, not
+  theoretical.
+
+### Defect classes ruled out
+
+- **ETXTBSY, structurally**: the executed inode is now the sealed wrapper that
+  `build.rs` writes once at compile time and no test ever opens for writing.
+  Unlike the prior copy (or even a copy-temp-then-rename, which the
+  implementor reports still reproduced the race), a symbolic link never creates
+  a just-written executed inode, so there is no writer the kernel can still be
+  flushing when `execve` sets up the text segment. The 10-run stress evidence
+  below is the empirical confirmation.
+- **Dangling lifetime**: the symlink target is the build-time-absolute
+  `SKILLTAP_FAKE_NATIVE_EXECUTABLE` path baked into the test-support library.
+  Cargo's `OUT_DIR` is stable for the lifetime of every test binary that links
+  test-support, so the target cannot disappear mid-process. The `_root`
+  `TempRoot` only owns the symlink (and its sibling `behavior`), not the
+  target.
+- **Mutable target**: the sealed wrapper is written once and never modified;
+  no test or build step writes to it after `build.rs`. Multiple consumers
+  symlink to it concurrently and read it coherently.
+- **Cleanup**: `TempRoot::drop` runs `remove_dir_all`, which unlinks the
+  symlink itself. The target on `/storage` is outside the TempRoot and is
+  untouched by fixture teardown. No temporary publication file exists to leak
+  on failure (the symlink is created atomically by a single `symlink` call).
+- **Portability**: `EXDEV` maps to `io::ErrorKind::CrossesDevices` on both
+  Linux and macOS, and `std::os::unix::fs::symlink` is available on both.
+  Same-filesystem roots continue to hard-link, so the symlink path only
+  engages on a real cross-device boundary. Windows remains out of contract:
+  the fixture module is `#[cfg(unix)]` and `build.rs` only writes the wrapper
+  under `cfg(unix)`, so no behavior change reaches non-Unix builds.
+- **Permissions**: the symlink itself needs none; execution resolves through
+  to the target's `0o755` mode set in `build.rs`.
+- **Isolated-root contract**: the executable lives in the caller-owned root
+  alongside its `behavior` companion, and the wrapper resolves `$0` to the
+  invocation path (the symlink in the TempRoot) before `cd && pwd -P`, so it
+  sources the per-fixture `behavior` from the TempRoot - not from `OUT_DIR`.
+  `snapshot_tree` (used by the matrix's drift detection) collects entries with
+  `symlink_metadata` and never follows links, and the matrix snapshots only
+  `scope.skill_root` - never the executable directory - so the cross-root
+  symlink is invisible to drift comparison and cannot pollute acceptance
+  evidence.
+- **Hard-link behavior preserved**: the `Ok(())` arm is unchanged, so legacy
+  `FakeNativeProcess::new` (which builds under `OUT_DIR`'s parent on the same
+  filesystem) and any same-filesystem profile build still hard-link the sealed
+  artifact. The symlink is strictly the cross-device fallback.
+- **`FakeNativeProcess` keeps the target alive for every consumer**: the
+  struct holds `_root: TempRoot` for its lifetime, the symlink target is
+  process-stable `OUT_DIR`, and consumers execute via `executable()` (the
+  symlink). The bounce's latent compiled-binary regression is resolved by
+  construction: `crates/cli/tests/compiled_binary.rs` calls
+  `fake_harness(machine, profile)` -> `profile.build(machine.working_directory(), ...)`
+  -> `fixture.executable()` and invokes that path directly, so when
+  `epic-expanded-harness-support-registry-cli` removes the `HarnessKind` seam,
+  the compiled-binary suite will execute symlinks to the sealed artifact - not
+  copied inodes - and cannot inherit the original flake.
+
+### Stress test credibility
+
+`profile_publication_survives_parallel_build_and_immediate_exec` is genuine:
+
+- 8 workers x 24 iterations, alternating real `FakeHarnessProfile::codex()`
+  and `::claude()` profiles.
+- Each iteration calls `TempRoot::new("skilltap-profile-publication")`, which
+  appends an `AtomicU64` sequence plus `process::id()` to the directory name
+  (`prefix-{pid}-{seq}`), so every destination is unique - the test cannot
+  pass on a path collision.
+- Each iteration builds, then immediately `.command().arg("--version").output()`s
+  with a panic that prints the failing executable path on `io::Error`. This is
+  real immediate `execve`, not a deferred or batched spawn.
+- Output bytes are asserted against `profile.version_response().render()` for
+  every build, so a silent wrong-target symlink would fail the test, not pass
+  it.
+
+### Reproduced no-flake evidence
+
+On this machine (`OUT_DIR` on `/storage`, `temp_dir()` on `/tmp` tmpfs),
+verified directly:
+
+- 10 consecutive `cargo test -p skilltap-test-support --lib --release
+  profile_publication_survives_parallel_build_and_immediate_exec` runs: 10/10
+  green (192 immediate build+exec cycles per run, 1,920 cycles total, zero
+  `ExecutableFileBusy`).
+- 7 consecutive full `cargo test -p skilltap-test-support --lib --release`
+  runs: 7/7 green at 20/20 tests each.
+- `cargo test -p skilltap-harnesses --release`: 56/56 green across 6 suites,
+  including the migrated `install_profile` path in `detection.rs`.
+- `cargo clippy -p skilltap-test-support -p skilltap-harnesses --all-targets
+  --release -- -D warnings`: clean.
+- `cargo fmt --all -- --check`: clean (after removing the throwaway probe
+  example; no tracked source changes were left behind).
+- `git grep -E 'FakeNativeMode::CodexVersion|FakeNativeMode::ClaudeVersion'
+  -- crates`: no matches. Migration intact.
+- `git diff --check`: clean.
+
+### No material blocker; non-blocking observations
+
+- `install_alias` (lines 204, 212) still uses `fs::copy`. This is the
+  pre-existing alias-installation surface, not the `publish_executable` path
+  the bounce scoped, and it is exercised one-shot per detection test (not in
+  a contended tight loop). The compiled-binary regression path the bounce
+  worried about uses `fixture.executable()` (the symlink) directly, not
+  `install_alias`, so this residual copy is not on the latent-flake path.
+  Noting it here for traceability; no change required for this story.
+- The lifecycle-gate intent comment requested by the bounce's notes section
+  was added at `native_process.rs:368-369`. The behavior expansion it
+  documents (a non-`VersionKnown` mode composed with a profile now emits the
+  lifecycle block because `lifecycle_dialect != None`) remains argv-gated
+  and benign, with no current test exercising that combination.
+
+### Final
+
+The cross-device publication defect identified in the bounce is resolved at
+the correct boundary, the strategy introduces no dangling-lifetime,
+mutable-target, cleanup, portability, permission, or isolated-root defect,
+the stress test is real and the no-flake evidence reproduces, the
+previously-approved matrix and migration remain intact, and no material
+current-cycle blocker remains. The story advances to `stage: done`.
