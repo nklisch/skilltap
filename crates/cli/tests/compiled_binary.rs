@@ -1255,6 +1255,91 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
 }
 
 #[test]
+fn unsupported_only_managed_project_plugin_stays_blocked_with_acknowledgment() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()).replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    let project = machine.home().join("unsupported-only-project");
+    fs::create_dir_all(&project).unwrap();
+    let source = machine.home().join("unsupported-only-marketplace");
+    fs::create_dir_all(source.join(".agents/plugins")).unwrap();
+    fs::create_dir_all(source.join("plugins/unsupported/.codex-plugin")).unwrap();
+    fs::create_dir_all(source.join("plugins/unsupported/hooks/first")).unwrap();
+    fs::write(
+        source.join(".agents/plugins/marketplace.json"),
+        r#"{"name":"team","plugins":[{"name":"unsupported","source":{"source":"local","path":"./plugins/unsupported"}}]}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/unsupported/.codex-plugin/plugin.json"),
+        r#"{"name":"unsupported","version":"1.0.0"}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/unsupported/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"plugin-relative":{"command":"${CLAUDE_PLUGIN_ROOT}/bin/server"}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/unsupported/hooks/first/hook.sh"),
+        "#!/bin/sh\nexit 0\n",
+    )
+    .unwrap();
+
+    let add = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&add, 0);
+    let project_before = snapshot_native_tree(&project);
+    let state_before = snapshot_native_tree(&config_root(&machine));
+
+    for acknowledgment in [None, Some("--yes")] {
+        let mut arguments = vec![
+            "plugin",
+            "install",
+            "unsupported@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+        ];
+        if let Some(flag) = acknowledgment {
+            arguments.push(flag);
+        }
+        arguments.push("--json");
+        let output = run(&machine, &arguments);
+        assert_code(&output, 2);
+        let value = json(&output);
+        assert_eq!(value["result"], "attention_required");
+        assert_eq!(value["summary"]["changed"], false);
+        assert_eq!(snapshot_native_tree(&project), project_before);
+        assert_eq!(snapshot_native_tree(&config_root(&machine)), state_before);
+        assert!(!project.join(".agents/skills").exists());
+        assert!(!project.join(".codex/config.toml").exists());
+        assert!(!machine.codex_home().join("plugins/cache").exists());
+    }
+}
+
+#[test]
 fn targeted_native_remove_preserves_unselected_harness() {
     let machine = machine();
     let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();

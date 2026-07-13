@@ -839,6 +839,12 @@ impl StatusApplication<'_> {
         }
 
         let inventory_changed = inventory != original_inventory;
+        if operations.is_empty() && !outcome.errors.is_empty() {
+            let operation_count = outcome.operations.len() as u64;
+            return outcome
+                .with_summary("operations", operation_count)
+                .with_summary("changed", false);
+        }
         if inventory_changed && !removal && self.inventory.replace(&inventory).is_err() {
             outcome.result = ResultClass::Invalid;
             return outcome.with_error(ErrorDetail::new(
