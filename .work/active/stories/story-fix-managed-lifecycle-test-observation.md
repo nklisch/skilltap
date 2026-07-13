@@ -1,7 +1,7 @@
 ---
 id: story-fix-managed-lifecycle-test-observation
 kind: story
-stage: review
+stage: done
 tags: [bug, testing]
 parent: null
 depends_on: []
@@ -51,3 +51,24 @@ empty isolated directory and require their success/recovery assertions to pass.
 - Focused application tests, formatting, and strict all-target/all-feature CLI
   Clippy pass.
 - Effective review weight: standard, from the project default.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate review at explicit `standard` weight, escalated from the
+fast story lane to a focused fresh-context deep pass because the change touches
+post-mutation correctness. Production composition still constructs
+`NativeObservationMode::System`; every `Disabled` construction is test-only.
+The three affected managed-project regressions passed from the compiled test
+binary with an isolated `PATH` containing Git and no Codex executable. All ten
+compiled native-postcondition tests also passed, preserving required normal-CLI
+post-mutation observation. `cargo fmt --all -- --check` and strict all-target,
+all-feature CLI Clippy passed. Security, public-contract, foundation-doc,
+naming, concurrency, persistence, and release lenses found no issue; the change
+is a narrow reuse of the existing test observation boundary.
