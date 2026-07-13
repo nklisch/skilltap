@@ -1,7 +1,7 @@
 ---
 id: gate-tests-managed-project-publication-failures
 kind: story
-stage: review
+stage: implementing
 tags: [testing]
 parent: null
 depends_on: []
@@ -39,3 +39,35 @@ single successful retry followed by a no-op.
 ## Verification
 
 - `cargo test -p skilltap --lib managed_project_publication_failures_restore_then_retry_once_and_noop`
+
+## Review findings
+
+- **Blocker — the injected state boundary does not verify state restoration.**
+  The `Boundary::State` path fails the first state write, but the assertions at
+  `crates/cli/src/application/tests.rs:547-570` check only that project skill
+  and MCP surfaces are absent. They never snapshot the state document before
+  the operation or require byte/domain equality afterward, so the test would
+  not catch a stale Pending/Applied record or another state mutation after the
+  injected failure. Add that exact before/after assertion, then retain the
+  successful retry and immediate no-op checks.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: state-boundary restoration is not asserted
+**Important**: none
+**Nits**: the recorded focused command uses `--exact` without the module-qualified test name and therefore selects zero tests; the actual passing command is `cargo test -p skilltap --lib application::tests::managed_project_publication_failures_restore_then_retry_once_and_noop -- --exact`
+**Rejected**: none
+
+**Notes**: Substrate review at effective `standard` weight (caller-selected),
+escalated to the Deep lane because this is a critical persistence/rollback
+story. Same-harness fresh-context review inspected commit `c5fa054`, the real
+application lifecycle service, executor/journal ordering, confined filesystem
+adapter, rollback implementation, and the fault-injection test. The injected
+catalog/tree/config/state faults do traverse `execute_native_lifecycle`; the
+filesystem adapter delegates all non-fault operations to the production
+implementation, and the rollback residual reporting code re-observes restored
+surfaces rather than assuming success. The correctly qualified focused test
+passes. Security was limited to the changed filesystem/state seams; no public
+CLI, schema, or foundation-doc change was introduced by this story.
