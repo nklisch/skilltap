@@ -588,7 +588,7 @@ fn execute_system_harness_list(_args: &OutputArgs) -> Outcome {
                 Err(error) => {
                     entry = entry.with_field("reachable", false);
                     outcome.result = ResultClass::AttentionRequired;
-                    let diagnostic = detection_diagnostic(&error, id);
+                    let diagnostic = detection_diagnostic(&error, id, policy.binary.as_str());
                     outcome = outcome
                         .with_warning(diagnostic.warning)
                         .with_next_action(diagnostic.next_action);

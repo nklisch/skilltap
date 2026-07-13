@@ -440,6 +440,22 @@ fn plugin_install_requires_an_exact_marketplace_selector() {
             ErrorKind::ValueValidation,
         );
     }
+
+    let Command::Plugin(PluginArgs {
+        command: PluginCommand::Remove(args),
+    }) = parse(&["skilltap", "plugin", "remove", "formatter@team-tools"])
+        .command
+        .unwrap()
+    else {
+        panic!("expected plugin remove")
+    };
+    assert_eq!(args.plugin.as_str(), "formatter@team-tools");
+    for invalid in ["formatter", "@team-tools", "formatter@", "a@b@c"] {
+        rejects(
+            &["skilltap", "plugin", "remove", invalid],
+            ErrorKind::ValueValidation,
+        );
+    }
 }
 
 #[test]

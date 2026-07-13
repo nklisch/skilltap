@@ -218,7 +218,7 @@ fn release_binary_exposes_version_help_and_the_complete_leaf_grammar() {
         (&["marketplace", "update"], "marketplace update"),
         (&["marketplace", "list"], "marketplace list"),
         (&["plugin", "install", "format@team"], "plugin install"),
-        (&["plugin", "remove", "format"], "plugin remove"),
+        (&["plugin", "remove", "format@team"], "plugin remove"),
         (&["plugin", "update"], "plugin update"),
         (&["plugin", "list"], "plugin list"),
         (
@@ -366,6 +366,23 @@ fn compiled_leaf_help_is_the_agent_discovery_contract() {
 #[test]
 fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
     let machine = machine();
+
+    let remove_help = run(&machine, &["plugin", "remove", "--help"]);
+    assert_code(&remove_help, 0);
+    assert!(stdout(&remove_help).contains("PLUGIN@MARKETPLACE"));
+
+    let remove_plain = run(&machine, &["plugin", "remove", "formatter"]);
+    assert_code(&remove_plain, 1);
+    assert!(remove_plain.stdout.is_empty());
+    assert!(stderr(&remove_plain).contains("skilltap plugin remove --help"));
+
+    let remove_json = run(&machine, &["plugin", "remove", "formatter", "--json"]);
+    assert_code(&remove_json, 1);
+    assert_eq!(json(&remove_json)["command"], "plugin remove");
+    assert_eq!(
+        json(&remove_json)["next_actions"][0]["command"],
+        "skilltap plugin remove --help"
+    );
 
     let plain = run(&machine, &["status", "--target", "pi"]);
     assert_code(&plain, 1);
@@ -682,13 +699,15 @@ fn native_lifecycle_projects_each_detection_failure_without_sensitive_context() 
         assert!(value["warnings"].as_array().unwrap().iter().any(|warning| {
             warning["code"] == warning_code && warning["context"]["harness"] == "claude"
         }));
-        assert!(
-            value["next_actions"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|action| action["code"] == action_code)
-        );
+        let action = value["next_actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|action| action["code"] == action_code)
+            .unwrap_or_else(|| panic!("missing {action_code} in {value}"));
+        if action_code == "inspect_harness_version" {
+            assert_eq!(action["command"], format!("{} --version", claude.display()));
+        }
         assert!(
             !value["warnings"].as_array().unwrap().iter().any(|warning| {
                 warning["code"] == "native_profile_unavailable"
@@ -699,6 +718,27 @@ fn native_lifecycle_projects_each_detection_failure_without_sensitive_context() 
         for forbidden in ["secret-native-output", "argv", "environment"] {
             assert!(!rendered.contains(forbidden));
         }
+
+        let plan = run(&machine, &["plan", "--target", "claude", "--json"]);
+        assert_code(&plan, 2);
+        let plan_value = json(&plan);
+        assert!(
+            plan_value["warnings"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|warning| {
+                    warning["code"] == warning_code && warning["context"]["harness"] == "claude"
+                })
+        );
+        assert!(
+            plan_value["next_actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|candidate| candidate == action),
+            "plan dropped typed recovery action: {plan_value}"
+        );
     }
 
     let missing_root = machine();
@@ -2888,7 +2928,8 @@ fn status_preserves_successful_sibling_observation_and_never_mutates_native_tree
             .iter()
             .any(|action| {
                 action["code"] == "inspect_harness_version"
-                    && action["command"] == "claude --version"
+                    && action["command"]
+                        == format!("{} --version", claude.executable().display())
             }),
         "unexpected adoption diagnostics: {value}"
     );
@@ -2973,7 +3014,8 @@ fn adopt_reports_partial_sibling_and_still_publishes_healthy_candidates() {
             .iter()
             .any(|action| {
                 action["code"] == "inspect_harness_version"
-                    && action["command"] == "claude --version"
+                    && action["command"]
+                        == format!("{} --version", claude.executable().display())
             }),
         "unexpected partial adoption diagnostics: {value}"
     );

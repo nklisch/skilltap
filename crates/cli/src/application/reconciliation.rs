@@ -91,6 +91,9 @@ impl StatusApplication<'_> {
         for warning in observation.warnings.iter().cloned() {
             outcome = outcome.with_warning(warning);
         }
+        for action in observation.next_actions.iter().cloned() {
+            outcome = outcome.with_next_action(action);
+        }
 
         let desired = documents
             .inventory

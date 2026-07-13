@@ -64,7 +64,9 @@ pub struct JsonRenderer;
 
 impl Renderer for JsonRenderer {
     fn render(&self, outcome: &Outcome) -> Result<String, RenderError> {
-        serde_json::to_string(outcome).map_err(RenderError)
+        let mut normalized = outcome.clone();
+        normalized.normalize_next_actions();
+        serde_json::to_string(&normalized).map_err(RenderError)
     }
 }
 
@@ -73,7 +75,9 @@ pub struct PlainRenderer;
 
 impl Renderer for PlainRenderer {
     fn render(&self, outcome: &Outcome) -> Result<String, RenderError> {
-        Ok(render_plain(outcome))
+        let mut normalized = outcome.clone();
+        normalized.normalize_next_actions();
+        Ok(render_plain(&normalized))
     }
 }
 

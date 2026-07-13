@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-dual-native-lifecycle
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -34,3 +34,23 @@ falls back to a managed copy.
   revision, provenance, ownership, and applicable journal evidence.
 - A same-key definition conflict fails before inventory publication or native
   mutation.
+
+## Implementation
+
+- Sequential identical installs now union the existing and selected harness
+  sets before inventory publication; conflicting definitions still fail through
+  the existing strict inventory boundary.
+- Per-target state seeds and journals mutate only selected bindings, preserving
+  every unselected sibling field introduced by the target-evidence migration.
+- Exact Codex/Claude fixtures prove sequential widening, two native bindings,
+  and a repeated `--target all` no-op without a managed artifact.
+- Existing narrowed update/removal and dual lifecycle coverage verifies sibling
+  preservation. Codex `0.144.1` remains correctly update-unavailable; Claude
+  update does not erase its Codex sibling.
+
+## Verification
+
+- `cargo test -p skilltap --test compiled_binary sequential_native_plugin_installs_widen_targets_and_preserve_bindings`
+- Full compiled lifecycle suite.
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`

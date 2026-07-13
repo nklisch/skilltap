@@ -190,9 +190,21 @@ impl ErrorDetail {
     }
 
     pub fn with_next_action(mut self, action: NextAction) -> Self {
-        self.next_actions.push(action);
+        if !self.next_actions.contains(&action) {
+            self.next_actions.push(action);
+        }
         self
     }
+}
+
+fn deduplicate_actions(actions: &mut Vec<NextAction>) {
+    let mut unique = Vec::with_capacity(actions.len());
+    for action in actions.drain(..) {
+        if !unique.contains(&action) {
+            unique.push(action);
+        }
+    }
+    *actions = unique;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -261,7 +273,68 @@ impl Outcome {
     }
 
     pub fn with_next_action(mut self, action: NextAction) -> Self {
-        self.next_actions.push(action);
+        if !self.next_actions.contains(&action) {
+            self.next_actions.push(action);
+        }
         self
+    }
+
+    pub fn normalize_next_actions(&mut self) {
+        deduplicate_actions(&mut self.next_actions);
+        for error in &mut self.errors {
+            deduplicate_actions(&mut error.next_actions);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exact_next_actions_are_deduplicated_in_first_seen_order() {
+        let inspect = NextAction::new("inspect", "Inspect the exact failure.")
+            .with_command("skilltap status --json");
+        let retry =
+            NextAction::new("retry", "Retry after repair.").with_command("skilltap sync --json");
+        let distinct = NextAction::new("inspect", "Inspect a different scope.")
+            .with_command("skilltap status --project --json");
+
+        let outcome = Outcome::new("status", ResultClass::AttentionRequired)
+            .with_next_action(inspect.clone())
+            .with_next_action(retry.clone())
+            .with_next_action(inspect.clone())
+            .with_next_action(distinct.clone());
+        assert_eq!(outcome.next_actions, vec![inspect.clone(), retry, distinct]);
+
+        let error = ErrorDetail::new("failed", "The operation failed.")
+            .with_next_action(inspect.clone())
+            .with_next_action(inspect.clone());
+        assert_eq!(error.next_actions, vec![inspect]);
+    }
+
+    #[test]
+    fn normalization_is_ordered_idempotent_and_result_preserving() {
+        let inspect = NextAction::new("inspect", "Inspect the exact failure.")
+            .with_command("skilltap status --json");
+        let retry =
+            NextAction::new("retry", "Retry after repair.").with_command("skilltap sync --json");
+        let mut outcome = Outcome::new("sync", ResultClass::AttentionRequired);
+        outcome.next_actions = vec![inspect.clone(), retry.clone(), inspect.clone()];
+        outcome.errors.push(ErrorDetail {
+            code: "failed".to_owned(),
+            summary: "The operation failed.".to_owned(),
+            context: BTreeMap::new(),
+            next_actions: vec![retry.clone(), retry.clone()],
+        });
+
+        outcome.normalize_next_actions();
+        let once = outcome.clone();
+        outcome.normalize_next_actions();
+
+        assert_eq!(outcome, once);
+        assert_eq!(outcome.result, ResultClass::AttentionRequired);
+        assert_eq!(outcome.next_actions, vec![inspect, retry.clone()]);
+        assert_eq!(outcome.errors[0].next_actions, vec![retry]);
     }
 }

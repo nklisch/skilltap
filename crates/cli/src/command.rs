@@ -223,7 +223,7 @@ pub enum PluginCommand {
     /// Install an exact plugin@marketplace selector.
     #[command(after_help = EXIT_STATUS_HELP)]
     Install(PluginInstallArgs),
-    /// Remove one managed plugin.
+    /// Remove one exact plugin@marketplace selector.
     #[command(after_help = EXIT_STATUS_HELP)]
     Remove(PluginNamedArgs),
     /// Update one plugin or all selected plugins.
@@ -253,8 +253,8 @@ pub struct PluginInstallArgs {
 
 #[derive(Debug, Args)]
 pub struct PluginNamedArgs {
-    /// Managed plugin name.
-    #[arg(value_parser = parse_native_id)]
+    /// Exact plugin selector in `<plugin>@<marketplace>` form.
+    #[arg(value_name = "PLUGIN@MARKETPLACE", value_parser = parse_plugin_selector)]
     pub plugin: NativeId,
     #[command(flatten)]
     pub common: ScopedTargetArgs,

@@ -412,7 +412,7 @@ skilltap plugin install <plugin>@<marketplace>
   [--exclude <component>...]
   [--json]
 
-skilltap plugin remove <plugin> [--target <target>] [--project [<path>] | --all-scopes] [--json]
+skilltap plugin remove <plugin>@<marketplace> [--target <target>] [--project [<path>] | --all-scopes] [--json]
 skilltap plugin update [<plugin>] [--target <target>] [--project [<path>] | --all-scopes] [--yes] [--json]
 skilltap plugin list [--target <target>] [--project [<path>] | --all-scopes] [--json]
 ```

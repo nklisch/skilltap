@@ -364,12 +364,25 @@ fn detection_diagnostics_are_typed_actionable_and_source_free() {
     ];
 
     for (error, warning_code, action_code) in cases {
-        let diagnostic = detection_diagnostic(&error, "codex");
+        let diagnostic = detection_diagnostic(&error, "codex", "/tmp/custom codex");
         assert_eq!(diagnostic.warning.code, warning_code);
         assert_eq!(diagnostic.next_action.code, action_code);
         let rendered = format!("{:?}{:?}", diagnostic.warning, diagnostic.next_action);
         assert!(!rendered.contains("secret-native-output"));
         assert!(!rendered.contains("argv"));
         assert!(!rendered.contains("environment"));
+        if matches!(
+            error,
+            DetectionError::InvalidVersion
+                | DetectionError::NonZeroExit
+                | DetectionError::Runtime(
+                    skilltap_core::runtime::ObservationRuntimeError::ProcessDeadlineExceeded
+                )
+        ) {
+            assert_eq!(
+                diagnostic.next_action.command.as_deref(),
+                Some("'/tmp/custom codex' --version")
+            );
+        }
     }
 }

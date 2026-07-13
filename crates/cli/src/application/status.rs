@@ -612,7 +612,7 @@ impl NativeObservation {
                             .with_field("harness", target.as_str())
                             .with_field("scope", scope_label(scope))
                     }));
-                    let diagnostic = detection_diagnostic(&error, target.as_str());
+                    let diagnostic = detection_diagnostic(&error, target.as_str(), binary);
                     result.warnings.push(diagnostic.warning);
                     result.next_actions.push(diagnostic.next_action);
                     continue;
@@ -989,7 +989,7 @@ pub(crate) fn first_use_harness_report(
             Err(error) => {
                 entry.status = "unreachable".to_owned();
                 entry = entry.with_field("reachable", false);
-                let diagnostic = detection_diagnostic(&error, harness);
+                let diagnostic = detection_diagnostic(&error, harness, binary);
                 outcome = outcome
                     .with_warning(diagnostic.warning)
                     .with_next_action(diagnostic.next_action);

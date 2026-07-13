@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics-completion
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
@@ -101,3 +101,21 @@ next actions; recovery must name the configured executable
 **Notes**: Fresh-context deep review at the project-default `standard` weight.
 The implemented lifecycle/status/adopt behavior and safety redaction are green;
 the missing plan projection prevents approval and parent roll-up.
+
+## Review repair (2026-07-12)
+
+- Reconciliation now carries the native observation's typed next actions into
+  plan and sync output.
+- Fresh post-mutation observation carries the same typed actions instead of
+  replacing them with generic verification guidance.
+- Detection diagnostics receive the configured binary identity. Version
+  recovery commands therefore inspect the exact configured executable, with
+  safe shell display quoting when needed.
+- The compiled failure matrix now verifies lifecycle and plan parity plus the
+  exact custom executable command without exposing native output, argv, or
+  environment content.
+
+## Repair verification
+
+- `cargo test -p skilltap application::tests::detection_diagnostics_are_typed_actionable_and_source_free --lib`
+- `cargo test -p skilltap --test compiled_binary native_lifecycle_projects_each_detection_failure_without_sensitive_context -- --exact`

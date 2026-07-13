@@ -35,7 +35,7 @@ skilltap marketplace update [name]
 skilltap marketplace list
 
 skilltap plugin install <plugin>@<marketplace>
-skilltap plugin remove <plugin>
+skilltap plugin remove <plugin>@<marketplace>
 skilltap plugin update [plugin]
 skilltap plugin list
 

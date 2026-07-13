@@ -178,11 +178,11 @@ impl StatusApplication<'_> {
                     lifecycle_preview_presence(&documents, kind, harness, concrete_scope, name);
                 let recorded = lifecycle_recorded_state(&documents, kind, concrete_scope, name);
                 let status = match (presence, recorded) {
-                    (NativeResourcePresence::Present, true) => "no_change",
-                    (NativeResourcePresence::Present, false)
-                    | (NativeResourcePresence::Missing, true)
-                    | (NativeResourcePresence::Missing, false) => "repair",
-                    (NativeResourcePresence::Unknown, _) => "planned",
+                    (NativeResourceObservation::Present { .. }, true) => "no_change",
+                    (NativeResourceObservation::Present { .. }, false)
+                    | (NativeResourceObservation::Missing, true)
+                    | (NativeResourceObservation::Missing, false) => "repair",
+                    (NativeResourceObservation::Indeterminate(_), _) => "planned",
                 };
                 outcome = outcome.with_operation(
                     crate::OperationOutcome::new(
@@ -524,7 +524,13 @@ impl StatusApplication<'_> {
                         Ok(Some(profile)) => profile,
                         Err(error) => {
                             outcome.result = ResultClass::AttentionRequired;
-                            let diagnostic = detection_diagnostic(&error, target_id.as_str());
+                            let binary = match target_id.as_str() {
+                                "codex" => documents.config.harnesses().codex.binary.as_str(),
+                                "claude" => documents.config.harnesses().claude.binary.as_str(),
+                                _ => target_id.as_str(),
+                            };
+                            let diagnostic =
+                                detection_diagnostic(&error, target_id.as_str(), binary);
                             outcome = outcome
                                 .with_resource(
                                     OutputEntry::new(
@@ -606,11 +612,19 @@ impl StatusApplication<'_> {
                             process_limits,
                             json_limits,
                         )
-                        .unwrap_or(NativeResourcePresence::Unknown)
+                        .unwrap_or(
+                            NativeResourceObservation::Indeterminate(
+                                NativeObservationFailure::CommandFailed,
+                            ),
+                        )
                     } else {
-                        NativeResourcePresence::Unknown
+                        NativeResourceObservation::Indeterminate(
+                            NativeObservationFailure::CommandFailed,
+                        )
                     };
-                    if journal_says_applied && fresh_presence != NativeResourcePresence::Missing {
+                    if journal_says_applied
+                        && !matches!(fresh_presence, NativeResourceObservation::Missing)
+                    {
                         outcome = outcome.with_operation(
                             crate::OperationOutcome::new(operation_id.to_string(), "no_change")
                                 .with_field("target", target_id.as_str())
@@ -859,6 +873,9 @@ impl StatusApplication<'_> {
         }
         for warning in observation.warnings.iter().cloned() {
             outcome = outcome.with_warning(warning);
+        }
+        for action in observation.next_actions.iter().cloned() {
+            outcome = outcome.with_next_action(action);
         }
         if observation.failed_targets > 0 {
             outcome.result = ResultClass::AttentionRequired;

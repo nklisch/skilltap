@@ -57,10 +57,10 @@ use skilltap_core::{
 use skilltap_harnesses::{
     CanonicalObservation, CodexPluginGraphReader, DetectionError, GitSourceRevisionResolver,
     HarnessKind, ManagedCodexCatalog, NativeLifecycleAction, NativeLifecyclePort,
-    NativeLifecycleRequest, NativeResourcePresence, ObservedNativeRevisionResolver,
-    detect_configured_installation, native_arguments, normalize_observations,
-    observe_claude_canonical_resources, observe_codex_canonical_resources, observe_native_resource,
-    select_profile,
+    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation,
+    ObservedNativeRevisionResolver, detect_configured_installation, native_arguments,
+    normalize_observations, observe_claude_canonical_resources, observe_codex_canonical_resources,
+    observe_native_resource, select_profile,
 };
 
 pub(super) struct DetectionDiagnostic {
@@ -68,8 +68,14 @@ pub(super) struct DetectionDiagnostic {
     pub(super) next_action: NextAction,
 }
 
-pub(super) fn detection_diagnostic(error: &DetectionError, harness: &str) -> DetectionDiagnostic {
+pub(super) fn detection_diagnostic(
+    error: &DetectionError,
+    harness: &str,
+    configured_binary: &str,
+) -> DetectionDiagnostic {
     use skilltap_core::runtime::ObservationRuntimeError;
+
+    let version_command = format!("{} --version", shell_command_word(configured_binary));
 
     let (code, summary, action_code, action_summary, command) = match error {
         DetectionError::InvalidVersion => (
@@ -77,14 +83,14 @@ pub(super) fn detection_diagnostic(error: &DetectionError, harness: &str) -> Det
             "The harness returned an invalid version response.",
             "inspect_harness_version",
             "Inspect the harness version response and configure a supported binary.",
-            format!("{harness} --version"),
+            version_command.clone(),
         ),
         DetectionError::NonZeroExit => (
             "native_version_command_failed",
             "The harness version command returned a nonzero status.",
             "inspect_harness_version",
             "Run the harness version command directly and resolve its failure.",
-            format!("{harness} --version"),
+            version_command.clone(),
         ),
         DetectionError::Runtime(ObservationRuntimeError::ExecutableNotFound) => (
             "native_executable_not_found",
@@ -101,7 +107,7 @@ pub(super) fn detection_diagnostic(error: &DetectionError, harness: &str) -> Det
             "Harness detection exceeded a safety limit.",
             "inspect_harness_version",
             "Run the harness version command directly and resolve the bounded failure.",
-            format!("{harness} --version"),
+            version_command,
         ),
         DetectionError::Runtime(_) => (
             "native_detection_runtime_failed",
@@ -115,6 +121,16 @@ pub(super) fn detection_diagnostic(error: &DetectionError, harness: &str) -> Det
         warning: Warning::new(code, summary).with_context("harness", harness),
         next_action: NextAction::new(action_code, action_summary).with_command(command),
     }
+}
+
+fn shell_command_word(value: &str) -> String {
+    if value
+        .bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+    {
+        return value.to_owned();
+    }
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 use crate::{
@@ -2099,18 +2115,26 @@ fn lifecycle_preview_presence(
     harness: &HarnessId,
     scope: &Scope,
     name: &str,
-) -> NativeResourcePresence {
+) -> NativeResourceObservation {
     let action = match kind {
         ResourceKind::Marketplace => NativeLifecycleAction::MarketplaceAdd,
         ResourceKind::Plugin => NativeLifecycleAction::PluginInstall,
         ResourceKind::StandaloneSkill
         | ResourceKind::InstructionLocation
-        | ResourceKind::Harness => return NativeResourcePresence::Unknown,
+        | ResourceKind::Harness => {
+            return NativeResourceObservation::Indeterminate(
+                NativeObservationFailure::UnsupportedShape,
+            );
+        }
     };
     let harness_kind = match harness.as_str() {
         "codex" => HarnessKind::Codex,
         "claude" => HarnessKind::Claude,
-        _ => return NativeResourcePresence::Unknown,
+        _ => {
+            return NativeResourceObservation::Indeterminate(
+                NativeObservationFailure::UnsupportedShape,
+            );
+        }
     };
     let configured = match harness_kind {
         HarnessKind::Codex => configured_binary(documents.config.harnesses().codex.binary.as_str()),
@@ -2119,10 +2143,12 @@ fn lifecycle_preview_presence(
         }
     };
     let Ok(configured) = configured else {
-        return NativeResourcePresence::Unknown;
+        return NativeResourceObservation::Indeterminate(NativeObservationFailure::CommandFailed);
     };
     let Ok(name) = NativeId::new(name) else {
-        return NativeResourcePresence::Unknown;
+        return NativeResourceObservation::Indeterminate(
+            NativeObservationFailure::UnsupportedShape,
+        );
     };
     let request = NativeLifecycleRequest {
         harness: harness_kind,
@@ -2136,11 +2162,11 @@ fn lifecycle_preview_presence(
     let json_limits =
         JsonLimits::new(256 * 1024, 64).expect("bounded lifecycle JSON limits are valid");
     let Ok(paths) = PlatformPaths::resolve(&ProcessEnvironment) else {
-        return NativeResourcePresence::Unknown;
+        return NativeResourceObservation::Indeterminate(NativeObservationFailure::CommandFailed);
     };
     let search_path = std::env::var_os("PATH");
     let Ok(environment) = paths.native_process_environment(search_path.clone()) else {
-        return NativeResourcePresence::Unknown;
+        return NativeResourceObservation::Indeterminate(NativeObservationFailure::CommandFailed);
     };
     observe_native_resource(
         configured,
@@ -2150,14 +2176,16 @@ fn lifecycle_preview_presence(
         process_limits,
         json_limits,
     )
-    .unwrap_or(NativeResourcePresence::Unknown)
+    .unwrap_or(NativeResourceObservation::Indeterminate(
+        NativeObservationFailure::CommandFailed,
+    ))
 }
 
-fn lifecycle_presence_label(presence: NativeResourcePresence) -> &'static str {
+fn lifecycle_presence_label(presence: NativeResourceObservation) -> &'static str {
     match presence {
-        NativeResourcePresence::Present => "present",
-        NativeResourcePresence::Missing => "missing",
-        NativeResourcePresence::Unknown => "unknown",
+        NativeResourceObservation::Present { .. } => "present",
+        NativeResourceObservation::Missing => "missing",
+        NativeResourceObservation::Indeterminate(_) => "unknown",
     }
 }
 
