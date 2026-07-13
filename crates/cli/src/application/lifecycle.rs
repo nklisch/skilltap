@@ -288,6 +288,7 @@ impl StatusApplication<'_> {
         );
         let mut operations = Vec::new();
         let mut requests = Vec::new();
+        let mut managed_entries = BTreeMap::new();
         let mut seeds = BTreeMap::new();
         let mut target_projection_keys = BTreeSet::new();
         let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
@@ -395,7 +396,48 @@ impl StatusApplication<'_> {
                     .and_then(|state| state.resources().get(resource.key()))
                     .map(|state| state.native_ids().clone())
                     .unwrap_or_default();
+                let mut native_route_selected = false;
                 for target_id in targets.iter() {
+                    if target_id.as_str() == "codex"
+                        && let Scope::Project(project) = concrete_scope
+                    {
+                        let observed_at = match timestamp {
+                            Ok(timestamp) => timestamp,
+                            Err(()) => {
+                                outcome.result = ResultClass::Invalid;
+                                return outcome.with_error(ErrorDetail::new(
+                                    "clock_unavailable",
+                                    "The operation timestamp could not be recorded safely.",
+                                ));
+                            }
+                        };
+                        let planned = match plan_managed_codex_project_lifecycle(
+                            kind,
+                            &request,
+                            &resource,
+                            project,
+                            &documents,
+                            observed_at,
+                            json_limits,
+                        ) {
+                            Ok(planned) => planned,
+                            Err(error) => {
+                                outcome.result = ResultClass::AttentionRequired;
+                                outcome = outcome.with_error(error);
+                                continue;
+                            }
+                        };
+                        let operation_id = planned.operation.id().clone();
+                        operations.push(planned.operation);
+                        managed_entries.insert(operation_id, planned.entry);
+                        if let Some(seed) = planned.seed {
+                            seeds.insert(resource.key().clone(), seed);
+                        }
+                        if removal {
+                            target_projection_keys.insert(resource.key().clone());
+                        }
+                        continue;
+                    }
                     let Some((harness, configured, executable, capability)) =
                         configured_native_profile(
                             &documents.config,
@@ -445,6 +487,7 @@ impl StatusApplication<'_> {
                         );
                         continue;
                     }
+                    native_route_selected = true;
                     let native_request = request.native_request(harness, concrete_scope.clone());
                     let arguments = match native_arguments(&native_request) {
                         Ok(arguments) => arguments,
@@ -523,7 +566,7 @@ impl StatusApplication<'_> {
                         native_request,
                     ));
                 }
-                if !native_ids.is_empty() {
+                if native_route_selected && !native_ids.is_empty() {
                     let observed_at = match timestamp {
                         Ok(timestamp) => timestamp,
                         Err(()) => {
@@ -649,8 +692,18 @@ impl StatusApplication<'_> {
                 ));
             }
         };
-        let port =
-            NativeLifecyclePort::new_per_operation_with_environment(requests, native_environment);
+        let foreign_operations = managed_entries.keys().cloned().collect::<Vec<_>>();
+        let native_port =
+            NativeLifecyclePort::new_per_operation_with_environment(requests, native_environment)
+                .with_foreign_operations(foreign_operations);
+        let filesystem = SystemFileSystem;
+        let port = HybridLifecyclePort {
+            native: native_port,
+            managed: ManagedProjectLifecyclePort {
+                filesystem: &filesystem,
+                entries: managed_entries,
+            },
+        };
         let journal = StateExecutionJournal {
             plan: &plan,
             state: self.state,

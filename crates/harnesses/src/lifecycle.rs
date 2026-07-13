@@ -1,6 +1,10 @@
 //! Native lifecycle command vectors for verified Codex and Claude contracts.
 
-use std::{collections::BTreeMap, ffi::OsString, fmt};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ffi::OsString,
+    fmt,
+};
 
 use skilltap_core::{
     domain::{
@@ -295,6 +299,7 @@ fn resource_presence(value: &serde_json::Value, name: &str) -> NativeResourcePre
 pub struct NativeLifecyclePort {
     entries: BTreeMap<OperationId, NativeLifecycleEntry>,
     environment: BTreeMap<OsString, OsString>,
+    foreign_operations: BTreeSet<OperationId>,
 }
 
 struct NativeLifecycleEntry {
@@ -345,6 +350,7 @@ impl NativeLifecyclePort {
                 })
                 .collect(),
             environment: BTreeMap::new(),
+            foreign_operations: BTreeSet::new(),
         }
     }
 
@@ -364,6 +370,16 @@ impl NativeLifecyclePort {
         port.environment = environment;
         port
     }
+
+    /// Declare operation ids executed by a sibling adapter in one mixed plan.
+    /// Native operations not present in either set still fail revalidation.
+    pub fn with_foreign_operations(
+        mut self,
+        operations: impl IntoIterator<Item = OperationId>,
+    ) -> Self {
+        self.foreign_operations = operations.into_iter().collect();
+        self
+    }
 }
 
 impl ExecutionPort for NativeLifecyclePort {
@@ -381,6 +397,9 @@ impl ExecutionPort for NativeLifecyclePort {
                 continue;
             }
             let Some(entry) = self.entries.get(operation.id()) else {
+                if self.foreign_operations.contains(operation.id()) {
+                    continue;
+                }
                 return Err(ExecutionError::revalidation(
                     EvidenceCode::new("native.request_missing")
                         .expect("static evidence code is valid"),

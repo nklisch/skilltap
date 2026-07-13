@@ -17,6 +17,8 @@ use skilltap_core::{
 
 mod plugin_graph;
 pub use plugin_graph::{ClaudePluginGraphReader, CodexPluginGraphReader};
+mod managed_codex_project;
+pub use managed_codex_project::{ManagedCodexCatalog, ManagedCodexCatalogError};
 mod materialization;
 pub use materialization::JsonMcpProjectionMapper;
 mod load_verification;

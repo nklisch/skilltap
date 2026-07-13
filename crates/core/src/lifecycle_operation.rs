@@ -117,6 +117,48 @@ pub fn faithful_file_operation_with_dependencies(
     )
 }
 
+/// Build a faithful managed lifecycle operation that names every file or
+/// directory the adapter will touch.
+pub fn faithful_managed_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    paths: impl IntoIterator<Item = crate::domain::AbsolutePath>,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::Compatible,
+        TransferFidelity::Faithful,
+        [],
+        [],
+    )
+    .expect("faithful managed operations have no evidence or consequences");
+    let semantics = OperationSemantics::new(
+        action,
+        resource.scope().clone(),
+        OperationReason::new(
+            EvidenceCode::new("managed.lifecycle").expect("static evidence code is valid"),
+            EvidenceDetail::new("The documented managed harness load paths will be updated.")
+                .expect("static evidence detail is valid"),
+        ),
+        compatibility,
+        Provenance::Materialized,
+        paths.into_iter().map(AffectedSurface::file),
+    );
+    Operation::new(
+        id,
+        target,
+        OperationSelector::Resource { resource },
+        semantics,
+        OperationClass::SafeMaterialization,
+        Reversibility::Reversible,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

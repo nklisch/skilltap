@@ -653,6 +653,163 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
 }
 
 #[test]
+fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
+    let machine = machine();
+    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(fixture.executable(), fixture.executable()).replace(
+            "[harnesses.claude]\nenabled = true",
+            "[harnesses.claude]\nenabled = false",
+        ),
+    );
+    let project = machine.home().join("managed-project");
+    fs::create_dir_all(&project).unwrap();
+    let source = machine.home().join("managed-marketplace");
+    fs::create_dir_all(source.join(".agents/plugins")).unwrap();
+    fs::create_dir_all(source.join("plugins/demo/.codex-plugin")).unwrap();
+    fs::create_dir_all(source.join("plugins/demo/skills/demo/scripts")).unwrap();
+    fs::write(
+        source.join(".agents/plugins/marketplace.json"),
+        r#"{
+  "name": "team",
+  "future": {"preserve": true},
+  "plugins": [{
+    "name": "demo",
+    "source": {"source": "local", "path": "./plugins/demo"},
+    "futurePluginField": "keep"
+  }]
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/plugin.json"),
+        r#"{"name":"demo","version":"1.0.0","future":true}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/skills/demo/SKILL.md"),
+        "---\nname: demo\ndescription: managed project fixture\n---\nbody\n",
+    )
+    .unwrap();
+    let script = source.join("plugins/demo/skills/demo/scripts/run.sh");
+    fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = fs::metadata(&script).unwrap().permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&script, permissions).unwrap();
+    }
+
+    let add = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            source.to_str().unwrap(),
+            "--name",
+            "team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&add, 0);
+    assert_eq!(json(&add)["summary"]["changed"], true);
+    let catalog_path = project.join(".agents/plugins/marketplace.json");
+    let added_catalog: serde_json::Value =
+        serde_json::from_slice(&fs::read(&catalog_path).unwrap()).unwrap();
+    assert_eq!(added_catalog["future"]["preserve"], true);
+
+    let install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["summary"]["changed"], true);
+    let installed = project.join(".agents/plugins/demo");
+    assert_eq!(
+        fs::read_to_string(installed.join("skills/demo/SKILL.md")).unwrap(),
+        "---\nname: demo\ndescription: managed project fixture\n---\nbody\n"
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        assert_ne!(
+            fs::metadata(installed.join("skills/demo/scripts/run.sh"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o111,
+            0
+        );
+    }
+    let installed_catalog: serde_json::Value =
+        serde_json::from_slice(&fs::read(&catalog_path).unwrap()).unwrap();
+    assert_eq!(installed_catalog["future"]["preserve"], true);
+    assert_eq!(installed_catalog["plugins"][0]["futurePluginField"], "keep");
+    assert_eq!(installed_catalog["plugins"][0]["source"]["path"], "./demo");
+    assert!(!machine.codex_home().join("plugins/cache").exists());
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("\"provenance\": \"materialized\""));
+    assert!(state.contains("\"ownership\": \"skilltap\""));
+
+    let repeat = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    fs::write(installed.join("skills/demo/SKILL.md"), "drift\n").unwrap();
+    let drifted = run(
+        &machine,
+        &[
+            "plugin",
+            "update",
+            "demo@team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&drifted, 2);
+    assert_eq!(
+        json(&drifted)["errors"][0]["code"],
+        "managed_project_drifted"
+    );
+    assert_eq!(
+        fs::read_to_string(installed.join("skills/demo/SKILL.md")).unwrap(),
+        "drift\n"
+    );
+}
+
+#[test]
 fn targeted_native_remove_preserves_unselected_harness() {
     let machine = machine();
     let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();

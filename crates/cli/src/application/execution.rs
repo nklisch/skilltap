@@ -126,6 +126,241 @@ pub(super) struct ManagedSkillPort<'a> {
     pub(super) entries: BTreeMap<OperationId, ManagedSkillEntry>,
 }
 
+pub(super) trait ManagedProjectFileSystem: FileSystem + DirectoryTreeFileSystem {}
+
+impl<T: FileSystem + DirectoryTreeFileSystem> ManagedProjectFileSystem for T {}
+
+pub(super) struct ManagedProjectLifecyclePort<'a> {
+    pub(super) filesystem: &'a dyn ManagedProjectFileSystem,
+    pub(super) entries: BTreeMap<OperationId, ManagedProjectLifecycleEntry>,
+}
+
+pub(super) struct ManagedProjectLifecycleEntry {
+    pub(super) catalog_path: AbsolutePath,
+    pub(super) expected_catalog: Option<Vec<u8>>,
+    pub(super) desired_catalog: Option<Vec<u8>>,
+    pub(super) plugin: Option<ManagedProjectPluginWrite>,
+}
+
+pub(super) struct ManagedProjectPluginWrite {
+    pub(super) root: AbsolutePath,
+    pub(super) destination: skilltap_core::domain::RelativeArtifactPath,
+    pub(super) desired_tree: Option<ArtifactTree>,
+    pub(super) expected_tree: Option<ArtifactTree>,
+    pub(super) expected_identity: Option<skilltap_core::runtime::DirectoryIdentity>,
+}
+
+impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        for (id, entry) in &self.entries {
+            let operation = plan.get(id).ok_or_else(|| {
+                managed_project_apply_failure(
+                    "A managed project lifecycle request no longer belongs to the plan.",
+                )
+            })?;
+            if !operation
+                .affected_surfaces()
+                .iter()
+                .any(|surface| surface.path() == Some(&entry.catalog_path))
+            {
+                return Err(managed_project_apply_failure(
+                    "The managed project catalog no longer matches the planned surface.",
+                ));
+            }
+            let current_catalog = self
+                .filesystem
+                .read_regular_no_follow(&entry.catalog_path)
+                .map_err(|_| {
+                    managed_project_apply_failure(
+                        "The managed project catalog could not be re-read safely.",
+                    )
+                })?;
+            if current_catalog != entry.expected_catalog {
+                return Err(managed_project_apply_failure(
+                    "The managed project catalog changed after planning.",
+                ));
+            }
+            if let Some(plugin) = &entry.plugin {
+                let current = self
+                    .filesystem
+                    .load_tree_no_follow(&plugin.root, &plugin.destination)
+                    .ok();
+                match (&plugin.expected_tree, current) {
+                    (None, None) => {}
+                    (Some(expected), Some((identity, files))) => {
+                        if plugin.expected_identity != Some(identity)
+                            || artifact_tree_from_loaded(files).as_ref() != Some(expected)
+                        {
+                            return Err(managed_project_apply_failure(
+                                "The managed project plugin changed after planning.",
+                            ));
+                        }
+                    }
+                    _ => {
+                        return Err(managed_project_apply_failure(
+                            "The managed project plugin presence changed after planning.",
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn apply(
+        &self,
+        operation: &skilltap_core::domain::Operation,
+    ) -> Result<OperationOutcome, ExecutionError> {
+        let entry = self.entries.get(operation.id()).ok_or_else(|| {
+            managed_project_apply_failure(
+                "The managed project lifecycle adapter did not receive the planned request.",
+            )
+        })?;
+        if entry.expected_catalog == entry.desired_catalog
+            && entry
+                .plugin
+                .as_ref()
+                .is_none_or(|plugin| plugin.expected_tree == plugin.desired_tree)
+        {
+            return Ok(OperationOutcome::NoChange);
+        }
+
+        let catalog_parent = entry
+            .catalog_path
+            .as_str()
+            .rsplit_once('/')
+            .and_then(|(parent, _)| AbsolutePath::new(parent).ok())
+            .ok_or_else(|| {
+                managed_project_apply_failure("The project catalog parent is invalid.")
+            })?;
+        self.filesystem
+            .create_directory_all(&catalog_parent)
+            .map_err(|_| {
+                managed_project_apply_failure("The project catalog parent could not be created.")
+            })?;
+
+        if let Some(plugin) = &entry.plugin {
+            match (&plugin.expected_tree, &plugin.desired_tree) {
+                (None, Some(tree)) => {
+                    self.filesystem
+                        .publish_tree_no_follow(&plugin.root, &plugin.destination, tree.files())
+                        .map_err(|_| {
+                            managed_project_apply_failure(
+                                "The managed project plugin could not be published.",
+                            )
+                        })?;
+                }
+                (Some(_), None) => {
+                    let identity = plugin.expected_identity.ok_or_else(|| {
+                        managed_project_apply_failure(
+                            "The managed project plugin has no owned identity.",
+                        )
+                    })?;
+                    self.filesystem
+                        .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
+                        .map_err(|_| {
+                            managed_project_apply_failure(
+                                "The managed project plugin could not be removed safely.",
+                            )
+                        })?;
+                }
+                (Some(previous), Some(next)) if previous != next => {
+                    let identity = plugin.expected_identity.ok_or_else(|| {
+                        managed_project_apply_failure(
+                            "The managed project plugin has no owned identity.",
+                        )
+                    })?;
+                    self.filesystem
+                        .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
+                        .map_err(|_| {
+                            managed_project_apply_failure(
+                                "The managed project plugin could not be replaced safely.",
+                            )
+                        })?;
+                    if self
+                        .filesystem
+                        .publish_tree_no_follow(&plugin.root, &plugin.destination, next.files())
+                        .is_err()
+                    {
+                        let _ = self.filesystem.publish_tree_no_follow(
+                            &plugin.root,
+                            &plugin.destination,
+                            previous.files(),
+                        );
+                        return Err(managed_project_apply_failure(
+                            "The replacement project plugin could not be published.",
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        match &entry.desired_catalog {
+            Some(bytes) => self
+                .filesystem
+                .atomic_write(&entry.catalog_path, bytes)
+                .map_err(|_| {
+                    managed_project_apply_failure(
+                        "The managed project catalog could not be published.",
+                    )
+                })?,
+            None => self.filesystem.remove(&entry.catalog_path).map_err(|_| {
+                managed_project_apply_failure(
+                    "The managed project catalog could not be removed safely.",
+                )
+            })?,
+        }
+        Ok(OperationOutcome::Applied)
+    }
+}
+
+pub(super) struct HybridLifecyclePort<'a> {
+    pub(super) native: NativeLifecyclePort,
+    pub(super) managed: ManagedProjectLifecyclePort<'a>,
+}
+
+impl ExecutionPort for HybridLifecyclePort<'_> {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        self.native.revalidate(plan)?;
+        self.managed.revalidate(plan)
+    }
+
+    fn apply(
+        &self,
+        operation: &skilltap_core::domain::Operation,
+    ) -> Result<OperationOutcome, ExecutionError> {
+        if self.managed.entries.contains_key(operation.id()) {
+            self.managed.apply(operation)
+        } else {
+            self.native.apply(operation)
+        }
+    }
+}
+
+fn artifact_tree_from_loaded(
+    files: BTreeMap<
+        skilltap_core::domain::RelativeArtifactPath,
+        skilltap_core::domain::ArtifactFile,
+    >,
+) -> Option<ArtifactTree> {
+    ArtifactTree::new(
+        files
+            .into_iter()
+            .map(|(path, file)| (path.as_str().to_owned(), file)),
+    )
+    .ok()
+}
+
+fn managed_project_apply_failure(detail: &'static str) -> ExecutionError {
+    ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
+        skilltap_core::domain::EvidenceCode::new("managed.project_lifecycle_failed")
+            .expect("static evidence code is valid"),
+        skilltap_core::domain::EvidenceDetail::new(detail)
+            .expect("static evidence detail is valid"),
+    ))
+}
+
 pub(super) struct ManagedSkillEntry {
     pub(super) root: AbsolutePath,
     pub(super) destination: skilltap_core::domain::RelativeArtifactPath,
