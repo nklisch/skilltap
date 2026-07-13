@@ -3,7 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, IsolatedMachine, snapshot_tree};
+use crate::{
+    FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, IsolatedMachine,
+    ManagedProjectionProfile, snapshot_tree,
+};
 
 /// How a fake harness responds to its version probe.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -49,6 +52,7 @@ pub struct FakeHarnessProfile {
     id: &'static str,
     version_response: VersionResponse,
     lifecycle_dialect: LifecycleDialect,
+    managed_projection: Option<ManagedProjectionProfile>,
 }
 
 impl FakeHarnessProfile {
@@ -60,6 +64,7 @@ impl FakeHarnessProfile {
                 version: "0.144.1",
             },
             lifecycle_dialect: LifecycleDialect::Codex,
+            managed_projection: Some(ManagedProjectionProfile::codex()),
         }
     }
 
@@ -71,6 +76,7 @@ impl FakeHarnessProfile {
                 suffix: " (Claude Code)",
             },
             lifecycle_dialect: LifecycleDialect::Claude,
+            managed_projection: None,
         }
     }
 
@@ -84,6 +90,11 @@ impl FakeHarnessProfile {
 
     pub const fn lifecycle_dialect(&self) -> LifecycleDialect {
         self.lifecycle_dialect
+    }
+
+    /// Managed fallback acceptance contract, when this harness opts in.
+    pub const fn managed_projection(&self) -> Option<&ManagedProjectionProfile> {
+        self.managed_projection.as_ref()
     }
 
     /// Compose this harness identity with an orthogonal process behavior.
@@ -401,6 +412,13 @@ mod tests {
             );
             assert!(report.passed());
         }
+        assert_eq!(
+            FakeHarnessProfile::codex()
+                .managed_projection()
+                .map(ManagedProjectionProfile::id),
+            Some("codex")
+        );
+        assert!(FakeHarnessProfile::claude().managed_projection().is_none());
     }
 
     #[test]

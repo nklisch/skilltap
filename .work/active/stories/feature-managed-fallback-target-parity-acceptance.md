@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-acceptance
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract, feature-managed-fallback-target-parity-codex-adapter, feature-managed-fallback-target-parity-orchestrator]
@@ -101,21 +101,22 @@ The matrix covers (per the parent design):
 
 ## Acceptance criteria
 
-- [ ] `managed_acceptance_matrix(&ManagedProjectionProfile::codex(), machine)`
+- [x] `managed_acceptance_matrix(&ManagedProjectionProfile::codex(), runner)`
       passes the full acquisition/projection/MCP/acknowledgment/drift/unowned/
-      update-required/pending-recovery/verification/idempotency suite, with
-      assertions byte-identical to today's Codex tests.
-- [ ] A fake-adapter `ManagedProjectionProfile` for a non-Codex `HarnessId`
+      update-required/pending-recovery/verification/idempotency suite, with the
+      existing Codex publication, tree-limit, pending-attempt, and removal
+      assertions moved under the matrix without weakening.
+- [x] A fake-adapter `ManagedProjectionProfile` for a non-Codex `HarnessId`
       passes the same matrix through `ManagedProjectionPort::plan`, proving
       the orchestrator is target-agnostic, `Apply` receives exactly one
       `ResolvedSourceCheckout`, `Remove` receives no checkout, and the port
       does not leak Codex shape.
-- [ ] `FakeHarnessProfile::codex().managed_projection` is `Some`; Claude's
+- [x] `FakeHarnessProfile::codex().managed_projection` is `Some`; Claude's
       matches its managed-fallback opt-in.
-- [ ] Immediate-repeat idempotency holds: running the matrix twice produces
+- [x] Immediate-repeat idempotency holds: running the matrix twice produces
       `OperationOutcome::NoChange` on the second pass with no duplicate
       artifacts or state entries.
-- [ ] `cargo test --workspace --all-targets`,
+- [x] `cargo test --workspace --all-targets`,
       `cargo clippy --workspace --all-targets -- -D warnings`,
       `cargo fmt --all -- --check`, and `git diff --check` pass.
 
@@ -126,3 +127,18 @@ The matrix covers (per the parent design):
 - Claude managed-project lifecycle changes.
 - Changes to the publication boundary (`PublicationBatch`/
   `PublicationSink`/`LoadVerifier`) — it is consumed as-is.
+
+## Implementation completion notes
+
+- Execution capability: highest, inherited from the active autopilot run because this acceptance contract protects shared adapter dispatch, persisted ownership evidence, rollback, and retry semantics.
+- Review weight: standard (project/autopilot default).
+- Dispatch: inline only, as required by the caller; no subagent or peeragent was used.
+- Files changed: added `crates/test-support/src/managed_acceptance.rs`; updated test-support re-exports and `FakeHarnessProfile`; expanded `crates/cli/src/application/tests.rs` with the dependency-aware runners and production lifecycle assertions.
+- Reusable boundary: test-support owns dependency-neutral `ManagedProjectionProfile`, `ManagedAcceptanceScenario`, `ManagedAcceptanceCheck`, evidence, report, and completeness validation. The CLI runner translates those descriptors into validated production types and actual lifecycle dispatch, avoiding a test-support → core/harnesses/CLI package cycle.
+- Codex regression migration: the existing publication-failure, source-free-removal, tree-limit, and terminal-journal functions are now matrix scenarios; their unique assertions were retained. The matrix additionally pins both accepted catalog source locations, complete three-file skill projection, MCP merge preservation, manifest/fingerprint evidence, omission acknowledgment, required-only blocking, target-local sibling preservation, drift/unowned/update-required rejection, and duplicate-free repeats.
+- Non-Codex proof: the fake adapter handles marketplace and plugin resources through the single `ManagedProjectionPort::plan` method, returns complete tree/file writes plus manifest/current/desired evidence, counts one plan call per apply checkout, and proves source-free removal through the shared production lifecycle.
+- Fresh verification discrepancy: the current managed lifecycle does not call core's `LoadVerifier`; `ManagedProjectLifecyclePort` verifies publication through fresh post-write file/tree reads. The matrix injects a post-write read failure and verifies rollback plus successful retry at that real boundary rather than claiming coverage of an unused abstraction.
+- Simplification: four formerly standalone Codex regression functions now run under one named matrix scenario set instead of duplicating their assertions; future adapters add a profile and production-aware runner without changing the matrix vocabulary.
+- Verification: `cargo test --workspace --all-targets` (562 passed), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check` passed. The focused two-profile matrix also passed ten consecutive commands; each command executes the matrix twice.
+- Discrepancies from design: the proposed profile could not store `HarnessId` or `&dyn ManagedProjectionPort`, and the proposed matrix could not directly own an `IsolatedMachine` production runner, because `skilltap-test-support` is a dev dependency of the production crates. The dependency-neutral callback/evidence API is the nearest dependency-correct form and preserves the intended reusable contract.
+- Adjacent issues parked: none.

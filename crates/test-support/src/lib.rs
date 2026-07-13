@@ -6,6 +6,7 @@ mod barrier;
 mod external_tree;
 #[cfg(unix)]
 mod harness_profile;
+mod managed_acceptance;
 #[cfg(unix)]
 mod native_process;
 
@@ -16,6 +17,11 @@ pub use external_tree::{ExternalTreeFixture, InjectedIoFault, ReplacementRace};
 #[cfg(unix)]
 pub use harness_profile::{
     AcceptanceReport, FakeHarnessProfile, LifecycleDialect, VersionResponse, acceptance_matrix,
+};
+pub use managed_acceptance::{
+    ManagedAcceptanceCheck, ManagedAcceptanceError, ManagedAcceptanceEvidence,
+    ManagedAcceptanceReport, ManagedAcceptanceScenario, ManagedProjectionProfile,
+    managed_acceptance_matrix,
 };
 #[cfg(unix)]
 pub use native_process::{

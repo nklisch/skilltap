@@ -5,6 +5,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     process::Command,
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
 use skilltap_core::{
@@ -20,7 +21,11 @@ use skilltap_core::{
         FileStateRepository, StateRepository,
     },
 };
-use skilltap_test_support::TempRoot;
+use skilltap_test_support::{
+    FakeHarnessProfile, ManagedAcceptanceCheck, ManagedAcceptanceEvidence,
+    ManagedAcceptanceScenario, ManagedProjectionProfile, TempRoot, managed_acceptance_matrix,
+    snapshot_tree,
+};
 
 use super::*;
 use crate::command::{OutputArgs, ScopeArgs, TargetArgs};
@@ -31,6 +36,9 @@ struct RecordingFaultFileSystem {
     fail_confined_write_suffix: RefCell<Option<String>>,
     fail_atomic_write_at: Cell<Option<usize>>,
     atomic_write_calls: Cell<usize>,
+    confined_write_calls: Cell<usize>,
+    post_write_read_calls: Cell<usize>,
+    fail_next_post_write_read: Cell<bool>,
     tree_publish_attempts: Cell<usize>,
     tree_publish_successes: Cell<usize>,
     bounded_tree_load_calls: Cell<usize>,
@@ -45,6 +53,9 @@ impl RecordingFaultFileSystem {
             fail_confined_write_suffix: RefCell::new(None),
             fail_atomic_write_at: Cell::new(None),
             atomic_write_calls: Cell::new(0),
+            confined_write_calls: Cell::new(0),
+            post_write_read_calls: Cell::new(0),
+            fail_next_post_write_read: Cell::new(false),
             tree_publish_attempts: Cell::new(0),
             tree_publish_successes: Cell::new(0),
             bounded_tree_load_calls: Cell::new(0),
@@ -75,6 +86,10 @@ impl RecordingFaultFileSystem {
     fn grow_oversized_tree_on_bounded_load(&self, number: usize) {
         self.bounded_tree_load_calls.set(0);
         self.grow_tree_on_bounded_load_at.set(Some(number));
+    }
+
+    fn fail_next_post_write_read(&self) {
+        self.fail_next_post_write_read.set(true);
     }
 
     fn injected(action: FileSystemAction, path: AbsolutePath) -> RuntimeError {
@@ -235,6 +250,16 @@ impl ConfinedFileSystem for RecordingFaultFileSystem {
         destination: &RelativeArtifactPath,
         maximum_bytes: u64,
     ) -> Result<Option<Vec<u8>>, RuntimeError> {
+        if self.confined_write_calls.get() > 0 {
+            self.post_write_read_calls
+                .set(self.post_write_read_calls.get() + 1);
+            if self.fail_next_post_write_read.replace(false) {
+                return Err(Self::injected(
+                    FileSystemAction::Read,
+                    Self::confined_path(root, destination),
+                ));
+            }
+        }
         self.delegate
             .read_regular_bounded_no_follow(root, destination, maximum_bytes)
     }
@@ -245,6 +270,8 @@ impl ConfinedFileSystem for RecordingFaultFileSystem {
         destination: &RelativeArtifactPath,
         contents: &[u8],
     ) -> Result<(), RuntimeError> {
+        self.confined_write_calls
+            .set(self.confined_write_calls.get() + 1);
         let matches = self
             .fail_confined_write_suffix
             .borrow()
@@ -347,6 +374,18 @@ fn write_managed_marketplace(source: &Path) {
         "---\nname: demo\ndescription: fixture\n---\nbody\n",
     )
     .unwrap();
+    fs::create_dir_all(source.join("plugins/demo/skills/demo/scripts")).unwrap();
+    fs::create_dir_all(source.join("plugins/demo/skills/demo/references")).unwrap();
+    fs::write(
+        source.join("plugins/demo/skills/demo/scripts/run.sh"),
+        "#!/bin/sh\nexit 0\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/skills/demo/references/usage.md"),
+        "# Usage\n",
+    )
+    .unwrap();
 }
 
 fn commit_marketplace(source: &Path, message: &str) -> ResolvedRevision {
@@ -427,6 +466,38 @@ fn managed_plugin_target(
         .expect("managed Codex plugin target state")
 }
 
+fn managed_state_document(
+    paths: &PlatformPaths,
+    state_filesystem: &dyn FileSystem,
+) -> StateDocument {
+    let state =
+        FileStateRepository::new(state_filesystem, paths.skilltap_config().clone()).unwrap();
+    match state.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => panic!("managed lifecycle must persist state"),
+    }
+}
+
+fn managed_target_state(
+    paths: &PlatformPaths,
+    project: &Path,
+    state_filesystem: &dyn FileSystem,
+    target: &HarnessId,
+    resource: &str,
+) -> TargetResourceState {
+    let document = managed_state_document(paths, state_filesystem);
+    let key = ResourceKey::new(
+        ResourceId::new(resource).unwrap(),
+        Scope::Project(absolute(&fs::canonicalize(project).unwrap())),
+    );
+    document
+        .resources()
+        .get(&key)
+        .and_then(|resource| resource.target(target))
+        .cloned()
+        .unwrap_or_else(|| panic!("managed target state for {target}:{resource}"))
+}
+
 fn managed_scope(project: &Path) -> ScopeArgs {
     ScopeArgs {
         project: Some(Some(project.to_path_buf())),
@@ -445,8 +516,16 @@ fn codex_target() -> TargetArgs {
 struct FakeManagedAdapter;
 struct FakeManagedProjection;
 
+const FAKE_MANAGED_PROFILE: ManagedProjectionProfile = ManagedProjectionProfile::new(
+    "fake-managed",
+    &[".fake/managed-marketplace"],
+    Some(".fake/config.toml"),
+    ".fake/skills",
+);
 static FAKE_MANAGED_ADAPTER: FakeManagedAdapter = FakeManagedAdapter;
 static FAKE_MANAGED_PROJECTION: FakeManagedProjection = FakeManagedProjection;
+static FAKE_APPLY_PLANS: AtomicUsize = AtomicUsize::new(0);
+static FAKE_REMOVE_PLANS: AtomicUsize = AtomicUsize::new(0);
 
 impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
     fn identity(&self) -> skilltap_harnesses::TargetIdentity {
@@ -512,47 +591,242 @@ impl skilltap_harnesses::ManagedProjectionPort for FakeManagedProjection {
         skilltap_core::managed_projection::ManagedProjectionPlan,
         skilltap_core::managed_projection::ManagedProjectionError,
     > {
-        let destination = RelativeArtifactPath::new(".fake/managed-marketplace").unwrap();
-        let current = context
-            .filesystem
-            .read_regular_bounded_no_follow(context.project, &destination, 4096)
-            .map_err(
-                |_| skilltap_core::managed_projection::ManagedProjectionError::Other {
-                    code: "fake_projection_unreadable",
-                    summary: "The fake managed projection could not be read.",
-                },
-            )?;
-        let (desired, manifest) = match &context.input {
+        match &context.input {
             ManagedProjectionInput::Apply { checkout } => {
+                FAKE_APPLY_PLANS.fetch_add(1, Ordering::SeqCst);
                 assert_eq!(
                     checkout.root().as_str(),
                     checkout.source().locator().as_str()
                 );
-                let desired = checkout.source().locator().as_str().as_bytes().to_vec();
-                let manifest = vec![ManagedProjection::Omitted {
-                    id: skilltap_core::domain::ComponentId::new("optional:fake-hook").unwrap(),
-                    consequence: skilltap_core::domain::EvidenceCode::new(
-                        "fake_optional_component_omitted",
-                    )
-                    .unwrap(),
-                }];
-                (Some(desired), manifest)
             }
-            ManagedProjectionInput::Remove => (None, Vec::new()),
-        };
-        Ok(skilltap_core::managed_projection::ManagedProjectionPlan {
-            files: vec![ManagedFileWrite {
-                root: context.project.clone(),
-                destination,
-                expected: current.clone(),
-                desired: desired.clone(),
-            }],
-            manifest,
-            current_fingerprint: current.as_deref().map(fingerprint_contents),
-            desired_fingerprint: desired.as_deref().map(fingerprint_contents),
-            ..skilltap_core::managed_projection::ManagedProjectionPlan::default()
-        })
+            ManagedProjectionInput::Remove => {
+                FAKE_REMOVE_PLANS.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        match context.resource_kind {
+            ResourceKind::Marketplace => fake_marketplace_plan(context),
+            ResourceKind::Plugin => fake_plugin_plan(context),
+            _ => Err(
+                skilltap_core::managed_projection::ManagedProjectionError::UnsupportedResourceKind,
+            ),
+        }
     }
+}
+
+fn fake_marker(
+    context: &ManagedProjectionContext<'_>,
+    root: &AbsolutePath,
+    name: &str,
+) -> Result<bool, skilltap_core::managed_projection::ManagedProjectionError> {
+    let destination = RelativeArtifactPath::new(name).unwrap();
+    context
+        .filesystem
+        .read_regular_bounded_no_follow(root, &destination, 64)
+        .map(|value| value.is_some())
+        .map_err(|_| fake_projection_error())
+}
+
+fn fake_marketplace_plan(
+    context: &ManagedProjectionContext<'_>,
+) -> Result<
+    skilltap_core::managed_projection::ManagedProjectionPlan,
+    skilltap_core::managed_projection::ManagedProjectionError,
+> {
+    let destination =
+        RelativeArtifactPath::new(FAKE_MANAGED_PROFILE.catalog_destinations()[0]).unwrap();
+    let current = context
+        .filesystem
+        .read_regular_bounded_no_follow(context.project, &destination, 4096)
+        .map_err(|_| fake_projection_error())?;
+    let (desired, manifest) = match &context.input {
+        ManagedProjectionInput::Apply { checkout } => {
+            let desired = checkout.source().locator().as_str().as_bytes().to_vec();
+            (Some(desired), Vec::new())
+        }
+        ManagedProjectionInput::Remove => (None, Vec::new()),
+    };
+    Ok(skilltap_core::managed_projection::ManagedProjectionPlan {
+        files: vec![ManagedFileWrite {
+            root: context.project.clone(),
+            destination,
+            expected: current.clone(),
+            desired: desired.clone(),
+        }],
+        manifest,
+        current_fingerprint: current.as_deref().map(fingerprint_contents),
+        desired_fingerprint: desired.as_deref().map(fingerprint_contents),
+        ..skilltap_core::managed_projection::ManagedProjectionPlan::default()
+    })
+}
+
+fn fake_plugin_plan(
+    context: &ManagedProjectionContext<'_>,
+) -> Result<
+    skilltap_core::managed_projection::ManagedProjectionPlan,
+    skilltap_core::managed_projection::ManagedProjectionError,
+> {
+    let skill_root = AbsolutePath::new(format!(
+        "{}/{}",
+        context.project.as_str(),
+        FAKE_MANAGED_PROFILE.skill_destination()
+    ))
+    .unwrap();
+    let skill_destination = RelativeArtifactPath::new("demo").unwrap();
+    let current_tree = match context.filesystem.load_tree_bounded_no_follow(
+        &skill_root,
+        &skill_destination,
+        managed_project_tree_observation_limits(),
+    ) {
+        Ok((identity, files)) => Some((
+            identity,
+            ArtifactTree::new(
+                files
+                    .into_iter()
+                    .map(|(path, file)| (path.as_str().to_owned(), file)),
+            )
+            .map_err(|_| fake_projection_error())?,
+        )),
+        Err(RuntimeError::FileSystem { source, .. })
+            if source.kind() == io::ErrorKind::NotFound =>
+        {
+            None
+        }
+        Err(_) => return Err(fake_projection_error()),
+    };
+    let mcp_destination =
+        RelativeArtifactPath::new(FAKE_MANAGED_PROFILE.mcp_destination().unwrap()).unwrap();
+    let current_mcp = context
+        .filesystem
+        .read_regular_bounded_no_follow(context.project, &mcp_destination, 4096)
+        .map_err(|_| fake_projection_error())?;
+
+    let (desired_tree, desired_mcp, mut manifest) = match &context.input {
+        ManagedProjectionInput::Apply { checkout } => {
+            if fake_marker(context, checkout.root(), "required-unsupported")? {
+                return Err(
+                    skilltap_core::managed_projection::ManagedProjectionError::RequiredUnsupported,
+                );
+            }
+            let source_destination = RelativeArtifactPath::new("projection/skill").unwrap();
+            let (_, files) = context
+                .filesystem
+                .load_tree_bounded_no_follow(
+                    checkout.root(),
+                    &source_destination,
+                    managed_project_tree_observation_limits(),
+                )
+                .map_err(|_| {
+                    skilltap_core::managed_projection::ManagedProjectionError::RequiredUnsupported
+                })?;
+            let tree = ArtifactTree::new(
+                files
+                    .into_iter()
+                    .map(|(path, file)| (path.as_str().to_owned(), file)),
+            )
+            .map_err(|_| fake_projection_error())?;
+            if !tree
+                .files()
+                .contains_key(&RelativeArtifactPath::new("SKILL.md").unwrap())
+            {
+                return Err(
+                    skilltap_core::managed_projection::ManagedProjectionError::RequiredUnsupported,
+                );
+            }
+            let mcp = context
+                .filesystem
+                .read_regular_bounded_no_follow(
+                    checkout.root(),
+                    &RelativeArtifactPath::new("projection/mcp.conf").unwrap(),
+                    4096,
+                )
+                .map_err(|_| fake_projection_error())?;
+            let mcp = mcp.ok_or_else(fake_projection_error)?;
+            let mut manifest = vec![
+                ManagedProjection::Skill {
+                    id: skill_destination.clone(),
+                    fingerprint: fake_tree_fingerprint(&skill_destination, &tree),
+                },
+                ManagedProjection::Mcp {
+                    id: NativeId::new("demo-docs").unwrap(),
+                    fingerprint: fingerprint_contents(&mcp),
+                },
+            ];
+            if fake_marker(context, checkout.root(), "optional-omission")? {
+                manifest.push(fake_omission());
+            }
+            (Some(tree), Some(mcp), manifest)
+        }
+        ManagedProjectionInput::Remove => (None, None, Vec::new()),
+    };
+    manifest.sort();
+    let current_fingerprint = fake_aggregate_fingerprint(
+        current_tree.as_ref().map(|(_, tree)| tree),
+        current_mcp.as_deref(),
+    );
+    let desired_fingerprint =
+        fake_aggregate_fingerprint(desired_tree.as_ref(), desired_mcp.as_deref());
+
+    Ok(skilltap_core::managed_projection::ManagedProjectionPlan {
+        trees: vec![ManagedPluginWrite {
+            root: skill_root,
+            destination: skill_destination,
+            desired_tree,
+            expected_tree: current_tree.as_ref().map(|(_, tree)| tree.clone()),
+            expected_identity: current_tree.map(|(identity, _)| identity),
+        }],
+        files: vec![ManagedFileWrite {
+            root: context.project.clone(),
+            destination: mcp_destination,
+            expected: current_mcp,
+            desired: desired_mcp,
+        }],
+        manifest,
+        current_fingerprint,
+        desired_fingerprint,
+    })
+}
+
+fn fake_projection_error() -> skilltap_core::managed_projection::ManagedProjectionError {
+    skilltap_core::managed_projection::ManagedProjectionError::Other {
+        code: "fake_projection_unreadable",
+        summary: "The fake managed projection could not be read.",
+    }
+}
+
+fn fake_omission() -> ManagedProjection {
+    ManagedProjection::Omitted {
+        id: skilltap_core::domain::ComponentId::new("optional:fake-hook").unwrap(),
+        consequence: skilltap_core::domain::EvidenceCode::new("fake_optional_component_omitted")
+            .unwrap(),
+    }
+}
+
+fn fake_tree_fingerprint(destination: &RelativeArtifactPath, tree: &ArtifactTree) -> Fingerprint {
+    let mut bytes = destination.as_str().as_bytes().to_vec();
+    for (path, file) in tree.files() {
+        bytes.extend_from_slice(path.as_str().as_bytes());
+        bytes.push(u8::from(file.is_executable()));
+        bytes.extend_from_slice(file.contents());
+    }
+    fingerprint_contents(&bytes)
+}
+
+fn fake_aggregate_fingerprint(
+    tree: Option<&ArtifactTree>,
+    mcp: Option<&[u8]>,
+) -> Option<Fingerprint> {
+    let mut bytes = Vec::new();
+    if let Some(tree) = tree {
+        bytes.extend_from_slice(
+            fake_tree_fingerprint(&RelativeArtifactPath::new("demo").unwrap(), tree)
+                .digest()
+                .as_bytes(),
+        );
+    }
+    if let Some(mcp) = mcp {
+        bytes.extend_from_slice(mcp);
+    }
+    (!bytes.is_empty()).then(|| fingerprint_contents(&bytes))
 }
 
 fn fake_target_id() -> HarnessId {
@@ -620,6 +894,34 @@ fn execute_managed_lifecycle(
     )
 }
 
+#[derive(Clone, Copy)]
+struct ManagedLifecycleTestRequest<'a> {
+    kind: NativeLifecycleKind,
+    source: Option<&'a str>,
+    name: Option<&'a str>,
+    acknowledged: bool,
+}
+
+impl<'a> ManagedLifecycleTestRequest<'a> {
+    const fn marketplace_add(source: &'a str) -> Self {
+        Self {
+            kind: NativeLifecycleKind::MarketplaceAdd,
+            source: Some(source),
+            name: Some("team"),
+            acknowledged: false,
+        }
+    }
+
+    const fn plugin_install() -> Self {
+        Self {
+            kind: NativeLifecycleKind::PluginInstall,
+            source: Some("demo@team"),
+            name: None,
+            acknowledged: false,
+        }
+    }
+}
+
 fn execute_fake_managed_lifecycle(
     paths: &PlatformPaths,
     project: &Path,
@@ -629,10 +931,39 @@ fn execute_fake_managed_lifecycle(
     acknowledged: bool,
 ) -> Outcome {
     let filesystem = SystemFileSystem;
+    execute_fake_managed_lifecycle_with_filesystems(
+        paths,
+        project,
+        &filesystem,
+        &filesystem,
+        ManagedLifecycleTestRequest {
+            kind,
+            source,
+            name,
+            acknowledged,
+        },
+    )
+}
+
+fn execute_fake_managed_lifecycle_with_filesystems(
+    paths: &PlatformPaths,
+    project: &Path,
+    state_filesystem: &dyn FileSystem,
+    managed_filesystem: &dyn ManagedProjectFileSystem,
+    request: ManagedLifecycleTestRequest<'_>,
+) -> Outcome {
+    let ManagedLifecycleTestRequest {
+        kind,
+        source,
+        name,
+        acknowledged,
+    } = request;
+    let filesystem = SystemFileSystem;
     let config = FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
     let inventory =
         FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
-    let state = FileStateRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let state =
+        FileStateRepository::new(state_filesystem, paths.skilltap_config().clone()).unwrap();
     let working_directory = FixedWorkingDirectory(absolute(project));
     let git = NoGitRoot;
     let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
@@ -650,7 +981,7 @@ fn execute_fake_managed_lifecycle(
         native_observation: NativeObservationMode::Disabled,
         registry: &registry,
         test_platform_paths: Some(paths.clone()),
-        test_managed_project_filesystem: Some(&filesystem),
+        test_managed_project_filesystem: Some(managed_filesystem),
     }
     .execute_native_lifecycle(
         "fake managed lifecycle test",
@@ -671,24 +1002,216 @@ fn assert_changed(outcome: &Outcome, expected: bool) {
 }
 
 #[test]
-fn non_codex_managed_port_drives_apply_acknowledgment_evidence_and_source_free_remove() {
-    let root = TempRoot::new("skilltap-fake-managed-projection").unwrap();
-    let paths = isolated_platform_paths(&root);
-    enable_fake_managed_only(&paths);
-    let project = root.join("project");
-    let source = root.join("marketplace");
-    fs::create_dir_all(&project).unwrap();
-    fs::create_dir_all(&source).unwrap();
-    let destination = project.join(".fake/managed-marketplace");
+fn managed_projection_profiles_pass_the_shared_acceptance_matrix_repeatedly() {
+    let codex = FakeHarnessProfile::codex();
+    let codex = codex
+        .managed_projection()
+        .expect("Codex opts into managed fallback acceptance");
+    assert!(FakeHarnessProfile::claude().managed_projection().is_none());
 
-    let blocked = execute_fake_managed_lifecycle(
-        &paths,
-        &project,
-        NativeLifecycleKind::MarketplaceAdd,
-        Some(source.to_str().unwrap()),
+    for run in 0..2 {
+        for profile in [codex, &FAKE_MANAGED_PROFILE] {
+            let report = managed_acceptance_matrix(profile, exercise_managed_acceptance)
+                .unwrap_or_else(|error| panic!("matrix run {run} failed: {error}"));
+            assert_eq!(report.profile_id(), profile.id());
+            assert!(report.passed());
+            assert_eq!(report.scenarios().count(), 8);
+        }
+    }
+}
+
+fn exercise_managed_acceptance(
+    profile: &ManagedProjectionProfile,
+    scenario: ManagedAcceptanceScenario,
+) -> ManagedAcceptanceEvidence {
+    match profile.id() {
+        "codex" => exercise_codex_managed_acceptance(scenario),
+        "fake-managed" => exercise_fake_managed_acceptance(scenario),
+        other => panic!("no managed acceptance runner registered for {other}"),
+    }
+}
+
+fn evidence(checks: impl IntoIterator<Item = ManagedAcceptanceCheck>) -> ManagedAcceptanceEvidence {
+    ManagedAcceptanceEvidence::new(checks)
+}
+
+struct FakeManagedFixture {
+    _root: TempRoot,
+    paths: PlatformPaths,
+    project: PathBuf,
+    source: PathBuf,
+}
+
+impl FakeManagedFixture {
+    fn new(prefix: &str, markers: &[&str]) -> Self {
+        let root = TempRoot::new(prefix).unwrap();
+        let paths = isolated_platform_paths(&root);
+        enable_fake_managed_only(&paths);
+        let project = root.join("project");
+        let source = root.join("marketplace");
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(source.join("projection/skill/scripts")).unwrap();
+        fs::create_dir_all(source.join("projection/skill/references")).unwrap();
+        fs::write(
+            source.join("projection/skill/SKILL.md"),
+            "---\nname: demo\ndescription: fake managed fixture\n---\n",
+        )
+        .unwrap();
+        fs::write(source.join("projection/skill/scripts/run.sh"), "exit 0\n").unwrap();
+        fs::write(
+            source.join("projection/skill/references/usage.md"),
+            "# Usage\n",
+        )
+        .unwrap();
+        fs::write(
+            source.join("projection/mcp.conf"),
+            "server = fake-managed\n",
+        )
+        .unwrap();
+        for marker in markers {
+            fs::write(source.join(marker), "fixture\n").unwrap();
+        }
+        Self {
+            _root: root,
+            paths,
+            project,
+            source,
+        }
+    }
+
+    fn add_marketplace(&self) -> Outcome {
+        execute_fake_managed_lifecycle(
+            &self.paths,
+            &self.project,
+            NativeLifecycleKind::MarketplaceAdd,
+            Some(self.source.to_str().unwrap()),
+            Some("team"),
+            false,
+        )
+    }
+
+    fn install_plugin(&self, acknowledged: bool) -> Outcome {
+        execute_fake_managed_lifecycle(
+            &self.paths,
+            &self.project,
+            NativeLifecycleKind::PluginInstall,
+            Some("demo@team"),
+            None,
+            acknowledged,
+        )
+    }
+
+    fn target_state(&self) -> TargetResourceState {
+        managed_target_state(
+            &self.paths,
+            &self.project,
+            &SystemFileSystem,
+            &fake_target_id(),
+            "plugin:demo@team",
+        )
+    }
+}
+
+fn exercise_fake_managed_acceptance(
+    scenario: ManagedAcceptanceScenario,
+) -> ManagedAcceptanceEvidence {
+    match scenario {
+        ManagedAcceptanceScenario::ApplyProjection => fake_apply_projection_acceptance(),
+        ManagedAcceptanceScenario::ProjectionEvidence => fake_projection_evidence_acceptance(),
+        ManagedAcceptanceScenario::RemovalWithoutCheckout => fake_removal_acceptance(),
+        ManagedAcceptanceScenario::Compatibility => fake_compatibility_acceptance(),
+        ManagedAcceptanceScenario::Ownership => fake_ownership_acceptance(),
+        ManagedAcceptanceScenario::PendingRecovery => fake_pending_recovery_acceptance(),
+        ManagedAcceptanceScenario::FreshLoadVerification => fake_fresh_load_acceptance(),
+        ManagedAcceptanceScenario::ImmediateRepeat => fake_repeat_acceptance(),
+    }
+}
+
+fn fake_apply_projection_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-apply", &[]);
+    FAKE_APPLY_PLANS.store(0, Ordering::SeqCst);
+    let added = fixture.add_marketplace();
+    assert_eq!(added.result, ResultClass::Completed, "{added:?}");
+    let calls_before_install = FAKE_APPLY_PLANS.load(Ordering::SeqCst);
+    let installed = fixture.install_plugin(false);
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    assert_eq!(
+        FAKE_APPLY_PLANS.load(Ordering::SeqCst),
+        calls_before_install + 1,
+        "one port plan receives one authoritative checkout per apply lifecycle"
+    );
+    let skill = fixture.project.join(".fake/skills/demo");
+    for relative in ["SKILL.md", "scripts/run.sh", "references/usage.md"] {
+        assert!(skill.join(relative).is_file(), "missing {relative}");
+    }
+    evidence([
+        ManagedAcceptanceCheck::OneApplyCheckout,
+        ManagedAcceptanceCheck::CompleteSkillTree,
+    ])
+}
+
+fn fake_projection_evidence_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-evidence", &[]);
+    assert_eq!(fixture.add_marketplace().result, ResultClass::Completed);
+    assert_eq!(fixture.install_plugin(false).result, ResultClass::Completed);
+    let target = fixture.target_state();
+    assert!(target.fingerprint().is_some());
+    assert!(matches!(
+        target.managed_projections(),
+        [ManagedProjection::Skill { id: skill, .. }, ManagedProjection::Mcp { id: mcp, .. }]
+            if skill.as_str() == "demo" && mcp.as_str() == "demo-docs"
+    ));
+    let repeated = fixture.install_plugin(false);
+    assert_eq!(repeated.result, ResultClass::Completed, "{repeated:?}");
+    assert_changed(&repeated, false);
+    evidence([
+        ManagedAcceptanceCheck::Manifest,
+        ManagedAcceptanceCheck::CurrentFingerprint,
+        ManagedAcceptanceCheck::DesiredFingerprint,
+    ])
+}
+
+fn fake_removal_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-remove", &[]);
+    assert_eq!(fixture.add_marketplace().result, ResultClass::Completed);
+    assert_eq!(fixture.install_plugin(false).result, ResultClass::Completed);
+    fs::remove_dir_all(&fixture.source).unwrap();
+    FAKE_REMOVE_PLANS.store(0, Ordering::SeqCst);
+    let plugin = execute_fake_managed_lifecycle(
+        &fixture.paths,
+        &fixture.project,
+        NativeLifecycleKind::PluginRemove,
+        None,
+        Some("demo@team"),
+        false,
+    );
+    assert_eq!(plugin.result, ResultClass::Completed, "{plugin:?}");
+    assert!(!fixture.project.join(".fake/skills/demo").exists());
+    assert!(!fixture.project.join(".fake/config.toml").exists());
+    let marketplace = execute_fake_managed_lifecycle(
+        &fixture.paths,
+        &fixture.project,
+        NativeLifecycleKind::MarketplaceRemove,
+        None,
         Some("team"),
         false,
     );
+    assert_eq!(
+        marketplace.result,
+        ResultClass::Completed,
+        "{marketplace:?}"
+    );
+    assert!(!fixture.project.join(".fake/managed-marketplace").exists());
+    assert_eq!(FAKE_REMOVE_PLANS.load(Ordering::SeqCst), 2);
+    evidence([ManagedAcceptanceCheck::RemoveWithoutCheckout])
+}
+
+fn fake_compatibility_acceptance() -> ManagedAcceptanceEvidence {
+    let optional =
+        FakeManagedFixture::new("skilltap-fake-managed-optional", &["optional-omission"]);
+    let added = optional.add_marketplace();
+    assert_eq!(added.result, ResultClass::Completed, "{added:?}");
+    let blocked = optional.install_plugin(false);
     assert_eq!(
         blocked.result,
         ResultClass::AttentionRequired,
@@ -698,82 +1221,303 @@ fn non_codex_managed_port_drives_apply_acknowledgment_evidence_and_source_free_r
         blocked
             .errors
             .iter()
-            .any(|error| error.code == "partial_operation_requires_acknowledgment"),
-        "{blocked:?}"
+            .any(|error| { error.code == "partial_operation_requires_acknowledgment" })
     );
-    assert!(!destination.exists());
-
-    let added = execute_fake_managed_lifecycle(
-        &paths,
-        &project,
-        NativeLifecycleKind::MarketplaceAdd,
-        Some(source.to_str().unwrap()),
-        Some("team"),
-        true,
-    );
-    assert_eq!(added.result, ResultClass::Completed, "{added:?}");
-    assert_changed(&added, true);
-    let projected = source.to_str().unwrap().as_bytes().to_vec();
-    assert_eq!(fs::read(&destination).unwrap(), projected);
-
-    let state =
-        FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone()).unwrap();
-    let state = match state.load().unwrap() {
-        DocumentState::Present(state) => state,
-        DocumentState::Missing => panic!("fake managed projection must persist state"),
-    };
-    let project_scope = absolute(&project);
-    let key = ResourceKey::new(
-        ResourceId::new("marketplace:team").unwrap(),
-        Scope::Project(project_scope),
-    );
-    let target = state
-        .resources()
-        .get(&key)
-        .and_then(|resource| resource.target(&fake_target_id()))
-        .expect("fake managed target state");
-    assert_eq!(
-        target
-            .source()
-            .map(Source::locator)
-            .map(SourceLocator::as_str),
-        source.to_str()
-    );
-    assert_eq!(
-        target.fingerprint(),
-        Some(&fingerprint_contents(&projected))
-    );
+    assert!(!optional.project.join(".fake/skills/demo").exists());
+    let accepted = optional.install_plugin(true);
+    assert_eq!(accepted.result, ResultClass::Completed, "{accepted:?}");
     assert!(matches!(
-        target.managed_projections(),
-        [ManagedProjection::Omitted { id, consequence }]
-            if id.as_str() == "optional:fake-hook"
-                && consequence.as_str() == "fake_optional_component_omitted"
+        optional.target_state().managed_projections(),
+        [
+            ManagedProjection::Skill { .. },
+            ManagedProjection::Mcp { .. },
+            ManagedProjection::Omitted { consequence, .. }
+        ] if consequence.as_str() == "fake_optional_component_omitted"
     ));
 
-    fs::remove_dir_all(&source).unwrap();
-    let removed = execute_fake_managed_lifecycle(
-        &paths,
-        &project,
-        NativeLifecycleKind::MarketplaceRemove,
-        None,
-        Some("team"),
-        false,
+    let required =
+        FakeManagedFixture::new("skilltap-fake-managed-required", &["required-unsupported"]);
+    assert_eq!(required.add_marketplace().result, ResultClass::Completed);
+    let blocked = required.install_plugin(true);
+    assert_eq!(
+        blocked.result,
+        ResultClass::AttentionRequired,
+        "{blocked:?}"
     );
-    assert_eq!(removed.result, ResultClass::Completed, "{removed:?}");
-    assert_changed(&removed, true);
-    assert!(!destination.exists());
-    let state =
-        FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone()).unwrap();
-    let state = match state.load().unwrap() {
-        DocumentState::Present(state) => state,
-        DocumentState::Missing => panic!("removal must preserve the state document"),
+    assert!(
+        blocked
+            .errors
+            .iter()
+            .any(|error| error.code == "required_unsupported"),
+        "{blocked:?}"
+    );
+    assert!(!required.project.join(".fake/skills/demo").exists());
+    evidence([
+        ManagedAcceptanceCheck::OmissionAcknowledgment,
+        ManagedAcceptanceCheck::RequiredUnsupported,
+    ])
+}
+
+fn fake_ownership_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-ownership", &[]);
+    assert_eq!(fixture.add_marketplace().result, ResultClass::Completed);
+    assert_eq!(fixture.install_plugin(false).result, ResultClass::Completed);
+    let target_before = fixture.target_state();
+    assert_eq!(target_before.ownership(), Ownership::Skilltap);
+
+    let repository =
+        FileStateRepository::new(&SystemFileSystem, fixture.paths.skilltap_config().clone())
+            .unwrap();
+    let mut document = match repository.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => unreachable!(),
+    };
+    let key = ResourceKey::new(
+        ResourceId::new("plugin:demo@team").unwrap(),
+        Scope::Project(absolute(&fs::canonicalize(&fixture.project).unwrap())),
+    );
+    let sibling = TargetResourceState::new(
+        HarnessId::new("codex").unwrap(),
+        Some(NativeId::new("demo@team").unwrap()),
+        Provenance::Native,
+        Ownership::Harness,
+        None,
+        None,
+        Some(fingerprint_contents(b"codex-sibling")),
+        None,
+        None,
+        Timestamp::new(1, 0).unwrap(),
+        None,
+    )
+    .unwrap();
+    let resource = document
+        .resources()
+        .get(&key)
+        .unwrap()
+        .clone()
+        .with_target(sibling)
+        .unwrap();
+    document = document.refresh_resource_state(resource).unwrap();
+    repository.replace(&document).unwrap();
+    let repeat = fixture.install_plugin(false);
+    assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
+    let document = match repository.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => unreachable!(),
     };
     assert!(
-        state
+        document
             .resources()
             .get(&key)
-            .and_then(|resource| resource.target(&fake_target_id()))
-            .is_none()
+            .and_then(|resource| resource.target(&HarnessId::new("codex").unwrap()))
+            .is_some()
+    );
+
+    fs::write(
+        fixture.project.join(".fake/skills/demo/SKILL.md"),
+        "drift\n",
+    )
+    .unwrap();
+    let drifted = execute_fake_managed_lifecycle(
+        &fixture.paths,
+        &fixture.project,
+        NativeLifecycleKind::PluginUpdate,
+        None,
+        Some("demo@team"),
+        false,
+    );
+    assert_error_code(&drifted, "managed_project_drifted");
+
+    let unowned = FakeManagedFixture::new("skilltap-fake-managed-unowned", &[]);
+    assert_eq!(unowned.add_marketplace().result, ResultClass::Completed);
+    fs::create_dir_all(unowned.project.join(".fake")).unwrap();
+    fs::write(unowned.project.join(".fake/config.toml"), "foreign\n").unwrap();
+    let rejected = unowned.install_plugin(false);
+    assert_error_code(&rejected, "managed_project_unowned");
+
+    let changed = FakeManagedFixture::new("skilltap-fake-managed-update", &[]);
+    assert_eq!(changed.add_marketplace().result, ResultClass::Completed);
+    assert_eq!(changed.install_plugin(false).result, ResultClass::Completed);
+    fs::write(
+        changed.source.join("projection/skill/SKILL.md"),
+        "---\nname: demo\ndescription: changed\n---\n",
+    )
+    .unwrap();
+    let rejected = changed.install_plugin(false);
+    assert_error_code(&rejected, "managed_project_update_required");
+
+    evidence([
+        ManagedAcceptanceCheck::OwnedDestination,
+        ManagedAcceptanceCheck::DriftRejected,
+        ManagedAcceptanceCheck::UnownedRejected,
+        ManagedAcceptanceCheck::UpdateRequired,
+        ManagedAcceptanceCheck::TargetStateIsolated,
+    ])
+}
+
+fn fake_pending_recovery_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-pending", &[]);
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let add = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::marketplace_add(fixture.source.to_str().unwrap()),
+    );
+    assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+    state_filesystem.fail_atomic_write_number(2);
+    let failed = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::plugin_install(),
+    );
+    assert_eq!(failed.result, ResultClass::AttentionRequired, "{failed:?}");
+    let pending = managed_target_state(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &fake_target_id(),
+        "plugin:demo@team",
+    );
+    assert!(pending.pending_managed_attempt().is_some());
+    let publications = managed_filesystem.tree_publish_successes.get();
+    let recovered = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::plugin_install(),
+    );
+    assert_eq!(recovered.result, ResultClass::Completed, "{recovered:?}");
+    assert_changed(&recovered, false);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications
+    );
+    let recovered = managed_target_state(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &fake_target_id(),
+        "plugin:demo@team",
+    );
+    assert!(recovered.pending_managed_attempt().is_none());
+    evidence([
+        ManagedAcceptanceCheck::PendingRetry,
+        ManagedAcceptanceCheck::RetryNoChange,
+    ])
+}
+
+fn fake_fresh_load_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-fresh-load", &[]);
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    managed_filesystem.fail_next_post_write_read();
+    let failed = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::marketplace_add(fixture.source.to_str().unwrap()),
+    );
+    assert_eq!(failed.result, ResultClass::AttentionRequired, "{failed:?}");
+    assert!(managed_filesystem.post_write_read_calls.get() > 0);
+    assert!(!fixture.project.join(".fake/managed-marketplace").exists());
+    let retry = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::marketplace_add(fixture.source.to_str().unwrap()),
+    );
+    assert_eq!(retry.result, ResultClass::Completed, "{retry:?}");
+    evidence([ManagedAcceptanceCheck::FreshLoadObserved])
+}
+
+fn fake_repeat_acceptance() -> ManagedAcceptanceEvidence {
+    let fixture = FakeManagedFixture::new("skilltap-fake-managed-repeat", &[]);
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let add = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::marketplace_add(fixture.source.to_str().unwrap()),
+    );
+    assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+    let install = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::plugin_install(),
+    );
+    assert_eq!(install.result, ResultClass::Completed, "{install:?}");
+    let project_before = snapshot_tree(&fixture.project).unwrap();
+    let state_before = managed_target_state(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &fake_target_id(),
+        "plugin:demo@team",
+    );
+    let resource_count = managed_state_document(&fixture.paths, &state_filesystem)
+        .resources()
+        .len();
+    let publications = managed_filesystem.tree_publish_successes.get();
+    let repeat = execute_fake_managed_lifecycle_with_filesystems(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest::plugin_install(),
+    );
+    assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
+    assert_changed(&repeat, false);
+    assert_eq!(snapshot_tree(&fixture.project).unwrap(), project_before);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications
+    );
+    let state_after = managed_target_state(
+        &fixture.paths,
+        &fixture.project,
+        &state_filesystem,
+        &fake_target_id(),
+        "plugin:demo@team",
+    );
+    assert_eq!(
+        state_after.managed_projections(),
+        state_before.managed_projections()
+    );
+    assert_eq!(state_after.managed_projections().len(), 2);
+    assert_eq!(
+        managed_state_document(&fixture.paths, &state_filesystem)
+            .resources()
+            .len(),
+        resource_count
+    );
+    evidence([
+        ManagedAcceptanceCheck::ImmediateRepeatNoChange,
+        ManagedAcceptanceCheck::NoDuplicateArtifacts,
+        ManagedAcceptanceCheck::NoDuplicateState,
+    ])
+}
+
+fn assert_error_code(outcome: &Outcome, code: &str) {
+    assert_eq!(
+        outcome.result,
+        ResultClass::AttentionRequired,
+        "{outcome:?}"
+    );
+    assert!(
+        outcome.errors.iter().any(|error| error.code == code),
+        "expected {code}: {outcome:?}"
     );
 }
 
@@ -865,7 +1609,603 @@ fn managed_skill_replacement_reports_clean_and_uncertain_restoration() {
     }
 }
 
-#[test]
+fn exercise_codex_managed_acceptance(
+    scenario: ManagedAcceptanceScenario,
+) -> ManagedAcceptanceEvidence {
+    match scenario {
+        ManagedAcceptanceScenario::ApplyProjection => codex_apply_projection_acceptance(),
+        ManagedAcceptanceScenario::ProjectionEvidence => codex_projection_evidence_acceptance(),
+        ManagedAcceptanceScenario::RemovalWithoutCheckout => {
+            codex_removal_without_checkout_acceptance()
+        }
+        ManagedAcceptanceScenario::Compatibility => codex_compatibility_acceptance(),
+        ManagedAcceptanceScenario::Ownership => codex_ownership_acceptance(),
+        ManagedAcceptanceScenario::PendingRecovery => {
+            managed_project_publication_failures_restore_then_retry_once_and_noop();
+            managed_terminal_journal_failure_recovers_without_duplicate_projection_publication();
+            evidence([
+                ManagedAcceptanceCheck::PendingRetry,
+                ManagedAcceptanceCheck::RetryNoChange,
+            ])
+        }
+        ManagedAcceptanceScenario::FreshLoadVerification => codex_fresh_load_acceptance(),
+        ManagedAcceptanceScenario::ImmediateRepeat => codex_repeat_acceptance(),
+    }
+}
+
+fn codex_fixture(prefix: &str) -> (TempRoot, PlatformPaths, PathBuf, PathBuf) {
+    let root = TempRoot::new(prefix).unwrap();
+    let paths = isolated_platform_paths(&root);
+    enable_codex_only(&paths);
+    let project = root.join("project");
+    let source = root.join("marketplace");
+    fs::create_dir_all(&project).unwrap();
+    write_managed_marketplace(&source);
+    (root, paths, project, source)
+}
+
+fn install_codex_fixture(
+    paths: &PlatformPaths,
+    project: &Path,
+    source: &Path,
+    managed_filesystem: &dyn ManagedProjectFileSystem,
+    state_filesystem: &dyn FileSystem,
+    acknowledged: bool,
+) -> Outcome {
+    let add = execute_managed_lifecycle(
+        paths,
+        project,
+        state_filesystem,
+        managed_filesystem,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+    );
+    assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+    let filesystem = SystemFileSystem;
+    let config = FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let inventory =
+        FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let state =
+        FileStateRepository::new(state_filesystem, paths.skilltap_config().clone()).unwrap();
+    let working_directory = FixedWorkingDirectory(absolute(project));
+    let git = NoGitRoot;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    let registry = skilltap_harnesses::TargetRegistry::canonical();
+    StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+        native_observation: NativeObservationMode::Disabled,
+        registry: &registry,
+        test_platform_paths: Some(paths.clone()),
+        test_managed_project_filesystem: Some(managed_filesystem),
+    }
+    .execute_native_lifecycle(
+        "managed acceptance install",
+        NativeLifecycleKind::PluginInstall,
+        &managed_scope(project),
+        &codex_target(),
+        NativeLifecycleValues {
+            source: Some("demo@team"),
+            name: None,
+        },
+        acknowledged,
+    )
+}
+
+fn codex_apply_projection_acceptance() -> ManagedAcceptanceEvidence {
+    let profile = ManagedProjectionProfile::codex();
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-apply");
+    fs::create_dir_all(project.join(".codex")).unwrap();
+    fs::write(
+        project.join(".codex/config.toml"),
+        "[mcp_servers.unmanaged]\ncommand = \"leave-me\"\n",
+    )
+    .unwrap();
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    assert!(project.join(profile.catalog_destinations()[0]).is_file());
+    assert!(!project.join(profile.catalog_destinations()[1]).exists());
+    for relative in ["SKILL.md", "scripts/run.sh", "references/usage.md"] {
+        assert!(
+            project.join(".agents/skills/demo").join(relative).is_file(),
+            "missing {relative}"
+        );
+    }
+    let mcp = fs::read_to_string(project.join(profile.mcp_destination().unwrap())).unwrap();
+    assert!(mcp.contains("[mcp_servers.demo-docs]"));
+    assert!(mcp.contains("[mcp_servers.unmanaged]"));
+    assert!(mcp.contains("command = \"leave-me\""));
+
+    let (_root, paths, legacy_project, legacy_source) =
+        codex_fixture("skilltap-codex-managed-legacy-catalog");
+    fs::create_dir_all(legacy_source.join(".claude-plugin")).unwrap();
+    fs::rename(
+        legacy_source.join(profile.catalog_destinations()[0]),
+        legacy_source.join(profile.catalog_destinations()[1]),
+    )
+    .unwrap();
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &legacy_project,
+        &legacy_source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    assert!(
+        legacy_project
+            .join(profile.catalog_destinations()[0])
+            .is_file()
+    );
+    assert!(
+        legacy_project
+            .join(profile.skill_destination())
+            .join("demo/SKILL.md")
+            .is_file()
+    );
+    evidence([
+        ManagedAcceptanceCheck::OneApplyCheckout,
+        ManagedAcceptanceCheck::CompleteSkillTree,
+    ])
+}
+
+fn codex_projection_evidence_acceptance() -> ManagedAcceptanceEvidence {
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-evidence");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    let target = managed_plugin_target(&paths, &project, &state_filesystem);
+    assert!(target.fingerprint().is_some());
+    assert!(matches!(
+        target.managed_projections(),
+        [ManagedProjection::Skill { id: skill, .. }, ManagedProjection::Mcp { id: mcp, .. }]
+            if skill.as_str() == "demo" && mcp.as_str() == "demo-docs"
+    ));
+    let repeated = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(repeated.result, ResultClass::Completed, "{repeated:?}");
+    assert_changed(&repeated, false);
+    evidence([
+        ManagedAcceptanceCheck::Manifest,
+        ManagedAcceptanceCheck::CurrentFingerprint,
+        ManagedAcceptanceCheck::DesiredFingerprint,
+    ])
+}
+
+fn codex_removal_without_checkout_acceptance() -> ManagedAcceptanceEvidence {
+    managed_marketplace_removal_uses_observed_projection_without_source();
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-remove");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    fs::remove_dir_all(&source).unwrap();
+    let plugin = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginRemove,
+        None,
+        Some("demo@team"),
+    );
+    assert_eq!(plugin.result, ResultClass::Completed, "{plugin:?}");
+    assert!(!project.join(".agents/skills/demo").exists());
+    assert!(!project.join(".codex/config.toml").exists());
+    let marketplace = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceRemove,
+        None,
+        Some("team"),
+    );
+    assert_eq!(
+        marketplace.result,
+        ResultClass::Completed,
+        "{marketplace:?}"
+    );
+    assert!(!project.join(".agents/plugins/marketplace.json").exists());
+    evidence([ManagedAcceptanceCheck::RemoveWithoutCheckout])
+}
+
+fn codex_compatibility_acceptance() -> ManagedAcceptanceEvidence {
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-optional");
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"plugin-relative":{"command":"${CODEX_PLUGIN_ROOT}/bin/server"}}}"#,
+    )
+    .unwrap();
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let blocked = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_error_code(&blocked, "partial_operation_requires_acknowledgment");
+    assert!(!project.join(".agents/skills/demo").exists());
+    let accepted = execute_managed_lifecycle_with_acknowledgment(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        ManagedLifecycleTestRequest {
+            kind: NativeLifecycleKind::PluginInstall,
+            source: Some("demo@team"),
+            name: None,
+            acknowledged: true,
+        },
+    );
+    assert_eq!(accepted.result, ResultClass::Completed, "{accepted:?}");
+    assert!(matches!(
+        managed_plugin_target(&paths, &project, &state_filesystem).managed_projections(),
+        [ManagedProjection::Skill { .. }, ManagedProjection::Omitted { consequence, .. }]
+            if consequence.as_str() == "plugin_root_relative_mcp_omitted"
+    ));
+
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-required");
+    fs::remove_file(source.join("plugins/demo/skills/demo/SKILL.md")).unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"plugin-relative":{"command":"${CODEX_PLUGIN_ROOT}/bin/server"}}}"#,
+    )
+    .unwrap();
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let blocked = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        true,
+    );
+    assert_eq!(
+        blocked.result,
+        ResultClass::AttentionRequired,
+        "{blocked:?}"
+    );
+    assert!(
+        blocked.errors.iter().any(|error| {
+            matches!(
+                error.code.as_str(),
+                "managed_project_plugin_invalid" | "managed_project_plugin_unsupported"
+            )
+        }),
+        "{blocked:?}"
+    );
+    assert!(!project.join(".agents/skills/demo").exists());
+    assert!(!project.join(".codex/config.toml").exists());
+    evidence([
+        ManagedAcceptanceCheck::OmissionAcknowledgment,
+        ManagedAcceptanceCheck::RequiredUnsupported,
+    ])
+}
+
+fn codex_ownership_acceptance() -> ManagedAcceptanceEvidence {
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-ownership");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    assert_eq!(
+        managed_plugin_target(&paths, &project, &state_filesystem).ownership(),
+        Ownership::Skilltap
+    );
+
+    let repository =
+        FileStateRepository::new(&state_filesystem, paths.skilltap_config().clone()).unwrap();
+    let mut document = match repository.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => unreachable!(),
+    };
+    let key = ResourceKey::new(
+        ResourceId::new("plugin:demo@team").unwrap(),
+        Scope::Project(absolute(&fs::canonicalize(&project).unwrap())),
+    );
+    let sibling = TargetResourceState::new(
+        fake_target_id(),
+        Some(NativeId::new("demo@team").unwrap()),
+        Provenance::Native,
+        Ownership::Harness,
+        None,
+        None,
+        Some(fingerprint_contents(b"fake-sibling")),
+        None,
+        None,
+        Timestamp::new(1, 0).unwrap(),
+        None,
+    )
+    .unwrap();
+    let resource = document
+        .resources()
+        .get(&key)
+        .unwrap()
+        .clone()
+        .with_target(sibling)
+        .unwrap();
+    document = document.refresh_resource_state(resource).unwrap();
+    repository.replace(&document).unwrap();
+    let repeat = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
+    let document = match repository.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => unreachable!(),
+    };
+    assert!(
+        document
+            .resources()
+            .get(&key)
+            .and_then(|resource| resource.target(&fake_target_id()))
+            .is_some()
+    );
+
+    fs::write(project.join(".agents/skills/demo/SKILL.md"), "drift\n").unwrap();
+    let drifted = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginUpdate,
+        None,
+        Some("demo@team"),
+    );
+    assert_error_code(&drifted, "managed_project_drifted");
+
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-unowned");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let add = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+    );
+    assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+    fs::create_dir_all(project.join(".codex")).unwrap();
+    fs::write(
+        project.join(".codex/config.toml"),
+        "[mcp_servers.demo-docs]\ncommand = \"foreign\"\n",
+    )
+    .unwrap();
+    let unowned = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_error_code(&unowned, "managed_project_unowned");
+
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-update");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    fs::write(
+        source.join("plugins/demo/skills/demo/SKILL.md"),
+        "---\nname: demo\ndescription: changed\n---\n",
+    )
+    .unwrap();
+    let update_required = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_error_code(&update_required, "managed_project_update_required");
+
+    evidence([
+        ManagedAcceptanceCheck::OwnedDestination,
+        ManagedAcceptanceCheck::DriftRejected,
+        ManagedAcceptanceCheck::UnownedRejected,
+        ManagedAcceptanceCheck::UpdateRequired,
+        ManagedAcceptanceCheck::TargetStateIsolated,
+    ])
+}
+
+fn codex_fresh_load_acceptance() -> ManagedAcceptanceEvidence {
+    managed_project_tree_limits_preserve_planning_and_revalidation_failures();
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-fresh-load");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    managed_filesystem.fail_next_post_write_read();
+    let failed = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+    );
+    assert_eq!(failed.result, ResultClass::AttentionRequired, "{failed:?}");
+    assert!(managed_filesystem.post_write_read_calls.get() > 0);
+    assert!(!project.join(".agents/plugins/marketplace.json").exists());
+    let retry = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+    );
+    assert_eq!(retry.result, ResultClass::Completed, "{retry:?}");
+    evidence([ManagedAcceptanceCheck::FreshLoadObserved])
+}
+
+fn codex_repeat_acceptance() -> ManagedAcceptanceEvidence {
+    let (_root, paths, project, source) = codex_fixture("skilltap-codex-managed-repeat");
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+    let installed = install_codex_fixture(
+        &paths,
+        &project,
+        &source,
+        &managed_filesystem,
+        &state_filesystem,
+        false,
+    );
+    assert_eq!(installed.result, ResultClass::Completed, "{installed:?}");
+    let project_before = snapshot_tree(&project).unwrap();
+    let state_before = managed_plugin_target(&paths, &project, &state_filesystem);
+    let resource_count = managed_state_document(&paths, &state_filesystem)
+        .resources()
+        .len();
+    let publications = managed_filesystem.tree_publish_successes.get();
+    let repeat = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
+    assert_changed(&repeat, false);
+    assert_eq!(snapshot_tree(&project).unwrap(), project_before);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications
+    );
+    let state_after = managed_plugin_target(&paths, &project, &state_filesystem);
+    assert_eq!(
+        state_after.managed_projections(),
+        state_before.managed_projections()
+    );
+    assert_eq!(state_after.managed_projections().len(), 2);
+    assert_eq!(
+        managed_state_document(&paths, &state_filesystem)
+            .resources()
+            .len(),
+        resource_count
+    );
+    evidence([
+        ManagedAcceptanceCheck::ImmediateRepeatNoChange,
+        ManagedAcceptanceCheck::NoDuplicateArtifacts,
+        ManagedAcceptanceCheck::NoDuplicateState,
+    ])
+}
+
+fn execute_managed_lifecycle_with_acknowledgment(
+    paths: &PlatformPaths,
+    project: &Path,
+    state_filesystem: &dyn FileSystem,
+    managed_filesystem: &dyn ManagedProjectFileSystem,
+    request: ManagedLifecycleTestRequest<'_>,
+) -> Outcome {
+    let ManagedLifecycleTestRequest {
+        kind,
+        source,
+        name,
+        acknowledged,
+    } = request;
+    let filesystem = SystemFileSystem;
+    let config = FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let inventory =
+        FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let state =
+        FileStateRepository::new(state_filesystem, paths.skilltap_config().clone()).unwrap();
+    let working_directory = FixedWorkingDirectory(absolute(project));
+    let git = NoGitRoot;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    let registry = skilltap_harnesses::TargetRegistry::canonical();
+    StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+        native_observation: NativeObservationMode::Disabled,
+        registry: &registry,
+        test_platform_paths: Some(paths.clone()),
+        test_managed_project_filesystem: Some(managed_filesystem),
+    }
+    .execute_native_lifecycle(
+        "managed lifecycle acceptance",
+        kind,
+        &managed_scope(project),
+        &codex_target(),
+        NativeLifecycleValues { source, name },
+        acknowledged,
+    )
+}
+
 fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
     #[derive(Clone, Copy, Debug)]
     enum Boundary {
@@ -1008,7 +2348,6 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
     }
 }
 
-#[test]
 fn managed_marketplace_removal_uses_observed_projection_without_source() {
     let root = TempRoot::new("skilltap-managed-marketplace-source-free-remove").unwrap();
     let paths = isolated_platform_paths(&root);
@@ -1057,7 +2396,6 @@ fn managed_marketplace_removal_uses_observed_projection_without_source() {
     );
 }
 
-#[test]
 fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
     for post_plan_growth in [false, true] {
         let root = TempRoot::new("skilltap-managed-tree-limit-failure").unwrap();
@@ -1122,7 +2460,6 @@ fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
     }
 }
 
-#[test]
 fn managed_terminal_journal_failure_recovers_without_duplicate_projection_publication() {
     let root = TempRoot::new("skilltap-managed-terminal-journal").unwrap();
     let paths = isolated_platform_paths(&root);
