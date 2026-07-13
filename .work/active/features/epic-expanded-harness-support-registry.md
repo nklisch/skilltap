@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: []
@@ -11,7 +11,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-12
+updated: 2026-07-13
 ---
 
 # Typed Target Registry and Adapter Contract
@@ -869,4 +869,63 @@ restructured to be executable.
   of possible-values. Fallback: keep derive for structure, override only the
   `help` text via `Command::mut_arg` at entrypoint build time. Exact rendered
   text is verified by one assertion, not by hand-maintained snapshots.
+
+## Implementation summary (children complete)
+
+All five child stories are `done` and reviewed, so the parent feature advances
+`implementing → review` for its own feature review pass. This transition does
+not approve the feature; it only signals that the contracted child scope is
+complete and the parent is ready for feature-level review.
+
+Realized architecture (matches the design above):
+
+- Unit 1 (`registry-contract`, done): `TargetRegistry`, `HarnessAdapter`, and
+  the optional port traits (`NativeLifecycleVector`, `InstructionBridgePort`,
+  `SkillProjectionPort`) in `crates/harnesses/src/registry.rs`. Canonical
+  registry yields exactly `codex` and `claude`; both are `FirstPartyPlugin`.
+- Unit 2 (`registry-adapters`, done): `CodexAdapter` and `ClaudeAdapter`
+  migrated onto the trait; capability matrices, observation codecs, lifecycle
+  vectors, instruction bridges, and skill projection moved verbatim into
+  adapter modules / `adapter_helpers`.
+- Unit 3 (`registry-config`, done): `HarnessPolicies { codex, claude }`
+  replaced by `HarnessPolicyMap(BTreeMap<HarnessId, HarnessPolicy>)`;
+  schema-1 byte compatibility pinned by round-trip tests and the
+  `stable_iter` ordering shim.
+- Unit 4 (`registry-cli`, done): `TargetRegistry::canonical()` built once in
+  `run_from`; help augmentation, target membership validation,
+  `target_not_registered`, bootstrap first-party filtering, instruction
+  bridges (including Claude alternates), skill destinations, lifecycle
+  dispatch/revalidation, status labels, and first-use reporting all dispatch
+  through adapter ports or adapter metadata. `HarnessKind`, the request
+  target duplication, and every behavior-dispatching `match target.as_str()`
+  in `crates/cli/src` are gone.
+- Unit 5 (`registry-test-support`, done): `FakeHarnessProfile` plus the
+  reusable `acceptance_matrix`; `FakeNativeMode::CodexVersion`/`ClaudeVersion`
+  removed; fixture publication uses hard link on the same filesystem and a
+  sealed-artifact symlink cross-device to avoid a copy-then-exec race.
+
+Newly added adapter metadata / port methods (all adapter-private contract
+extensions; no new behavior-dispatch list in CLI):
+
+- `HarnessAdapter`: `decode_version_with_limits` (defaulted), `native_root`,
+  `managed_project_lifecycle`, `bootstrap_next_action`,
+  `bootstrap_capability_next_action`.
+- `NativeLifecycleVector::observation_scope`.
+- `InstructionBridgePort::alternate_project_bridges`.
+- `AdapterObservationPaths::surface_labels`.
+- `NativeLifecycleDispatch` (binds a semantic request to the selected
+  `HarnessId` and lifecycle vector) and `NativeLifecyclePort::
+  with_foreign_operations` for mixed native/managed plans.
+
+Verification at the head of this transition:
+
+- `cargo test --workspace --all-targets` — 558 passed across 18 suites.
+- `cargo clippy --workspace --all-targets -- -D warnings` — clean.
+- `cargo fmt --all -- --check`, `git diff --check` — clean.
+- `git grep -n HarnessKind -- crates` — no matches.
+
+Sibling adapter features that `depends_on: [epic-expanded-harness-support-
+registry, ...]` are now unblocked at the dependency-graph level; they still
+wait on their other declared dependencies (e.g. managed fallback parity)
+before becoming ready.
 
