@@ -243,66 +243,9 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
 
         let mut applied_trees: Vec<&ManagedProjectPluginWrite> = Vec::new();
         for plugin in &entry.trees {
-            let result = (|| -> Result<(), ExecutionError> {
-                match (&plugin.expected_tree, &plugin.desired_tree) {
-                    (None, Some(tree)) => {
-                        self.filesystem
-                            .publish_tree_no_follow(&plugin.root, &plugin.destination, tree.files())
-                            .map_err(|_| {
-                                managed_project_apply_failure(
-                                    "The managed project plugin could not be published.",
-                                )
-                            })?;
-                    }
-                    (Some(_), None) => {
-                        let identity = plugin.expected_identity.ok_or_else(|| {
-                            managed_project_apply_failure(
-                                "The managed project plugin has no owned identity.",
-                            )
-                        })?;
-                        self.filesystem
-                            .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
-                            .map_err(|_| {
-                                managed_project_apply_failure(
-                                    "The managed project plugin could not be removed safely.",
-                                )
-                            })?;
-                    }
-                    (Some(previous), Some(next)) if previous != next => {
-                        let identity = plugin.expected_identity.ok_or_else(|| {
-                            managed_project_apply_failure(
-                                "The managed project plugin has no owned identity.",
-                            )
-                        })?;
-                        self.filesystem
-                            .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
-                            .map_err(|_| {
-                                managed_project_apply_failure(
-                                    "The managed project plugin could not be replaced safely.",
-                                )
-                            })?;
-                        if self
-                            .filesystem
-                            .publish_tree_no_follow(&plugin.root, &plugin.destination, next.files())
-                            .is_err()
-                        {
-                            let _ = self.filesystem.publish_tree_no_follow(
-                                &plugin.root,
-                                &plugin.destination,
-                                previous.files(),
-                            );
-                            return Err(managed_project_apply_failure(
-                                "The replacement project plugin could not be published.",
-                            ));
-                        }
-                    }
-                    _ => {}
-                }
-                Ok(())
-            })();
-            if let Err(error) = result {
+            if let Err(detail) = apply_managed_project_tree(self.filesystem, plugin) {
                 rollback_managed_project(self.filesystem, &[], &applied_trees);
-                return Err(error);
+                return Err(managed_project_apply_failure(detail));
             }
             applied_trees.push(plugin);
         }
@@ -353,6 +296,48 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
             }
         }
         Ok(OperationOutcome::Applied)
+    }
+}
+
+fn apply_managed_project_tree(
+    filesystem: &dyn ManagedProjectFileSystem,
+    plugin: &ManagedProjectPluginWrite,
+) -> Result<(), &'static str> {
+    match (&plugin.expected_tree, &plugin.desired_tree) {
+        (None, Some(tree)) => filesystem
+            .publish_tree_no_follow(&plugin.root, &plugin.destination, tree.files())
+            .map(|_| ())
+            .map_err(|_| "The managed project plugin could not be published."),
+        (Some(_), None) => {
+            let identity = plugin
+                .expected_identity
+                .ok_or("The managed project plugin has no owned identity.")?;
+            filesystem
+                .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
+                .map(|_| ())
+                .map_err(|_| "The managed project plugin could not be removed safely.")
+        }
+        (Some(previous), Some(next)) if previous != next => {
+            let identity = plugin
+                .expected_identity
+                .ok_or("The managed project plugin has no owned identity.")?;
+            filesystem
+                .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
+                .map_err(|_| "The managed project plugin could not be replaced safely.")?;
+            if filesystem
+                .publish_tree_no_follow(&plugin.root, &plugin.destination, next.files())
+                .is_err()
+            {
+                let _ = filesystem.publish_tree_no_follow(
+                    &plugin.root,
+                    &plugin.destination,
+                    previous.files(),
+                );
+                return Err("The replacement project plugin could not be published.");
+            }
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }
 

@@ -386,8 +386,7 @@ fn execute_system_native_lifecycle(
             kind,
             scope,
             target,
-            source,
-            name,
+            crate::application::NativeLifecycleValues { source, name },
             acknowledged,
         )
     })

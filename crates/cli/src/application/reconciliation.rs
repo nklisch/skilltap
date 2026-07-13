@@ -186,8 +186,7 @@ impl StatusApplication<'_> {
                     NativeLifecycleKind::MarketplaceAdd,
                     &child_scope,
                     &child_target,
-                    source,
-                    name,
+                    NativeLifecycleValues { source, name },
                     acknowledged,
                 ),
                 ResourceKind::Plugin => self.execute_native_lifecycle(
@@ -195,8 +194,10 @@ impl StatusApplication<'_> {
                     NativeLifecycleKind::PluginInstall,
                     &child_scope,
                     &child_target,
-                    name,
-                    None,
+                    NativeLifecycleValues {
+                        source: name,
+                        name: None,
+                    },
                     acknowledged,
                 ),
                 ResourceKind::StandaloneSkill => match source {

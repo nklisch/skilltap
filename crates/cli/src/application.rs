@@ -920,6 +920,11 @@ struct NativeLifecycleSpec {
     source: Option<Source>,
 }
 
+pub(crate) struct NativeLifecycleValues<'a> {
+    pub(crate) source: Option<&'a str>,
+    pub(crate) name: Option<&'a str>,
+}
+
 fn native_resource_kind(kind: NativeLifecycleKind) -> ResourceKind {
     match kind {
         NativeLifecycleKind::MarketplaceAdd
@@ -1264,17 +1269,29 @@ struct PlannedManagedProjectLifecycle {
     seed: Option<ResourceState>,
 }
 
+struct ManagedCodexProjectPlanContext<'a> {
+    project: &'a AbsolutePath,
+    documents: &'a StatusDocuments,
+    paths: &'a PlatformPaths,
+    timestamp: Timestamp,
+    json_limits: JsonLimits,
+    acknowledged: bool,
+}
+
 fn plan_managed_codex_project_lifecycle(
     kind: NativeLifecycleKind,
     request: &NativeLifecycleSpec,
     resource: &DesiredResource,
-    project: &AbsolutePath,
-    documents: &StatusDocuments,
-    paths: &PlatformPaths,
-    timestamp: Timestamp,
-    json_limits: JsonLimits,
-    acknowledged: bool,
+    context: ManagedCodexProjectPlanContext<'_>,
 ) -> Result<PlannedManagedProjectLifecycle, ErrorDetail> {
+    let ManagedCodexProjectPlanContext {
+        project,
+        documents,
+        paths,
+        timestamp,
+        json_limits,
+        acknowledged,
+    } = context;
     let codex = HarnessId::new("codex").expect("static harness id is valid");
     let catalog_path = AbsolutePath::new(format!(
         "{}/.agents/plugins/marketplace.json",
@@ -1391,18 +1408,20 @@ fn plan_managed_codex_project_lifecycle(
                 })?;
                 let plugin_tree =
                     read_complete_codex_plugin(&plugin_root, &marketplace_source, json_limits)?;
-                let (trees, config_write, current_fingerprint, fingerprint) =
-                    plan_codex_component_projections(
-                        project,
-                        &filesystem,
-                        &plugin_tree,
-                        kind,
-                        acknowledged,
-                    )?;
+                let projection = plan_codex_component_projections(
+                    project,
+                    &filesystem,
+                    &plugin_tree,
+                    kind,
+                    acknowledged,
+                )?;
                 let mut files = Vec::new();
-                if let Some(config) = config_write {
+                if let Some(config) = projection.config {
                     files.push(config);
                 }
+                let trees = projection.trees;
+                let current_fingerprint = projection.current_fingerprint;
+                let fingerprint = projection.desired_fingerprint;
                 let source = if marketplace_source.kind() == SourceKind::Git {
                     let relative = std::path::Path::new(plugin_root.as_str())
                         .strip_prefix(std::path::Path::new(resolved.root.as_str()))
@@ -1627,15 +1646,7 @@ fn plan_codex_component_projections(
     plugin: &ArtifactTree,
     kind: NativeLifecycleKind,
     acknowledged: bool,
-) -> Result<
-    (
-        Vec<ManagedProjectPluginWrite>,
-        Option<ManagedProjectFileWrite>,
-        Option<Fingerprint>,
-        Option<Fingerprint>,
-    ),
-    ErrorDetail,
-> {
+) -> Result<CodexComponentProjectionPlan, ErrorDetail> {
     let removal = kind == NativeLifecycleKind::PluginRemove;
     let mut skill_names = BTreeSet::new();
     let mut unsupported_optional = false;
@@ -1728,22 +1739,29 @@ fn plan_codex_component_projections(
             expected_identity: current.map(|(identity, _)| identity),
         });
     }
-    let (config, current_mcp, desired_mcp) =
-        plan_codex_mcp_config(project, filesystem, plugin, removal, acknowledged)?;
-    current_parts.extend(current_mcp);
-    desired_parts.extend(desired_mcp);
-    if trees.is_empty() && config.is_none() {
+    let mcp = plan_codex_mcp_config(project, filesystem, plugin, removal, acknowledged)?;
+    current_parts.extend(mcp.current_fingerprint_bytes);
+    desired_parts.extend(mcp.desired_fingerprint_bytes);
+    if trees.is_empty() && mcp.write.is_none() {
         return Err(managed_project_error(
             "managed_project_plugin_unsupported",
             "The plugin has no faithful project skill or MCP projection.",
         ));
     }
-    Ok((
+    Ok(CodexComponentProjectionPlan {
         trees,
-        config,
-        (!current_parts.is_empty()).then(|| fingerprint_contents(&current_parts)),
-        (!removal).then(|| fingerprint_contents(&desired_parts)),
-    ))
+        config: mcp.write,
+        current_fingerprint: (!current_parts.is_empty())
+            .then(|| fingerprint_contents(&current_parts)),
+        desired_fingerprint: (!removal).then(|| fingerprint_contents(&desired_parts)),
+    })
+}
+
+struct CodexComponentProjectionPlan {
+    trees: Vec<ManagedProjectPluginWrite>,
+    config: Option<ManagedProjectFileWrite>,
+    current_fingerprint: Option<Fingerprint>,
+    desired_fingerprint: Option<Fingerprint>,
 }
 
 fn append_projection_tree(
@@ -1765,7 +1783,7 @@ fn plan_codex_mcp_config(
     plugin: &ArtifactTree,
     removal: bool,
     acknowledged: bool,
-) -> Result<(Option<ManagedProjectFileWrite>, Vec<u8>, Vec<u8>), ErrorDetail> {
+) -> Result<CodexMcpConfigPlan, ErrorDetail> {
     let mcp_file = [".codex-plugin/mcp.json", ".mcp.json", "mcp.json"]
         .iter()
         .find_map(|path| {
@@ -1774,7 +1792,7 @@ fn plan_codex_mcp_config(
                 .get(&skilltap_core::domain::RelativeArtifactPath::new(*path).ok()?)
         });
     let Some(mcp_file) = mcp_file else {
-        return Ok((None, Vec::new(), Vec::new()));
+        return Ok(CodexMcpConfigPlan::empty());
     };
     let value: serde_json::Value = serde_json::from_slice(mcp_file.contents()).map_err(|_| {
         managed_project_error(
@@ -1863,7 +1881,7 @@ fn plan_codex_mcp_config(
         }
     }
     if compatible_servers == 0 {
-        return Ok((None, Vec::new(), Vec::new()));
+        return Ok(CodexMcpConfigPlan::empty());
     }
     if mcp_servers.is_empty() {
         document.remove("mcp_servers");
@@ -1882,15 +1900,31 @@ fn plan_codex_mcp_config(
                 .into_bytes(),
         )
     };
-    Ok((
-        Some(ManagedProjectFileWrite {
+    Ok(CodexMcpConfigPlan {
+        write: Some(ManagedProjectFileWrite {
             path,
             expected,
             desired,
         }),
-        current_parts,
-        desired_parts,
-    ))
+        current_fingerprint_bytes: current_parts,
+        desired_fingerprint_bytes: desired_parts,
+    })
+}
+
+struct CodexMcpConfigPlan {
+    write: Option<ManagedProjectFileWrite>,
+    current_fingerprint_bytes: Vec<u8>,
+    desired_fingerprint_bytes: Vec<u8>,
+}
+
+impl CodexMcpConfigPlan {
+    fn empty() -> Self {
+        Self {
+            write: None,
+            current_fingerprint_bytes: Vec::new(),
+            desired_fingerprint_bytes: Vec::new(),
+        }
+    }
 }
 
 fn mcp_depends_on_plugin_root(server: &serde_json::Value) -> bool {

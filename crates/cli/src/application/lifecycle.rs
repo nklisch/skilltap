@@ -78,8 +78,10 @@ impl StatusApplication<'_> {
                     NativeLifecycleKind::PluginUpdate,
                     &child_scope,
                     &TargetArgs::default(),
-                    None,
-                    Some(&name),
+                    NativeLifecycleValues {
+                        source: None,
+                        name: Some(&name),
+                    },
                     false,
                 ),
                 ResourceKind::StandaloneSkill => self.execute_skill_update(
@@ -210,10 +212,13 @@ impl StatusApplication<'_> {
         kind: NativeLifecycleKind,
         requested_scope: &ScopeArgs,
         target: &TargetArgs,
-        source_value: Option<&str>,
-        name_value: Option<&str>,
+        values: NativeLifecycleValues<'_>,
         acknowledged: bool,
     ) -> Outcome {
+        let NativeLifecycleValues {
+            source: source_value,
+            name: name_value,
+        } = values;
         let (documents, mut outcome) = match self.load_documents(command) {
             Ok(value) => value,
             Err(outcome) => return *outcome,
@@ -472,12 +477,14 @@ impl StatusApplication<'_> {
                             kind,
                             &request,
                             &resource,
-                            project,
-                            &documents,
-                            &paths,
-                            observed_at,
-                            json_limits,
-                            acknowledged,
+                            ManagedCodexProjectPlanContext {
+                                project,
+                                documents: &documents,
+                                paths: &paths,
+                                timestamp: observed_at,
+                                json_limits,
+                                acknowledged,
+                            },
                         ) {
                             Ok(planned) => planned,
                             Err(error) => {
