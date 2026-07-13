@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-target-evidence
 kind: story
-stage: review
+stage: done
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on: []
@@ -59,3 +59,19 @@ fixtures as one atomic contract change.
   no-op result classification, and absent project-scope removal behavior; root
   explicitly assigned those shared code/test hunks to this atomic commit.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep lane at review weight `standard` (explicit
+caller selection). Strict wire rejection, distinct native/materialized sibling
+bindings, exact target journaling, selected-target removal/update, publication,
+and byte-preserving sibling behavior all pass focused tests; the full workspace
+passes 519 tests. Persistence, migration policy, idempotency, contract/API
+behavior, breaking changes, and foundation alignment were reviewed. The clean
+v3 break intentionally rejects the old state shape.

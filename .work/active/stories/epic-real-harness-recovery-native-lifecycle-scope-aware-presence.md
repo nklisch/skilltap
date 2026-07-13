@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-scope-aware-presence
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -64,3 +64,18 @@ re-observation.
   concurrent per-target state migration's unfinished CLI call sites and is
   ready to run when that shared transition compiles.
 - Adjacent issues parked: none.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep lane at review weight `standard` (explicit
+caller selection). Adapter, isolated subprocess, and compiled CLI regressions
+prove that `user` evidence cannot satisfy `local`, same-name siblings remain
+distinct, and missing/malformed/duplicate scope evidence fails closed. The
+full workspace passes 519 tests. Correctness, tests, contract behavior,
+failure handling, data exposure, and foundation alignment were reviewed.

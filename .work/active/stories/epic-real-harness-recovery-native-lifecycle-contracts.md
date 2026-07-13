@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-contracts
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -78,3 +78,19 @@ presence now requires the exact qualified identity plus the requested `user`
 or `local` scope; missing, malformed, duplicate, or contradictory evidence is
 unknown. Adapter and isolated subprocess suites pass, and the compiled repair
 regression is present for the coordinating state-migration pass to execute.
+
+## Review (2026-07-12, follow-up)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep lane at review weight `standard` (explicit
+caller selection). Exact profile, argument-vector, environment, working
+directory, scope-aware presence, malformed-output, and compiled repair
+regressions pass. The full workspace passes 519 tests. Correctness, tests,
+contract/API behavior, security boundaries, breaking changes, foundation-doc
+alignment, and operational lifecycle were reviewed; no applicable lens was
+skipped.
