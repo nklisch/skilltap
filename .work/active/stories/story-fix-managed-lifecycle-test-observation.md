@@ -5,7 +5,7 @@ stage: done
 tags: [bug, testing]
 parent: null
 depends_on: []
-release_binding: null
+release_binding: 3.0.3
 research_refs: []
 research_origin: null
 gate_origin: null
