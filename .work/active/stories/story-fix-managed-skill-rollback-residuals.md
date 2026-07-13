@@ -1,7 +1,7 @@
 ---
 id: story-fix-managed-skill-rollback-residuals
 kind: story
-stage: review
+stage: done
 tags: [bug]
 parent: null
 depends_on: []
@@ -54,3 +54,26 @@ restored and the recovery surface is named. Retain a clean-restoration case.
 - `cargo test -p skilltap managed_skill_replacement_reports_clean_and_uncertain_restoration -- --nocapture`
 - `cargo test -p skilltap`
 - `cargo clippy -p skilltap --all-targets -- -D warnings`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep review at effective `standard` weight (explicit
+caller selection), performed in same-harness fresh context over commit
+`2b65680`. Replacement failure restores only through the no-follow tree port,
+captures and rechecks the identity returned by a successful publication, and
+compares the complete restored artifact tree with the durable backup. Both
+clean and failed restore paths name the exact managed destination; the failed
+path is conservatively described as unproven and never as restored. The fault
+fixture schedules the replacement and restore failures independently while
+delegating successful publication/load behavior to the real filesystem
+adapter, so the regression is behavioral rather than tautological. The focused
+clean/uncertain regression passes. Correctness, rollback/race safety,
+diagnostic truthfulness, and test-integrity lenses found no remaining issue;
+the change does not alter a public schema, CLI, or foundation assertion.
