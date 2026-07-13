@@ -33,6 +33,8 @@ struct RecordingFaultFileSystem {
     atomic_write_calls: Cell<usize>,
     tree_publish_attempts: Cell<usize>,
     tree_publish_successes: Cell<usize>,
+    bounded_tree_load_calls: Cell<usize>,
+    grow_tree_on_bounded_load_at: Cell<Option<usize>>,
 }
 
 impl RecordingFaultFileSystem {
@@ -45,6 +47,8 @@ impl RecordingFaultFileSystem {
             atomic_write_calls: Cell::new(0),
             tree_publish_attempts: Cell::new(0),
             tree_publish_successes: Cell::new(0),
+            bounded_tree_load_calls: Cell::new(0),
+            grow_tree_on_bounded_load_at: Cell::new(None),
         }
     }
 
@@ -66,6 +70,11 @@ impl RecordingFaultFileSystem {
     fn fail_atomic_write_number(&self, number: usize) {
         self.atomic_write_calls.set(0);
         self.fail_atomic_write_at.set(Some(number));
+    }
+
+    fn grow_oversized_tree_on_bounded_load(&self, number: usize) {
+        self.bounded_tree_load_calls.set(0);
+        self.grow_tree_on_bounded_load_at.set(Some(number));
     }
 
     fn injected(action: FileSystemAction, path: AbsolutePath) -> RuntimeError {
@@ -204,6 +213,18 @@ impl ConfinedFileSystem for RecordingFaultFileSystem {
         ),
         RuntimeError,
     > {
+        let call = self.bounded_tree_load_calls.get() + 1;
+        self.bounded_tree_load_calls.set(call);
+        if self.grow_tree_on_bounded_load_at.get() == Some(call) {
+            self.grow_tree_on_bounded_load_at.set(None);
+            let tree = Self::confined_path(root, destination);
+            fs::create_dir_all(tree.as_str()).unwrap();
+            let oversized = Path::new(tree.as_str()).join("oversized");
+            fs::File::create(oversized)
+                .unwrap()
+                .set_len(limits.file_bytes() + 1)
+                .unwrap();
+        }
         self.delegate
             .load_tree_bounded_no_follow(root, destination, limits)
     }
@@ -706,6 +727,71 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
         assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
         assert_changed(&repeat, false);
         assert_eq!(managed_filesystem.tree_publish_successes.get(), published);
+    }
+}
+
+#[test]
+fn managed_project_tree_limits_preserve_planning_and_revalidation_failures() {
+    for post_plan_growth in [false, true] {
+        let root = TempRoot::new("skilltap-managed-tree-limit-failure").unwrap();
+        let paths = isolated_platform_paths(&root);
+        enable_codex_only(&paths);
+        let project = root.join("project");
+        let source = root.join("marketplace");
+        fs::create_dir_all(&project).unwrap();
+        write_managed_marketplace(&source);
+        let managed_filesystem = RecordingFaultFileSystem::new();
+        let state_filesystem = RecordingFaultFileSystem::new();
+        let add = execute_managed_lifecycle(
+            &paths,
+            &project,
+            &state_filesystem,
+            &managed_filesystem,
+            NativeLifecycleKind::MarketplaceAdd,
+            Some(source.to_str().unwrap()),
+            Some("team"),
+        );
+        assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+
+        if post_plan_growth {
+            managed_filesystem.grow_oversized_tree_on_bounded_load(2);
+        } else {
+            let hostile = project.join(".agents/skills/demo");
+            fs::create_dir_all(&hostile).unwrap();
+            fs::File::create(hostile.join("oversized"))
+                .unwrap()
+                .set_len(managed_project_tree_observation_limits().file_bytes() + 1)
+                .unwrap();
+        }
+
+        let install = execute_managed_lifecycle(
+            &paths,
+            &project,
+            &state_filesystem,
+            &managed_filesystem,
+            NativeLifecycleKind::PluginInstall,
+            Some("demo@team"),
+            None,
+        );
+        assert_eq!(
+            install.result,
+            ResultClass::AttentionRequired,
+            "post_plan_growth={post_plan_growth} outcome={install:?}"
+        );
+        let expected_code = if post_plan_growth {
+            "native_command_failed"
+        } else {
+            "managed_project_plugin_unreadable"
+        };
+        assert!(
+            install
+                .errors
+                .iter()
+                .any(|error| error.code == expected_code),
+            "post_plan_growth={post_plan_growth} outcome={install:?}"
+        );
+        assert_eq!(managed_filesystem.tree_publish_attempts.get(), 0);
+        assert!(project.join(".agents/skills/demo/oversized").is_file());
     }
 }
 

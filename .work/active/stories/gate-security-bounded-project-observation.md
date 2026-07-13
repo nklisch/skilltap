@@ -1,7 +1,7 @@
 ---
 id: gate-security-bounded-project-observation
 kind: story
-stage: implementing
+stage: review
 tags: [security]
 parent: null
 depends_on: []
@@ -64,3 +64,27 @@ entry, depth, metadata length, per-file, total-byte, and document limits before
 large allocation, and its focused adversarial tests pass. The blocker is in
 application/execution composition, not the primitive. No foundation-doc drift
 or public API break found; product/UX lenses were inapplicable.
+
+## Review finding resolution (2026-07-12)
+
+- Execution capability: inline; the finding was cohesive across one planner,
+  one execution port, and their shared lifecycle fixture.
+- Review weight: `standard` from the explicit caller selection.
+- Files changed: `crates/cli/src/application.rs`,
+  `crates/cli/src/application/execution.rs`, and
+  `crates/cli/src/application/tests.rs`.
+- Planning now distinguishes a genuinely missing tree from a bounded/no-follow
+  observation failure and returns `managed_project_plugin_unreadable` for the
+  latter.
+- Revalidation, post-apply verification, and rollback now share the same
+  root-confined depth, entry, per-file, total-byte, and path limits. Rollback
+  treats an unreadable tree as an owned residual instead of guessing absence.
+- Regression coverage creates an oversized sparse tree before planning and
+  again between planning and locked revalidation; both fail without a
+  publication attempt and retain the hostile surface for truthful observation.
+- Simplification: one limit constructor and bounded observation helper replace
+  duplicated/unbounded lifecycle reads.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
+- Verification: focused managed-project security/recovery tests, CLI library
+  tests, formatting, and strict CLI test Clippy.

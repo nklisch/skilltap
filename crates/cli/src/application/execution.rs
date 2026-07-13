@@ -240,6 +240,26 @@ pub(super) struct ManagedProjectPluginWrite {
     pub(super) expected_identity: Option<skilltap_core::runtime::DirectoryIdentity>,
 }
 
+fn observe_managed_project_tree_for_execution(
+    filesystem: &dyn ManagedProjectFileSystem,
+    root: &AbsolutePath,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+) -> Result<Option<ObservedManagedProjectTree>, ()> {
+    match filesystem.load_tree_bounded_no_follow(
+        root,
+        destination,
+        managed_project_tree_observation_limits(),
+    ) {
+        Ok(tree) => Ok(Some(tree)),
+        Err(skilltap_core::runtime::RuntimeError::FileSystem { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            Ok(None)
+        }
+        Err(_) => Err(()),
+    }
+}
+
 impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
     fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
         for (id, entry) in &self.entries {
@@ -273,10 +293,16 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                 }
             }
             for plugin in &entry.trees {
-                let current = self
-                    .filesystem
-                    .load_tree_no_follow(&plugin.root, &plugin.destination)
-                    .ok();
+                let current = observe_managed_project_tree_for_execution(
+                    self.filesystem,
+                    &plugin.root,
+                    &plugin.destination,
+                )
+                .map_err(|()| {
+                    managed_project_apply_failure(
+                        "A managed project skill tree could not be observed within its safety limits.",
+                    )
+                })?;
                 match (&plugin.expected_tree, current) {
                     (None, None) => {}
                     (Some(expected), Some((identity, files))) => {
@@ -375,11 +401,14 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
             }
         }
         for tree in &entry.trees {
-            let observed = self
-                .filesystem
-                .load_tree_no_follow(&tree.root, &tree.destination)
-                .ok()
-                .and_then(|(_, files)| artifact_tree_from_loaded(files));
+            let observed = observe_managed_project_tree_for_execution(
+                self.filesystem,
+                &tree.root,
+                &tree.destination,
+            )
+            .ok()
+            .flatten()
+            .and_then(|(_, files)| artifact_tree_from_loaded(files));
             if observed != tree.desired_tree {
                 let residuals =
                     rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
@@ -458,7 +487,18 @@ fn rollback_managed_project(
         }
     }
     for tree in trees.iter().rev() {
-        if let Ok((identity, _)) = filesystem.load_tree_no_follow(&tree.root, &tree.destination)
+        let current = match observe_managed_project_tree_for_execution(
+            filesystem,
+            &tree.root,
+            &tree.destination,
+        ) {
+            Ok(current) => current,
+            Err(_) => {
+                residuals.push(managed_project_tree_path(tree));
+                continue;
+            }
+        };
+        if let Some((identity, _)) = current
             && filesystem
                 .remove_tree_no_follow(&tree.root, &tree.destination, identity)
                 .is_err()
@@ -470,10 +510,11 @@ fn rollback_managed_project(
             let _ =
                 filesystem.publish_tree_no_follow(&tree.root, &tree.destination, previous.files());
         }
-        let observed = filesystem
-            .load_tree_no_follow(&tree.root, &tree.destination)
-            .ok()
-            .and_then(|(_, files)| artifact_tree_from_loaded(files));
+        let observed =
+            observe_managed_project_tree_for_execution(filesystem, &tree.root, &tree.destination)
+                .ok()
+                .flatten()
+                .and_then(|(_, files)| artifact_tree_from_loaded(files));
         if observed != tree.expected_tree {
             residuals.push(managed_project_tree_path(tree));
         }

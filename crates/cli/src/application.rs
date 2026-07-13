@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::OsString,
+    io,
     path::{Component, Path, PathBuf},
 };
 
@@ -1771,9 +1772,6 @@ fn plan_codex_component_projections(
     acknowledged: bool,
 ) -> Result<CodexComponentProjectionPlan, ErrorDetail> {
     let removal = kind == NativeLifecycleKind::PluginRemove;
-    let observation_limits =
-        ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
-            .expect("bounded project tree limits are valid");
     let mut skill_names = BTreeSet::new();
     let mut unsupported_optional = BTreeSet::new();
     for declaration in declarations {
@@ -1846,10 +1844,8 @@ fn plan_codex_component_projections(
                 "A plugin skill name is not a safe destination.",
             )
         })?;
-        let current = filesystem
-            .load_tree_bounded_no_follow(&root, &destination, observation_limits)
-            .ok()
-            .and_then(|(identity, files)| {
+        let current = observe_managed_project_tree(filesystem, &root, &destination)?.and_then(
+            |(identity, files)| {
                 ArtifactTree::new(
                     files
                         .into_iter()
@@ -1857,7 +1853,8 @@ fn plan_codex_component_projections(
                 )
                 .ok()
                 .map(|tree| (identity, tree))
-            });
+            },
+        );
         if let Some(expected) = prior.iter().find_map(|projection| match projection {
             ManagedProjection::Skill { id, fingerprint } if id == &destination => Some(fingerprint),
             _ => None,
@@ -1928,6 +1925,42 @@ struct CodexComponentProjectionPlan {
     current_fingerprint: Option<Fingerprint>,
     desired_fingerprint: Option<Fingerprint>,
     manifest: Vec<ManagedProjection>,
+}
+
+fn managed_project_tree_observation_limits() -> ExternalTreeLimits {
+    ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
+        .expect("bounded project tree limits are valid")
+}
+
+type ObservedManagedProjectTree = (
+    skilltap_core::runtime::DirectoryIdentity,
+    BTreeMap<skilltap_core::domain::RelativeArtifactPath, ArtifactFile>,
+);
+
+type ManagedProjectTreePlanningObservation =
+    Result<Option<ObservedManagedProjectTree>, ErrorDetail>;
+
+fn observe_managed_project_tree(
+    filesystem: &dyn ManagedProjectFileSystem,
+    root: &AbsolutePath,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+) -> ManagedProjectTreePlanningObservation {
+    match filesystem.load_tree_bounded_no_follow(
+        root,
+        destination,
+        managed_project_tree_observation_limits(),
+    ) {
+        Ok(tree) => Ok(Some(tree)),
+        Err(skilltap_core::runtime::RuntimeError::FileSystem { source, .. })
+            if source.kind() == io::ErrorKind::NotFound =>
+        {
+            Ok(None)
+        }
+        Err(_) => Err(managed_project_error(
+            "managed_project_plugin_unreadable",
+            "The managed project skill tree could not be observed within its safety limits.",
+        )),
+    }
 }
 
 fn managed_projection_manifest(
