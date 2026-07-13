@@ -22,7 +22,7 @@ mod locking;
 mod publication;
 mod unix_identity;
 
-pub use directory_tree::{DirectoryPublishOutcome, DirectoryTreeFileSystem};
+pub use directory_tree::{ConfinedFileSystem, DirectoryPublishOutcome, DirectoryTreeFileSystem};
 
 #[cfg(test)]
 use locking::try_acquire_with;

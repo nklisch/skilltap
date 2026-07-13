@@ -459,3 +459,38 @@ fn parent_sync_failure_reports_removed_path_and_uncertain_durability() {
     ));
     assert!(!temporary.join("managed/artifact").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn confined_file_operations_reject_symlink_ancestors_without_touching_the_target() {
+    use std::os::unix::fs::symlink;
+
+    let temporary = TempRoot::new("skilltap-confined-file-symlink-ancestor").unwrap();
+    let project = temporary.join("project");
+    let outside = temporary.join("outside");
+    fs::create_dir(&project).unwrap();
+    fs::create_dir(&outside).unwrap();
+    fs::create_dir(outside.join("plugins")).unwrap();
+    symlink(&outside, project.join(".agents")).unwrap();
+
+    let project = AbsolutePath::new(project.to_str().unwrap()).unwrap();
+    let destination = RelativeArtifactPath::new(".agents/plugins/marketplace.json").unwrap();
+    let filesystem = SystemFileSystem;
+
+    assert!(
+        filesystem
+            .read_regular_bounded_no_follow(&project, &destination, 4096)
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .atomic_write_beneath_no_follow(&project, &destination, b"catalog")
+            .is_err()
+    );
+    assert!(
+        filesystem
+            .remove_file_beneath_no_follow(&project, &destination)
+            .is_err()
+    );
+    assert!(!outside.join("plugins/marketplace.json").exists());
+}

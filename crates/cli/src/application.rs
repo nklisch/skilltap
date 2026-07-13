@@ -1310,9 +1310,18 @@ fn plan_managed_codex_project_lifecycle(
         acknowledged,
     } = context;
     let codex = HarnessId::new("codex").expect("static harness id is valid");
+    let catalog_destination =
+        skilltap_core::domain::RelativeArtifactPath::new(".agents/plugins/marketplace.json")
+            .map_err(|_| {
+                managed_project_error(
+                    "managed_project_path_invalid",
+                    "The managed Codex project catalog path is invalid.",
+                )
+            })?;
     let catalog_path = AbsolutePath::new(format!(
-        "{}/.agents/plugins/marketplace.json",
-        project.as_str()
+        "{}/{}",
+        project.as_str(),
+        catalog_destination.as_str()
     ))
     .map_err(|_| {
         managed_project_error(
@@ -1321,8 +1330,13 @@ fn plan_managed_codex_project_lifecycle(
         )
     })?;
     let filesystem = SystemFileSystem;
-    let current_catalog = filesystem
-        .read_regular_no_follow(&catalog_path)
+    let current_catalog =
+        skilltap_core::runtime::ConfinedFileSystem::read_regular_bounded_no_follow(
+            &filesystem,
+            project,
+            &catalog_destination,
+            json_limits.bytes(),
+        )
         .map_err(|_| {
             managed_project_error(
                 "managed_project_catalog_unreadable",
@@ -1377,6 +1391,8 @@ fn plan_managed_codex_project_lifecycle(
             (
                 vec![ManagedProjectFileWrite {
                     path: catalog_path.clone(),
+                    root: project.clone(),
+                    destination: catalog_destination,
                     expected: current_catalog.clone(),
                     desired,
                 }],
@@ -1955,7 +1971,20 @@ fn plan_codex_mcp_config(
                 "The project MCP config path is invalid.",
             )
         })?;
-    let expected = filesystem.read_regular_no_follow(&path).map_err(|_| {
+    let destination = skilltap_core::domain::RelativeArtifactPath::new(".codex/config.toml")
+        .map_err(|_| {
+            managed_project_error(
+                "managed_project_mcp_path_invalid",
+                "The project MCP config path is invalid.",
+            )
+        })?;
+    let expected = skilltap_core::runtime::ConfinedFileSystem::read_regular_bounded_no_follow(
+        filesystem,
+        project,
+        &destination,
+        256 * 1024,
+    )
+    .map_err(|_| {
         managed_project_error(
             "managed_project_mcp_unreadable",
             "The project MCP config could not be read safely.",
@@ -2085,6 +2114,8 @@ fn plan_codex_mcp_config(
     Ok(CodexMcpConfigPlan {
         write: Some(ManagedProjectFileWrite {
             path,
+            root: project.clone(),
+            destination,
             expected,
             desired,
         }),

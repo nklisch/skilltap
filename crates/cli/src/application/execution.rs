@@ -204,9 +204,15 @@ pub(super) struct ManagedSkillPort<'a> {
     pub(super) entries: BTreeMap<OperationId, ManagedSkillEntry>,
 }
 
-pub(super) trait ManagedProjectFileSystem: FileSystem + DirectoryTreeFileSystem {}
+pub(super) trait ManagedProjectFileSystem:
+    FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedFileSystem
+{
+}
 
-impl<T: FileSystem + DirectoryTreeFileSystem> ManagedProjectFileSystem for T {}
+impl<T: FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedFileSystem>
+    ManagedProjectFileSystem for T
+{
+}
 
 pub(super) struct ManagedProjectLifecyclePort<'a> {
     pub(super) filesystem: &'a dyn ManagedProjectFileSystem,
@@ -220,6 +226,8 @@ pub(super) struct ManagedProjectLifecycleEntry {
 
 pub(super) struct ManagedProjectFileWrite {
     pub(super) path: AbsolutePath,
+    pub(super) root: AbsolutePath,
+    pub(super) destination: skilltap_core::domain::RelativeArtifactPath,
     pub(super) expected: Option<Vec<u8>>,
     pub(super) desired: Option<Vec<u8>>,
 }
@@ -252,7 +260,7 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                 }
                 let current = self
                     .filesystem
-                    .read_regular_no_follow(&file.path)
+                    .read_regular_bounded_no_follow(&file.root, &file.destination, 256 * 1024)
                     .map_err(|_| {
                         managed_project_apply_failure(
                             "A managed project file could not be re-read safely.",
@@ -332,20 +340,16 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
 
         let mut applied_files: Vec<&ManagedProjectFileWrite> = Vec::new();
         for file in &entry.files {
-            let parent = file
-                .path
-                .as_str()
-                .rsplit_once('/')
-                .and_then(|(parent, _)| AbsolutePath::new(parent).ok())
-                .ok_or_else(|| {
-                    managed_project_apply_failure("A managed project file parent is invalid.")
-                })?;
-            if self.filesystem.create_directory_all(&parent).is_err()
-                || match &file.desired {
-                    Some(bytes) => self.filesystem.atomic_write(&file.path, bytes).is_err(),
-                    None => self.filesystem.remove(&file.path).is_err(),
-                }
-            {
+            if match &file.desired {
+                Some(bytes) => self
+                    .filesystem
+                    .atomic_write_beneath_no_follow(&file.root, &file.destination, bytes)
+                    .is_err(),
+                None => self
+                    .filesystem
+                    .remove_file_beneath_no_follow(&file.root, &file.destination)
+                    .is_err(),
+            } {
                 let residuals =
                     rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
                 return Err(managed_project_rollback_failure(
@@ -356,7 +360,11 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
             applied_files.push(file);
         }
         for file in &entry.files {
-            if self.filesystem.read_regular_no_follow(&file.path).ok() != Some(file.desired.clone())
+            if self
+                .filesystem
+                .read_regular_bounded_no_follow(&file.root, &file.destination, 256 * 1024)
+                .ok()
+                != Some(file.desired.clone())
             {
                 let residuals =
                     rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
@@ -435,11 +443,16 @@ fn rollback_managed_project(
     let mut residuals = Vec::new();
     for file in files.iter().rev() {
         let restored = match &file.expected {
-            Some(bytes) => filesystem.atomic_write(&file.path, bytes),
-            None => filesystem.remove(&file.path),
+            Some(bytes) => {
+                filesystem.atomic_write_beneath_no_follow(&file.root, &file.destination, bytes)
+            }
+            None => filesystem.remove_file_beneath_no_follow(&file.root, &file.destination),
         };
         if restored.is_err()
-            || filesystem.read_regular_no_follow(&file.path).ok() != Some(file.expected.clone())
+            || filesystem
+                .read_regular_bounded_no_follow(&file.root, &file.destination, 256 * 1024)
+                .ok()
+                != Some(file.expected.clone())
         {
             residuals.push(file.path.as_str().to_owned());
         }

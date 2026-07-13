@@ -29,9 +29,9 @@ pub use error::{
 pub use executable::SystemExecutableResolver;
 pub use external_tree::SystemExternalTreeObserver;
 pub use filesystem::{
-    ConfigurationLock, ConfigurationLockGuard, DirectoryPublishOutcome, DirectoryTreeFileSystem,
-    FileKind, FileMetadata, FileSystem, RelativeSymlinkTarget, SystemConfigurationLock,
-    SystemConfigurationLockGuard, SystemFileSystem,
+    ConfigurationLock, ConfigurationLockGuard, ConfinedFileSystem, DirectoryPublishOutcome,
+    DirectoryTreeFileSystem, FileKind, FileMetadata, FileSystem, RelativeSymlinkTarget,
+    SystemConfigurationLock, SystemConfigurationLockGuard, SystemFileSystem,
 };
 pub use observation::{
     DecodedJson, ExecutableResolutionRequest, ExecutableResolver, ExternalTreeEntry,

@@ -18,6 +18,21 @@ use crate::{
 };
 
 pub(super) fn open_absolute_directory(path: &AbsolutePath, create: bool) -> io::Result<File> {
+    open_absolute_directory_with_mode(path, create, true)
+}
+
+pub(super) fn open_absolute_directory_preserve_mode(
+    path: &AbsolutePath,
+    create: bool,
+) -> io::Result<File> {
+    open_absolute_directory_with_mode(path, create, false)
+}
+
+fn open_absolute_directory_with_mode(
+    path: &AbsolutePath,
+    create: bool,
+    private: bool,
+) -> io::Result<File> {
     let mut directory = File::open("/")?;
     for component in Path::new(path.as_str()).components() {
         let Component::Normal(component) = component else {
@@ -38,7 +53,9 @@ pub(super) fn open_absolute_directory(path: &AbsolutePath, create: bool) -> io::
     // The managed tree is a private skilltap boundary. Apply the mode to the
     // opened descriptor as well as newly-created ancestors so an existing
     // directory cannot retain group/world access after adoption.
-    directory.set_permissions(Permissions::from_mode(0o700))?;
+    if private {
+        directory.set_permissions(Permissions::from_mode(0o700))?;
+    }
     Ok(directory)
 }
 
