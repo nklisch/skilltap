@@ -8,8 +8,7 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     HarnessKind, NativeLifecycleAction, NativeLifecycleRequest, NativeObservationFailure,
-    NativeResourceObservation,
-    observe_native_resource,
+    NativeResourceObservation, observe_native_resource,
 };
 use skilltap_test_support::TempRoot;
 

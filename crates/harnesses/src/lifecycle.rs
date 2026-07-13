@@ -61,9 +61,7 @@ impl NativeObservationFailure {
         match self {
             Self::CommandFailed => "The native list command returned a nonzero status.",
             Self::InvalidJson => "The native list command returned invalid JSON.",
-            Self::UnsupportedShape => {
-                "The native list command returned an unsupported JSON shape."
-            }
+            Self::UnsupportedShape => "The native list command returned an unsupported JSON shape.",
             Self::AmbiguousScope => {
                 "The native list command did not identify one unambiguous requested scope."
             }

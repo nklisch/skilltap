@@ -603,7 +603,8 @@ impl StatusApplication<'_> {
                         target_id,
                         &operation_id,
                     );
-                    let fresh_presence = if journal_says_applied {
+                    let requires_fresh_precondition = journal_says_applied || removal;
+                    let fresh_presence = if requires_fresh_precondition {
                         observe_native_resource(
                             configured.clone(),
                             search_path.clone(),
@@ -622,15 +623,52 @@ impl StatusApplication<'_> {
                             NativeObservationFailure::CommandFailed,
                         )
                     };
-                    if journal_says_applied
-                        && !matches!(fresh_presence, NativeResourceObservation::Missing)
-                    {
-                        outcome = outcome.with_operation(
-                            crate::OperationOutcome::new(operation_id.to_string(), "no_change")
-                                .with_field("target", target_id.as_str())
-                                .with_field("scope", scope_label(concrete_scope)),
-                        );
-                        continue;
+                    if requires_fresh_precondition {
+                        match (fresh_presence, removal, journal_says_applied) {
+                            (NativeResourceObservation::Present { .. }, false, true)
+                            | (NativeResourceObservation::Missing, true, _) => {
+                                outcome = outcome.with_operation(
+                                    crate::OperationOutcome::new(
+                                        operation_id.to_string(),
+                                        "no_change",
+                                    )
+                                    .with_field("target", target_id.as_str())
+                                    .with_field("scope", scope_label(concrete_scope)),
+                                );
+                                continue;
+                            }
+                            (NativeResourceObservation::Missing, false, true)
+                            | (NativeResourceObservation::Present { .. }, true, _) => {}
+                            (NativeResourceObservation::Indeterminate(failure), _, _) => {
+                                outcome.result = ResultClass::AttentionRequired;
+                                outcome = outcome
+                                    .with_operation(
+                                        crate::OperationOutcome::new(
+                                            operation_id.to_string(),
+                                            "observation_required",
+                                        )
+                                        .with_field("target", target_id.as_str())
+                                        .with_field("scope", scope_label(concrete_scope)),
+                                    )
+                                    .with_warning(
+                                        Warning::new(failure.diagnostic_code(), failure.summary())
+                                            .with_context("harness", target_id.as_str())
+                                            .with_context("scope", scope_label(concrete_scope)),
+                                    )
+                                    .with_next_action(
+                                        NextAction::new(
+                                            "reobserve_before_retry",
+                                            "Restore native list observation before retrying; skilltap did not repeat the mutation.",
+                                        )
+                                        .with_command(format!(
+                                            "skilltap status --target {} --json",
+                                            target_id.as_str()
+                                        )),
+                                    );
+                                continue;
+                            }
+                            (_, false, false) => {}
+                        }
                     }
                     let command_arguments = match command_arguments(arguments) {
                         Ok(arguments) => arguments,
@@ -899,6 +937,21 @@ impl StatusApplication<'_> {
             ) {
                 outcome.result = ResultClass::AttentionRequired;
             }
+            if let OperationOutcome::Failed { reason } = result.outcome()
+                && let (Some(code), Some(detail)) = (reason.code(), reason.detail())
+            {
+                let action = NextAction::new(
+                    "reobserve_before_retry",
+                    "Re-observe the selected harness before retrying the lifecycle operation.",
+                )
+                .with_command("skilltap status --json");
+                outcome = outcome
+                    .with_error(
+                        ErrorDetail::new(code.to_string(), detail.to_string())
+                            .with_next_action(action.clone()),
+                    )
+                    .with_next_action(action);
+            }
         }
         if removal
             && report.result.operations().values().all(|result| {
@@ -964,13 +1017,16 @@ impl StatusApplication<'_> {
         {
             outcome.result = ResultClass::Completed;
         }
-        outcome
+        outcome = outcome
             .with_summary("operations", report.result.operations().len() as u64)
-            .with_summary("changed", report.changed)
-            .with_next_action(NextAction::new(
+            .with_summary("changed", report.changed);
+        if successful {
+            outcome = outcome.with_next_action(NextAction::new(
                 "verify_status",
                 "Run status to verify the fresh native observation and recorded state.",
-            ))
+            ));
+        }
+        outcome
     }
 
     pub(crate) fn execute_skill_install(

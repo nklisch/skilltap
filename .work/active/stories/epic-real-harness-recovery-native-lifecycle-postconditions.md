@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-postconditions
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -36,3 +36,13 @@ journaled. This story owns blocker 10.
   retry path without attempting an unverified rollback.
 - Disposable fake and real harness coverage proves success, each failure class,
   and immediate repeat idempotence without touching user configuration.
+
+## Implementation notes
+
+- Execution capability: strongest inline implementation because the change guards native mutation and state publication across the harness/application boundary.
+- Review weight: highest, from the caller's autopilot instruction.
+- Files changed: `crates/harnesses/src/lifecycle.rs`, `crates/harnesses/src/lib.rs`, `crates/harnesses/src/bootstrap.rs`, `crates/harnesses/tests/lifecycle_scope.rs`, `crates/cli/src/application/lifecycle.rs`, `crates/cli/tests/native_postconditions.rs`, and `crates/test-support/src/native_process.rs`.
+- Tests added: typed observation/postcondition unit coverage; isolated scoped-observation coverage; compiled CLI coverage for every failure class, failed-journal safety, prior-success indeterminate no-repeat behavior, install/remove postconditions, and immediate install/remove repeat idempotence.
+- Discrepancies from design: the execution port uses the existing bounded per-operation process limit and a matching bounded JSON limit rather than adding a second constructor parameter; behavior and safety bounds remain the designed values.
+- Adjacent issues parked: none.
+- Verification: harness lifecycle unit and scope tests pass; the new compiled postcondition suite passes; 47 of 48 pre-existing compiled tests pass, with the sole stale assertion in `populated_plan_and_sync_apply_the_desired_inventory_resource` now needing to accept the truthful `repair` plan status after its lifecycle-aware fake reports the native resource still present.

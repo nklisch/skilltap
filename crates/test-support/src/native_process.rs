@@ -87,6 +87,7 @@ impl FakeNativeBuilder {
         let captures = root.join("captures");
         fs::create_dir_all(captures.join("argv"))?;
         fs::create_dir_all(captures.join("environment"))?;
+        fs::create_dir_all(captures.join("lifecycle"))?;
         for name in &self.environment {
             fs::create_dir(captures.join("environment").join(name))?;
         }
@@ -343,6 +344,64 @@ fn render_script(
     if let Some(barrier) = start_barrier {
         script.push_str(&barrier_script(barrier, ""));
     }
+    if matches!(
+        mode,
+        FakeNativeMode::CodexVersion | FakeNativeMode::ClaudeVersion | FakeNativeMode::VersionKnown
+    ) {
+        script.push_str(&format!(
+            r#"lifecycle={lifecycle}
+if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace list" ]; then
+  first=1
+  printf '%s' '{{"marketplaces":['
+  for path in "$lifecycle"/marketplace-*; do
+    [ -f "$path" ] || continue
+    name=${{path##*/}}
+    name=${{name#marketplace-}}
+    if [ "$first" = 0 ]; then printf ','; fi
+    printf '{{"name":"%s","scope":"user"}},{{"name":"%s","scope":"local"}}' "$name" "$name"
+    first=0
+  done
+  printf '%s' ']}}'
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "plugin list" ]; then
+  first=1
+  printf '%s' '{{"plugins":['
+  for path in "$lifecycle"/plugin-*; do
+    [ -f "$path" ] || continue
+    name=${{path##*/}}
+    name=${{name#plugin-}}
+    if [ "$first" = 0 ]; then printf ','; fi
+    printf '{{"name":"%s","scope":"user"}},{{"name":"%s","scope":"local"}}' "$name" "$name"
+    first=0
+  done
+  printf '%s' ']}}'
+  exit 0
+fi
+if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace add" ]; then
+  : > "$lifecycle/marketplace-team"
+  : > "$lifecycle/marketplace-other"
+  exit 0
+fi
+if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace remove" ]; then
+  /bin/rm -f "$lifecycle/marketplace-${{4-}}"
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "plugin add" ] || [ "${{1-}} ${{2-}}" = "plugin install" ]; then
+  : > "$lifecycle/plugin-${{3-}}"
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "plugin remove" ] || [ "${{1-}} ${{2-}}" = "plugin uninstall" ]; then
+  /bin/rm -f "$lifecycle/plugin-${{3-}}"
+  exit 0
+fi
+if [ "${{1-}} ${{2-}}" = "plugin update" ] || [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace update" ] || [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace upgrade" ]; then
+  exit 0
+fi
+"#,
+            lifecycle = shell_quote(&captures.join("lifecycle")),
+        ));
+    }
     match mode {
         FakeNativeMode::Exit(code) => script.push_str(&format!("exit {code}\n")),
         FakeNativeMode::CodexVersion => {
@@ -578,6 +637,21 @@ mod tests {
             assert!(output.status.success());
             assert_eq!(output.stdout, expected);
             assert!(output.stderr.is_empty());
+            if matches!(
+                mode,
+                FakeNativeMode::CodexVersion
+                    | FakeNativeMode::ClaudeVersion
+                    | FakeNativeMode::VersionKnown
+            ) {
+                let output = native.command().arg("--version").output().unwrap();
+                assert!(
+                    output.status.success(),
+                    "version stderr: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+                assert_eq!(output.stdout, expected);
+                assert!(output.stderr.is_empty());
+            }
         }
     }
 
