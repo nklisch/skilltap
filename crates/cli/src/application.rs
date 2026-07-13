@@ -47,7 +47,8 @@ use skilltap_core::{
     storage::{
         ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DocumentState,
         InventoryDocument, InventoryRepository, ManagedArtifactRepository, ResourceState,
-        StateDocument, StateRepository, StorageError, StorageFailure, Timestamp,
+        StateDocument, StateRepository, StorageError, StorageFailure, TargetResourceState,
+        Timestamp,
     },
     updates::{
         ResolutionError, SourceRevisionResolver, UpdateCandidate, UpdateDecision,
@@ -1187,21 +1188,27 @@ fn configured_native_profile(
     json_limits: JsonLimits,
     search_path: Option<std::ffi::OsString>,
     capability_name: &str,
-) -> Option<(HarnessKind, ConfiguredBinary, NativeId, CapabilitySupport)> {
+) -> Result<Option<(HarnessKind, ConfiguredBinary, NativeId, CapabilitySupport)>, DetectionError> {
     let (harness, binary) = match target.as_str() {
         "codex" => (HarnessKind::Codex, config.harnesses().codex.binary.as_str()),
         "claude" => (
             HarnessKind::Claude,
             config.harnesses().claude.binary.as_str(),
         ),
-        _ => return None,
+        _ => return Ok(None),
     };
-    let configured = configured_binary(binary).ok()?;
-    let executable = NativeId::new(binary).ok()?;
-    let environment = PlatformPaths::resolve(&ProcessEnvironment)
-        .ok()?
-        .native_process_environment(search_path.clone())
-        .ok()?;
+    let Some(configured) = configured_binary(binary).ok() else {
+        return Ok(None);
+    };
+    let Some(executable) = NativeId::new(binary).ok() else {
+        return Ok(None);
+    };
+    let Some(environment) = PlatformPaths::resolve(&ProcessEnvironment)
+        .ok()
+        .and_then(|paths| paths.native_process_environment(search_path.clone()).ok())
+    else {
+        return Ok(None);
+    };
     let installation = detect_configured_installation(
         harness,
         configured.clone(),
@@ -1209,18 +1216,19 @@ fn configured_native_profile(
         &environment,
         process_limits,
         json_limits,
-    )
-    .ok()?;
+    )?;
     let HarnessReachability::Reachable { native_version, .. } = installation.reachability() else {
-        return None;
+        return Ok(None);
     };
     let profile = select_profile(harness, native_version);
-    let capability_id = CapabilityId::new(capability_name).ok()?;
+    let Some(capability_id) = CapabilityId::new(capability_name).ok() else {
+        return Ok(None);
+    };
     let capability = profile
         .mutation_capabilities()
         .and_then(|capabilities| capabilities.for_scope(scope).support(&capability_id))
         .unwrap_or(CapabilitySupport::Unverified);
-    Some((harness, configured, executable, capability))
+    Ok(Some((harness, configured, executable, capability)))
 }
 
 fn command_arguments(arguments: Vec<std::ffi::OsString>) -> Result<Vec<CommandArgument>, ()> {
@@ -1295,7 +1303,11 @@ fn plan_managed_codex_project_lifecycle(
         ResourceKind::Marketplace => {
             let source = resource
                 .source()
-                .or_else(|| existing_state.and_then(ResourceState::source))
+                .or_else(|| {
+                    existing_state
+                        .and_then(|state| state.target(&codex))
+                        .and_then(TargetResourceState::source)
+                })
                 .cloned()
                 .ok_or_else(|| {
                     managed_project_error(
@@ -1346,7 +1358,8 @@ fn plan_managed_codex_project_lifecycle(
                         .state
                         .as_ref()
                         .and_then(|state| state.resources().get(&marketplace_key))
-                        .and_then(ResourceState::source)
+                        .and_then(|state| state.target(&codex))
+                        .and_then(TargetResourceState::source)
                 })
                 .cloned()
                 .ok_or_else(|| managed_project_error("managed_project_marketplace_missing", "Register the selected marketplace in this project before installing its plugin."))?;
@@ -1500,7 +1513,7 @@ fn plan_managed_codex_project_lifecycle(
             })?,
         );
     }
-    let operation = skilltap_core::lifecycle_operation::faithful_managed_operation(
+    let operation = skilltap_core::lifecycle_operation::managed_materialization_operation(
         operation_id,
         codex.clone(),
         resource.key().clone(),
@@ -1520,9 +1533,9 @@ fn plan_managed_codex_project_lifecycle(
         None
     } else {
         Some(
-            ResourceState::new(
-                resource.key().clone(),
-                BTreeMap::from([(codex, request.native_name.clone())]),
+            TargetResourceState::new(
+                codex,
+                Some(request.native_name.clone()),
                 Provenance::Materialized,
                 Ownership::Skilltap,
                 source,
@@ -1533,6 +1546,7 @@ fn plan_managed_codex_project_lifecycle(
                 timestamp,
                 None,
             )
+            .and_then(|target| ResourceState::new(resource.key().clone(), [target]))
             .map_err(|_| {
                 managed_project_error(
                     "state_seed_invalid",
@@ -1697,6 +1711,13 @@ fn validate_managed_project_ownership(
                 "The existing managed destination has no skilltap ownership record.",
             )
         })?;
+        let codex = HarnessId::new("codex").expect("static harness id is valid");
+        let state = state.target(&codex).ok_or_else(|| {
+            managed_project_error(
+                "managed_project_unowned",
+                "The existing managed destination has no Codex ownership binding.",
+            )
+        })?;
         if state.ownership() != Ownership::Skilltap
             || state.provenance() != Provenance::Materialized
         {
@@ -1732,10 +1753,12 @@ fn managed_project_error(code: &'static str, summary: &'static str) -> ErrorDeta
 fn previously_applied(
     state: Option<&StateDocument>,
     resource: &ResourceKey,
+    target: &HarnessId,
     operation: &OperationId,
 ) -> bool {
     state
         .and_then(|state| state.resources().get(resource))
+        .and_then(|state| state.target(target))
         .and_then(|state| state.last_apply())
         .and_then(|apply| apply.operations().get(operation))
         .is_some_and(|result| {
@@ -1948,14 +1971,18 @@ fn refresh_state_seeds(
 }
 
 fn state_seed_matches(existing: &ResourceState, seed: &ResourceState) -> bool {
-    existing.native_ids() == seed.native_ids()
-        && existing.provenance() == seed.provenance()
-        && existing.ownership() == seed.ownership()
-        && existing.source() == seed.source()
-        && existing.managed_artifact() == seed.managed_artifact()
-        && existing.fingerprint() == seed.fingerprint()
-        && existing.installed_revision() == seed.installed_revision()
-        && existing.available_revision() == seed.available_revision()
+    seed.targets().iter().all(|(harness, seed_target)| {
+        existing.target(harness).is_some_and(|existing_target| {
+            existing_target.native_id() == seed_target.native_id()
+                && existing_target.provenance() == seed_target.provenance()
+                && existing_target.ownership() == seed_target.ownership()
+                && existing_target.source() == seed_target.source()
+                && existing_target.managed_artifact() == seed_target.managed_artifact()
+                && existing_target.fingerprint() == seed_target.fingerprint()
+                && existing_target.installed_revision() == seed_target.installed_revision()
+                && existing_target.available_revision() == seed_target.available_revision()
+        })
+    })
 }
 
 fn project_inventory_targets(
@@ -2002,29 +2029,17 @@ fn project_state_targets_after_remove(
         let Some(existing) = document.resources().get(key).cloned() else {
             continue;
         };
-        let mut native_ids = existing.native_ids().clone();
-        native_ids.retain(|harness, _| !selected.contains(harness));
-        if native_ids.is_empty() {
-            document = document.without_resource(key).map_err(|_| ())?;
-        } else if native_ids != *existing.native_ids() {
-            let projected = ResourceState::new(
-                existing.key().clone(),
-                native_ids,
-                existing.provenance(),
-                existing.ownership(),
-                existing.source().cloned(),
-                existing.managed_artifact().cloned(),
-                existing.fingerprint().cloned(),
-                existing.installed_revision().cloned(),
-                existing.available_revision().cloned(),
-                existing.observed_at(),
-                existing.last_apply().cloned(),
-            )
-            .map_err(|_| ())?;
-            document = document.refresh_resource_state(projected).map_err(|_| ())?;
-        } else {
+        let projected = existing.without_targets(selected).map_err(|_| ())?;
+        if projected.as_ref() == Some(&existing) {
             continue;
         }
+        document = match projected {
+            Some(projected) => document
+                .without_resource(key)
+                .and_then(|state| state.with_resource_state(projected))
+                .map_err(|_| ())?,
+            None => document.without_resource(key).map_err(|_| ())?,
+        };
         changed = true;
     }
     if changed {

@@ -390,17 +390,44 @@ impl StatusApplication<'_> {
                 }
 
                 let warning_count = outcome.warnings.len();
-                let mut native_ids = documents
+                let mut native_ids: BTreeMap<HarnessId, NativeId> = documents
                     .state
                     .as_ref()
                     .and_then(|state| state.resources().get(resource.key()))
-                    .map(|state| state.native_ids().clone())
+                    .map(|state| {
+                        state
+                            .targets()
+                            .iter()
+                            .filter_map(|(harness, target)| {
+                                target
+                                    .native_id()
+                                    .cloned()
+                                    .map(|native| (harness.clone(), native))
+                            })
+                            .collect()
+                    })
                     .unwrap_or_default();
                 let mut native_route_selected = false;
                 for target_id in targets.iter() {
                     if target_id.as_str() == "codex"
                         && let Scope::Project(project) = concrete_scope
                     {
+                        let desired_here = documents.inventory.as_ref().is_some_and(|inventory| {
+                            inventory
+                                .resources()
+                                .get(resource.key())
+                                .is_some_and(|desired| desired.targets().contains(target_id))
+                        });
+                        let owned_here = documents.state.as_ref().is_some_and(|state| {
+                            state
+                                .resources()
+                                .get(resource.key())
+                                .and_then(|state| state.target(target_id))
+                                .is_some_and(|target| target.ownership() == Ownership::Skilltap)
+                        });
+                        if removal && !desired_here && !owned_here {
+                            continue;
+                        }
                         let observed_at = match timestamp {
                             Ok(timestamp) => timestamp,
                             Err(()) => {
@@ -438,42 +465,60 @@ impl StatusApplication<'_> {
                         }
                         continue;
                     }
-                    let Some((harness, configured, executable, capability)) =
-                        configured_native_profile(
-                            &documents.config,
-                            target_id,
-                            concrete_scope,
-                            process_limits,
-                            json_limits,
-                            search_path.clone(),
-                            match kind {
-                                NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
-                                NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
-                                NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
-                                NativeLifecycleKind::PluginInstall => "plugin.install",
-                                NativeLifecycleKind::PluginRemove => "plugin.remove",
-                                NativeLifecycleKind::PluginUpdate => "plugin.update",
-                            },
-                        )
-                    else {
-                        outcome.result = ResultClass::AttentionRequired;
-                        outcome = outcome
-                        .with_resource(
-                            OutputEntry::new(
-                                format!("{}:{}", target_id, resource.key()),
-                                "mutation_unavailable",
-                            )
-                            .with_field("target", target_id.as_str())
-                            .with_field("scope", scope_label(concrete_scope)),
-                        )
-                        .with_warning(
-                            Warning::new(
-                                "native_profile_unavailable",
-                                "The selected harness is not mutation-authorized for this lifecycle action.",
-                            )
-                            .with_context("harness", target_id.as_str()),
-                        );
-                        continue;
+                    let profile = configured_native_profile(
+                        &documents.config,
+                        target_id,
+                        concrete_scope,
+                        process_limits,
+                        json_limits,
+                        search_path.clone(),
+                        match kind {
+                            NativeLifecycleKind::MarketplaceAdd => "marketplace.register",
+                            NativeLifecycleKind::MarketplaceRemove => "marketplace.remove",
+                            NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+                            NativeLifecycleKind::PluginInstall => "plugin.install",
+                            NativeLifecycleKind::PluginRemove => "plugin.remove",
+                            NativeLifecycleKind::PluginUpdate => "plugin.update",
+                        },
+                    );
+                    let (harness, configured, executable, capability) = match profile {
+                        Ok(Some(profile)) => profile,
+                        Err(error) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            let diagnostic = detection_diagnostic(&error, target_id.as_str());
+                            outcome = outcome
+                                .with_resource(
+                                    OutputEntry::new(
+                                        format!("{}:{}", target_id, resource.key()),
+                                        "detection_failed",
+                                    )
+                                    .with_field("target", target_id.as_str())
+                                    .with_field("scope", scope_label(concrete_scope)),
+                                )
+                                .with_warning(diagnostic.warning)
+                                .with_next_action(diagnostic.next_action);
+                            continue;
+                        }
+                        Ok(None) => {
+                            outcome.result = ResultClass::AttentionRequired;
+                            outcome = outcome
+                                .with_resource(
+                                    OutputEntry::new(
+                                        format!("{}:{}", target_id, resource.key()),
+                                        "mutation_unavailable",
+                                    )
+                                    .with_field("target", target_id.as_str())
+                                    .with_field("scope", scope_label(concrete_scope)),
+                                )
+                                .with_warning(
+                                    Warning::new(
+                                        "native_profile_unavailable",
+                                        "The selected harness is not mutation-authorized for this lifecycle action.",
+                                    )
+                                    .with_context("harness", target_id.as_str()),
+                                );
+                            continue;
+                        }
                     };
                     if capability != CapabilitySupport::Supported {
                         outcome.result = ResultClass::AttentionRequired;
@@ -507,8 +552,12 @@ impl StatusApplication<'_> {
                     let operation_id =
                         lifecycle_operation_id(kind, target_id, concrete_scope, resource.key());
                     native_ids.insert(target_id.clone(), request.native_name.clone());
-                    let journal_says_applied =
-                        previously_applied(documents.state.as_ref(), resource.key(), &operation_id);
+                    let journal_says_applied = previously_applied(
+                        documents.state.as_ref(),
+                        resource.key(),
+                        target_id,
+                        &operation_id,
+                    );
                     let fresh_presence = if journal_says_applied {
                         observe_native_resource(
                             configured.clone(),
@@ -577,31 +626,61 @@ impl StatusApplication<'_> {
                             ));
                         }
                     };
-                    let native_state = match ResourceState::new(
-                        resource.key().clone(),
-                        native_ids,
-                        Provenance::Native,
-                        Ownership::Harness,
-                        resource
+                    let existing = documents
+                        .state
+                        .as_ref()
+                        .and_then(|state| state.resources().get(resource.key()));
+                    let mut bindings = existing
+                        .map(|state| state.targets().clone())
+                        .unwrap_or_default();
+                    for (harness, native_id) in native_ids {
+                        if !targets.resolved.contains(&harness) {
+                            continue;
+                        }
+                        let source = resource
                             .source()
                             .cloned()
-                            .or_else(|| request.source.clone()),
-                        None,
-                        None,
-                        None,
-                        None,
-                        observed_at,
-                        None,
-                    ) {
-                        Ok(state) => state,
-                        Err(_) => {
-                            outcome.result = ResultClass::Invalid;
-                            return outcome.with_error(ErrorDetail::new(
-                                "state_seed_invalid",
-                                "The native lifecycle state seed was invalid.",
-                            ));
-                        }
-                    };
+                            .or_else(|| request.source.clone())
+                            .or_else(|| {
+                                existing
+                                    .and_then(|state| state.target(&harness))
+                                    .and_then(|target| target.source().cloned())
+                            });
+                        let binding = match TargetResourceState::new(
+                            harness.clone(),
+                            Some(native_id),
+                            Provenance::Native,
+                            Ownership::Harness,
+                            source,
+                            None,
+                            None,
+                            None,
+                            None,
+                            observed_at,
+                            None,
+                        ) {
+                            Ok(binding) => binding,
+                            Err(_) => {
+                                outcome.result = ResultClass::Invalid;
+                                return outcome.with_error(ErrorDetail::new(
+                                    "state_seed_invalid",
+                                    "The native lifecycle target evidence was invalid.",
+                                ));
+                            }
+                        };
+                        bindings.insert(harness, binding);
+                    }
+                    let native_state =
+                        match ResourceState::new(resource.key().clone(), bindings.into_values()) {
+                            Ok(state) => state,
+                            Err(_) => {
+                                outcome.result = ResultClass::Invalid;
+                                return outcome.with_error(ErrorDetail::new(
+                                    "state_seed_invalid",
+                                    "The native lifecycle state seed was invalid.",
+                                ));
+                            }
+                        };
                     seeds.insert(resource.key().clone(), native_state);
                 }
                 if removal
@@ -822,7 +901,11 @@ impl StatusApplication<'_> {
                 "The desired inventory could not be published after the native removal.",
             ));
         }
-        if report.changed && observation.failed_targets == 0 && successful {
+        if observation.failed_targets == 0
+            && successful
+            && outcome.errors.is_empty()
+            && outcome.warnings.is_empty()
+        {
             outcome.result = ResultClass::Completed;
         }
         outcome
@@ -1129,7 +1212,13 @@ impl StatusApplication<'_> {
                     .state
                     .as_ref()
                     .and_then(|state| state.resources().get(&key))
-                    .and_then(|state| state.installed_revision())
+                    .and_then(|state| {
+                        targets
+                            .resolved
+                            .iter()
+                            .find_map(|target| state.target(target))
+                    })
+                    .and_then(|target| target.installed_revision())
                     .cloned();
             }
             let desired_targets = inventory
@@ -1229,12 +1318,7 @@ impl StatusApplication<'_> {
                     ));
                 }
             };
-            let mut native_ids = documents
-                .state
-                .as_ref()
-                .and_then(|state| state.resources().get(&key))
-                .map(|state| state.native_ids().clone())
-                .unwrap_or_default();
+            let mut native_ids: BTreeMap<HarnessId, NativeId> = BTreeMap::new();
             let destinations =
                 match skill_destinations(&paths, concrete_scope, &targets.resolved, &destination) {
                     Some(destinations) => destinations,
@@ -1287,7 +1371,8 @@ impl StatusApplication<'_> {
                         .state
                         .as_ref()
                         .and_then(|state| state.resources().get(&key))
-                        .and_then(|state| state.fingerprint());
+                        .and_then(|state| state.target(target_id))
+                        .and_then(|target| target.fingerprint());
                     if managed_fingerprint != Some(current.fingerprint()) {
                         outcome.result = ResultClass::AttentionRequired;
                         outcome = outcome.with_warning(
@@ -1399,21 +1484,35 @@ impl StatusApplication<'_> {
                 native_ids.insert(target_id.clone(), name.clone());
             }
             if !native_ids.is_empty() {
-                let state = match ResourceState::new(
-                    key.clone(),
-                    native_ids,
-                    Provenance::Direct,
-                    Ownership::Skilltap,
-                    Some(source.clone()),
-                    None,
-                    Some(skill.fingerprint().clone()),
-                    git_commit
-                        .clone()
-                        .map(skilltap_core::domain::ResolvedRevision::GitCommit),
-                    None,
-                    timestamp,
-                    None,
-                ) {
+                let mut bindings = Vec::new();
+                for (harness, native_id) in native_ids {
+                    let binding = match TargetResourceState::new(
+                        harness,
+                        Some(native_id),
+                        Provenance::Direct,
+                        Ownership::Skilltap,
+                        Some(source.clone()),
+                        None,
+                        Some(skill.fingerprint().clone()),
+                        git_commit
+                            .clone()
+                            .map(skilltap_core::domain::ResolvedRevision::GitCommit),
+                        None,
+                        timestamp,
+                        None,
+                    ) {
+                        Ok(binding) => binding,
+                        Err(_) => {
+                            outcome.result = ResultClass::Invalid;
+                            return outcome.with_error(ErrorDetail::new(
+                                "state_seed_invalid",
+                                "The standalone skill target evidence was invalid.",
+                            ));
+                        }
+                    };
+                    bindings.push(binding);
+                }
+                let state = match ResourceState::new(key.clone(), bindings) {
                     Ok(state) => state,
                     Err(_) => {
                         outcome.result = ResultClass::Invalid;
@@ -1603,7 +1702,13 @@ impl StatusApplication<'_> {
                         .state
                         .as_ref()
                         .and_then(|state| state.resources().get(resource.key()))
-                        .and_then(|state| state.source())
+                        .and_then(|state| {
+                            resource
+                                .targets()
+                                .iter()
+                                .find_map(|target| state.target(target))
+                        })
+                        .and_then(|target| target.source())
                         .cloned();
                     Some((name, resource.scope().clone(), source))
                 })
@@ -1692,7 +1797,18 @@ impl StatusApplication<'_> {
                 .state
                 .as_ref()
                 .and_then(|state| state.resources().get(&key))
-                .and_then(|state| state.source())
+                .and_then(|state| {
+                    state
+                        .targets()
+                        .values()
+                        .find(|binding| match target.target.as_ref() {
+                            None | Some(skilltap_core::domain::TargetSelection::All) => true,
+                            Some(skilltap_core::domain::TargetSelection::Only(requested)) => {
+                                binding.harness() == requested
+                            }
+                        })
+                })
+                .and_then(|target| target.source())
             {
                 source = Some(value.clone());
                 break;
@@ -1830,7 +1946,11 @@ impl StatusApplication<'_> {
                 );
                 continue;
             };
-            if state.ownership() != Ownership::Skilltap {
+            if !targets.resolved.iter().any(|target| {
+                state
+                    .target(target)
+                    .is_some_and(|binding| binding.ownership() == Ownership::Skilltap)
+            }) {
                 outcome.result = ResultClass::AttentionRequired;
                 outcome = outcome.with_warning(
                     Warning::new(
@@ -1861,6 +1981,18 @@ impl StatusApplication<'_> {
                     full_path,
                 } = destination_entry;
                 let target_id = &target;
+                let Some(target_state) = state.target(target_id) else {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(
+                        Warning::new(
+                            "skill_not_managed_for_target",
+                            "The requested skill has no ownership record for the selected target; no files were removed.",
+                        )
+                        .with_context("target", target_id.as_str())
+                        .with_context("scope", scope_label(concrete_scope)),
+                    );
+                    continue;
+                };
                 let snapshot = match SystemExternalTreeObserver
                     .observe(&ExternalTreeRequest::new(full_path.clone(), limits))
                 {
@@ -1887,7 +2019,7 @@ impl StatusApplication<'_> {
                         continue;
                     }
                 };
-                if state.fingerprint() != Some(current.fingerprint()) {
+                if target_state.fingerprint() != Some(current.fingerprint()) {
                     outcome.result = ResultClass::AttentionRequired;
                     outcome = outcome.with_warning(
                         Warning::new(

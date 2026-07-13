@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use crate::{
     domain::{DesiredResource, HarnessId, OperationSelector, ResolvedRevision, ResourceKey},
-    storage::{ResourceState, SchemaError, StateDocument, Timestamp, UpdateMode},
+    storage::{SchemaError, StateDocument, TargetResourceState, Timestamp, UpdateMode},
     updates::{UpdateCandidate, UpdateDecision, UpdateSafety, classify_update_with_mode},
 };
 
@@ -318,22 +318,35 @@ pub fn record_verified_updates(
                 resource: entry.resource.clone(),
             })
         })?;
-        let refreshed = ResourceState::new(
-            current.key().clone(),
-            current.native_ids().clone(),
-            current.provenance(),
-            current.ownership(),
-            current.source().cloned(),
-            current.managed_artifact().cloned(),
-            current.fingerprint().cloned(),
-            Some(observation.revision.clone()),
-            None,
-            current.observed_at(),
-            current.last_apply().cloned(),
-        )
-        .map_err(UpdateRecordingError::State)?;
+        let mut refreshed = current.clone();
+        for target in &observation.targets {
+            let current_target = current.target(target).ok_or_else(|| {
+                UpdateRecordingError::State(SchemaError::TargetBindingNotFound {
+                    resource: entry.resource.clone(),
+                    harness: target.clone(),
+                })
+            })?;
+            let refreshed_target = TargetResourceState::new(
+                target.clone(),
+                current_target.native_id().cloned(),
+                current_target.provenance(),
+                current_target.ownership(),
+                current_target.source().cloned(),
+                current_target.managed_artifact().cloned(),
+                current_target.fingerprint().cloned(),
+                Some(observation.revision.clone()),
+                None,
+                current_target.observed_at(),
+                None,
+            )
+            .map_err(UpdateRecordingError::State)?;
+            refreshed = refreshed
+                .with_target(refreshed_target)
+                .map_err(UpdateRecordingError::State)?;
+        }
         updated = updated
-            .refresh_resource_state(refreshed)
+            .without_resource(entry.resource())
+            .and_then(|state| state.with_resource_state(refreshed))
             .map_err(UpdateRecordingError::State)?;
     }
     if let Some(extra) = verified.iter().find(|value| {
@@ -594,9 +607,18 @@ mod tests {
         })
         .unwrap();
         let selection = select_foreground_updates(&plan, &BTreeSet::new()).unwrap();
-        let current = ResourceState::new(
-            desired.key().clone(),
-            BTreeMap::new(),
+        let prior_apply = crate::storage::ApplyRecord::new(
+            Timestamp::new(1, 0).unwrap(),
+            [crate::domain::OperationResult::new(
+                crate::domain::OperationId::new("codex:update").unwrap(),
+                crate::domain::OperationOutcome::Applied,
+            )
+            .unwrap()],
+        )
+        .unwrap();
+        let target = TargetResourceState::new(
+            HarnessId::new("codex").unwrap(),
+            None,
             crate::domain::Provenance::Direct,
             crate::domain::Ownership::Skilltap,
             None,
@@ -605,10 +627,35 @@ mod tests {
             Some(revision('a')),
             Some(revision('b')),
             Timestamp::new(1, 0).unwrap(),
+            Some(prior_apply),
+        )
+        .unwrap();
+        let sibling = TargetResourceState::new(
+            HarnessId::new("claude").unwrap(),
+            Some(crate::domain::NativeId::new("alpha").unwrap()),
+            crate::domain::Provenance::Direct,
+            crate::domain::Ownership::Skilltap,
+            None,
+            None,
+            None,
+            Some(revision('c')),
+            None,
+            Timestamp::new(3, 0).unwrap(),
             None,
         )
         .unwrap();
-        let state = StateDocument::new(1, [], [current], None, None, None).unwrap();
+        let current =
+            crate::storage::ResourceState::new(desired.key().clone(), [target, sibling.clone()])
+                .unwrap();
+        let state = StateDocument::new(
+            crate::storage::STATE_SCHEMA_VERSION,
+            [],
+            [current],
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         let next = record_verified_updates(
             &state,
             &selection,
@@ -621,8 +668,17 @@ mod tests {
         )
         .unwrap();
         let updated = next.resources().get(desired.key()).unwrap();
+        let updated = updated.target(&HarnessId::new("codex").unwrap()).unwrap();
         assert_eq!(updated.installed_revision(), Some(&revision('b')));
         assert_eq!(updated.available_revision(), None);
+        assert_eq!(updated.last_apply(), None);
+        assert_eq!(
+            next.resources()
+                .get(desired.key())
+                .unwrap()
+                .target(&HarnessId::new("claude").unwrap()),
+            Some(&sibling)
+        );
         assert_eq!(
             next.last_successful_application(),
             Some(Timestamp::new(2, 0).unwrap())

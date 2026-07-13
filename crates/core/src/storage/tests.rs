@@ -8,8 +8,8 @@ use crate::bootstrap::BootstrapUpdateMode;
 use crate::domain::{
     ComponentGraph, DesiredOrigin, DesiredResource, EvidenceCode, Fingerprint,
     FingerprintAlgorithm, HarnessId, HarnessSet, NativeId, OperationId, OperationOutcome,
-    OperationResult, Ownership, Provenance, RelativeArtifactPath, ResourceId, ResourceKey,
-    ResourceKind, Scope, UpdateIntent,
+    OperationResult, Ownership, Provenance, RelativeArtifactPath, ResolvedRevision, ResourceId,
+    ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
 };
 
 fn resource(
@@ -73,6 +73,10 @@ fn fingerprint() -> Fingerprint {
     Fingerprint::new(FingerprintAlgorithm::Sha256, "a".repeat(64)).unwrap()
 }
 
+fn codex() -> HarnessId {
+    HarnessId::new("codex").unwrap()
+}
+
 fn managed_resource(id: &str) -> ResourceState {
     managed_resource_at(id, Scope::Global)
 }
@@ -80,15 +84,15 @@ fn managed_resource(id: &str) -> ResourceState {
 fn managed_resource_at(id: &str, scope: Scope) -> ResourceState {
     let key = ResourceKey::new(ResourceId::new(id).unwrap(), scope);
     let artifact_fingerprint = fingerprint();
-    ResourceState::new(
-        key.clone(),
-        BTreeMap::new(),
+    let target = TargetResourceState::new(
+        codex(),
+        None,
         Provenance::Direct,
         Ownership::Skilltap,
         None,
         Some(
             ManagedArtifactRecord::for_artifact(
-                key,
+                key.clone(),
                 ArtifactRole::DirectSkill,
                 artifact_fingerprint.clone(),
             )
@@ -110,7 +114,8 @@ fn managed_resource_at(id: &str, scope: Scope) -> ResourceState {
             .unwrap(),
         ),
     )
-    .unwrap()
+    .unwrap();
+    ResourceState::new(key, [target]).unwrap()
 }
 
 fn representative_state() -> StateDocument {
@@ -145,6 +150,7 @@ fn state_journal_updates_exact_resource_without_touching_siblings() {
     let updated = document
         .with_operation_result(
             first.key(),
+            &codex(),
             Timestamp::new(200, 0).unwrap(),
             OperationResult::new(
                 OperationId::new("update:first").unwrap(),
@@ -157,6 +163,8 @@ fn state_journal_updates_exact_resource_without_touching_siblings() {
     let operations = updated
         .resources()
         .get(first.key())
+        .unwrap()
+        .target(&codex())
         .unwrap()
         .last_apply()
         .unwrap()
@@ -187,11 +195,15 @@ fn available_revision_cache_preserves_apply_history_and_siblings() {
     );
     let checked_at = Timestamp::new(300, 0).unwrap();
     let updated = document
-        .with_available_revision(first.key(), Some(available.clone()), checked_at)
+        .with_available_revision(first.key(), &codex(), Some(available.clone()), checked_at)
         .unwrap();
     let resource = updated.resources().get(first.key()).unwrap();
+    let resource = resource.target(&codex()).unwrap();
     assert_eq!(resource.available_revision(), Some(&available));
-    assert_eq!(resource.last_apply(), first.last_apply());
+    assert_eq!(
+        resource.last_apply(),
+        first.target(&codex()).unwrap().last_apply()
+    );
     assert_eq!(updated.resources().get(second.key()), Some(&second));
     assert_eq!(updated.last_update_check(), Some(checked_at));
 }
@@ -455,8 +467,18 @@ fn equal_ids_in_distinct_scopes_coexist_in_inventory_and_state() {
     let global_state = managed_resource_at("skill:shared", Scope::Global);
     let project_state = managed_resource_at("skill:shared", Scope::Project(project));
     assert_ne!(
-        global_state.managed_artifact().unwrap().path(),
-        project_state.managed_artifact().unwrap().path()
+        global_state
+            .target(&codex())
+            .unwrap()
+            .managed_artifact()
+            .unwrap()
+            .path(),
+        project_state
+            .target(&codex())
+            .unwrap()
+            .managed_artifact()
+            .unwrap()
+            .path()
     );
     let state = StateDocument::new(
         STATE_SCHEMA_VERSION,
@@ -510,8 +532,8 @@ fn state_is_strict_golden_and_excludes_desired_policy() {
     assert!(serde_json::from_value::<StateDocument>(desired).is_err());
     assert!(
         serde_json::from_str::<StateDocument>(&encoded.replacen(
-            "\"schema\": 1",
             "\"schema\": 2",
+            "\"schema\": 1",
             1
         ))
         .is_err()
@@ -559,26 +581,25 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
         fingerprint(),
     )
     .unwrap();
+    let wrong_owner_target = TargetResourceState::new(
+        codex(),
+        None,
+        Provenance::Direct,
+        Ownership::Skilltap,
+        None,
+        Some(wrong_owner),
+        None,
+        None,
+        None,
+        Timestamp::new(1, 0).unwrap(),
+        None,
+    )
+    .unwrap();
+    assert!(ResourceState::new(key.clone(), [wrong_owner_target]).is_err());
     assert!(
-        ResourceState::new(
-            key.clone(),
-            BTreeMap::new(),
-            Provenance::Direct,
-            Ownership::Skilltap,
+        TargetResourceState::new(
+            codex(),
             None,
-            Some(wrong_owner),
-            None,
-            None,
-            None,
-            Timestamp::new(1, 0).unwrap(),
-            None
-        )
-        .is_err()
-    );
-    assert!(
-        ResourceState::new(
-            key.clone(),
-            BTreeMap::new(),
             Provenance::Direct,
             Ownership::Unmanaged,
             None,
@@ -598,9 +619,9 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
     )
     .unwrap();
     assert!(
-        ResourceState::new(
-            key,
-            BTreeMap::new(),
+        TargetResourceState::new(
+            codex(),
+            None,
             Provenance::Direct,
             Ownership::Skilltap,
             None,
@@ -638,10 +659,10 @@ fn state_validates_duplicate_ids_ownership_roles_and_apply_records() {
 fn constructor_and_deserialization_enforce_state_invariants_equally() {
     let valid = managed_resource("skill:review");
     let mut value = serde_json::to_value(&valid).unwrap();
-    value["ownership"] = serde_json::json!("unmanaged");
+    value["targets"][0]["binding"]["ownership"] = serde_json::json!("unmanaged");
     assert!(serde_json::from_value::<ResourceState>(value).is_err());
 
-    let apply = valid.managed_artifact().unwrap();
+    let apply = valid.target(&codex()).unwrap().managed_artifact().unwrap();
     assert_eq!(apply.owner(), valid.key());
     assert_eq!(apply.role(), ArtifactRole::DirectSkill);
     assert!(apply.path().as_str().starts_with("artifact-direct-skill-"));
@@ -707,6 +728,7 @@ fn daemon_run_record_round_trips_and_survives_state_updates() {
     let preserved = state_with_resource
         .with_available_revision(
             &ResourceKey::new(ResourceId::new("skill:review").unwrap(), Scope::Global),
+            &codex(),
             None,
             Timestamp::new(5, 0).unwrap(),
         )
@@ -715,4 +737,96 @@ fn daemon_run_record_round_trips_and_survives_state_updates() {
     let mut invalid = serde_json::to_value(record).unwrap();
     invalid["failure_code"] = serde_json::json!("daemon.raw_secret");
     assert!(serde_json::from_value::<DaemonRunRecord>(invalid).is_err());
+}
+
+#[test]
+fn target_bindings_preserve_distinct_lifecycle_evidence_and_project_exactly() {
+    let key = ResourceKey::new(ResourceId::new("skill:dual").unwrap(), Scope::Global);
+    let codex = HarnessId::new("codex").unwrap();
+    let claude = HarnessId::new("claude").unwrap();
+    let apply = |id: &str, at| {
+        ApplyRecord::new(
+            Timestamp::new(at, 0).unwrap(),
+            [
+                OperationResult::new(OperationId::new(id).unwrap(), OperationOutcome::Applied)
+                    .unwrap(),
+            ],
+        )
+        .unwrap()
+    };
+    let native = TargetResourceState::new(
+        codex.clone(),
+        Some(NativeId::new("dual@catalog").unwrap()),
+        Provenance::Native,
+        Ownership::Harness,
+        Some(
+            Source::new(
+                SourceKind::RemoteCatalog,
+                SourceLocator::new("https://example.test/catalog.json").unwrap(),
+                None,
+            )
+            .unwrap(),
+        ),
+        None,
+        None,
+        Some(ResolvedRevision::Native(NativeId::new("1.0.0").unwrap())),
+        Some(ResolvedRevision::Native(NativeId::new("1.1.0").unwrap())),
+        Timestamp::new(10, 0).unwrap(),
+        Some(apply("codex:install", 11)),
+    )
+    .unwrap();
+    let artifact =
+        ManagedArtifactRecord::for_artifact(key.clone(), ArtifactRole::DirectSkill, fingerprint())
+            .unwrap();
+    let managed = TargetResourceState::new(
+        claude.clone(),
+        Some(NativeId::new("dual").unwrap()),
+        Provenance::Direct,
+        Ownership::Skilltap,
+        Some(
+            Source::new(
+                SourceKind::Local,
+                SourceLocator::new("/tmp/dual-skill").unwrap(),
+                None,
+            )
+            .unwrap(),
+        ),
+        Some(artifact),
+        Some(fingerprint()),
+        None,
+        None,
+        Timestamp::new(20, 0).unwrap(),
+        Some(apply("claude:install", 21)),
+    )
+    .unwrap();
+    let resource = ResourceState::new(key.clone(), [native.clone(), managed.clone()]).unwrap();
+    assert_eq!(resource.target(&codex), Some(&native));
+    assert_eq!(resource.target(&claude), Some(&managed));
+
+    let selected = HarnessSet::new([codex.clone()]).unwrap();
+    let projected = resource.without_targets(&selected).unwrap().unwrap();
+    assert_eq!(projected.targets().len(), 1);
+    assert_eq!(projected.target(&claude), Some(&managed));
+    assert!(projected.target(&codex).is_none());
+
+    let encoded = serde_json::to_value(&resource).unwrap();
+    let mut mismatch = encoded.clone();
+    let binding_harness = mismatch["targets"][0]["binding"]["harness"]
+        .as_str()
+        .unwrap();
+    mismatch["targets"][0]["target"] = if binding_harness == "codex" {
+        serde_json::json!("claude")
+    } else {
+        serde_json::json!("codex")
+    };
+    assert!(serde_json::from_value::<ResourceState>(mismatch).is_err());
+    let mut duplicate = encoded.clone();
+    duplicate["targets"]
+        .as_array_mut()
+        .unwrap()
+        .push(encoded["targets"][0].clone());
+    assert!(serde_json::from_value::<ResourceState>(duplicate).is_err());
+    let mut unknown = encoded;
+    unknown["targets"][0]["binding"]["unexpected"] = serde_json::json!(true);
+    assert!(serde_json::from_value::<ResourceState>(unknown).is_err());
 }

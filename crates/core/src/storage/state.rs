@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -272,11 +272,11 @@ pub struct HarnessState {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-#[serde(into = "ResourceStateWire")]
-pub struct ResourceState {
-    key: ResourceKey,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    native_ids: BTreeMap<HarnessId, NativeId>,
+#[serde(into = "TargetResourceStateWire")]
+pub struct TargetResourceState {
+    harness: HarnessId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_id: Option<NativeId>,
     provenance: Provenance,
     ownership: Ownership,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -296,10 +296,10 @@ pub struct ResourceState {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct ResourceStateWire {
-    key: ResourceKey,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    native_ids: BTreeMap<HarnessId, NativeId>,
+struct TargetResourceStateWire {
+    harness: HarnessId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    native_id: Option<NativeId>,
     provenance: Provenance,
     ownership: Ownership,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -317,11 +317,11 @@ struct ResourceStateWire {
     last_apply: Option<ApplyRecord>,
 }
 
-impl ResourceState {
+impl TargetResourceState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        key: ResourceKey,
-        native_ids: BTreeMap<HarnessId, NativeId>,
+        harness: HarnessId,
+        native_id: Option<NativeId>,
         provenance: Provenance,
         ownership: Ownership,
         source: Option<Source>,
@@ -343,10 +343,9 @@ impl ResourceState {
             )
         );
         if !ownership_valid {
-            return Err(SchemaError::InvalidOwnership { resource: key });
+            return Err(SchemaError::InvalidTargetOwnership { harness });
         }
         if let Some(artifact) = &managed_artifact {
-            artifact.validate_for_owner(&key)?;
             let role_valid = matches!(
                 (artifact.role(), provenance),
                 (ArtifactRole::MaterializedPlugin, Provenance::Materialized)
@@ -357,12 +356,12 @@ impl ResourceState {
                     )
             );
             if !role_valid {
-                return Err(SchemaError::InvalidArtifactRole { resource: key });
+                return Err(SchemaError::InvalidTargetArtifactRole { harness });
             }
         }
         Ok(Self {
-            key,
-            native_ids,
+            harness,
+            native_id,
             provenance,
             ownership,
             source,
@@ -374,8 +373,11 @@ impl ResourceState {
             last_apply,
         })
     }
-    pub const fn key(&self) -> &ResourceKey {
-        &self.key
+    pub const fn harness(&self) -> &HarnessId {
+        &self.harness
+    }
+    pub const fn native_id(&self) -> Option<&NativeId> {
+        self.native_id.as_ref()
     }
     pub const fn provenance(&self) -> Provenance {
         self.provenance
@@ -385,9 +387,6 @@ impl ResourceState {
     }
     pub const fn managed_artifact(&self) -> Option<&ManagedArtifactRecord> {
         self.managed_artifact.as_ref()
-    }
-    pub const fn native_ids(&self) -> &BTreeMap<HarnessId, NativeId> {
-        &self.native_ids
     }
     pub const fn source(&self) -> Option<&Source> {
         self.source.as_ref()
@@ -409,11 +408,11 @@ impl ResourceState {
     }
 }
 
-impl From<ResourceState> for ResourceStateWire {
-    fn from(value: ResourceState) -> Self {
+impl From<TargetResourceState> for TargetResourceStateWire {
+    fn from(value: TargetResourceState) -> Self {
         Self {
-            key: value.key,
-            native_ids: value.native_ids,
+            harness: value.harness,
+            native_id: value.native_id,
             provenance: value.provenance,
             ownership: value.ownership,
             source: value.source,
@@ -427,13 +426,13 @@ impl From<ResourceState> for ResourceStateWire {
     }
 }
 
-impl TryFrom<ResourceStateWire> for ResourceState {
+impl TryFrom<TargetResourceStateWire> for TargetResourceState {
     type Error = SchemaError;
 
-    fn try_from(value: ResourceStateWire) -> Result<Self, Self::Error> {
+    fn try_from(value: TargetResourceStateWire) -> Result<Self, Self::Error> {
         Self::new(
-            value.key,
-            value.native_ids,
+            value.harness,
+            value.native_id,
             value.provenance,
             value.ownership,
             value.source,
@@ -443,6 +442,134 @@ impl TryFrom<ResourceStateWire> for ResourceState {
             value.available_revision,
             value.observed_at,
             value.last_apply,
+        )
+    }
+}
+
+impl<'de> Deserialize<'de> for TargetResourceState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        TargetResourceStateWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(into = "ResourceStateWire")]
+pub struct ResourceState {
+    key: ResourceKey,
+    targets: BTreeMap<HarnessId, TargetResourceState>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ResourceStateWire {
+    key: ResourceKey,
+    targets: Vec<TargetBindingWire>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct TargetBindingWire {
+    target: HarnessId,
+    binding: TargetResourceState,
+}
+
+impl ResourceState {
+    pub fn new(
+        key: ResourceKey,
+        targets: impl IntoIterator<Item = TargetResourceState>,
+    ) -> Result<Self, SchemaError> {
+        let mut target_map = BTreeMap::new();
+        for target in targets {
+            let harness = target.harness().clone();
+            if let Some(artifact) = target.managed_artifact() {
+                artifact.validate_for_owner(&key)?;
+            }
+            if target_map.insert(harness.clone(), target).is_some() {
+                return Err(SchemaError::DuplicateTargetBinding {
+                    resource: key,
+                    harness,
+                });
+            }
+        }
+        if target_map.is_empty() {
+            return Err(SchemaError::EmptyTargetBindings { resource: key });
+        }
+        Ok(Self {
+            key,
+            targets: target_map,
+        })
+    }
+
+    pub const fn key(&self) -> &ResourceKey {
+        &self.key
+    }
+
+    pub const fn targets(&self) -> &BTreeMap<HarnessId, TargetResourceState> {
+        &self.targets
+    }
+
+    pub fn target(&self, harness: &HarnessId) -> Option<&TargetResourceState> {
+        self.targets.get(harness)
+    }
+
+    pub fn with_target(&self, target: TargetResourceState) -> Result<Self, SchemaError> {
+        let mut targets = self.targets.clone();
+        targets.insert(target.harness().clone(), target);
+        Self::new(self.key.clone(), targets.into_values())
+    }
+
+    pub fn without_targets(
+        &self,
+        selected: &crate::domain::HarnessSet,
+    ) -> Result<Option<Self>, SchemaError> {
+        let remaining = self
+            .targets
+            .iter()
+            .filter(|(harness, _)| !selected.contains(harness))
+            .map(|(_, target)| target.clone())
+            .collect::<Vec<_>>();
+        if remaining.is_empty() {
+            Ok(None)
+        } else {
+            Self::new(self.key.clone(), remaining).map(Some)
+        }
+    }
+}
+
+impl From<ResourceState> for ResourceStateWire {
+    fn from(value: ResourceState) -> Self {
+        Self {
+            key: value.key,
+            targets: value
+                .targets
+                .into_iter()
+                .map(|(target, binding)| TargetBindingWire { target, binding })
+                .collect(),
+        }
+    }
+}
+
+impl TryFrom<ResourceStateWire> for ResourceState {
+    type Error = SchemaError;
+
+    fn try_from(value: ResourceStateWire) -> Result<Self, Self::Error> {
+        for target in &value.targets {
+            if target.target != *target.binding.harness() {
+                return Err(SchemaError::TargetBindingMismatch {
+                    resource: value.key,
+                    map_key: target.target.clone(),
+                    binding: target.binding.harness().clone(),
+                });
+            }
+        }
+        Self::new(
+            value.key,
+            value.targets.into_iter().map(|target| target.binding),
         )
     }
 }
@@ -512,15 +639,19 @@ impl StateDocument {
             }
         }
         let mut resource_map = BTreeMap::new();
-        let mut managed_paths = BTreeSet::new();
+        let mut managed_paths = BTreeMap::new();
         for state in resources {
             let id = state.key.clone();
-            if let Some(artifact) = &state.managed_artifact
-                && !managed_paths.insert(artifact.path().clone())
-            {
-                return Err(SchemaError::DuplicateManagedPath {
-                    path: artifact.path().clone(),
-                });
+            for target in state.targets().values() {
+                if let Some(artifact) = target.managed_artifact()
+                    && managed_paths
+                        .insert(artifact.path().clone(), id.clone())
+                        .is_some_and(|owner| owner != id)
+                {
+                    return Err(SchemaError::DuplicateManagedPath {
+                        path: artifact.path().clone(),
+                    });
+                }
             }
             if resource_map.insert(id.clone(), state).is_some() {
                 return Err(SchemaError::DuplicateStateResource { resource: id });
@@ -583,6 +714,7 @@ impl StateDocument {
     pub fn with_operation_result(
         &self,
         resource: &ResourceKey,
+        target: &HarnessId,
         at: Timestamp,
         operation: OperationResult,
     ) -> Result<Self, SchemaError> {
@@ -592,25 +724,33 @@ impl StateDocument {
                 .ok_or_else(|| SchemaError::StateResourceNotFound {
                     resource: resource.clone(),
                 })?;
-        let mut operations = current
+        let current_target =
+            current
+                .target(target)
+                .ok_or_else(|| SchemaError::TargetBindingNotFound {
+                    resource: resource.clone(),
+                    harness: target.clone(),
+                })?;
+        let mut operations = current_target
             .last_apply()
             .map(|record| record.operations().clone())
             .unwrap_or_default();
         operations.insert(operation.operation_id().clone(), operation);
         let apply = ApplyRecord::new(at, operations.into_values())?;
-        let updated = ResourceState::new(
-            current.key().clone(),
-            current.native_ids().clone(),
-            current.provenance(),
-            current.ownership(),
-            current.source().cloned(),
-            current.managed_artifact().cloned(),
-            current.fingerprint().cloned(),
-            current.installed_revision().cloned(),
-            current.available_revision().cloned(),
-            current.observed_at(),
+        let updated_target = TargetResourceState::new(
+            current_target.harness().clone(),
+            current_target.native_id().cloned(),
+            current_target.provenance(),
+            current_target.ownership(),
+            current_target.source().cloned(),
+            current_target.managed_artifact().cloned(),
+            current_target.fingerprint().cloned(),
+            current_target.installed_revision().cloned(),
+            current_target.available_revision().cloned(),
+            current_target.observed_at(),
             Some(apply),
         )?;
+        let updated = current.with_target(updated_target)?;
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
         resources.push(updated);
@@ -631,6 +771,7 @@ impl StateDocument {
     pub fn with_available_revision(
         &self,
         resource: &ResourceKey,
+        target: &HarnessId,
         available: Option<ResolvedRevision>,
         checked_at: Timestamp,
     ) -> Result<Self, SchemaError> {
@@ -640,19 +781,27 @@ impl StateDocument {
                 .ok_or_else(|| SchemaError::StateResourceNotFound {
                     resource: resource.clone(),
                 })?;
-        let updated = ResourceState::new(
-            current.key().clone(),
-            current.native_ids().clone(),
-            current.provenance(),
-            current.ownership(),
-            current.source().cloned(),
-            current.managed_artifact().cloned(),
-            current.fingerprint().cloned(),
-            current.installed_revision().cloned(),
+        let current_target =
+            current
+                .target(target)
+                .ok_or_else(|| SchemaError::TargetBindingNotFound {
+                    resource: resource.clone(),
+                    harness: target.clone(),
+                })?;
+        let updated_target = TargetResourceState::new(
+            current_target.harness().clone(),
+            current_target.native_id().cloned(),
+            current_target.provenance(),
+            current_target.ownership(),
+            current_target.source().cloned(),
+            current_target.managed_artifact().cloned(),
+            current_target.fingerprint().cloned(),
+            current_target.installed_revision().cloned(),
             available,
-            current.observed_at(),
-            current.last_apply().cloned(),
+            current_target.observed_at(),
+            current_target.last_apply().cloned(),
         )?;
+        let updated = current.with_target(updated_target)?;
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
         resources.push(updated);
@@ -689,27 +838,38 @@ impl StateDocument {
         )?)
     }
 
-    /// Refresh mutable provenance fields for an already-known resource while
-    /// preserving its existing operation journal. Lifecycle updates use this
-    /// to record a new source fingerprint or resolved revision atomically with
-    /// the operation result.
+    /// Merge refreshed target bindings into an already-known logical resource.
+    /// Unselected siblings are preserved, and an existing target journal is
+    /// retained until an exact-target operation result replaces it.
     pub fn refresh_resource_state(&self, resource: ResourceState) -> Result<Self, SchemaError> {
         let Some(existing) = self.resources.get(resource.key()) else {
             return self.with_resource_state(resource);
         };
-        let refreshed = ResourceState::new(
-            resource.key().clone(),
-            resource.native_ids().clone(),
-            resource.provenance(),
-            resource.ownership(),
-            resource.source().cloned(),
-            resource.managed_artifact().cloned(),
-            resource.fingerprint().cloned(),
-            resource.installed_revision().cloned(),
-            resource.available_revision().cloned(),
-            resource.observed_at(),
-            existing.last_apply().cloned(),
-        )?;
+        let mut refreshed = existing.clone();
+        for incoming in resource.targets().values() {
+            let incoming = if incoming.last_apply().is_none() {
+                if let Some(previous) = existing.target(incoming.harness()) {
+                    TargetResourceState::new(
+                        incoming.harness().clone(),
+                        incoming.native_id().cloned(),
+                        incoming.provenance(),
+                        incoming.ownership(),
+                        incoming.source().cloned(),
+                        incoming.managed_artifact().cloned(),
+                        incoming.fingerprint().cloned(),
+                        incoming.installed_revision().cloned(),
+                        incoming.available_revision().cloned(),
+                        incoming.observed_at(),
+                        previous.last_apply().cloned(),
+                    )?
+                } else {
+                    incoming.clone()
+                }
+            } else {
+                incoming.clone()
+            };
+            refreshed = refreshed.with_target(incoming)?;
+        }
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource.key());
         resources.push(refreshed);

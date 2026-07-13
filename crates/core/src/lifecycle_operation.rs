@@ -7,7 +7,8 @@
 
 use crate::domain::{
     AcknowledgmentRequirement, AffectedSurface, CommandArgument, CompatibilityClass,
-    CompatibilityResult, EvidenceCode, EvidenceDetail, HarnessId, NativeId, Operation,
+    CompatibilityEvidence, CompatibilityResult, ComponentId, ConsequenceCode, ConsequenceSummary,
+    EvidenceCode, EvidenceDetail, HarnessId, MaterialConsequence, NativeId, Operation,
     OperationAction, OperationClass, OperationId, OperationReason, OperationSelector,
     OperationSemantics, Provenance, ResourceKey, Reversibility, TransferFidelity,
 };
@@ -117,23 +118,41 @@ pub fn faithful_file_operation_with_dependencies(
     )
 }
 
-/// Build a faithful managed lifecycle operation that names every file or
+/// Build a managed materialization operation that names every file or
 /// directory the adapter will touch.
-pub fn faithful_managed_operation(
+pub fn managed_materialization_operation(
     id: OperationId,
     target: HarnessId,
     resource: ResourceKey,
     action: OperationAction,
     paths: impl IntoIterator<Item = crate::domain::AbsolutePath>,
 ) -> Result<Operation, crate::domain::OperationContractError> {
+    let component =
+        ComponentId::new("managed:representation").expect("static managed component id is valid");
     let compatibility = CompatibilityResult::new(
         target.clone(),
         CompatibilityClass::Compatible,
-        TransferFidelity::Faithful,
-        [],
-        [],
+        TransferFidelity::Materializable,
+        [CompatibilityEvidence::new(
+            EvidenceCode::new("managed.load_path").expect("static evidence code is valid"),
+            target.clone(),
+            [component.clone()],
+            EvidenceDetail::new(
+                "The harness lacks a verified native project lifecycle command; skilltap will own the documented load-path representation.",
+            )
+            .expect("static evidence detail is valid"),
+        )],
+        [MaterialConsequence::new(
+            ConsequenceCode::new("managed.ownership")
+                .expect("static consequence code is valid"),
+            [component],
+            ConsequenceSummary::new(
+                "The project representation is managed by skilltap rather than the harness lifecycle.",
+            )
+            .expect("static consequence summary is valid"),
+        )],
     )
-    .expect("faithful managed operations have no evidence or consequences");
+    .expect("managed materialization operations have no partial consequences");
     let semantics = OperationSemantics::new(
         action,
         resource.scope().clone(),
@@ -223,5 +242,22 @@ mod tests {
                 .path()
                 .is_some_and(|path| path.as_str().ends_with("/demo"))
         }));
+    }
+
+    #[test]
+    fn managed_lifecycle_uses_the_materialization_contract() {
+        let operation = managed_materialization_operation(
+            OperationId::new("managed-project-marketplace").unwrap(),
+            HarnessId::new("codex").unwrap(),
+            ResourceKey::new(ResourceId::new("marketplace:local").unwrap(), Scope::Global),
+            OperationAction::MarketplaceRegister,
+            [crate::domain::AbsolutePath::new("/tmp/marketplace.json").unwrap()],
+        )
+        .unwrap();
+        assert_eq!(operation.class(), OperationClass::SafeMaterialization);
+        assert_eq!(
+            operation.compatibility().fidelity(),
+            TransferFidelity::Materializable
+        );
     }
 }

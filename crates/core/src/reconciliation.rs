@@ -164,7 +164,9 @@ pub fn classify_candidate(
             });
         }
         if let Some(prior) = &candidate.prior_state
-            && let Some(fingerprint) = prior.fingerprint()
+            && let Some(fingerprint) = prior
+                .target(candidate.operation.target())
+                .and_then(|target| target.fingerprint())
             && observed.fingerprint() != Some(fingerprint)
         {
             return Ok(ReconciliationDisposition::Attention {

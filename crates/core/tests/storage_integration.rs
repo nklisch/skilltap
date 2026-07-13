@@ -134,9 +134,9 @@ impl Fixture {
         &self,
         record: skilltap_core::storage::ManagedArtifactRecord,
     ) -> StateDocument {
-        let resource = ResourceState::new(
-            self.owner.clone(),
-            BTreeMap::new(),
+        let target = skilltap_core::storage::TargetResourceState::new(
+            HarnessId::new("codex").unwrap(),
+            None,
             Provenance::Direct,
             Ownership::Skilltap,
             None,
@@ -148,6 +148,7 @@ impl Fixture {
             None,
         )
         .unwrap();
+        let resource = ResourceState::new(self.owner.clone(), [target]).unwrap();
         StateDocument::new(
             STATE_SCHEMA_VERSION,
             [],
@@ -327,6 +328,8 @@ fn complete_tree_precedes_atomic_state_reference_and_failed_publish_preserves_bo
         .resources()
         .get(&fixture.owner)
         .unwrap()
+        .target(&HarnessId::new("codex").unwrap())
+        .unwrap()
         .managed_artifact()
         .unwrap();
     assert_eq!(round_tripped_record, handle.record());
@@ -357,6 +360,8 @@ fn complete_tree_precedes_atomic_state_reference_and_failed_publish_preserves_bo
             };
             if let Some(resource) = state.resources().get(&reader_owner) {
                 let record = resource
+                    .target(&HarnessId::new("codex").unwrap())
+                    .expect("referenced state carries target binding")
                     .managed_artifact()
                     .expect("referenced state carries artifact record");
                 let artifacts =

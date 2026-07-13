@@ -9,8 +9,7 @@ use crate::{
     },
     storage::{
         ArtifactPublication, ArtifactRole, ArtifactTree, ManagedArtifactError,
-        ManagedArtifactRecord, ManagedArtifactRepository, ResourceState, SchemaError,
-        StateDocument, Timestamp,
+        ManagedArtifactRecord, ManagedArtifactRepository, SchemaError, StateDocument, Timestamp,
     },
 };
 
@@ -324,27 +323,27 @@ pub fn record_verified_publication(
                 ));
             }
         };
-        let mut native_ids = current.native_ids().clone();
+        let mut refreshed = current.clone();
         for (_, verified) in entries {
-            native_ids.insert(
+            let current_target = current.target(verified.target());
+            let target = crate::storage::TargetResourceState::new(
                 verified.target().clone(),
-                verified.native_identity().clone(),
-            );
+                Some(verified.native_identity().clone()),
+                provenance,
+                Ownership::Skilltap,
+                current_target.and_then(|target| target.source().cloned()),
+                Some(first_record.clone()),
+                first_record.fingerprint().cloned(),
+                current_target.and_then(|target| target.installed_revision().cloned()),
+                current_target.and_then(|target| target.available_revision().cloned()),
+                at,
+                current_target.and_then(|target| target.last_apply().cloned()),
+            )
+            .map_err(PublicationStateError::State)?;
+            refreshed = refreshed
+                .with_target(target)
+                .map_err(PublicationStateError::State)?;
         }
-        let refreshed = ResourceState::new(
-            resource.clone(),
-            native_ids,
-            provenance,
-            Ownership::Skilltap,
-            current.source().cloned(),
-            Some(first_record.clone()),
-            first_record.fingerprint().cloned(),
-            current.installed_revision().cloned(),
-            current.available_revision().cloned(),
-            current.observed_at(),
-            current.last_apply().cloned(),
-        )
-        .map_err(PublicationStateError::State)?;
         updated = updated
             .refresh_resource_state(refreshed)
             .map_err(PublicationStateError::State)?;
@@ -585,14 +584,12 @@ pub fn plan_publication(
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::collections::BTreeMap;
-
     use super::*;
     use crate::domain::{
         ComponentGraph, FingerprintAlgorithm, ObservationKey, Ownership, Provenance, ResourceId,
         ResourceKind, Scope,
     };
+    use std::cell::RefCell;
 
     fn resource(value: &str) -> ResourceKey {
         ResourceKey::new(ResourceId::new(value).unwrap(), Scope::Global)
@@ -816,9 +813,9 @@ mod tests {
                 NativeId::new("native-demo").unwrap(),
             )],
         };
-        let current = ResourceState::new(
-            entry.resource.clone(),
-            BTreeMap::new(),
+        let current_target = crate::storage::TargetResourceState::new(
+            entry.target.clone(),
+            None,
             Provenance::Native,
             Ownership::Harness,
             None,
@@ -830,13 +827,24 @@ mod tests {
             None,
         )
         .unwrap();
-        let state = StateDocument::new(1, [], [current], None, None, None).unwrap();
+        let current =
+            crate::storage::ResourceState::new(entry.resource.clone(), [current_target]).unwrap();
+        let state = StateDocument::new(
+            crate::storage::STATE_SCHEMA_VERSION,
+            [],
+            [current],
+            None,
+            None,
+            None,
+        )
+        .unwrap();
         let refreshed =
             record_verified_publication(&state, &receipt, Timestamp::new(2, 0).unwrap()).unwrap();
         let updated = refreshed.resources().get(&entry.resource).unwrap();
+        let updated = updated.target(&entry.target).unwrap();
         assert_eq!(updated.provenance(), Provenance::Materialized);
         assert_eq!(updated.ownership(), Ownership::Skilltap);
-        assert_eq!(updated.native_ids()[&entry.target].as_str(), "native-demo");
+        assert_eq!(updated.native_id().unwrap().as_str(), "native-demo");
         assert_eq!(
             refreshed.last_successful_application(),
             Some(Timestamp::new(2, 0).unwrap())

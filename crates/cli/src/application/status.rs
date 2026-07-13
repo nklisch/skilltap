@@ -115,8 +115,11 @@ impl StatusApplication<'_> {
                     "Resolve the reported harness observation problem and retry adoption.",
                 ));
         };
-        for warning in observation.warnings {
+        for warning in observation.warnings.iter().cloned() {
             outcome = outcome.with_warning(warning);
+        }
+        for action in observation.next_actions.iter().cloned() {
+            outcome = outcome.with_next_action(action);
         }
         outcome = outcome
             .with_summary("scopes", scope.count)
@@ -1062,7 +1065,14 @@ fn status_update_projection(
             .state
             .as_ref()
             .and_then(|state| state.resources().get(resource.key()))
-            .and_then(|state| state.installed_revision());
+            .and_then(|state| {
+                resource
+                    .targets()
+                    .iter()
+                    .filter(|target| targets.resolved.contains(target))
+                    .find_map(|target| state.target(target))
+            })
+            .and_then(|target| target.installed_revision());
         if update_mode == skilltap_core::storage::UpdateMode::Off
             || resource.update() == UpdateIntent::Disabled
         {

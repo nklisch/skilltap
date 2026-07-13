@@ -549,12 +549,9 @@ impl StatusApplication<'_> {
                     }
                 };
             }
-            let canonical_state = ResourceState::new(
-                canonical_resource,
-                BTreeMap::from([(
-                    enabled.first().expect("enabled set is non-empty").clone(),
-                    NativeId::new(canonical.as_str()).expect("absolute path is valid native id"),
-                )]),
+            let canonical_target = TargetResourceState::new(
+                enabled.first().expect("enabled set is non-empty").clone(),
+                Some(NativeId::new(canonical.as_str()).expect("absolute path is valid native id")),
                 Provenance::Direct,
                 Ownership::Skilltap,
                 None,
@@ -564,9 +561,11 @@ impl StatusApplication<'_> {
                 None,
                 timestamp,
                 None,
-            )
-            .map_err(|_| ())
-            .ok();
+            );
+            let canonical_state = canonical_target
+                .and_then(|target| ResourceState::new(canonical_resource, [target]))
+                .map_err(|_| ())
+                .ok();
             if let Some(state) = canonical_state {
                 seeds.insert(state.key().clone(), state);
             }
@@ -614,12 +613,9 @@ impl StatusApplication<'_> {
                     .filter(|metadata| metadata.kind() == FileKind::RegularFile)
                     .and_then(|_| filesystem.read(&nested).ok())
                     .unwrap_or_default();
-                let nested_state = ResourceState::new(
-                    nested_resource,
-                    BTreeMap::from([(
-                        HarnessId::new("claude").expect("known harness id is valid"),
-                        NativeId::new(nested.as_str()).expect("absolute path is valid native id"),
-                    )]),
+                let nested_target = TargetResourceState::new(
+                    HarnessId::new("claude").expect("known harness id is valid"),
+                    Some(NativeId::new(nested.as_str()).expect("absolute path is valid native id")),
                     Provenance::Direct,
                     Ownership::Skilltap,
                     None,
@@ -629,9 +625,11 @@ impl StatusApplication<'_> {
                     None,
                     timestamp,
                     None,
-                )
-                .map_err(|_| ())
-                .ok();
+                );
+                let nested_state = nested_target
+                    .and_then(|target| ResourceState::new(nested_resource, [target]))
+                    .map_err(|_| ())
+                    .ok();
                 operations.push(nested_operation);
                 entries.insert(
                     nested_id,
@@ -719,12 +717,9 @@ impl StatusApplication<'_> {
                     InstructionWrite::Canonical | InstructionWrite::Symlink { .. } => Vec::new(),
                     InstructionWrite::Remove => Vec::new(),
                 };
-                let bridge_state = ResourceState::new(
-                    bridge_resource.clone(),
-                    BTreeMap::from([(
-                        target.clone(),
-                        NativeId::new(bridge.as_str()).expect("absolute path is valid native id"),
-                    )]),
+                let bridge_target = TargetResourceState::new(
+                    target.clone(),
+                    Some(NativeId::new(bridge.as_str()).expect("absolute path is valid native id")),
                     Provenance::Direct,
                     Ownership::Skilltap,
                     None,
@@ -734,9 +729,11 @@ impl StatusApplication<'_> {
                     None,
                     timestamp,
                     None,
-                )
-                .map_err(|_| ())
-                .ok();
+                );
+                let bridge_state = bridge_target
+                    .and_then(|target| ResourceState::new(bridge_resource.clone(), [target]))
+                    .map_err(|_| ())
+                    .ok();
                 if let Some(state) = bridge_state {
                     seeds.insert(state.key().clone(), state);
                 }

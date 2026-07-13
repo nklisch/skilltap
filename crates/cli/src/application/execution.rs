@@ -97,7 +97,7 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
             )
         })?;
         let next = current
-            .with_operation_result(resource, at, result.clone())
+            .with_operation_result(resource, operation.target(), at, result.clone())
             .map_err(|_| {
                 ExecutionError::journal_failure(
                     skilltap_core::domain::EvidenceCode::new("state.resource_unavailable")
@@ -216,6 +216,17 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                 "The managed project lifecycle adapter did not receive the planned request.",
             )
         })?;
+        if matches!(
+            operation.action(),
+            OperationAction::PluginInstall
+                | OperationAction::PluginUpdate
+                | OperationAction::PluginRemove
+        ) && entry.plugin.is_none()
+        {
+            return Err(managed_project_apply_failure(
+                "The managed project plugin operation has no plugin tree request.",
+            ));
+        }
         if entry.expected_catalog == entry.desired_catalog
             && entry
                 .plugin

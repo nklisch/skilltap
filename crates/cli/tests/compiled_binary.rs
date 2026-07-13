@@ -653,6 +653,88 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
 }
 
 #[test]
+fn native_lifecycle_projects_each_detection_failure_without_sensitive_context() {
+    fn assert_failure(claude: &Path, warning_code: &str, action_code: &str) {
+        let machine = machine();
+        let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+        write_owned(
+            &machine,
+            "config.toml",
+            &native_config(codex.executable(), claude),
+        );
+
+        let output = run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                "https://example.invalid/team.git",
+                "--name",
+                "team",
+                "--target",
+                "claude",
+                "--json",
+            ],
+        );
+        assert_code(&output, 2);
+        let value = json(&output);
+        assert_eq!(value["result"], "attention_required");
+        assert!(value["warnings"].as_array().unwrap().iter().any(|warning| {
+            warning["code"] == warning_code && warning["context"]["harness"] == "claude"
+        }));
+        assert!(
+            value["next_actions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|action| action["code"] == action_code)
+        );
+        assert!(
+            !value["warnings"].as_array().unwrap().iter().any(|warning| {
+                warning["code"] == "native_profile_unavailable"
+                    || warning["code"] == "native_detection_failed"
+            })
+        );
+        let rendered = serde_json::to_string(&value).unwrap();
+        for forbidden in ["secret-native-output", "argv", "environment"] {
+            assert!(!rendered.contains(forbidden));
+        }
+    }
+
+    let missing_root = machine();
+    assert_failure(
+        &missing_root.home().join("missing-claude"),
+        "native_executable_not_found",
+        "configure_harness_binary",
+    );
+
+    let invalid = FakeNativeProcess::new(FakeNativeMode::MalformedJson).unwrap();
+    assert_failure(
+        invalid.executable(),
+        "native_version_invalid",
+        "inspect_harness_version",
+    );
+
+    let nonzero = FakeNativeProcess::new(FakeNativeMode::Exit(17)).unwrap();
+    assert_failure(
+        nonzero.executable(),
+        "native_version_command_failed",
+        "inspect_harness_version",
+    );
+
+    let bounded = FakeNativeProcess::new(FakeNativeMode::Flood {
+        stdout_bytes: 300_000,
+        stderr_bytes: 0,
+    })
+    .unwrap();
+    assert_failure(
+        bounded.executable(),
+        "native_detection_bounded",
+        "inspect_harness_version",
+    );
+}
+
+#[test]
 fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     let machine = machine();
     let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
@@ -812,11 +894,12 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
 #[test]
 fn targeted_native_remove_preserves_unselected_harness() {
     let machine = machine();
-    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
     write_owned(
         &machine,
         "config.toml",
-        &native_config(fixture.executable(), fixture.executable()),
+        &native_config(codex.executable(), claude.executable()),
     );
     fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
     fs::create_dir_all(machine.home().join(".codex/skills")).unwrap();
@@ -1806,8 +1889,29 @@ fn targeted_skill_update_preserves_unselected_target_and_native_ids() {
     );
     let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
     assert!(inventory.contains("skill:targeted-update"));
-    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
-    assert!(state.contains("\"claude\": \"targeted-update\""));
+    let state: serde_json::Value =
+        serde_json::from_slice(&fs::read(config_root(&machine).join("state.json")).unwrap())
+            .unwrap();
+    let resource = state["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|resource| resource["key"]["id"] == "skill:targeted-update")
+        .unwrap();
+    let binding = |harness: &str| {
+        resource["targets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|target| target["target"] == harness)
+            .unwrap()["binding"]
+            .clone()
+    };
+    let codex = binding("codex");
+    let claude = binding("claude");
+    assert_eq!(claude["native_id"], "targeted-update");
+    assert_eq!(codex["native_id"], "targeted-update");
+    assert_ne!(codex["fingerprint"], claude["fingerprint"]);
 }
 
 #[test]
@@ -2611,8 +2715,19 @@ fn status_preserves_successful_sibling_observation_and_never_mutates_native_tree
             .any(|entry| { entry["id"] == "claude:global" && entry["status"] == "unreachable" })
     );
     assert!(value["warnings"].as_array().unwrap().iter().any(|warning| {
-        warning["code"] == "native_detection_failed" && warning["context"]["harness"] == "claude"
+        warning["code"] == "native_version_invalid" && warning["context"]["harness"] == "claude"
     }));
+    assert!(
+        value["next_actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|action| {
+                action["code"] == "inspect_harness_version"
+                    && action["command"] == "claude --version"
+            }),
+        "unexpected adoption diagnostics: {value}"
+    );
 
     let plain = run(&machine, &["status", "--target", "codex"]);
     assert_code(&plain, 0);
@@ -2685,8 +2800,19 @@ fn adopt_reports_partial_sibling_and_still_publishes_healthy_candidates() {
     assert_eq!(value["result"], "attention_required");
     assert!(value["summary"]["adopted"].as_u64().unwrap() > 0);
     assert!(value["warnings"].as_array().unwrap().iter().any(|warning| {
-        warning["code"] == "native_detection_failed" && warning["context"]["harness"] == "claude"
+        warning["code"] == "native_version_invalid" && warning["context"]["harness"] == "claude"
     }));
+    assert!(
+        value["next_actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|action| {
+                action["code"] == "inspect_harness_version"
+                    && action["command"] == "claude --version"
+            }),
+        "unexpected partial adoption diagnostics: {value}"
+    );
     assert!(config_root(&machine).join("inventory.toml").is_file());
 }
 

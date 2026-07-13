@@ -26,7 +26,7 @@ pub use repository::{
 };
 pub use state::{
     ApplyRecord, DaemonRunRecord, DaemonRunResult, HarnessState, ResourceState, StateDocument,
-    Timestamp,
+    TargetResourceState, Timestamp,
 };
 
 use std::fmt;
@@ -35,7 +35,7 @@ use crate::domain::{AbsolutePath, OperationId, ResourceGraphError, ResourceKey, 
 
 pub const CONFIG_SCHEMA_VERSION: u32 = 1;
 pub const INVENTORY_SCHEMA_VERSION: u32 = 1;
-pub const STATE_SCHEMA_VERSION: u32 = 1;
+pub const STATE_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug)]
 pub enum SchemaError {
@@ -89,6 +89,28 @@ pub enum SchemaError {
     },
     InvalidArtifactRole {
         resource: ResourceKey,
+    },
+    InvalidTargetOwnership {
+        harness: crate::domain::HarnessId,
+    },
+    InvalidTargetArtifactRole {
+        harness: crate::domain::HarnessId,
+    },
+    EmptyTargetBindings {
+        resource: ResourceKey,
+    },
+    DuplicateTargetBinding {
+        resource: ResourceKey,
+        harness: crate::domain::HarnessId,
+    },
+    TargetBindingMismatch {
+        resource: ResourceKey,
+        map_key: crate::domain::HarnessId,
+        binding: crate::domain::HarnessId,
+    },
+    TargetBindingNotFound {
+        resource: ResourceKey,
+        harness: crate::domain::HarnessId,
     },
     InvalidDaemonFailureCode,
     DuplicateManagedPath {
@@ -160,6 +182,33 @@ impl fmt::Display for SchemaError {
             Self::InvalidArtifactRole { resource } => write!(
                 formatter,
                 "resource `{resource}` has an artifact role inconsistent with its provenance"
+            ),
+            Self::InvalidTargetOwnership { harness } => write!(
+                formatter,
+                "target `{harness}` has inconsistent provenance and ownership"
+            ),
+            Self::InvalidTargetArtifactRole { harness } => write!(
+                formatter,
+                "target `{harness}` has an artifact role inconsistent with its provenance"
+            ),
+            Self::EmptyTargetBindings { resource } => {
+                write!(formatter, "resource `{resource}` has no target bindings")
+            }
+            Self::DuplicateTargetBinding { resource, harness } => write!(
+                formatter,
+                "resource `{resource}` contains target `{harness}` more than once"
+            ),
+            Self::TargetBindingMismatch {
+                resource,
+                map_key,
+                binding,
+            } => write!(
+                formatter,
+                "resource `{resource}` target key `{map_key}` does not match binding `{binding}`"
+            ),
+            Self::TargetBindingNotFound { resource, harness } => write!(
+                formatter,
+                "resource `{resource}` has no target binding for `{harness}`"
             ),
             Self::InvalidDaemonFailureCode => {
                 formatter.write_str("daemon failure code is not registered or conflicts with its result")

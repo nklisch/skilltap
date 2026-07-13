@@ -46,9 +46,9 @@ fn desired(key: ResourceKey) -> DesiredResource {
 }
 
 fn state_resource(key: ResourceKey) -> ResourceState {
-    ResourceState::new(
-        key,
-        BTreeMap::new(),
+    let target = skilltap_core::storage::TargetResourceState::new(
+        HarnessId::new("codex").unwrap(),
+        None,
         Provenance::Adopted,
         Ownership::Harness,
         None,
@@ -59,7 +59,8 @@ fn state_resource(key: ResourceKey) -> ResourceState {
         Timestamp::new(10, 0).unwrap(),
         None,
     )
-    .unwrap()
+    .unwrap();
+    ResourceState::new(key, [target]).unwrap()
 }
 
 fn planned_operation(id: &str, key: ResourceKey) -> Operation {

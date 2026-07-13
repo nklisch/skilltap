@@ -1,5 +1,5 @@
 {
-  "schema": 1,
+  "schema": 2,
   "harnesses": [
     {
       "harness": "codex",
@@ -18,44 +18,52 @@
           "kind": "global"
         }
       },
-      "provenance": "direct",
-      "ownership": "skilltap",
-      "managed_artifact": {
-        "owner": {
-          "id": "skill:review",
-          "scope": {
-            "kind": "global"
-          }
-        },
-        "role": "direct_skill",
-        "path": "artifact-direct-skill-c05d6415c054e1efb1a65975253d47362856c834f7b5e3cf2029dc0baad7e3da-sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        "fingerprint": {
-          "algorithm": "sha256",
-          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        }
-      },
-      "fingerprint": {
-        "algorithm": "sha256",
-        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-      },
-      "observed_at": {
-        "seconds": 100,
-        "nanoseconds": 25
-      },
-      "last_apply": {
-        "at": {
-          "seconds": 101,
-          "nanoseconds": 0
-        },
-        "operations": [
-          {
-            "operation_id": "install:skill",
-            "outcome": {
-              "status": "applied"
+      "targets": [
+        {
+          "target": "codex",
+          "binding": {
+            "harness": "codex",
+            "provenance": "direct",
+            "ownership": "skilltap",
+            "managed_artifact": {
+              "owner": {
+                "id": "skill:review",
+                "scope": {
+                  "kind": "global"
+                }
+              },
+              "role": "direct_skill",
+              "path": "artifact-direct-skill-c05d6415c054e1efb1a65975253d47362856c834f7b5e3cf2029dc0baad7e3da-sha256-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "fingerprint": {
+                "algorithm": "sha256",
+                "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              }
+            },
+            "fingerprint": {
+              "algorithm": "sha256",
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "observed_at": {
+              "seconds": 100,
+              "nanoseconds": 25
+            },
+            "last_apply": {
+              "at": {
+                "seconds": 101,
+                "nanoseconds": 0
+              },
+              "operations": [
+                {
+                  "operation_id": "install:skill",
+                  "outcome": {
+                    "status": "applied"
+                  }
+                }
+              ]
             }
           }
-        ]
-      }
+        }
+      ]
     }
   ],
   "last_update_check": {
