@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-cross-harness-materialization, epic-expanded-harness-support-registry]
@@ -1180,6 +1180,18 @@ of the `From` conversions beyond the orchestrator integration.
   load the projected resource effectively; a malformed MCP document fails
   verification and blocks ownership. The Codex regression tests pin the
   specific TOML shape; future adapters pin theirs in their own features.
+
+## Implementation outcome
+
+All five child stories are terminal. The delivered implementation includes the
+base adapter port, the evidence/source amendment discovered during Codex
+relocation, the Codex adapter, the target-neutral CLI orchestrator, and a
+reusable dependency-neutral acceptance matrix exercised through real lifecycle
+dispatch for Codex and a non-Codex adapter. Install/update behavior remains
+regression-pinned; marketplace removal is intentionally source-free; state
+schema and publication boundaries are unchanged. The aggregate review should
+treat the earlier acquire/project descriptions and migration sketches as
+superseded by the amendment and completed child records.
 
 ## Cross-feature impact
 
