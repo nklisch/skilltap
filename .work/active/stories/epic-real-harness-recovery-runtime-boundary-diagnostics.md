@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
@@ -67,3 +67,18 @@ safe output and isolated compiled-binary coverage.
 **Nits**: none
 
 **Notes**: Fresh-context deep review at the project-default `standard` weight for the public diagnostic contract. Commit `ac89e49` correctly centralizes safe projections for harness list and observation/status paths, but does not carry the typed error through lifecycle capability lookup and leaves two compiled regressions red. Verification used a detached second-wave worktree to avoid concurrent third-wave edits.
+
+## Bounce resolution (2026-07-12)
+
+- `configured_native_profile` now preserves `DetectionError` through lifecycle
+  capability lookup. Lifecycle output uses the same authoritative mapper as
+  harness list and status while unsupported profiles/capabilities retain their
+  distinct warnings.
+- Partial adoption now projects the observation's typed next actions, matching
+  status and plan behavior.
+- The stale sibling status/adoption assertions now require the exact invalid
+  version warning and `claude --version` next action.
+- Compiled coverage exercises absent, invalid, nonzero, and bounded lifecycle
+  detection without generic warnings or sensitive context.
+- Integrated by `b0e1869`; the full workspace suite and all-feature Clippy are
+  green, and the three diagnostics-focused compiled tests pass independently.
