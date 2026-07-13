@@ -5,7 +5,7 @@ stage: done
 tags: [testing, architecture]
 parent: epic-skilltap-plugin-distribution-package
 depends_on: [story-skilltap-plugin-package-assets]
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

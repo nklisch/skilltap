@@ -8,7 +8,7 @@ depends_on:
   - epic-real-harness-recovery-runtime-boundary-process-context
   - epic-real-harness-recovery-runtime-boundary-version-decoding
   - epic-real-harness-recovery-runtime-boundary-diagnostics-completion
-release_binding: null
+release_binding: 3.0.2
 research_refs: []
 research_origin: null
 gate_origin: null

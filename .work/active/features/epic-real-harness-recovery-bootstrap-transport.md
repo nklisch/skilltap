@@ -5,7 +5,7 @@ stage: done
 tags: [correctness, security, infra, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: []
-release_binding: null
+release_binding: 3.0.2
 research_refs: []
 research_origin: null
 gate_origin: null

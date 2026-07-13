@@ -5,7 +5,7 @@ stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
-release_binding: null
+release_binding: 3.0.2
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
 gate_origin: null

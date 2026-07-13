@@ -5,7 +5,7 @@ stage: done
 tags: [infra, security, testing]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: [story-skilltap-plugin-distribution-bootstrap-cli-rollback-safety]
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

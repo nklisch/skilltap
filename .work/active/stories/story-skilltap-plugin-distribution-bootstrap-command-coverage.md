@@ -5,7 +5,7 @@ stage: done
 tags: [infra, testing, security]
 parent: epic-skilltap-plugin-distribution-bootstrap
 depends_on: []
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

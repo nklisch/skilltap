@@ -5,7 +5,7 @@ stage: done
 tags: [infra, content, architecture]
 parent: null
 depends_on: []
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

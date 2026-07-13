@@ -5,7 +5,7 @@ stage: done
 tags: [infra, content]
 parent: epic-skilltap-plugin-distribution
 depends_on: [epic-skilltap-plugin-distribution-package, epic-skilltap-plugin-distribution-cli-contract, epic-skilltap-plugin-distribution-bootstrap, epic-skilltap-plugin-distribution-guidance]
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

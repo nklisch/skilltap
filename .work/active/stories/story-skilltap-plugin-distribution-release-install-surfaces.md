@@ -5,7 +5,7 @@ stage: done
 tags: [content, testing]
 parent: epic-skilltap-plugin-distribution-release
 depends_on: [story-skilltap-plugin-distribution-release-contract]
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

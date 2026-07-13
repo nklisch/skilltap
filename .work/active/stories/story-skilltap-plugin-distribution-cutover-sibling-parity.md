@@ -5,7 +5,7 @@ stage: done
 tags: [infra, testing, cleanup]
 parent: epic-skilltap-plugin-distribution-cutover
 depends_on: [story-skilltap-plugin-distribution-cutover-canonical-verification]
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12

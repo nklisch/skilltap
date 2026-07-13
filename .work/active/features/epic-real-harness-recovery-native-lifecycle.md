@@ -5,7 +5,7 @@ stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: [epic-real-harness-recovery-runtime-boundary]
-release_binding: null
+release_binding: 3.0.2
 research_refs: []
 research_origin: null
 gate_origin: null

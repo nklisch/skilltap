@@ -7,7 +7,7 @@ parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
   - epic-real-harness-recovery-state-diagnostics-dual-native-lifecycle
   - epic-real-harness-recovery-state-diagnostics-update-eligibility
-release_binding: null
+release_binding: 3.0.2
 research_refs: []
 research_origin: null
 gate_origin: null

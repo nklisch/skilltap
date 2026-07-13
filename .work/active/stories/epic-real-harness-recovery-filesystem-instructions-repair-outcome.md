@@ -7,7 +7,7 @@ parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
   - epic-real-harness-recovery-filesystem-instructions-relative-bridges
   - epic-real-harness-recovery-filesystem-instructions-repair-completion
-release_binding: null
+release_binding: 3.0.2
 research_refs: []
 research_origin: null
 gate_origin: null

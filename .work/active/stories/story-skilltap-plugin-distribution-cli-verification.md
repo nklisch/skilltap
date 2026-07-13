@@ -7,7 +7,7 @@ parent: epic-skilltap-plugin-distribution-cli-contract
 depends_on:
   - story-skilltap-plugin-distribution-cli-help-contract
   - story-skilltap-plugin-distribution-cli-diagnostics
-release_binding: null
+release_binding: 3.0.2
 gate_origin: null
 created: 2026-07-12
 updated: 2026-07-12
