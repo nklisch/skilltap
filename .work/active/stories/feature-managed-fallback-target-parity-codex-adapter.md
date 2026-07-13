@@ -1,10 +1,10 @@
 ---
 id: feature-managed-fallback-target-parity-codex-adapter
 kind: story
-stage: drafting
+stage: implementing
 tags: []
 parent: feature-managed-fallback-target-parity
-depends_on: [feature-managed-fallback-target-parity-contract]
+depends_on: [feature-managed-fallback-target-parity-contract-evidence]
 release_binding: null
 research_refs:
   - .research/analysis/briefs/harness-adapter-targets-skills-mcp-2026-07-12.md
@@ -18,29 +18,52 @@ updated: 2026-07-13
 
 ## Scope
 
-Implement Unit 2 of the managed-fallback-target-parity feature design: a
-`CodexManagedProjection` struct that implements `ManagedProjectionPort` by
-**relocating** — not rewriting — the existing Codex managed-project helpers
-out of CLI and into `skilltap-harnesses`. `CodexAdapter::managed_projection()`
-returns the static ref. Behavior is byte-identical; only the module home
-changes.
+Implement Unit 2 of the managed-fallback-target-parity feature design against
+the **amended** contract (`feature-managed-fallback-target-parity-contract-
+evidence`): a `CodexManagedProjection` struct that implements the
+single-method `ManagedProjectionPort::plan` by **relocating** — not rewriting
+— the existing Codex managed-project helpers out of CLI and into
+`skilltap-harnesses`. `CodexAdapter::managed_projection()` returns the static
+ref. The relocation is behavior-preserving for install/update paths; removal
+is corrected to drop the approved contract's mandatory source acquisition
+(see Behavior change for removal below).
 
 The CLI keeps its existing `plan_managed_codex_project_lifecycle` orchestrator
-for now (Unit 3 removes it). To avoid a behavioral fork during this story,
-the CLI orchestrator and the new adapter port share the same relocated
+for now (the orchestrator story removes it). To avoid a behavioral fork during
+this story, the CLI orchestrator and the new adapter share the same relocated
 helpers: the helpers move to `crates/harnesses/src/adapters/codex_managed.rs`
 (or a private `codex_managed_helpers` submodule) and the CLI function imports
-them. This makes the story a pure relocation.
+them. This keeps install/update a pure relocation.
 
-Parent design: `feature-managed-fallback-target-parity` Unit 2.
+Parent design: `feature-managed-fallback-target-parity` Unit 2, as amended by
+the Implementation discovery and contract amendment section. The contract
+amendment this story depends on is
+`feature-managed-fallback-target-parity-contract-evidence`.
+
+### Behavior change for removal
+
+The amended contract models removal as `ManagedProjectionInput::Remove`, which
+carries no `ResolvedSourceCheckout`. This is an intentional, contract-driven
+change to the removal path: plugin removal already planned from the prior
+manifest without source (the existing Codex path proves this works);
+marketplace removal now also plans from the prior manifest plus current
+filesystem observation of `.agents/plugins/marketplace.json`, and no longer
+fails with `managed_project_source_missing` when the marketplace source is
+unreachable but its catalog projection is still observable. The
+`managed_project_source_missing` error remains a typed variant for install/
+update, where source acquisition is genuinely required. The Codex regression
+suite must be updated to reflect that marketplace removal no longer requires
+source (the previously source-gated removal test moves to a source-absent
+fixture that succeeds against an observable catalog).
 
 ## Units
 
 - `crates/harnesses/src/adapters/codex_managed.rs` (new):
-  `CodexManagedProjection` struct implementing `ManagedProjectionPort`, plus
-  the relocated private helpers (catalog read, plugin-tree read,
-  component-projection planning, MCP-config planning, plugin-root-relative
-  gating) and the adapter-private path/format constants.
+  `CodexManagedProjection` struct implementing the amended single-method
+  `ManagedProjectionPort::plan`, plus the relocated private helpers (catalog
+  read at a checkout root, plugin-tree read, component-projection planning,
+  MCP-config planning, plugin-root-relative gating) and the adapter-private
+  path/format constants.
 - `crates/harnesses/src/adapters/codex.rs` (modified): override
   `managed_projection()` to return `CodexManagedProjection::static_ref()`.
 - `crates/cli/src/application.rs` (modified): the Codex-specific free
@@ -50,26 +73,40 @@ Parent design: `feature-managed-fallback-target-parity` Unit 2.
   `ResolvedCodexMarketplace`, `CodexComponentProjectionPlan`,
   `CodexMcpConfigPlan`) are deleted from CLI; `plan_managed_codex_project_
   lifecycle` imports the relocated helpers from harnesses for the duration of
-  this story (Unit 3 deletes it).
+  this story (the orchestrator story deletes it).
 
-The full code shape is in the parent feature's Unit 2 design body. The key
-relocations (verified line numbers in the grounding summary):
+### Amended port consumption
 
-- Marketplace acquisition: `application.rs:1467-1577` marketplace branch +
-  `resolve_codex_marketplace_source` (1777) + `read_codex_catalog_at_root`
-  (1773) → `CodexManagedProjection::acquire` returning
-  `AcquiredProjection::MarketplaceCatalog { bytes, fingerprint, source,
-  installed_revision }`.
-- Plugin acquisition: `application.rs:1577+` plugin branch +
-  `read_complete_codex_plugin` (2301) → `CodexManagedProjection::acquire`
-  returning `AcquiredProjection::Plugin { tree, fingerprint, declarations,
-  source, installed_revision }`.
-- Plugin projection: `plan_codex_component_projections` (1818) +
-  `plan_codex_mcp_config` (2050) + `mcp_depends_on_plugin_root` (2253) →
-  `CodexManagedProjection::project` returning `ManagedProjectionPlan {
-  trees, files, omitted }`. The intermediate `CodexComponentProjectionPlan`
-  (1975) and `CodexMcpConfigPlan` (2246) types collapse into
-  `ManagedProjectionPlan` and are deleted.
+`CodexManagedProjection::plan` matches on `context.input`:
+
+- `ManagedProjectionInput::Apply { checkout, marketplace_source }`:
+  - `ResourceKind::Marketplace`: read the catalog at `checkout.root()` via
+    `CODEX_CATALOG_DESTINATIONS` → one `ManagedFileWrite` whose `desired` is
+    the catalog bytes (relocated from the marketplace branch of
+    `plan_managed_codex_project_lifecycle` and `read_codex_catalog_at_root`).
+    `marketplace_source` is unused (the resource's own source drove the
+    checkout).
+  - `ResourceKind::Plugin`: derive the plugin selector from
+    `context.request.name.as_str()` (it carries the spec's `native_name`,
+    verified at `application.rs:1199-1203`); use `marketplace_source` (the
+    orchestrator-resolved selected marketplace source) to resolve the catalog
+    at `checkout.root()`; `catalog.plugin_source(selector.plugin(),
+    checkout.root())` → plugin_root; `read_complete_codex_plugin(plugin_root,
+    marketplace_source)` → tree + declarations; then plan skill trees + MCP
+    config (relocated from `plan_codex_component_projections` +
+    `plan_codex_mcp_config`).
+  - For both, the returned `ManagedProjectionPlan` carries `manifest`,
+    `current_fingerprint`, and `desired_fingerprint` directly from the
+    relocated helpers (the intermediate `CodexComponentProjectionPlan` /
+    `CodexMcpConfigPlan` types fold into the plan's evidence fields and are
+    deleted).
+- `ManagedProjectionInput::Remove`: plan from `context.prior` plus current
+  filesystem observation only. `ResourceKind::Plugin` reuses the relocated
+  removal branch verbatim (it already passes `plugin: None` and plans from
+  `prior`). `ResourceKind::Marketplace` reads the current catalog bytes from
+  the project filesystem, sets `desired_fingerprint: None`, and produces a
+  `ManagedFileWrite` with `desired: None` — no source acquisition, no
+  `managed_project_source_missing` failure.
 
 Adapter-private constants (declared in `codex_managed.rs`):
 
@@ -83,51 +120,82 @@ pub(crate) const CODEX_MCP_DESTINATION: &str = ".codex/config.toml";
 
 ## Implementation notes
 
+- The amended port (`feature-managed-fallback-target-parity-contract-evidence`)
+  collapses acquire/project into one `plan` method and passes the
+  caller-resolved `ResolvedSourceCheckout` via `ManagedProjectionInput::Apply`.
+  The adapter no longer calls `resolve_git_skill_source` or any source
+  resolver; it reads catalog/plugin trees from `checkout.root()`. This is the
+  discovery's gap 1 fix.
 - `ManagedCodexCatalog` and `ManagedCodexCatalogError` already live in
   harnesses (`crates/harnesses/src/managed_codex_project.rs`) and are
   unchanged.
-- Local-vs-git source resolution moves behind the shared
-  `SourceRevisionResolver` the port receives. Codex no longer calls
-  `resolve_git_skill_source` directly; the resolver is the same `GitSource
-  RevisionResolver` machinery, supplied by the caller. This keeps the
-  helper testable in isolation.
 - The plugin-root-relative MCP executable gate (`mcp_depends_on_plugin_root`)
-  relocates with `plan_codex_mcp_config`. Its evidence code
-  (`plugin_root_relative_mcp_omitted`) stays the exact string.
+  relocates with the MCP planning helper. Its evidence code
+  (`plugin_root_relative_mcp_omitted`) stays the exact string and is emitted
+  as a `ManagedProjection::Omitted` entry inside `plan.manifest` (replacing
+  the old `plan.omitted` field that the amendment removed).
 - `ComponentDeclaration` is already a core type
-  (`crates/core/src/plugin_graph.rs:20`), so the port's
-  `AcquiredProjection::Plugin::declarations` field carries it directly.
-- This story must not change any user-facing behavior or error code. The
-  Codex managed-project test suite in `crates/cli/src/application/tests.rs`
-  is the regression bar.
+  (`crates/core/src/plugin_graph.rs:20`); the adapter reads declarations via
+  `CodexPluginGraphReader` and uses them internally (they no longer cross the
+  port boundary, since `AcquiredProjection` was removed by the amendment).
+- The relocated helpers populate `plan.manifest`, `plan.current_fingerprint`,
+  and `plan.desired_fingerprint` directly — the values the discovery's gap 3
+  identified as missing. The CLI orchestrator continues to compute these via
+  the relocated helpers until the orchestrator story flips dispatch onto the
+  port; the port simply returns them.
+- Install/update paths must remain byte-identical to the existing Codex
+  orchestrator output (operations, entries, seeds, error codes, manifest,
+  fingerprints). The Codex managed-project test suite in
+  `crates/cli/src/application/tests.rs` is the regression bar for those paths.
+- Removal behavior changes per the Scope section (marketplace removal no
+  longer requires source). The relevant regression test is updated, not
+  deleted; the new fixture proves removal succeeds against an observable
+  catalog with the source absent.
 - The CLI's `plan_managed_codex_project_lifecycle` keeps working by importing
-  the relocated helpers; it is not yet deleted (Unit 3 deletes it after
-  flipping the dispatch).
+  the relocated helpers; it is not yet deleted (the orchestrator story deletes
+  it after flipping the dispatch).
 
 ## Acceptance criteria
 
-- [ ] `CodexManagedProjection` implements `ManagedProjectionPort` and
-      `CodexAdapter::managed_projection()` returns its static ref.
-- [ ] Every existing Codex managed-project test in
-      `crates/cli/src/application/tests.rs` passes without modification to
-      its assertions — the tests at lines 582 (publication failure retry +
-      noop), 725 (tree-limit revalidation), 833-969 (pending-attempt
-      recovery for install/update), 1360-1506 (ownership validation), and
-      the drift/unowned/unsupported-partial cases all stay green.
+- [ ] `CodexManagedProjection` implements the amended single-method
+      `ManagedProjectionPort::plan` and `CodexAdapter::managed_projection()`
+      returns its static ref.
+- [ ] For `ManagedProjectionInput::Apply`, every existing Codex managed-
+      project install/update test in `crates/cli/src/application/tests.rs`
+      passes without modification to its assertions — the tests at lines 582
+      (publication failure retry + noop), 725 (tree-limit revalidation),
+      833-969 (pending-attempt recovery for install/update), 1360-1506
+      (ownership validation), and the drift/unowned/unsupported-partial
+      cases all stay green.
 - [ ] The Codex catalog destination search order (`.agents/plugins/
       marketplace.json` then `.claude-plugin/marketplace.json`), the MCP
       destination (`.codex/config.toml`), the MCP TOML table name
       (`mcp_servers`), and the plugin-root-relative evidence code
-      (`plugin_root_relative_mcp_omitted`) are byte-identical, pinned by the
-      existing tests.
+      (`plugin_root_relative_mcp_omitted`) are byte-identical, pinned by
+      the existing tests. The evidence code is emitted as a
+      `ManagedProjection::Omitted` entry inside `plan.manifest`.
+- [ ] For `ManagedProjectionInput::Remove`, plugin removal behaves
+      byte-identically to today (plans from `prior`, no source). Marketplace
+      removal no longer fails with `managed_project_source_missing` when the
+      source is absent; the previously source-gated removal regression test
+      is updated to a source-absent fixture that succeeds against an
+      observable catalog projection, and that change is documented in the
+      test.
+- [ ] The returned `ManagedProjectionPlan` carries `manifest`,
+      `current_fingerprint`, and `desired_fingerprint` matching the values
+      the existing Codex helpers compute, so the CLI orchestrator (still
+      driving Codex through the relocated helpers) and the port produce
+      identical evidence.
 - [ ] `git grep -n "plan_codex_component_projections\|plan_codex_mcp_config\
       |read_complete_codex_plugin\|read_codex_catalog_at_root\|mcp_depends_\
       on_plugin_root" crates/cli/` returns no matches (helpers fully
       relocated to harnesses).
 - [ ] `CodexComponentProjectionPlan` and `CodexMcpConfigPlan` no longer
-      exist; their fields fold into `ManagedProjectionPlan`.
-- [ ] `cargo test --workspace --all-targets` and `cargo clippy --workspace
-      --all-targets -- -D warnings` pass.
+      exist; their fields fold into `ManagedProjectionPlan`'s writes and
+      evidence fields.
+- [ ] `cargo test --workspace --all-targets`,
+      `cargo clippy --workspace --all-targets -- -D warnings`,
+      `cargo fmt --all -- --check`, and `git diff --check` pass.
 
 ## Implementation discovery
 

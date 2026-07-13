@@ -975,37 +975,173 @@ into managed fallback get the full matrix; adapters that do not are skipped.
 
 ---
 
+## Implementation discovery and contract amendment
+
+The Codex adapter story (`feature-managed-fallback-target-parity-codex-
+adapter`) reached `stage:implementing`, probed the approved Unit 1 contract
+against the actual Codex orchestrator, and stopped before any code change
+because the contract could not carry the evidence required to relocate
+Codex behavior faithfully. Its discovery is preserved verbatim in that
+story's body; this section records the resulting contract amendment
+without erasing the original Unit 1 design above.
+
+### Evidence gaps in the approved contract
+
+1. **No checked-out source root.** `ManagedAcquisitionContext::revision_
+   resolver` is a `SourceRevisionResolver`, whose only operation returns a
+   `ResolvedRevision` (a git commit id). It cannot return the checked-out,
+   confined source root that `read_codex_catalog_at_root` and
+   `read_complete_codex_plugin` must read. Recreating `resolve_git_skill_
+   source` inside the adapter would duplicate the git process/cache
+   boundary and contradict the design decision that acquisition reuses
+   shared git resolution.
+2. **No selected marketplace source for fresh plugin installs.** A fresh
+   plugin install has no source on the plugin resource or
+   `NativeLifecycleRequest`; the existing orchestrator resolves the
+   selected marketplace source from inventory and passes it to catalog
+   lookup. `ManagedAcquisitionContext` carried neither documents nor a
+   typed marketplace source, so the adapter could not locate
+   `plugin@marketplace` without a CLI-owned Codex side channel.
+3. **No projection evidence.** `ManagedProjectionPlan` carried writes and
+   omissions only. The Codex projection helper also produces the exact
+   current aggregate fingerprint, desired aggregate fingerprint, and the
+   complete `Vec<ManagedProjection>` manifest (Skill + per-server Mcp
+   fingerprints + Omitted). Those drive ownership validation, drift,
+   pending-attempt recovery, update-required checks, and persisted
+   projection state. They cannot be reconstructed from
+   `ManagedFileWrite` without parsing Codex TOML in CLI, and hashing the
+   whole file would include unmanaged configuration and change semantics.
+4. **Mandatory source acquisition for removal.** The acquire-then-project
+   split forced every lifecycle through acquisition, but plugin removal
+   plans from the prior manifest without source, and marketplace removal
+   only needs current filesystem observation of the catalog destination.
+
+### Amended contract (story `feature-managed-fallback-target-parity-
+contract-evidence`)
+
+The amendment does not reopen the approved Unit 1 story (it stays `done` at
+its commit). It adds one new child story at `stage:implementing`, parented
+here, that revises the public contract types in place:
+
+- **Caller-resolved checkout.** New core type `ResolvedSourceCheckout {
+   root, source, revision }`. The orchestrator resolves it once using the
+   existing `resolve_git_skill_source` machinery and hands it to the
+   adapter via the input enum. `SourceRevisionResolver` stays
+   revision-only and leaves the managed-projection context.
+- **Marketplace source on the input.** `ManagedProjectionInput::Apply {
+   checkout, marketplace_source }` surfaces the orchestrator-resolved
+   selected marketplace source explicitly for fresh plugin installs.
+- **Complete projection evidence.** `ManagedProjectionPlan` gains
+   `manifest: Vec<ManagedProjection>`, `current_fingerprint:
+   Option<Fingerprint>`, and `desired_fingerprint: Option<Fingerprint>`.
+   The adapter produces them directly; the orchestrator never reconstructs
+   them from writes. The `omitted: Vec<OmittedComponent>` field and the
+   `OmittedComponent` type are removed (omissions live exclusively as
+   `ManagedProjection::Omitted` inside `manifest`, so the two cannot
+   diverge).
+- **Removal without source.** `ManagedProjectionInput::Remove` carries no
+   checkout, so removal cannot accidentally require source. Marketplace
+   removal no longer fails with `managed_project_source_missing` when the
+   source is absent but the catalog projection is observable; plugin
+   removal is unchanged.
+- **One `plan` method.** `acquire`/`project` collapse into a single
+   `ManagedProjectionPort::plan` taking `ManagedProjectionContext` whose
+   `input: ManagedProjectionInput` distinguishes apply from remove.
+   `AcquiredProjection` and `ManagedAcquisitionContext` no longer cross
+   the boundary. This is the shortest type-safe contract: invalid states
+   (removal carrying a checkout; apply without one) are unrepresentable.
+
+### Revised interface summary
+
+```rust
+// skilltap-core
+pub struct ResolvedSourceCheckout { /* root, source, revision */ }
+
+pub struct ManagedProjectionPlan {
+    pub trees: Vec<ManagedPluginWrite>,
+    pub files: Vec<ManagedFileWrite>,
+    pub manifest: Vec<ManagedProjection>,
+    pub current_fingerprint: Option<Fingerprint>,
+    pub desired_fingerprint: Option<Fingerprint>,
+}
+// Removed: OmittedComponent, AcquiredProjection, ManagedProjectionPlan::omitted.
+
+// skilltap-harnesses
+pub enum ManagedProjectionInput<'a> {
+    Apply { checkout: &'a ResolvedSourceCheckout,
+            marketplace_source: Option<&'a Source> },
+    Remove,
+}
+
+pub struct ManagedProjectionContext<'a> { /* target, project, paths,
+    resource_key, resource_kind, request, kind, input, prior, acknowledged,
+    filesystem, json_limits */ }
+
+pub trait ManagedProjectionPort: Sync {
+    fn plan(&self, context: &ManagedProjectionContext<'_>)
+        -> Result<ManagedProjectionPlan, ManagedProjectionError>;
+}
+// Removed: ManagedAcquisitionContext, acquire, project.
+```
+
+The `HarnessAdapter::managed_projection() -> Option<&dyn
+ManagedProjectionPort>` accessor, the `ManagedLifecycleKind` enum,
+`ManagedPluginWrite`, `ManagedFileWrite`, and the entire
+`ManagedProjectionError` model (codes, summaries, `Other` discipline) are
+unchanged.
+
+### Removal behavior change
+
+Modeling removal as `Remove` (no checkout) is an intentional, contract-
+driven behavior change: marketplace removal no longer requires source
+acquisition. Plugin removal was already source-free. The Codex regression
+suite is updated (not weakened) to reflect this; the orchestrator and
+acceptance stories inherit the amended port shape when they implement.
+
 ## Implementation Order
 
 1. `feature-managed-fallback-target-parity-contract` (Unit 1, port + core
-   types + adapter accessor) — `depends_on: []`. Foundation story; everything
-   else binds to its trait surface. Terminalizes independently of the parent
-   feature so sibling stories can become ready.
-2. `feature-managed-fallback-target-parity-codex-adapter` (Unit 2, Codex
-   relocation onto the port) — `depends_on:
-   [feature-managed-fallback-target-parity-contract]`. Behavior-preserving
-   relocation; the CLI orchestrator still drives Codex through the relocated
-   helpers until Unit 3 flips the dispatch.
-3. `feature-managed-fallback-target-parity-orchestrator` (Unit 3,
+   types + adapter accessor) — `depends_on: []`. Foundation story;
+   terminalized at `caf5df03`.
+2. `feature-managed-fallback-target-parity-contract-evidence` (Unit 1
+   amendment) — `depends_on: [feature-managed-fallback-target-parity-
+   contract]`. Revises the public contract types in place to carry the
+   four pieces of evidence the Codex relocation requires: caller-resolved
+   checkout, marketplace source, complete projection evidence, and
+   removal-without-source. Collapses acquire/project into one `plan`
+   method. Does not touch production Codex behavior.
+3. `feature-managed-fallback-target-parity-codex-adapter` (Unit 2, Codex
+   relocation onto the amended port) — `depends_on:
+   [feature-managed-fallback-target-parity-contract-evidence]`.
+   Behavior-preserving relocation for install/update; removal corrected to
+   drop mandatory source. The CLI orchestrator still drives Codex through
+   the relocated helpers until Unit 4 flips the dispatch.
+4. `feature-managed-fallback-target-parity-orchestrator` (Unit 3,
    target-agnostic orchestrator + generalized ownership validation +
    dispatch flip) — `depends_on: [feature-managed-fallback-target-parity-
    contract, feature-managed-fallback-target-parity-codex-adapter]`. The
    composition boundary that makes the lifecycle target-agnostic.
-4. `feature-managed-fallback-target-parity-acceptance` (Unit 4, shared
+   Transitively depends on the contract-evidence amendment through the
+   codex-adapter; consumes the amended port surface directly.
+5. `feature-managed-fallback-target-parity-acceptance` (Unit 4, shared
    matrix + regression + fake-adapter proof) — `depends_on:
    [feature-managed-fallback-target-parity-contract,
    feature-managed-fallback-target-parity-codex-adapter,
-   feature-managed-fallback-target-parity-orchestrator]`. Reusable contract
-   adapter features will invoke; Codex regression pinned.
+   feature-managed-fallback-target-parity-orchestrator]`. Reusable
+   contract adapter features will invoke; Codex regression pinned.
 
 The parent feature `feature-managed-fallback-target-parity` carries the
-design body only; it has no inline stride. Its four child stories carry
-Units 1–4 respectively. Each child's `depends_on` points only at sibling
-stories (or is empty) — never at the parent feature id — so the graph is
-executable: the foundation story terminalizes first, then codex-adapter,
-then orchestrator, then acceptance. The parent feature terminalizes once
-all four children are done, which also unblocks the four sibling adapter
-features that legitimately wait on the whole managed-fallback deliverable.
+design body only; it has no inline stride. Its child stories carry the
+units above. Each child's `depends_on` points only at sibling stories (or
+is empty) — never at the parent feature id — so the graph is executable:
+the foundation story terminalized first, then contract-evidence, then
+codex-adapter, then orchestrator, then acceptance. The orchestrator and
+acceptance stories depend on the contract-evidence amendment transitively
+through the codex-adapter (their direct edge to it is implied, keeping the
+graph minimal); both consume the amended port surface directly. The parent
+feature terminalizes once all children are done, which also unblocks the
+four sibling adapter features that legitimately wait on the whole
+managed-fallback deliverable.
 
 ## Elimination
 
