@@ -3,7 +3,7 @@
 use std::path::{Component, Path, PathBuf};
 
 use skilltap_core::{
-    domain::{AbsolutePath, NativeId, RelativeArtifactPath},
+    domain::{AbsolutePath, NativeId},
     runtime::{JsonLimits, StrictJson, StrictJsonDecoder},
 };
 
@@ -34,8 +34,8 @@ impl std::fmt::Display for ManagedCodexCatalogError {
 
 impl std::error::Error for ManagedCodexCatalogError {}
 
-/// A bounded Codex marketplace document whose unknown fields remain in its
-/// original JSON value until an explicitly selected plugin entry is changed.
+/// A bounded Codex marketplace document that validates selected sources while
+/// preserving unknown fields in its original JSON value.
 #[derive(Clone, Debug)]
 pub struct ManagedCodexCatalog {
     value: serde_json::Value,
@@ -101,44 +101,6 @@ impl ManagedCodexCatalog {
         .map_err(|_| ManagedCodexCatalogError::SourceEscapesCatalog)
     }
 
-    /// Repoint one already-selected entry at the managed project directory.
-    /// Every unrelated top-level and plugin-entry field is retained.
-    pub fn with_local_plugin(
-        mut self,
-        plugin: &NativeId,
-        path: &RelativeArtifactPath,
-    ) -> Result<Vec<u8>, ManagedCodexCatalogError> {
-        let entry = self.unique_plugin_mut(plugin)?;
-        entry.insert(
-            "source".to_owned(),
-            serde_json::json!({"source": "local", "path": format!("./{}", path.as_str())}),
-        );
-        let mut bytes = serde_json::to_vec_pretty(&self.value)
-            .map_err(|_| ManagedCodexCatalogError::InvalidShape)?;
-        bytes.push(b'\n');
-        Ok(bytes)
-    }
-
-    pub fn without_plugin(
-        mut self,
-        plugin: &NativeId,
-    ) -> Result<Vec<u8>, ManagedCodexCatalogError> {
-        self.unique_plugin(plugin)?;
-        let plugins = self
-            .value
-            .as_object_mut()
-            .and_then(|value| value.get_mut("plugins"))
-            .and_then(serde_json::Value::as_array_mut)
-            .ok_or(ManagedCodexCatalogError::InvalidShape)?;
-        plugins.retain(|entry| {
-            entry.get("name").and_then(serde_json::Value::as_str) != Some(plugin.as_str())
-        });
-        let mut bytes = serde_json::to_vec_pretty(&self.value)
-            .map_err(|_| ManagedCodexCatalogError::InvalidShape)?;
-        bytes.push(b'\n');
-        Ok(bytes)
-    }
-
     pub fn into_bytes(self) -> Result<Vec<u8>, ManagedCodexCatalogError> {
         let mut bytes = serde_json::to_vec_pretty(&self.value)
             .map_err(|_| ManagedCodexCatalogError::InvalidShape)?;
@@ -169,32 +131,6 @@ impl ManagedCodexCatalog {
         Ok(entry)
     }
 
-    fn unique_plugin_mut(
-        &mut self,
-        plugin: &NativeId,
-    ) -> Result<&mut serde_json::Map<String, serde_json::Value>, ManagedCodexCatalogError> {
-        let plugins = self
-            .value
-            .as_object_mut()
-            .and_then(|value| value.get_mut("plugins"))
-            .and_then(serde_json::Value::as_array_mut)
-            .ok_or(ManagedCodexCatalogError::InvalidShape)?;
-        let indexes = plugins
-            .iter()
-            .enumerate()
-            .filter(|(_, entry)| {
-                entry.get("name").and_then(serde_json::Value::as_str) == Some(plugin.as_str())
-            })
-            .map(|(index, _)| index)
-            .collect::<Vec<_>>();
-        match indexes.as_slice() {
-            [] => Err(ManagedCodexCatalogError::PluginMissing),
-            [index] => plugins[*index]
-                .as_object_mut()
-                .ok_or(ManagedCodexCatalogError::InvalidShape),
-            _ => Err(ManagedCodexCatalogError::DuplicatePlugin),
-        }
-    }
 }
 
 fn contained_relative(value: &str) -> Result<PathBuf, ManagedCodexCatalogError> {
@@ -241,16 +177,11 @@ mod tests {
                 .as_str(),
             "/tmp/catalog/plugins/demo"
         );
-        let bytes = catalog
-            .with_local_plugin(
-                &NativeId::new("demo").unwrap(),
-                &RelativeArtifactPath::new("demo").unwrap(),
-            )
-            .unwrap();
+        let bytes = catalog.into_bytes().unwrap();
         let value: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(value["future"]["enabled"], true);
         assert_eq!(value["plugins"][0]["future"], "keep");
-        assert_eq!(value["plugins"][0]["source"]["path"], "./demo");
+        assert_eq!(value["plugins"][0]["source"]["path"], "./plugins/demo");
     }
 
     #[test]
