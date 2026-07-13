@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-cross-harness-materialization, epic-expanded-harness-support-registry]
@@ -1207,3 +1207,22 @@ superseded by the amendment and completed child records.
   concrete adapter evidence, not on this shared port.
 - Does **not** change `epic-cross-harness-materialization-publish` (the
   publication boundary is reused verbatim) or any released 3.0.0 work.
+
+## Review (2026-07-13)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Aggregate feature deep review at standard weight, performed as a same-harness fresh-context review by the delegated reviewer with no nested delegation or peeragent per caller instruction. Reviewed project rules, relevant pattern references, foundation docs (`docs/VISION.md`, `docs/SPEC.md`, `docs/ARCH.md`, `docs/HARNESS-CONTRACTS.md`), the current agent-extension standards brief, all five completed child records and their review evidence, implementation rollup `d23d48eb`, and the current contract/adapter/orchestrator/test-support code.
+
+Active contract for future readers: the earlier Unit 1 `acquire`/`project`, `AcquiredProjection`, `ManagedAcquisitionContext`, and `OmittedComponent` prose in this parent body is historical design context only. The live contract is the amended single-method port: `ResolvedSourceCheckout` is the one authoritative source/root/revision bundle for apply operations; `ManagedProjectionInput::{Apply { checkout }, Remove}` makes removal source-free; `ManagedProjectionPort::plan` returns target-native writes plus complete `ManagedProjectionPlan` evidence (`manifest`, `current_fingerprint`, `desired_fingerprint`). The orchestrator consumes that evidence directly and never reconstructs target-native MCP or projection semantics from file bytes.
+
+Aggregate findings: dependency direction is preserved (`core` owns pure evidence types, `harnesses` owns Codex codecs and the port trait, `cli` owns orchestration and state execution, `test-support` stays dependency-neutral); Codex-specific catalog/MCP paths and `mcp_servers` logic are confined to `crates/harnesses/src/adapters/codex_managed.rs`; the CLI managed lifecycle resolves one checkout only for apply, performs no source lookup for removal, dispatches through the registry-selected `ManagedProjectionPort`, validates ownership against the selected target, and uses existing shared state, drift, acknowledgment, pending-attempt, publication, rollback, and post-write verification paths. Source-free marketplace removal is deliberate and tested. Sibling target state is preserved by the target-local state removal path. The Codex regression surface remains pinned, and the reusable acceptance matrix exercises both Codex and a non-Codex fake adapter through production lifecycle dispatch with substantive assertions before evidence labels are returned.
+
+Verification run during this aggregate review: `cargo test --workspace --all-targets --no-fail-fast` (562 passed), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check` all passed. Targeted greps confirmed no `plan_managed_codex_project_lifecycle`, `ManagedCodexProjectPlanContext`, `CodexManagedProjection`, `HarnessId::new("codex")`, split-contract symbols, or Codex projection constants remain in the CLI managed orchestrator; removed public contract symbols are gone from `crates/`; and no Codex vocabulary leaks into `crates/core/src/managed_projection.rs`. Existing untracked `.pi/pi-model-modes.json` was left untouched.
+
+Outcome: feature delivered as briefed and unblocks the dependent adapter-family features. Stage advanced from `review` to `done`.
