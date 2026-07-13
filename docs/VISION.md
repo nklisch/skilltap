@@ -2,7 +2,11 @@
 
 skilltap is a personal control plane for agent development environments.
 
-It gives one person a consistent way to understand and manage the skills, plugins, marketplaces, MCP servers, and instruction files used by Codex and Claude Code. It preserves each harness's native behavior while making the overall environment observable, reproducible on the same computer, and easier for agents to operate safely.
+It gives one person a consistent way to understand and manage the skills,
+plugins, marketplaces, MCP servers, and instruction files used across supported
+agent harnesses. It preserves each harness's native behavior while making the
+overall environment observable, reproducible on the same computer, and easier
+for agents to operate safely.
 
 ## Problem
 
@@ -25,7 +29,9 @@ This leaves both people and agents with basic unanswered questions:
 
 skilltap maintains a normalized, machine-wide description of one person's agent environment.
 
-It can adopt existing Codex and Claude Code configuration into that state, compare the state with the current native environments, and synchronize changes back through each harness's supported mechanisms.
+It can adopt existing harness configuration into that state, compare the state
+with current native environments, and synchronize changes back through each
+harness's supported mechanisms.
 
 The normalized state is a control plane, not a replacement plugin format. Native harness behavior remains authoritative at the integration boundary.
 
@@ -136,7 +142,11 @@ skilltap does not:
 - Claim support for a harness through undocumented cache copying or without
   observable skill and MCP load behavior.
 
-Codex and Claude Code are the first supported harnesses. Additional harnesses
-belong when documented skill and MCP load paths can participate in the same
-faithfulness, ownership, and reconciliation model; native marketplace and
-plugin lifecycle support improves an adapter but is not required.
+Codex and Claude Code are the first supported harnesses. The intended expanded
+set includes Factory Droid, Qwen Code, GitHub Copilot CLI, Gemini CLI, Junie,
+Kimi Code CLI, OpenCode, Kilo Code, Mistral Vibe, Kiro CLI, Amp, and a
+compound Pi profile with compatible MCP and Claude-hook extensions. Cursor,
+Zoo Code, and ZCode join only after their supported write boundaries are
+verified. Every added harness must meet the same faithfulness, ownership,
+observation, and reconciliation contract; native marketplace and plugin
+lifecycle support improves an adapter but is not required.

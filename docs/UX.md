@@ -21,8 +21,8 @@ The CLI favors explicit commands, stable output, and actionable failure over pro
 
 ```text
 skilltap harness list
-skilltap harness enable <codex|claude>
-skilltap harness disable <codex|claude>
+skilltap harness enable <harness>
+skilltap harness disable <harness>
 
 skilltap adopt
 skilltap status
@@ -75,11 +75,12 @@ debug-only paths.
 
 Target and scope are independent.
 
-`--target` selects harnesses:
+`--target` selects one registered harness or every enabled harness:
 
 ```text
 --target codex
 --target claude
+--target gemini
 --target all
 ```
 
@@ -117,7 +118,7 @@ No skilltap metadata is written into a project. A plan lists any native project 
 ## Common Flags
 
 ```text
---target <codex|claude|all>
+--target <harness|all>
 --project [<path>]
 --all-scopes
 --json

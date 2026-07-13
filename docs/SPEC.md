@@ -4,7 +4,7 @@ This document defines skilltap's command behavior, state model, reconciliation s
 
 ## Product Boundary
 
-skilltap manages one person's Codex and Claude Code environments on one computer.
+skilltap manages one person's supported agent harness environments on one computer.
 
 It manages:
 
@@ -85,7 +85,12 @@ stable document derived from the same outcome as plain output.
 
 **Harness**
 
-A supported agent runtime. The supported harness identifiers are `codex` and `claude`.
+A supported agent runtime selected from skilltap's typed target registry. The
+intended identifiers are `codex`, `claude`, `droid`, `qwen`, `copilot`,
+`gemini`, `junie`, `kimi`, `opencode`, `kilo`, `vibe`, `kiro`, `amp`, and
+`pi`. Candidate identifiers `cursor`, `zoo`, and `zcode` remain observe-only
+until their supported write boundaries are verified. `all` is a selector, not
+a harness identifier.
 
 **Desired inventory**
 
@@ -134,7 +139,9 @@ Commands never open a picker, prompt for confirmation, or require a TTY. Missing
 
 Human-readable output is the default. Commands that inspect, plan, or mutate state accept `--json`.
 
-`--target` accepts `codex`, `claude`, or `all`. When omitted, it resolves to every enabled harness. A command fails when no harness is enabled.
+`--target` accepts one registered harness identifier or `all`. When omitted,
+it resolves to every enabled harness. A command fails when no harness is
+enabled. `all` expands from the registry rather than a hard-coded harness pair.
 
 Scoped commands accept:
 

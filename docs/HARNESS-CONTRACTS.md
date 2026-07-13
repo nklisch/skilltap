@@ -1,6 +1,7 @@
 # Harness Contracts
 
-This document defines the native capabilities skilltap relies on for Codex and Claude Code, along with the mappings skilltap considers faithful.
+This document defines the native capabilities skilltap relies on for every
+supported target harness, along with the mappings skilltap considers faithful.
 
 A harness contract describes current supported behavior. Verified compiled
 profiles grant mutation authority for known versions and scopes. Runtime
@@ -113,6 +114,48 @@ Claude import mode uses a managed `~/.claude/CLAUDE.md` containing:
 ```
 
 Existing user-authored native instruction files are conflicts until their content is reconciled explicitly.
+
+## Expanded Target Set
+
+The intended direct adapter set, in addition to Codex and Claude Code, is:
+
+```text
+Factory Droid
+Qwen Code
+GitHub Copilot CLI
+Gemini CLI
+Junie
+Kimi Code CLI
+OpenCode
+Kilo Code
+Mistral Vibe
+Kiro CLI
+Amp
+```
+
+Each direct adapter must provide documented global and project skill roots,
+global and project MCP configuration, effective-state observation, a verified
+version profile, ownership-safe update and removal, and the common acceptance
+tests described under Adding Another Harness. Native marketplace and plugin
+lifecycle capabilities are preferred where available but are not admission
+requirements.
+
+Cursor, Zoo Code, and ZCode are boundary-validation candidates. They remain
+observe-only until isolated validation identifies their exact supported global
+and project write files, verifies reload and precedence, and establishes that
+skilltap does not need to mutate an editor or extension cache.
+
+Pi is a conditional compound target. A mutable Pi profile requires the Pi
+runtime plus compatible user-installed MCP and Claude Code hook-compatibility
+extensions. The adapter observes the core runtime and each companion extension
+separately, reports missing or incompatible companions as capability-specific
+health findings, remains observe-only until both companions are healthy, and
+never attributes extension behavior to Pi core. Pre-existing companion
+extensions remain user-owned and are not adopted implicitly.
+
+Goose, Windsurf/Devin Desktop Cascade, and Cline remain outside the target set
+until they document ambient project-scoped MCP configuration. Roo Code remains
+excluded because it is retired.
 
 ## Codex Contract
 

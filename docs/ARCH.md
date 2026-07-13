@@ -23,9 +23,11 @@ flowchart LR
 
     Adapters --> Codex["Codex adapter"]
     Adapters --> Claude["Claude adapter"]
+    Adapters --> Targets["Registered target adapters"]
 
     Codex --> CodexCLI["Codex CLI and native files"]
     Claude --> ClaudeCLI["Claude CLI and native files"]
+    Targets --> TargetNative["Target CLIs, extensions, and native files"]
 
     Materializer --> Managed["skilltap-managed artifacts"]
 ```
@@ -97,7 +99,12 @@ The core has no dependency on CLI parsing, terminal output, Codex, Claude, `laun
 
 ### `skilltap-harnesses`
 
-The harness library implements Codex and Claude Code observation and lifecycle operations, native manifest parsing, native command invocation, runtime capability detection, harness-version compatibility, and user-service integration for `launchd` and `systemd --user`.
+The harness library implements target-registry composition, harness observation
+and lifecycle operations, native manifest parsing, native command invocation,
+runtime capability detection, harness-version compatibility, and user-service
+integration for `launchd` and `systemd --user`. Each harness keeps a distinct
+adapter and native contract even when it reuses shared skill/MCP projection
+ports.
 
 It depends on core contracts. Core does not depend on concrete harness adapters.
 
@@ -109,7 +116,10 @@ Command handlers contain no reconciliation or native-format business logic.
 
 ### `skilltap-test-support`
 
-Test support provides temporary home and configuration directories, fake Codex and Claude binaries, native-output fixtures, Git repository fixtures, marketplace, plugin, and skill fixtures, filesystem assertions, and compiled-binary command helpers.
+Test support provides temporary home and configuration directories, fake
+harness binaries and companion extensions, native-output fixtures, Git
+repository fixtures, marketplace, plugin, MCP, and skill fixtures, filesystem
+assertions, and compiled-binary command helpers.
 
 Production crates never depend on test support.
 

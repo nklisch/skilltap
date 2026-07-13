@@ -3,7 +3,7 @@ id: feature-managed-fallback-target-parity
 kind: feature
 stage: drafting
 tags: []
-parent: null
+parent: epic-expanded-harness-support
 depends_on: [epic-cross-harness-materialization]
 release_binding: null
 research_refs: []
@@ -42,6 +42,13 @@ adapter writes undocumented caches.
 - **What is the immediate parity gap?** Preserve the existing Codex project
   projection and add equivalent managed fallback wherever another supported
   adapter exposes faithful documented destinations.
+
+## Scope integration
+
+This feature is the shared managed-projection foundation for
+`epic-expanded-harness-support`. Harness-specific adapters consume this work;
+they do not each invent a separate acquisition, ownership, drift, update, or
+removal lifecycle.
 
 ## Foundation references
 
