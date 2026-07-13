@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-adapters
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -103,19 +103,51 @@ narrow public compatibility token because the out-of-scope CLI, bootstrap
 rendering, and test-support/integration callers still construct and exhaustively
 match that surface. The token no longer owns detection, profile, observation,
 or lifecycle-vector behavior: it resolves its adapter through
-`TargetRegistry::canonical()`. Removing the token now would require edits in
-`crates/cli/src/**` and `crates/harnesses/tests/**`, violating this worker's
-ownership and racing the registry CLI/config/test-support stories. Those owning
-stories must migrate callers to `HarnessId` plus registry adapter dispatch, drop
-the compatibility wrappers/request field, and then satisfy the repository-wide
-`git grep -n "HarnessKind" crates/` and CLI string-dispatch checks.
+`TargetRegistry::canonical()`.
+
+Commit `3119913c` closes the review's ownership hole by extending the active
+`epic-expanded-harness-support-registry-cli` story. Its durable Units and
+acceptance criteria explicitly own final seam removal across CLI consumers,
+`crates/harnesses/src/{bootstrap,lib,lifecycle}.rs`, and
+`crates/harnesses/tests/{bootstrap,detection,lifecycle_scope}.rs`, including
+removing `NativeLifecycleRequest.harness`, compatibility wrappers, and every
+repository `HarnessKind` occurrence. Keeping the seam here therefore preserves
+an independently compilable intermediate commit without leaving elimination
+unowned.
 
 This is an intentional sequencing seam rather than a new compatibility layer:
 no additional target behavior may be added to `HarnessKind`.
 
+### Approved contract extensions and deviations
+
+This implementation necessarily extends the approved `registry.rs` trait shape
+in two narrowly bounded ways:
+
+- `HarnessAdapter::decode_version_with_limits` preserves the existing strict-JSON
+  decode boundary's caller-supplied `JsonLimits`. The approved
+  `decode_version(stdout)` signature could preserve text decoding but could not
+  reproduce the prior bounded JSON behavior. Its default delegates to
+  `decode_version`, so text-only adapters do not gain boilerplate and existing
+  implementations remain source-compatible.
+- `NativeLifecycleVector::observation_scope` moves native scope interpretation
+  behind the owning lifecycle adapter. Claude list evidence must distinguish
+  skilltap global/project scope as native `user`/`local`; without this port,
+  generic postcondition observation would either reintroduce a Claude string or
+  enum dispatch in `lifecycle.rs`, or incorrectly accept a same-name resource
+  from the wrong scope. Codex returns `None` because its verified lifecycle has
+  no independently encoded scope evidence.
+
+These are approved contract extensions required to relocate existing boundary
+semantics, not new product behavior. Apart from those interface additions and
+the temporary compatibility seam, detection bytes and limits, capability
+matrices, canonical observations, lifecycle argv and rejection diagnostics,
+instruction paths, skill projection paths, and native scope interpretation
+remain byte-equivalent to the pre-migration behavior.
+
 ### Verification
 
-- `cargo test -p skilltap-harnesses` — 55 passed across six suites.
+- `cargo test -p skilltap-harnesses` — 56 passed across six suites, including
+  the Codex PluginUpdate+Project precedence regression.
 - `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings` — passed.
 - `cargo fmt --package skilltap-harnesses -- --check` — passed.
 - `cargo check --workspace` is temporarily blocked by the concurrent config-map
@@ -302,3 +334,31 @@ test.
 
 **Nits (parked, below the material bar)**: none worth filing while the
 blocker is open — they would be re-evaluated on the next review pass.
+
+## Review resolution (2026-07-12)
+
+All receiver-confirmed findings from review commit `6c58e476` are resolved:
+
+- **Ownership blocker — resolved.** Commit `3119913c` updates the durable
+  `epic-expanded-harness-support-registry-cli` Units, implementation notes, and
+  acceptance criteria to own final `HarnessKind` removal across CLI consumers,
+  harnesses bootstrap/lib/lifecycle producers, harnesses integration tests, and
+  `NativeLifecycleRequest.harness`. The temporary seam remains here solely to
+  keep this intermediate story independently compilable.
+- **Contract extensions — acknowledged and justified.** The implementation
+  notes now explicitly record `decode_version_with_limits` as necessary to
+  preserve caller-bounded strict JSON version decoding and
+  `NativeLifecycleVector::observation_scope` as necessary to keep Claude's
+  native `user`/`local` scope evidence adapter-owned and scope-safe.
+- **Lifecycle precedence — resolved.** `CodexLifecycle::arguments` again rejects
+  `PluginUpdate` before project scope, exactly matching the original
+  `native_arguments` diagnostic. A direct regression test asserts that
+  PluginUpdate+Project returns `UnsupportedAction`.
+
+Receiver verification confirms every other migrated behavior remains
+byte-equivalent: version parsing and limits, exact known/unknown capability
+matrices, canonical observation roots, Codex/Claude direct argv, Claude scope
+evidence, instruction bridges, and skill destinations are unchanged.
+
+Review-fix verification: 56 harness tests passed across six suites; clippy with
+`-D warnings`, formatting, and `git diff --check` all passed.

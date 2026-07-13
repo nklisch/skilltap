@@ -94,11 +94,13 @@ impl NativeLifecycleVector for CodexLifecycle {
         request: &NativeLifecycleRequest,
     ) -> Result<Vec<OsString>, NativeLifecycleError> {
         crate::lifecycle::validate_native_request(request)?;
-        if matches!(request.scope, Scope::Project(_)) {
-            return Err(NativeLifecycleError::UnsupportedProjectScope);
-        }
+        // Preserve the original diagnostic precedence: an unsupported action
+        // is rejected before considering whether its scope is also unsupported.
         if request.action == NativeLifecycleAction::PluginUpdate {
             return Err(NativeLifecycleError::UnsupportedAction);
+        }
+        if matches!(request.scope, Scope::Project(_)) {
+            return Err(NativeLifecycleError::UnsupportedProjectScope);
         }
 
         let mut args = vec![OsString::from("plugin")];
@@ -165,4 +167,28 @@ impl SkillProjectionPort for CodexSkillProjection {
 
 fn default_json_limits() -> JsonLimits {
     JsonLimits::new(64 * 1024, 32).expect("static adapter JSON limits are valid")
+}
+
+#[cfg(test)]
+mod tests {
+    use skilltap_core::domain::{NativeId, SourceLocator};
+
+    use super::*;
+    use crate::HarnessKind;
+
+    #[test]
+    fn plugin_update_is_rejected_before_project_scope() {
+        let request = NativeLifecycleRequest {
+            harness: HarnessKind::Codex,
+            action: NativeLifecycleAction::PluginUpdate,
+            scope: Scope::Project(AbsolutePath::new("/tmp/project").unwrap()),
+            name: NativeId::new("formatter@team").unwrap(),
+            source: Some(SourceLocator::new("https://example.invalid/team.git").unwrap()),
+        };
+
+        assert_eq!(
+            LIFECYCLE.arguments(&request),
+            Err(NativeLifecycleError::UnsupportedAction)
+        );
+    }
 }
