@@ -683,7 +683,7 @@ impl ExecutionPort for ManagedSkillPort<'_> {
                     "The managed skill replacement did not include the previous tree.",
                 ));
             };
-            let backup = repository.backup(owner, backup_tree).map_err(|_| {
+            repository.backup(owner, backup_tree).map_err(|_| {
                 managed_skill_apply_failure(
                     "The existing skill tree could not be backed up safely.",
                 )
@@ -712,7 +712,6 @@ impl ExecutionPort for ManagedSkillPort<'_> {
                         &entry.destination,
                         backup_tree.files(),
                     );
-                    let _ = backup;
                     Err(managed_skill_apply_failure(
                         "The replacement skill tree could not be published after backup.",
                     ))
