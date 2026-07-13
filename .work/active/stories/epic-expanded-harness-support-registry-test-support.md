@@ -5,7 +5,7 @@ stage: implementing
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
-  - epic-expanded-harness-support-registry
+  - epic-expanded-harness-support-registry-contract
   - epic-expanded-harness-support-registry-adapters
 release_binding: null
 research_refs: []

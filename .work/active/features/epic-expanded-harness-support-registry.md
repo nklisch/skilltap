@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry
 kind: feature
-stage: drafting
+stage: implementing
 tags: []
 parent: epic-expanded-harness-support
 depends_on: []
@@ -164,6 +164,8 @@ atural revision point (see Risks).
 
 **File**: `crates/harnesses/src/registry.rs` (new); re-exports added to
 `crates/harnesses/src/lib.rs`.
+
+**Story**: `epic-expanded-harness-support-registry-contract`.
 
 ```rust
 use std::ffi::OsString;
@@ -733,26 +735,33 @@ pub fn acceptance_matrix(
 
 ## Implementation Order
 
-1. `epic-expanded-harness-support-registry` (Unit 1, registry + adapter trait) —
-   `depends_on: []`. Foundation; everything else binds to its trait surface.
+1. `epic-expanded-harness-support-registry-contract` (Unit 1, registry +
+   adapter trait) — `depends_on: []`. Foundation story; everything else binds
+   to its trait surface. Terminalizes independently of the parent feature so
+   its sibling stories can become ready.
 2. `epic-expanded-harness-support-registry-adapters` (Unit 2, Codex/Claude
-   migration) — `depends_on: [epic-expanded-harness-support-registry]`. Makes the
-   contract concrete and proves behavior is preserved.
+   migration) — `depends_on: [epic-expanded-harness-support-registry-contract]`.
+   Makes the contract concrete and proves behavior is preserved.
 3. `epic-expanded-harness-support-registry-config` (Unit 3, config map) —
-   `depends_on: [epic-expanded-harness-support-registry]`. Wire-compatible;
-   enables enabled-resolution and membership validation.
+   `depends_on: [epic-expanded-harness-support-registry-contract]`.
+   Wire-compatible; enables enabled-resolution and membership validation.
 4. `epic-expanded-harness-support-registry-cli` (Unit 4, parser/help/dispatch) —
-   `depends_on: [epic-expanded-harness-support-registry,
+   `depends_on: [epic-expanded-harness-support-registry-contract,
    epic-expanded-harness-support-registry-adapters,
    epic-expanded-harness-support-registry-config]`. The composition boundary that
    ties registry + config together.
 5. `epic-expanded-harness-support-registry-test-support` (Unit 5, acceptance
-   contract) — `depends_on: [epic-expanded-harness-support-registry,
+   contract) — `depends_on: [epic-expanded-harness-support-registry-contract,
    epic-expanded-harness-support-registry-adapters]`. Reusable matrix; exercises
    the registry-driven fixtures.
 
-Unit 1 is treated as the feature's own inline stride (it is small, cohesive, and
-the parent of every story), so the four shipped child stories are Units 2–5.
+The parent feature `epic-expanded-harness-support-registry` carries the design
+body only; it has no `depends_on` and is never an inline stride. Its five child
+stories carry Units 1–5 respectively. Sibling adapter features outside this
+registry subtree continue to depend on the parent feature id (the whole
+registry deliverable), which is correct: they wait for the full contract +
+Codex/Claude migration + config + CLI composition to terminalize together,
+which the parent feature reaches once all five children are done.
 
 ## Simplification
 
@@ -808,12 +817,30 @@ Low-value tests are not added: no per-adapter unit test for `version_arguments`
 
 ## Implementation discovery
 
+### Initial defect (resolved 2026-07-12)
+
 The initial decomposition made Unit 1 an inline parent-feature stride while
-making every child story depend on the parent feature id. Since a parent feature
-must remain nonterminal until its children complete, that graph leaves every
-child blocked forever. The corrected design must represent Unit 1 as its own
-foundation story and point sibling dependencies at that story, never at their
-nonterminal parent.
+making every child story `depends_on` the parent feature id. Since readiness
+is governed by `depends_on` reaching a terminal stage and the parent feature
+cannot terminalize until its children complete, that graph left every child
+blocked forever: the four children all pointed at a nonterminal ancestor, and
+the ancestor could not finish before the children that depended on it.
+
+### Correction
+
+Unit 1 is now its own foundation story,
+`epic-expanded-harness-support-registry-contract` (`depends_on: []`, sibling to
+Units 2–5 under the same parent feature). Every child story's `depends_on`
+now points at that foundation story (and, for cli/test-support, at sibling
+stories) — never at the parent feature id. The parent feature keeps the design
+body and no `depends_on`; it terminalizes once all five children are done,
+which also unblocks the sibling adapter features that legitimately wait on the
+whole registry deliverable.
+
+The substantive architecture is unchanged: the trait shape, the registry API,
+the wire-compatible config map, the registry-derived CLI, and the
+registry-derived test fixtures are all as designed. Only the work graph was
+restructured to be executable.
 
 ## Risks
 
