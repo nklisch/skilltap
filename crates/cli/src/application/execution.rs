@@ -204,7 +204,7 @@ pub(super) struct ManagedSkillPort<'a> {
     pub(super) entries: BTreeMap<OperationId, ManagedSkillEntry>,
 }
 
-pub(super) trait ManagedProjectFileSystem:
+pub(crate) trait ManagedProjectFileSystem:
     FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedFileSystem
 {
 }

@@ -34,12 +34,12 @@ use skilltap_core::{
     lifecycle_operation::native_operation,
     plugin_graph::{ComponentDeclaration, PluginGraphReader},
     runtime::{
-        ConfinedFileSystem, DirectoryTreeFileSystem, ExecutableResolutionRequest,
-        ExecutableResolver, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
-        FileKind, FileSystem, JsonLimits, NativeProcessRequest, NativeProcessRunner, PlatformPaths,
-        ProcessEnvironment, ProcessLimits, RelativeSymlinkTarget, ScopeRequest, ScopeResolver,
-        SystemConfigurationLock, SystemExecutableResolver, SystemExternalTreeObserver,
-        SystemFileSystem, SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
+        DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
+        ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, FileKind, FileSystem,
+        JsonLimits, NativeProcessRequest, NativeProcessRunner, PlatformPaths, ProcessEnvironment,
+        ProcessLimits, RelativeSymlinkTarget, ScopeRequest, ScopeResolver, SystemConfigurationLock,
+        SystemExecutableResolver, SystemExternalTreeObserver, SystemFileSystem,
+        SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
     },
     skill::ValidatedSkillTree,
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
@@ -153,9 +153,9 @@ use status::{NativeObservation, StatusDocuments, StatusScope, StatusTargetError,
 
 use execution::{
     HybridLifecyclePort, InstructionEntry, InstructionPort, InstructionWrite,
-    ManagedProjectFileWrite, ManagedProjectLifecycleEntry, ManagedProjectLifecyclePort,
-    ManagedProjectPluginWrite, ManagedSkillAction, ManagedSkillEntry, ManagedSkillPort,
-    StateExecutionJournal,
+    ManagedProjectFileSystem, ManagedProjectFileWrite, ManagedProjectLifecycleEntry,
+    ManagedProjectLifecyclePort, ManagedProjectPluginWrite, ManagedSkillAction, ManagedSkillEntry,
+    ManagedSkillPort, StateExecutionJournal,
 };
 
 pub(crate) struct StatusApplication<'a> {
@@ -165,6 +165,10 @@ pub(crate) struct StatusApplication<'a> {
     pub(crate) scopes: &'a ScopeResolver<'a>,
     pub(crate) working_directory: &'a dyn WorkingDirectory,
     pub(crate) native_observation: NativeObservationMode,
+    #[cfg(test)]
+    pub(crate) test_platform_paths: Option<PlatformPaths>,
+    #[cfg(test)]
+    pub(crate) test_managed_project_filesystem: Option<&'a dyn ManagedProjectFileSystem>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1293,6 +1297,7 @@ struct ManagedCodexProjectPlanContext<'a> {
     timestamp: Timestamp,
     json_limits: JsonLimits,
     acknowledged: bool,
+    filesystem: &'a dyn ManagedProjectFileSystem,
 }
 
 fn plan_managed_codex_project_lifecycle(
@@ -1308,6 +1313,7 @@ fn plan_managed_codex_project_lifecycle(
         timestamp,
         json_limits,
         acknowledged,
+        filesystem,
     } = context;
     let codex = HarnessId::new("codex").expect("static harness id is valid");
     let catalog_destination =
@@ -1329,10 +1335,9 @@ fn plan_managed_codex_project_lifecycle(
             "The managed Codex project catalog path is invalid.",
         )
     })?;
-    let filesystem = SystemFileSystem;
     let current_catalog =
         skilltap_core::runtime::ConfinedFileSystem::read_regular_bounded_no_follow(
-            &filesystem,
+            filesystem,
             project,
             &catalog_destination,
             json_limits.bytes(),
@@ -1424,7 +1429,7 @@ fn plan_managed_codex_project_lifecycle(
                 }
                 let projection = plan_codex_component_projections(
                     project,
-                    &filesystem,
+                    filesystem,
                     None,
                     &[],
                     prior_projections,
@@ -1493,7 +1498,7 @@ fn plan_managed_codex_project_lifecycle(
                     read_complete_codex_plugin(&plugin_root, &marketplace_source, json_limits)?;
                 let projection = plan_codex_component_projections(
                     project,
-                    &filesystem,
+                    filesystem,
                     Some(&plugin.tree),
                     &plugin.declarations,
                     prior_projections,
@@ -1743,7 +1748,7 @@ fn read_codex_catalog_at_root(
 
 fn plan_codex_component_projections(
     project: &AbsolutePath,
-    filesystem: &SystemFileSystem,
+    filesystem: &dyn ManagedProjectFileSystem,
     plugin: Option<&ArtifactTree>,
     declarations: &[ComponentDeclaration],
     prior: &[ManagedProjection],
@@ -1943,7 +1948,7 @@ fn append_projection_tree(
 
 fn plan_codex_mcp_config(
     project: &AbsolutePath,
-    filesystem: &SystemFileSystem,
+    filesystem: &dyn ManagedProjectFileSystem,
     plugin: Option<&ArtifactTree>,
     prior: &[ManagedProjection],
     removal: bool,

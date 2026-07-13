@@ -1,8 +1,19 @@
-use std::{cell::RefCell, collections::BTreeMap, fs, path::PathBuf};
+use std::{
+    cell::{Cell, RefCell},
+    collections::BTreeMap,
+    ffi::OsString,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId},
-    runtime::{GitRoot, ScopeResolver, SystemFileSystem, WorkingDirectory},
+    domain::{AbsolutePath, HarnessId, RelativeArtifactPath},
+    runtime::{
+        ConfinedFileSystem, DirectoryIdentity, DirectoryPublishOutcome, DirectoryTreeFileSystem,
+        Environment, EnvironmentVariable, ExternalTreeLimits, FileMetadata, FileSystem,
+        FileSystemAction, GitRoot, PlatformPaths, RuntimeError, ScopeResolver, SupportedPlatform,
+        SystemFileSystem, WorkingDirectory,
+    },
     storage::{
         ConfigDocument, ConfigRepository, FileConfigRepository, FileInventoryRepository,
         FileStateRepository, HarnessPolicies, HarnessPolicy, StateRepository,
@@ -12,6 +23,502 @@ use skilltap_test_support::TempRoot;
 
 use super::*;
 use crate::command::{OutputArgs, ScopeArgs, TargetArgs};
+
+struct RecordingFaultFileSystem {
+    delegate: SystemFileSystem,
+    fail_tree_publish: Cell<bool>,
+    fail_confined_write_suffix: RefCell<Option<String>>,
+    fail_atomic_write_at: Cell<Option<usize>>,
+    atomic_write_calls: Cell<usize>,
+    tree_publish_attempts: Cell<usize>,
+    tree_publish_successes: Cell<usize>,
+}
+
+impl RecordingFaultFileSystem {
+    fn new() -> Self {
+        Self {
+            delegate: SystemFileSystem,
+            fail_tree_publish: Cell::new(false),
+            fail_confined_write_suffix: RefCell::new(None),
+            fail_atomic_write_at: Cell::new(None),
+            atomic_write_calls: Cell::new(0),
+            tree_publish_attempts: Cell::new(0),
+            tree_publish_successes: Cell::new(0),
+        }
+    }
+
+    fn fail_next_tree_publish(&self) {
+        self.fail_tree_publish.set(true);
+    }
+
+    fn fail_next_confined_write(&self, suffix: &str) {
+        *self.fail_confined_write_suffix.borrow_mut() = Some(suffix.to_owned());
+    }
+
+    fn fail_atomic_write_number(&self, number: usize) {
+        self.atomic_write_calls.set(0);
+        self.fail_atomic_write_at.set(Some(number));
+    }
+
+    fn injected(action: FileSystemAction, path: AbsolutePath) -> RuntimeError {
+        RuntimeError::FileSystem {
+            action,
+            path,
+            source: io::Error::other("injected managed lifecycle failure"),
+        }
+    }
+
+    fn confined_path(root: &AbsolutePath, destination: &RelativeArtifactPath) -> AbsolutePath {
+        AbsolutePath::new(format!("{}/{}", root.as_str(), destination.as_str())).unwrap()
+    }
+}
+
+impl FileSystem for RecordingFaultFileSystem {
+    fn inspect(&self, path: &AbsolutePath) -> Result<FileMetadata, RuntimeError> {
+        self.delegate.inspect(path)
+    }
+
+    fn canonicalize(&self, path: &AbsolutePath) -> Result<AbsolutePath, RuntimeError> {
+        self.delegate.canonicalize(path)
+    }
+
+    fn create_directory_all(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
+        self.delegate.create_directory_all(path)
+    }
+
+    fn ensure_private_directory(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
+        self.delegate.ensure_private_directory(path)
+    }
+
+    fn ensure_private_file(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
+        self.delegate.ensure_private_file(path)
+    }
+
+    fn read(&self, path: &AbsolutePath) -> Result<Vec<u8>, RuntimeError> {
+        self.delegate.read(path)
+    }
+
+    fn read_regular_no_follow(&self, path: &AbsolutePath) -> Result<Option<Vec<u8>>, RuntimeError> {
+        self.delegate.read_regular_no_follow(path)
+    }
+
+    fn atomic_write(&self, path: &AbsolutePath, contents: &[u8]) -> Result<(), RuntimeError> {
+        let call = self.atomic_write_calls.get() + 1;
+        self.atomic_write_calls.set(call);
+        if self.fail_atomic_write_at.get() == Some(call) {
+            self.fail_atomic_write_at.set(None);
+            return Err(Self::injected(FileSystemAction::Write, path.clone()));
+        }
+        self.delegate.atomic_write(path, contents)
+    }
+
+    fn copy_recoverable(
+        &self,
+        source: &AbsolutePath,
+        destination: &AbsolutePath,
+    ) -> Result<(), RuntimeError> {
+        self.delegate.copy_recoverable(source, destination)
+    }
+
+    fn create_relative_symlink(
+        &self,
+        target: &skilltap_core::runtime::RelativeSymlinkTarget,
+        link: &AbsolutePath,
+    ) -> Result<(), RuntimeError> {
+        self.delegate.create_relative_symlink(target, link)
+    }
+
+    fn remove(&self, path: &AbsolutePath) -> Result<(), RuntimeError> {
+        self.delegate.remove(path)
+    }
+}
+
+impl DirectoryTreeFileSystem for RecordingFaultFileSystem {
+    fn publish_tree_no_follow(
+        &self,
+        managed_root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        files: &BTreeMap<RelativeArtifactPath, ArtifactFile>,
+    ) -> Result<DirectoryPublishOutcome, RuntimeError> {
+        self.tree_publish_attempts
+            .set(self.tree_publish_attempts.get() + 1);
+        if self.fail_tree_publish.replace(false) {
+            return Err(Self::injected(
+                FileSystemAction::Write,
+                Self::confined_path(managed_root, destination),
+            ));
+        }
+        let result = self
+            .delegate
+            .publish_tree_no_follow(managed_root, destination, files);
+        if result.is_ok() {
+            self.tree_publish_successes
+                .set(self.tree_publish_successes.get() + 1);
+        }
+        result
+    }
+
+    fn load_tree_no_follow(
+        &self,
+        managed_root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+    ) -> Result<
+        (
+            DirectoryIdentity,
+            BTreeMap<RelativeArtifactPath, ArtifactFile>,
+        ),
+        RuntimeError,
+    > {
+        self.delegate.load_tree_no_follow(managed_root, destination)
+    }
+
+    fn remove_tree_no_follow(
+        &self,
+        managed_root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        expected: DirectoryIdentity,
+    ) -> Result<DirectoryIdentity, RuntimeError> {
+        self.delegate
+            .remove_tree_no_follow(managed_root, destination, expected)
+    }
+}
+
+impl ConfinedFileSystem for RecordingFaultFileSystem {
+    fn load_tree_bounded_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        limits: ExternalTreeLimits,
+    ) -> Result<
+        (
+            DirectoryIdentity,
+            BTreeMap<RelativeArtifactPath, ArtifactFile>,
+        ),
+        RuntimeError,
+    > {
+        self.delegate
+            .load_tree_bounded_no_follow(root, destination, limits)
+    }
+
+    fn read_regular_bounded_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        maximum_bytes: u64,
+    ) -> Result<Option<Vec<u8>>, RuntimeError> {
+        self.delegate
+            .read_regular_bounded_no_follow(root, destination, maximum_bytes)
+    }
+
+    fn atomic_write_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+        contents: &[u8],
+    ) -> Result<(), RuntimeError> {
+        let matches = self
+            .fail_confined_write_suffix
+            .borrow()
+            .as_ref()
+            .is_some_and(|suffix| destination.as_str().ends_with(suffix));
+        if matches {
+            self.fail_confined_write_suffix.borrow_mut().take();
+            return Err(Self::injected(
+                FileSystemAction::Write,
+                Self::confined_path(root, destination),
+            ));
+        }
+        self.delegate
+            .atomic_write_beneath_no_follow(root, destination, contents)
+    }
+
+    fn remove_file_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        destination: &RelativeArtifactPath,
+    ) -> Result<(), RuntimeError> {
+        self.delegate
+            .remove_file_beneath_no_follow(root, destination)
+    }
+}
+
+struct FixtureEnvironment {
+    home: OsString,
+    config: OsString,
+    cache: OsString,
+}
+
+impl Environment for FixtureEnvironment {
+    fn value(&self, variable: EnvironmentVariable) -> Option<OsString> {
+        match variable {
+            EnvironmentVariable::Home => Some(self.home.clone()),
+            EnvironmentVariable::XdgConfigHome => Some(self.config.clone()),
+            EnvironmentVariable::XdgCacheHome => Some(self.cache.clone()),
+            EnvironmentVariable::CodexHome | EnvironmentVariable::ClaudeConfigDir => None,
+            EnvironmentVariable::Path => std::env::var_os("PATH"),
+        }
+    }
+}
+
+fn isolated_platform_paths(root: &TempRoot) -> PlatformPaths {
+    let home = root.join("home");
+    let config = root.join("config");
+    let cache = root.join("cache");
+    fs::create_dir_all(&home).unwrap();
+    fs::create_dir_all(&config).unwrap();
+    fs::create_dir_all(&cache).unwrap();
+    PlatformPaths::resolve_for(
+        SupportedPlatform::current().unwrap(),
+        &FixtureEnvironment {
+            home: home.into_os_string(),
+            config: config.into_os_string(),
+            cache: cache.into_os_string(),
+        },
+    )
+    .unwrap()
+}
+
+fn enable_codex_only(paths: &PlatformPaths) {
+    let filesystem = SystemFileSystem;
+    let repository =
+        FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let defaults = ConfigDocument::defaults();
+    repository
+        .replace(
+            &ConfigDocument::new(
+                defaults.schema(),
+                HarnessPolicies {
+                    codex: HarnessPolicy {
+                        enabled: true,
+                        binary: defaults.harnesses().codex.binary.clone(),
+                    },
+                    claude: HarnessPolicy {
+                        enabled: false,
+                        binary: defaults.harnesses().claude.binary.clone(),
+                    },
+                },
+                defaults.instructions().clone(),
+                defaults.updates().clone(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+}
+
+fn write_managed_marketplace(source: &Path) {
+    fs::create_dir_all(source.join(".agents/plugins")).unwrap();
+    fs::create_dir_all(source.join("plugins/demo/.codex-plugin")).unwrap();
+    fs::create_dir_all(source.join("plugins/demo/skills/demo")).unwrap();
+    fs::write(
+        source.join(".agents/plugins/marketplace.json"),
+        r#"{"name":"team","plugins":[{"name":"demo","source":{"source":"local","path":"./plugins/demo"}}]}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/plugin.json"),
+        r#"{"name":"demo","version":"1.0.0"}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"demo-docs":{"command":"demo-mcp","args":["serve"]}}}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/skills/demo/SKILL.md"),
+        "---\nname: demo\ndescription: fixture\n---\nbody\n",
+    )
+    .unwrap();
+}
+
+fn managed_scope(project: &Path) -> ScopeArgs {
+    ScopeArgs {
+        project: Some(Some(project.to_path_buf())),
+        all_scopes: false,
+    }
+}
+
+fn codex_target() -> TargetArgs {
+    TargetArgs {
+        target: Some(skilltap_core::domain::TargetSelection::Only(
+            HarnessId::new("codex").unwrap(),
+        )),
+    }
+}
+
+fn execute_managed_lifecycle(
+    paths: &PlatformPaths,
+    project: &Path,
+    state_filesystem: &dyn FileSystem,
+    managed_filesystem: &dyn ManagedProjectFileSystem,
+    kind: NativeLifecycleKind,
+    source: Option<&str>,
+    name: Option<&str>,
+) -> Outcome {
+    let filesystem = SystemFileSystem;
+    let config = FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let inventory =
+        FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let state =
+        FileStateRepository::new(state_filesystem, paths.skilltap_config().clone()).unwrap();
+    let working_directory = FixedWorkingDirectory(absolute(project));
+    let git = NoGitRoot;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+        native_observation: NativeObservationMode::Disabled,
+        test_platform_paths: Some(paths.clone()),
+        test_managed_project_filesystem: Some(managed_filesystem),
+    }
+    .execute_native_lifecycle(
+        "managed lifecycle test",
+        kind,
+        &managed_scope(project),
+        &codex_target(),
+        NativeLifecycleValues { source, name },
+        false,
+    )
+}
+
+fn assert_changed(outcome: &Outcome, expected: bool) {
+    assert_eq!(
+        outcome.summary.get("changed"),
+        Some(&OutputValue::Boolean(expected)),
+        "outcome: {outcome:?}"
+    );
+}
+
+#[test]
+fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
+    #[derive(Clone, Copy, Debug)]
+    enum Boundary {
+        Catalog,
+        Tree,
+        Config,
+        State,
+    }
+
+    for boundary in [
+        Boundary::Catalog,
+        Boundary::Tree,
+        Boundary::Config,
+        Boundary::State,
+    ] {
+        let root = TempRoot::new("skilltap-managed-publication-failure").unwrap();
+        let paths = isolated_platform_paths(&root);
+        enable_codex_only(&paths);
+        let project = root.join("project");
+        let source = root.join("marketplace");
+        fs::create_dir_all(&project).unwrap();
+        write_managed_marketplace(&source);
+        let managed_filesystem = RecordingFaultFileSystem::new();
+        let state_filesystem = RecordingFaultFileSystem::new();
+
+        if matches!(boundary, Boundary::Catalog) {
+            managed_filesystem.fail_next_confined_write("marketplace.json");
+        }
+        let add = execute_managed_lifecycle(
+            &paths,
+            &project,
+            &state_filesystem,
+            &managed_filesystem,
+            NativeLifecycleKind::MarketplaceAdd,
+            Some(source.to_str().unwrap()),
+            Some("team"),
+        );
+        if matches!(boundary, Boundary::Catalog) {
+            assert_eq!(add.result, ResultClass::AttentionRequired, "{add:?}");
+            assert!(!project.join(".agents/plugins/marketplace.json").exists());
+            let retry = execute_managed_lifecycle(
+                &paths,
+                &project,
+                &state_filesystem,
+                &managed_filesystem,
+                NativeLifecycleKind::MarketplaceAdd,
+                Some(source.to_str().unwrap()),
+                Some("team"),
+            );
+            assert_eq!(retry.result, ResultClass::Completed, "{retry:?}");
+            assert_changed(&retry, true);
+            let repeat = execute_managed_lifecycle(
+                &paths,
+                &project,
+                &state_filesystem,
+                &managed_filesystem,
+                NativeLifecycleKind::MarketplaceAdd,
+                Some(source.to_str().unwrap()),
+                Some("team"),
+            );
+            assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
+            assert_changed(&repeat, false);
+            continue;
+        }
+        assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+
+        match boundary {
+            Boundary::Tree => managed_filesystem.fail_next_tree_publish(),
+            Boundary::Config => managed_filesystem.fail_next_confined_write("config.toml"),
+            Boundary::State => state_filesystem.fail_atomic_write_number(1),
+            Boundary::Catalog => unreachable!(),
+        }
+        let failed = execute_managed_lifecycle(
+            &paths,
+            &project,
+            &state_filesystem,
+            &managed_filesystem,
+            NativeLifecycleKind::PluginInstall,
+            Some("demo@team"),
+            None,
+        );
+        assert_eq!(failed.result, ResultClass::AttentionRequired, "{failed:?}");
+        assert!(
+            !project.join(".agents/skills/demo").exists(),
+            "boundary={boundary:?} outcome={failed:?}"
+        );
+        assert!(
+            !project.join(".codex/config.toml").exists(),
+            "boundary={boundary:?} outcome={failed:?}"
+        );
+        if matches!(boundary, Boundary::Config) {
+            assert!(
+                format!("{failed:?}").contains("Rollback restored every prior surface"),
+                "{failed:?}"
+            );
+        }
+
+        let retry = execute_managed_lifecycle(
+            &paths,
+            &project,
+            &state_filesystem,
+            &managed_filesystem,
+            NativeLifecycleKind::PluginInstall,
+            Some("demo@team"),
+            None,
+        );
+        assert_eq!(retry.result, ResultClass::Completed, "{retry:?}");
+        assert_changed(&retry, true);
+        assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+        assert!(project.join(".codex/config.toml").is_file());
+
+        let published = managed_filesystem.tree_publish_successes.get();
+        let repeat = execute_managed_lifecycle(
+            &paths,
+            &project,
+            &state_filesystem,
+            &managed_filesystem,
+            NativeLifecycleKind::PluginInstall,
+            Some("demo@team"),
+            None,
+        );
+        assert_eq!(repeat.result, ResultClass::Completed, "{repeat:?}");
+        assert_changed(&repeat, false);
+        assert_eq!(managed_filesystem.tree_publish_successes.get(), published);
+    }
+}
 
 fn application_root(root: &TempRoot) -> PathBuf {
     root.join("skilltap")
@@ -63,6 +570,8 @@ fn execute(root: &std::path::Path, args: &StatusArgs, cwd: AbsolutePath) -> Outc
         scopes: &scopes,
         working_directory: &working_directory,
         native_observation: NativeObservationMode::Disabled,
+        test_platform_paths: None,
+        test_managed_project_filesystem: None,
     }
     .execute(args)
 }
@@ -542,9 +1051,7 @@ fn managed_pending_writer_and_recovery_use_exact_first_install_and_update_shapes
             .is_ok()
         );
         journal
-            .record(
-                &OperationResult::new(operation_id, OperationOutcome::NoChange).unwrap(),
-            )
+            .record(&OperationResult::new(operation_id, OperationOutcome::NoChange).unwrap())
             .unwrap();
         let completed = match repository.load().unwrap() {
             DocumentState::Present(value) => value,

@@ -436,6 +436,10 @@ fn with_system_application(
         scopes: &scopes,
         working_directory: &working_directory,
         native_observation: NativeObservationMode::System,
+        #[cfg(test)]
+        test_platform_paths: None,
+        #[cfg(test)]
+        test_managed_project_filesystem: None,
     })
 }
 

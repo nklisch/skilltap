@@ -18,6 +18,24 @@ fn previously_attempted(
 }
 
 impl StatusApplication<'_> {
+    fn lifecycle_platform_paths(
+        &self,
+    ) -> Result<PlatformPaths, skilltap_core::runtime::RuntimeError> {
+        #[cfg(test)]
+        if let Some(paths) = &self.test_platform_paths {
+            return Ok(paths.clone());
+        }
+        PlatformPaths::resolve(&ProcessEnvironment)
+    }
+
+    fn managed_project_filesystem(&self) -> &dyn ManagedProjectFileSystem {
+        #[cfg(test)]
+        if let Some(filesystem) = self.test_managed_project_filesystem {
+            return filesystem;
+        }
+        &SystemFileSystem
+    }
+
     #[allow(dead_code)]
     pub(crate) fn execute_daemon_cycle(&self) -> Outcome {
         self.execute_daemon_cycle_with_binary(None)
@@ -291,7 +309,7 @@ impl StatusApplication<'_> {
                 }
             }
         };
-        let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
+        let paths = match self.lifecycle_platform_paths() {
             Ok(paths) => paths,
             Err(_) => {
                 outcome.result = ResultClass::Invalid;
@@ -501,6 +519,7 @@ impl StatusApplication<'_> {
                                 timestamp: observed_at,
                                 json_limits,
                                 acknowledged,
+                                filesystem: self.managed_project_filesystem(),
                             },
                         ) {
                             Ok(planned) => planned,
@@ -927,11 +946,10 @@ impl StatusApplication<'_> {
         let native_port =
             NativeLifecyclePort::new_per_operation_with_environment(requests, native_environment)
                 .with_foreign_operations(foreign_operations);
-        let filesystem = SystemFileSystem;
         let port = HybridLifecyclePort {
             native: native_port,
             managed: ManagedProjectLifecyclePort {
-                filesystem: &filesystem,
+                filesystem: self.managed_project_filesystem(),
                 entries: managed_entries,
             },
         };
