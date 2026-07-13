@@ -1,11 +1,12 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-repair-outcome
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
   - epic-real-harness-recovery-filesystem-instructions-relative-bridges
+  - epic-real-harness-recovery-filesystem-instructions-repair-completion
 release_binding: null
 research_refs: []
 research_origin: null
@@ -51,3 +52,36 @@ instruction outcome from execution plus post-apply bridge and backup health.
 - Existing project duplicate, mixed blocker, and broken-entry regressions.
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+
+## Review findings (2026-07-12)
+
+- **Blocker — import postcondition follows symlinks**:
+  `instruction_entry_postcondition` validates an import with
+  `FileSystem::read`, so a post-apply swap to a symlink whose destination has
+  the expected bytes is accepted as healthy. This contradicts the exact
+  regular-file import representation used by the authoritative bridge
+  classifier and can incorrectly return `completed`. Validate with
+  `read_regular_no_follow` and add a post-apply swap/fake-filesystem regression.
+- **Blocker — acknowledged target-scoped sync remains attention-required**:
+  direct `instructions repair` now completes, but reconciliation merges the
+  repair disclosure warning and only normalizes when the aggregate warning
+  list is empty. Existing global and project regressions still require exit 2
+  after a successful `sync --yes`, contrary to this story's explicit exit-0
+  acceptance. Reconciliation must distinguish resolved disclosures from
+  unresolved warnings and assert completed global/project sync results.
+
+Tracked by `epic-real-harness-recovery-filesystem-instructions-repair-completion`.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: `epic-real-harness-recovery-filesystem-instructions-repair-completion`
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight,
+escalated from Fast because this is a correctness/security-sensitive
+filesystem postcondition. Focused repair, repeat, duplicate, and blocker tests
+plus full workspace tests and all-feature Clippy are green, but the no-follow
+representation gap prevents approval.

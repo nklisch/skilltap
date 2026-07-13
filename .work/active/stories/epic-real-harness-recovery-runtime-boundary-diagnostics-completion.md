@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics-completion
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
@@ -71,3 +71,33 @@ generic warning code, leaving the exact implementation baseline red.
 - `cargo test -p skilltap --test compiled_binary adopt_reports_partial_sibling_and_still_publishes_healthy_candidates -- --exact`
 - Integration commit `b0e1869`: `cargo test --workspace --all-targets` and
   `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+
+## Review findings (2026-07-12)
+
+- **Blocker — plan drops typed detection next actions**: the reconciliation
+  application copies observation resources and warnings but omits
+  `observation.next_actions`. Plan output consequently lacks the exact
+  category-specific recovery command required by this item's acceptance.
+  Project the typed actions through reconciliation and cover plan in the
+  isolated diagnostic matrix.
+- **Blocker — post-mutation lifecycle drops typed next actions**: fresh
+  lifecycle observation forwards warnings but not target-specific recovery
+  actions, leaving only generic verification guidance.
+- **Blocker — recovery command does not name the configured executable**:
+  invalid/nonzero/bounded failures format `<harness> --version` from the
+  harness ID rather than the absolute or custom configured binary that was
+  actually invoked. Carry that safe executable identity through the mapper and
+  cover custom configuration.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: plan and post-mutation lifecycle must preserve typed detection
+next actions; recovery must name the configured executable
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+The implemented lifecycle/status/adopt behavior and safety redaction are green;
+the missing plan projection prevents approval and parent roll-up.

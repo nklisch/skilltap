@@ -1,12 +1,13 @@
 ---
 id: epic-real-harness-recovery-runtime-boundary-diagnostics
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-runtime-boundary
 depends_on:
   - epic-real-harness-recovery-runtime-boundary-process-context
   - epic-real-harness-recovery-runtime-boundary-version-decoding
+  - epic-real-harness-recovery-runtime-boundary-diagnostics-completion
 release_binding: null
 research_refs: []
 research_origin: null
@@ -82,3 +83,36 @@ safe output and isolated compiled-binary coverage.
   detection without generic warnings or sensitive context.
 - Integrated by `b0e1869`; the full workspace suite and all-feature Clippy are
   green, and the three diagnostics-focused compiled tests pass independently.
+
+## Review findings (2026-07-12, completion pass)
+
+- **Blocker — plan drops typed detection next actions**: reconciliation copies
+  native observation resources and warnings but not its target-specific
+  `next_actions`. A failed plan therefore reports the typed category without
+  the matching safe command, unlike status, adoption, and lifecycle. Project
+  `observation.next_actions` into plan/sync aggregation and add an isolated
+  plan regression for the exact warning/action pair.
+- **Blocker — post-mutation lifecycle drops typed next actions**: lifecycle
+  re-observation copies resources and warnings but omits the observation's
+  target-specific actions, then emits only generic verification guidance.
+  Preserve typed actions in the post-mutation aggregate and cover a failed
+  re-observation.
+- **Blocker — recovery command does not name the configured executable**: the
+  authoritative mapper formats `<harness> --version` from the harness ID. With
+  an absolute or custom configured binary this may inspect a different
+  executable than the one that failed. Carry the safely rendered configured
+  executable into the action and add custom-binary coverage.
+
+## Review (2026-07-12, completion pass)
+
+**Verdict**: Request changes
+
+**Blockers**: plan and post-mutation lifecycle must preserve typed detection
+next actions; recovery must name the configured executable
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+Lifecycle, status, and adoption focused tests plus full workspace tests and
+all-feature Clippy are green; the untested plan aggregation seam still violates
+the public diagnostic contract.
