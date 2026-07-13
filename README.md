@@ -24,7 +24,9 @@ skilltap uses native harness commands whenever they exist.
 
 A Claude plugin stays a Claude plugin. A Codex plugin stays a Codex plugin. When the same plugin exists natively for both harnesses, skilltap installs both native distributions.
 
-When no native target exists, skilltap can materialize compatible components into the target harness. Partial or lossy results are reported and require explicit approval.
+When no native target exists, skilltap can materialize compatible components
+into the target harness through documented load paths. Partial or lossy
+results are reported and require explicit approval.
 
 ## Agent Forward
 
