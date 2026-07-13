@@ -1,9 +1,8 @@
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId, ResourceKey, ResourceKind, Source},
-    managed_projection::{AcquiredProjection, ManagedProjectionError, ManagedProjectionPlan},
+    domain::{AbsolutePath, HarnessId, ResourceKey, ResourceKind},
+    managed_projection::{ManagedProjectionError, ManagedProjectionPlan, ResolvedSourceCheckout},
     runtime::{ConfinedFileSystem, JsonLimits, PlatformPaths},
     storage::ManagedProjection,
-    updates::SourceRevisionResolver,
 };
 
 use crate::lifecycle::NativeLifecycleRequest;
@@ -19,27 +18,29 @@ pub enum ManagedLifecycleKind {
     PluginUpdate,
 }
 
-/// Inputs required for target-specific source acquisition.
-pub struct ManagedAcquisitionContext<'a> {
+/// The source requirement for one managed-projection plan.
+///
+/// Invalid states are unrepresentable: apply always has one authoritative
+/// checkout, while removal cannot carry or require source evidence.
+#[derive(Clone, Debug)]
+pub enum ManagedProjectionInput<'a> {
+    Apply {
+        checkout: &'a ResolvedSourceCheckout,
+    },
+    Remove,
+}
+
+/// Inputs required to plan one operation on documented target surfaces.
+pub struct ManagedProjectionContext<'a> {
     pub target: &'a HarnessId,
     pub project: &'a AbsolutePath,
     pub paths: &'a PlatformPaths,
     pub resource_key: &'a ResourceKey,
     pub resource_kind: ResourceKind,
     pub request: &'a NativeLifecycleRequest,
-    pub source: Option<&'a Source>,
-    pub json_limits: JsonLimits,
-    pub filesystem: &'a dyn ConfinedFileSystem,
-    pub revision_resolver: &'a dyn SourceRevisionResolver,
-}
-
-/// Inputs required to map acquired content onto documented target surfaces.
-pub struct ManagedProjectionContext<'a> {
-    pub target: &'a HarnessId,
-    pub project: &'a AbsolutePath,
-    pub acquired: &'a AcquiredProjection,
-    pub prior: &'a [ManagedProjection],
     pub kind: ManagedLifecycleKind,
+    pub input: ManagedProjectionInput<'a>,
+    pub prior: &'a [ManagedProjection],
     pub acknowledged: bool,
     pub filesystem: &'a dyn ConfinedFileSystem,
     pub json_limits: JsonLimits,
@@ -47,16 +48,12 @@ pub struct ManagedProjectionContext<'a> {
 
 /// Target-specific acquisition and projection for managed fallback lifecycle.
 ///
-/// The port owns native document codecs and target path rules. Shared
-/// orchestration owns state, drift, acknowledgment, publication, and load
-/// verification.
+/// Apply receives the caller-resolved checkout that the adapter reads and
+/// projects in one pass. Remove plans only from prior evidence and current
+/// filesystem observation. Shared orchestration owns state, drift,
+/// acknowledgment, publication, and load verification.
 pub trait ManagedProjectionPort: Sync {
-    fn acquire(
-        &self,
-        context: &ManagedAcquisitionContext<'_>,
-    ) -> Result<AcquiredProjection, ManagedProjectionError>;
-
-    fn project(
+    fn plan(
         &self,
         context: &ManagedProjectionContext<'_>,
     ) -> Result<ManagedProjectionPlan, ManagedProjectionError>;
@@ -68,12 +65,11 @@ mod tests {
 
     use skilltap_core::{
         domain::{
-            Fingerprint, FingerprintAlgorithm, NativeId, RelativeArtifactPath, ResolvedRevision,
-            ResourceId, Scope, SourceKind, SourceLocator,
+            Fingerprint, FingerprintAlgorithm, GitCommit, NativeId, RelativeArtifactPath,
+            ResolvedRevision, ResourceId, Scope, Source, SourceKind, SourceLocator,
         },
-        managed_projection::ManagedFileWrite,
+        managed_projection::{ManagedFileWrite, ResolvedSourceCheckout},
         runtime::{Environment, EnvironmentVariable, SupportedPlatform, SystemFileSystem},
-        updates::ResolutionError,
     };
 
     use super::*;
@@ -87,120 +83,133 @@ mod tests {
         }
     }
 
-    struct TestRevisionResolver;
-
-    impl SourceRevisionResolver for TestRevisionResolver {
-        fn resolve(&self, _source: &Source) -> Result<ResolvedRevision, ResolutionError> {
-            Err(ResolutionError::UnreachableSource)
-        }
+    struct TestPort {
+        checkout: ResolvedSourceCheckout,
+        apply_plan: ManagedProjectionPlan,
     }
 
-    struct TestPort;
-
     impl ManagedProjectionPort for TestPort {
-        fn acquire(
-            &self,
-            context: &ManagedAcquisitionContext<'_>,
-        ) -> Result<AcquiredProjection, ManagedProjectionError> {
-            Ok(AcquiredProjection::MarketplaceCatalog {
-                bytes: b"catalog".to_vec(),
-                fingerprint: Fingerprint::new(FingerprintAlgorithm::Sha256, "a".repeat(64))
-                    .expect("test fingerprint is valid"),
-                source: context
-                    .source
-                    .cloned()
-                    .ok_or(ManagedProjectionError::SourceMissing)?,
-                installed_revision: None,
-            })
-        }
-
-        fn project(
+        fn plan(
             &self,
             context: &ManagedProjectionContext<'_>,
         ) -> Result<ManagedProjectionPlan, ManagedProjectionError> {
-            let AcquiredProjection::MarketplaceCatalog { bytes, .. } = context.acquired else {
-                return Err(ManagedProjectionError::UnsupportedResourceKind);
-            };
-            Ok(ManagedProjectionPlan {
-                files: vec![ManagedFileWrite {
-                    root: context.project.clone(),
-                    destination: RelativeArtifactPath::new(".agents/plugins/marketplace.json")
-                        .expect("test path is valid"),
-                    expected: None,
-                    desired: Some(bytes.clone()),
-                }],
-                ..ManagedProjectionPlan::default()
-            })
+            match &context.input {
+                ManagedProjectionInput::Apply { checkout } => {
+                    assert_eq!(*checkout, &self.checkout);
+                    Ok(self.apply_plan.clone())
+                }
+                ManagedProjectionInput::Remove => Ok(ManagedProjectionPlan::default()),
+            }
         }
     }
 
+    fn fingerprint(digit: char) -> Fingerprint {
+        Fingerprint::new(FingerprintAlgorithm::Sha256, digit.to_string().repeat(64))
+            .expect("test fingerprint is valid")
+    }
+
     #[test]
-    fn managed_projection_port_is_object_safe_and_round_trips_pure_types() {
-        let port: &dyn ManagedProjectionPort = &TestPort;
+    fn managed_projection_port_is_object_safe_and_round_trips_apply_and_remove() {
         let target = HarnessId::new("test").unwrap();
         let project = AbsolutePath::new("/project").unwrap();
         let paths = PlatformPaths::resolve_for(SupportedPlatform::Linux, &TestEnvironment).unwrap();
         let resource_key = ResourceKey::new(
-            ResourceId::new("marketplace:test").unwrap(),
+            ResourceId::new("plugin:test").unwrap(),
             Scope::Project(project.clone()),
         );
         let source = Source::new(
-            SourceKind::Local,
-            SourceLocator::new("/source").unwrap(),
+            SourceKind::Git,
+            SourceLocator::new("https://example.invalid/marketplace.git").unwrap(),
             None,
         )
         .unwrap();
+        let revision = ResolvedRevision::GitCommit(GitCommit::new("a".repeat(40)).unwrap());
+        let checkout = ResolvedSourceCheckout::new(
+            AbsolutePath::new("/checkout").unwrap(),
+            source.clone(),
+            Some(revision.clone()),
+        );
+        assert_eq!(checkout.root().as_str(), "/checkout");
+        assert_eq!(checkout.source(), &source);
+        assert_eq!(checkout.revision(), Some(&revision));
+
         let request = NativeLifecycleRequest {
-            action: NativeLifecycleAction::MarketplaceAdd,
+            action: NativeLifecycleAction::PluginInstall,
             scope: Scope::Project(project.clone()),
             name: NativeId::new("test").unwrap(),
-            source: Some(SourceLocator::new("/source").unwrap()),
+            source: Some(source.locator().clone()),
         };
+        let current_fingerprint = fingerprint('b');
+        let desired_fingerprint = fingerprint('c');
+        let manifest = vec![ManagedProjection::Skill {
+            id: RelativeArtifactPath::new("test").unwrap(),
+            fingerprint: desired_fingerprint.clone(),
+        }];
+        let apply_plan = ManagedProjectionPlan {
+            files: vec![ManagedFileWrite {
+                root: project.clone(),
+                destination: RelativeArtifactPath::new(".agents/plugins/marketplace.json").unwrap(),
+                expected: None,
+                desired: Some(b"catalog".to_vec()),
+            }],
+            manifest: manifest.clone(),
+            current_fingerprint: Some(current_fingerprint.clone()),
+            desired_fingerprint: Some(desired_fingerprint.clone()),
+            ..ManagedProjectionPlan::default()
+        };
+        let port = TestPort {
+            checkout: checkout.clone(),
+            apply_plan: apply_plan.clone(),
+        };
+        let port: &dyn ManagedProjectionPort = &port;
         let filesystem = SystemFileSystem;
-        let revision_resolver = TestRevisionResolver;
         let json_limits = JsonLimits::new(1024, 8).unwrap();
 
-        let acquired = port
-            .acquire(&ManagedAcquisitionContext {
+        let planned_apply = port
+            .plan(&ManagedProjectionContext {
                 target: &target,
                 project: &project,
                 paths: &paths,
                 resource_key: &resource_key,
-                resource_kind: ResourceKind::Marketplace,
+                resource_kind: ResourceKind::Plugin,
                 request: &request,
-                source: Some(&source),
-                json_limits,
-                filesystem: &filesystem,
-                revision_resolver: &revision_resolver,
-            })
-            .unwrap();
-        assert_eq!(acquired.source(), &source);
-
-        let plan = port
-            .project(&ManagedProjectionContext {
-                target: &target,
-                project: &project,
-                acquired: &acquired,
+                kind: ManagedLifecycleKind::PluginInstall,
+                input: ManagedProjectionInput::Apply {
+                    checkout: &checkout,
+                },
                 prior: &[],
-                kind: ManagedLifecycleKind::MarketplaceAdd,
                 acknowledged: false,
                 filesystem: &filesystem,
                 json_limits,
             })
             .unwrap();
-
+        assert_eq!(planned_apply, apply_plan);
+        assert_eq!(planned_apply.manifest, manifest);
         assert_eq!(
-            plan,
-            ManagedProjectionPlan {
-                files: vec![ManagedFileWrite {
-                    root: project,
-                    destination: RelativeArtifactPath::new(".agents/plugins/marketplace.json")
-                        .unwrap(),
-                    expected: None,
-                    desired: Some(b"catalog".to_vec()),
-                }],
-                ..ManagedProjectionPlan::default()
-            }
+            planned_apply.current_fingerprint.as_ref(),
+            Some(&current_fingerprint)
         );
+        assert_eq!(
+            planned_apply.desired_fingerprint.as_ref(),
+            Some(&desired_fingerprint)
+        );
+
+        let planned_remove = port
+            .plan(&ManagedProjectionContext {
+                target: &target,
+                project: &project,
+                paths: &paths,
+                resource_key: &resource_key,
+                resource_kind: ResourceKind::Plugin,
+                request: &request,
+                kind: ManagedLifecycleKind::PluginRemove,
+                input: ManagedProjectionInput::Remove,
+                prior: &planned_apply.manifest,
+                acknowledged: false,
+                filesystem: &filesystem,
+                json_limits,
+            })
+            .unwrap();
+        assert_eq!(planned_remove, ManagedProjectionPlan::default());
     }
 }

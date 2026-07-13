@@ -1,69 +1,42 @@
 use std::fmt;
 
 use crate::{
-    domain::{
-        AbsolutePath, ComponentId, EvidenceCode, Fingerprint, RelativeArtifactPath,
-        ResolvedRevision, Source,
-    },
-    plugin_graph::ComponentDeclaration,
+    domain::{AbsolutePath, Fingerprint, RelativeArtifactPath, ResolvedRevision, Source},
     runtime::DirectoryIdentity,
-    storage::ArtifactTree,
+    storage::{ArtifactTree, ManagedProjection},
 };
 
-/// A component omitted because the target cannot represent it faithfully.
+/// A confined source checkout resolved by orchestration for managed projection.
 ///
-/// Required unsupported components are errors and never enter a projection
-/// plan. This type records only acknowledged optional loss.
+/// Adapters read catalog and plugin content from `root` and use `source` as the
+/// authoritative provenance identity. They do not resolve or acquire sources.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct OmittedComponent {
-    pub id: ComponentId,
-    pub consequence: EvidenceCode,
+pub struct ResolvedSourceCheckout {
+    root: AbsolutePath,
+    source: Source,
+    revision: Option<ResolvedRevision>,
 }
 
-/// Source content acquired by a target adapter for managed projection.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AcquiredProjection {
-    /// A complete plugin tree and its normalized component declarations.
-    Plugin {
-        tree: ArtifactTree,
-        fingerprint: Fingerprint,
-        declarations: Vec<ComponentDeclaration>,
-        source: Source,
-        installed_revision: Option<ResolvedRevision>,
-    },
-    /// A target-native catalog or document that is projected verbatim.
-    MarketplaceCatalog {
-        bytes: Vec<u8>,
-        fingerprint: Fingerprint,
-        source: Source,
-        installed_revision: Option<ResolvedRevision>,
-    },
-}
-
-impl AcquiredProjection {
-    pub const fn fingerprint(&self) -> &Fingerprint {
-        match self {
-            Self::Plugin { fingerprint, .. } | Self::MarketplaceCatalog { fingerprint, .. } => {
-                fingerprint
-            }
+impl ResolvedSourceCheckout {
+    /// Constructs a checkout from components validated by source resolution.
+    pub fn new(root: AbsolutePath, source: Source, revision: Option<ResolvedRevision>) -> Self {
+        Self {
+            root,
+            source,
+            revision,
         }
+    }
+
+    pub const fn root(&self) -> &AbsolutePath {
+        &self.root
     }
 
     pub const fn source(&self) -> &Source {
-        match self {
-            Self::Plugin { source, .. } | Self::MarketplaceCatalog { source, .. } => source,
-        }
+        &self.source
     }
 
-    pub const fn installed_revision(&self) -> Option<&ResolvedRevision> {
-        match self {
-            Self::Plugin {
-                installed_revision, ..
-            }
-            | Self::MarketplaceCatalog {
-                installed_revision, ..
-            } => installed_revision.as_ref(),
-        }
+    pub const fn revision(&self) -> Option<&ResolvedRevision> {
+        self.revision.as_ref()
     }
 }
 
@@ -86,12 +59,20 @@ pub struct ManagedFileWrite {
     pub desired: Option<Vec<u8>>,
 }
 
-/// Pure target-bound writes and acknowledged omissions produced by an adapter.
+/// Pure target-bound writes plus complete projection evidence from an adapter.
+///
+/// Shared orchestration consumes the manifest and fingerprints directly rather
+/// than reconstructing target-native semantics from encoded file writes.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ManagedProjectionPlan {
     pub trees: Vec<ManagedPluginWrite>,
     pub files: Vec<ManagedFileWrite>,
-    pub omitted: Vec<OmittedComponent>,
+    /// Complete target-bound Skill, MCP, and acknowledged Omitted evidence.
+    pub manifest: Vec<ManagedProjection>,
+    /// Aggregate fingerprint of currently observed projected surfaces.
+    pub current_fingerprint: Option<Fingerprint>,
+    /// Aggregate fingerprint of desired projected surfaces.
+    pub desired_fingerprint: Option<Fingerprint>,
 }
 
 /// Typed failures at the managed-projection adapter boundary.

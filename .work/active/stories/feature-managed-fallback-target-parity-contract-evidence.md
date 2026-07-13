@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract-evidence
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract]
@@ -322,42 +322,72 @@ files changed, no error contract was touched, and no assertions were weakened.
 The story returned to `stage:drafting` so its Apply input can be made
 unambiguous before becoming a public cross-crate contract.
 
+## Implementation completion notes
+
+- Execution capability: highest; this is a public cross-crate contract that
+  controls source provenance and lifecycle evidence for every managed fallback
+  adapter.
+- Review weight: standard (project/autopilot run default).
+- Dispatch: direct-read only, as required by the caller; no agent or peer
+  delegation.
+- Files changed: `crates/core/src/managed_projection.rs`,
+  `crates/harnesses/src/managed_projection.rs`, and
+  `crates/harnesses/src/lib.rs`.
+- Tests updated: the harness contract test now exercises the object-safe
+  `plan` method with `Apply` and `Remove`, checks all checkout accessors, and
+  round-trips the complete manifest and aggregate fingerprints.
+- Simplification: removed `AcquiredProjection`, `OmittedComponent`,
+  `ManagedAcquisitionContext`, the parallel `omitted` field, and the split
+  `acquire`/`project` methods. Apply now has exactly one authoritative source
+  through `ResolvedSourceCheckout`; Remove has no source-bearing state.
+- Discrepancy from design: `crates/core/src/lib.rs` already publicly exports
+  the whole `managed_projection` module and had no named re-export list to
+  update. The harness named re-export list was updated as designed.
+- Invalid-state check: no second source identity or independently supplied
+  marketplace source remains in the amended contract. No further design bounce
+  was required.
+- Verification: 332 core library tests and 26 harness library tests passed;
+  `cargo check --workspace`, focused clippy with warnings denied, formatting,
+  `git diff --check`, removed-symbol greps, duplicate-source greps, and the
+  no-Codex-override check all passed.
+- Adjacent issues parked: none.
+
 ## Acceptance criteria
 
-- [ ] `crates/core/src/managed_projection.rs` defines `ResolvedSourceCheckout`
+- [x] `crates/core/src/managed_projection.rs` defines `ResolvedSourceCheckout`
       with `new`, `root`, `source`, `revision`, and `ManagedProjectionPlan`
       carries `manifest: Vec<ManagedProjection>`, `current_fingerprint:
       Option<Fingerprint>`, and `desired_fingerprint: Option<Fingerprint>`.
-- [ ] `OmittedComponent` and `AcquiredProjection` no longer exist in
+- [x] `OmittedComponent` and `AcquiredProjection` no longer exist in
       `crates/core/src/managed_projection.rs`; `ManagedProjectionPlan::omitted`
       is gone (omissions live in `manifest` as `ManagedProjection::Omitted`).
-- [ ] `crates/harnesses/src/managed_projection.rs` defines
+- [x] `crates/harnesses/src/managed_projection.rs` defines
       `ManagedProjectionInput<'a>` (`Apply { checkout }` | `Remove`) and one
       `ManagedProjectionContext` carrying
       `input: ManagedProjectionInput<'a>`; `ManagedAcquisitionContext` no
       longer exists.
-- [ ] `ManagedProjectionPort` exposes a single `plan` method taking
+- [x] `ManagedProjectionPort` exposes a single `plan` method taking
       `&ManagedProjectionContext<'_>` and returning
       `Result<ManagedProjectionPlan, ManagedProjectionError>`. `acquire` and
       `project` are gone.
-- [ ] `HarnessAdapter::managed_projection() -> Option<&dyn
+- [x] `HarnessAdapter::managed_projection() -> Option<&dyn
       ManagedProjectionPort>` is unchanged; `CodexAdapter` still does not
       override it.
-- [ ] An updated interface test constructs a throwaway `ManagedProjectionPort`
+- [x] An updated interface test constructs a throwaway `ManagedProjectionPort`
       impl, invokes `plan` with `Apply` (round-tripping a
       `ResolvedSourceCheckout` plus a plan whose manifest/fingerprints equal
       the inputs) and with `Remove` (asserting no checkout is required),
       proving object safety and type round-trip for both input variants.
-- [ ] The approved `ManagedProjectionError` table test and the
+- [x] The approved `ManagedProjectionError` table test and the
       `contextual_summaries_vary_without_changing_the_typed_code` regression
       test pass unchanged (the error model is untouched).
-- [ ] `git grep -n "OmittedComponent\|AcquiredProjection\|ManagedAcquisitionContext" crates/`
+- [x] `git grep -n "OmittedComponent\|AcquiredProjection\|ManagedAcquisitionContext" crates/`
       returns no matches (the removed names are gone from the public surface).
-- [ ] `cargo test -p skilltap-core --lib` and `cargo test -p
+- [x] `cargo test -p skilltap-core --lib` and `cargo test -p
       skilltap-harnesses --lib` pass; `cargo clippy -p skilltap-core -p
       skilltap-harnesses --all-targets -- -D warnings`,
       `cargo fmt --all -- --check`, and `git diff --check` pass.
-- [ ] `cargo check --workspace` passes (downstream crates compile against the
+- [x] `cargo check --workspace` passes (downstream crates compile against the
       amended types).
 
 ## Out of scope

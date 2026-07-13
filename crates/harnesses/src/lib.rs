@@ -28,8 +28,7 @@ mod managed_codex_project;
 pub use managed_codex_project::{ManagedCodexCatalog, ManagedCodexCatalogError};
 mod managed_projection;
 pub use managed_projection::{
-    ManagedAcquisitionContext, ManagedLifecycleKind, ManagedProjectionContext,
-    ManagedProjectionPort,
+    ManagedLifecycleKind, ManagedProjectionContext, ManagedProjectionInput, ManagedProjectionPort,
 };
 mod materialization;
 pub use materialization::JsonMcpProjectionMapper;
