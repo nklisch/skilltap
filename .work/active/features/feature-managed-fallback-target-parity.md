@@ -4,7 +4,7 @@ kind: feature
 stage: drafting
 tags: []
 parent: epic-expanded-harness-support
-depends_on: [epic-cross-harness-materialization]
+depends_on: [epic-cross-harness-materialization, epic-expanded-harness-support-registry]
 release_binding: null
 research_refs: []
 research_origin: null
@@ -37,7 +37,7 @@ adapter writes undocumented caches.
   published for both targets, track both native installations instead of
   materializing either one.
 - **What qualifies a target without marketplace lifecycle?** Documented,
-  observable global or project skill and MCP load surfaces are sufficient;
+  observable global and project skill and MCP load surfaces are required;
   hooks and other capabilities are optional and compatibility-gated.
 - **What is the immediate parity gap?** Preserve the existing Codex project
   projection and add equivalent managed fallback wherever another supported
@@ -61,7 +61,8 @@ removal lifecycle.
 
 - A dual-native plugin uses both native lifecycles and creates no managed fallback.
 - A one-sided plugin can project complete compatible skills and portable MCP
-  configuration into the other supported target's documented destinations.
+  configuration into documented global and project destinations for the other
+  supported target.
 - Required unsupported behavior blocks even with broad acknowledgment;
   optional loss requires explicit foreground approval.
 - Update, drift, status, and removal operate from recorded managed ownership

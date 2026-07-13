@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support
 kind: epic
-stage: drafting
+stage: implementing
 tags: []
 parent: null
 depends_on: [epic-cross-harness-materialization, epic-harness-observation-adoption, epic-reconciliation-execution]
@@ -58,6 +58,25 @@ blocked reporting for unsupported optional or required components.
 - **What does `--target all` mean?** Every enabled harness in the typed target
   registry, not a hard-coded Codex/Claude pair.
 
+## Design decisions
+
+- **Does expanded target support broaden first-party plugin bootstrap?** No.
+  The self-hosted plugin and bootstrap remain Codex/Claude distribution
+  surfaces. Other harnesses participate in ordinary detection, enablement,
+  adoption, planning, synchronization, and update flows.
+- **Do instructions become an admission requirement?** No. AGENTS.md or native
+  instruction support is capability-detected per adapter. Whole-directory
+  skills and global/project MCP remain the minimum target contract.
+- **Where does shared acceptance infrastructure live?** With the typed registry
+  and adapter contract, then inside each adapter feature's delivery evidence;
+  there is no test-only feature or parallel adapter framework.
+- **How are Pi companions owned?** Existing MCP and Claude-hook extensions stay
+  user-owned unless the user explicitly installs or adopts them through a
+  supported future lifecycle. Detection alone never transfers ownership.
+- **How is Pi's hook prerequisite grounded?** A dedicated research engagement
+  must attest the exact extension, version/health contract, and hook semantics
+  before the Pi adapter can be designed or granted mutation authority.
+
 ## Simplification opportunity
 
 Replace repeated Codex/Claude target enumerations in CLI parsing, configuration,
@@ -93,12 +112,89 @@ not flatten their schemas or lifecycle behavior into a universal plugin format.
 - Optional unsupported components require foreground acknowledgment; required
   unsupported components remain blocked even with `--yes`.
 
-## Anticipated decomposition
+## Decomposition
 
-- Typed target registry, configuration schema, CLI parsing, and composition.
-- Shared managed-adapter ports and reusable skill/MCP projection machinery.
-- Direct adapter waves following the research-recommended boundary order.
-- Pi compound capability detection, ownership, and lifecycle integration.
-- Cursor, Zoo Code, and ZCode isolated boundary spikes and admission gates.
-- Cross-target fixtures, native validation, compatibility, status, help, and
-  website/documentation updates.
+The existing managed-fallback feature remains the shared publication
+foundation. Eight additional features split the work by capability: one
+registry and adapter contract, four independent direct-adapter families, a Pi
+contract research prerequisite, the Pi compound adapter, and independent
+candidate admission. Nine children exceed the usual epic target because this
+scope spans fifteen harnesses; collapsing them further would combine unrelated
+native contracts or hand oversized features to the next design pass.
+
+### Child features
+
+- `epic-expanded-harness-support-registry` — typed target registry,
+  configuration/composition, and reusable adapter acceptance contract — depends
+  on: `[]`.
+- `feature-managed-fallback-target-parity` — shared complete-skill and MCP
+  projection lifecycle for targets without native distribution — depends on:
+  `[epic-cross-harness-materialization,
+  epic-expanded-harness-support-registry]`.
+- `epic-expanded-harness-support-file-managed` — Gemini, OpenCode, and Kiro
+  adapters — depends on: `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity]`.
+- `epic-expanded-harness-support-native-coexistence` — Factory Droid, Qwen,
+  and Copilot adapters with native-managed coexistence — depends on:
+  `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity]`.
+- `epic-expanded-harness-support-configuration-constrained` — Kimi, Vibe, and
+  Kilo adapters with explicit reload, transport, and document constraints —
+  depends on: `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity]`.
+- `epic-expanded-harness-support-trust-interactive` — Junie and Amp adapters
+  with declared-versus-effective trust and interactive-state behavior —
+  depends on: `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity]`.
+- `epic-expanded-harness-support-pi-hook-research` — attest the exact Pi Claude
+  hook-compatibility extension and its health/version/semantics contract —
+  depends on: `[]`.
+- `epic-expanded-harness-support-pi` — conditional Pi compound adapter —
+  depends on: `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-pi-hook-research]`.
+- `epic-expanded-harness-support-candidate-admission` — independently validate
+  and admit Cursor, Zoo Code, and ZCode — depends on:
+  `[epic-expanded-harness-support-registry,
+  feature-managed-fallback-target-parity]`.
+
+### Simplification arcs
+
+- `epic-expanded-harness-support-registry` removes repeated target lists and
+  dispatch matches from configuration, CLI, composition, status, and fixtures.
+- `feature-managed-fallback-target-parity` consolidates managed acquisition,
+  projection, ownership, drift, update, removal, and verification instead of
+  duplicating them in each adapter.
+- Concrete adapter features reuse bounded execution, target-local state,
+  rollback, and effective-load verification while retaining only target-owned
+  codecs, probes, paths, and lifecycle semantics.
+
+### Decomposition risks
+
+- Exact target versions, write paths, reload behavior, and trust constraints
+  may move before implementation. No adapter gains mutation authority without
+  refreshed source evidence and isolated native validation.
+- Pi's required Claude-hook compatibility extension is not yet attested in the
+  research substrate. The dedicated research child blocks Pi design until it
+  verifies the exact extension and semantics.
+- Cursor, Zoo Code, and ZCode have different missing boundaries. Their gates
+  are target-local; partial success cannot produce batch support claims.
+- Registry generalization must preserve the intentionally narrower
+  Codex/Claude self-hosted plugin and bootstrap contract.
+
+## Other agent review
+
+- Invoked because: large architectural expansion across registry, adapter,
+  capability, and native-contract boundaries.
+- Phase 1 — advisory/completeness: same-harness fresh-context review found the
+  missing Pi research prerequisite, oversized/heterogeneous feature groups,
+  weakened two-scope wording, and stale project-agent guidance.
+- Phase 2 — adversarial verification: the same reviewer re-read the corrected
+  decomposition and returned `ready` with no remaining material findings.
+- Fixed/active blockers: added the Pi hook research dependency; separated Pi
+  delivery from candidate admission; split constrained targets; required both
+  scopes; rolled `AGENTS.md` forward.
+- Parked: none.
+- Rejected: none.
+- Skipped/degraded: different-model review was unavailable, so both passes are
+  labeled same-harness fresh-context rather than cross-model.

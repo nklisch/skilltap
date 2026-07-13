@@ -2,7 +2,9 @@
 
 ## Product
 
-skilltap is a personal control plane for managing Codex and Claude Code environments. It adopts, reconciles, and updates native marketplaces, plugins, complete skill directories, and shared instructions.
+skilltap is a personal control plane for managing supported agent harness
+environments. It adopts, reconciles, and updates native marketplaces, plugins,
+complete skill directories, MCP configuration, and shared instructions.
 
 It does not provide discovery, recommendations, security scanning, a TUI, or compatibility with the previous implementation.
 
@@ -25,7 +27,7 @@ Foundation documents describe current or intended truth. Planned and time-bound 
 - `--project` targets the current project.
 - `--project <path>` targets another project.
 - `--all-scopes` targets the managed computer.
-- `--target` selects Codex, Claude, or both.
+- `--target` selects one registered harness or all enabled harnesses.
 - `~/AGENTS.md` is the canonical global instruction file.
 - A skill is the complete directory containing top-level `SKILL.md`.
 - Native harness lifecycle commands take precedence over file materialization.
@@ -39,7 +41,8 @@ Foundation documents describe current or intended truth. Planned and time-bound 
 The implementation is a stable Rust workspace:
 
 - `skilltap-core` owns domain types, state, planning, reconciliation, compatibility, and updates.
-- `skilltap-harnesses` owns Codex, Claude, and user-service adapters.
+- `skilltap-harnesses` owns the typed target registry, distinct native harness
+  adapters, and user-service adapters.
 - `skilltap-cli` owns argument parsing, rendering, and exit codes.
 - `skilltap-test-support` owns fixtures and isolated test environments.
 
