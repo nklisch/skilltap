@@ -34,3 +34,20 @@ UX examples forward with the executable contract.
 - Native post-mutation failures retain the typed boundary reason and one
   actionable recovery command; healthy final observation completes normally.
 - Multi-target/all-scope compiled-binary tests prove plain/JSON parity.
+
+## Review checkpoint (2026-07-12)
+
+The independently committed grammar and normalization portions are approved
+at fresh-context `standard` depth:
+
+- `plugin remove` consistently requires `PLUGIN@MARKETPLACE` in parsing, leaf
+  help, safe plain/JSON invalid-input recovery, SPEC, and UX.
+- Exact next actions are deduplicated in first-seen order at builders and both
+  renderers; different commands/summaries remain distinct, normalization is
+  idempotent, and rendering does not mutate the source outcome or result class.
+- Focused command, outcome, renderer, release-help, and compiled invalid-input
+  tests pass at commits `6c657f0` and `ea61cb1`.
+
+No blocker or important finding applies to those portions. Final story review
+remains pending only on typed native post-mutation output and its multi-target
+plain/JSON integration evidence.
