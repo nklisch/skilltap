@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-repair-completion
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
@@ -44,3 +44,28 @@ still treats repair disclosures as unresolved attention.
   exact filesystem postconditions hold.
 - Disclosure output remains visible without keeping the result in attention.
 - Mixed blockers and failed post-observation remain attention-required.
+
+## Implementation notes
+
+- Execution capability: strongest available; this closes a security-sensitive
+  filesystem postcondition and a cross-command result aggregation contract.
+- Review weight: standard, inherited from the autopilot caller.
+- Files changed: `crates/cli/src/application/instructions.rs`,
+  `crates/cli/src/application/reconciliation.rs`, and
+  `crates/cli/tests/compiled_binary.rs`.
+- Tests added: an isolated unit regression proving matching bytes behind a
+  symlink fail the import postcondition; global and project target-scoped sync
+  regressions now require exit 0/completed after acknowledged repair; direct
+  repeat coverage verifies JSON and plain no-ops create no additional backup.
+- Discrepancies from design: the existing sync regression used one Codex-shaped
+  fake for both harnesses, which correctly produced an unrelated Claude
+  capability warning. It now uses exact Codex and Claude fixtures so the test
+  isolates repair disclosure semantics.
+- Adjacent issues parked: none.
+
+## Verification
+
+- Focused import postcondition, direct repair/repeat, global/project sync, and
+  broken duplicate regressions pass in isolated roots.
+- Full workspace verification is recorded with the integration commit after
+  the concurrent managed-load contract worker releases the shared files.

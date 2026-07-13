@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-repair-outcome
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
@@ -85,3 +85,17 @@ escalated from Fast because this is a correctness/security-sensitive
 filesystem postcondition. Focused repair, repeat, duplicate, and blocker tests
 plus full workspace tests and all-feature Clippy are green, but the no-follow
 representation gap prevents approval.
+
+## Bounce resolution (2026-07-12)
+
+- Import postconditions now use descriptor-bound `read_regular_no_follow` and
+  reject symlinks even when their destination has the expected bytes.
+- Reconciliation treats only successful instruction repair/consolidation
+  disclosures as resolved; other warnings, observation failures, and errors
+  remain attention-required.
+- Global and project `sync --yes` now require completed exit-0 results after
+  exact harness-specific observation and healthy repaired bridges.
+- Repeat direct repair is covered in JSON and plain output and preserves the
+  original single backup count.
+- Implemented by
+  `epic-real-harness-recovery-filesystem-instructions-repair-completion`.

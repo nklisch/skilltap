@@ -981,8 +981,8 @@ fn instruction_entry_postcondition(filesystem: &dyn FileSystem, entry: &Instruct
             target_matches && destination_regular
         }
         InstructionWrite::Import { contents } => filesystem
-            .read(&entry.path)
-            .is_ok_and(|observed| observed == *contents),
+            .read_regular_no_follow(&entry.path)
+            .is_ok_and(|observed| observed.as_deref() == Some(contents)),
         InstructionWrite::Remove => filesystem
             .inspect(&entry.path)
             .is_ok_and(|metadata| metadata.kind() == FileKind::Missing),
@@ -993,4 +993,40 @@ fn instruction_entry_postcondition(filesystem: &dyn FileSystem, entry: &Instruct
             .is_ok_and(|metadata| metadata.kind() == FileKind::RegularFile)
     });
     path_healthy && backup_healthy
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use skilltap_test_support::TempRoot;
+
+    #[test]
+    fn import_postcondition_requires_the_exact_regular_file_representation() {
+        let root = TempRoot::new("instruction-import-postcondition").unwrap();
+        let expected = b"@AGENTS.md\n".to_vec();
+        let regular = root.join("regular-CLAUDE.md");
+        let target = root.join("target-CLAUDE.md");
+        let link = root.join("linked-CLAUDE.md");
+        std::fs::write(&regular, &expected).unwrap();
+        std::fs::write(&target, &expected).unwrap();
+        std::os::unix::fs::symlink("target-CLAUDE.md", &link).unwrap();
+
+        let entry = |path: &std::path::Path| InstructionEntry {
+            path: AbsolutePath::new(path.to_str().unwrap()).unwrap(),
+            write: InstructionWrite::Import {
+                contents: expected.clone(),
+            },
+            action: OperationAction::InstructionRepair,
+            backup: None,
+        };
+
+        assert!(instruction_entry_postcondition(
+            &SystemFileSystem,
+            &entry(&regular)
+        ));
+        assert!(!instruction_entry_postcondition(
+            &SystemFileSystem,
+            &entry(&link)
+        ));
+    }
 }
