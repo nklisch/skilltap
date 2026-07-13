@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract
 kind: story
-stage: review
+stage: done
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: []
@@ -15,6 +15,116 @@ updated: 2026-07-13
 ---
 
 # Managed Projection Port Contract and Pure Types
+
+## Review (standard, approve — 2026-07-13, convergence on `caf5df03`)
+
+Same-harness fresh-context re-review of the implementor's option-2 correction
+at commit `caf5df03`, against the prior bounce record and the ACTUAL existing
+`managed_project_error` call sites in `crates/cli/src/application.rs` (audited
+directly, not via implementor notes). All three prior findings are resolved;
+all focused checks re-ran clean. Approving review → done.
+
+### Material 1 — Codex vocabulary removed from target-neutral defaults
+
+`crates/core/src/managed_projection.rs` `summary()` defaults audited; none
+embed Codex vocabulary:
+
+- `CatalogMissing` -> "The selected source has no compatible marketplace
+  document." ("Codex" dropped; was "...no Codex-compatible...")
+- `PluginMissing` is now `{ detail }`-carrying, so it has no fixed default at
+  all (the prior Codex-worded default is gone with the variant shape change).
+- `UnsupportedResourceKind`, `RequiredUnsupported`, `SourceMissing`,
+  `SourceUnavailable`, `McpConflict` — none mention Codex.
+- `grep -ni codex` across both contract modules returns zero matches.
+
+Material 1 resolved.
+
+### Material 2 — variable-summary canonical codes modeled with typed detail
+
+Independent call-site audit of every contract-covered code. "Distinct" below
+means distinct user-facing summary strings actually emitted by the existing
+Codex orchestrator under that code:
+
+| code | distinct summaries | sites | contract shape |
+|---|---|---|---|
+| `managed_project_mcp_invalid` | 6 | 2072, 2081, 2117, 2146, 2191, 2225 | `McpInvalid { detail }` ✓ |
+| `managed_project_drifted` | 3 | 1922, 2181, 2399 | `Drifted { detail }` ✓ |
+| `managed_project_plugin_invalid` | 4 | 1879, 1890, 2311, 2341 | `PluginMissing { detail }` ✓ |
+| `managed_project_plugin_source_invalid` | 3 (4 sites; 1614==1623 share text) | 1566, 1599, 1614, 1623 | `PluginSourceInvalid { detail }` ✓ |
+| `managed_project_plugin_unreadable` | 2 | 2013, 2316 | `PluginUnreadable { detail }` ✓ |
+| `managed_project_catalog_invalid` | 2 | 1463, 1805 | `CatalogInvalid { detail }` ✓ |
+| `managed_project_mcp_conflict` | 1 | 2129 | `McpConflict` fixed ✓ |
+| `managed_project_source_missing` | 1 | 1453 | `SourceMissing` fixed, byte-exact ✓ |
+| `managed_project_source_unavailable` | 1 | 1751 | `SourceUnavailable` fixed, byte-exact ✓ |
+| `managed_project_catalog_missing` | 1 | 1813 | `CatalogMissing` fixed (Codex-neutralized, see below) |
+
+Every canonical code with multiple existing summaries carries typed per-instance
+`detail: &'static str`; `summary()` returns that detail unchanged. Codes are
+variant-owned: `code()` is a `const` match over variants, and `Other { code, ..
+}` is the only escape hatch. No variable-summary canonical code was missed; the
+model is unambiguous. The regression test
+`contextual_summaries_vary_without_changing_the_typed_code` uses byte-exact
+strings from real call sites (the 2072 and 2081 summaries). Material 2
+resolved.
+
+`McpConflict` confirmed genuinely single-summary (one call site at 2129,
+byte-exact match "The existing mcp_servers value is not a table."); correctly
+kept as a fixed unit variant.
+
+### `Other` discipline
+
+Documented in two places: the variant doc-comment ("A failure code defined by
+one adapter, not an alias for a canonical variant's code") and the Scope
+section ("`Other` is reserved for truly adapter-specific codes and must never
+reproduce a canonical variant's code"). The discipline prevents silent drift:
+no adapter can shadow a canonical code via `Other`, and the regression test
+pins the canonical codes by variant. Discipline is in place.
+
+### Minor — accessor lifetime aligned
+
+`registry.rs:123` now reads
+`fn managed_projection(&self) -> Option<&dyn ManagedProjectionPort>`
+(elided lifetime, borrowing from `&self`), matching the established
+optional-port siblings `native_lifecycle`, `instruction_bridge`, and
+`skill_projection`. No `'static dyn ManagedProjectionPort` remains. Object
+safety is proven by the interface test, which constructs
+`&dyn ManagedProjectionPort` and round-trips `acquire`/`project` against a
+throwaway adapter. No object-safety regression; instance-bound ports remain
+reachable. Minor resolved.
+
+### Focused verification re-run
+
+- `cargo test -p skilltap-core --lib` -> 332 passed.
+- `cargo test -p skilltap-harnesses --lib` -> 26 passed.
+- `cargo clippy -p skilltap-core -p skilltap-harnesses --all-targets --
+  -D warnings` -> no issues.
+- `cargo fmt --all -- --check` -> clean.
+- `git diff --check` -> clean.
+- `cargo check --workspace` -> compiles.
+- `CodexAdapter` does not override `managed_projection()` (only the trait
+  default at `registry.rs:123` exists), so Codex behavior is unchanged.
+
+### Parked nit (does not block)
+
+The Scope section's sentence "Unit 3 can therefore map both code and
+context-specific summary one-to-one and keep diagnostics byte-identical" is
+now slightly imprecise for `CatalogMissing` specifically: its canonical
+default was deliberately Codex-neutralized under Material 1, so the Unit 2
+Codex adapter cannot reproduce the exact legacy "...no Codex-compatible
+marketplace document." text through the typed variant without violating the
+`Other` discipline. The acceptance criteria explicitly accept the
+Codex-neutral canonical summary, so this is a deliberate tradeoff, not a
+defect. Unit 2/Unit 2 review should be aware that this one fixed-summary code
+intentionally changes user-facing text for Codex users; no contract change
+required here.
+
+### Verdict
+
+All material defects (Material 1, Material 2) and the Minor item are
+resolved. No variable-summary canonical code was missed; the type model is
+unambiguous; `McpConflict` is correctly single-summary; `Other` is
+disciplined; the accessor lifetime aligns with object safety preserved.
+Approve; advance review → done.
 
 ## Review (standard, bounce — 2026-07-13)
 
