@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract-evidence
 kind: story
-stage: implementing
+stage: drafting
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract]
@@ -283,6 +283,46 @@ pub trait ManagedProjectionPort: Sync {
 - `ResolvedSourceCheckout` derives `Eq + PartialEq` so the interface test can
   compare values directly, matching the equality discipline the approved
   contract established for `AcquiredProjection`.
+
+## Implementation discovery
+
+Implementation stopped before code changes because the proposed `Apply` shape
+still makes the selected marketplace checkout ambiguous for plugin operations:
+
+- `ResolvedSourceCheckout` already owns the `Source` whose content exists at
+  `root`; `checkout.source()` is therefore the source identity for that exact
+  checkout.
+- `ManagedProjectionInput::Apply` separately accepts
+  `marketplace_source: Option<&Source>`. Nothing requires this second source to
+  equal `checkout.source()`, and its optionality also permits a plugin Apply
+  without the selected marketplace source the design says is required.
+- The existing Codex flow has only one source at this boundary: it selects the
+  marketplace `Source` from inventory/state, resolves that same source into a
+  checkout, and reads the plugin as a contained path beneath that checkout
+  (`crates/cli/src/application.rs`, the plugin branch of
+  `plan_managed_codex_project_lifecycle`). The proposed contract turns that one
+  identity into two independently supplied values.
+
+A caller could therefore pass checkout A with marketplace source B. The adapter
+would read bytes from A while using B for plugin source/provenance semantics,
+with no type-level answer for which source is authoritative. That is the
+ambiguous duplicate-source state the implementation brief explicitly forbids.
+Adding runtime equality checks would retain a redundant invalid state in the
+public contract, and adding another optional field or Codex side channel is out
+of scope.
+
+The contract needs a focused redesign with one authoritative source identity.
+The smallest shape is for plugin Apply to use the source already carried by the
+caller-resolved checkout (`checkout.source()`), while the exact
+`plugin@marketplace` request identifies the selected marketplace name. If the
+marketplace resource identity itself must cross the port, it should be part of
+one resolved marketplace-checkout value rather than a second independent
+`Source`.
+
+Dispatch: direct-read only, as required by the caller. No production or test
+files changed, no error contract was touched, and no assertions were weakened.
+The story returned to `stage:drafting` so its Apply input can be made
+unambiguous before becoming a public cross-crate contract.
 
 ## Acceptance criteria
 
