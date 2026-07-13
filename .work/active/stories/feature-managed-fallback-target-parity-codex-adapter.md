@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-codex-adapter
 kind: story
-stage: implementing
+stage: drafting
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract]
@@ -128,6 +128,50 @@ pub(crate) const CODEX_MCP_DESTINATION: &str = ".codex/config.toml";
       exist; their fields fold into `ManagedProjectionPlan`.
 - [ ] `cargo test --workspace --all-targets` and `cargo clippy --workspace
       --all-targets -- -D warnings` pass.
+
+## Implementation discovery
+
+Implementation stopped before code changes because the completed Unit 1
+contract cannot carry the evidence required to relocate the current Codex
+behavior without changing it:
+
+1. `ManagedAcquisitionContext::revision_resolver` is a
+   `SourceRevisionResolver`, whose only operation returns a
+   `ResolvedRevision`. It cannot return the checked-out, confined source root
+   that `read_codex_catalog_at_root` and `read_complete_codex_plugin` must
+   read. Recreating `resolve_git_skill_source` inside the adapter would bypass
+   the supplied port, duplicate the Git process/cache boundary, and contradict
+   the design decision that acquisition reuses shared Git resolution.
+2. A fresh plugin install has no source on the plugin resource or
+   `NativeLifecycleRequest`; the existing orchestrator resolves the selected
+   marketplace resource from inventory and passes that marketplace's source to
+   catalog lookup. `ManagedAcquisitionContext` carries neither the documents
+   nor a typed resolved marketplace source, so `CodexManagedProjection::acquire`
+   cannot locate `plugin@marketplace` without a CLI-owned Codex side channel.
+3. `ManagedProjectionPlan` carries writes and omissions only. The existing
+   Codex projection helper also returns the exact current aggregate
+   fingerprint, desired aggregate fingerprint, and `ManagedProjection::Mcp`
+   entries with per-server fingerprints. Those values drive ownership, drift,
+   pending-attempt recovery, update-required checks, and persisted projection
+   state. They cannot be reconstructed from `ManagedFileWrite` without parsing
+   Codex TOML in CLI, and hashing the whole file would include unmanaged
+   configuration and change existing semantics. `AcquiredProjection::Plugin`
+   fingerprints the source plugin tree, not the projected managed surfaces, so
+   it is not a compatible substitute.
+
+The contract needs a typed revision before Unit 2 can proceed: acquisition must
+receive or resolve a checked-out source root plus revision; fresh plugin
+acquisition must receive the selected marketplace source explicitly; and the
+projection result must carry the target-neutral current/desired fingerprints
+and complete managed-projection manifest (or an equivalent typed evidence
+object). Removal should also be modeled without requiring source acquisition
+when the prior manifest is sufficient. These are normalized domain values, not
+Codex codecs or paths.
+
+Dispatch: direct-read only, as required by the caller. No production or test
+files changed, and no assertions were weakened. The story returned to
+`stage:drafting` so design can amend the contract rather than add stringly
+escape hatches.
 
 ## Out of scope
 
