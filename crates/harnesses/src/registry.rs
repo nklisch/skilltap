@@ -1,0 +1,320 @@
+use std::{ffi::OsString, fmt};
+
+use skilltap_core::{
+    domain::{AbsolutePath, CapabilityProfileSelection, HarnessId, NativeVersion, Scope},
+    runtime::{ExternalTreeLimits, ObservationRuntimeError, PlatformPaths},
+};
+
+use crate::{
+    CanonicalObservation, DetectionError,
+    lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
+};
+
+/// Whether a target participates in skilltap's self-hosted first-party plugin
+/// bootstrap.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DistributionSurface {
+    FirstPartyPlugin,
+    Managed,
+}
+
+/// Stable identity and display metadata for one registered target.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TargetIdentity {
+    pub id: HarnessId,
+    pub display_name: &'static str,
+    pub distribution_surface: DistributionSurface,
+}
+
+/// Documented native observation roots for one concrete scope.
+#[derive(Clone, Debug)]
+pub struct AdapterObservationPaths {
+    pub canonical: Vec<CanonicalObservation>,
+    pub project_entry_count: Option<usize>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ObservationPathError {
+    Validation(skilltap_core::domain::ValidationError),
+    Runtime(ObservationRuntimeError),
+}
+
+impl fmt::Display for ObservationPathError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Validation(error) => error.fmt(formatter),
+            Self::Runtime(error) => error.fmt(formatter),
+        }
+    }
+}
+
+impl std::error::Error for ObservationPathError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Validation(error) => Some(error),
+            Self::Runtime(error) => Some(error),
+        }
+    }
+}
+
+impl From<skilltap_core::domain::ValidationError> for ObservationPathError {
+    fn from(error: skilltap_core::domain::ValidationError) -> Self {
+        Self::Validation(error)
+    }
+}
+
+impl From<ObservationRuntimeError> for ObservationPathError {
+    fn from(error: ObservationRuntimeError) -> Self {
+        Self::Runtime(error)
+    }
+}
+
+/// One registered target adapter.
+///
+/// Required methods provide detection, capability selection, and bounded
+/// observation. Optional ports expose only the native behavior a target
+/// actually supports.
+pub trait HarnessAdapter: Sync {
+    fn identity(&self) -> TargetIdentity;
+
+    fn version_arguments(&self) -> Vec<OsString>;
+    fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, DetectionError>;
+
+    fn select_profile(&self, version: &NativeVersion) -> CapabilityProfileSelection;
+
+    fn observe(
+        &self,
+        paths: &PlatformPaths,
+        scope: &Scope,
+        limits: ExternalTreeLimits,
+    ) -> Result<AdapterObservationPaths, ObservationPathError>;
+
+    fn native_lifecycle(&self) -> Option<&dyn NativeLifecycleVector> {
+        None
+    }
+
+    fn instruction_bridge(&self) -> Option<&dyn InstructionBridgePort> {
+        None
+    }
+
+    fn skill_projection(&self) -> Option<&dyn SkillProjectionPort> {
+        None
+    }
+}
+
+/// Native marketplace/plugin lifecycle argument vector for one request.
+pub trait NativeLifecycleVector: Sync {
+    fn arguments(
+        &self,
+        request: &NativeLifecycleRequest,
+    ) -> Result<Vec<OsString>, NativeLifecycleError>;
+}
+
+/// Harness-native instruction bridge location for one scope.
+pub trait InstructionBridgePort: Sync {
+    fn global_bridge(&self, paths: &PlatformPaths) -> Option<AbsolutePath>;
+    fn project_bridge(&self, project: &AbsolutePath) -> Option<AbsolutePath>;
+}
+
+/// Where skilltap projects a standalone skill for this target.
+pub trait SkillProjectionPort: Sync {
+    fn destination(&self, paths: &PlatformPaths, scope: &Scope) -> Option<AbsolutePath>;
+}
+
+#[derive(Clone)]
+struct RegistryEntry {
+    identity: TargetIdentity,
+    adapter: &'static dyn HarnessAdapter,
+}
+
+/// The authoritative typed target registry.
+#[derive(Clone)]
+pub struct TargetRegistry {
+    entries: Vec<RegistryEntry>,
+}
+
+impl TargetRegistry {
+    /// Builds a registry in stable insertion order.
+    ///
+    /// This constructor also provides the composition seam for adapter contract
+    /// tests without requiring production adapters in the canonical registry.
+    pub fn new(adapters: impl IntoIterator<Item = &'static dyn HarnessAdapter>) -> Self {
+        Self {
+            entries: adapters
+                .into_iter()
+                .map(|adapter| RegistryEntry {
+                    identity: adapter.identity(),
+                    adapter,
+                })
+                .collect(),
+        }
+    }
+
+    /// The adapters story populates this constructor once concrete Codex and
+    /// Claude adapter implementations exist.
+    pub fn canonical() -> Self {
+        Self {
+            entries: Vec::new(),
+        }
+    }
+
+    pub fn contains(&self, id: &HarnessId) -> bool {
+        self.entries.iter().any(|entry| &entry.identity.id == id)
+    }
+
+    pub fn adapter(&self, id: &HarnessId) -> Option<&'static dyn HarnessAdapter> {
+        self.entries
+            .iter()
+            .find(|entry| &entry.identity.id == id)
+            .map(|entry| entry.adapter)
+    }
+
+    pub fn ids(&self) -> impl Iterator<Item = &HarnessId> {
+        self.entries.iter().map(|entry| &entry.identity.id)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &'static dyn HarnessAdapter> + '_ {
+        self.entries.iter().map(|entry| entry.adapter)
+    }
+
+    pub fn first_party_targets(&self) -> impl Iterator<Item = &'static dyn HarnessAdapter> + '_ {
+        self.entries
+            .iter()
+            .filter(|entry| {
+                entry.identity.distribution_surface == DistributionSurface::FirstPartyPlugin
+            })
+            .map(|entry| entry.adapter)
+    }
+}
+
+impl fmt::Debug for TargetRegistry {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("TargetRegistry")
+            .field(
+                "targets",
+                &self
+                    .entries
+                    .iter()
+                    .map(|entry| &entry.identity)
+                    .collect::<Vec<_>>(),
+            )
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skilltap_core::domain::{CapabilitySet, ScopedCapabilitySets};
+
+    struct TestAdapter {
+        id: &'static str,
+        display_name: &'static str,
+        distribution_surface: DistributionSurface,
+    }
+
+    impl HarnessAdapter for TestAdapter {
+        fn identity(&self) -> TargetIdentity {
+            TargetIdentity {
+                id: HarnessId::new(self.id).expect("test harness id is valid"),
+                display_name: self.display_name,
+                distribution_surface: self.distribution_surface,
+            }
+        }
+
+        fn version_arguments(&self) -> Vec<OsString> {
+            vec![OsString::from("--version")]
+        }
+
+        fn decode_version(&self, stdout: &[u8]) -> Result<NativeVersion, DetectionError> {
+            let version =
+                std::str::from_utf8(stdout).map_err(|_| DetectionError::InvalidVersion)?;
+            NativeVersion::new(version).map_err(|_| DetectionError::InvalidVersion)
+        }
+
+        fn select_profile(&self, _version: &NativeVersion) -> CapabilityProfileSelection {
+            CapabilityProfileSelection::unknown_version(ScopedCapabilitySets::new(
+                CapabilitySet::default(),
+                CapabilitySet::default(),
+            ))
+        }
+
+        fn observe(
+            &self,
+            _paths: &PlatformPaths,
+            _scope: &Scope,
+            _limits: ExternalTreeLimits,
+        ) -> Result<AdapterObservationPaths, ObservationPathError> {
+            Ok(AdapterObservationPaths {
+                canonical: Vec::new(),
+                project_entry_count: None,
+            })
+        }
+    }
+
+    static FIRST_PARTY: TestAdapter = TestAdapter {
+        id: "test-first-party",
+        display_name: "Test First Party",
+        distribution_surface: DistributionSurface::FirstPartyPlugin,
+    };
+    static MANAGED: TestAdapter = TestAdapter {
+        id: "test-managed",
+        display_name: "Test Managed",
+        distribution_surface: DistributionSurface::Managed,
+    };
+
+    #[test]
+    fn registry_dispatches_and_filters_adapters_in_insertion_order() {
+        let registry = TargetRegistry::new([
+            &FIRST_PARTY as &'static dyn HarnessAdapter,
+            &MANAGED as &'static dyn HarnessAdapter,
+        ]);
+        let first_party_id = HarnessId::new("test-first-party").unwrap();
+        let managed_id = HarnessId::new("test-managed").unwrap();
+        let absent_id = HarnessId::new("absent").unwrap();
+
+        assert_eq!(
+            registry.ids().map(HarnessId::as_str).collect::<Vec<_>>(),
+            ["test-first-party", "test-managed"]
+        );
+        assert!(registry.contains(&first_party_id));
+        assert!(registry.contains(&managed_id));
+        assert!(!registry.contains(&absent_id));
+        assert_eq!(
+            registry
+                .adapter(&managed_id)
+                .map(HarnessAdapter::identity)
+                .map(|identity| identity.id),
+            Some(managed_id)
+        );
+        assert!(registry.adapter(&absent_id).is_none());
+        assert_eq!(registry.iter().count(), 2);
+        assert_eq!(
+            registry
+                .first_party_targets()
+                .map(HarnessAdapter::identity)
+                .map(|identity| identity.id)
+                .collect::<Vec<_>>(),
+            [first_party_id]
+        );
+    }
+
+    #[test]
+    fn canonical_registry_stays_empty_until_concrete_adapters_land() {
+        let registry = TargetRegistry::canonical();
+
+        assert_eq!(registry.ids().count(), 0);
+        assert_eq!(registry.iter().count(), 0);
+        assert_eq!(registry.first_party_targets().count(), 0);
+    }
+
+    #[test]
+    fn optional_ports_default_to_absent() {
+        let adapter = &FIRST_PARTY as &dyn HarnessAdapter;
+
+        assert!(adapter.native_lifecycle().is_none());
+        assert!(adapter.instruction_bridge().is_none());
+        assert!(adapter.skill_projection().is_none());
+    }
+}

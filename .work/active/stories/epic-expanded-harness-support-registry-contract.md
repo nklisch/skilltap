@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-contract
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on: []
@@ -203,6 +203,31 @@ impl TargetRegistry {
   today's `select_profile(harness, version)` logic byte-for-byte — but that
   implementation lands in `registry-adapters`, not here. This story only
   declares the trait method.
+
+### Completion
+
+- Execution capability: highest, as directed by the autopilot caller because
+  this contract becomes the architectural dispatch boundary for every target.
+- Review weight: standard (caller/default).
+- Files changed: `crates/harnesses/src/registry.rs`,
+  `crates/harnesses/src/lib.rs`, and this story.
+- Tests added/removed: added registry interface coverage for stable insertion
+  order, lookup, membership, iteration, first-party filtering, the intentionally
+  empty canonical registry, and default-absent optional ports; removed none.
+- Simplification: kept `canonical()` empty and used one constructor seam for
+  both production composition and throwaway test adapters, avoiding speculative
+  Codex/Claude adapter shells or placeholder implementations.
+- Discrepancies from design: privately cached each adapter's `TargetIdentity` so
+  `ids()` can safely yield `&HarnessId` despite `identity()` returning an owned
+  value; implemented `Debug` for the registry and the transparent error
+  conversions manually because trait objects are not `Debug` and this crate does
+  not directly depend on `thiserror`. The designed public contract is unchanged.
+- Adjacent issues parked: none.
+- Dispatch: direct-read only; the story is confined to one new module and one
+  re-export boundary, and the caller prohibited delegation.
+- Verification: `cargo test -p skilltap-harnesses --lib` passed 21 tests;
+  `cargo check -p skilltap-harnesses`, the focused format check, and
+  `git diff --check` passed.
 
 ## Acceptance criteria
 

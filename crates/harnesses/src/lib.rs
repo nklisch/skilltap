@@ -33,6 +33,12 @@ pub use lifecycle::{
     observe_native_resource, run_native_lifecycle, run_native_lifecycle_bound,
     verify_lifecycle_postcondition,
 };
+pub mod registry;
+pub use registry::{
+    AdapterObservationPaths, DistributionSurface, HarnessAdapter, InstructionBridgePort,
+    NativeLifecycleVector, ObservationPathError, SkillProjectionPort, TargetIdentity,
+    TargetRegistry,
+};
 mod bootstrap;
 pub use bootstrap::{
     HarnessBootstrapPolicy, HarnessSetupResult, SetupReason, setup_detected_plugin,
