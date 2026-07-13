@@ -112,6 +112,26 @@ fn plain_and_json_are_derived_from_the_same_outcome() {
 }
 
 #[test]
+fn renderers_deduplicate_exact_actions_without_collapsing_distinct_commands() {
+    let inspect = NextAction::new("inspect", "Inspect the exact failure.")
+        .with_command("skilltap status --json");
+    let project = NextAction::new("inspect", "Inspect the project failure.")
+        .with_command("skilltap status --project --json");
+    let mut outcome = Outcome::new("status", ResultClass::AttentionRequired);
+    outcome.next_actions = vec![inspect.clone(), inspect, project];
+
+    let json = JsonRenderer.render(&outcome).unwrap();
+    let plain = PlainRenderer.render(&outcome).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(value["next_actions"].as_array().unwrap().len(), 2);
+    assert_eq!(plain.matches("skilltap status --json").count(), 1);
+    assert_eq!(plain.matches("skilltap status --project --json").count(), 1);
+    assert_eq!(outcome.next_actions.len(), 3, "rendering is read-only");
+    assert_eq!(outcome.result, ResultClass::AttentionRequired);
+}
+
+#[test]
 fn safe_errors_do_not_have_a_serialized_source_or_debug_channel() {
     let outcome = Outcome::new("sync", ResultClass::Invalid).with_error(
         ErrorDetail::new("native_operation_failed", "Codex rejected the operation.")
