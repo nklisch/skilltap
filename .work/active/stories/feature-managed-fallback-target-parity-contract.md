@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: []
@@ -86,6 +86,41 @@ one-to-one and user-facing output is byte-identical.
 - Manual `Display`/`Error` impls for `ManagedProjectionError` (this crate
   does not depend on `thiserror`, matching the `ObservationPathError` precedent
   in `registry.rs`).
+
+### Completion
+
+- Execution capability: highest, as directed by the autopilot caller because
+  this is a cross-crate public adapter contract consumed by every managed
+  fallback target.
+- Review weight: standard (caller).
+- Files changed: `crates/core/src/managed_projection.rs`,
+  `crates/core/src/lib.rs`, `crates/harnesses/src/managed_projection.rs`,
+  `crates/harnesses/src/lib.rs`, `crates/harnesses/src/registry.rs`, and this
+  story.
+- Tests added/removed: added one core table test pinning every
+  `ManagedProjectionError::code()` variant, one harness interface test proving
+  `&dyn ManagedProjectionPort` object safety and acquisition-to-plan type round
+  trip, and one default-accessor test; removed none and did not modify existing
+  tests.
+- Simplification: reused the existing validated domain/path/source/state types
+  directly, kept target codecs out of core, and introduced only the six
+  lifecycle variants currently required by Codex.
+- Discrepancies from design: `SourceRevisionResolver` is publicly exported from
+  `skilltap_core::updates` rather than `runtime`, and `ComponentDeclaration`
+  from `skilltap_core::plugin_graph` rather than `domain`; the contexts use
+  those existing public homes without changing signatures or dependency
+  direction. Added the explicitly required `RequiredUnsupported` error variant,
+  which the parent prose and stable-code list require even though its sample
+  enum accidentally omitted it. Derived equality for acquired data and plans
+  so the required interface round-trip can compare the public values directly.
+- Adjacent issues parked: none.
+- Dispatch: direct-read only; ownership was bounded to two new modules, their
+  re-exports, one default trait accessor, focused tests, and this story, and the
+  caller prohibited delegation.
+- Verification: `cargo test -p skilltap-core --lib` passed 331 tests;
+  `cargo test -p skilltap-harnesses --lib` passed 26 tests; `cargo check -p
+  skilltap-core -p skilltap-harnesses`, strict all-target Clippy for both crates,
+  `cargo fmt --all -- --check`, and `git diff --check` passed.
 
 ## Acceptance criteria
 

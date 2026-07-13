@@ -8,6 +8,7 @@ pub mod foreground_update;
 pub mod hook_mapping;
 pub mod instructions;
 pub mod lifecycle_operation;
+pub mod managed_projection;
 pub mod marketplace;
 pub mod materialization;
 pub mod native_config;

@@ -11,6 +11,7 @@ use crate::{
     CanonicalObservation, DetectionError,
     adapters::{ClaudeAdapter, CodexAdapter},
     lifecycle::{NativeLifecycleError, NativeLifecycleRequest},
+    managed_projection::ManagedProjectionPort,
 };
 
 /// Whether a target participates in skilltap's self-hosted first-party plugin
@@ -115,6 +116,11 @@ pub trait HarnessAdapter: Sync {
     }
 
     fn skill_projection(&self) -> Option<&dyn SkillProjectionPort> {
+        None
+    }
+
+    /// Target-specific acquisition and projection for managed fallback.
+    fn managed_projection(&self) -> Option<&'static dyn ManagedProjectionPort> {
         None
     }
 
@@ -344,6 +350,11 @@ mod tests {
                 .collect::<Vec<_>>(),
             [first_party_id]
         );
+    }
+
+    #[test]
+    fn managed_projection_port_defaults_to_absent() {
+        assert!(HarnessAdapter::managed_projection(&FIRST_PARTY).is_none());
     }
 
     #[test]
