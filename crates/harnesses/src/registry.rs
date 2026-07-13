@@ -120,7 +120,7 @@ pub trait HarnessAdapter: Sync {
     }
 
     /// Target-specific acquisition and projection for managed fallback.
-    fn managed_projection(&self) -> Option<&'static dyn ManagedProjectionPort> {
+    fn managed_projection(&self) -> Option<&dyn ManagedProjectionPort> {
         None
     }
 

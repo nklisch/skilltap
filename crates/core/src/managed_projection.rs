@@ -102,13 +102,27 @@ pub enum ManagedProjectionError {
     SourceMissing,
     SourceUnavailable,
     CatalogMissing,
-    CatalogInvalid,
-    PluginMissing,
-    PluginSourceInvalid,
-    PluginUnreadable,
-    McpInvalid,
+    CatalogInvalid {
+        detail: &'static str,
+    },
+    PluginMissing {
+        detail: &'static str,
+    },
+    PluginSourceInvalid {
+        detail: &'static str,
+    },
+    PluginUnreadable {
+        detail: &'static str,
+    },
+    McpInvalid {
+        detail: &'static str,
+    },
     McpConflict,
-    Drifted,
+    Drifted {
+        detail: &'static str,
+    },
+    /// A failure code defined by one adapter, not an alias for a canonical
+    /// variant's code.
     Other {
         code: &'static str,
         summary: &'static str,
@@ -124,13 +138,13 @@ impl ManagedProjectionError {
             Self::SourceMissing => "managed_project_source_missing",
             Self::SourceUnavailable => "managed_project_source_unavailable",
             Self::CatalogMissing => "managed_project_catalog_missing",
-            Self::CatalogInvalid => "managed_project_catalog_invalid",
-            Self::PluginMissing => "managed_project_plugin_invalid",
-            Self::PluginSourceInvalid => "managed_project_plugin_source_invalid",
-            Self::PluginUnreadable => "managed_project_plugin_unreadable",
-            Self::McpInvalid => "managed_project_mcp_invalid",
+            Self::CatalogInvalid { .. } => "managed_project_catalog_invalid",
+            Self::PluginMissing { .. } => "managed_project_plugin_invalid",
+            Self::PluginSourceInvalid { .. } => "managed_project_plugin_source_invalid",
+            Self::PluginUnreadable { .. } => "managed_project_plugin_unreadable",
+            Self::McpInvalid { .. } => "managed_project_mcp_invalid",
             Self::McpConflict => "managed_project_mcp_conflict",
-            Self::Drifted => "managed_project_drifted",
+            Self::Drifted { .. } => "managed_project_drifted",
             Self::Other { code, .. } => code,
         }
     }
@@ -148,20 +162,14 @@ impl ManagedProjectionError {
             Self::SourceUnavailable => {
                 "The Git marketplace source could not be cloned and checked out safely."
             }
-            Self::CatalogMissing => {
-                "The selected source has no Codex-compatible marketplace document."
-            }
-            Self::CatalogInvalid => "The selected marketplace document is invalid.",
-            Self::PluginMissing => {
-                "The selected plugin does not contain a valid Codex manifest and complete component graph."
-            }
-            Self::PluginSourceInvalid => {
-                "The selected plugin source is not a contained local marketplace entry."
-            }
-            Self::PluginUnreadable => "The selected plugin tree could not be read safely.",
-            Self::McpInvalid => "The plugin MCP declaration is invalid JSON.",
+            Self::CatalogMissing => "The selected source has no compatible marketplace document.",
+            Self::CatalogInvalid { detail }
+            | Self::PluginMissing { detail }
+            | Self::PluginSourceInvalid { detail }
+            | Self::PluginUnreadable { detail }
+            | Self::McpInvalid { detail }
+            | Self::Drifted { detail } => detail,
             Self::McpConflict => "The existing mcp_servers value is not a table.",
-            Self::Drifted => "The managed project destination drifted; no files were changed.",
             Self::Other { summary, .. } => summary,
         }
     }
@@ -203,30 +211,45 @@ mod tests {
                 "managed_project_catalog_missing",
             ),
             (
-                ManagedProjectionError::CatalogInvalid,
+                ManagedProjectionError::CatalogInvalid {
+                    detail: "Invalid catalog.",
+                },
                 "managed_project_catalog_invalid",
             ),
             (
-                ManagedProjectionError::PluginMissing,
+                ManagedProjectionError::PluginMissing {
+                    detail: "Invalid plugin.",
+                },
                 "managed_project_plugin_invalid",
             ),
             (
-                ManagedProjectionError::PluginSourceInvalid,
+                ManagedProjectionError::PluginSourceInvalid {
+                    detail: "Invalid plugin source.",
+                },
                 "managed_project_plugin_source_invalid",
             ),
             (
-                ManagedProjectionError::PluginUnreadable,
+                ManagedProjectionError::PluginUnreadable {
+                    detail: "Unreadable plugin.",
+                },
                 "managed_project_plugin_unreadable",
             ),
             (
-                ManagedProjectionError::McpInvalid,
+                ManagedProjectionError::McpInvalid {
+                    detail: "Invalid MCP declaration.",
+                },
                 "managed_project_mcp_invalid",
             ),
             (
                 ManagedProjectionError::McpConflict,
                 "managed_project_mcp_conflict",
             ),
-            (ManagedProjectionError::Drifted, "managed_project_drifted"),
+            (
+                ManagedProjectionError::Drifted {
+                    detail: "Drifted projection.",
+                },
+                "managed_project_drifted",
+            ),
             (
                 ManagedProjectionError::Other {
                     code: "adapter_specific",
@@ -239,5 +262,26 @@ mod tests {
         for (error, expected) in cases {
             assert_eq!(error.code(), expected);
         }
+    }
+
+    #[test]
+    fn contextual_summaries_vary_without_changing_the_typed_code() {
+        let invalid_json = ManagedProjectionError::McpInvalid {
+            detail: "The plugin MCP declaration is invalid JSON.",
+        };
+        let missing_servers = ManagedProjectionError::McpInvalid {
+            detail: "The plugin MCP declaration has no mcpServers object.",
+        };
+
+        assert_eq!(invalid_json.code(), "managed_project_mcp_invalid");
+        assert_eq!(missing_servers.code(), "managed_project_mcp_invalid");
+        assert_eq!(
+            invalid_json.summary(),
+            "The plugin MCP declaration is invalid JSON."
+        );
+        assert_eq!(
+            missing_servers.summary(),
+            "The plugin MCP declaration has no mcpServers object."
+        );
     }
 }

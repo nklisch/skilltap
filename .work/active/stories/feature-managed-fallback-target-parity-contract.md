@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-contract
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: []
@@ -118,8 +118,8 @@ Then return to review.
 Implement Unit 1 of the managed-fallback-target-parity feature design: the
 `ManagedProjectionPort` adapter trait (in `skilltap-harnesses`) and its pure
 supporting types (in `skilltap-core`), plus the defaulted
-`HarnessAdapter::managed_projection() -> Option<&'static dyn
-ManagedProjectionPort>` accessor. This story is the foundation the other
+`HarnessAdapter::managed_projection() -> Option<&dyn ManagedProjectionPort>`
+accessor. This story is the foundation the other
 three child stories bind to: the Codex adapter implements the port, the CLI
 orchestrator dispatches through it, and the acceptance matrix exercises it.
 
@@ -148,16 +148,21 @@ Parent design: `feature-managed-fallback-target-parity` Unit 1.
   `managed_projection()` accessor to `trait HarnessAdapter`.
 - `crates/core/src/lib.rs` (modified): re-export the new module.
 
-The exact signatures are in the parent feature's Unit 1 design body. The
-stable error codes carried by `ManagedProjectionError::code()` / `summary()`
-must match the existing Codex orchestrator's `ErrorDetail` codes verbatim
-(`managed_project_source_missing`, `managed_project_source_unavailable`,
-`managed_project_catalog_missing`, `managed_project_catalog_invalid`,
+The exact signatures are in the parent feature's Unit 1 design body, as
+corrected by this story's review findings. The stable error codes carried by
+`ManagedProjectionError::code()` must match the existing Codex orchestrator's
+`ErrorDetail` codes verbatim (`managed_project_source_missing`,
+`managed_project_source_unavailable`, `managed_project_catalog_missing`,
+`managed_project_catalog_invalid`, `managed_project_plugin_invalid`,
 `managed_project_plugin_source_invalid`, `managed_project_plugin_unreadable`,
 `managed_project_mcp_invalid`, `managed_project_mcp_conflict`,
 `managed_project_drifted`, plus `unsupported_resource_kind` and
-`required_unsupported` for the new general cases) so Unit 3's mapping is
-one-to-one and user-facing output is byte-identical.
+`required_unsupported` for the new general cases). Canonical variants whose
+existing Codex call sites share one code but use multiple summaries carry a
+per-instance `detail: &'static str`; `summary()` returns that detail unchanged.
+Unit 3 can therefore map both code and context-specific summary one-to-one and
+keep diagnostics byte-identical. `Other` is reserved for truly adapter-specific
+codes and must never reproduce a canonical variant's code.
 
 ## Implementation notes
 
@@ -177,9 +182,9 @@ one-to-one and user-facing output is byte-identical.
   `PluginInstall`, `PluginRemove`, `PluginUpdate`) and have Unit 3 add the
   `From<NativeLifecycleKind>` conversion at the CLI boundary.
 - The port is `Sync` and object-safe: `acquire`/`project` take `&self` and
-  `&Context`; the contexts borrow only `&` references. `&'static dyn
-  ManagedProjectionPort` is the registry's currency, mirroring the existing
-  optional ports.
+  `&Context`; the contexts borrow only `&` references. The registry returns
+  `Option<&dyn ManagedProjectionPort>`, matching the established optional-port
+  pattern and allowing either stateless or adapter-instance-bound ports.
 - Manual `Display`/`Error` impls for `ManagedProjectionError` (this crate
   does not depend on `thiserror`, matching the `ObservationPathError` precedent
   in `registry.rs`).
@@ -195,10 +200,11 @@ one-to-one and user-facing output is byte-identical.
   `crates/harnesses/src/lib.rs`, `crates/harnesses/src/registry.rs`, and this
   story.
 - Tests added/removed: added one core table test pinning every
-  `ManagedProjectionError::code()` variant, one harness interface test proving
-  `&dyn ManagedProjectionPort` object safety and acquisition-to-plan type round
-  trip, and one default-accessor test; removed none and did not modify existing
-  tests.
+  `ManagedProjectionError::code()` variant, one regression test proving two
+  exact context-specific summaries retain the same typed canonical code, one
+  harness interface test proving `&dyn ManagedProjectionPort` object safety
+  and acquisition-to-plan type round trip, and one default-accessor test;
+  removed none and did not modify existing tests.
 - Simplification: reused the existing validated domain/path/source/state types
   directly, kept target codecs out of core, and introduced only the six
   lifecycle variants currently required by Codex.
@@ -210,34 +216,46 @@ one-to-one and user-facing output is byte-identical.
   which the parent prose and stable-code list require even though its sample
   enum accidentally omitted it. Derived equality for acquired data and plans
   so the required interface round-trip can compare the public values directly.
+  Review established that one canonical summary per code could not preserve
+  existing diagnostics, so the six variable-summary canonical variants now
+  carry typed per-instance detail while retaining variant-owned codes. The
+  accessor lifetime was also aligned with the existing optional-port pattern.
+  The call-site audit found only one `managed_project_mcp_conflict` summary, so
+  `McpConflict` remains a fixed-summary unit variant.
 - Adjacent issues parked: none.
 - Dispatch: direct-read only; ownership was bounded to two new modules, their
   re-exports, one default trait accessor, focused tests, and this story, and the
   caller prohibited delegation.
-- Verification: `cargo test -p skilltap-core --lib` passed 331 tests;
+- Verification: `cargo test -p skilltap-core --lib` passed 332 tests;
   `cargo test -p skilltap-harnesses --lib` passed 26 tests; `cargo check -p
-  skilltap-core -p skilltap-harnesses`, strict all-target Clippy for both crates,
-  `cargo fmt --all -- --check`, and `git diff --check` passed.
+  skilltap-core -p skilltap-harnesses`, strict all-target Clippy for both
+  crates, `cargo fmt --all -- --check`, and `git diff --check` passed.
 
 ## Acceptance criteria
 
-- [ ] `crates/core/src/managed_projection.rs` defines `AcquiredProjection`,
+- [x] `crates/core/src/managed_projection.rs` defines `AcquiredProjection`,
       `ManagedProjectionPlan`, `ManagedPluginWrite`, `ManagedFileWrite`,
       `OmittedComponent`, and `ManagedProjectionError` with the signatures in
       the parent Unit 1 design, referencing only existing public core types.
-- [ ] `crates/harnesses/src/managed_projection.rs` defines
+- [x] `crates/harnesses/src/managed_projection.rs` defines
       `ManagedProjectionPort`, `ManagedAcquisitionContext`,
       `ManagedProjectionContext`, and `ManagedLifecycleKind` with the
       signatures in the parent Unit 1 design.
-- [ ] `HarnessAdapter::managed_projection()` exists and defaults to `None`;
-      `CodexAdapter` does not yet override it.
-- [ ] An interface test (throwaway test adapter, like the registry contract
+- [x] `HarnessAdapter::managed_projection() -> Option<&dyn
+      ManagedProjectionPort>` exists and defaults to `None`; `CodexAdapter`
+      does not yet override it.
+- [x] An interface test (throwaway test adapter, like the registry contract
       story used) constructs a `ManagedProjectionPort` impl, calls
       `acquire`/`project`, and asserts the round-tripped plan equals the
       inputs — proving object-safety and type round-trip.
-- [ ] `ManagedProjectionError::code()` returns the exact existing
-      `ErrorDetail` code strings (one assertion per variant).
-- [ ] `cargo test -p skilltap-core --lib` and `cargo test -p
+- [x] `ManagedProjectionError::code()` returns the exact existing
+      `ErrorDetail` code strings (one assertion per variant), while every
+      canonical code with multiple existing Codex summaries carries typed
+      per-instance detail and returns it unchanged from `summary()`.
+- [x] `CatalogMissing` has a target-neutral canonical summary; no canonical
+      summary embeds Codex vocabulary. `Other` remains reserved for
+      adapter-specific codes rather than aliases of canonical codes.
+- [x] `cargo test -p skilltap-core --lib` and `cargo test -p
       skilltap-harnesses --lib` pass; no existing test changes.
 
 ## Out of scope
