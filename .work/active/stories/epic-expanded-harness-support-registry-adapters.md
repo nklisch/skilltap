@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-adapters
 kind: story
-stage: review
+stage: implementing
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -122,3 +122,183 @@ no additional target behavior may be added to `HarnessKind`.
   migration: current CLI code still accesses removed `HarnessPolicyMap.codex`
   and `.claude` fields. That failure is wholly outside this story's ownership
   and is the expected Unit 3 → Unit 4 integration seam.
+
+## Review (2026-07-12)
+
+**Verdict**: Bounce
+**Review weight**: standard, risk-escalated to Deep fresh-context because this
+story relocates native detection / version-decode / capability-profile /
+observation / lifecycle / instruction / skill-projection contracts onto the
+new adapter trait.
+**Reviewer context**: cross-model — Z.AI GLM 5.2 fresh-context review of an
+OpenAI-host run (different model class).
+
+### Blocker — the compatibility seam is not actually owned by any active story
+
+The story's body retains `HarnessKind` (and the `NativeLifecycleRequest.harness`
+field) as a "narrow public compatibility token" and asserts that "Those owning
+stories must migrate callers to `HarnessId` plus registry adapter dispatch,
+drop the compatibility wrappers/request field, and then satisfy the
+repository-wide `git grep -n "HarnessKind" crates/` and CLI string-dispatch
+checks." The argument depends on the already-active CLI and test-support
+stories owning *complete* elimination. They do not.
+
+Verified `git grep -n HarnessKind crates/` at this commit returns **83
+non-CLI occurrences** plus the CLI surface. Of those, neither active story
+explicitly owns the harnesses-crate production sites:
+
+- `crates/harnesses/src/bootstrap.rs` — **19 production occurrences**, and
+  they are behavior-dispatching, not display labels. Examples: `if target ==
+  HarnessKind::Codex { return Unsupported { ... } }` (line 161),
+  `unsupported_next_action(target: HarnessKind)` returning per-harness
+  next-action strings (lines 292–296), `HarnessBootstrapPolicy.harness`,
+  `setup_first_party_plugin(target: HarnessKind, ...)`,
+  `setup_detected_plugin(target: HarnessKind, ...)`.
+  This is exactly the closed-enum dispatch the parent feature's `HarnessKind`
+  elimination was meant to remove.
+- `crates/harnesses/src/lifecycle.rs` — the `NativeLifecycleRequest.harness:
+  HarnessKind` field (line 81) that this story's own `Units` list explicitly
+  says to drop ("drop `harness: HarnessKind` from `NativeLifecycleRequest`").
+  Plus `lifecycle_scope.rs` tests and the field's construction sites.
+- `crates/harnesses/src/lib.rs` — the seam itself plus three
+  `detect_*_installation(harness: HarnessKind, ...)` functions and the
+  `select_profile(harness: HarnessKind, ...)` compatibility wrapper.
+- `crates/harnesses/tests/{bootstrap.rs,detection.rs,lifecycle_scope.rs}` —
+  extensive direct construction and matching.
+
+The active stories' scopes do not cover these:
+
+- `registry-cli` Units bound it to `crates/cli/src/{command,entrypoint,
+  application, application/*}.rs` only — it migrates the CLI's `HarnessKind`
+  consumers, not the harnesses-crate producers.
+- `registry-test-support` Units bound it to the test-support crate's
+  `FakeNativeMode::CodexVersion / ClaudeVersion` removal; it does not migrate
+  the harnesses crate's own integration tests' `HarnessKind` usage.
+
+Consequence: even after `registry-cli` and `registry-test-support` reach done,
+`HarnessKind` will remain alive in `crates/harnesses/{src,tests}/`, and the
+literal acceptance criterion `git grep -n "HarnessKind" crates/` returns no
+matches — shared by this story and the parent feature's Unit 2 — will continue
+to fail at parent roll-up. The seam is not "merely staged"; its staging has a
+real ownership hole that leaves the elimination target unowned.
+
+This is a material design/acceptance blocker because the three-way approval
+test the caller set (seam preserves behavior **AND** complete elimination is
+explicitly and safely owned by the already-active CLI/test-support stories
+**AND** parent acceptance will still enforce zero matches) requires all three;
+the second conjunct fails.
+
+### Important — the contract file was extended after its story terminalized
+
+`crates/harnesses/src/registry.rs` is the `registry-contract` story's
+deliverable, and that story is `done` with its trait shape approved. This
+story modified that file to add two trait methods not present in the contract
+design or its review:
+
+- `HarnessAdapter::decode_version_with_limits(stdout, limits)` with a default
+  that delegates to `decode_version(stdout)`. Functionally necessary: the
+  original `decode_native_version(harness, stdout, json_limits)` carried the
+  JSON boundary limits, and the contract's `decode_version(stdout)` dropped
+  them, so the JSON-decode path needs the limits to preserve behavior.
+- `NativeLifecycleVector::observation_scope(&self, scope: &Scope) ->
+  Option<CapabilityScope>` — **no default impl**, so this is a breaking change
+  to the trait. Functionally necessary: `lifecycle.rs::resource_observation`
+  calls it to recover Claude's user/local scope disambiguation that the
+  original `match request.scope { Global => "user", Project(_) => "local" }`
+  provided.
+
+The additions are defensible on the merits, but they extend the contract
+surface after the fact and are not acknowledged in the contract story body or
+its review. Either move them into a deliberate contract-amendment stride (and
+update the contract story / its review to reflect the extended trait), or
+fold them into this story's documented deviations from the parent design so
+the contract file is not silently rewritten by a sibling story.
+
+### Important — one hidden semantic rewrite in the lifecycle vector
+
+`CodexLifecycle::arguments` reorders the rejection guards versus the original
+`native_arguments`:
+
+- Original: `validate_native_request` → `Codex + PluginUpdate =>
+  UnsupportedAction` → per-harness match (`Codex if project =>
+  UnsupportedProjectScope`).
+- New: `validate_native_request` → `Scope::Project(_) =>
+  UnsupportedProjectScope` → `PluginUpdate => UnsupportedAction`.
+
+For `Codex + PluginUpdate + Project`, the original returned
+`UnsupportedAction` ("the native harness has no verified lifecycle command");
+the new returns `UnsupportedProjectScope` ("the native harness has no
+verified project-scoped lifecycle command"). The existing tests do not cover
+this combination, so the regression is unverified rather than caught. Both
+outcomes are rejections, but the diagnostic and error code differ, and the
+story's literal guarantee is "Relocate, do not rewrite … behavior is preserved
+byte-for-byte." Restore the original precedence (PluginUpdate guard before
+the project-scope guard) and add a regression test pinning the
+Codex+PluginUpdate+Project outcome, or document the precedence change
+explicitly as a deviation with justification.
+
+### Verified
+
+- Adapter trait / port method bodies preserve the Codex/Claude capability
+  matrix exactly. `adapter_helpers::compiled_capabilities(false, false)` for
+  Codex and `compiled_capabilities(true, true)` for Claude reproduce the
+  previous `!codex` matrix for `plugin.update` and the entire project-scope
+  row (verified against the prior `compiled_capabilities` in lib.rs).
+- `adapter_helpers::select_profile` is the prior logic parameterized by
+  `(verified_version, profile_id, capabilities)`; codex `0.144.1` /
+  `codex-0-144-1` and claude `2.1.201` / `claude-2-1-201` are pinned by the
+  table test in `adapters/mod.rs`, plus unknown-version `Unverified`
+  fallback for both scopes.
+- `adapter_helpers::decode_native_version` is the prior decoder factored by a
+  `text_version` closure (`strip_prefix("codex-cli ")` /
+  `strip_suffix(" (Claude Code)")`); control-char rejection, `
+`/`
+` strip,
+  `is_single_version_token`, and the `{...}` strict-JSON path with caller
+  limits are all preserved.
+- `ClaudeLifecycle::arguments` is `claude_arguments` moved verbatim,
+  including the `MarketplaceUpdate` skips-`--scope` special case and the
+  user/local mapping.
+- `CodexLifecycle::arguments` is `codex_arguments` moved verbatim *modulo the
+  precedence change above*.
+- `CodexInstructionBridge` / `ClaudeInstructionBridge` / `CodexSkillProjection`
+  / `ClaudeSkillProjection` reproduce the prior per-harness bridge and skill
+  destinations (`codex_home/AGENTS.md`, `claude_home/CLAUDE.md`, project
+  `CLAUDE.md`, `.agents/skills`, `claude_home/skills`, `.claude/skills`).
+- `HarnessKind::adapter()` resolves through `TargetRegistry::canonical()`, so
+  the migration is dispatch-equivalent for the ports it covers.
+- `TargetRegistry::canonical().ids()` yields exactly `codex`, `claude`; gemini
+  returns `None`; first-party filter yields both.
+- Verification reproduced: `cargo test -p skilltap-harnesses` → 55 passed
+  (6 suites); `cargo clippy -p skilltap-harnesses --all-targets -- -D warnings`
+  → clean; `cargo fmt -p skilltap-harnesses -- --check` → clean. Workspace
+  `cargo check` has 16 errors confined to `crates/cli/` consuming the removed
+  `HarnessPolicyMap.{codex,claude}` fields — that is the expected
+  registry-cli integration seam.
+
+### Resolution required
+
+Pick one — either resolves the blocker:
+
+1. Extend `registry-cli` (and/or `registry-test-support`) acceptance criteria
+   to explicitly own `HarnessKind` elimination across `crates/harnesses/{src,tests}/`
+   (including `bootstrap.rs`, the `NativeLifecycleRequest.harness` field, the
+   seam in `lib.rs`, and the harnesses integration tests), and re-add this
+   story's literal `git grep -n "HarnessKind" crates/` and CLI literal
+   acceptance checks to whichever story completes the elimination. Then this
+   story may re-enter review with the seam intact and the ownership chain
+   explicit.
+2. Do the harnesses-crate `HarnessKind` elimination in this story after all
+   (its `Units` already lists dropping the `NativeLifecycleRequest.harness`
+   field and removing `HarnessKind` from `lib.rs`), and re-scope the seam to
+   CLI-only — i.e., leave only the `crates/cli/src/` consumers for
+   `registry-cli`.
+
+Either way, also: acknowledge the contract trait extension
+(`decode_version_with_limits`, `observation_scope`) in the contract story or
+this story's deviations, restore (or document) the
+Codex+PluginUpdate+Project error precedence, and add the missing regression
+test.
+
+**Nits (parked, below the material bar)**: none worth filing while the
+blocker is open — they would be re-evaluated on the next review pass.
