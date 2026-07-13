@@ -748,7 +748,7 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     );
     let project = machine.home().join("managed-project");
     fs::create_dir_all(&project).unwrap();
-    let source = machine.home().join("managed-marketplace");
+    let source = machine.home().join("managed-marketplace.git");
     fs::create_dir_all(source.join(".agents/plugins")).unwrap();
     fs::create_dir_all(source.join("plugins/demo/.codex-plugin")).unwrap();
     fs::create_dir_all(source.join("plugins/demo/skills/demo/scripts")).unwrap();
@@ -769,6 +769,11 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     fs::write(
         source.join("plugins/demo/.codex-plugin/plugin.json"),
         r#"{"name":"demo","version":"1.0.0","future":true}"#,
+    )
+    .unwrap();
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"demo-docs":{"command":"demo-mcp","args":["serve"]}}}"#,
     )
     .unwrap();
     fs::write(
@@ -823,16 +828,16 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     );
     assert_code(&install, 0);
     assert_eq!(json(&install)["summary"]["changed"], true);
-    let installed = project.join(".agents/plugins/demo");
+    let installed = project.join(".agents/skills/demo");
     assert_eq!(
-        fs::read_to_string(installed.join("skills/demo/SKILL.md")).unwrap(),
+        fs::read_to_string(installed.join("SKILL.md")).unwrap(),
         "---\nname: demo\ndescription: managed project fixture\n---\nbody\n"
     );
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         assert_ne!(
-            fs::metadata(installed.join("skills/demo/scripts/run.sh"))
+            fs::metadata(installed.join("scripts/run.sh"))
                 .unwrap()
                 .permissions()
                 .mode()
@@ -844,7 +849,13 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
         serde_json::from_slice(&fs::read(&catalog_path).unwrap()).unwrap();
     assert_eq!(installed_catalog["future"]["preserve"], true);
     assert_eq!(installed_catalog["plugins"][0]["futurePluginField"], "keep");
-    assert_eq!(installed_catalog["plugins"][0]["source"]["path"], "./demo");
+    assert_eq!(
+        installed_catalog["plugins"][0]["source"]["path"],
+        "./plugins/demo"
+    );
+    let codex_config = fs::read_to_string(project.join(".codex/config.toml")).unwrap();
+    assert!(codex_config.contains("[mcp_servers.demo-docs]"));
+    assert!(codex_config.contains("command = \"demo-mcp\""));
     assert!(!machine.codex_home().join("plugins/cache").exists());
     let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
     assert!(state.contains("\"provenance\": \"materialized\""));
@@ -866,7 +877,23 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     assert_code(&repeat, 0);
     assert_eq!(json(&repeat)["summary"]["changed"], false);
 
-    fs::write(installed.join("skills/demo/SKILL.md"), "drift\n").unwrap();
+    let catalog_update = run(
+        &machine,
+        &[
+            "marketplace",
+            "update",
+            "team",
+            "--project",
+            project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&catalog_update, 0);
+    assert_eq!(json(&catalog_update)["summary"]["changed"], false);
+
+    fs::write(installed.join("SKILL.md"), "drift\n").unwrap();
     let drifted = run(
         &machine,
         &[
@@ -886,9 +913,125 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
         "managed_project_drifted"
     );
     assert_eq!(
-        fs::read_to_string(installed.join("skills/demo/SKILL.md")).unwrap(),
+        fs::read_to_string(installed.join("SKILL.md")).unwrap(),
         "drift\n"
     );
+
+    fs::write(
+        source.join("plugins/demo/.codex-plugin/mcp.json"),
+        r#"{"mcpServers":{"demo-docs":{"command":"demo-mcp","args":["serve"]},"plugin-relative":{"command":"${CLAUDE_PLUGIN_ROOT}/bin/server"}}}"#,
+    )
+    .unwrap();
+
+    for arguments in [
+        vec!["init"],
+        vec!["config", "user.email", "fixture@example.invalid"],
+        vec!["config", "user.name", "Fixture"],
+        vec!["add", "."],
+        vec!["commit", "-m", "fixture"],
+    ] {
+        let output = Command::new("git")
+            .args(arguments)
+            .current_dir(&source)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "git fixture command failed");
+    }
+    let revision = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&source)
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let git_project = machine.home().join("git-managed-project");
+    fs::create_dir_all(&git_project).unwrap();
+    let git_url = format!("file://{}", source.display());
+    let git_add = run(
+        &machine,
+        &[
+            "marketplace",
+            "add",
+            &git_url,
+            "--name",
+            "git-team",
+            "--project",
+            git_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&git_add, 0);
+    let partial = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@git-team",
+            "--project",
+            git_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&partial, 2);
+    assert_eq!(
+        json(&partial)["errors"][0]["code"],
+        "partial_operation_requires_acknowledgment"
+    );
+    fs::create_dir_all(git_project.join(".codex")).unwrap();
+    let foreign_config = "[mcp_servers.demo-docs]\ncommand = \"foreign\"\n";
+    fs::write(git_project.join(".codex/config.toml"), foreign_config).unwrap();
+    let foreign = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@git-team",
+            "--project",
+            git_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&foreign, 2);
+    assert_eq!(
+        json(&foreign)["errors"][0]["code"],
+        "managed_project_unowned"
+    );
+    assert_eq!(
+        fs::read_to_string(git_project.join(".codex/config.toml")).unwrap(),
+        foreign_config
+    );
+    fs::remove_file(git_project.join(".codex/config.toml")).unwrap();
+    let git_install = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "demo@git-team",
+            "--project",
+            git_project.to_str().unwrap(),
+            "--target",
+            "codex",
+            "--yes",
+            "--json",
+        ],
+    );
+    assert_code(&git_install, 0);
+    assert!(git_project.join(".agents/skills/demo/SKILL.md").is_file());
+    let git_config = fs::read_to_string(git_project.join(".codex/config.toml")).unwrap();
+    assert!(git_config.contains("demo-docs"));
+    assert!(!git_config.contains("plugin-relative"));
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains(revision.trim()));
+    assert!(config_root(&machine).join("managed/sources").is_dir());
 }
 
 #[test]
@@ -2150,25 +2293,29 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
             .file_type()
             .is_symlink()
     );
-    assert!(
-        fs::read_dir(config_root(&machine).join("managed/backups/instructions"))
-            .unwrap()
-            .next()
-            .is_some()
-    );
+    let backup_root = config_root(&machine).join("managed/backups/instructions");
+    let backup_count = || fs::read_dir(&backup_root).unwrap().count();
+    assert_eq!(backup_count(), 1);
     let repeat_repair = run(&machine, &["instructions", "repair", "--yes", "--json"]);
     assert_code(&repeat_repair, 0);
     assert_eq!(json(&repeat_repair)["summary"]["changed"], false);
+    assert_eq!(backup_count(), 1);
+
+    let plain_repeat = run(&machine, &["instructions", "repair", "--yes"]);
+    assert_code(&plain_repeat, 0);
+    assert!(stdout(&plain_repeat).contains("Result: completed"));
+    assert_eq!(backup_count(), 1);
 }
 
 #[test]
 fn reconciliation_repairs_instruction_bridge_drift_with_target_and_scope_boundaries() {
     let machine = machine();
-    let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
+    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
     write_owned(
         &machine,
         "config.toml",
-        &native_config(fixture.executable(), fixture.executable()),
+        &native_config(codex.executable(), claude.executable()),
     );
     fs::create_dir_all(machine.home().join(".agents/skills")).unwrap();
     fs::create_dir_all(machine.home().join(".codex/skills")).unwrap();
@@ -2215,8 +2362,10 @@ fn reconciliation_repairs_instruction_bridge_drift_with_target_and_scope_boundar
     );
 
     let repaired = run(&machine, &["sync", "--target", "codex", "--yes", "--json"]);
-    assert_code(&repaired, 2);
-    assert_eq!(json(&repaired)["summary"]["changed"], true);
+    assert_code(&repaired, 0);
+    let repaired_value = json(&repaired);
+    assert_eq!(repaired_value["result"], "completed");
+    assert_eq!(repaired_value["summary"]["changed"], true);
     assert_eq!(
         fs::read_link(&codex_bridge).unwrap(),
         PathBuf::from("../AGENTS.md")
@@ -2256,13 +2405,14 @@ fn reconciliation_repairs_instruction_bridge_drift_with_target_and_scope_boundar
         &project,
         &["sync", "--project", "--target", "claude", "--yes", "--json"],
     );
-    assert_code(&project_sync, 2);
-    assert_eq!(json(&project_sync)["summary"]["changed"], true);
+    assert_code(&project_sync, 0);
+    let project_sync_value = json(&project_sync);
+    assert_eq!(project_sync_value["result"], "completed");
+    assert_eq!(project_sync_value["summary"]["changed"], true);
     assert_eq!(
         fs::read_link(&project_claude).unwrap(),
         PathBuf::from("AGENTS.md")
     );
-    let _ = fixture;
 }
 
 #[test]
@@ -3035,6 +3185,74 @@ fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_rep
         assert_code(&marketplace_remove, 0);
         assert_eq!(json(&marketplace_remove)["result"], "completed");
     }
+}
+
+#[test]
+fn sequential_native_plugin_installs_widen_targets_and_preserve_bindings() {
+    let machine = machine();
+    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    for root in [machine.codex_home(), machine.claude_home()] {
+        fs::create_dir_all(root.join("plugins")).unwrap();
+        fs::create_dir_all(root.join("skills")).unwrap();
+    }
+
+    for target in ["codex", "claude"] {
+        let install = run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "shared@team",
+                "--target",
+                target,
+                "--json",
+            ],
+        );
+        assert_code(&install, 0);
+        assert_eq!(json(&install)["summary"]["changed"], true);
+    }
+
+    let inventory = fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap();
+    let shared = inventory
+        .split("[[resources]]")
+        .find(|section| section.contains("id = \"plugin:shared@team\""))
+        .expect("shared desired resource exists");
+    assert!(shared.contains("\"codex\"") && shared.contains("\"claude\""));
+
+    let state: serde_json::Value =
+        serde_json::from_slice(&fs::read(config_root(&machine).join("state.json")).unwrap())
+            .unwrap();
+    let bindings = state["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|resource| resource["key"]["id"] == "plugin:shared@team")
+        .and_then(|resource| resource["targets"].as_array())
+        .expect("shared state has target bindings");
+    assert!(
+        bindings.iter().any(|binding| binding["target"] == "codex")
+            && bindings.iter().any(|binding| binding["target"] == "claude")
+    );
+
+    let repeat = run(
+        &machine,
+        &[
+            "plugin",
+            "install",
+            "shared@team",
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
 }
 
 #[test]

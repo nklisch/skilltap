@@ -139,6 +139,7 @@ where
                 &args.common.target,
                 Some(args.source.as_str()),
                 args.name.as_ref().map(|value| value.as_str()),
+                false,
             ),
             OutputChannel::Stdout,
         ),
@@ -150,6 +151,7 @@ where
                 &args.common.target,
                 None,
                 Some(args.name.as_str()),
+                false,
             ),
             OutputChannel::Stdout,
         ),
@@ -161,6 +163,7 @@ where
                 &args.common.target,
                 None,
                 args.name.as_ref().map(|value| value.as_str()),
+                false,
             ),
             OutputChannel::Stdout,
         ),
@@ -172,6 +175,7 @@ where
                 &args.target,
                 Some(args.plugin.as_str()),
                 None,
+                args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
@@ -183,6 +187,7 @@ where
                 &args.common.target,
                 None,
                 Some(args.plugin.as_str()),
+                false,
             ),
             OutputChannel::Stdout,
         ),
@@ -194,6 +199,7 @@ where
                 &args.target,
                 None,
                 args.plugin.as_ref().map(|value| value.as_str()),
+                args.acknowledgment.yes,
             ),
             OutputChannel::Stdout,
         ),
@@ -372,9 +378,18 @@ fn execute_system_native_lifecycle(
     target: &crate::command::TargetArgs,
     source: Option<&str>,
     name: Option<&str>,
+    acknowledged: bool,
 ) -> Outcome {
     execute_system_reconciliation(command, |application| {
-        application.execute_native_lifecycle(command, kind, scope, target, source, name)
+        application.execute_native_lifecycle(
+            command,
+            kind,
+            scope,
+            target,
+            source,
+            name,
+            acknowledged,
+        )
     })
 }
 

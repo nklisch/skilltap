@@ -303,6 +303,7 @@ dependencies = [
  "skilltap-core",
  "skilltap-harnesses",
  "skilltap-test-support",
+ "toml",
 ]
 
 [[package]]

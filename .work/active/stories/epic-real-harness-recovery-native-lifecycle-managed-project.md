@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: [epic-real-harness-recovery-native-lifecycle-managed-project-load-contract]
@@ -66,6 +66,16 @@ owns blocker 9.
   constructors are migrated to that new schema; the coordinating worker owns
   that migration and will rerun this scenario afterward.
 - Adjacent issues parked: none.
+
+## Repair follow-up (2026-07-12)
+
+- The corrective load-contract story replaced copied plugin bundles with
+  effective complete-skill and MCP projections, separated marketplace and
+  plugin ownership, added bounded Git checkout/revision evidence, and made
+  multi-surface publication recoverable and freshly verified.
+- The isolated local/Git compiled lifecycle scenario and full 521-test
+  workspace suite pass. The three review blockers below are resolved and this
+  parent is returned to review.
 
 ## Review findings (2026-07-12)
 

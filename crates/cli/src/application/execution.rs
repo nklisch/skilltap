@@ -136,10 +136,14 @@ pub(super) struct ManagedProjectLifecyclePort<'a> {
 }
 
 pub(super) struct ManagedProjectLifecycleEntry {
-    pub(super) catalog_path: AbsolutePath,
-    pub(super) expected_catalog: Option<Vec<u8>>,
-    pub(super) desired_catalog: Option<Vec<u8>>,
-    pub(super) plugin: Option<ManagedProjectPluginWrite>,
+    pub(super) files: Vec<ManagedProjectFileWrite>,
+    pub(super) trees: Vec<ManagedProjectPluginWrite>,
+}
+
+pub(super) struct ManagedProjectFileWrite {
+    pub(super) path: AbsolutePath,
+    pub(super) expected: Option<Vec<u8>>,
+    pub(super) desired: Option<Vec<u8>>,
 }
 
 pub(super) struct ManagedProjectPluginWrite {
@@ -158,29 +162,31 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
                     "A managed project lifecycle request no longer belongs to the plan.",
                 )
             })?;
-            if !operation
-                .affected_surfaces()
-                .iter()
-                .any(|surface| surface.path() == Some(&entry.catalog_path))
-            {
-                return Err(managed_project_apply_failure(
-                    "The managed project catalog no longer matches the planned surface.",
-                ));
+            for file in &entry.files {
+                if !operation
+                    .affected_surfaces()
+                    .iter()
+                    .any(|surface| surface.path() == Some(&file.path))
+                {
+                    return Err(managed_project_apply_failure(
+                        "A managed project file no longer matches the planned surface.",
+                    ));
+                }
+                let current = self
+                    .filesystem
+                    .read_regular_no_follow(&file.path)
+                    .map_err(|_| {
+                        managed_project_apply_failure(
+                            "A managed project file could not be re-read safely.",
+                        )
+                    })?;
+                if current != file.expected {
+                    return Err(managed_project_apply_failure(
+                        "A managed project file changed after planning.",
+                    ));
+                }
             }
-            let current_catalog = self
-                .filesystem
-                .read_regular_no_follow(&entry.catalog_path)
-                .map_err(|_| {
-                    managed_project_apply_failure(
-                        "The managed project catalog could not be re-read safely.",
-                    )
-                })?;
-            if current_catalog != entry.expected_catalog {
-                return Err(managed_project_apply_failure(
-                    "The managed project catalog changed after planning.",
-                ));
-            }
-            if let Some(plugin) = &entry.plugin {
+            for plugin in &entry.trees {
                 let current = self
                     .filesystem
                     .load_tree_no_follow(&plugin.root, &plugin.destination)
@@ -218,111 +224,161 @@ impl ExecutionPort for ManagedProjectLifecyclePort<'_> {
         })?;
         if matches!(
             operation.action(),
-            OperationAction::PluginInstall
-                | OperationAction::PluginUpdate
-                | OperationAction::PluginRemove
-        ) && entry.plugin.is_none()
+            OperationAction::PluginInstall | OperationAction::PluginUpdate
+        ) && entry.trees.is_empty()
+            && entry.files.is_empty()
         {
             return Err(managed_project_apply_failure(
                 "The managed project plugin operation has no plugin tree request.",
             ));
         }
-        if entry.expected_catalog == entry.desired_catalog
+        if entry.files.iter().all(|file| file.expected == file.desired)
             && entry
-                .plugin
-                .as_ref()
-                .is_none_or(|plugin| plugin.expected_tree == plugin.desired_tree)
+                .trees
+                .iter()
+                .all(|tree| tree.expected_tree == tree.desired_tree)
         {
             return Ok(OperationOutcome::NoChange);
         }
 
-        let catalog_parent = entry
-            .catalog_path
-            .as_str()
-            .rsplit_once('/')
-            .and_then(|(parent, _)| AbsolutePath::new(parent).ok())
-            .ok_or_else(|| {
-                managed_project_apply_failure("The project catalog parent is invalid.")
-            })?;
-        self.filesystem
-            .create_directory_all(&catalog_parent)
-            .map_err(|_| {
-                managed_project_apply_failure("The project catalog parent could not be created.")
-            })?;
-
-        if let Some(plugin) = &entry.plugin {
-            match (&plugin.expected_tree, &plugin.desired_tree) {
-                (None, Some(tree)) => {
-                    self.filesystem
-                        .publish_tree_no_follow(&plugin.root, &plugin.destination, tree.files())
-                        .map_err(|_| {
-                            managed_project_apply_failure(
-                                "The managed project plugin could not be published.",
-                            )
-                        })?;
-                }
-                (Some(_), None) => {
-                    let identity = plugin.expected_identity.ok_or_else(|| {
-                        managed_project_apply_failure(
-                            "The managed project plugin has no owned identity.",
-                        )
-                    })?;
-                    self.filesystem
-                        .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
-                        .map_err(|_| {
-                            managed_project_apply_failure(
-                                "The managed project plugin could not be removed safely.",
-                            )
-                        })?;
-                }
-                (Some(previous), Some(next)) if previous != next => {
-                    let identity = plugin.expected_identity.ok_or_else(|| {
-                        managed_project_apply_failure(
-                            "The managed project plugin has no owned identity.",
-                        )
-                    })?;
-                    self.filesystem
-                        .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
-                        .map_err(|_| {
-                            managed_project_apply_failure(
-                                "The managed project plugin could not be replaced safely.",
-                            )
-                        })?;
-                    if self
-                        .filesystem
-                        .publish_tree_no_follow(&plugin.root, &plugin.destination, next.files())
-                        .is_err()
-                    {
-                        let _ = self.filesystem.publish_tree_no_follow(
-                            &plugin.root,
-                            &plugin.destination,
-                            previous.files(),
-                        );
-                        return Err(managed_project_apply_failure(
-                            "The replacement project plugin could not be published.",
-                        ));
+        let mut applied_trees: Vec<&ManagedProjectPluginWrite> = Vec::new();
+        for plugin in &entry.trees {
+            let result = (|| -> Result<(), ExecutionError> {
+                match (&plugin.expected_tree, &plugin.desired_tree) {
+                    (None, Some(tree)) => {
+                        self.filesystem
+                            .publish_tree_no_follow(&plugin.root, &plugin.destination, tree.files())
+                            .map_err(|_| {
+                                managed_project_apply_failure(
+                                    "The managed project plugin could not be published.",
+                                )
+                            })?;
                     }
+                    (Some(_), None) => {
+                        let identity = plugin.expected_identity.ok_or_else(|| {
+                            managed_project_apply_failure(
+                                "The managed project plugin has no owned identity.",
+                            )
+                        })?;
+                        self.filesystem
+                            .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
+                            .map_err(|_| {
+                                managed_project_apply_failure(
+                                    "The managed project plugin could not be removed safely.",
+                                )
+                            })?;
+                    }
+                    (Some(previous), Some(next)) if previous != next => {
+                        let identity = plugin.expected_identity.ok_or_else(|| {
+                            managed_project_apply_failure(
+                                "The managed project plugin has no owned identity.",
+                            )
+                        })?;
+                        self.filesystem
+                            .remove_tree_no_follow(&plugin.root, &plugin.destination, identity)
+                            .map_err(|_| {
+                                managed_project_apply_failure(
+                                    "The managed project plugin could not be replaced safely.",
+                                )
+                            })?;
+                        if self
+                            .filesystem
+                            .publish_tree_no_follow(&plugin.root, &plugin.destination, next.files())
+                            .is_err()
+                        {
+                            let _ = self.filesystem.publish_tree_no_follow(
+                                &plugin.root,
+                                &plugin.destination,
+                                previous.files(),
+                            );
+                            return Err(managed_project_apply_failure(
+                                "The replacement project plugin could not be published.",
+                            ));
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
+                Ok(())
+            })();
+            if let Err(error) = result {
+                rollback_managed_project(self.filesystem, &[], &applied_trees);
+                return Err(error);
+            }
+            applied_trees.push(plugin);
+        }
+
+        let mut applied_files: Vec<&ManagedProjectFileWrite> = Vec::new();
+        for file in &entry.files {
+            let parent = file
+                .path
+                .as_str()
+                .rsplit_once('/')
+                .and_then(|(parent, _)| AbsolutePath::new(parent).ok())
+                .ok_or_else(|| {
+                    managed_project_apply_failure("A managed project file parent is invalid.")
+                })?;
+            if self.filesystem.create_directory_all(&parent).is_err()
+                || match &file.desired {
+                    Some(bytes) => self.filesystem.atomic_write(&file.path, bytes).is_err(),
+                    None => self.filesystem.remove(&file.path).is_err(),
+                }
+            {
+                rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_project_apply_failure(
+                    "A managed project file could not be published; earlier changes were rolled back.",
+                ));
+            }
+            applied_files.push(file);
+        }
+        for file in &entry.files {
+            if self.filesystem.read_regular_no_follow(&file.path).ok() != Some(file.desired.clone())
+            {
+                rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_project_apply_failure(
+                    "Managed project file verification failed.",
+                ));
             }
         }
-
-        match &entry.desired_catalog {
-            Some(bytes) => self
+        for tree in &entry.trees {
+            let observed = self
                 .filesystem
-                .atomic_write(&entry.catalog_path, bytes)
-                .map_err(|_| {
-                    managed_project_apply_failure(
-                        "The managed project catalog could not be published.",
-                    )
-                })?,
-            None => self.filesystem.remove(&entry.catalog_path).map_err(|_| {
-                managed_project_apply_failure(
-                    "The managed project catalog could not be removed safely.",
-                )
-            })?,
+                .load_tree_no_follow(&tree.root, &tree.destination)
+                .ok()
+                .and_then(|(_, files)| artifact_tree_from_loaded(files));
+            if observed != tree.desired_tree {
+                rollback_managed_project(self.filesystem, &applied_files, &applied_trees);
+                return Err(managed_project_apply_failure(
+                    "Managed project skill verification failed.",
+                ));
+            }
         }
         Ok(OperationOutcome::Applied)
+    }
+}
+
+fn rollback_managed_project(
+    filesystem: &dyn ManagedProjectFileSystem,
+    files: &[&ManagedProjectFileWrite],
+    trees: &[&ManagedProjectPluginWrite],
+) {
+    for file in files.iter().rev() {
+        match &file.expected {
+            Some(bytes) => {
+                let _ = filesystem.atomic_write(&file.path, bytes);
+            }
+            None => {
+                let _ = filesystem.remove(&file.path);
+            }
+        }
+    }
+    for tree in trees.iter().rev() {
+        if let Ok((identity, _)) = filesystem.load_tree_no_follow(&tree.root, &tree.destination) {
+            let _ = filesystem.remove_tree_no_follow(&tree.root, &tree.destination, identity);
+        }
+        if let Some(previous) = &tree.expected_tree {
+            let _ =
+                filesystem.publish_tree_no_follow(&tree.root, &tree.destination, previous.files());
+        }
     }
 }
 

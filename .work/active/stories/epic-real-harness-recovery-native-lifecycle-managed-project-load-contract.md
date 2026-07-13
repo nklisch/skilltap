@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-load-contract
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -64,3 +64,29 @@ checkouts, and can leave the tree/catalog pair partially changed.
   fail before mutation.
 - Isolated compiled E2Es validate project load paths and prove Codex caches and
   the operator's real environment remain untouched.
+
+## Implementation notes
+
+- Codex project plugin install/update/remove now projects complete skill
+  directories to `<project>/.agents/skills/<name>` and compatible MCP servers
+  to `<project>/.codex/config.toml`; copied plugin-bundle presence is no longer
+  treated as effective installation.
+- Marketplace registration remains the sole owner of the project marketplace
+  document. Plugin lifecycle fingerprints only its effective skill/MCP
+  projections, so marketplace add → plugin install → marketplace update is a
+  healthy no-op instead of self-authored drift.
+- Local and Git marketplace sources share the bounded resolver. Git lifecycle
+  records the exact checked-out commit and stores its checkout below
+  skilltap's managed source root; remote catalog payloads still fail closed.
+- Optional plugin components and plugin-root-relative MCP commands require
+  `--yes`; accepted unsupported MCP servers are omitted rather than published
+  as broken configuration. Existing same-name foreign MCP configuration fails
+  closed before mutation.
+- Multi-tree/file execution revalidates every surface, rolls earlier
+  publications back when a later publication fails, and freshly verifies all
+  effective skill and config destinations before state journaling.
+- Verification: `cargo test --workspace` passes (521 tests), including an
+  isolated compiled local/Git scenario covering executable complete skills,
+  MCP projection, partial acknowledgment, foreign ownership, Git SHA
+  provenance, cache non-mutation, catalog-update health, repeat no-op, and
+  drift refusal.

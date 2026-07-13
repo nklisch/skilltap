@@ -80,6 +80,7 @@ impl StatusApplication<'_> {
                     &TargetArgs::default(),
                     None,
                     Some(&name),
+                    false,
                 ),
                 ResourceKind::StandaloneSkill => self.execute_skill_update(
                     // A daemon cycle is still the safe, non-interactive
@@ -211,6 +212,7 @@ impl StatusApplication<'_> {
         target: &TargetArgs,
         source_value: Option<&str>,
         name_value: Option<&str>,
+        acknowledged: bool,
     ) -> Outcome {
         let (documents, mut outcome) = match self.load_documents(command) {
             Ok(value) => value,
@@ -366,13 +368,41 @@ impl StatusApplication<'_> {
                     };
                     match inventory.resources().get(proposed.key()) {
                         Some(existing) if existing.source() == proposed.source() => {
-                            existing.clone()
+                            let widened = existing
+                                .targets()
+                                .iter()
+                                .chain(proposed.targets().iter())
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            let widened = HarnessSet::new(widened)
+                                .map_err(|_| ())
+                                .and_then(|targets| existing.with_targets(targets).map_err(|_| ()));
+                            match widened {
+                                Ok(resource) => resource,
+                                Err(_) => {
+                                    outcome.result = ResultClass::Invalid;
+                                    return outcome.with_error(ErrorDetail::new(
+                                        "inventory_target_union_invalid",
+                                        "The existing and requested harness targets could not be combined safely.",
+                                    ));
+                                }
+                            }
                         }
                         _ => proposed,
                     }
                 };
                 if request.retains_desired() && !request.is_update() {
-                    match inventory.with_resource(resource.clone()) {
+                    let next_inventory = match inventory.resources().get(resource.key()) {
+                        Some(existing)
+                            if existing
+                                .with_targets(resource.targets().clone())
+                                .is_ok_and(|projected| projected == resource) =>
+                        {
+                            inventory.replace_resource(resource.clone())
+                        }
+                        _ => inventory.with_resource(resource.clone()),
+                    };
+                    match next_inventory {
                         Ok(next) => inventory = next,
                         Err(_) => {
                             outcome.result = ResultClass::AttentionRequired;
@@ -444,8 +474,10 @@ impl StatusApplication<'_> {
                             &resource,
                             project,
                             &documents,
+                            &paths,
                             observed_at,
                             json_limits,
+                            acknowledged,
                         ) {
                             Ok(planned) => planned,
                             Err(error) => {

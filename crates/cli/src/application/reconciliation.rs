@@ -188,6 +188,7 @@ impl StatusApplication<'_> {
                     &child_target,
                     source,
                     name,
+                    acknowledged,
                 ),
                 ResourceKind::Plugin => self.execute_native_lifecycle(
                     "sync",
@@ -196,6 +197,7 @@ impl StatusApplication<'_> {
                     &child_target,
                     name,
                     None,
+                    acknowledged,
                 ),
                 ResourceKind::StandaloneSkill => match source {
                     Some(source) => self.execute_skill_install(
@@ -238,7 +240,14 @@ impl StatusApplication<'_> {
         }
         if observation.failed_targets > 0 {
             outcome.result = ResultClass::AttentionRequired;
-        } else if outcome.errors.is_empty() && outcome.warnings.is_empty() {
+        } else if outcome.errors.is_empty()
+            && outcome.warnings.iter().all(|warning| {
+                matches!(
+                    warning.code.as_str(),
+                    "instruction_bridge_repair" | "instruction_bridge_consolidation"
+                )
+            })
+        {
             outcome.result = ResultClass::Completed;
         }
         let changed = outcome.summary.get("changed") == Some(&OutputValue::Boolean(true));
