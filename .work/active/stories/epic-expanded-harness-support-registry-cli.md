@@ -40,18 +40,30 @@ rather than from Codex/Claude string matches.
     the registry, before any state write.
   - Restrict `bootstrap --target` to `registry.first_party_targets()`.
 - `crates/cli/src/application.rs` and submodules
-  (`crates/cli/src/application/{status,reconciliation,lifecycle,instructions,\nexecution}.rs`) (modified):
+  (`crates/cli/src/application/{status,reconciliation,lifecycle,instructions,execution}.rs`) (modified):
   - `enabled_harnesses(config)` becomes `config.harnesses().enabled()`.
   - `instruction_locations`, `skill_destination`, `configured_native_profile`,
-    `lifecycle_preview_presence`, and the lifecycle `HarnessKind` mapping
-    dispatch through `registry.adapter(&id)` and the relevant adapter port.
+    `lifecycle_preview_presence`, and lifecycle dispatch use
+    `registry.adapter(&id)` and the relevant adapter port.
   - Detection diagnostic and next-action messages reference
     `<registered-harness>` rather than `<codex|claude>`.
+- Final compatibility-seam removal across `crates/harnesses/` (modified):
+  - migrate `bootstrap.rs`, `lib.rs`, and `lifecycle.rs` from `HarnessKind` to
+    `HarnessId`/registry adapter dispatch;
+  - drop `NativeLifecycleRequest.harness` after every CLI caller selects the
+    adapter before constructing the request;
+  - remove compatibility wrappers that accept `HarnessKind`;
+  - migrate `crates/harnesses/tests/{bootstrap,detection,lifecycle_scope}.rs`
+    to registry adapters and typed harness ids.
 
 ## Implementation notes
 
 - The dispatch layer is the single point that holds a `&TargetRegistry`; it is
   threaded into the application services that previously matched on id strings.
+- This story owns the final `HarnessKind` compatibility-seam removal across both
+  CLI consumers and harnesses-crate producers/tests. The adapter story keeps the
+  seam only so its intermediate commit remains compilable; this integration
+  story must leave `git grep -n "HarnessKind" crates/` empty.
 - `--target all` already expands via the generic `resolve_targets`; the only
   change is that `enabled` now comes from the config map.
 - Help derivation uses `Command::mut_arg` to set the `--target` help text from
@@ -73,6 +85,11 @@ rather than from Codex/Claude string matches.
 - [ ] `--target all` expands to every enabled registered harness from the map.
 - [ ] No behavior-dispatching `match target.as_str()` remains in
       `crates/cli/src/`.
+- [ ] `git grep -n "HarnessKind" crates/` returns no matches after CLI and
+      harnesses producer/test migration.
+- [ ] `NativeLifecycleRequest` no longer carries a `HarnessKind` field; callers
+      select `NativeLifecycleVector` from `TargetRegistry` before request
+      construction.
 
 ## Out of scope
 
