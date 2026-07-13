@@ -283,6 +283,9 @@ impl Outcome {
         deduplicate_actions(&mut self.next_actions);
         for error in &mut self.errors {
             deduplicate_actions(&mut error.next_actions);
+            error
+                .next_actions
+                .retain(|action| !self.next_actions.contains(action));
         }
     }
 }
@@ -335,6 +338,6 @@ mod tests {
         assert_eq!(outcome, once);
         assert_eq!(outcome.result, ResultClass::AttentionRequired);
         assert_eq!(outcome.next_actions, vec![inspect, retry.clone()]);
-        assert_eq!(outcome.errors[0].next_actions, vec![retry]);
+        assert!(outcome.errors[0].next_actions.is_empty());
     }
 }

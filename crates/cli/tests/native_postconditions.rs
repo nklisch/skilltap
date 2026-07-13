@@ -38,6 +38,15 @@ fn install(machine: &IsolatedMachine) -> Output {
         .expect("run isolated lifecycle command")
 }
 
+fn install_plain(machine: &IsolatedMachine) -> Output {
+    machine
+        .run(
+            &binary(),
+            &["plugin", "install", "formatter@team", "--target", "claude"],
+        )
+        .expect("run isolated plain lifecycle command")
+}
+
 fn remove(machine: &IsolatedMachine) -> Output {
     machine
         .run(
@@ -189,6 +198,114 @@ allow_major = false
     .unwrap();
 }
 
+fn configure_invalid_binaries_for_all_scopes(machine: &IsolatedMachine) {
+    let root = config_root(machine);
+    fs::create_dir_all(&root).unwrap();
+    let mut binaries = Vec::new();
+    for harness in ["codex", "claude"] {
+        let executable = machine.home().join(format!("{harness}-invalid-version"));
+        fs::write(
+            &executable,
+            "#!/bin/sh\nprintf '%s\\n' 'not-a-supported-version'\n",
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        binaries.push(
+            executable
+                .to_string_lossy()
+                .replace('\\', "\\\\")
+                .replace('"', "\\\""),
+        );
+    }
+    fs::write(
+        root.join("config.toml"),
+        format!(
+            r#"schema = 1
+
+[harnesses.codex]
+enabled = true
+binary = "{}"
+
+[harnesses.claude]
+enabled = true
+binary = "{}"
+
+[instructions]
+claude_mode = "symlink"
+
+[updates]
+mode = "apply-safe"
+interval = "6h"
+
+[bootstrap]
+mode = "off"
+allow_major = false
+"#,
+            binaries[0], binaries[1]
+        ),
+    )
+    .unwrap();
+    let project = machine.home().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let project = project
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    fs::write(
+        root.join("inventory.toml"),
+        format!("schema = 1\nprojects = [\"{project}\"]\nresources = []\n"),
+    )
+    .unwrap();
+}
+
+#[test]
+fn multi_target_all_scope_diagnostics_have_plain_and_json_parity() {
+    let structured_machine = IsolatedMachine::new("skilltap-diagnostic-parity-json").unwrap();
+    configure_invalid_binaries_for_all_scopes(&structured_machine);
+    let structured = structured_machine
+        .run(
+            &binary(),
+            &["status", "--all-scopes", "--target", "all", "--json"],
+        )
+        .unwrap();
+    assert_eq!(structured.status.code(), Some(2));
+    let value = json(&structured);
+    assert_eq!(value["scope"]["kind"], "all");
+    assert_eq!(value["summary"]["scopes"], 2);
+    assert_eq!(value["summary"]["targets"], 2);
+    assert_eq!(
+        value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|warning| warning["code"] == "native_version_invalid")
+            .count(),
+        2
+    );
+    assert_eq!(
+        value["next_actions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|action| action["code"] == "inspect_harness_version")
+            .count(),
+        2
+    );
+
+    let plain_machine = IsolatedMachine::new("skilltap-diagnostic-parity-plain").unwrap();
+    configure_invalid_binaries_for_all_scopes(&plain_machine);
+    let plain = plain_machine
+        .run(&binary(), &["status", "--all-scopes", "--target", "all"])
+        .unwrap();
+    assert_eq!(plain.status.code(), Some(2));
+    assert!(plain.stderr.is_empty());
+    let rendered = captured_stdout(&plain).unwrap();
+    assert!(rendered.contains("Scope  all scopes"));
+    assert_eq!(rendered.matches("native_version_invalid:").count(), 2);
+    assert_eq!(rendered.matches("--version").count(), 2);
+    assert!(rendered.ends_with("Result: attention required\n"));
+}
+
 #[test]
 fn native_postcondition_failures_are_typed_and_never_journal_success() {
     for (mode_name, expected_code) in [
@@ -225,6 +342,43 @@ fn native_postcondition_failures_are_typed_and_never_journal_success() {
             "mode={mode_name}"
         );
     }
+}
+
+#[test]
+fn native_postcondition_diagnostic_has_plain_and_json_parity() {
+    fn failing_machine(label: &str) -> IsolatedMachine {
+        let machine = IsolatedMachine::new(label).unwrap();
+        let mode = machine.home().join("mode");
+        let present = machine.home().join("present");
+        let count = machine.home().join("mutation-count");
+        fs::write(&mode, "invalid_json").unwrap();
+        let fixture = write_fixture(&machine, &mode, &present, &count);
+        configure(&machine, &fixture);
+        machine
+    }
+
+    let json_machine = failing_machine("skilltap-native-postcondition-json");
+    let structured = install(&json_machine);
+    assert_eq!(structured.status.code(), Some(2));
+    let value = json(&structured);
+    assert_eq!(
+        value["errors"][0]["code"],
+        "native_observation_invalid_json"
+    );
+    assert_eq!(value["next_actions"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        value["next_actions"][0]["command"],
+        "skilltap status --json"
+    );
+
+    let plain_machine = failing_machine("skilltap-native-postcondition-plain");
+    let plain = install_plain(&plain_machine);
+    assert_eq!(plain.status.code(), Some(2));
+    assert!(plain.stderr.is_empty());
+    let rendered = captured_stdout(&plain).unwrap();
+    assert!(rendered.contains("Code: native_observation_invalid_json"));
+    assert_eq!(rendered.matches("skilltap status --json").count(), 1);
+    assert!(rendered.ends_with("Result: attention required\n"));
 }
 
 #[test]

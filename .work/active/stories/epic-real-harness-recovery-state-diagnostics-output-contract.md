@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-output-contract
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing, documentation]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -34,6 +34,25 @@ UX examples forward with the executable contract.
 - Native post-mutation failures retain the typed boundary reason and one
   actionable recovery command; healthy final observation completes normally.
 - Multi-target/all-scope compiled-binary tests prove plain/JSON parity.
+
+## Implementation
+
+- Plugin removal now parses and advertises only exact
+  `PLUGIN@MARKETPLACE` selectors across leaf help, safe parse failures, SPEC,
+  and UX.
+- Outcome builders and both renderers normalize exact duplicate recovery
+  actions without collapsing distinct commands. A top-level action is the
+  canonical rendered copy when an error also carries the same action.
+- Typed native detection and postcondition failures retain their stable reason
+  and actionable status command after reconciliation or mutation.
+- Isolated compiled tests cover typed postcondition plain/JSON parity and a
+  two-target, two-scope diagnostic matrix without touching user state.
+
+## Verification
+
+- `cargo test -p skilltap --lib`
+- `cargo test -p skilltap --test native_postconditions native_postcondition_diagnostic_has_plain_and_json_parity -- --exact`
+- `cargo test -p skilltap --test native_postconditions multi_target_all_scope_diagnostics_have_plain_and_json_parity -- --exact`
 
 ## Review checkpoint (2026-07-12)
 
