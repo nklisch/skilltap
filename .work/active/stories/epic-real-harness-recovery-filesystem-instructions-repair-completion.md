@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-repair-completion
 kind: story
-stage: review
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
@@ -69,3 +69,17 @@ still treats repair disclosures as unresolved attention.
   broken duplicate regressions pass in isolated roots.
 - Full workspace verification is recorded with the integration commit after
   the concurrent managed-load contract worker releases the shared files.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight,
+escalated for the security-sensitive no-follow filesystem boundary. The
+descriptor-bound import postcondition unit regression and the isolated global,
+project, repeat, and broken-duplicate compiled scenarios pass at detached
+commit `6c657f0`; exact postconditions gate completion.

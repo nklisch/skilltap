@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions
 kind: feature
-stage: implementing
+stage: done
 tags: [correctness, security, testing]
 parent: epic-real-harness-recovery-and-adapter-expansion
 depends_on: [epic-real-harness-recovery-runtime-boundary]
@@ -395,3 +395,24 @@ fn finalize_instruction_result(
 - **Fallback:** if carrying intent in the general artifact contract proves too
   invasive, constrain `ArtifactFile` to the managed skill/publication pipeline,
   but never infer modes at destination or keep an unsynchronized side map.
+
+## Children complete (2026-07-12)
+
+All direct stories completed review; the feature advanced through its own
+aggregate review.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep aggregate review at the project-default
+`standard` weight. All five child stories carry focused green verification and
+approved review evidence. The combined implementation preserves complete
+skill executable intent, computes bridges from the actual canonical path,
+fails closed on non-regular/symlink postconditions, and completes acknowledged
+repairs only after backup and effective bridge health. No foundation drift was
+found in the feature scope.

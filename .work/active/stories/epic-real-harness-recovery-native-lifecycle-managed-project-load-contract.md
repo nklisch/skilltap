@@ -1,10 +1,11 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-load-contract
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
-depends_on: []
+depends_on:
+  - epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest
 release_binding: null
 research_refs: [.research/analysis/briefs/current-agent-extension-standards.md]
 research_origin: null
@@ -90,3 +91,37 @@ checkouts, and can leave the tree/catalog pair partially changed.
   MCP projection, partial acknowledgment, foreign ownership, Git SHA
   provenance, cache non-mutation, catalog-update health, repeat no-op, and
   drift refusal.
+
+## Review findings (2026-07-12)
+
+- **Blocker — source evolution loses the owned projection set**: managed state
+  records only an aggregate fingerprint, while update and removal reconstruct
+  skill and MCP destinations exclusively from the newly resolved source. If a
+  release renames or removes a skill/MCP server, the old owned projection is
+  never planned for deletion. If the catalog removes the plugin entry,
+  `plugin remove` cannot resolve the source at all.
+- **Blocker — accepted partial loss is silent and unsupported plugins can be
+  uninstallable**: acknowledged optional directories and plugin-root-relative
+  MCP omissions are not emitted as exact consequences or retained in state.
+  The unsupported-directory check also runs during removal, while
+  `plugin remove` has no `--yes`, so a plugin containing hooks, agents, or
+  another optional directory cannot be removed through this fallback.
+
+Tracked by
+`epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest`.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**:
+`epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest`
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+Projection, Git acquisition, containment, and multi-surface filesystem rollback
+are materially improved. The remaining blocker is lifecycle identity across
+source revisions. The compiled scenario is temporarily red at `6c657f0`
+because the concurrently repaired native post-observation fixture reports the
+managed operation's harness unreachable; that fallout is not duplicated here.

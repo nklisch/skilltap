@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: [epic-real-harness-recovery-native-lifecycle-managed-project-load-contract]
@@ -119,3 +119,26 @@ adversarial lifecycle and foundation-contract review exposed the blockers
 above. Security/path containment is sound for the supported local input; the
 failure is capability completeness, effective-state truth, ownership, source
 coverage, and rollback behavior.
+
+## Review findings (2026-07-12, projection lifecycle pass)
+
+- **Blocker — update/remove are not closed over the installed component set**:
+  the corrective implementation retains only an aggregate hash and derives
+  destinations from the current source. Renamed/removed upstream skills and
+  MCP servers remain effective, and a removed catalog entry can prevent
+  uninstall. Accepted omissions are silent, and optional plugin directories
+  incorrectly require an unavailable acknowledgment during removal. Tracked by
+  `epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest`.
+
+## Review (2026-07-12, projection lifecycle pass)
+
+**Verdict**: Request changes
+
+**Blockers**:
+`epic-real-harness-recovery-native-lifecycle-managed-project-projection-manifest`
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+Effective load surfaces and transaction handling are sound for an unchanged
+source shape, but update/remove require exact prior component identity.

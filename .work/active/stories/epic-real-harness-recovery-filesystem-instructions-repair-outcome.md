@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-filesystem-instructions-repair-outcome
 kind: story
-stage: review
+stage: done
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-filesystem-instructions
 depends_on:
@@ -99,3 +99,16 @@ representation gap prevents approval.
   original single backup count.
 - Implemented by
   `epic-real-harness-recovery-filesystem-instructions-repair-completion`.
+
+## Review (2026-07-12, repair pass)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+
+**Notes**: Fresh-context deep review at the project-default `standard` weight.
+The corrective child closes both prior blockers. Focused isolated tests prove
+acknowledged global/project repairs complete, preserve exactly one recoverable
+backup, repeat as plain/JSON no-ops, and reject a matching-byte symlink.
