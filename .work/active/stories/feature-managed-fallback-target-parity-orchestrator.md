@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-orchestrator
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract, feature-managed-fallback-target-parity-codex-adapter]
@@ -140,7 +140,7 @@ explicit and no target-specific CLI side channel is needed:
     recovery, retry behavior, publication, rollback, load verification, and
     foreground result rendering remain on the current shared path.
 
-## Implementation notes
+## Implementation constraints
 
 - The target-specific work in this story is limited to the adapter resolved by
   `registry.adapter(target)`. The CLI must not match on a target id string to
@@ -208,3 +208,16 @@ explicit and no target-specific CLI side channel is needed:
   the minimal proof needed to protect the dispatch flip.
 - Any concrete adapter for a new target.
 - Claude managed-project lifecycle changes.
+
+## Implementation notes
+
+- Execution capability: highest, selected by the active autopilot run because this story changes the shared mutation, ownership, retry, and adapter-dispatch boundary.
+- Review weight: standard (project/default autopilot policy).
+- Files changed: `crates/cli/src/application.rs`, `crates/cli/src/application/lifecycle.rs`, and `crates/cli/src/application/tests.rs`.
+- Tests added: one non-Codex fake adapter/port lifecycle test that proves registry-selected `Apply` and source-free `Remove`, direct manifest/fingerprint persistence, target-local state, and shared defense-in-depth omission acknowledgment.
+- Simplification: removed the specialized Codex planner/context and direct `CodexManagedProjection` CLI dependency; production now has one registry-selected managed-project path and no split-contract remnants.
+- Source and evidence flow: apply resolves exactly one checkout in CLI; plugin source selection remains inventory-first and target-state-second; removal resolves no checkout; the adapter plan's manifest and fingerprints are consumed directly.
+- Verification: `cargo test --workspace --all-targets --no-fail-fast` (564 passed), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, `git diff --check`, and ten consecutive focused application lifecycle runs passed.
+- Required greps: specialized planner/context, `CodexManagedProjection`, and split-contract symbols have zero CLI matches; the production managed orchestrator/lifecycle files have zero `HarnessId::new("codex")` matches. The broader literal grep still reports pre-existing test-fixture identities outside shared dispatch, which were deliberately left unchanged to preserve this story's ownership boundary and assertions.
+- Discrepancies from design: none in production behavior or architecture; the broad test-inclusive literal grep caveat above is a pre-existing fixture-scope mismatch in the acceptance command, not a shared-CLI dispatch dependency.
+- Adjacent issues parked: none.

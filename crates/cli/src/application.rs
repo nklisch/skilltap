@@ -56,11 +56,11 @@ use skilltap_core::{
     },
 };
 use skilltap_harnesses::{
-    CodexManagedProjection, DetectionError, GitSourceRevisionResolver, ManagedLifecycleKind,
-    ManagedProjectionContext, ManagedProjectionInput, NativeLifecycleAction,
-    NativeLifecycleDispatch, NativeLifecyclePort, NativeLifecycleRequest, NativeObservationFailure,
-    NativeResourceObservation, ObservedNativeRevisionResolver, detect_configured_installation,
-    native_arguments, normalize_observations, observe_native_resource,
+    DetectionError, GitSourceRevisionResolver, ManagedLifecycleKind, ManagedProjectionContext,
+    ManagedProjectionInput, NativeLifecycleAction, NativeLifecycleDispatch, NativeLifecyclePort,
+    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation,
+    ObservedNativeRevisionResolver, detect_configured_installation, native_arguments,
+    normalize_observations, observe_native_resource,
 };
 
 pub(super) struct DetectionDiagnostic {
@@ -1343,7 +1343,7 @@ struct PlannedManagedProjectLifecycle {
     seed: Option<ResourceState>,
 }
 
-struct ManagedCodexProjectPlanContext<'a> {
+struct ManagedProjectPlanContext<'a> {
     project: &'a AbsolutePath,
     documents: &'a StatusDocuments,
     paths: &'a PlatformPaths,
@@ -1353,13 +1353,27 @@ struct ManagedCodexProjectPlanContext<'a> {
     filesystem: &'a dyn ManagedProjectFileSystem,
 }
 
-fn plan_managed_codex_project_lifecycle(
+fn plan_managed_project_lifecycle(
+    registry: &skilltap_harnesses::TargetRegistry,
+    target: &HarnessId,
     kind: NativeLifecycleKind,
     request: &NativeLifecycleSpec,
     resource: &DesiredResource,
-    context: ManagedCodexProjectPlanContext<'_>,
+    context: ManagedProjectPlanContext<'_>,
 ) -> Result<PlannedManagedProjectLifecycle, ErrorDetail> {
-    let ManagedCodexProjectPlanContext {
+    let adapter = registry.adapter(target).ok_or_else(|| {
+        managed_project_error(
+            "managed_project_target_unregistered",
+            "The selected managed project target is not registered.",
+        )
+    })?;
+    let port = adapter.managed_projection().ok_or_else(|| {
+        managed_project_error(
+            "managed_project_projection_unsupported",
+            "The selected target does not provide managed project projection.",
+        )
+    })?;
+    let ManagedProjectPlanContext {
         project,
         documents,
         paths,
@@ -1368,15 +1382,14 @@ fn plan_managed_codex_project_lifecycle(
         acknowledged,
         filesystem,
     } = context;
-    let codex = HarnessId::new("codex").expect("static harness id is valid");
     let existing_state = documents
         .state
         .as_ref()
         .and_then(|state| state.resources().get(resource.key()));
-    let target_state = existing_state.and_then(|state| state.target(&codex));
+    let target_state = existing_state.and_then(|state| state.target(target));
     let operation_id = lifecycle_operation_id(
         kind,
-        &codex,
+        target,
         &Scope::Project(project.clone()),
         resource.key(),
     );
@@ -1460,7 +1473,7 @@ fn plan_managed_codex_project_lifecycle(
                         .state
                         .as_ref()
                         .and_then(|state| state.resources().get(&marketplace_key))
-                        .and_then(|state| state.target(&codex))
+                        .and_then(|state| state.target(target))
                         .and_then(TargetResourceState::source)
                 })
                 .cloned()
@@ -1475,7 +1488,7 @@ fn plan_managed_codex_project_lifecycle(
         _ => {
             return Err(managed_project_error(
                 "managed_project_resource_invalid",
-                "Only Codex project marketplace and plugin resources can use this managed lifecycle.",
+                "Only project marketplace and plugin resources can use managed projection.",
             ));
         }
     };
@@ -1493,9 +1506,9 @@ fn plan_managed_codex_project_lifecycle(
             .as_ref()
             .map(|source| source.locator().clone()),
     };
-    let plan = CodexManagedProjection::static_ref()
+    let plan = port
         .plan(&ManagedProjectionContext {
-            target: &codex,
+            target,
             project,
             paths,
             resource_key: resource.key(),
@@ -1514,6 +1527,16 @@ fn plan_managed_codex_project_lifecycle(
     let mut managed_projections = plan.manifest;
     managed_projections.sort();
     managed_projections.dedup();
+    if !acknowledged
+        && managed_projections
+            .iter()
+            .any(|projection| matches!(projection, ManagedProjection::Omitted { .. }))
+    {
+        return Err(managed_project_error(
+            "partial_operation_requires_acknowledgment",
+            "The managed project plan omits optional components; rerun with `--yes` to accept the reported loss.",
+        ));
+    }
     let files = plan
         .files
         .into_iter()
@@ -1536,11 +1559,14 @@ fn plan_managed_codex_project_lifecycle(
     validate_managed_project_ownership(
         kind,
         existing_state,
-        current_fingerprint.as_ref(),
-        fingerprint.as_ref(),
-        &managed_projections,
-        installed_revision.as_ref(),
-        &operation_id,
+        target,
+        ManagedProjectOwnershipEvidence {
+            current_fingerprint: current_fingerprint.as_ref(),
+            desired_fingerprint: fingerprint.as_ref(),
+            desired_projections: &managed_projections,
+            installed_revision: installed_revision.as_ref(),
+            operation_id: &operation_id,
+        },
     )?;
     let mut surfaces = files
         .iter()
@@ -1556,7 +1582,7 @@ fn plan_managed_codex_project_lifecycle(
     }));
     let operation = skilltap_core::lifecycle_operation::managed_materialization_operation(
         operation_id,
-        codex.clone(),
+        target.clone(),
         resource.key().clone(),
         request.operation_action(),
         surfaces,
@@ -1564,7 +1590,7 @@ fn plan_managed_codex_project_lifecycle(
     .map_err(|_| {
         managed_project_error(
             "operation_contract_invalid",
-            "The managed Codex project operation could not be represented safely.",
+            "The managed project operation could not be represented safely.",
         )
     })?;
     let seed = if removal {
@@ -1572,7 +1598,7 @@ fn plan_managed_codex_project_lifecycle(
     } else {
         Some(
             TargetResourceState::new(
-                codex,
+                target.clone(),
                 Some(request.native_name.clone()),
                 Provenance::Materialized,
                 Ownership::Skilltap,
@@ -1589,7 +1615,7 @@ fn plan_managed_codex_project_lifecycle(
             .map_err(|_| {
                 managed_project_error(
                     "state_seed_invalid",
-                    "The managed Codex project state evidence is invalid.",
+                    "The managed project state evidence is invalid.",
                 )
             })?,
         )
@@ -1697,15 +1723,27 @@ type ObservedManagedProjectTree = (
     BTreeMap<skilltap_core::domain::RelativeArtifactPath, ArtifactFile>,
 );
 
+struct ManagedProjectOwnershipEvidence<'a> {
+    current_fingerprint: Option<&'a Fingerprint>,
+    desired_fingerprint: Option<&'a Fingerprint>,
+    desired_projections: &'a [ManagedProjection],
+    installed_revision: Option<&'a skilltap_core::domain::ResolvedRevision>,
+    operation_id: &'a OperationId,
+}
+
 fn validate_managed_project_ownership(
     kind: NativeLifecycleKind,
     state: Option<&ResourceState>,
-    current_fingerprint: Option<&Fingerprint>,
-    desired_fingerprint: Option<&Fingerprint>,
-    desired_projections: &[ManagedProjection],
-    installed_revision: Option<&skilltap_core::domain::ResolvedRevision>,
-    operation_id: &OperationId,
+    target: &HarnessId,
+    evidence: ManagedProjectOwnershipEvidence<'_>,
 ) -> Result<(), ErrorDetail> {
+    let ManagedProjectOwnershipEvidence {
+        current_fingerprint,
+        desired_fingerprint,
+        desired_projections,
+        installed_revision,
+        operation_id,
+    } = evidence;
     if let Some(current_fingerprint) = current_fingerprint {
         let state = state.ok_or_else(|| {
             managed_project_error(
@@ -1713,11 +1751,10 @@ fn validate_managed_project_ownership(
                 "The existing managed destination has no skilltap ownership record.",
             )
         })?;
-        let codex = HarnessId::new("codex").expect("static harness id is valid");
-        let state = state.target(&codex).ok_or_else(|| {
+        let state = state.target(target).ok_or_else(|| {
             managed_project_error(
                 "managed_project_unowned",
-                "The existing managed destination has no Codex ownership binding.",
+                "The existing managed destination has no ownership binding for the selected target.",
             )
         })?;
         if state.ownership() != Ownership::Skilltap

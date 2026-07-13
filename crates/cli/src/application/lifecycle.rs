@@ -517,11 +517,13 @@ impl StatusApplication<'_> {
                                 ));
                             }
                         };
-                        let planned = match plan_managed_codex_project_lifecycle(
+                        let planned = match plan_managed_project_lifecycle(
+                            self.registry,
+                            target_id,
                             kind,
                             &request,
                             &resource,
-                            ManagedCodexProjectPlanContext {
+                            ManagedProjectPlanContext {
                                 project,
                                 documents: &documents,
                                 paths: &paths,

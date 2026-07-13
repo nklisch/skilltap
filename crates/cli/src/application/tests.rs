@@ -442,6 +442,144 @@ fn codex_target() -> TargetArgs {
     }
 }
 
+struct FakeManagedAdapter;
+struct FakeManagedProjection;
+
+static FAKE_MANAGED_ADAPTER: FakeManagedAdapter = FakeManagedAdapter;
+static FAKE_MANAGED_PROJECTION: FakeManagedProjection = FakeManagedProjection;
+
+impl skilltap_harnesses::HarnessAdapter for FakeManagedAdapter {
+    fn identity(&self) -> skilltap_harnesses::TargetIdentity {
+        skilltap_harnesses::TargetIdentity {
+            id: fake_target_id(),
+            display_name: "Fake Managed",
+            distribution_surface: skilltap_harnesses::DistributionSurface::Managed,
+        }
+    }
+
+    fn version_arguments(&self) -> Vec<OsString> {
+        vec![OsString::from("--version")]
+    }
+
+    fn decode_version(
+        &self,
+        _stdout: &[u8],
+    ) -> Result<skilltap_core::domain::NativeVersion, DetectionError> {
+        skilltap_core::domain::NativeVersion::new("test")
+            .map_err(|_| DetectionError::InvalidVersion)
+    }
+
+    fn select_profile(
+        &self,
+        _version: &skilltap_core::domain::NativeVersion,
+    ) -> skilltap_core::domain::CapabilityProfileSelection {
+        skilltap_core::domain::CapabilityProfileSelection::unknown_version(
+            skilltap_core::domain::ScopedCapabilitySets::new(
+                skilltap_core::domain::CapabilitySet::default(),
+                skilltap_core::domain::CapabilitySet::default(),
+            ),
+        )
+    }
+
+    fn observe(
+        &self,
+        _paths: &PlatformPaths,
+        _scope: &Scope,
+        _limits: ExternalTreeLimits,
+    ) -> Result<skilltap_harnesses::AdapterObservationPaths, skilltap_harnesses::ObservationPathError>
+    {
+        Ok(skilltap_harnesses::AdapterObservationPaths {
+            canonical: Vec::new(),
+            project_entry_count: None,
+            surface_labels: Vec::new(),
+        })
+    }
+
+    fn managed_projection(&self) -> Option<&dyn skilltap_harnesses::ManagedProjectionPort> {
+        Some(&FAKE_MANAGED_PROJECTION)
+    }
+
+    fn managed_project_lifecycle(&self) -> bool {
+        true
+    }
+}
+
+impl skilltap_harnesses::ManagedProjectionPort for FakeManagedProjection {
+    fn plan(
+        &self,
+        context: &ManagedProjectionContext<'_>,
+    ) -> Result<
+        skilltap_core::managed_projection::ManagedProjectionPlan,
+        skilltap_core::managed_projection::ManagedProjectionError,
+    > {
+        let destination = RelativeArtifactPath::new(".fake/managed-marketplace").unwrap();
+        let current = context
+            .filesystem
+            .read_regular_bounded_no_follow(context.project, &destination, 4096)
+            .map_err(
+                |_| skilltap_core::managed_projection::ManagedProjectionError::Other {
+                    code: "fake_projection_unreadable",
+                    summary: "The fake managed projection could not be read.",
+                },
+            )?;
+        let (desired, manifest) = match &context.input {
+            ManagedProjectionInput::Apply { checkout } => {
+                assert_eq!(
+                    checkout.root().as_str(),
+                    checkout.source().locator().as_str()
+                );
+                let desired = checkout.source().locator().as_str().as_bytes().to_vec();
+                let manifest = vec![ManagedProjection::Omitted {
+                    id: skilltap_core::domain::ComponentId::new("optional:fake-hook").unwrap(),
+                    consequence: skilltap_core::domain::EvidenceCode::new(
+                        "fake_optional_component_omitted",
+                    )
+                    .unwrap(),
+                }];
+                (Some(desired), manifest)
+            }
+            ManagedProjectionInput::Remove => (None, Vec::new()),
+        };
+        Ok(skilltap_core::managed_projection::ManagedProjectionPlan {
+            files: vec![ManagedFileWrite {
+                root: context.project.clone(),
+                destination,
+                expected: current.clone(),
+                desired: desired.clone(),
+            }],
+            manifest,
+            current_fingerprint: current.as_deref().map(fingerprint_contents),
+            desired_fingerprint: desired.as_deref().map(fingerprint_contents),
+            ..skilltap_core::managed_projection::ManagedProjectionPlan::default()
+        })
+    }
+}
+
+fn fake_target_id() -> HarnessId {
+    HarnessId::new("fake-managed").unwrap()
+}
+
+fn fake_target() -> TargetArgs {
+    TargetArgs {
+        target: Some(skilltap_core::domain::TargetSelection::Only(
+            fake_target_id(),
+        )),
+    }
+}
+
+fn enable_fake_managed_only(paths: &PlatformPaths) {
+    let filesystem = SystemFileSystem;
+    let repository =
+        FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    repository
+        .replace(
+            &ConfigDocument::defaults()
+                .with_harness_enabled(&fake_target_id(), true)
+                .unwrap(),
+        )
+        .unwrap();
+}
+
 fn execute_managed_lifecycle(
     paths: &PlatformPaths,
     project: &Path,
@@ -482,11 +620,160 @@ fn execute_managed_lifecycle(
     )
 }
 
+fn execute_fake_managed_lifecycle(
+    paths: &PlatformPaths,
+    project: &Path,
+    kind: NativeLifecycleKind,
+    source: Option<&str>,
+    name: Option<&str>,
+    acknowledged: bool,
+) -> Outcome {
+    let filesystem = SystemFileSystem;
+    let config = FileConfigRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let inventory =
+        FileInventoryRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let state = FileStateRepository::new(&filesystem, paths.skilltap_config().clone()).unwrap();
+    let working_directory = FixedWorkingDirectory(absolute(project));
+    let git = NoGitRoot;
+    let scopes = ScopeResolver::new(&filesystem, &working_directory, &git);
+    let registry = skilltap_harnesses::TargetRegistry::new([
+        skilltap_harnesses::CodexAdapter::static_ref(),
+        skilltap_harnesses::ClaudeAdapter::static_ref(),
+        &FAKE_MANAGED_ADAPTER as &'static dyn skilltap_harnesses::HarnessAdapter,
+    ]);
+    StatusApplication {
+        config: &config,
+        inventory: &inventory,
+        state: &state,
+        scopes: &scopes,
+        working_directory: &working_directory,
+        native_observation: NativeObservationMode::Disabled,
+        registry: &registry,
+        test_platform_paths: Some(paths.clone()),
+        test_managed_project_filesystem: Some(&filesystem),
+    }
+    .execute_native_lifecycle(
+        "fake managed lifecycle test",
+        kind,
+        &managed_scope(project),
+        &fake_target(),
+        NativeLifecycleValues { source, name },
+        acknowledged,
+    )
+}
+
 fn assert_changed(outcome: &Outcome, expected: bool) {
     assert_eq!(
         outcome.summary.get("changed"),
         Some(&OutputValue::Boolean(expected)),
         "outcome: {outcome:?}"
+    );
+}
+
+#[test]
+fn non_codex_managed_port_drives_apply_acknowledgment_evidence_and_source_free_remove() {
+    let root = TempRoot::new("skilltap-fake-managed-projection").unwrap();
+    let paths = isolated_platform_paths(&root);
+    enable_fake_managed_only(&paths);
+    let project = root.join("project");
+    let source = root.join("marketplace");
+    fs::create_dir_all(&project).unwrap();
+    fs::create_dir_all(&source).unwrap();
+    let destination = project.join(".fake/managed-marketplace");
+
+    let blocked = execute_fake_managed_lifecycle(
+        &paths,
+        &project,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+        false,
+    );
+    assert_eq!(
+        blocked.result,
+        ResultClass::AttentionRequired,
+        "{blocked:?}"
+    );
+    assert!(
+        blocked
+            .errors
+            .iter()
+            .any(|error| error.code == "partial_operation_requires_acknowledgment"),
+        "{blocked:?}"
+    );
+    assert!(!destination.exists());
+
+    let added = execute_fake_managed_lifecycle(
+        &paths,
+        &project,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(source.to_str().unwrap()),
+        Some("team"),
+        true,
+    );
+    assert_eq!(added.result, ResultClass::Completed, "{added:?}");
+    assert_changed(&added, true);
+    let projected = source.to_str().unwrap().as_bytes().to_vec();
+    assert_eq!(fs::read(&destination).unwrap(), projected);
+
+    let state =
+        FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone()).unwrap();
+    let state = match state.load().unwrap() {
+        DocumentState::Present(state) => state,
+        DocumentState::Missing => panic!("fake managed projection must persist state"),
+    };
+    let project_scope = absolute(&project);
+    let key = ResourceKey::new(
+        ResourceId::new("marketplace:team").unwrap(),
+        Scope::Project(project_scope),
+    );
+    let target = state
+        .resources()
+        .get(&key)
+        .and_then(|resource| resource.target(&fake_target_id()))
+        .expect("fake managed target state");
+    assert_eq!(
+        target
+            .source()
+            .map(Source::locator)
+            .map(SourceLocator::as_str),
+        source.to_str()
+    );
+    assert_eq!(
+        target.fingerprint(),
+        Some(&fingerprint_contents(&projected))
+    );
+    assert!(matches!(
+        target.managed_projections(),
+        [ManagedProjection::Omitted { id, consequence }]
+            if id.as_str() == "optional:fake-hook"
+                && consequence.as_str() == "fake_optional_component_omitted"
+    ));
+
+    fs::remove_dir_all(&source).unwrap();
+    let removed = execute_fake_managed_lifecycle(
+        &paths,
+        &project,
+        NativeLifecycleKind::MarketplaceRemove,
+        None,
+        Some("team"),
+        false,
+    );
+    assert_eq!(removed.result, ResultClass::Completed, "{removed:?}");
+    assert_changed(&removed, true);
+    assert!(!destination.exists());
+    let state =
+        FileStateRepository::new(&SystemFileSystem, paths.skilltap_config().clone()).unwrap();
+    let state = match state.load().unwrap() {
+        DocumentState::Present(state) => state,
+        DocumentState::Missing => panic!("removal must preserve the state document"),
+    };
+    assert!(
+        state
+            .resources()
+            .get(&key)
+            .and_then(|resource| resource.target(&fake_target_id()))
+            .is_none()
     );
 }
 
@@ -1497,7 +1784,9 @@ fn managed_pending_writer_and_recovery_use_exact_first_install_and_update_shapes
             state: &repository,
             seeds,
         };
-        let operation_id = plan.iter().next().unwrap().1.id().clone();
+        let operation = plan.iter().next().unwrap().1;
+        let operation_id = operation.id().clone();
+        let target_id = operation.target().clone();
         journal
             .record(&OperationResult::new(operation_id.clone(), OperationOutcome::Pending).unwrap())
             .unwrap();
@@ -1530,11 +1819,14 @@ fn managed_pending_writer_and_recovery_use_exact_first_install_and_update_shapes
                     NativeLifecycleKind::PluginInstall
                 },
                 document.resources().get(&key),
-                Some(&desired_fingerprint),
-                Some(&desired_fingerprint),
-                &desired_projections,
-                None,
-                &operation_id,
+                &target_id,
+                ManagedProjectOwnershipEvidence {
+                    current_fingerprint: Some(&desired_fingerprint),
+                    desired_fingerprint: Some(&desired_fingerprint),
+                    desired_projections: &desired_projections,
+                    installed_revision: None,
+                    operation_id: &operation_id,
+                },
             )
             .is_ok()
         );
