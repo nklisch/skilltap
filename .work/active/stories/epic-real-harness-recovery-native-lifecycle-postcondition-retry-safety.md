@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-postcondition-retry-safety
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -48,3 +48,12 @@ presence already holds.
   retry mutation and requires a fresh successful postcondition.
 - Indeterminate observation never authorizes a duplicate mutation.
 - Failed post-observation still never publishes an `Applied` journal result.
+
+## Implementation notes
+
+- Execution capability: strongest inline implementation due native mutation and persisted-journal risk.
+- Review weight: highest from the caller's autopilot instruction.
+- Files changed: native lifecycle planning/execution, native-port locked revalidation, the native no-op operation constructor, and isolated compiled regressions.
+- Tests added: recovered install/remove no-op, opposite-state single retry, indeterminate no-mutation, and under-lock observation race coverage.
+- Discrepancies from design: native failed-attempt bindings are retained as recovery evidence while managed projection seeds remain success-only; this preserves the ownership safety introduced by the managed projection work.
+- Adjacent issues parked: none.

@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-postconditions
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -75,3 +75,10 @@ escalated for native mutation and persisted-journal correctness. Typed failure,
 expected-presence/removal, prior-success no-repeat, scope parsing, and isolated
 plain/JSON tests were inspected. A disposable HOME/XDG/Claude-root reproduction
 proved the retry mutation; no operator configuration was read or written.
+
+## Repair notes (2026-07-12)
+
+- Failed native first attempts now retain only native/harness-owned recovery evidence; managed projection seeds remain success-only.
+- Every prior lifecycle attempt is freshly observed before retry. Desired state becomes a journaled no-op, opposite state permits one mutation, and indeterminate state remains mutation-free.
+- Verified no-op evidence is re-observed by the native port under the configuration lock before `NoChange` is journaled, closing the planning-to-apply race.
+- Isolated regressions cover install and removal recovery, opposite-state retry, mutation counts, journal transitions, and a deliberate revalidation race.

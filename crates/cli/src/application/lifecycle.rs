@@ -1,5 +1,22 @@
 use super::*;
 
+fn previously_attempted(
+    state: Option<&StateDocument>,
+    resource: &ResourceKey,
+    target: &HarnessId,
+    operation: &OperationId,
+) -> bool {
+    if previously_applied(state, resource, target, operation) {
+        return true;
+    }
+    state
+        .and_then(|state| state.resources().get(resource))
+        .and_then(|state| state.target(target))
+        .and_then(|state| state.last_apply())
+        .and_then(|apply| apply.operations().get(operation))
+        .is_some()
+}
+
 impl StatusApplication<'_> {
     #[allow(dead_code)]
     pub(crate) fn execute_daemon_cycle(&self) -> Outcome {
@@ -597,13 +614,13 @@ impl StatusApplication<'_> {
                     let operation_id =
                         lifecycle_operation_id(kind, target_id, concrete_scope, resource.key());
                     native_ids.insert(target_id.clone(), request.native_name.clone());
-                    let journal_says_applied = previously_applied(
+                    let journal_has_attempt = previously_attempted(
                         documents.state.as_ref(),
                         resource.key(),
                         target_id,
                         &operation_id,
                     );
-                    let requires_fresh_precondition = journal_says_applied || removal;
+                    let requires_fresh_precondition = journal_has_attempt || removal;
                     let fresh_presence = if requires_fresh_precondition {
                         observe_native_resource(
                             configured.clone(),
@@ -624,17 +641,55 @@ impl StatusApplication<'_> {
                         )
                     };
                     if requires_fresh_precondition {
-                        match (fresh_presence, removal, journal_says_applied) {
+                        match (fresh_presence, removal, journal_has_attempt) {
                             (NativeResourceObservation::Present { .. }, false, true)
                             | (NativeResourceObservation::Missing, true, _) => {
-                                outcome = outcome.with_operation(
-                                    crate::OperationOutcome::new(
-                                        operation_id.to_string(),
-                                        "no_change",
-                                    )
-                                    .with_field("target", target_id.as_str())
-                                    .with_field("scope", scope_label(concrete_scope)),
-                                );
+                                if journal_has_attempt {
+                                    let command_arguments = match command_arguments(arguments) {
+                                        Ok(arguments) => arguments,
+                                        Err(_) => {
+                                            outcome.result = ResultClass::Invalid;
+                                            return outcome.with_error(ErrorDetail::new(
+                                                "native_argument_encoding",
+                                                "The native lifecycle arguments could not be represented safely.",
+                                            ));
+                                        }
+                                    };
+                                    let operation = match skilltap_core::lifecycle_operation::native_noop_operation(
+                                        operation_id.clone(),
+                                        target_id.clone(),
+                                        resource.key().clone(),
+                                        request.operation_action(),
+                                        executable,
+                                        command_arguments,
+                                    ) {
+                                        Ok(operation) => operation,
+                                        Err(_) => {
+                                            outcome.result = ResultClass::Invalid;
+                                            return outcome.with_error(ErrorDetail::new(
+                                                "operation_contract_invalid",
+                                                "The verified native no-change operation could not be constructed safely.",
+                                            ));
+                                        }
+                                    };
+                                    operations.push(operation);
+                                    requests.push((
+                                        operation_id,
+                                        configured,
+                                        search_path.clone(),
+                                        process_limits,
+                                        native_request,
+                                    ));
+                                } else {
+                                    outcome = outcome.with_operation(
+                                        crate::OperationOutcome::new(
+                                            operation_id.to_string(),
+                                            "no_change",
+                                        )
+                                        .with_field("target", target_id.as_str())
+                                        .with_field("scope", scope_label(concrete_scope)),
+                                    );
+                                }
                                 continue;
                             }
                             (NativeResourceObservation::Missing, false, true)
@@ -874,6 +929,17 @@ impl StatusApplication<'_> {
                 entries: managed_entries,
             },
         };
+        let acknowledged_omissions = seeds
+            .values()
+            .flat_map(|resource| resource.targets().values())
+            .flat_map(TargetResourceState::managed_projections)
+            .filter_map(|projection| match projection {
+                ManagedProjection::Omitted { id, consequence } => {
+                    Some((id.as_str().to_owned(), consequence.as_str().to_owned()))
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
         let journal = StateExecutionJournal {
             plan: &plan,
             state: self.state,
@@ -897,17 +963,25 @@ impl StatusApplication<'_> {
                 Ok(report) => report,
                 Err(error) => {
                     outcome.result = ResultClass::AttentionRequired;
-                    return outcome
-                    .with_error(native_execution_error(&error))
-                    .with_next_action(NextAction::new(
+                    let action = NextAction::new(
                         "reobserve_before_retry",
                         "Re-observe the selected harness before retrying the lifecycle operation.",
-                    ));
+                    );
+                    return outcome
+                        .with_error(native_execution_error(&error).with_next_action(action.clone()))
+                        .with_next_action(action);
                 }
             };
         let observation = NativeObservation::run(&documents, &scope, &targets);
         for resource in observation.resources.iter().cloned() {
             outcome = outcome.with_resource(resource);
+        }
+        for (id, consequence) in acknowledged_omissions {
+            outcome = outcome.with_resource(
+                OutputEntry::new(format!("omitted:{id}"), "omitted")
+                    .with_field("component", id)
+                    .with_field("consequence", consequence),
+            );
         }
         for warning in observation.warnings.iter().cloned() {
             outcome = outcome.with_warning(warning);

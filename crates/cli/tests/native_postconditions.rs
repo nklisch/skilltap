@@ -92,13 +92,14 @@ if [ "${{1-}} ${{2-}}" = "plugin uninstall" ]; then
   current=good
   if [ -f '{mode}' ]; then read current < '{mode}'; fi
   if [ "$current" != "expected_missing" ]; then /bin/rm -f '{present}'; fi
+  if [ "$current" = "remove_post_invalid" ]; then printf '%s' 'invalid_json' > '{mode}'; fi
   exit 0
 fi
 if [ "${{1-}} ${{2-}}" = "plugin list" ]; then
   current=good
   if [ -f '{mode}' ]; then read current < '{mode}'; fi
   case "$current" in
-    good)
+    good|remove_post_invalid)
       if [ -f '{present}' ]; then printf '%s' '{{"plugins":[{{"name":"formatter@team","scope":"user"}}]}}'; else printf '%s' '{{"plugins":[]}}'; fi
       exit 0 ;;
     command_failed) exit 17 ;;
@@ -107,6 +108,13 @@ if [ "${{1-}} ${{2-}}" = "plugin list" ]; then
     ambiguous_scope) printf '%s' '{{"plugins":[{{"name":"formatter@team"}}]}}'; exit 0 ;;
     expected_present) printf '%s' '{{"plugins":[]}}'; exit 0 ;;
     expected_missing) printf '%s' '{{"plugins":[{{"name":"formatter@team","scope":"user"}}]}}'; exit 0 ;;
+    race_missing)
+      calls=0
+      if [ -f '{mode}.race' ]; then read calls < '{mode}.race'; fi
+      calls=$((calls + 1))
+      printf '%s' "$calls" > '{mode}.race'
+      if [ "$calls" = 1 ]; then printf '%s' '{{"plugins":[{{"name":"formatter@team","scope":"user"}}]}}'; else printf '%s' '{{"plugins":[]}}'; fi
+      exit 0 ;;
   esac
 fi
 exit 0
@@ -332,7 +340,18 @@ fn native_postcondition_failures_are_typed_and_never_journal_success() {
             "mode={mode_name}"
         );
         assert_eq!(
-            value["errors"][0]["next_actions"][0]["code"], "reobserve_before_retry",
+            value["next_actions"][0]["code"], "reobserve_before_retry",
+            "mode={mode_name}"
+        );
+        assert_eq!(value["next_actions"].as_array().unwrap().len(), 1);
+        assert!(
+            value["errors"][0]["next_actions"]
+                .as_array()
+                .is_none_or(Vec::is_empty),
+            "mode={mode_name}"
+        );
+        assert_eq!(
+            value["next_actions"][0]["command"], "skilltap status --json",
             "mode={mode_name}"
         );
         let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
@@ -399,13 +418,13 @@ fn prior_success_with_indeterminate_observation_does_not_repeat_mutation() {
         captured_stdout(&first).unwrap()
     );
     assert_eq!(json(&first)["summary"]["changed"], true);
-    let state = fs::read(config_root(&machine).join("state.json")).unwrap();
     assert_eq!(fs::read_to_string(&count).unwrap(), "1");
 
     let repeat = install(&machine);
     assert_eq!(repeat.status.code(), Some(0));
     assert_eq!(json(&repeat)["summary"]["changed"], false);
     assert_eq!(fs::read_to_string(&count).unwrap(), "1");
+    let state = fs::read(config_root(&machine).join("state.json")).unwrap();
 
     fs::write(&mode, "invalid_json").unwrap();
     let uncertain = install(&machine);
@@ -423,5 +442,107 @@ fn prior_success_with_indeterminate_observation_does_not_repeat_mutation() {
     assert_eq!(
         fs::read(config_root(&machine).join("state.json")).unwrap(),
         state
+    );
+}
+
+#[test]
+fn failed_install_postobservation_recovers_as_verified_noop_without_duplicate_mutation() {
+    let machine = IsolatedMachine::new("skilltap-native-failed-install-recovery").unwrap();
+    let mode = machine.home().join("mode");
+    let present = machine.home().join("present");
+    let count = machine.home().join("mutation-count");
+    fs::write(&mode, "invalid_json").unwrap();
+    let fixture = write_fixture(&machine, &mode, &present, &count);
+    configure(&machine, &fixture);
+
+    let failed = install(&machine);
+    assert_eq!(failed.status.code(), Some(2));
+    assert!(
+        config_root(&machine).join("state.json").is_file(),
+        "{}",
+        captured_stdout(&failed).unwrap()
+    );
+    assert_eq!(fs::read_to_string(&count).unwrap(), "1");
+    assert!(present.is_file());
+
+    fs::write(&mode, "good").unwrap();
+    let recovered = install(&machine);
+    assert_eq!(recovered.status.code(), Some(0));
+    let value = json(&recovered);
+    assert_eq!(value["summary"]["changed"], false);
+    assert_eq!(value["operations"][0]["status"], "no_change");
+    assert_eq!(fs::read_to_string(&count).unwrap(), "1");
+    let state = fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(state.contains("\"status\": \"no_change\""));
+}
+
+#[test]
+fn failed_install_postobservation_retries_once_when_resource_is_really_missing() {
+    let machine = IsolatedMachine::new("skilltap-native-failed-install-retry").unwrap();
+    let mode = machine.home().join("mode");
+    let present = machine.home().join("present");
+    let count = machine.home().join("mutation-count");
+    fs::write(&mode, "invalid_json").unwrap();
+    let fixture = write_fixture(&machine, &mode, &present, &count);
+    configure(&machine, &fixture);
+
+    assert_eq!(install(&machine).status.code(), Some(2));
+    fs::remove_file(&present).unwrap();
+    fs::write(&mode, "good").unwrap();
+    let retried = install(&machine);
+    assert_eq!(retried.status.code(), Some(0));
+    assert_eq!(json(&retried)["summary"]["changed"], true);
+    assert_eq!(fs::read_to_string(&count).unwrap(), "2");
+    assert!(present.is_file());
+}
+
+#[test]
+fn failed_remove_postobservation_recovers_as_verified_noop_without_duplicate_mutation() {
+    let machine = IsolatedMachine::new("skilltap-native-failed-remove-recovery").unwrap();
+    let mode = machine.home().join("mode");
+    let present = machine.home().join("present");
+    let count = machine.home().join("mutation-count");
+    fs::write(&mode, "good").unwrap();
+    let fixture = write_fixture(&machine, &mode, &present, &count);
+    configure(&machine, &fixture);
+
+    assert_eq!(install(&machine).status.code(), Some(0));
+    fs::write(&mode, "remove_post_invalid").unwrap();
+    let failed = remove(&machine);
+    assert_eq!(failed.status.code(), Some(2));
+    assert!(!present.exists());
+    assert_eq!(fs::read_to_string(&count).unwrap(), "2");
+
+    fs::write(&mode, "good").unwrap();
+    let recovered = remove(&machine);
+    assert_eq!(recovered.status.code(), Some(0));
+    let value = json(&recovered);
+    assert_eq!(value["summary"]["changed"], false);
+    assert_eq!(value["operations"][0]["status"], "no_change");
+    assert_eq!(fs::read_to_string(&count).unwrap(), "2");
+}
+
+#[test]
+fn recovered_noop_is_reobserved_under_lock_before_journaling() {
+    let machine = IsolatedMachine::new("skilltap-native-noop-revalidation").unwrap();
+    let mode = machine.home().join("mode");
+    let present = machine.home().join("present");
+    let count = machine.home().join("mutation-count");
+    fs::write(&mode, "invalid_json").unwrap();
+    let fixture = write_fixture(&machine, &mode, &present, &count);
+    configure(&machine, &fixture);
+
+    assert_eq!(install(&machine).status.code(), Some(2));
+    let failed_state = fs::read(config_root(&machine).join("state.json")).unwrap();
+    fs::write(&mode, "race_missing").unwrap();
+
+    let raced = install(&machine);
+    assert_eq!(raced.status.code(), Some(2));
+    let value = json(&raced);
+    assert_eq!(value["errors"][0]["code"], "stale_native_evidence");
+    assert_eq!(fs::read_to_string(&count).unwrap(), "1");
+    assert_eq!(
+        fs::read(config_root(&machine).join("state.json")).unwrap(),
+        failed_state
     );
 }

@@ -556,6 +556,44 @@ impl ExecutionPort for NativeLifecyclePort {
                     .expect("static evidence detail is valid"),
                 ));
             }
+            if operation.class() == skilltap_core::domain::OperationClass::NoOp {
+                let observation = observe_native_resource(
+                    entry.configured.clone(),
+                    entry.search_path.clone(),
+                    &self.environment,
+                    &entry.request,
+                    entry.limits,
+                    entry.json_limits,
+                )
+                .map_err(|_| {
+                    native_noop_revalidation_failure(
+                        "native.noop_observation_unavailable",
+                        "Fresh native no-change evidence could not be re-observed under the configuration lock.",
+                    )
+                })?;
+                verify_lifecycle_postcondition(entry.request.action, observation).map_err(
+                    |error| match error {
+                        LifecyclePostconditionError::ObservationFailed(failure) => {
+                            native_noop_revalidation_failure(
+                                failure.diagnostic_code(),
+                                failure.summary(),
+                            )
+                        }
+                        LifecyclePostconditionError::ExpectedPresent => {
+                            native_noop_revalidation_failure(
+                                "native.noop_expected_present",
+                                "The resource was no longer present when no-change evidence was revalidated.",
+                            )
+                        }
+                        LifecyclePostconditionError::ExpectedMissing => {
+                            native_noop_revalidation_failure(
+                                "native.noop_expected_missing",
+                                "The resource was present when removal no-change evidence was revalidated.",
+                            )
+                        }
+                    },
+                )?;
+            }
         }
         Ok(())
     }
@@ -598,6 +636,13 @@ impl ExecutionPort for NativeLifecyclePort {
             ))
         }
     }
+}
+
+fn native_noop_revalidation_failure(code: &'static str, detail: &'static str) -> ExecutionError {
+    ExecutionError::revalidation(
+        EvidenceCode::new(code).expect("static evidence code is valid"),
+        EvidenceDetail::new(detail).expect("static evidence detail is valid"),
+    )
 }
 
 fn lifecycle_postcondition_failure(error: LifecyclePostconditionError) -> ExecutionError {

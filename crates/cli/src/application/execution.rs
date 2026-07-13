@@ -50,8 +50,21 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                 )
             })?,
         };
+        let native_attempt_seed = self.seeds.get(resource).is_some_and(|seed| {
+            !seed.targets().is_empty()
+                && seed.targets().values().all(|target| {
+                    target.provenance() == Provenance::Native
+                        && target.ownership() == Ownership::Harness
+                        && target.managed_projections().is_empty()
+                })
+        });
+        let publish_seed = native_attempt_seed
+            || matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            );
         let current = if current.resources().contains_key(resource) {
-            if let Some(seed) = self.seeds.get(resource) {
+            if publish_seed && let Some(seed) = self.seeds.get(resource) {
                 current.refresh_resource_state(seed.clone()).map_err(|_| {
                     ExecutionError::journal_failure(
                         skilltap_core::domain::EvidenceCode::new("state.seed_refresh_failed")
@@ -65,7 +78,7 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
             } else {
                 current
             }
-        } else if let Some(seed) = self.seeds.get(resource) {
+        } else if publish_seed && let Some(seed) = self.seeds.get(resource) {
             current.with_resource_state(seed.clone()).map_err(|_| {
                 ExecutionError::journal_failure(
                     skilltap_core::domain::EvidenceCode::new("state.seed_conflict")
@@ -77,14 +90,11 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                 )
             })?
         } else {
-            return Err(ExecutionError::journal_failure(
-                skilltap_core::domain::EvidenceCode::new("state.resource_missing")
-                    .expect("static evidence code is valid"),
-                skilltap_core::domain::EvidenceDetail::new(
-                    "The operation resource is not present in state.",
-                )
-                .expect("static evidence detail is valid"),
-            ));
+            // A pre-apply or failed first managed install has no durable
+            // effective projection to journal. Native attempts are retained
+            // above because their target binding is recovery evidence, not a
+            // claim that a skilltap-owned projection became effective.
+            return Ok(());
         };
         let at = Timestamp::from_system_time(std::time::SystemTime::now()).map_err(|_| {
             ExecutionError::journal_failure(

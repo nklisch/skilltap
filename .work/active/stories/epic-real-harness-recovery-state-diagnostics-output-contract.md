@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-output-contract
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing, documentation]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -99,3 +99,9 @@ normalization, first-seen ordering, distinct-command retention, result/exit
 preservation, typed post-mutation output, and multi-target/all-scope parity all
 pass focused isolated checks. Approval is withheld solely because the complete
 focused test target is red on its stale nested-action assertion.
+
+## Repair notes (2026-07-12)
+
+- The typed postcondition regression now asserts one canonical top-level recovery action and no duplicate nested copy.
+- Typed error codes, state-safety assertions, distinct-action preservation, and plain/JSON parity remain covered.
+- The complete native postcondition target and workspace suite pass.

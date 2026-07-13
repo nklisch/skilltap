@@ -64,6 +64,56 @@ pub fn native_operation(
     )
 }
 
+/// Build a journaled no-op after fresh native observation proves that a prior
+/// attempted lifecycle operation already achieved its requested state.
+pub fn native_noop_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    executable: NativeId,
+    arguments: impl IntoIterator<Item = CommandArgument>,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::Compatible,
+        TransferFidelity::Faithful,
+        [],
+        [],
+    )
+    .expect("faithful native no-op operations have no evidence or consequences");
+    let semantics = OperationSemantics::new(
+        action,
+        resource.scope().clone(),
+        OperationReason::new(
+            EvidenceCode::new("native.lifecycle.verified_noop")
+                .expect("static evidence code is valid"),
+            EvidenceDetail::new(
+                "Fresh native observation already satisfies the requested lifecycle state.",
+            )
+            .expect("static evidence detail is valid"),
+        ),
+        compatibility,
+        Provenance::Native,
+        [AffectedSurface::native_command(
+            target.clone(),
+            executable,
+            arguments,
+        )],
+    );
+    Operation::new(
+        id,
+        target,
+        OperationSelector::Resource { resource },
+        semantics,
+        OperationClass::NoOp,
+        Reversibility::NotApplicable,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        None,
+    )
+}
+
 /// Build a faithful managed-file operation for a complete resource tree.
 pub fn faithful_file_operation(
     id: OperationId,

@@ -595,10 +595,9 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
         fs::read_to_string(config_root(&machine).join("inventory.toml")).unwrap(),
         inventory
     );
-    assert_eq!(
-        fs::read_to_string(config_root(&machine).join("state.json")).unwrap(),
-        state
-    );
+    let repeated_state =
+        fs::read_to_string(config_root(&machine).join("state.json")).unwrap();
+    assert!(repeated_state.contains("\"status\": \"no_change\""));
 
     let update = run(
         &machine,
@@ -647,7 +646,7 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
     let update_all_value = json(&update_all);
     assert_eq!(update_all_value["result"], "completed");
     assert_eq!(update_all_value["summary"]["changed"], true);
-    assert_eq!(update_all_value["summary"]["operations"], 1);
+    assert_eq!(update_all_value["summary"]["operations"], 2);
 
     let remove = run(
         &machine,
@@ -1145,7 +1144,7 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|resource| resource["id"] == "omitted:mcp/plugin-relative"
+            .any(|resource| resource["id"] == "omitted:mcp:plugin-relative"
                 && resource["fields"]["consequence"] == "plugin_root_relative_mcp_omitted")
     );
     assert!(git_project.join(".agents/skills/demo/SKILL.md").is_file());

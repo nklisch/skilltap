@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-output-test-parity
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -40,3 +40,12 @@ behavior.
 - Plain and JSON render one exact recovery command while materially distinct
   actions remain visible.
 - Test changes preserve state-safety and failure-class coverage.
+
+## Implementation notes
+
+- Execution capability: focused inline test-contract correction.
+- Review weight: highest from the caller's autopilot instruction.
+- Files changed: `crates/cli/tests/native_postconditions.rs`.
+- Tests changed: every typed failure now asserts the error code, one top-level `reobserve_before_retry` command, no nested duplicate, and failed-state/no-applied safety.
+- Discrepancies from design: none.
+- Adjacent issues parked: none.
