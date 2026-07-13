@@ -8,8 +8,8 @@ use std::{
 use serde_json::Value;
 use skilltap_core::VERSION;
 use skilltap_test_support::{
-    FakeNativeMode, FakeNativeProcess, IsolatedMachine, captured_stderr, captured_stdout,
-    compiled_binary,
+    FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, IsolatedMachine, captured_stderr,
+    captured_stdout, compiled_binary,
 };
 
 const ENABLED_CONFIG: &str = r#"schema = 1
@@ -36,6 +36,12 @@ allow_major = false
 
 fn machine() -> IsolatedMachine {
     IsolatedMachine::new("skilltap-compiled-cli").expect("create isolated machine")
+}
+
+fn fake_harness(machine: &IsolatedMachine, profile: &FakeHarnessProfile) -> FakeNativeProcess {
+    profile
+        .build(machine.working_directory(), FakeNativeMode::VersionKnown)
+        .expect("build isolated fake harness")
 }
 
 fn binary() -> std::path::PathBuf {
@@ -423,7 +429,7 @@ fn compiled_invalid_invocations_use_safe_channels_and_boundaries() {
 fn harness_policy_commands_are_non_interactive_idempotent_and_first_use_read_only() {
     let machine = machine();
     let fixture = FakeNativeProcess::new(FakeNativeMode::VersionKnown).unwrap();
-    let claude_fixture = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let claude_fixture = fake_harness(&machine, &FakeHarnessProfile::claude());
 
     let first_list = machine
         .run_with_path(
@@ -671,7 +677,7 @@ fn native_marketplace_add_uses_bounded_lifecycle_and_journals_state() {
 fn native_lifecycle_projects_each_detection_failure_without_sensitive_context() {
     fn assert_failure(claude: &Path, warning_code: &str, action_code: &str) {
         let machine = machine();
-        let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
+        let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
         write_owned(
             &machine,
             "config.toml",
@@ -1342,8 +1348,8 @@ fn unsupported_only_managed_project_plugin_stays_blocked_with_acknowledgment() {
 #[test]
 fn targeted_native_remove_preserves_unselected_harness() {
     let machine = machine();
-    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
-    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
     write_owned(
         &machine,
         "config.toml",
@@ -2615,8 +2621,8 @@ fn instruction_setup_creates_canonical_global_file_and_bridges() {
 #[test]
 fn reconciliation_repairs_instruction_bridge_drift_with_target_and_scope_boundaries() {
     let machine = machine();
-    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
-    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
     write_owned(
         &machine,
         "config.toml",
@@ -2727,7 +2733,7 @@ fn reconciliation_plan_and_sync_preserve_nested_project_claude_bridge() {
         ("import", Some(b"@../AGENTS.md\n".as_slice())),
     ] {
         let machine = machine();
-        let fixture = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+        let fixture = fake_harness(&machine, &FakeHarnessProfile::claude());
         let mut config = native_config(fixture.executable(), fixture.executable());
         config = config.replace(
             "claude_mode = \"symlink\"",
@@ -3046,8 +3052,8 @@ fn instruction_repair_does_not_remove_broken_duplicate_bridge_entries() {
 #[test]
 fn status_resolves_current_explicit_and_all_scopes_independently_from_targets() {
     let machine = machine();
-    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
-    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
     write_owned(
         &machine,
         "config.toml",
@@ -3333,8 +3339,8 @@ fn adopt_project_and_all_scopes_preserve_project_inventory_scope() {
 #[test]
 fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_repeats() {
     let machine = machine();
-    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
-    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
     write_owned(
         &machine,
         "config.toml",
@@ -3495,8 +3501,8 @@ fn native_plugin_and_marketplace_lifecycle_covers_both_harnesses_and_journal_rep
 #[test]
 fn sequential_native_plugin_installs_widen_targets_and_preserve_bindings() {
     let machine = machine();
-    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
-    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
     write_owned(
         &machine,
         "config.toml",
@@ -3563,8 +3569,8 @@ fn sequential_native_plugin_installs_widen_targets_and_preserve_bindings() {
 #[test]
 fn native_mutations_keep_project_and_all_scope_boundaries() {
     let machine = machine();
-    let codex = FakeNativeProcess::new(FakeNativeMode::CodexVersion).unwrap();
-    let claude = FakeNativeProcess::new(FakeNativeMode::ClaudeVersion).unwrap();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
     write_owned(
         &machine,
         "config.toml",

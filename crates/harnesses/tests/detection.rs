@@ -17,7 +17,7 @@ use skilltap_harnesses::{
     detect_installation as detect_installation_with_environment, observe_codex_canonical_resources,
     observe_codex_config, probe_profile, select_profile, unreachable_installation,
 };
-use skilltap_test_support::{FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, TempRoot};
+use skilltap_test_support::{FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, TempRoot};
 
 #[derive(Default)]
 struct TestEnvironment(BTreeMap<&'static str, OsString>);
@@ -81,9 +81,19 @@ fn install(mode: FakeNativeMode, name: &str) -> (TempRoot, FakeNativeProcess) {
     (root, fixture)
 }
 
+fn install_profile(profile: &FakeHarnessProfile, name: &str) -> (TempRoot, FakeNativeProcess) {
+    let root = TempRoot::new("skilltap-profile-detection").unwrap();
+    let fixture = profile
+        .build(root.path(), FakeNativeMode::VersionKnown)
+        .unwrap();
+    fixture.install_alias(root.path(), name).unwrap();
+    (root, fixture)
+}
+
 #[test]
 fn detection_forwards_only_the_explicit_native_environment() {
-    let fixture = FakeNativeBuilder::new(FakeNativeMode::CodexVersion)
+    let fixture = FakeHarnessProfile::codex()
+        .builder(FakeNativeMode::VersionKnown)
         .capture_environment([
             "HOME",
             "XDG_CONFIG_HOME",
@@ -177,21 +187,21 @@ fn known_and_unknown_versions_are_reachable_without_profile_guessing() {
 
 #[test]
 fn exact_real_versions_are_reachable_and_select_exact_profiles() {
-    for (harness, mode, binary, expected) in [
+    for (harness, profile, binary, expected) in [
         (
             HarnessKind::Codex,
-            FakeNativeMode::CodexVersion,
+            FakeHarnessProfile::codex(),
             "codex",
             "0.144.1",
         ),
         (
             HarnessKind::Claude,
-            FakeNativeMode::ClaudeVersion,
+            FakeHarnessProfile::claude(),
             "claude",
             "2.1.201",
         ),
     ] {
-        let (root, _fixture) = install(mode, binary);
+        let (root, _fixture) = install_profile(&profile, binary);
         let (process_limits, json_limits) = limits();
         let installation = detect_installation(
             harness,
@@ -240,16 +250,11 @@ fn configured_absolute_binary_is_used_for_detection_without_path_lookup() {
 
 #[test]
 fn cross_harness_and_extra_document_versions_are_rejected() {
-    for (harness, mode, binary) in [
-        (HarnessKind::Codex, FakeNativeMode::ClaudeVersion, "codex"),
-        (HarnessKind::Claude, FakeNativeMode::CodexVersion, "claude"),
-        (
-            HarnessKind::Codex,
-            FakeNativeMode::ExtraJsonDocument,
-            "codex",
-        ),
+    for (harness, profile, binary) in [
+        (HarnessKind::Codex, FakeHarnessProfile::claude(), "codex"),
+        (HarnessKind::Claude, FakeHarnessProfile::codex(), "claude"),
     ] {
-        let (root, _fixture) = install(mode, binary);
+        let (root, _fixture) = install_profile(&profile, binary);
         let (process_limits, json_limits) = limits();
         assert_eq!(
             detect_installation(
@@ -262,6 +267,19 @@ fn cross_harness_and_extra_document_versions_are_rejected() {
             DetectionError::InvalidVersion
         );
     }
+
+    let (root, _fixture) = install(FakeNativeMode::ExtraJsonDocument, "codex");
+    let (process_limits, json_limits) = limits();
+    assert_eq!(
+        detect_installation(
+            HarnessKind::Codex,
+            root.path().as_os_str().to_os_string(),
+            process_limits,
+            json_limits,
+        )
+        .unwrap_err(),
+        DetectionError::InvalidVersion
+    );
 }
 
 #[test]

@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{FileBarrier, TempRoot};
+use crate::{FileBarrier, LifecycleDialect, TempRoot, VersionResponse};
 
 const FAKE_NATIVE_EXECUTABLE: &str = env!("SKILLTAP_FAKE_NATIVE_EXECUTABLE");
 const ESCAPED_PIPE_HOLDER: &str = env!("SKILLTAP_ESCAPED_PIPE_HOLDER");
@@ -22,8 +22,6 @@ pub enum PipeHolder {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FakeNativeMode {
     Exit(u8),
-    CodexVersion,
-    ClaudeVersion,
     VersionKnown,
     VersionUnknown,
     ProbeNarrow,
@@ -45,6 +43,9 @@ pub struct FakeNativeBuilder {
     mode: FakeNativeMode,
     environment: Vec<String>,
     start_barrier: bool,
+    version_response: Option<VersionResponse>,
+    lifecycle_dialect: LifecycleDialect,
+    executable_name: &'static str,
 }
 
 impl FakeNativeBuilder {
@@ -53,6 +54,9 @@ impl FakeNativeBuilder {
             mode,
             environment: Vec::new(),
             start_barrier: false,
+            version_response: None,
+            lifecycle_dialect: LifecycleDialect::None,
+            executable_name: "fake-native",
         }
     }
 
@@ -78,12 +82,28 @@ impl FakeNativeBuilder {
 
     pub fn build(self) -> io::Result<FakeNativeProcess> {
         let stable_executable = Path::new(FAKE_NATIVE_EXECUTABLE);
-        let root = TempRoot::new_in(
+        self.build_in(
             stable_executable
                 .parent()
                 .expect("build-time fixture has a parent"),
-            "skilltap-fake-native",
-        )?;
+        )
+    }
+
+    pub(crate) fn for_harness(
+        mut self,
+        version_response: VersionResponse,
+        lifecycle_dialect: LifecycleDialect,
+        executable_name: &'static str,
+    ) -> Self {
+        self.version_response = Some(version_response);
+        self.lifecycle_dialect = lifecycle_dialect;
+        self.executable_name = executable_name;
+        self
+    }
+
+    pub(crate) fn build_in(self, parent: &Path) -> io::Result<FakeNativeProcess> {
+        let stable_executable = Path::new(FAKE_NATIVE_EXECUTABLE);
+        let root = TempRoot::new_in(parent, "skilltap-fake-native")?;
         let captures = root.join("captures");
         fs::create_dir_all(captures.join("argv"))?;
         fs::create_dir_all(captures.join("environment"))?;
@@ -118,11 +138,13 @@ impl FakeNativeBuilder {
         let escaped_helper_pid = escaped_helper
             .as_ref()
             .map(|_| root.join("barriers/pipe-holder.pid"));
-        let executable = root.join("fake-native");
+        let executable = root.join(self.executable_name);
         let behavior = render_script(
             &captures,
             &self.environment,
             self.mode,
+            self.version_response.as_ref(),
+            self.lifecycle_dialect,
             start_barrier.as_ref(),
             hang_barrier.as_ref(),
             pipe_holder_barrier.as_ref(),
@@ -131,7 +153,7 @@ impl FakeNativeBuilder {
             escaped_helper_pid.as_deref(),
         );
         fs::write(root.join("behavior"), behavior)?;
-        fs::hard_link(stable_executable, &executable)?;
+        publish_executable(stable_executable, &executable)?;
 
         Ok(FakeNativeProcess {
             _root: root,
@@ -318,6 +340,8 @@ fn render_script(
     captures: &Path,
     environment: &[String],
     mode: FakeNativeMode,
+    version_response: Option<&VersionResponse>,
+    lifecycle_dialect: LifecycleDialect,
     start_barrier: Option<&FileBarrier>,
     hang_barrier: Option<&FileBarrier>,
     pipe_holder_barrier: Option<&FileBarrier>,
@@ -344,10 +368,9 @@ fn render_script(
     if let Some(barrier) = start_barrier {
         script.push_str(&barrier_script(barrier, ""));
     }
-    if matches!(
-        mode,
-        FakeNativeMode::CodexVersion | FakeNativeMode::ClaudeVersion | FakeNativeMode::VersionKnown
-    ) {
+    if lifecycle_dialect != LifecycleDialect::None
+        || (version_response.is_none() && matches!(mode, FakeNativeMode::VersionKnown))
+    {
         script.push_str(&format!(
             r#"lifecycle={lifecycle}
 if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace list" ]; then
@@ -404,14 +427,15 @@ fi
     }
     match mode {
         FakeNativeMode::Exit(code) => script.push_str(&format!("exit {code}\n")),
-        FakeNativeMode::CodexVersion => {
-            script.push_str("printf 'codex-cli 0.144.1\\n'\nexit 0\n");
-        }
-        FakeNativeMode::ClaudeVersion => {
-            script.push_str("printf '2.1.201 (Claude Code)\\n'\nexit 0\n");
-        }
         FakeNativeMode::VersionKnown => {
-            script.push_str("printf '%s' '{\"version\":\"0.144.1\"}'\nexit 0\n");
+            if let Some(response) = version_response {
+                script.push_str(&format!(
+                    "printf '%s' {}\nexit 0\n",
+                    shell_quote_value(&response.render())
+                ));
+            } else {
+                script.push_str("printf '%s' '{\"version\":\"0.144.1\"}'\nexit 0\n");
+            }
         }
         FakeNativeMode::VersionUnknown => {
             script.push_str("printf '%s' '{\"version\":\"99.0.0\"}'\nexit 0\n");
@@ -485,6 +509,17 @@ fi
     script
 }
 
+fn publish_executable(source: &Path, destination: &Path) -> io::Result<()> {
+    match fs::hard_link(source, destination) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::CrossesDevices => {
+            fs::copy(source, destination)?;
+            Ok(())
+        }
+        Err(error) => Err(error),
+    }
+}
+
 fn normalize_flood_chunk(script: &mut String, variable: &str, byte: char) {
     let marker = format!("{variable}='");
     let start = script.find(&marker).expect("flood chunk is rendered") + marker.len();
@@ -507,6 +542,10 @@ fn shell_quote(path: &Path) -> String {
     let value = path
         .to_str()
         .expect("fixture roots are constructed from UTF-8 names");
+    shell_quote_value(value)
+}
+
+fn shell_quote_value(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
@@ -597,14 +636,6 @@ mod tests {
     fn detection_payload_modes_are_exact_and_deterministic() {
         for (mode, expected) in [
             (
-                FakeNativeMode::CodexVersion,
-                b"codex-cli 0.144.1\n".as_slice(),
-            ),
-            (
-                FakeNativeMode::ClaudeVersion,
-                b"2.1.201 (Claude Code)\n".as_slice(),
-            ),
-            (
                 FakeNativeMode::VersionKnown,
                 b"{\"version\":\"0.144.1\"}".as_slice(),
             ),
@@ -637,12 +668,7 @@ mod tests {
             assert!(output.status.success());
             assert_eq!(output.stdout, expected);
             assert!(output.stderr.is_empty());
-            if matches!(
-                mode,
-                FakeNativeMode::CodexVersion
-                    | FakeNativeMode::ClaudeVersion
-                    | FakeNativeMode::VersionKnown
-            ) {
+            if matches!(mode, FakeNativeMode::VersionKnown) {
                 let output = native.command().arg("--version").output().unwrap();
                 assert!(
                     output.status.success(),

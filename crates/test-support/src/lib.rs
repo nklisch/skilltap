@@ -5,12 +5,18 @@ mod barrier;
 #[cfg(unix)]
 mod external_tree;
 #[cfg(unix)]
+mod harness_profile;
+#[cfg(unix)]
 mod native_process;
 
 #[cfg(unix)]
 pub use barrier::FileBarrier;
 #[cfg(unix)]
 pub use external_tree::{ExternalTreeFixture, InjectedIoFault, ReplacementRace};
+#[cfg(unix)]
+pub use harness_profile::{
+    AcceptanceReport, FakeHarnessProfile, LifecycleDialect, VersionResponse, acceptance_matrix,
+};
 #[cfg(unix)]
 pub use native_process::{
     CapturedInvocation, FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, PipeHolder,
