@@ -1,7 +1,7 @@
 ---
 id: gate-tests-remove-opposite-state-retry
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -37,3 +37,14 @@ a fresh missing postcondition, and an immediate no-op repeat.
 ## Verification
 
 - `cargo test -p skilltap --test native_postconditions failed_remove_postobservation_retries_once_when_resource_is_still_present -- --exact --nocapture`
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate review at effective weight `standard` (caller), Fast lane because this is a bounded regression-fixture extension with recorded green verification and no production change. The fixture preserves presence across the failed post-observation, the test proves one retry reaches a fresh missing postcondition, and the immediate repeat performs no additional mutation. The exact test passes in a detached clean worktree.
