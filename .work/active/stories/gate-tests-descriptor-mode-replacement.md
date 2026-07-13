@@ -1,7 +1,7 @@
 ---
 id: gate-tests-descriptor-mode-replacement
 kind: story
-stage: review
+stage: done
 tags: [testing]
 parent: null
 depends_on: []
@@ -33,3 +33,22 @@ unchanged while publication fails closed or cleans only the owned identity.
 - Discrepancies from design: none; the low-level publication writer is exercised directly so the replacement can be injected at the exact open-to-mode boundary.
 - Adjacent issues parked: none.
 - Verification: focused adversarial test, all 344 core tests/integration tests, and strict all-target core Clippy pass.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate Deep review at effective review weight `standard` (explicit
+caller selection), performed in fresh context because the test exercises a
+pathname-replacement race. The writer opens with `O_NOFOLLOW`, captures the
+opened inode identity, performs `fchmod` on that descriptor, and verifies both
+descriptor and pathname identity afterward. The adversarial hook replaces the
+pathname with an external symlink after open; the external mode stays `0644`,
+only the opened owned inode becomes `0700`, and verification fails on identity
+change. Focused descriptor and directory-tree tests passed. No foundation-doc,
+public-contract, or release drift found; product/UX lenses were inapplicable.
