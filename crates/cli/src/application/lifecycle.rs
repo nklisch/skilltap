@@ -996,7 +996,10 @@ impl StatusApplication<'_> {
                         .with_next_action(action);
                 }
             };
-        let observation = NativeObservation::run(&documents, &scope, &targets);
+        let observation = match self.native_observation {
+            NativeObservationMode::Disabled => NativeObservation::default(),
+            NativeObservationMode::System => NativeObservation::run(&documents, &scope, &targets),
+        };
         for resource in observation.resources.iter().cloned() {
             outcome = outcome.with_resource(resource);
         }
