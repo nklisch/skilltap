@@ -1,6 +1,6 @@
 {
   "name": "skilltap",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "A personal control plane for managing Codex and Claude Code environments.",
   "author": {
     "name": "nklisch"
