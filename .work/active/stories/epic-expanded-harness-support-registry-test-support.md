@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-registry-test-support
 kind: story
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support-registry
 depends_on:
@@ -102,8 +102,9 @@ that every registered adapter must pass.
   Lifecycle emulation is gated by `LifecycleDialect`, while retaining the
   existing command/list state machine so current lifecycle tests remain stable.
 - `FakeHarnessProfile::build` materializes under a caller-owned isolated root.
-  Executable publication prefers the prior hard-link behavior and falls back to
-  an exact copy only when the build artifact and isolated root cross filesystems.
+  Executable publication preserves the prior hard-link behavior on one
+  filesystem and uses a symbolic link to the sealed build artifact across
+  filesystems, so the executed inode is never opened for writing.
 - Added a proportional fixture-level `acceptance_matrix` rather than duplicating
   the compiled CLI suite or adding a forbidden production dependency. It creates
   documented Codex/Claude global and project skill/MCP surfaces, observes all
@@ -298,3 +299,47 @@ by >=10 consecutive clean `cargo test -p skilltap-test-support --lib` runs and a
 parallel-stress test), then re-enter review. No other change is required; the
 matrix, migration, version bytes, lifecycle gate, path realism, and CLI-seam
 ownership are all sound.
+
+## Review fix implementation (2026-07-12)
+
+- Fixed executable publication at the boundary rather than adding retries to
+  individual executions. Same-filesystem publication still hard-links the
+  sealed Cargo build artifact.
+- The preferred cross-device copy-to-unique-sibling sequence was implemented
+  and exercised with closed writer handles, file sync, completed permissions,
+  atomic rename, directory sync, and failure cleanup. The real parallel
+  build-then-immediate-exec regression still reproduced `ETXTBSY` on the
+  `/storage` (Cargo output) to `/tmp` (caller root) boundary. The final fallback
+  therefore uses a symbolic link to the sealed build artifact: unlike any copy,
+  it never creates a just-written executed inode and proved deterministic under
+  the same stress. No temporary publication file exists to leak on failure.
+- Added
+  `profile_publication_survives_parallel_build_and_immediate_exec`, which runs
+  8 workers × 24 iterations against alternating real Codex and Claude
+  `FakeHarnessProfile::build` calls. Every build receives a unique `TempRoot`
+  and is immediately executed with `--version`, preserving exact output checks.
+- Added the lifecycle-gate intent comment: profile dialect controls lifecycle
+  semantics independently of process behavior, while unprofiled
+  `VersionKnown` retains legacy coverage.
+- Files changed: `crates/test-support/src/native_process.rs`,
+  `crates/test-support/src/harness_profile.rs`, and this story.
+- Simplification: no execution retry helper, timeout, sleep, or copied
+  executable cleanup state was introduced.
+- Preserved boundaries: `HarnessKind`, CLI production/tests, harnesses
+  production/tests, `.pi`, parent/sibling items, and unrelated files are
+  unchanged.
+
+## Review fix verification (2026-07-12)
+
+- `cargo test -p skilltap-test-support --lib`, default parallelism — passed 10
+  consecutive final-state runs; 20 tests per run, including 192 immediate
+  profile build/exec cycles per run (1,920 stress cycles total).
+- `cargo test -p skilltap-harnesses` — passed 56 tests across 6 suites.
+- `cargo clippy -p skilltap-test-support -p skilltap-harnesses --all-targets -- -D warnings`
+  — passed with no issues.
+- `cargo fmt --all -- --check` — passed.
+- `git diff --check` — passed.
+- No delegation or peer mechanism was used, as required.
+
+Review fix is complete and the story has re-entered `stage: review` at the
+caller-selected standard review weight.

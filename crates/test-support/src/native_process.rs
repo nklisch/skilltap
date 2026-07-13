@@ -368,6 +368,8 @@ fn render_script(
     if let Some(barrier) = start_barrier {
         script.push_str(&barrier_script(barrier, ""));
     }
+    // A profile's dialect owns lifecycle semantics independently of its
+    // process behavior; the unprofiled version mode retains legacy coverage.
     if lifecycle_dialect != LifecycleDialect::None
         || (version_response.is_none() && matches!(mode, FakeNativeMode::VersionKnown))
     {
@@ -512,9 +514,11 @@ fi
 fn publish_executable(source: &Path, destination: &Path) -> io::Result<()> {
     match fs::hard_link(source, destination) {
         Ok(()) => Ok(()),
+        // Caller-owned roots can be on a different filesystem than Cargo's
+        // OUT_DIR. A symbolic link keeps the sealed build artifact as the
+        // executed inode, avoiding a copy-then-exec writer race entirely.
         Err(error) if error.kind() == io::ErrorKind::CrossesDevices => {
-            fs::copy(source, destination)?;
-            Ok(())
+            std::os::unix::fs::symlink(source, destination)
         }
         Err(error) => Err(error),
     }

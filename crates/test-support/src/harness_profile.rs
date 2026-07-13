@@ -329,6 +329,8 @@ fn contract_error(message: &'static str) -> io::Error {
 
 #[cfg(test)]
 mod tests {
+    use std::thread;
+
     use super::*;
     use crate::TempRoot;
 
@@ -412,5 +414,48 @@ mod tests {
                 .kind(),
             io::ErrorKind::NotFound
         );
+    }
+
+    #[test]
+    fn profile_publication_survives_parallel_build_and_immediate_exec() {
+        const WORKERS: usize = 8;
+        const BUILDS_PER_WORKER: usize = 24;
+
+        thread::scope(|scope| {
+            let workers = (0..WORKERS)
+                .map(|worker| {
+                    scope.spawn(move || {
+                        for iteration in 0..BUILDS_PER_WORKER {
+                            let profile = if (worker + iteration) % 2 == 0 {
+                                FakeHarnessProfile::codex()
+                            } else {
+                                FakeHarnessProfile::claude()
+                            };
+                            let root = TempRoot::new("skilltap-profile-publication").unwrap();
+                            let native = profile
+                                .build(root.path(), FakeNativeMode::VersionKnown)
+                                .unwrap();
+                            let output = native.command().arg("--version").output().unwrap_or_else(
+                                |error| {
+                                    panic!(
+                                        "immediate exec failed for {}: {error}",
+                                        native.executable().display()
+                                    )
+                                },
+                            );
+                            assert!(output.status.success());
+                            assert_eq!(
+                                output.stdout,
+                                profile.version_response().render().as_bytes()
+                            );
+                            assert!(output.stderr.is_empty());
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            for worker in workers {
+                worker.join().unwrap();
+            }
+        });
     }
 }
