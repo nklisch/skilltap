@@ -8,8 +8,9 @@ mod repository;
 mod state;
 
 pub use config::{
-    BinaryUpdatePolicy, ClaudeInstructionMode, ConfigDocument, HarnessBinary, HarnessPolicies,
-    HarnessPolicy, InstructionPolicy, UpdateInterval, UpdateIntervalUnit, UpdateMode, UpdatePolicy,
+    BinaryUpdatePolicy, ClaudeInstructionMode, ConfigDocument, HarnessBinary, HarnessPolicy,
+    HarnessPolicyMap, InstructionPolicy, UpdateInterval, UpdateIntervalUnit, UpdateMode,
+    UpdatePolicy,
 };
 pub use inventory::InventoryDocument;
 pub use managed_artifact::{

@@ -211,11 +211,20 @@ fn available_revision_cache_preserves_apply_history_and_siblings() {
 #[test]
 fn config_defaults_are_explicit_strict_and_golden() {
     let config = ConfigDocument::defaults();
+    let codex = HarnessId::new("codex").unwrap();
+    let claude = HarnessId::new("claude").unwrap();
     assert_eq!(config.schema(), CONFIG_SCHEMA_VERSION);
-    assert!(!config.harnesses().codex.enabled);
-    assert!(!config.harnesses().claude.enabled);
-    assert_eq!(config.harnesses().codex.binary.as_str(), "codex");
-    assert_eq!(config.harnesses().claude.binary.as_str(), "claude");
+    assert_eq!(config.harnesses().iter().len(), 2);
+    assert!(!config.harnesses().get(&codex).unwrap().enabled);
+    assert!(!config.harnesses().get(&claude).unwrap().enabled);
+    assert_eq!(
+        config.harnesses().get(&codex).unwrap().binary.as_str(),
+        "codex"
+    );
+    assert_eq!(
+        config.harnesses().get(&claude).unwrap().binary.as_str(),
+        "claude"
+    );
     assert_eq!(
         config.instructions().claude_mode,
         ClaudeInstructionMode::Symlink
@@ -223,8 +232,10 @@ fn config_defaults_are_explicit_strict_and_golden() {
     assert_eq!(config.updates().mode, UpdateMode::ApplySafe);
     assert_eq!(config.updates().interval.to_string(), "6h");
 
+    let legacy = include_str!("fixtures/config.toml");
+    assert_eq!(toml::from_str::<ConfigDocument>(legacy).unwrap(), config);
     let encoded = toml::to_string_pretty(&config).unwrap();
-    assert_eq!(encoded, include_str!("fixtures/config.toml"));
+    assert_eq!(encoded, legacy);
     assert_eq!(toml::from_str::<ConfigDocument>(&encoded).unwrap(), config);
     assert!(toml::from_str::<ConfigDocument>("schema = 1").is_err());
     assert!(toml::from_str::<ConfigDocument>(&format!("unknown = true\n{encoded}")).is_err());
@@ -296,29 +307,60 @@ fn harness_binaries_reject_non_utf8_os_values_without_rendering_bytes() {
 }
 
 #[test]
-fn harness_policy_updates_one_target_and_preserves_the_other() {
+fn harness_policy_map_updates_any_structurally_valid_target() {
     let config = ConfigDocument::defaults();
     let codex = HarnessId::new("codex").unwrap();
     let claude = HarnessId::new("claude").unwrap();
+    let gemini = HarnessId::new("gemini").unwrap();
     let custom = HarnessBinary::new("/opt/bin/codex").unwrap();
 
     let updated = config
         .with_harness_policy(&codex, true, Some(&custom))
         .unwrap();
-    assert!(updated.harnesses().codex.enabled);
-    assert_eq!(updated.harnesses().codex.binary, custom);
-    assert!(!updated.harnesses().claude.enabled);
-    assert_eq!(updated.harnesses().claude, config.harnesses().claude);
+    assert!(updated.harnesses().get(&codex).unwrap().enabled);
+    assert_eq!(updated.harnesses().get(&codex).unwrap().binary, custom);
+    assert!(!updated.harnesses().get(&claude).unwrap().enabled);
+    assert_eq!(
+        updated.harnesses().get(&claude),
+        config.harnesses().get(&claude)
+    );
 
     let disabled = updated.with_harness_enabled(&codex, false).unwrap();
-    assert!(!disabled.harnesses().codex.enabled);
-    assert_eq!(disabled.harnesses().codex.binary.as_str(), "/opt/bin/codex");
-    assert!(disabled.with_harness_enabled(&claude, true).is_ok());
-    assert!(
-        disabled
-            .with_harness_enabled(&HarnessId::new("pi").unwrap(), true)
-            .is_err()
+    assert!(!disabled.harnesses().get(&codex).unwrap().enabled);
+    assert_eq!(
+        disabled.harnesses().get(&codex).unwrap().binary.as_str(),
+        "/opt/bin/codex"
     );
+
+    let expanded = disabled.with_harness_policy(&gemini, true, None).unwrap();
+    assert_eq!(expanded.harnesses().iter().len(), 3);
+    assert!(expanded.harnesses().get(&gemini).unwrap().enabled);
+    assert_eq!(
+        expanded.harnesses().get(&gemini).unwrap().binary.as_str(),
+        "gemini"
+    );
+}
+
+#[test]
+fn enabled_harnesses_and_two_target_round_trip_preserve_established_order() {
+    let codex = HarnessId::new("codex").unwrap();
+    let claude = HarnessId::new("claude").unwrap();
+    let config = ConfigDocument::defaults()
+        .with_harness_enabled(&codex, true)
+        .unwrap()
+        .with_harness_enabled(&claude, true)
+        .unwrap();
+
+    assert_eq!(
+        config
+            .harnesses()
+            .enabled()
+            .map(HarnessId::as_str)
+            .collect::<Vec<_>>(),
+        ["codex", "claude"]
+    );
+    let encoded = toml::to_string_pretty(&config).unwrap();
+    assert_eq!(toml::from_str::<ConfigDocument>(&encoded).unwrap(), config);
 }
 
 #[test]

@@ -265,8 +265,9 @@ fn system_adapter_readers_observe_only_old_or_new_complete_documents() {
     let config_root = AbsolutePath::new(config_root.to_str().unwrap()).unwrap();
     let repository = FileConfigRepository::new(&SystemFileSystem, config_root.clone()).unwrap();
     let old = ConfigDocument::defaults();
-    let mut harnesses = old.harnesses().clone();
-    harnesses.codex.binary = super::super::HarnessBinary::new("/usr/local/bin/codex").unwrap();
+    let codex = crate::domain::HarnessId::new("codex").unwrap();
+    let binary = super::super::HarnessBinary::new("/usr/local/bin/codex").unwrap();
+    let harnesses = old.harnesses().with_policy(codex, false, Some(&binary));
     let new = ConfigDocument::new(
         CONFIG_SCHEMA_VERSION,
         harnesses,

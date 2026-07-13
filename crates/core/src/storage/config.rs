@@ -1,11 +1,12 @@
 use std::{
+    collections::BTreeMap,
     ffi::OsString,
     fmt,
     path::{Component, Path},
     str::FromStr,
 };
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, ser::SerializeMap};
 
 use super::{CONFIG_SCHEMA_VERSION, SchemaError};
 use crate::domain::{AbsolutePath, HarnessId, NativeId};
@@ -189,11 +190,77 @@ pub struct HarnessPolicy {
     pub binary: HarnessBinary,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct HarnessPolicies {
-    pub codex: HarnessPolicy,
-    pub claude: HarnessPolicy,
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct HarnessPolicyMap(BTreeMap<HarnessId, HarnessPolicy>);
+
+impl HarnessPolicyMap {
+    pub fn get(&self, id: &HarnessId) -> Option<&HarnessPolicy> {
+        self.0.get(id)
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = (&HarnessId, &HarnessPolicy)> {
+        self.0.iter()
+    }
+
+    /// Returns enabled harnesses in the established policy order. Keeping the
+    /// original pair first preserves existing CLI output; additional ids are
+    /// deterministic because the backing map is ordered.
+    pub fn enabled(&self) -> impl Iterator<Item = &HarnessId> {
+        self.stable_iter()
+            .filter(|(_, policy)| policy.enabled)
+            .map(|(id, _)| id)
+    }
+
+    pub fn with_policy(
+        &self,
+        id: HarnessId,
+        enabled: bool,
+        binary: Option<&HarnessBinary>,
+    ) -> Self {
+        let mut policies = self.0.clone();
+        let binary = binary.cloned().unwrap_or_else(|| {
+            policies
+                .get(&id)
+                .map(|policy| policy.binary.clone())
+                .unwrap_or_else(|| {
+                    // Harness identifiers are valid single PATH components, so
+                    // they are also valid first-use PATH-lookup binary names.
+                    HarnessBinary::new(id.as_str()).expect("validated harness id is a PATH name")
+                })
+        });
+        policies.insert(id, HarnessPolicy { enabled, binary });
+        Self(policies)
+    }
+
+    fn stable_iter(&self) -> impl Iterator<Item = (&HarnessId, &HarnessPolicy)> {
+        ["codex", "claude"]
+            .into_iter()
+            .filter_map(|id| {
+                self.0
+                    .iter()
+                    .find(|(candidate, _)| candidate.as_str() == id)
+            })
+            .chain(
+                self.0
+                    .iter()
+                    .filter(|(id, _)| !matches!(id.as_str(), "codex" | "claude")),
+            )
+    }
+}
+
+impl Serialize for HarnessPolicyMap {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        // TOML table order is not semantic, but retaining the established pair
+        // first keeps schema-1 documents byte-stable for existing defaults.
+        for (id, policy) in self.stable_iter() {
+            map.serialize_entry(id, policy)?;
+        }
+        map.end()
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -231,7 +298,7 @@ impl Default for BinaryUpdatePolicy {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(into = "ConfigWire")]
 pub struct ConfigDocument {
-    harnesses: HarnessPolicies,
+    harnesses: HarnessPolicyMap,
     instructions: InstructionPolicy,
     updates: UpdatePolicy,
     #[serde(default)]
@@ -242,7 +309,7 @@ pub struct ConfigDocument {
 #[serde(deny_unknown_fields)]
 struct ConfigWire {
     schema: u32,
-    harnesses: HarnessPolicies,
+    harnesses: HarnessPolicyMap,
     instructions: InstructionPolicy,
     updates: UpdatePolicy,
     #[serde(default)]
@@ -261,7 +328,7 @@ impl ConfigDocument {
 
     pub fn new(
         schema: u32,
-        harnesses: HarnessPolicies,
+        harnesses: HarnessPolicyMap,
         instructions: InstructionPolicy,
         updates: UpdatePolicy,
     ) -> Result<Self, SchemaError> {
@@ -281,16 +348,22 @@ impl ConfigDocument {
 
     pub fn defaults() -> Self {
         Self {
-            harnesses: HarnessPolicies {
-                codex: HarnessPolicy {
-                    enabled: false,
-                    binary: HarnessBinary::new("codex").expect("known valid binary"),
-                },
-                claude: HarnessPolicy {
-                    enabled: false,
-                    binary: HarnessBinary::new("claude").expect("known valid binary"),
-                },
-            },
+            harnesses: HarnessPolicyMap(BTreeMap::from([
+                (
+                    HarnessId::new("codex").expect("known valid harness id"),
+                    HarnessPolicy {
+                        enabled: false,
+                        binary: HarnessBinary::new("codex").expect("known valid binary"),
+                    },
+                ),
+                (
+                    HarnessId::new("claude").expect("known valid harness id"),
+                    HarnessPolicy {
+                        enabled: false,
+                        binary: HarnessBinary::new("claude").expect("known valid binary"),
+                    },
+                ),
+            ])),
             instructions: InstructionPolicy {
                 claude_mode: ClaudeInstructionMode::Symlink,
             },
@@ -303,7 +376,7 @@ impl ConfigDocument {
         }
     }
 
-    pub const fn harnesses(&self) -> &HarnessPolicies {
+    pub const fn harnesses(&self) -> &HarnessPolicyMap {
         &self.harnesses
     }
     pub const fn instructions(&self) -> &InstructionPolicy {
@@ -323,38 +396,20 @@ impl ConfigDocument {
         next
     }
 
-    /// Returns a policy copy with one known harness's enabled state and binary.
+    /// Returns a policy copy with one structurally valid harness entry updated.
+    /// Registry membership is enforced by the CLI composition boundary.
     pub fn with_harness_policy(
         &self,
         harness: &HarnessId,
         enabled: bool,
         binary: Option<&HarnessBinary>,
     ) -> Result<Self, SchemaError> {
-        let mut harnesses = self.harnesses.clone();
-        let policy = match harness.as_str() {
-            "codex" => &mut harnesses.codex,
-            "claude" => &mut harnesses.claude,
-            _ => return Err(SchemaError::InvalidHarnessBinary),
-        };
-        policy.enabled = enabled;
-        if let Some(binary) = binary {
-            policy.binary = binary.clone();
-        }
-        Self::new(
-            CONFIG_SCHEMA_VERSION,
-            harnesses,
-            self.instructions.clone(),
-            self.updates.clone(),
-        )
-        .map(|mut config| {
-            // Harness policy edits must not reset the independent skilltap
-            // binary update policy that was already persisted by the user.
-            config.bootstrap = self.bootstrap.clone();
-            config
-        })
+        let mut next = self.clone();
+        next.harnesses = self.harnesses.with_policy(harness.clone(), enabled, binary);
+        Ok(next)
     }
 
-    /// Returns a policy copy with only one known harness enabled/disabled.
+    /// Returns a policy copy with only one harness enabled/disabled.
     pub fn with_harness_enabled(
         &self,
         harness: &HarnessId,
