@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-postconditions
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:
@@ -46,3 +46,32 @@ journaled. This story owns blocker 10.
 - Discrepancies from design: the execution port uses the existing bounded per-operation process limit and a matching bounded JSON limit rather than adding a second constructor parameter; behavior and safety bounds remain the designed values.
 - Adjacent issues parked: none.
 - Verification: harness lifecycle unit and scope tests pass; the new compiled postcondition suite passes; 47 of 48 pre-existing compiled tests pass, with the sole stale assertion in `populated_plan_and_sync_apply_the_desired_inventory_resource` now needing to accept the truthful `repair` plan status after its lifecycle-aware fake reports the native resource still present.
+
+## Review findings (2026-07-12)
+
+- **Blocker — failed postcondition retries can repeat a completed native
+  mutation.** The pre-mutation observation gate recognizes only an `Applied` or
+  `NoChange` journal result. If the native mutation succeeds but its fresh list
+  observation is indeterminate, skilltap journals `Failed`; once observation
+  recovers, the next retry skips the precondition and runs the mutation again
+  even when the exact resource is already present. An isolated compiled-binary
+  reproduction observed two install invocations and `changed: true` on the
+  retry. Fix and regression coverage are tracked by
+  `epic-real-harness-recovery-native-lifecycle-postcondition-retry-safety`.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: unsafe retry after a failed/indeterminate postcondition
+(`epic-real-harness-recovery-native-lifecycle-postcondition-retry-safety`)
+
+**Important**: none
+
+**Nits**: none
+
+**Notes**: Fresh-context deep review at caller-selected `standard` weight,
+escalated for native mutation and persisted-journal correctness. Typed failure,
+expected-presence/removal, prior-success no-repeat, scope parsing, and isolated
+plain/JSON tests were inspected. A disposable HOME/XDG/Claude-root reproduction
+proved the retry mutation; no operator configuration was read or written.

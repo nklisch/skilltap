@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-state-diagnostics-output-contract
 kind: story
-stage: review
+stage: implementing
 tags: [correctness, testing, documentation]
 parent: epic-real-harness-recovery-state-diagnostics
 depends_on:
@@ -70,3 +70,32 @@ at fresh-context `standard` depth:
 No blocker or important finding applies to those portions. Final story review
 remains pending only on typed native post-mutation output and its multi-target
 plain/JSON integration evidence.
+
+## Review findings (2026-07-12)
+
+- **Blocker — the committed focused suite contradicts the canonical action
+  contract.** `Outcome::normalize_next_actions` correctly retains one exact
+  recovery action at the top level and removes the identical nested error copy,
+  but `native_postcondition_failures_are_typed_and_never_journal_success` still
+  indexes the removed nested action. The full `native_postconditions` target
+  therefore fails 1 of 5 tests. Align the regression with the approved one-copy
+  contract and retain its typed error/state-safety assertions. Tracked by
+  `epic-real-harness-recovery-state-diagnostics-output-test-parity`.
+
+## Review (2026-07-12)
+
+**Verdict**: Request changes
+
+**Blockers**: focused compiled suite is red
+(`epic-real-harness-recovery-state-diagnostics-output-test-parity`)
+
+**Important**: none
+
+**Nits**: none
+
+**Notes**: Fresh-context deep review at caller-selected `standard` weight,
+escalated for the public plain/JSON contract. Exact global/error duplicate
+normalization, first-seen ordering, distinct-command retention, result/exit
+preservation, typed post-mutation output, and multi-target/all-scope parity all
+pass focused isolated checks. Approval is withheld solely because the complete
+focused test target is red on its stale nested-action assertion.
