@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-codex-adapter
 kind: story
-stage: review
+stage: done
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract-evidence]
@@ -290,3 +290,169 @@ escape hatches.
   `feature-managed-fallback-target-parity-acceptance`).
 - Claude managed-project lifecycle changes (Claude's state is preserved
   as-is; Claude is not migrated in this feature scope).
+
+## Review (standard-to-deep, approve — 2026-07-13)
+
+Same-harness fresh-context review of the Codex managed-projection
+relocation at commit `aa8f91e3`, performed inline per caller instruction
+with no nested delegation or peeragent. Read the parent feature, the
+approved base contract, the contract-evidence amendment, this story's
+scope/discoveries/completion notes, the full diff, the original behavior
+via the parent commit, and the test corpus. Focused verification re-ran
+clean. Approving review → done.
+
+### Behavior preservation — install/update (the load-bearing claim)
+
+The relocation is byte-equivalent for install/update on every dimension
+the existing regression suite pins. Verified by direct diff of the
+relocated helpers against `aa8f91e3~1:crates/cli/src/application.rs`:
+
+- `mcp_depends_on_plugin_root`, `json_to_toml`, `append_projection_tree`:
+  byte-identical (only import-path qualifiers differ).
+- `read_complete_codex_plugin`: identical body; error sites route through
+  typed `ManagedProjectionError` variants (`PluginMissing`,
+  `PluginUnreadable`, `Other` for the Codex-specific
+  `managed_project_plugin_symlink`) whose `code()`/`summary()` reproduce
+  the legacy `managed_project_error(code, summary)` pairs verbatim.
+- `plan_codex_component_projections` and `plan_codex_mcp_config`:
+  identical control flow, identical TOML merge rules (`mcp_servers` table,
+  `toml::to_string_pretty` for desired, `toml::to_string` for fingerprint
+  parts), identical drift/acknowledgment/omission classification, identical
+  evidence codes (`plugin_root_relative_mcp_omitted`,
+  `unsupported_optional_component_omitted`).
+- Fingerprint aggregation order is preserved: skill parts accumulate
+  first (sorted `BTreeSet` iteration), then MCP parts extend the same
+  buffers in place via the shared `(&mut current_parts, &mut
+  desired_parts)` handle — matching the old `current_parts.extend(
+  mcp.current_fingerprint_bytes)` append order.
+- `managed_projection_manifest` is identical (mcp entries first, then
+  Skill entries per tree). The adapter additionally `sort`/`dedup`s the
+  manifest before returning; the CLI wrapper re-sorts/dedups. Idempotent,
+  no behavioral difference — the persisted manifest is byte-identical to
+  today.
+
+The catalog destination order (`.agents/plugins/marketplace.json` then
+`.claude-plugin/marketplace.json`), MCP destination (`.codex/config.toml`),
+MCP TOML table name (`mcp_servers`), and the plugin-root-relative
+omission code are all pinned by the existing tests and unchanged.
+
+### Behavior preservation — plugin remove
+
+The unowned check (`managed_project_unowned` when `target_state.is_none()`)
+and the empty-prior check (`managed_project_projection_manifest_missing`)
+are preserved verbatim in the CLI wrapper. Plugin removal remains
+source-free: the adapter plans from `prior` plus current filesystem
+observation with `removal = true`, matching the old `plan_codex_
+component_projections(..., None, &[], prior, PluginRemove, true)` path.
+`installed_revision` and `source` for removal fall back to the prior
+target state (and the seed is `None` for removal anyway), so nothing is
+persisted differently.
+
+### Documented, contract-driven narrowings (not blockers)
+
+Three narrowings are intentional and were checked against the amended
+contract (`feature-managed-fallback-target-parity-contract-evidence`):
+
+1. **Marketplace removal is source-free.** `ResourceKind::Marketplace if
+   removal => None` produces `ManagedProjectionInput::Remove`; the adapter
+   reads current catalog bytes from the project filesystem, sets
+   `desired: None`, and returns `desired_fingerprint: None`. The new test
+   `managed_marketplace_removal_uses_observed_projection_without_source`
+   proves removal succeeds after the upstream checkout disappears while
+   the owned catalog projection is still observable. When the catalog is
+   already absent, `current_fingerprint` is `None` and
+   `validate_managed_project_ownership` correctly skips its body (you
+cannot own a non-existent file) — matching the old behavior except for
+   the dropped source requirement, which is the contract's designed
+   change.
+2. **Plugin provenance records the marketplace checkout source.** The
+   recorded `Source` is now `checkout.source()` (the marketplace source)
+   rather than the old synthesized plugin-subdirectory source. This is
+   mandated by the amended contract's "one authoritative source per
+   checkout" decision and is documented in the completion notes. It does
+   not affect ownership validation (which never reads `source`), does not
+   affect update-required detection (which compares fingerprints, not
+   source identity), and preserves `installed_revision` (the marketplace
+   commit for Git, `None` for Local — identical to today). No test
+   asserts on the synthesized subdirectory source, so the regression
+   suite is unaffected. The new identity is also more stable: it no
+   longer depends on the plugin's relative path within the marketplace.
+3. **`CatalogMissing` summary is Codex-neutral.** The fixed summary drops
+   "Codex-" ("...has no compatible marketplace document."). This is the
+   contract's Material 1 fix (no Codex vocabulary in target-neutral
+   summaries), explicitly called out in the contract review's parked nit
+   and in this story's scope. The code `managed_project_catalog_missing`
+   is preserved; no test pins the old wording.
+
+### Port consumption and downstream safety
+
+The CLI wrapper `plan_managed_codex_project_lifecycle` resolves one
+`ResolvedSourceCheckout` via `resolve_managed_source_checkout` (Local →
+root = locator, revision = None; Git → reuses `resolve_git_skill_source`,
+revision = commit; `RemoteCatalog` → `managed_project_source_unsupported`
+unchanged), invokes `CodexManagedProjection::static_ref().plan(...)`
+directly, and translates `plan.files`/`plan.trees` into the existing
+revalidated execution-port entries via the mechanical
+`managed_project_file_write` / `managed_project_plugin_write` adapters.
+
+The implementor chose to invoke the public port `plan` directly rather
+than importing the relocated private helpers (a deviation from the
+literal scope text, documented in the completion notes). This is the
+cleaner choice: it exercises the actual contract surface the
+orchestrator story will consume, avoids cross-crate `pub(crate)` helper
+exposure, and leaves Unit 3 purely the generalization + dispatch flip.
+The wrapper remains Codex-specific (`HarnessId::new("codex")`, direct
+`CodexManagedProjection` call), so Unit 3's scope is intact.
+
+The port is safe for the downstream shared orchestrator to consume:
+
+- **Object safety / static lifetime:** `ManagedProjectionPort::plan` is
+  `&self` + `&ManagedProjectionContext` with no generics; the contract
+  test constructs `&dyn ManagedProjectionPort` and round-trips both
+  `Apply` and `Remove`. `CodexManagedProjection::static_ref()` returns
+  `&'static dyn` via a `static MANAGED_PROJECTION`, satisfying the
+  registry accessor's `Option<&dyn ManagedProjectionPort>`.
+- **Complete evidence:** `ManagedProjectionPlan` carries `manifest`,
+  `current_fingerprint`, and `desired_fingerprint` directly from the
+  adapter; the orchestrator never reconstructs them from writes.
+- **No target leakage into core:** `grep -ni codex
+  crates/core/src/managed_projection.rs` returns no matches; all Codex
+  codecs, paths, and constants live in `crates/harnesses/src/adapters/
+  codex_managed.rs` as adapter-private.
+- **No CLI duplicate native helper logic:**
+  `git grep -n "plan_codex_component_projections\|plan_codex_mcp_config\|
+  read_complete_codex_plugin\|read_codex_catalog_at_root\|
+  mcp_depends_on_plugin_root" crates/cli/` returns no matches; the
+  intermediates `CodexComponentProjectionPlan`, `CodexMcpConfigPlan`, and
+  `ResolvedCodexMarketplace` are gone from the whole tree.
+- **Filesystem scope:** the adapter reads checkout roots via
+  `context.filesystem: &dyn ConfinedFileSystem`; in production this is
+  `SystemFileSystem` (the managed-project filesystem), and
+  `RecordingFaultFileSystem` delegates to it in tests, so catalog/plugin
+  reads at out-of-project checkout roots behave exactly as the old
+  CLI-side `SystemFileSystem` reads did. `Confined` here means
+  no-symlink-follow + bounded, not a global path restriction.
+
+### Focused verification re-run
+
+- `cargo test --workspace --all-targets` → 563 passed.
+- `cargo test -p skilltap --lib managed` → 6 managed lifecycle tests
+  passed (publication retry/noop, tree-limit revalidation, pending
+  install/update recovery, ownership, drift, source-free marketplace
+  removal).
+- `cargo clippy --workspace --all-targets -- -D warnings` → no issues.
+- `cargo fmt --all -- --check` → clean.
+- `git diff --check` → clean.
+- Helper-elimination and intermediate-type greps → no matches.
+
+### Verdict
+
+The relocation is behavior-preserving for install/update on every
+dimension the regression suite pins. Plugin removal is unchanged.
+Marketplace removal, plugin-source provenance, and the `CatalogMissing`
+summary are the three documented, contract-driven narrowings — each
+verified against the amended contract, each consistent with downstream
+ownership/drift/update semantics, and none weakening a test assertion.
+The port is object-safe, returns complete evidence, leaks nothing
+Codex-specific into core, and is demonstrated to be consumable by the
+CLI wrapper that Unit 3 will generalize. Approve; advance review → done.
