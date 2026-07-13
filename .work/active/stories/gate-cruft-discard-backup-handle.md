@@ -1,7 +1,7 @@
 ---
 id: gate-cruft-discard-backup-handle
 kind: story
-stage: review
+stage: done
 tags: [cleanup]
 parent: null
 depends_on: []
@@ -25,3 +25,14 @@ replacement rollback state.
 - Removed the unused local binding and explicit post-failure discard.
 - Verification: `cargo test -p skilltap application::execution --offline`
   compiled the CLI and passed the selected test targets.
+
+## Review (2026-07-12)
+
+**Verdict**: Approve
+
+**Blockers**: none
+**Important**: none
+**Nits**: none
+**Rejected**: none
+
+**Notes**: Substrate review at effective weight `standard` (caller), Fast lane for a two-line cleanup with unchanged fallible backup publication and error mapping. `ManagedArtifactHandle` has no drop behavior, so immediate result discard is behavior-preserving; replacement rollback still uses the explicit backup tree. The focused CLI target compiles and passes in a detached clean worktree.
