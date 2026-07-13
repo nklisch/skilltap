@@ -1,11 +1,11 @@
-use std::{fs, path::PathBuf};
+use std::{cell::RefCell, collections::BTreeMap, fs, path::PathBuf};
 
 use skilltap_core::{
     domain::{AbsolutePath, HarnessId},
     runtime::{GitRoot, ScopeResolver, SystemFileSystem, WorkingDirectory},
     storage::{
         ConfigDocument, ConfigRepository, FileConfigRepository, FileInventoryRepository,
-        FileStateRepository, HarnessPolicies, HarnessPolicy,
+        FileStateRepository, HarnessPolicies, HarnessPolicy, StateRepository,
     },
 };
 use skilltap_test_support::TempRoot;
@@ -384,5 +384,180 @@ fn detection_diagnostics_are_typed_actionable_and_source_free() {
                 Some("'/tmp/custom codex' --version")
             );
         }
+    }
+}
+
+struct MemoryStateRepository(RefCell<DocumentState<StateDocument>>);
+
+impl StateRepository for MemoryStateRepository {
+    fn load(&self) -> Result<DocumentState<StateDocument>, StorageError> {
+        Ok(self.0.borrow().clone())
+    }
+
+    fn replace(&self, value: &StateDocument) -> Result<(), StorageError> {
+        *self.0.borrow_mut() = DocumentState::Present(value.clone());
+        Ok(())
+    }
+}
+
+fn pending_managed_fixture(
+    action: OperationAction,
+    existing: Option<TargetResourceState>,
+) -> (
+    MemoryStateRepository,
+    Plan,
+    BTreeMap<ResourceKey, ResourceState>,
+    ResourceKey,
+    Fingerprint,
+    Vec<ManagedProjection>,
+) {
+    let scope = Scope::Project(AbsolutePath::new("/tmp/managed-pending-project").unwrap());
+    let key = ResourceKey::new(ResourceId::new("plugin:demo@team").unwrap(), scope);
+    let operation_id = OperationId::new("managed:pending:demo").unwrap();
+    let operation = skilltap_core::lifecycle_operation::managed_materialization_operation(
+        operation_id,
+        HarnessId::new("codex").unwrap(),
+        key.clone(),
+        action,
+        [AbsolutePath::new("/tmp/managed-pending-project/.agents/skills/demo").unwrap()],
+    )
+    .unwrap();
+    let plan = Plan::new([operation]).unwrap();
+    let fingerprint = fingerprint_contents(b"desired");
+    let projections = vec![ManagedProjection::Skill {
+        id: skilltap_core::domain::RelativeArtifactPath::new("demo").unwrap(),
+        fingerprint: fingerprint_contents(b"skill"),
+    }];
+    let desired = TargetResourceState::new(
+        HarnessId::new("codex").unwrap(),
+        Some(NativeId::new("demo@team").unwrap()),
+        Provenance::Materialized,
+        Ownership::Skilltap,
+        None,
+        None,
+        Some(fingerprint.clone()),
+        None,
+        None,
+        Timestamp::new(10, 0).unwrap(),
+        None,
+    )
+    .unwrap()
+    .with_managed_projections(projections.clone());
+    let seed = ResourceState::new(key.clone(), [desired]).unwrap();
+    let state = StateDocument::new(
+        skilltap_core::storage::STATE_SCHEMA_VERSION,
+        [],
+        existing.map(|target| ResourceState::new(key.clone(), [target]).unwrap()),
+        None,
+        None,
+        None,
+    )
+    .unwrap();
+    (
+        MemoryStateRepository(RefCell::new(DocumentState::Present(state))),
+        plan,
+        BTreeMap::from([(key.clone(), seed)]),
+        key,
+        fingerprint,
+        projections,
+    )
+}
+
+#[test]
+fn managed_pending_writer_and_recovery_use_exact_first_install_and_update_shapes() {
+    for existing in [
+        None,
+        Some(
+            TargetResourceState::new(
+                HarnessId::new("codex").unwrap(),
+                Some(NativeId::new("demo@team").unwrap()),
+                Provenance::Materialized,
+                Ownership::Skilltap,
+                None,
+                None,
+                Some(fingerprint_contents(b"previous")),
+                None,
+                None,
+                Timestamp::new(9, 0).unwrap(),
+                None,
+            )
+            .unwrap()
+            .with_managed_projections([ManagedProjection::Skill {
+                id: skilltap_core::domain::RelativeArtifactPath::new("old").unwrap(),
+                fingerprint: fingerprint_contents(b"old-skill"),
+            }]),
+        ),
+    ] {
+        let action = if existing.is_some() {
+            OperationAction::PluginUpdate
+        } else {
+            OperationAction::PluginInstall
+        };
+        let (repository, plan, seeds, key, desired_fingerprint, desired_projections) =
+            pending_managed_fixture(action, existing.clone());
+        let journal = StateExecutionJournal {
+            plan: &plan,
+            state: &repository,
+            seeds,
+        };
+        let operation_id = plan.iter().next().unwrap().1.id().clone();
+        journal
+            .record(&OperationResult::new(operation_id.clone(), OperationOutcome::Pending).unwrap())
+            .unwrap();
+        let document = match repository.load().unwrap() {
+            DocumentState::Present(value) => value,
+            DocumentState::Missing => unreachable!(),
+        };
+        let target = document
+            .resources()
+            .get(&key)
+            .unwrap()
+            .target(&HarnessId::new("codex").unwrap())
+            .unwrap();
+        let attempt = target.pending_managed_attempt().expect("pending evidence");
+        assert_eq!(attempt.operation_id(), &operation_id);
+        assert_eq!(attempt.fingerprint(), &desired_fingerprint);
+        assert_eq!(attempt.managed_projections(), desired_projections);
+        if let Some(previous) = existing {
+            assert_eq!(target.fingerprint(), previous.fingerprint());
+            assert_eq!(target.managed_projections(), previous.managed_projections());
+        } else {
+            assert_eq!(target.fingerprint(), None);
+            assert!(target.managed_projections().is_empty());
+        }
+        assert!(
+            validate_managed_project_ownership(
+                if action == OperationAction::PluginUpdate {
+                    NativeLifecycleKind::PluginUpdate
+                } else {
+                    NativeLifecycleKind::PluginInstall
+                },
+                document.resources().get(&key),
+                Some(&desired_fingerprint),
+                Some(&desired_fingerprint),
+                &desired_projections,
+                None,
+                &operation_id,
+            )
+            .is_ok()
+        );
+        journal
+            .record(
+                &OperationResult::new(operation_id, OperationOutcome::NoChange).unwrap(),
+            )
+            .unwrap();
+        let completed = match repository.load().unwrap() {
+            DocumentState::Present(value) => value,
+            DocumentState::Missing => unreachable!(),
+        };
+        let completed_target = completed
+            .resources()
+            .get(&key)
+            .unwrap()
+            .target(&HarnessId::new("codex").unwrap())
+            .unwrap();
+        assert_eq!(completed_target.fingerprint(), Some(&desired_fingerprint));
+        assert_eq!(completed_target.managed_projections(), desired_projections);
+        assert!(completed_target.pending_managed_attempt().is_none());
     }
 }

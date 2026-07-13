@@ -305,6 +305,8 @@ pub struct TargetResourceState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     managed_projections: Vec<ManagedProjection>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pending_managed_attempt: Option<PendingManagedAttempt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     installed_revision: Option<ResolvedRevision>,
     #[serde(skip_serializing_if = "Option::is_none")]
     available_revision: Option<ResolvedRevision>,
@@ -329,6 +331,8 @@ struct TargetResourceStateWire {
     fingerprint: Option<Fingerprint>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     managed_projections: Vec<ManagedProjection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pending_managed_attempt: Option<PendingManagedAttempt>,
     #[serde(skip_serializing_if = "Option::is_none")]
     installed_revision: Option<ResolvedRevision>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -389,6 +393,7 @@ impl TargetResourceState {
             managed_artifact,
             fingerprint,
             managed_projections: Vec::new(),
+            pending_managed_attempt: None,
             installed_revision,
             available_revision,
             observed_at,
@@ -428,6 +433,20 @@ impl TargetResourceState {
         self.managed_projections.dedup();
         self
     }
+    pub const fn pending_managed_attempt(&self) -> Option<&PendingManagedAttempt> {
+        self.pending_managed_attempt.as_ref()
+    }
+    pub fn with_pending_managed_attempt(mut self, attempt: PendingManagedAttempt) -> Self {
+        self.pending_managed_attempt = Some(attempt);
+        self
+    }
+    fn with_pending_managed_attempt_option(
+        mut self,
+        attempt: Option<PendingManagedAttempt>,
+    ) -> Self {
+        self.pending_managed_attempt = attempt;
+        self
+    }
     pub const fn installed_revision(&self) -> Option<&ResolvedRevision> {
         self.installed_revision.as_ref()
     }
@@ -453,6 +472,7 @@ impl From<TargetResourceState> for TargetResourceStateWire {
             managed_artifact: value.managed_artifact,
             fingerprint: value.fingerprint,
             managed_projections: value.managed_projections,
+            pending_managed_attempt: value.pending_managed_attempt,
             installed_revision: value.installed_revision,
             available_revision: value.available_revision,
             observed_at: value.observed_at,
@@ -466,6 +486,9 @@ impl TryFrom<TargetResourceStateWire> for TargetResourceState {
 
     fn try_from(value: TargetResourceStateWire) -> Result<Self, Self::Error> {
         validate_managed_projections(&value.managed_projections)?;
+        if let Some(attempt) = &value.pending_managed_attempt {
+            validate_managed_projections(attempt.managed_projections())?;
+        }
         Self::new(
             value.harness,
             value.native_id,
@@ -480,6 +503,53 @@ impl TryFrom<TargetResourceStateWire> for TargetResourceState {
             value.last_apply,
         )
         .map(|state| state.with_managed_projections(value.managed_projections))
+        .map(|state| match value.pending_managed_attempt {
+            Some(attempt) => state.with_pending_managed_attempt(attempt),
+            None => state,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct PendingManagedAttempt {
+    operation_id: OperationId,
+    fingerprint: Fingerprint,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    managed_projections: Vec<ManagedProjection>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    installed_revision: Option<ResolvedRevision>,
+}
+
+impl PendingManagedAttempt {
+    pub fn new(
+        operation_id: OperationId,
+        fingerprint: Fingerprint,
+        projections: impl IntoIterator<Item = ManagedProjection>,
+        installed_revision: Option<ResolvedRevision>,
+    ) -> Result<Self, SchemaError> {
+        let mut managed_projections = projections.into_iter().collect::<Vec<_>>();
+        validate_managed_projections(&managed_projections)?;
+        managed_projections.sort();
+        managed_projections.dedup();
+        Ok(Self {
+            operation_id,
+            fingerprint,
+            managed_projections,
+            installed_revision,
+        })
+    }
+    pub const fn operation_id(&self) -> &OperationId {
+        &self.operation_id
+    }
+    pub const fn fingerprint(&self) -> &Fingerprint {
+        &self.fingerprint
+    }
+    pub fn managed_projections(&self) -> &[ManagedProjection] {
+        &self.managed_projections
+    }
+    pub const fn installed_revision(&self) -> Option<&ResolvedRevision> {
+        self.installed_revision.as_ref()
     }
 }
 
@@ -804,7 +874,8 @@ impl StateDocument {
             current_target.observed_at(),
             Some(apply),
         )?
-        .with_managed_projections(current_target.managed_projections().iter().cloned());
+        .with_managed_projections(current_target.managed_projections().iter().cloned())
+        .with_pending_managed_attempt_option(current_target.pending_managed_attempt().cloned());
         let updated = current.with_target(updated_target)?;
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
@@ -856,7 +927,8 @@ impl StateDocument {
             current_target.observed_at(),
             current_target.last_apply().cloned(),
         )?
-        .with_managed_projections(current_target.managed_projections().iter().cloned());
+        .with_managed_projections(current_target.managed_projections().iter().cloned())
+        .with_pending_managed_attempt_option(current_target.pending_managed_attempt().cloned());
         let updated = current.with_target(updated_target)?;
         let mut resources = self.resources.values().cloned().collect::<Vec<_>>();
         resources.retain(|value| value.key() != resource);
@@ -919,6 +991,9 @@ impl StateDocument {
                         previous.last_apply().cloned(),
                     )?
                     .with_managed_projections(incoming.managed_projections().iter().cloned())
+                    .with_pending_managed_attempt_option(
+                        incoming.pending_managed_attempt().cloned(),
+                    )
                 } else {
                     incoming.clone()
                 }

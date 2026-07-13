@@ -25,8 +25,8 @@ pub use repository::{
     StorageError, StorageFailure,
 };
 pub use state::{
-    ApplyRecord, DaemonRunRecord, DaemonRunResult, HarnessState, ManagedProjection, ResourceState,
-    StateDocument, TargetResourceState, Timestamp,
+    ApplyRecord, DaemonRunRecord, DaemonRunResult, HarnessState, ManagedProjection,
+    PendingManagedAttempt, ResourceState, StateDocument, TargetResourceState, Timestamp,
 };
 
 use std::fmt;

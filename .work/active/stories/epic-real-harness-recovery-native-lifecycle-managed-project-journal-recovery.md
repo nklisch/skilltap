@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-journal-recovery
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on: []
@@ -64,3 +64,19 @@ recovery predicate accepts rather than the representation the journal emits.
   Pending journal retains.
 - Full workspace tests and Clippy pass in isolated roots without touching the
   operator environment or a harness cache.
+
+## Implementation notes
+
+- Added explicit `PendingManagedAttempt` state evidence containing the exact
+  operation ID, desired projection fingerprint, component manifest, and
+  resolved revision without replacing confirmed effective evidence.
+- First-install Pending state has no confirmed fingerprint/components; update
+  Pending state preserves the previous confirmed binding. Both carry the exact
+  attempted binding separately and recover only for the same operation when
+  fresh desired surfaces match it exactly.
+- Applied/NoChange publication replaces confirmed evidence and clears Pending;
+  failed, mismatched, cross-operation, and cross-revision attempts remain
+  fail-closed.
+- Direct journal tests exercise the real writer-produced first-install and
+  update shapes, validate recovery, and prove terminal NoChange publishes the
+  desired binding. The fabricated compiled state rewrite was removed.

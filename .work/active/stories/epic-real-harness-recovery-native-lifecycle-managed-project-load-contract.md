@@ -1,7 +1,7 @@
 ---
 id: epic-real-harness-recovery-native-lifecycle-managed-project-load-contract
 kind: story
-stage: implementing
+stage: review
 tags: [correctness, architecture, testing]
 parent: epic-real-harness-recovery-native-lifecycle
 depends_on:

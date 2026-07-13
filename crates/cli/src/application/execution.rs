@@ -63,6 +63,8 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                 result.outcome(),
                 OperationOutcome::Applied | OperationOutcome::NoChange
             );
+        let pending_managed_attempt =
+            !native_attempt_seed && matches!(result.outcome(), OperationOutcome::Pending);
         let current = if current.resources().contains_key(resource) {
             if publish_seed && let Some(seed) = self.seeds.get(resource) {
                 current.refresh_resource_state(seed.clone()).map_err(|_| {
@@ -75,6 +77,16 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                         .expect("static evidence detail is valid"),
                     )
                 })?
+            } else if pending_managed_attempt && let Some(seed) = self.seeds.get(resource) {
+                let existing = current
+                    .resources()
+                    .get(resource)
+                    .expect("resource was checked");
+                let attempt = managed_pending_resource(Some(existing), seed, result.operation_id())
+                    .map_err(|_| managed_attempt_journal_failure())?;
+                current
+                    .refresh_resource_state(attempt)
+                    .map_err(|_| managed_attempt_journal_failure())?
             } else {
                 current
             }
@@ -89,51 +101,12 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
                     .expect("static evidence detail is valid"),
                 )
             })?
-        } else if let Some(seed) = self.seeds.get(resource) {
-            let attempt_targets = seed
-                .targets()
-                .values()
-                .map(|target| {
-                    TargetResourceState::new(
-                        target.harness().clone(),
-                        target.native_id().cloned(),
-                        target.provenance(),
-                        target.ownership(),
-                        target.source().cloned(),
-                        None,
-                        None,
-                        target.installed_revision().cloned(),
-                        None,
-                        target.observed_at(),
-                        None,
-                    )
-                    .map(|attempt| {
-                        attempt
-                            .with_managed_projections(target.managed_projections().iter().cloned())
-                    })
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .and_then(|targets| ResourceState::new(resource.clone(), targets))
-                .map_err(|_| {
-                    ExecutionError::journal_failure(
-                        skilltap_core::domain::EvidenceCode::new("state.attempt_seed_invalid")
-                            .expect("static evidence code is valid"),
-                        skilltap_core::domain::EvidenceDetail::new(
-                            "The managed operation attempt could not be recorded safely.",
-                        )
-                        .expect("static evidence detail is valid"),
-                    )
-                })?;
-            current.with_resource_state(attempt_targets).map_err(|_| {
-                ExecutionError::journal_failure(
-                    skilltap_core::domain::EvidenceCode::new("state.attempt_seed_conflict")
-                        .expect("static evidence code is valid"),
-                    skilltap_core::domain::EvidenceDetail::new(
-                        "The managed operation attempt conflicted with current state.",
-                    )
-                    .expect("static evidence detail is valid"),
-                )
-            })?
+        } else if pending_managed_attempt && let Some(seed) = self.seeds.get(resource) {
+            let attempt_targets = managed_pending_resource(None, seed, result.operation_id())
+                .map_err(|_| managed_attempt_journal_failure())?;
+            current
+                .with_resource_state(attempt_targets)
+                .map_err(|_| managed_attempt_journal_failure())?
         } else {
             return Ok(());
         };
@@ -170,6 +143,60 @@ impl ExecutionJournal for StateExecutionJournal<'_> {
             )
         })
     }
+}
+
+fn managed_pending_resource(
+    existing: Option<&ResourceState>,
+    desired: &ResourceState,
+    operation_id: &OperationId,
+) -> Result<ResourceState, ()> {
+    let mut next = existing.cloned();
+    for target in desired.targets().values() {
+        let fingerprint = target.fingerprint().cloned().ok_or(())?;
+        let attempt = PendingManagedAttempt::new(
+            operation_id.clone(),
+            fingerprint,
+            target.managed_projections().iter().cloned(),
+            target.installed_revision().cloned(),
+        )
+        .map_err(|_| ())?;
+        let binding =
+            if let Some(current) = existing.and_then(|state| state.target(target.harness())) {
+                current.clone().with_pending_managed_attempt(attempt)
+            } else {
+                TargetResourceState::new(
+                    target.harness().clone(),
+                    target.native_id().cloned(),
+                    target.provenance(),
+                    target.ownership(),
+                    target.source().cloned(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    target.observed_at(),
+                    None,
+                )
+                .map_err(|_| ())?
+                .with_pending_managed_attempt(attempt)
+            };
+        next = Some(match next {
+            Some(state) => state.with_target(binding).map_err(|_| ())?,
+            None => ResourceState::new(desired.key().clone(), [binding]).map_err(|_| ())?,
+        });
+    }
+    next.ok_or(())
+}
+
+fn managed_attempt_journal_failure() -> ExecutionError {
+    ExecutionError::journal_failure(
+        skilltap_core::domain::EvidenceCode::new("state.attempt_seed_invalid")
+            .expect("static evidence code is valid"),
+        skilltap_core::domain::EvidenceDetail::new(
+            "The managed operation attempt could not be recorded safely.",
+        )
+        .expect("static evidence detail is valid"),
+    )
 }
 
 pub(super) struct ManagedSkillPort<'a> {

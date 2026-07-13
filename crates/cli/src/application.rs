@@ -46,8 +46,8 @@ use skilltap_core::{
     storage::{
         ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DocumentState,
         InventoryDocument, InventoryRepository, ManagedArtifactRepository, ManagedProjection,
-        ResourceState, StateDocument, StateRepository, StorageError, StorageFailure,
-        TargetResourceState, Timestamp,
+        PendingManagedAttempt, ResourceState, StateDocument, StateRepository, StorageError,
+        StorageFailure, TargetResourceState, Timestamp,
     },
     updates::{
         ResolutionError, SourceRevisionResolver, UpdateCandidate, UpdateDecision,
@@ -1562,6 +1562,8 @@ fn plan_managed_codex_project_lifecycle(
         existing_state,
         current_fingerprint.as_ref(),
         fingerprint.as_ref(),
+        &managed_projections,
+        installed_revision.as_ref(),
         &operation_id,
     )?;
     let mut surfaces = files
@@ -2204,6 +2206,8 @@ fn validate_managed_project_ownership(
     state: Option<&ResourceState>,
     current_fingerprint: Option<&Fingerprint>,
     desired_fingerprint: Option<&Fingerprint>,
+    desired_projections: &[ManagedProjection],
+    installed_revision: Option<&skilltap_core::domain::ResolvedRevision>,
     operation_id: &OperationId,
 ) -> Result<(), ErrorDetail> {
     if let Some(current_fingerprint) = current_fingerprint {
@@ -2228,9 +2232,13 @@ fn validate_managed_project_ownership(
                 "The existing managed destination is not owned by skilltap.",
             ));
         }
-        let recoverable_pending_attempt = state.fingerprint().is_none()
-            && state.managed_projections().is_empty()
-            && desired_fingerprint == Some(current_fingerprint)
+        let recoverable_pending_attempt = desired_fingerprint == Some(current_fingerprint)
+            && state.pending_managed_attempt().is_some_and(|attempt| {
+                attempt.operation_id() == operation_id
+                    && attempt.fingerprint() == current_fingerprint
+                    && attempt.managed_projections() == desired_projections
+                    && attempt.installed_revision() == installed_revision
+            })
             && state.last_apply().is_some_and(|apply| {
                 apply
                     .operations()

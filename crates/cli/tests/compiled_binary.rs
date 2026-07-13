@@ -900,46 +900,6 @@ fn codex_project_lifecycle_materializes_owned_plugin_without_cache_mutation() {
     assert!(state.contains("\"ownership\": \"skilltap\""));
     assert!(state.contains("managed_projections"), "state: {state}");
 
-    let state_path = config_root(&machine).join("state.json");
-    let mut interrupted: serde_json::Value = serde_json::from_str(&state).unwrap();
-    let binding = interrupted["resources"]
-        .as_array_mut()
-        .unwrap()
-        .iter_mut()
-        .find(|resource| resource["key"]["id"] == "plugin:demo@team")
-        .unwrap()["targets"][0]["binding"]
-        .as_object_mut()
-        .unwrap();
-    binding.remove("fingerprint");
-    binding.remove("managed_projections");
-    binding.remove("installed_revision");
-    binding["last_apply"]["operations"][0]["outcome"] = serde_json::json!({"status":"pending"});
-    fs::write(
-        &state_path,
-        serde_json::to_vec_pretty(&interrupted).unwrap(),
-    )
-    .unwrap();
-    let recovered_attempt = run(
-        &machine,
-        &[
-            "plugin",
-            "install",
-            "demo@team",
-            "--project",
-            project.to_str().unwrap(),
-            "--target",
-            "codex",
-            "--json",
-        ],
-    );
-    assert_code(&recovered_attempt, 0);
-    assert_eq!(json(&recovered_attempt)["summary"]["changed"], false);
-    assert!(
-        fs::read_to_string(&state_path)
-            .unwrap()
-            .contains("managed_projections")
-    );
-
     let repeat = run(
         &machine,
         &[
