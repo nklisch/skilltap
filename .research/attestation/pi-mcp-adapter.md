@@ -3,6 +3,7 @@ source_handle: pi-mcp-adapter
 fetched: 2026-07-12
 source_url: https://pi.dev/packages/pi-mcp-adapter
 provenance: source-direct
+substrate_confidence: source-direct
 ---
 
 # Pi MCP adapter package
