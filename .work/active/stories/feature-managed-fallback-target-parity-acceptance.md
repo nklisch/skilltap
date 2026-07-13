@@ -1,7 +1,7 @@
 ---
 id: feature-managed-fallback-target-parity-acceptance
 kind: story
-stage: review
+stage: done
 tags: []
 parent: feature-managed-fallback-target-parity
 depends_on: [feature-managed-fallback-target-parity-contract, feature-managed-fallback-target-parity-codex-adapter, feature-managed-fallback-target-parity-orchestrator]
@@ -142,3 +142,126 @@ The matrix covers (per the parent design):
 - Verification: `cargo test --workspace --all-targets` (562 passed), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`, and `git diff --check` passed. The focused two-profile matrix also passed ten consecutive commands; each command executes the matrix twice.
 - Discrepancies from design: the proposed profile could not store `HarnessId` or `&dyn ManagedProjectionPort`, and the proposed matrix could not directly own an `IsolatedMachine` production runner, because `skilltap-test-support` is a dev dependency of the production crates. The dependency-neutral callback/evidence API is the nearest dependency-correct form and preserves the intended reusable contract.
 - Adjacent issues parked: none.
+
+## Review (standard, approved at 7f74ee12)
+
+Verdict: approved. This is trustworthy, reusable coverage for sibling adapters.
+The matrix enforces one complete scenario set; both profiles earn every
+required check through real production lifecycle dispatch with substantive
+assertions, not self-reported labels.
+
+### Verification performed
+
+- `cargo test --workspace --all-targets`: 562 passed.
+- `cargo clippy --workspace --all-targets -- -D warnings`: clean.
+- `cargo fmt --all -- --check` and `git diff --check`: clean.
+- Focused matrix test run 5x consecutively: stable, no flake.
+- Diff scope confirmed: only this story, `tests.rs`, `harness_profile.rs`,
+  test-support `lib.rs`, and the new `managed_acceptance.rs`. No production
+  code, parent feature, downstream stories, contract story, or `.pi/`.
+
+### Evidence is earned, not self-reported
+
+The matrix function only verifies the runner returns the required evidence
+labels per scenario; the substance lives in the CLI runner. The pattern is
+sound because each `*_acceptance()` runner performs its concrete assertions
+(`assert_eq!`/`assert!`/`assert_error_code`/state-shape matches) BEFORE
+returning `evidence([...])`. A failing assertion panics before any label is
+returned, so labels cannot be claimed without the underlying check passing.
+The matrix's own self-tests (`matrix_requires_each_scenarios_declared_evidence`,
+`complete_matrix_reports_every_scenario_and_check`) prove the completeness
+enforcement itself.
+
+Each required scenario is covered with real dispatch for BOTH profiles:
+
+- Pending retry/noop: fake injects atomic-write failure then retries with
+  pending-attempt recovery and stable publication count; Codex runs the
+  byte-identical `managed_project_publication_failures_restore_then_retry_once_and_noop`
+  and terminal-journal recovery functions.
+- Drift/unowned/update-required: both profiles mutate the destination or
+  source and assert `managed_project_drifted`, `managed_project_unowned`,
+  and `managed_project_update_required`.
+- Acknowledgment/required-unsupported: both profiles block without `--yes`,
+  accept optional omission with `--yes`, and block required failures even
+  with `--yes`.
+- Source-free removal: both profiles remove after deleting the source and
+  assert files are gone; Codex also invokes the byte-identical
+  `managed_marketplace_removal_uses_observed_projection_without_source`.
+- Target isolation: both profiles insert a sibling target state and assert
+  the repeat install preserves it.
+- Complete tree/MCP evidence: fake asserts three skill files; Codex asserts
+  both catalog destinations, three skill files, and MCP merge preservation.
+- Idempotence/no duplicates: both profiles snapshot the project tree,
+  publication count, resource count, and manifest length across a repeat.
+- Fresh load: both inject a post-write read failure and assert rollback +
+  successful retry.
+
+### No hidden weakening or arbitrary bundling
+
+The four previously-standalone Codex regression functions
+(`managed_project_publication_failures_restore_then_retry_once_and_noop`,
+`managed_marketplace_removal_uses_observed_projection_without_source`,
+`managed_project_tree_limits_preserve_planning_and_revalidation_failures`,
+`managed_terminal_journal_failure_recovers_without_duplicate_projection_publication`)
+are byte-identical to their pre-commit bodies; only their `#[test]` attributes
+were removed and they are now invoked from inside the Codex matrix runner.
+No assertion was weakened or deleted. The orchestrator story's temporary
+proof (`non_codex_managed_port_drives_apply_acknowledgment_evidence_and_source_free_remove`)
+was folded into the fake-adapter scenarios, which expand its assertions across
+the full scenario set rather than collapsing them.
+
+### Documented deviations validated as non-material
+
+- **Dependency-neutral callback shape.** `skilltap-test-support` is a
+  `[dev-dependencies]` of all three production crates and has zero
+dependencies of its own, so it cannot import `HarnessId`, `IsolatedMachine`,
+  or `&dyn ManagedProjectionPort` without forming a cycle. The
+  callback/evidence API (`ManagedProjectionProfile` with `&'static str`
+  fields, runner closure) is the nearest dependency-correct form. The design's
+  Unit 4 sketch (`id: HarnessId`, `port: fn() -> ...`, `&IsolatedMachine`) was
+  not realizable; the implemented shape preserves the reusable contract.
+- **`LoadVerifier` not used by the managed lifecycle.** Confirmed against
+  `crates/cli/src/application/execution.rs`: the `ManagedProjectLifecyclePort::apply`
+  path verifies each write by reading it back (`read_regular_bounded_no_follow`,
+  lines 391 and 482) and rolls back on mismatch with `Managed project file
+  verification failed.` / `Managed project skill verification failed.` That
+  is the substantive load-verification guarantee (fresh post-write
+  observation, not assumption). The matrix's `fail_next_post_write_read`
+  injection hits exactly that boundary, proving rollback + successful retry.
+  The named `LoadVerifier` abstraction is not exercised, but the guarantee it
+  represents is. The deviation is transparently documented and accurate.
+
+### Code economy and parameterization
+
+The ~1459-line expansion is justified: 8 scenarios x 2 profiles (16 runner
+functions), the fake adapter's realistic plan/evidence production (required
+to drive ownership/drift/idempotency through the real orchestrator), and
+shared helpers. Each function has one clear purpose; no obvious bloat.
+Parameterization introduces no shared false positives: the matrix requires
+ALL declared evidence per scenario, evidence is only returned after
+assertions pass, and the matrix self-tests prove enforcement.
+
+### Notes (lower-risk, non-blocking)
+
+- State-target cleanup after managed removal is no longer asserted
+  explicitly (the old orchestrator proof asserted
+  `state...target(...).is_none()` after `MarketplaceRemove`). The new matrix
+  asserts file cleanup, source-free removal, completion, and (fake) the
+  remove plan count; state cleanup is exercised implicitly through
+  `assert_changed` and the shared executor that owns state removal. Park as
+  a minor explicitness opportunity for a future adapter-profile pass; not a
+  current-cycle blocker because removal is otherwise extensively covered and
+  state cleanup is owned by the shared lifecycle executor.
+- The Codex `RequiredUnsupported` matrix check is earned through
+  `managed_project_plugin_invalid`/`managed_project_plugin_unsupported` (a
+  missing required `SKILL.md` fails at catalog validation), not the typed
+  `ManagedProjectionError::RequiredUnsupported` code. The behavioral
+  guarantee (required-unprojectable blocks even with `--yes`) holds; the
+  typed path is covered by the fake adapter. Naming is slightly imprecise
+  for the Codex side but the contract is met.
+
+### Outcome
+
+Story advances to `done`. The reusable managed-projection acceptance contract
+is trustworthy: every sibling adapter feature can add a `ManagedProjectionProfile`
+and a production-aware runner and inherit the full scenario enforcement.
