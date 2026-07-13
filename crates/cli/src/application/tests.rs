@@ -4,10 +4,11 @@ use std::{
     ffi::OsString,
     fs, io,
     path::{Path, PathBuf},
+    process::Command,
 };
 
 use skilltap_core::{
-    domain::{AbsolutePath, HarnessId, RelativeArtifactPath},
+    domain::{AbsolutePath, HarnessId, RelativeArtifactPath, ResolvedRevision},
     runtime::{
         ConfinedFileSystem, DirectoryIdentity, DirectoryPublishOutcome, DirectoryTreeFileSystem,
         Environment, EnvironmentVariable, ExternalTreeLimits, FileMetadata, FileSystem,
@@ -331,6 +332,84 @@ fn write_managed_marketplace(source: &Path) {
     .unwrap();
 }
 
+fn commit_marketplace(source: &Path, message: &str) -> ResolvedRevision {
+    if !source.join(".git").exists() {
+        let status = Command::new("git")
+            .args(["init", "--initial-branch=main"])
+            .arg(source)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        for (key, value) in [
+            ("user.name", "skilltap test"),
+            ("user.email", "skilltap-test@example.invalid"),
+        ] {
+            let status = Command::new("git")
+                .args(["-C"])
+                .arg(source)
+                .args(["config", key, value])
+                .status()
+                .unwrap();
+            assert!(status.success());
+        }
+    }
+    let add = Command::new("git")
+        .args(["-C"])
+        .arg(source)
+        .args(["add", "."])
+        .status()
+        .unwrap();
+    assert!(add.success());
+    let commit = Command::new("git")
+        .args(["-C"])
+        .arg(source)
+        .args(["commit", "--quiet", "-m", message])
+        .status()
+        .unwrap();
+    assert!(commit.success());
+    let output = Command::new("git")
+        .args(["-C"])
+        .arg(source)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    ResolvedRevision::GitCommit(
+        GitCommit::new(String::from_utf8(output.stdout).unwrap().trim()).unwrap(),
+    )
+}
+
+fn managed_plugin_target(
+    paths: &PlatformPaths,
+    project: &Path,
+    state_filesystem: &dyn FileSystem,
+) -> TargetResourceState {
+    let state =
+        FileStateRepository::new(state_filesystem, paths.skilltap_config().clone()).unwrap();
+    let document = match state.load().unwrap() {
+        DocumentState::Present(document) => document,
+        DocumentState::Missing => panic!("managed lifecycle must persist state"),
+    };
+    let project = AbsolutePath::new(
+        fs::canonicalize(project)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_owned(),
+    )
+    .unwrap();
+    let key = ResourceKey::new(
+        ResourceId::new("plugin:demo@team").unwrap(),
+        Scope::Project(project),
+    );
+    document
+        .resources()
+        .get(&key)
+        .and_then(|resource| resource.target(&HarnessId::new("codex").unwrap()))
+        .cloned()
+        .expect("managed Codex plugin target state")
+}
+
 fn managed_scope(project: &Path) -> ScopeArgs {
     ScopeArgs {
         project: Some(Some(project.to_path_buf())),
@@ -499,7 +578,11 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
             Some("demo@team"),
             None,
         );
-        assert_eq!(retry.result, ResultClass::Completed, "{retry:?}");
+        assert_eq!(
+            retry.result,
+            ResultClass::Completed,
+            "boundary={boundary:?} outcome={retry:?}"
+        );
         assert_changed(&retry, true);
         assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
         assert!(project.join(".codex/config.toml").is_file());
@@ -518,6 +601,188 @@ fn managed_project_publication_failures_restore_then_retry_once_and_noop() {
         assert_changed(&repeat, false);
         assert_eq!(managed_filesystem.tree_publish_successes.get(), published);
     }
+}
+
+#[test]
+fn managed_terminal_journal_failure_recovers_without_duplicate_projection_publication() {
+    let root = TempRoot::new("skilltap-managed-terminal-journal").unwrap();
+    let paths = isolated_platform_paths(&root);
+    enable_codex_only(&paths);
+    let project = root.join("project");
+    let source = root.join("marketplace");
+    fs::create_dir_all(&project).unwrap();
+    write_managed_marketplace(&source);
+    let first_revision = commit_marketplace(&source, "initial marketplace");
+    let locator = format!("file://{}", source.display());
+    let managed_filesystem = RecordingFaultFileSystem::new();
+    let state_filesystem = RecordingFaultFileSystem::new();
+
+    let add = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::MarketplaceAdd,
+        Some(&locator),
+        Some("team"),
+    );
+    assert_eq!(add.result, ResultClass::Completed, "{add:?}");
+
+    state_filesystem.fail_atomic_write_number(2);
+    let failed_install = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(
+        failed_install.result,
+        ResultClass::AttentionRequired,
+        "{failed_install:?}"
+    );
+    assert!(project.join(".agents/skills/demo/SKILL.md").is_file());
+    assert!(project.join(".codex/config.toml").is_file());
+    let pending_install = managed_plugin_target(&paths, &project, &state_filesystem);
+    assert_eq!(pending_install.installed_revision(), None);
+    assert!(pending_install.managed_projections().is_empty());
+    let attempt = pending_install
+        .pending_managed_attempt()
+        .expect("terminal failure preserves pending install evidence");
+    assert_eq!(attempt.installed_revision(), Some(&first_revision));
+    assert!(!attempt.managed_projections().is_empty());
+    let publications_after_failed_install = managed_filesystem.tree_publish_successes.get();
+
+    let recovered_install = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(
+        recovered_install.result,
+        ResultClass::Completed,
+        "{recovered_install:?}"
+    );
+    assert_changed(&recovered_install, false);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications_after_failed_install
+    );
+    let installed = managed_plugin_target(&paths, &project, &state_filesystem);
+    assert_eq!(installed.installed_revision(), Some(&first_revision));
+    assert!(!installed.managed_projections().is_empty());
+    assert!(installed.pending_managed_attempt().is_none());
+
+    let repeat_install = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginInstall,
+        Some("demo@team"),
+        None,
+    );
+    assert_eq!(
+        repeat_install.result,
+        ResultClass::Completed,
+        "{repeat_install:?}"
+    );
+    assert_changed(&repeat_install, false);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications_after_failed_install
+    );
+
+    fs::write(
+        source.join("plugins/demo/skills/demo/SKILL.md"),
+        "---\nname: demo\ndescription: updated fixture\n---\nupdated body\n",
+    )
+    .unwrap();
+    let second_revision = commit_marketplace(&source, "update marketplace");
+    assert_ne!(first_revision, second_revision);
+    state_filesystem.fail_atomic_write_number(2);
+    let failed_update = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginUpdate,
+        None,
+        Some("demo@team"),
+    );
+    assert_eq!(
+        failed_update.result,
+        ResultClass::AttentionRequired,
+        "{failed_update:?}"
+    );
+    assert!(
+        fs::read_to_string(project.join(".agents/skills/demo/SKILL.md"))
+            .unwrap()
+            .contains("updated body")
+    );
+    let pending_update = managed_plugin_target(&paths, &project, &state_filesystem);
+    assert_eq!(pending_update.installed_revision(), Some(&first_revision));
+    assert!(!pending_update.managed_projections().is_empty());
+    let attempt = pending_update
+        .pending_managed_attempt()
+        .expect("terminal failure preserves pending update evidence");
+    assert_eq!(attempt.installed_revision(), Some(&second_revision));
+    assert!(!attempt.managed_projections().is_empty());
+    let publications_after_failed_update = managed_filesystem.tree_publish_successes.get();
+    assert_eq!(
+        publications_after_failed_update,
+        publications_after_failed_install + 1
+    );
+
+    let recovered_update = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginUpdate,
+        None,
+        Some("demo@team"),
+    );
+    assert_eq!(
+        recovered_update.result,
+        ResultClass::Completed,
+        "{recovered_update:?}"
+    );
+    assert_changed(&recovered_update, false);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications_after_failed_update
+    );
+    let updated = managed_plugin_target(&paths, &project, &state_filesystem);
+    assert_eq!(updated.installed_revision(), Some(&second_revision));
+    assert!(!updated.managed_projections().is_empty());
+    assert!(updated.pending_managed_attempt().is_none());
+
+    let repeat_update = execute_managed_lifecycle(
+        &paths,
+        &project,
+        &state_filesystem,
+        &managed_filesystem,
+        NativeLifecycleKind::PluginUpdate,
+        None,
+        Some("demo@team"),
+    );
+    assert_eq!(
+        repeat_update.result,
+        ResultClass::Completed,
+        "{repeat_update:?}"
+    );
+    assert_changed(&repeat_update, false);
+    assert_eq!(
+        managed_filesystem.tree_publish_successes.get(),
+        publications_after_failed_update
+    );
 }
 
 fn application_root(root: &TempRoot) -> PathBuf {

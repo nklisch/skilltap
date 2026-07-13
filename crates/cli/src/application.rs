@@ -1352,9 +1352,28 @@ fn plan_managed_codex_project_lifecycle(
         .state
         .as_ref()
         .and_then(|state| state.resources().get(resource.key()));
+    let operation_id = lifecycle_operation_id(
+        kind,
+        &codex,
+        &Scope::Project(project.clone()),
+        resource.key(),
+    );
     let prior_projections = existing_state
         .and_then(|state| state.target(&codex))
-        .map(TargetResourceState::managed_projections)
+        .map(|target| {
+            target
+                .pending_managed_attempt()
+                .filter(|attempt| {
+                    attempt.operation_id() == &operation_id
+                        && target.last_apply().is_some_and(|apply| {
+                            apply.operations().get(&operation_id).is_some_and(|result| {
+                                matches!(result.outcome(), OperationOutcome::Pending)
+                            })
+                        })
+                })
+                .map(PendingManagedAttempt::managed_projections)
+                .unwrap_or_else(|| target.managed_projections())
+        })
         .unwrap_or_default();
 
     let (
@@ -1364,7 +1383,7 @@ fn plan_managed_codex_project_lifecycle(
         fingerprint,
         source,
         installed_revision,
-        managed_projections,
+        mut managed_projections,
     ) = match resource.kind() {
         ResourceKind::Marketplace => {
             let source = resource
@@ -1571,13 +1590,9 @@ fn plan_managed_codex_project_lifecycle(
             ));
         }
     };
+    managed_projections.sort();
+    managed_projections.dedup();
 
-    let operation_id = lifecycle_operation_id(
-        kind,
-        &codex,
-        &Scope::Project(project.clone()),
-        resource.key(),
-    );
     validate_managed_project_ownership(
         kind,
         existing_state,
