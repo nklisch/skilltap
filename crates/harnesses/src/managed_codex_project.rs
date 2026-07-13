@@ -130,7 +130,6 @@ impl ManagedCodexCatalog {
         }
         Ok(entry)
     }
-
 }
 
 fn contained_relative(value: &str) -> Result<PathBuf, ManagedCodexCatalogError> {
