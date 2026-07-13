@@ -758,7 +758,17 @@ fn managed_terminal_journal_failure_recovers_without_duplicate_projection_public
         .pending_managed_attempt()
         .expect("terminal failure preserves pending install evidence");
     assert_eq!(attempt.installed_revision(), Some(&first_revision));
-    assert!(!attempt.managed_projections().is_empty());
+    let install_manifest = attempt.managed_projections().to_vec();
+    assert_eq!(install_manifest.len(), 2, "{install_manifest:?}");
+    assert!(install_manifest.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(matches!(
+        &install_manifest[0],
+        ManagedProjection::Skill { id, .. } if id.as_str() == "demo"
+    ));
+    assert!(matches!(
+        &install_manifest[1],
+        ManagedProjection::Mcp { id, .. } if id.as_str() == "demo-docs"
+    ));
     let publications_after_failed_install = managed_filesystem.tree_publish_successes.get();
 
     let recovered_install = execute_managed_lifecycle(
@@ -782,7 +792,7 @@ fn managed_terminal_journal_failure_recovers_without_duplicate_projection_public
     );
     let installed = managed_plugin_target(&paths, &project, &state_filesystem);
     assert_eq!(installed.installed_revision(), Some(&first_revision));
-    assert!(!installed.managed_projections().is_empty());
+    assert_eq!(installed.managed_projections(), install_manifest);
     assert!(installed.pending_managed_attempt().is_none());
 
     let repeat_install = execute_managed_lifecycle(
@@ -839,7 +849,19 @@ fn managed_terminal_journal_failure_recovers_without_duplicate_projection_public
         .pending_managed_attempt()
         .expect("terminal failure preserves pending update evidence");
     assert_eq!(attempt.installed_revision(), Some(&second_revision));
-    assert!(!attempt.managed_projections().is_empty());
+    let update_manifest = attempt.managed_projections().to_vec();
+    assert_eq!(update_manifest.len(), 2, "{update_manifest:?}");
+    assert!(update_manifest.windows(2).all(|pair| pair[0] < pair[1]));
+    assert!(matches!(
+        &update_manifest[0],
+        ManagedProjection::Skill { id, .. } if id.as_str() == "demo"
+    ));
+    assert!(matches!(
+        &update_manifest[1],
+        ManagedProjection::Mcp { id, .. } if id.as_str() == "demo-docs"
+    ));
+    assert_ne!(update_manifest[0], install_manifest[0]);
+    assert_eq!(update_manifest[1], install_manifest[1]);
     let publications_after_failed_update = managed_filesystem.tree_publish_successes.get();
     assert_eq!(
         publications_after_failed_update,
@@ -867,7 +889,7 @@ fn managed_terminal_journal_failure_recovers_without_duplicate_projection_public
     );
     let updated = managed_plugin_target(&paths, &project, &state_filesystem);
     assert_eq!(updated.installed_revision(), Some(&second_revision));
-    assert!(!updated.managed_projections().is_empty());
+    assert_eq!(updated.managed_projections(), update_manifest);
     assert!(updated.pending_managed_attempt().is_none());
 
     let repeat_update = execute_managed_lifecycle(

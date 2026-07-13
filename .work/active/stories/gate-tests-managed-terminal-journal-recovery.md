@@ -1,7 +1,7 @@
 ---
 id: gate-tests-managed-terminal-journal-recovery
 kind: story
-stage: implementing
+stage: review
 tags: [testing]
 parent: null
 depends_on: []
@@ -78,3 +78,11 @@ publication-failure story also demonstrates a failed apply is retried rather
 than blessed. A clean-target `cargo test -p skilltap --lib` runs 70 tests and
 passes. No public CLI, schema, security boundary, or foundation-doc assertion
 changed in this story.
+
+## Review resolution
+
+- The pending install and update manifests now require exactly the sorted
+  `skill:demo` and `mcp:demo-docs` projections.
+- The update must change the skill projection fingerprint while preserving the
+  MCP projection, and each recovered binding must equal its pending manifest
+  exactly.
