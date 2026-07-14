@@ -204,6 +204,35 @@ pub(super) struct ManagedSkillPort<'a> {
     pub(super) entries: BTreeMap<OperationId, ManagedSkillEntry>,
 }
 
+pub(super) struct ProjectSkillLinkEntry {
+    pub(super) root: AbsolutePath,
+    pub(super) destination: skilltap_core::domain::RelativeArtifactPath,
+    pub(super) target: RelativeSymlinkTarget,
+    pub(super) action: ProjectSkillLinkAction,
+}
+
+pub(super) enum ProjectSkillLinkAction {
+    Create,
+    Replace {
+        expected_identity: LinkIdentity,
+        previous_target: RelativeSymlinkTarget,
+    },
+    Remove {
+        expected_identity: LinkIdentity,
+    },
+}
+
+pub(super) struct ProjectSkillLinkPort<'a> {
+    pub(super) filesystem: &'a dyn ManagedProjectFileSystem,
+    pub(super) entries: BTreeMap<OperationId, ProjectSkillLinkEntry>,
+    pub(super) foreign_operations: BTreeSet<OperationId>,
+}
+
+pub(super) struct ProjectSkillLifecyclePort<'a> {
+    pub(super) canonical: ManagedSkillPort<'a>,
+    pub(super) links: ProjectSkillLinkPort<'a>,
+}
+
 pub(crate) trait ManagedProjectFileSystem:
     FileSystem + DirectoryTreeFileSystem + skilltap_core::runtime::ConfinedFileSystem
 {
@@ -627,6 +656,191 @@ pub(super) enum ManagedSkillAction {
     Remove,
 }
 
+impl ProjectSkillLinkPort<'_> {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        for id in &self.foreign_operations {
+            if plan.get(id).is_none() {
+                return Err(project_skill_link_failure(
+                    "A declared project skill foreign operation is absent from the plan.",
+                ));
+            }
+        }
+        for (id, entry) in &self.entries {
+            let operation = plan.get(id).ok_or_else(|| {
+                project_skill_link_failure(
+                    "The project skill link request no longer belongs to the plan.",
+                )
+            })?;
+            let expected_path = AbsolutePath::new(format!(
+                "{}/{}",
+                entry.root.as_str(),
+                entry.destination.as_str()
+            ))
+            .map_err(|_| project_skill_link_failure("The project skill link path is invalid."))?;
+            if !operation
+                .affected_surfaces()
+                .iter()
+                .any(|surface| surface.path() == Some(&expected_path))
+            {
+                return Err(project_skill_link_failure(
+                    "The project skill link destination no longer matches the plan.",
+                ));
+            }
+            let observed = self
+                .filesystem
+                .inspect_entry_beneath_no_follow(&entry.root, &entry.destination)
+                .map_err(|_| {
+                    project_skill_link_failure(
+                        "The project skill link destination could not be observed safely.",
+                    )
+                })?;
+            let valid = match &entry.action {
+                ProjectSkillLinkAction::Create => {
+                    matches!(observed, ConfinedEntryObservation::Missing)
+                }
+                ProjectSkillLinkAction::Replace {
+                    expected_identity,
+                    previous_target,
+                } => matches!(
+                    observed,
+                    ConfinedEntryObservation::RelativeSymlink { identity, target }
+                        if identity == *expected_identity && target == *previous_target
+                ),
+                ProjectSkillLinkAction::Remove { expected_identity } => matches!(
+                    observed,
+                    ConfinedEntryObservation::RelativeSymlink { identity, target }
+                        if identity == *expected_identity && target == entry.target
+                ),
+            };
+            if !valid {
+                return Err(project_skill_link_failure(
+                    "The project skill link changed after planning.",
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    fn apply(
+        &self,
+        operation: &skilltap_core::domain::Operation,
+    ) -> Result<OperationOutcome, ExecutionError> {
+        let entry = self.entries.get(operation.id()).ok_or_else(|| {
+            project_skill_link_failure(
+                "The project skill link adapter did not receive the planned request.",
+            )
+        })?;
+        match &entry.action {
+            ProjectSkillLinkAction::Create => self
+                .filesystem
+                .create_relative_symlink_beneath_no_follow(
+                    &entry.root,
+                    &entry.destination,
+                    &entry.target,
+                )
+                .map(|_| OperationOutcome::Applied)
+                .map_err(|_| {
+                    project_skill_link_failure("The project skill link could not be created.")
+                }),
+            ProjectSkillLinkAction::Remove { expected_identity } => self
+                .filesystem
+                .remove_relative_symlink_beneath_no_follow(
+                    &entry.root,
+                    &entry.destination,
+                    *expected_identity,
+                    &entry.target,
+                )
+                .map(|_| OperationOutcome::Applied)
+                .map_err(|_| {
+                    project_skill_link_failure(
+                        "The project skill link could not be removed safely.",
+                    )
+                }),
+            ProjectSkillLinkAction::Replace {
+                expected_identity,
+                previous_target,
+            } => {
+                self.filesystem
+                    .remove_relative_symlink_beneath_no_follow(
+                        &entry.root,
+                        &entry.destination,
+                        *expected_identity,
+                        previous_target,
+                    )
+                    .map_err(|_| {
+                        project_skill_link_failure(
+                            "The prior project skill link could not be removed safely.",
+                        )
+                    })?;
+                if self
+                    .filesystem
+                    .create_relative_symlink_beneath_no_follow(
+                        &entry.root,
+                        &entry.destination,
+                        &entry.target,
+                    )
+                    .is_ok()
+                {
+                    return Ok(OperationOutcome::Applied);
+                }
+                let restored = self
+                    .filesystem
+                    .inspect_entry_beneath_no_follow(&entry.root, &entry.destination)
+                    .ok()
+                    .is_some_and(|observation| {
+                        matches!(observation, ConfinedEntryObservation::Missing)
+                    })
+                    && self
+                        .filesystem
+                        .create_relative_symlink_beneath_no_follow(
+                            &entry.root,
+                            &entry.destination,
+                            previous_target,
+                        )
+                        .is_ok();
+                let detail = if restored {
+                    "The project skill link replacement failed; the prior owned relative link was restored."
+                } else {
+                    "The project skill link replacement failed and restoration could not be proven."
+                };
+                Err(project_skill_link_failure(detail))
+            }
+        }
+    }
+}
+
+impl ExecutionPort for ProjectSkillLifecyclePort<'_> {
+    fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
+        self.canonical.revalidate(plan)?;
+        self.links.revalidate(plan)
+    }
+
+    fn apply(
+        &self,
+        operation: &skilltap_core::domain::Operation,
+    ) -> Result<OperationOutcome, ExecutionError> {
+        if self.canonical.entries.contains_key(operation.id()) {
+            self.canonical.apply(operation)
+        } else {
+            self.links.apply(operation)
+        }
+    }
+}
+
+fn project_skill_link_failure(detail: impl Into<String>) -> ExecutionError {
+    let detail = skilltap_core::domain::EvidenceDetail::new(detail.into()).unwrap_or_else(|_| {
+        skilltap_core::domain::EvidenceDetail::new(
+            "Project skill link execution failed; fresh observation is required.",
+        )
+        .expect("static evidence detail is valid")
+    });
+    ExecutionError::apply_failure(skilltap_core::domain::AttentionReason::operation_failed(
+        skilltap_core::domain::EvidenceCode::new("managed.project_skill_link_failed")
+            .expect("static evidence code is valid"),
+        detail,
+    ))
+}
+
 impl ExecutionPort for ManagedSkillPort<'_> {
     fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
         for (_, operation) in plan.iter() {
@@ -637,14 +851,9 @@ impl ExecutionPort for ManagedSkillPort<'_> {
                 continue;
             }
             let Some(entry) = self.entries.get(operation.id()) else {
-                return Err(ExecutionError::revalidation(
-                    skilltap_core::domain::EvidenceCode::new("managed.skill_request_missing")
-                        .expect("static evidence code is valid"),
-                    skilltap_core::domain::EvidenceDetail::new(
-                        "The managed skill adapter did not receive a request for a planned operation.",
-                    )
-                    .expect("static evidence detail is valid"),
-                ));
+                // Project link operations use the same skill actions but are
+                // validated by ProjectSkillLinkPort in the composite port.
+                continue;
             };
             let expected = AbsolutePath::new(format!(
                 "{}/{}",

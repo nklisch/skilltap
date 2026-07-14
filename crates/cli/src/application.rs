@@ -35,12 +35,13 @@ use skilltap_core::{
     lifecycle_operation::native_operation,
     managed_projection::{ManagedFileWrite, ManagedPluginWrite, ResolvedSourceCheckout},
     runtime::{
-        DirectoryTreeFileSystem, ExecutableResolutionRequest, ExecutableResolver,
-        ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, FileKind, FileSystem,
-        JsonLimits, NativeProcessRequest, NativeProcessRunner, PlatformPaths, ProcessEnvironment,
-        ProcessLimits, RelativeSymlinkTarget, ScopeRequest, ScopeResolver, SystemConfigurationLock,
-        SystemExecutableResolver, SystemExternalTreeObserver, SystemFileSystem,
-        SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
+        ConfinedEntryObservation, DirectoryTreeFileSystem, ExecutableResolutionRequest,
+        ExecutableResolver, ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest,
+        FileKind, FileSystem, JsonLimits, LinkIdentity, NativeProcessRequest, NativeProcessRunner,
+        PlatformPaths, ProcessEnvironment, ProcessLimits, RelativeSymlinkTarget, ScopeRequest,
+        ScopeResolver, SystemConfigurationLock, SystemExecutableResolver,
+        SystemExternalTreeObserver, SystemFileSystem, SystemNativeProcessRunner, WorkingDirectory,
+        resolve_targets,
     },
     skill::ValidatedSkillTree,
     skill_compatibility::{SkillCompatibility, SkillLoadability},
@@ -145,6 +146,7 @@ use crate::{
 mod execution;
 mod instructions;
 mod lifecycle;
+mod project_skills;
 mod reconciliation;
 mod status;
 

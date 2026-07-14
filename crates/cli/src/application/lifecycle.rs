@@ -2064,6 +2064,26 @@ impl StatusApplication<'_> {
         } else {
             UpdateIntent::Track
         };
+        if scope
+            .resolved
+            .iter()
+            .all(|scope| matches!(scope, Scope::Project(_)))
+        {
+            return super::project_skills::execute_project_skill_install(
+                self,
+                command,
+                &scope,
+                &targets,
+                acknowledged,
+                name,
+                skill,
+                source,
+                update_intent,
+                git_commit,
+                paths,
+                outcome,
+            );
+        }
         let mut inventory = documents.inventory.clone().unwrap_or_else(|| {
             InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
                 .expect("empty inventory is valid")
@@ -2792,6 +2812,21 @@ impl StatusApplication<'_> {
                 ));
             }
         };
+        if scope
+            .resolved
+            .iter()
+            .all(|scope| matches!(scope, Scope::Project(_)))
+        {
+            return super::project_skills::execute_project_skill_remove(
+                self,
+                &scope,
+                &targets,
+                name,
+                acknowledged,
+                paths,
+                outcome,
+            );
+        }
         let destination = match skill_relative_destination(&name) {
             Some(destination) => destination,
             None => {

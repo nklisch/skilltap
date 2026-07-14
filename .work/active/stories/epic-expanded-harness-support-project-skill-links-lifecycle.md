@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links-lifecycle
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-project-skill-links
 depends_on:
@@ -81,3 +81,30 @@ state semantics; it does not own final status/adoption rendering.
 Consumes the contract and filesystem checkpoints. The observation checkpoint
 uses its planning/state semantics; the acceptance checkpoint verifies the
 integrated lifecycle.
+
+## Implementation notes
+
+- Added `application/project_skills.rs` as the project-only lifecycle planner.
+  It validates the canonical source once, asks each selected registry adapter
+  for compatibility and destination evidence, publishes one `.agents/skills`
+  tree, and derives links from the pure project layout contract.
+- Added a composite execution port that binds canonical tree operations and
+  no-follow link operations to one dependency graph and configuration lock.
+  Canonical publication precedes links; final canonical removal depends on all
+  selected link removals.
+- Link repair is limited to desired skilltap-owned relative links. Absolute,
+  regular, directory, special, missing-ownership, and divergent unmanaged
+  destinations remain preserved conflicts. Replacement rollback restores only
+  the captured relative target when the pathname is still absent.
+- Project updates enforce the shared-content target gate; target-local state
+  seeds preserve unselected sibling bindings while the canonical fingerprint is
+  shared. Global skill lifecycle remains on the existing copied-tree path.
+- Explicit project install, update, and remove now route through this service;
+  source-backed reconciliation follows the same path.
+
+## Verification
+
+- `cargo check -p skilltap` — passed with warnings denied by later workspace checks.
+- `cargo test -p skilltap --test compiled_binary` — 53 passed.
+- `cargo fmt --all -- --check` — passed before this checkpoint transition.
+- `git diff --check` — passed before this checkpoint transition.
