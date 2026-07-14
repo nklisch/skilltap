@@ -11,7 +11,7 @@ research_refs:
 research_origin: operator-request-2026-07-12
 gate_origin: null
 created: 2026-07-12
-updated: 2026-07-12
+updated: 2026-07-14
 ---
 
 # Expanded Harness Support
@@ -115,12 +115,13 @@ not flatten their schemas or lifecycle behavior into a universal plugin format.
 ## Decomposition
 
 The existing managed-fallback feature remains the shared publication
-foundation. Eight additional features split the work by capability: one
-registry and adapter contract, four independent direct-adapter families, a Pi
-contract research prerequisite, the Pi compound adapter, and independent
-candidate admission. Nine children exceed the usual epic target because this
-scope spans fifteen harnesses; collapsing them further would combine unrelated
-native contracts or hand oversized features to the next design pass.
+foundation. Nine additional features split the work by capability: one
+registry and adapter contract, one shared project-skill link contract, four
+independent direct-adapter families, a Pi contract research prerequisite, the
+Pi compound adapter, and independent candidate admission. Ten children exceed
+the usual epic target because this scope spans fifteen harnesses; collapsing
+them further would combine unrelated native contracts or hand oversized
+features to the next design pass.
 
 ### Child features
 
@@ -131,32 +132,43 @@ native contracts or hand oversized features to the next design pass.
   projection lifecycle for targets without native distribution — depends on:
   `[epic-cross-harness-materialization,
   epic-expanded-harness-support-registry]`.
+- `epic-expanded-harness-support-project-skill-links` — validate canonical
+  project-local skills and project them into distinct native roots through
+  per-skill relative symlinks — depends on:
+  `[epic-standalone-skill-lifecycle,
+  epic-expanded-harness-support-registry]`.
 - `epic-expanded-harness-support-file-managed` — Gemini, OpenCode, and Kiro
   adapters — depends on: `[epic-expanded-harness-support-registry,
-  feature-managed-fallback-target-parity]`.
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links]`.
 - `epic-expanded-harness-support-native-coexistence` — Factory Droid, Qwen,
   and Copilot adapters with native-managed coexistence — depends on:
   `[epic-expanded-harness-support-registry,
-  feature-managed-fallback-target-parity]`.
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links]`.
 - `epic-expanded-harness-support-configuration-constrained` — Kimi, Vibe, and
   Kilo adapters with explicit reload, transport, and document constraints —
   depends on: `[epic-expanded-harness-support-registry,
-  feature-managed-fallback-target-parity]`.
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links]`.
 - `epic-expanded-harness-support-trust-interactive` — Junie and Amp adapters
   with declared-versus-effective trust and interactive-state behavior —
   depends on: `[epic-expanded-harness-support-registry,
-  feature-managed-fallback-target-parity]`.
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links]`.
 - `epic-expanded-harness-support-pi-hook-research` — attest the exact Pi Claude
   hook-compatibility extension and its health/version/semantics contract —
   depends on: `[]`.
 - `epic-expanded-harness-support-pi` — conditional Pi compound adapter —
   depends on: `[epic-expanded-harness-support-registry,
   feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links,
   epic-expanded-harness-support-pi-hook-research]`.
 - `epic-expanded-harness-support-candidate-admission` — independently validate
   and admit Cursor, Zoo Code, and ZCode — depends on:
   `[epic-expanded-harness-support-registry,
-  feature-managed-fallback-target-parity]`.
+  feature-managed-fallback-target-parity,
+  epic-expanded-harness-support-project-skill-links]`.
 
 ### Simplification arcs
 
@@ -165,6 +177,9 @@ native contracts or hand oversized features to the next design pass.
 - `feature-managed-fallback-target-parity` consolidates managed acquisition,
   projection, ownership, drift, update, removal, and verification instead of
   duplicating them in each adapter.
+- `epic-expanded-harness-support-project-skill-links` replaces duplicate
+  project skill trees with one validated canonical tree and per-skill relative
+  links while preserving native-only siblings.
 - Concrete adapter features reuse bounded execution, target-local state,
   rollback, and effective-load verification while retaining only target-owned
   codecs, probes, paths, and lifecycle semantics.
