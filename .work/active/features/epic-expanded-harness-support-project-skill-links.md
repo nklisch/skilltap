@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links
 kind: feature
-stage: implementing
+stage: review
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-standalone-skill-lifecycle, epic-expanded-harness-support-registry]
@@ -923,6 +923,56 @@ safety, and externally visible behavior are the earned surfaces.
   durability differ at the syscall edge. Unit 2 keeps platform code behind the
   existing Unix runtime boundary and the compiled matrix must run on both
   supported CI platforms.
+
+## Implementation summary
+
+All five implementation units are complete. The delivered feature now keeps a
+single complete project skill tree at `.agents/skills/<name>`, projects each
+noncanonical registry-derived target through a relative per-skill link, and
+keeps global skill publication as copied trees. Lifecycle execution validates
+and publishes canonical content before links, revalidates link identity under
+the configuration lock, preserves unmanaged conflicts, and removes links before
+owned canonical content. Status and adoption use the same bounded observation
+model, including separate conformance, loadability, compatibility, and
+projection fields.
+
+The acceptance checkpoint added isolated compiled-binary coverage for nested
+project paths, canonical Codex no-op and Claude projection, complete-tree
+siblings and executable intent, idempotency, repair and conflict preservation,
+read-only status, malformed unmanaged candidates, source-less adoption/removal,
+and the all-desired-target content update gate. Global copy assertions remain in
+place as the explicit scope boundary.
+
+## Implementation deviations and discoveries
+
+- The compiled target registry currently contains Codex and Claude only, so the
+  planned throwaway-adapter scenario cannot be exercised through the compiled
+  CLI. Registry-driven projection and lower-level filesystem coverage remain
+  the evidence for future target roots; no test-only adapter was introduced.
+- The final compiled acceptance surface uses the stable rendered project-scope
+  resource IDs. Lower-level filesystem tests, including final-entry kinds and
+  stale-identity races, remain the appropriate boundary for no-follow behavior.
+- Strict all-feature Clippy exposed pre-existing cross-platform checked Unix
+  identity conversions and large project-link execution errors. The final
+  checkpoint retains the checked conversions with a platform rationale, adds
+  narrow lint annotations for the intentionally composed project execution
+  boundary, and removes an avoidable borrow; behavior is unchanged.
+- Status initially lost `attention_required` when native observation completed,
+  unmanaged status attempted an invalid empty target set, and partial shared
+  content updates omitted `changed: false`. The acceptance commit fixes and
+  verifies all three defects.
+
+## Integrated evidence
+
+- `cargo test -p skilltap --test compiled_binary project_skill -- --nocapture` —
+  passed (4 tests).
+- `cargo test -p skilltap --test compiled_binary -- --nocapture` — passed (58
+  tests).
+- `cargo test --workspace --all-targets` — passed (586 tests).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` —
+  passed.
+- `cargo fmt --all -- --check` and `git diff --check` — passed.
+- Acceptance commit: `c6829824` (`implement: epic-expanded-harness-support-project-skill-links-acceptance`).
 
 ## Other agent review
 
