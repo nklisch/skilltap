@@ -10,7 +10,7 @@ use skilltap_core::{
         ExternalTreeLimits, ExternalTreeObserver, ExternalTreeRequest, SystemExternalTreeObserver,
     },
     skill::ValidatedSkillTree,
-    skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
+    skill_compatibility::{SkillCompatibility, SkillLoadability},
 };
 use skilltap_test_support::TempRoot;
 
@@ -255,7 +255,7 @@ fn validated_skill(root: &Path) -> Result<ValidatedSkillTree, String> {
     let compatibility = SkillCompatibility::evaluate(&skill, &targets);
     if compatibility
         .iter()
-        .any(|value| value.class() != SkillCompatibilityClass::Compatible)
+        .any(|value| value.loadability() != SkillLoadability::Loadable)
     {
         return Err("skill frontmatter is not strict for both channels".to_owned());
     }

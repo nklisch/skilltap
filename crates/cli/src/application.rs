@@ -11,8 +11,8 @@ use skilltap_core::{
     },
     domain::{
         AbsolutePath, ArtifactFile, CapabilityId, CapabilitySupport, CommandArgument,
-        ComponentGraph, ConfiguredBinary, DesiredOrigin, DesiredResource, EvidenceCode,
-        EvidenceDetail, Fingerprint, GitCommit, HarnessId, HarnessObservation,
+        CompatibilityClass, ComponentGraph, ConfiguredBinary, DesiredOrigin, DesiredResource,
+        EvidenceCode, EvidenceDetail, Fingerprint, GitCommit, HarnessId, HarnessObservation,
         HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
         ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
         ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
@@ -43,7 +43,7 @@ use skilltap_core::{
         SystemNativeProcessRunner, WorkingDirectory, resolve_targets,
     },
     skill::ValidatedSkillTree,
-    skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
+    skill_compatibility::{SkillCompatibility, SkillLoadability},
     storage::{
         ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DaemonOperationRef,
         DocumentState, InventoryDocument, InventoryRepository, ManagedArtifactRepository,

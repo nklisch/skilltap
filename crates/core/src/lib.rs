@@ -14,6 +14,7 @@ pub mod materialization;
 pub mod native_config;
 pub mod operation_graph;
 pub mod plugin_graph;
+pub mod project_skill;
 pub mod publication;
 pub mod reconciliation;
 pub mod runtime;

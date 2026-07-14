@@ -1964,8 +1964,9 @@ impl StatusApplication<'_> {
         let mut compatibility_label = "compatible";
         let mut partial_compatibility = false;
         for compatibility in SkillCompatibility::evaluate(&skill, &targets.resolved) {
-            match compatibility.class() {
-                SkillCompatibilityClass::Blocked => {
+            match (compatibility.class(), compatibility.loadability()) {
+                (CompatibilityClass::Compatible, SkillLoadability::Loadable) => {}
+                (CompatibilityClass::Incompatible, SkillLoadability::Blocked) => {
                     outcome.result = ResultClass::AttentionRequired;
                     return outcome.with_warning(
                         Warning::new(
@@ -1975,7 +1976,7 @@ impl StatusApplication<'_> {
                         .with_context("harness", compatibility.target().as_str()),
                     );
                 }
-                SkillCompatibilityClass::Warning => {
+                (CompatibilityClass::Unknown, SkillLoadability::Unknown) => {
                     compatibility_label = "warning";
                     partial_compatibility = true;
                     outcome = outcome.with_warning(
@@ -1986,7 +1987,16 @@ impl StatusApplication<'_> {
                         .with_context("harness", compatibility.target().as_str()),
                     );
                 }
-                SkillCompatibilityClass::Compatible => {}
+                _ => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return outcome.with_warning(
+                        Warning::new(
+                            "skill_incompatible",
+                            "The skill frontmatter is not loadable by the selected harness.",
+                        )
+                        .with_context("harness", compatibility.target().as_str()),
+                    );
+                }
             }
         }
         let name = match request.name {

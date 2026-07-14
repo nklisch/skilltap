@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links-contract
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-project-skill-links
 depends_on: []
@@ -74,3 +74,27 @@ reconciliation.
 Foundation checkpoint. The filesystem and lifecycle checkpoints consume these
 exact types and must not duplicate name, path, conformance, or link-health
 rules.
+
+## Implementation notes
+
+- Added bounded `serde_yaml` parsing over the already captured `SKILL.md`
+  bytes, with validating `AgentSkillName`, typed portable metadata, extension
+  field preservation, and independent strict conformance/loadability results.
+- Added `project_skill` layout derivation. It validates native roots beneath
+  the project, treats `.agents/skills` as canonical by path equality, and
+  computes normalized relative targets for all other descendant roots without
+  harness-specific branching.
+- Retained the existing non-project compatibility helper as a compatibility
+  surface for plugin bootstrap callers, mapping strict metadata to the new
+  `CompatibilityClass`/`SkillLoadability` contract. Unterminated frontmatter
+  remains explicitly nonconforming but may be conservatively loadable, matching
+  the established client-tolerance behavior.
+- Updated the existing lifecycle caller and plugin-package fixture to consume
+  the separate compatibility/loadability results; no mutation or status
+  orchestration was introduced in this checkpoint.
+
+## Verification
+
+- `cargo test -p skilltap-core --all-targets` — 361 passed.
+- `cargo test -p skilltap --test compiled_binary skill_install_requires_generic_yes_for_loadable_partial_frontmatter` — passed.
+- `git diff --check` — passed.
