@@ -66,6 +66,46 @@ pub fn native_operation(
 
 /// Build a journaled no-op after fresh native observation proves that a prior
 /// attempted lifecycle operation already achieved its requested state.
+/// Build a typed blocked native lifecycle operation. The operation remains in
+/// the validated plan so dependency skips and journal evidence are explicit,
+/// while the native port is not given a request it could accidentally run.
+pub fn blocked_native_operation(
+    id: OperationId,
+    target: HarnessId,
+    resource: ResourceKey,
+    action: OperationAction,
+    code: EvidenceCode,
+    detail: EvidenceDetail,
+) -> Result<Operation, crate::domain::OperationContractError> {
+    let compatibility = CompatibilityResult::new(
+        target.clone(),
+        CompatibilityClass::Incompatible,
+        TransferFidelity::Blocked,
+        [],
+        [],
+    )
+    .expect("blocked native operations have bounded compatibility evidence");
+    let semantics = OperationSemantics::new(
+        action,
+        resource.scope().clone(),
+        OperationReason::new(code.clone(), detail.clone()),
+        compatibility,
+        Provenance::Native,
+        [],
+    );
+    Operation::new(
+        id,
+        target,
+        OperationSelector::Resource { resource },
+        semantics,
+        OperationClass::Unsupported,
+        Reversibility::NotApplicable,
+        [],
+        AcknowledgmentRequirement::not_required(),
+        Some(crate::domain::AttentionReason::unsupported(code, detail)),
+    )
+}
+
 pub fn native_noop_operation(
     id: OperationId,
     target: HarnessId,

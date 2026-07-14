@@ -69,6 +69,7 @@ fn same_name_user_plugin_does_not_satisfy_missing_local_plugin() {
         .unwrap(),
         NativeResourceObservation::Present {
             scope: Some(skilltap_core::domain::CapabilityScope::Global),
+            revision: None,
         }
     );
     assert_eq!(

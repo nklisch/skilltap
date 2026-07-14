@@ -26,8 +26,9 @@ pub use repository::{
     StorageError, StorageFailure,
 };
 pub use state::{
-    ApplyRecord, DaemonRunRecord, DaemonRunResult, HarnessState, ManagedProjection,
-    PendingManagedAttempt, ResourceState, StateDocument, TargetResourceState, Timestamp,
+    ApplyRecord, DaemonOperationRef, DaemonRunRecord, DaemonRunResult, HarnessState,
+    ManagedProjection, PendingManagedAttempt, ResourceState, StateDocument, TargetResourceState,
+    Timestamp,
 };
 
 use std::fmt;
@@ -114,6 +115,7 @@ pub enum SchemaError {
         harness: crate::domain::HarnessId,
     },
     InvalidDaemonFailureCode,
+    InvalidDaemonOperationAction,
     DuplicateManagedPath {
         path: crate::domain::RelativeArtifactPath,
     },
@@ -214,6 +216,9 @@ impl fmt::Display for SchemaError {
             ),
             Self::InvalidDaemonFailureCode => {
                 formatter.write_str("daemon failure code is not registered or conflicts with its result")
+            }
+            Self::InvalidDaemonOperationAction => {
+                formatter.write_str("daemon operation references may contain only update actions")
             }
             Self::DuplicateManagedPath { path } => {
                 write!(formatter, "duplicate managed artifact path `{path}`")

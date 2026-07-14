@@ -427,7 +427,9 @@ impl StatusProjection<'_> {
             outcome = outcome.with_warning(warning);
         }
         if let Some(state) = self.documents.state.as_ref() {
-            outcome = outcome.with_resource(daemon_status_projection(state.daemon_run()));
+            for entry in daemon_status_projection(state, state.daemon_run()) {
+                outcome = outcome.with_resource(entry);
+            }
         }
         if observation.failed_targets == 0 {
             outcome.result = ResultClass::Completed;
@@ -1008,10 +1010,11 @@ pub(crate) fn first_use_harness_report(
 }
 
 fn daemon_status_projection(
+    state: &skilltap_core::storage::StateDocument,
     record: Option<&skilltap_core::storage::DaemonRunRecord>,
-) -> OutputEntry {
+) -> Vec<OutputEntry> {
     let Some(record) = record else {
-        return OutputEntry::new("daemon", "never_run");
+        return vec![OutputEntry::new("daemon", "never_run")];
     };
     let status = match record.result() {
         skilltap_core::storage::DaemonRunResult::Completed => "completed",
@@ -1019,14 +1022,61 @@ fn daemon_status_projection(
         skilltap_core::storage::DaemonRunResult::Contended => "contended",
         skilltap_core::storage::DaemonRunResult::Failed => "failed",
     };
-    let mut entry = OutputEntry::new("daemon", status)
+    let mut entries = Vec::with_capacity(record.operations().len() + 1);
+    let mut daemon = OutputEntry::new("daemon", status)
         .with_field("last_run_seconds", record.at().seconds())
         .with_field("safe_operations", record.safe_operations())
         .with_field("pending_operations", record.pending_operations());
     if let Some(code) = record.failure_code() {
-        entry = entry.with_field("failure", code.as_str());
+        daemon = daemon.with_field("failure", code.as_str());
     }
-    entry
+    entries.push(daemon);
+    for reference in record.operations() {
+        let result = state
+            .resources()
+            .get(reference.resource())
+            .and_then(|resource| resource.target(reference.target()))
+            .and_then(|target| target.last_apply())
+            .and_then(|apply| apply.operations().get(reference.operation()));
+        let (status, result_label, dependencies) = match result {
+            Some(result) => (
+                operation_result_status(result.outcome()),
+                operation_result_status(result.outcome()),
+                match result.outcome() {
+                    OperationOutcome::SkippedDependency { dependencies } => dependencies
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(","),
+                    _ => String::new(),
+                },
+            ),
+            None => ("pending", "indeterminate", String::new()),
+        };
+        let mut entry = OutputEntry::new(
+            format!("daemon-operation:{}", reference.operation()),
+            status,
+        )
+        .with_field("phase", daemon_operation_phase(reference.action()))
+        .with_field("operation", reference.operation().to_string())
+        .with_field("resource", reference.resource().to_string())
+        .with_field("target", reference.target().as_str())
+        .with_field("result", result_label);
+        if !dependencies.is_empty() {
+            entry = entry.with_field("dependencies", dependencies);
+        }
+        entries.push(entry);
+    }
+    entries
+}
+
+fn daemon_operation_phase(action: skilltap_core::domain::OperationAction) -> &'static str {
+    match action {
+        skilltap_core::domain::OperationAction::MarketplaceUpdate => "marketplace_refresh",
+        skilltap_core::domain::OperationAction::PluginUpdate => "plugin_update",
+        skilltap_core::domain::OperationAction::SkillUpdate => "skill_update",
+        _ => "lifecycle",
+    }
 }
 
 struct UnavailableSourceRevisionResolver;

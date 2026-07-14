@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -7,8 +7,9 @@ use serde::{Deserialize, Deserializer, Serialize};
 
 use super::{ArtifactRole, ManagedArtifactRecord, STATE_SCHEMA_VERSION, SchemaError};
 use crate::domain::{
-    ComponentId, EvidenceCode, Fingerprint, HarnessId, NativeId, OperationId, OperationResult,
-    Ownership, Provenance, RelativeArtifactPath, ResolvedRevision, ResourceKey, Source,
+    ComponentId, EvidenceCode, Fingerprint, HarnessId, NativeId, OperationAction, OperationId,
+    OperationResult, Ownership, Provenance, RelativeArtifactPath, ResolvedRevision, ResourceKey,
+    Source,
 };
 
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
@@ -160,6 +161,121 @@ impl<'de> Deserialize<'de> for ApplyRecord {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct DaemonOperationRef {
+    operation: OperationId,
+    resource: ResourceKey,
+    target: HarnessId,
+    action: OperationAction,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+struct DaemonOperationRefWire {
+    operation: OperationId,
+    resource: ResourceKey,
+    target: HarnessId,
+    action: OperationAction,
+}
+
+impl Ord for DaemonOperationRef {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.operation
+            .cmp(&other.operation)
+            .then_with(|| self.resource.cmp(&other.resource))
+            .then_with(|| self.target.cmp(&other.target))
+            .then_with(|| {
+                daemon_operation_action_rank(self.action)
+                    .cmp(&daemon_operation_action_rank(other.action))
+            })
+    }
+}
+
+impl PartialOrd for DaemonOperationRef {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn daemon_operation_action_rank(action: OperationAction) -> u8 {
+    match action {
+        OperationAction::MarketplaceUpdate => 0,
+        OperationAction::PluginUpdate => 1,
+        OperationAction::SkillUpdate => 2,
+        _ => 255,
+    }
+}
+
+impl DaemonOperationRef {
+    pub fn new(
+        operation: OperationId,
+        resource: ResourceKey,
+        target: HarnessId,
+        action: OperationAction,
+    ) -> Result<Self, SchemaError> {
+        if !matches!(
+            action,
+            OperationAction::MarketplaceUpdate
+                | OperationAction::PluginUpdate
+                | OperationAction::SkillUpdate
+        ) {
+            return Err(SchemaError::InvalidDaemonOperationAction);
+        }
+        Ok(Self {
+            operation,
+            resource,
+            target,
+            action,
+        })
+    }
+
+    pub const fn operation(&self) -> &OperationId {
+        &self.operation
+    }
+
+    pub const fn resource(&self) -> &ResourceKey {
+        &self.resource
+    }
+
+    pub const fn target(&self) -> &HarnessId {
+        &self.target
+    }
+
+    pub const fn action(&self) -> OperationAction {
+        self.action
+    }
+}
+
+impl From<DaemonOperationRef> for DaemonOperationRefWire {
+    fn from(value: DaemonOperationRef) -> Self {
+        Self {
+            operation: value.operation,
+            resource: value.resource,
+            target: value.target,
+            action: value.action,
+        }
+    }
+}
+
+impl TryFrom<DaemonOperationRefWire> for DaemonOperationRef {
+    type Error = SchemaError;
+
+    fn try_from(value: DaemonOperationRefWire) -> Result<Self, Self::Error> {
+        Self::new(value.operation, value.resource, value.target, value.action)
+    }
+}
+
+impl<'de> Deserialize<'de> for DaemonOperationRef {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        DaemonOperationRefWire::deserialize(deserializer)?
+            .try_into()
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DaemonRunResult {
@@ -177,6 +293,7 @@ pub struct DaemonRunRecord {
     safe_operations: u64,
     pending_operations: u64,
     failure_code: Option<EvidenceCode>,
+    operations: BTreeSet<DaemonOperationRef>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -188,6 +305,8 @@ struct DaemonRunRecordWire {
     pending_operations: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     failure_code: Option<EvidenceCode>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    operations: Vec<DaemonOperationRefWire>,
 }
 
 impl DaemonRunRecord {
@@ -218,7 +337,16 @@ impl DaemonRunRecord {
             safe_operations,
             pending_operations,
             failure_code,
+            operations: BTreeSet::new(),
         })
+    }
+
+    pub fn with_operations(
+        mut self,
+        operations: impl IntoIterator<Item = DaemonOperationRef>,
+    ) -> Result<Self, SchemaError> {
+        self.operations = operations.into_iter().collect();
+        Ok(self)
     }
 
     pub const fn at(&self) -> Timestamp {
@@ -240,6 +368,10 @@ impl DaemonRunRecord {
     pub const fn failure_code(&self) -> Option<&EvidenceCode> {
         self.failure_code.as_ref()
     }
+
+    pub const fn operations(&self) -> &BTreeSet<DaemonOperationRef> {
+        &self.operations
+    }
 }
 
 impl From<DaemonRunRecord> for DaemonRunRecordWire {
@@ -250,6 +382,7 @@ impl From<DaemonRunRecord> for DaemonRunRecordWire {
             safe_operations: value.safe_operations,
             pending_operations: value.pending_operations,
             failure_code: value.failure_code,
+            operations: value.operations.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -258,12 +391,19 @@ impl TryFrom<DaemonRunRecordWire> for DaemonRunRecord {
     type Error = SchemaError;
 
     fn try_from(value: DaemonRunRecordWire) -> Result<Self, Self::Error> {
-        Self::new(
+        let record = Self::new(
             value.at,
             value.result,
             value.safe_operations,
             value.pending_operations,
             value.failure_code,
+        )?;
+        record.with_operations(
+            value
+                .operations
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<Result<Vec<DaemonOperationRef>, SchemaError>>()?,
         )
     }
 }

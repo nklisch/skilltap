@@ -11,12 +11,13 @@ use skilltap_core::{
     },
     domain::{
         AbsolutePath, ArtifactFile, CapabilityId, CapabilitySupport, CommandArgument,
-        ComponentGraph, ConfiguredBinary, DesiredOrigin, DesiredResource, Fingerprint, GitCommit,
-        HarnessId, HarnessObservation, HarnessObservationOutcome, HarnessReachability, HarnessSet,
-        NativeId, ObservationAdapterError, ObservationBatch, ObservationEvidence,
-        ObservationFields, ObservationFinding, ObservationFindingCode, ObservationKey,
-        ObservationLayer, ObservationRequest, ObservationSeverity, ObservationSubject,
-        ObservationSummary, ObservationTarget, ObservedResource, OperationAction, OperationId,
+        ComponentGraph, ConfiguredBinary, DesiredOrigin, DesiredResource, EvidenceCode,
+        EvidenceDetail, Fingerprint, GitCommit, HarnessId, HarnessObservation,
+        HarnessObservationOutcome, HarnessReachability, HarnessSet, NativeId,
+        ObservationAdapterError, ObservationBatch, ObservationEvidence, ObservationFields,
+        ObservationFinding, ObservationFindingCode, ObservationKey, ObservationLayer,
+        ObservationRequest, ObservationSeverity, ObservationSubject, ObservationSummary,
+        ObservationTarget, ObservedResource, OperationAction, OperationDependency, OperationId,
         OperationOutcome, OperationResult, OperationSelector, Ownership, Plan, ProfileAuthority,
         Provenance, ResourceHealth, ResourceId, ResourceKey, ResourceKind, Scope, Source,
         SourceKind, SourceLocator, UpdateIntent,
@@ -44,10 +45,10 @@ use skilltap_core::{
     skill::ValidatedSkillTree,
     skill_compatibility::{SkillCompatibility, SkillCompatibilityClass},
     storage::{
-        ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DocumentState,
-        InventoryDocument, InventoryRepository, ManagedArtifactRepository, ManagedProjection,
-        PendingManagedAttempt, ResourceState, StateDocument, StateRepository, StorageError,
-        StorageFailure, TargetResourceState, Timestamp,
+        ArtifactTree, ClaudeInstructionMode, ConfigDocument, ConfigRepository, DaemonOperationRef,
+        DocumentState, InventoryDocument, InventoryRepository, ManagedArtifactRepository,
+        ManagedProjection, PendingManagedAttempt, ResourceState, StateDocument, StateRepository,
+        StorageError, StorageFailure, TargetResourceState, Timestamp,
     },
     updates::{
         ResolutionError, SourceRevisionResolver, UpdateCandidate, UpdateDecision,
@@ -57,10 +58,10 @@ use skilltap_core::{
 };
 use skilltap_harnesses::{
     DetectionError, GitSourceRevisionResolver, ManagedLifecycleKind, ManagedProjectionContext,
-    ManagedProjectionInput, NativeLifecycleAction, NativeLifecycleDispatch, NativeLifecyclePort,
-    NativeLifecycleRequest, NativeObservationFailure, NativeResourceObservation,
-    ObservedNativeRevisionResolver, detect_configured_installation, native_arguments,
-    normalize_observations, observe_native_resource,
+    ManagedProjectionInput, NativeLifecycleAction, NativeLifecycleBinding, NativeLifecycleDispatch,
+    NativeLifecyclePort, NativeLifecycleRequest, NativeObservationFailure,
+    NativeResourceObservation, ObservedNativeRevisionResolver, detect_configured_installation,
+    native_arguments, normalize_observations, observe_native_resource,
 };
 
 pub(super) struct DetectionDiagnostic {
@@ -205,6 +206,7 @@ impl StatusApplication<'_> {
         outcome: &mut Outcome,
         safe_operations: u64,
         pending_operations: u64,
+        operations: impl IntoIterator<Item = DaemonOperationRef>,
     ) {
         let at = match Timestamp::from_system_time(std::time::SystemTime::now()) {
             Ok(at) => at,
@@ -232,7 +234,9 @@ impl StatusApplication<'_> {
             safe_operations,
             pending_operations,
             failure_code,
-        ) {
+        )
+        .and_then(|record| record.with_operations(operations))
+        {
             Ok(record) => record,
             Err(_) => {
                 outcome.result = merge_result(outcome.result, ResultClass::AttentionRequired);

@@ -9,7 +9,8 @@ use std::{
 use skilltap_core::{
     domain::{
         CapabilityScope, ConfiguredBinary, EvidenceCode, EvidenceDetail, ExecutableIdentity,
-        HarnessId, NativeId, Operation, OperationId, OperationOutcome, Plan, Scope, SourceLocator,
+        HarnessId, NativeId, Operation, OperationId, OperationOutcome, Plan, ResolvedRevision,
+        Scope, SourceLocator,
     },
     executor::{ExecutionError, ExecutionPort},
     runtime::{
@@ -32,9 +33,12 @@ pub enum NativeLifecycleAction {
 }
 
 /// Fresh native evidence for one exact managed lifecycle resource.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum NativeResourceObservation {
-    Present { scope: Option<CapabilityScope> },
+    Present {
+        scope: Option<CapabilityScope>,
+        revision: Option<ResolvedRevision>,
+    },
     Missing,
     Indeterminate(NativeObservationFailure),
 }
@@ -329,10 +333,11 @@ fn resource_observation(
     const LIST_FIELDS: &[&str] = &["plugins", "marketplaces", "installed", "resources", "items"];
     const IDENTITY_FIELDS: &[&str] = &["name", "id", "plugin", "marketplace", "qualifiedName"];
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone)]
     struct Entry<'a> {
         identity: &'a str,
         scope: Option<&'a str>,
+        revision: Option<ResolvedRevision>,
     }
 
     fn parse_entry<'a>(
@@ -343,6 +348,7 @@ fn resource_observation(
             serde_json::Value::String(identity) => Ok(Entry {
                 identity,
                 scope: None,
+                revision: None,
             }),
             serde_json::Value::Object(fields) => {
                 let identities = fields
@@ -360,7 +366,28 @@ fn resource_observation(
                     .get("scope")
                     .map(|value| value.as_str().ok_or(()))
                     .transpose()?;
-                Ok(Entry { identity, scope })
+                let version = fields
+                    .get("version")
+                    .map(|value| value.as_str().ok_or(()))
+                    .transpose()?;
+                let revision = fields
+                    .get("revision")
+                    .map(|value| value.as_str().ok_or(()))
+                    .transpose()?;
+                if version.is_some() && revision.is_some() && version != revision {
+                    return Err(());
+                }
+                let revision = match version.or(revision) {
+                    Some(value) => Some(ResolvedRevision::Native(
+                        NativeId::new(value).map_err(|_| ())?,
+                    )),
+                    None => None,
+                };
+                Ok(Entry {
+                    identity,
+                    scope,
+                    revision,
+                })
             }
             _ => Err(()),
         }
@@ -412,7 +439,13 @@ fn resource_observation(
             .iter()
             .any(|entry| entry.identity == request.name.as_str())
         {
-            NativeResourceObservation::Present { scope: None }
+            NativeResourceObservation::Present {
+                scope: None,
+                revision: entries
+                    .iter()
+                    .find(|entry| entry.identity == request.name.as_str())
+                    .and_then(|entry| entry.revision.clone()),
+            }
         } else {
             NativeResourceObservation::Missing
         };
@@ -438,6 +471,13 @@ fn resource_observation(
         0 => NativeResourceObservation::Missing,
         1 => NativeResourceObservation::Present {
             scope: Some(expected_scope),
+            revision: entries
+                .iter()
+                .find(|entry| {
+                    entry.identity == request.name.as_str()
+                        && entry.scope == Some(expected_scope_name)
+                })
+                .and_then(|entry| entry.revision.clone()),
         },
         _ => NativeResourceObservation::Indeterminate(NativeObservationFailure::AmbiguousScope),
     }
@@ -456,12 +496,26 @@ pub struct NativeLifecyclePort {
     foreign_operations: BTreeSet<OperationId>,
 }
 
+/// A native lifecycle request bound to its fresh pre-mutation observation.
+/// Foreground callers may leave `before` empty; daemon update batches provide
+/// it so conservative revision evidence can distinguish a verified no-change.
+#[derive(Clone)]
+pub struct NativeLifecycleBinding {
+    pub operation_id: OperationId,
+    pub configured: ConfiguredBinary,
+    pub search_path: Option<OsString>,
+    pub limits: ProcessLimits,
+    pub dispatch: NativeLifecycleDispatch,
+    pub before: Option<NativeResourceObservation>,
+}
+
 struct NativeLifecycleEntry {
     configured: ConfiguredBinary,
     search_path: Option<OsString>,
     limits: ProcessLimits,
     json_limits: skilltap_core::runtime::JsonLimits,
     dispatch: NativeLifecycleDispatch,
+    before: Option<NativeResourceObservation>,
 }
 
 impl NativeLifecyclePort {
@@ -506,6 +560,7 @@ impl NativeLifecyclePort {
                             json_limits: skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
                                 .expect("static lifecycle JSON limits are valid"),
                             dispatch,
+                            before: None,
                         },
                     )
                 })
@@ -530,6 +585,35 @@ impl NativeLifecyclePort {
         let mut port = Self::new_per_operation(entries);
         port.environment = environment;
         port
+    }
+
+    /// Build a port from bindings that carry the daemon's fresh pre-observation.
+    pub fn new_bound_with_environment(
+        bindings: impl IntoIterator<Item = NativeLifecycleBinding>,
+        environment: BTreeMap<OsString, OsString>,
+    ) -> Self {
+        Self {
+            entries: bindings
+                .into_iter()
+                .map(|binding| {
+                    let id = binding.operation_id.clone();
+                    (
+                        id,
+                        NativeLifecycleEntry {
+                            configured: binding.configured,
+                            search_path: binding.search_path,
+                            limits: binding.limits,
+                            json_limits: skilltap_core::runtime::JsonLimits::new(256 * 1024, 64)
+                                .expect("static lifecycle JSON limits are valid"),
+                            dispatch: binding.dispatch,
+                            before: binding.before,
+                        },
+                    )
+                })
+                .collect(),
+            environment,
+            foreign_operations: BTreeSet::new(),
+        }
     }
 
     /// Declare operation ids executed by a sibling adapter in one mixed plan.
@@ -582,6 +666,28 @@ impl ExecutionPort for NativeLifecyclePort {
                     )
                     .expect("static evidence detail is valid"),
                 ));
+            }
+            if let Some(before) = &entry.before {
+                let observation = observe_native_resource(
+                    entry.configured.clone(),
+                    entry.search_path.clone(),
+                    &self.environment,
+                    &entry.dispatch,
+                    entry.limits,
+                    entry.json_limits,
+                )
+                .map_err(|_| {
+                    native_noop_revalidation_failure(
+                        "native.precondition_observation_unavailable",
+                        "Fresh native precondition evidence could not be re-observed under the configuration lock.",
+                    )
+                })?;
+                if &observation != before {
+                    return Err(native_noop_revalidation_failure(
+                        "native.stale_evidence",
+                        "Native lifecycle evidence changed after daemon planning.",
+                    ));
+                }
             }
             if operation.class() == skilltap_core::domain::OperationClass::NoOp {
                 let observation = observe_native_resource(
@@ -654,9 +760,26 @@ impl ExecutionPort for NativeLifecyclePort {
                 entry.json_limits,
             )
             .map_err(|_| native_observation_failure(NativeObservationFailure::CommandFailed))?;
-            verify_lifecycle_postcondition(entry.dispatch.request.action, observation)
+            verify_lifecycle_postcondition(entry.dispatch.request.action, observation.clone())
                 .map_err(lifecycle_postcondition_failure)?;
-            Ok(OperationOutcome::Applied)
+            let no_change = matches!(
+                (&entry.before, &observation),
+                (
+                    Some(NativeResourceObservation::Present {
+                        revision: Some(before),
+                        ..
+                    }),
+                    NativeResourceObservation::Present {
+                        revision: Some(after),
+                        ..
+                    }
+                ) if before == after
+            );
+            Ok(if no_change {
+                OperationOutcome::NoChange
+            } else {
+                OperationOutcome::Applied
+            })
         } else {
             Err(native_apply_failure(
                 "The native lifecycle command returned a nonzero status.",
@@ -851,7 +974,10 @@ mod tests {
                 &serde_json::json!({"plugins": [{"name": "formatter@team"}]}),
                 &request,
             ),
-            NativeResourceObservation::Present { scope: None }
+            NativeResourceObservation::Present {
+                scope: None,
+                revision: None,
+            }
         );
         assert_eq!(
             resource_observation(&serde_json::json!({"plugins": []}), &request),
@@ -878,6 +1004,41 @@ mod tests {
     }
 
     #[test]
+    fn native_revision_evidence_is_strict_and_opaque() {
+        let request = claude(NativeLifecycleAction::PluginUpdate, Scope::Global);
+        assert_eq!(
+            resource_observation(
+                &serde_json::json!({
+                    "plugins": [{"name": "formatter@team", "scope": "user", "version": "1.2.3"}]
+                }),
+                &request,
+            ),
+            NativeResourceObservation::Present {
+                scope: Some(CapabilityScope::Global),
+                revision: Some(ResolvedRevision::Native(NativeId::new("1.2.3").unwrap())),
+            }
+        );
+        assert_eq!(
+            resource_observation(
+                &serde_json::json!({
+                    "plugins": [{"name": "formatter@team", "scope": "user", "version": "1.2.3", "revision": "1.2.4"}]
+                }),
+                &request,
+            ),
+            NativeResourceObservation::Indeterminate(NativeObservationFailure::UnsupportedShape)
+        );
+        assert_eq!(
+            resource_observation(
+                &serde_json::json!({
+                    "plugins": [{"name": "formatter@team", "scope": "user", "version": 3}]
+                }),
+                &request,
+            ),
+            NativeResourceObservation::Indeterminate(NativeObservationFailure::UnsupportedShape)
+        );
+    }
+
+    #[test]
     fn claude_presence_matches_identity_and_concrete_scope() {
         let global = claude(NativeLifecycleAction::PluginInstall, Scope::Global);
         let project = claude(
@@ -890,7 +1051,8 @@ mod tests {
         assert_eq!(
             resource_observation(&global_only, &global),
             NativeResourceObservation::Present {
-                scope: Some(CapabilityScope::Global)
+                scope: Some(CapabilityScope::Global),
+                revision: None,
             }
         );
         assert_eq!(
@@ -906,13 +1068,15 @@ mod tests {
         assert_eq!(
             resource_observation(&siblings, &global),
             NativeResourceObservation::Present {
-                scope: Some(CapabilityScope::Global)
+                scope: Some(CapabilityScope::Global),
+                revision: None,
             }
         );
         assert_eq!(
             resource_observation(&siblings, &project),
             NativeResourceObservation::Present {
-                scope: Some(CapabilityScope::Project)
+                scope: Some(CapabilityScope::Project),
+                revision: None,
             }
         );
     }
@@ -960,7 +1124,10 @@ mod tests {
         assert_eq!(
             verify_lifecycle_postcondition(
                 NativeLifecycleAction::PluginInstall,
-                NativeResourceObservation::Present { scope: None },
+                NativeResourceObservation::Present {
+                    scope: None,
+                    revision: None,
+                },
             ),
             Ok(())
         );
@@ -974,7 +1141,10 @@ mod tests {
         assert_eq!(
             verify_lifecycle_postcondition(
                 NativeLifecycleAction::PluginRemove,
-                NativeResourceObservation::Present { scope: None },
+                NativeResourceObservation::Present {
+                    scope: None,
+                    revision: None,
+                },
             ),
             Err(LifecyclePostconditionError::ExpectedMissing)
         );

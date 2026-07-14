@@ -1,5 +1,104 @@
 use super::*;
 
+#[derive(Default)]
+struct NativeLifecyclePlanBuilder {
+    operations: Vec<skilltap_core::domain::Operation>,
+    native_bindings: Vec<NativeLifecycleBinding>,
+    managed_entries: BTreeMap<OperationId, ManagedProjectLifecycleEntry>,
+    seeds: BTreeMap<ResourceKey, ResourceState>,
+    foreign_operations: BTreeSet<OperationId>,
+}
+
+struct DaemonNativeExecution {
+    outcome: Outcome,
+    changed: bool,
+    safe_operations: u64,
+    pending_operations: u64,
+    operations: Vec<DaemonOperationRef>,
+}
+
+fn daemon_capability_name(kind: NativeLifecycleKind) -> &'static str {
+    match kind {
+        NativeLifecycleKind::MarketplaceUpdate => "marketplace.update",
+        NativeLifecycleKind::PluginUpdate => "plugin.update",
+        NativeLifecycleKind::MarketplaceAdd
+        | NativeLifecycleKind::MarketplaceRemove
+        | NativeLifecycleKind::PluginInstall
+        | NativeLifecycleKind::PluginRemove => "daemon.unsupported",
+    }
+}
+
+fn daemon_action_label(action: OperationAction) -> &'static str {
+    match action {
+        OperationAction::MarketplaceUpdate => "marketplace_refresh",
+        OperationAction::PluginUpdate => "plugin_update",
+        OperationAction::SkillUpdate => "skill_update",
+        _ => "lifecycle",
+    }
+}
+
+fn daemon_block_reason(
+    reason: skilltap_core::daemon::DaemonPluginBlockReason,
+) -> (&'static str, &'static str) {
+    match reason {
+        skilltap_core::daemon::DaemonPluginBlockReason::InvalidSelector => (
+            "daemon.invalid_plugin_selector",
+            "The desired plugin selector is not a valid plugin@marketplace identity.",
+        ),
+        skilltap_core::daemon::DaemonPluginBlockReason::MarketplaceMissing => (
+            "daemon.marketplace_missing",
+            "The plugin's exact marketplace is not registered in the same scope.",
+        ),
+        skilltap_core::daemon::DaemonPluginBlockReason::MarketplaceTargetMissing => (
+            "daemon.marketplace_target_missing",
+            "The plugin target is not registered for its exact marketplace.",
+        ),
+        skilltap_core::daemon::DaemonPluginBlockReason::MarketplaceUpdateDisabled => (
+            "daemon.marketplace_update_disabled",
+            "The plugin's marketplace has automatic updates disabled.",
+        ),
+        skilltap_core::daemon::DaemonPluginBlockReason::MarketplacePinned => (
+            "daemon.marketplace_pinned",
+            "The plugin's marketplace is pinned and requires foreground review.",
+        ),
+    }
+}
+
+fn daemon_blocked_operation_id(resource: &ResourceKey, target: &HarnessId) -> OperationId {
+    let label = format!("daemon-blocked:{target}:{resource}");
+    let hash = stable_hash(&label);
+    OperationId::new(format!("daemon-blocked:{}:{hash:016x}", target.as_str()))
+        .expect("daemon blocked operation id is valid")
+}
+
+fn native_state_seed(
+    resource: &DesiredResource,
+    target: &HarnessId,
+    native_id: &NativeId,
+    observed_at: Timestamp,
+    before: &NativeResourceObservation,
+) -> ResourceState {
+    let installed_revision = match before {
+        NativeResourceObservation::Present { revision, .. } => revision.clone(),
+        NativeResourceObservation::Missing | NativeResourceObservation::Indeterminate(_) => None,
+    };
+    let binding = TargetResourceState::new(
+        target.clone(),
+        Some(native_id.clone()),
+        Provenance::Native,
+        Ownership::Harness,
+        resource.source().cloned(),
+        None,
+        None,
+        installed_revision,
+        None,
+        observed_at,
+        None,
+    )
+    .expect("daemon native state seed is valid");
+    ResourceState::new(resource.key().clone(), [binding]).expect("daemon native state is valid")
+}
+
 fn previously_attempted(
     state: Option<&StateDocument>,
     resource: &ResourceKey,
@@ -68,9 +167,7 @@ impl StatusApplication<'_> {
             aggregate.errors.extend(binary.errors);
             aggregate.next_actions.extend(binary.next_actions);
         }
-        let resource_updates_enabled =
-            documents.config.updates().mode == skilltap_core::storage::UpdateMode::ApplySafe;
-        if !resource_updates_enabled {
+        if documents.config.updates().mode != skilltap_core::storage::UpdateMode::ApplySafe {
             aggregate = aggregate
                 .with_warning(Warning::new(
                     "daemon_policy_not_apply_safe",
@@ -80,80 +177,626 @@ impl StatusApplication<'_> {
                 .with_summary("safe_operations", safe_operations)
                 .with_summary("pending_operations", pending_operations);
             normalize_daemon_noop_result(&mut aggregate, safe_operations, pending_operations);
-            self.persist_daemon_run(&mut aggregate, safe_operations, pending_operations);
+            self.persist_daemon_run(&mut aggregate, safe_operations, pending_operations, []);
             return aggregate;
         }
-        let mut tasks = Vec::new();
+
+        let native = self.execute_daemon_native_plan(&documents, aggregate);
+        let daemon_operations = native.operations.clone();
+        let mut aggregate = native.outcome;
+        let mut changed = native.changed || safe_operations > 0;
+        safe_operations += native.safe_operations;
+        pending_operations += native.pending_operations;
+
+        // Git-backed standalone skills deliberately remain a separate child
+        // phase. They have no native marketplace prerequisite and reuse their
+        // existing managed replacement port after the native batch completes.
         if let Some(inventory) = documents.inventory.as_ref() {
-            for resource in inventory.resources().values() {
-                if resource.update() != UpdateIntent::Track {
-                    continue;
-                }
-                let name = if resource.kind() == ResourceKind::Plugin {
-                    resource.id().as_str().strip_prefix("plugin:")
-                } else if resource.kind() == ResourceKind::StandaloneSkill
-                    && resource
-                        .source()
-                        .is_some_and(|source| source.kind() == SourceKind::Git)
-                {
-                    resource.id().as_str().strip_prefix("skill:")
-                } else {
-                    None
-                };
-                let Some(name) = name else { continue };
-                tasks.push((resource.kind(), name.to_owned(), resource.scope().clone()));
-            }
-        }
-        let mut changed = safe_operations > 0;
-        for (kind, name, scope) in tasks {
-            let child_scope = scope_args_for_scope(&scope);
-            let child = match kind {
-                ResourceKind::Plugin => self.execute_native_lifecycle(
-                    command,
-                    NativeLifecycleKind::PluginUpdate,
-                    &child_scope,
-                    &TargetArgs::default(),
-                    NativeLifecycleValues {
-                        source: None,
-                        name: Some(&name),
-                    },
-                    false,
-                ),
-                ResourceKind::StandaloneSkill => self.execute_skill_update(
-                    // A daemon cycle is still the safe, non-interactive
-                    // update path.  Reuse the explicit skill-update
-                    // command's replacement planning so a changed Git
-                    // revision is applied when the destination is managed
-                    // and unchanged; the daemon wrapper still refuses
-                    // drift, pins, and other judgment-required work.
+            let skills = inventory
+                .resources()
+                .values()
+                .filter(|resource| {
+                    resource.kind() == ResourceKind::StandaloneSkill
+                        && resource.update() == UpdateIntent::Track
+                        && resource
+                            .source()
+                            .is_some_and(|source| source.kind() == SourceKind::Git)
+                })
+                .filter_map(|resource| {
+                    let name = resource.id().as_str().strip_prefix("skill:")?;
+                    Some((name.to_owned(), resource.scope().clone()))
+                })
+                .collect::<Vec<_>>();
+            for (name, scope) in skills {
+                let child_scope = scope_args_for_scope(&scope);
+                let child = self.execute_skill_update(
                     "skill update",
                     &child_scope,
                     &TargetArgs::default(),
                     Some(&name),
                     false,
-                ),
-                _ => continue,
-            };
-            changed |= child.summary.get("changed") == Some(&OutputValue::Boolean(true));
-            if child.result == ResultClass::Completed {
-                safe_operations += child.operations.len() as u64;
-            } else {
-                pending_operations += 1;
+                );
+                changed |= child.summary.get("changed") == Some(&OutputValue::Boolean(true));
+                if child.result == ResultClass::Completed {
+                    safe_operations += child.operations.len() as u64;
+                } else {
+                    pending_operations += 1;
+                }
+                aggregate.result = merge_result(aggregate.result, child.result);
+                aggregate.resources.extend(child.resources);
+                aggregate.operations.extend(child.operations);
+                aggregate.warnings.extend(child.warnings);
+                aggregate.errors.extend(child.errors);
+                aggregate.next_actions.extend(child.next_actions);
             }
-            aggregate.result = merge_result(aggregate.result, child.result);
-            aggregate.resources.extend(child.resources);
-            aggregate.operations.extend(child.operations);
-            aggregate.warnings.extend(child.warnings);
-            aggregate.errors.extend(child.errors);
-            aggregate.next_actions.extend(child.next_actions);
         }
         aggregate = aggregate
             .with_summary("changed", changed)
             .with_summary("safe_operations", safe_operations)
             .with_summary("pending_operations", pending_operations);
         normalize_daemon_noop_result(&mut aggregate, safe_operations, pending_operations);
-        self.persist_daemon_run(&mut aggregate, safe_operations, pending_operations);
+        self.persist_daemon_run(
+            &mut aggregate,
+            safe_operations,
+            pending_operations,
+            daemon_operations,
+        );
         aggregate
+    }
+
+    fn execute_daemon_native_plan(
+        &self,
+        documents: &StatusDocuments,
+        mut outcome: Outcome,
+    ) -> DaemonNativeExecution {
+        let Some(inventory) = documents.inventory.as_ref() else {
+            return DaemonNativeExecution {
+                outcome,
+                changed: false,
+                safe_operations: 0,
+                pending_operations: 0,
+                operations: Vec::new(),
+            };
+        };
+        let paths = match self.lifecycle_platform_paths() {
+            Ok(paths) => paths,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return DaemonNativeExecution {
+                    outcome: outcome.with_error(ErrorDetail::new(
+                        "platform_paths_unavailable",
+                        "The skilltap configuration paths could not be resolved for the daemon update cycle.",
+                    )),
+                    changed: false,
+                    safe_operations: 0,
+                    pending_operations: 1,
+                    operations: Vec::new(),
+                };
+            }
+        };
+        let search_path = std::env::var_os("PATH");
+        let native_environment = match paths.native_process_environment(search_path.clone()) {
+            Ok(environment) => environment,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return DaemonNativeExecution {
+                    outcome: outcome.with_error(ErrorDetail::new(
+                        "native_environment_unavailable",
+                        "The bounded native process environment could not be resolved for the daemon update cycle.",
+                    )),
+                    changed: false,
+                    safe_operations: 0,
+                    pending_operations: 1,
+                    operations: Vec::new(),
+                };
+            }
+        };
+        let plan =
+            skilltap_core::daemon::plan_daemon_native_updates(inventory.resources().values());
+        let process_limits = ProcessLimits::new(5_000, 256 * 1024, 256 * 1024, 512 * 1024)
+            .expect("bounded daemon lifecycle process limits are valid");
+        let json_limits = JsonLimits::new(256 * 1024, 64)
+            .expect("bounded daemon lifecycle JSON limits are valid");
+        let timestamp = match Timestamp::from_system_time(std::time::SystemTime::now()) {
+            Ok(timestamp) => timestamp,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return DaemonNativeExecution {
+                    outcome: outcome.with_error(ErrorDetail::new(
+                        "clock_unavailable",
+                        "The daemon lifecycle operation timestamp could not be recorded safely.",
+                    )),
+                    changed: false,
+                    safe_operations: 0,
+                    pending_operations: 1,
+                    operations: Vec::new(),
+                };
+            }
+        };
+        let mut builder = NativeLifecyclePlanBuilder::default();
+        let mut refresh_ids = BTreeMap::new();
+        for refresh in plan.refreshes() {
+            let Some(resource) = inventory.resources().get(refresh.key().resource()) else {
+                continue;
+            };
+            let operation = self.plan_daemon_lifecycle_target(
+                &mut builder,
+                documents,
+                &paths,
+                &native_environment,
+                process_limits,
+                json_limits,
+                timestamp,
+                NativeLifecycleKind::MarketplaceUpdate,
+                resource,
+                refresh.key().target(),
+                refresh.name(),
+                BTreeSet::new(),
+                &mut outcome,
+            );
+            if let Some(operation) = operation {
+                refresh_ids.insert(refresh.key().clone(), operation);
+            }
+        }
+        for plugin in plan.plugins() {
+            let Some(resource) = inventory.resources().get(plugin.resource()) else {
+                continue;
+            };
+            let dependencies = refresh_ids
+                .get(plugin.refresh())
+                .cloned()
+                .map(|id| BTreeSet::from([OperationDependency::new(id)]))
+                .unwrap_or_default();
+            self.plan_daemon_lifecycle_target(
+                &mut builder,
+                documents,
+                &paths,
+                &native_environment,
+                process_limits,
+                json_limits,
+                timestamp,
+                NativeLifecycleKind::PluginUpdate,
+                resource,
+                plugin.target(),
+                &NativeId::new(plugin.selector().to_string()).expect("validated plugin selector"),
+                dependencies,
+                &mut outcome,
+            );
+        }
+        for blocked in plan.blocked_plugins() {
+            let operation_id = daemon_blocked_operation_id(blocked.resource(), blocked.target());
+            let action = OperationAction::PluginUpdate;
+            let (code, detail) = daemon_block_reason(blocked.reason());
+            let operation = skilltap_core::lifecycle_operation::blocked_native_operation(
+                operation_id.clone(),
+                blocked.target().clone(),
+                blocked.resource().clone(),
+                action,
+                EvidenceCode::new(code).expect("static daemon evidence code is valid"),
+                EvidenceDetail::new(detail).expect("static daemon evidence detail is valid"),
+            );
+            match operation {
+                Ok(operation) => {
+                    builder.foreign_operations.insert(operation_id);
+                    builder.operations.push(operation);
+                }
+                Err(_) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    outcome = outcome.with_warning(Warning::new(
+                        "daemon_plan_invalid",
+                        "A blocked daemon plugin relationship could not be represented safely.",
+                    ));
+                }
+            }
+        }
+        if builder.operations.is_empty() {
+            return DaemonNativeExecution {
+                outcome,
+                changed: false,
+                safe_operations: 0,
+                pending_operations: 0,
+                operations: Vec::new(),
+            };
+        }
+        let plan = match Plan::new(builder.operations) {
+            Ok(plan) => plan,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return DaemonNativeExecution {
+                    outcome: outcome.with_error(ErrorDetail::new(
+                        "operation_plan_invalid",
+                        "The daemon native update operations did not form a valid dependency plan.",
+                    )),
+                    changed: false,
+                    safe_operations: 0,
+                    pending_operations: 1,
+                    operations: Vec::new(),
+                };
+            }
+        };
+        let native_port = NativeLifecyclePort::new_bound_with_environment(
+            builder.native_bindings,
+            native_environment,
+        )
+        .with_foreign_operations(builder.foreign_operations.iter().cloned());
+        let port = HybridLifecyclePort {
+            native: native_port,
+            managed: ManagedProjectLifecyclePort {
+                filesystem: self.managed_project_filesystem(),
+                entries: builder.managed_entries,
+            },
+        };
+        let journal = StateExecutionJournal {
+            plan: &plan,
+            state: self.state,
+            seeds: builder.seeds,
+        };
+        let lock_path = match AbsolutePath::new(format!(
+            "{}/skilltap.lock",
+            paths.skilltap_config().as_str()
+        )) {
+            Ok(path) => path,
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                return DaemonNativeExecution {
+                    outcome: outcome.with_error(ErrorDetail::new(
+                        "lock_path_invalid",
+                        "The daemon configuration lock path is invalid.",
+                    )),
+                    changed: false,
+                    safe_operations: 0,
+                    pending_operations: 1,
+                    operations: Vec::new(),
+                };
+            }
+        };
+        let report =
+            match execute_plan(&SystemConfigurationLock, &lock_path, &port, &journal, &plan) {
+                Ok(report) => report,
+                Err(error) => {
+                    outcome.result = ResultClass::AttentionRequired;
+                    return DaemonNativeExecution {
+                    outcome: outcome
+                        .with_error(native_execution_error(&error))
+                        .with_next_action(NextAction::new(
+                            "reobserve_before_retry",
+                            "Re-observe the selected harnesses before retrying the daemon cycle.",
+                        )),
+                    changed: false,
+                    safe_operations: 0,
+                    pending_operations: plan.iter().count() as u64,
+                    operations: Vec::new(),
+                };
+                }
+            };
+        let mut changed = false;
+        let mut safe_operations = 0_u64;
+        let mut pending_operations = 0_u64;
+        let mut operations = Vec::new();
+        for result in report.result.operations().values() {
+            let Some(operation) = report.result.plan().get(result.operation_id()) else {
+                continue;
+            };
+            let status = operation_result_status(result.outcome());
+            if let Ok(reference) = DaemonOperationRef::new(
+                result.operation_id().clone(),
+                operation.selector().resource().clone(),
+                operation.target().clone(),
+                operation.action(),
+            ) {
+                operations.push(reference);
+            }
+            outcome = outcome.with_operation(
+                crate::OperationOutcome::new(result.operation_id().to_string(), status)
+                    .with_field("target", operation.target().as_str())
+                    .with_field("resource", operation.selector().resource().to_string())
+                    .with_field("action", daemon_action_label(operation.action())),
+            );
+            if matches!(
+                result.outcome(),
+                OperationOutcome::Applied | OperationOutcome::NoChange
+            ) {
+                safe_operations += 1;
+                if operation.action() == OperationAction::PluginUpdate
+                    && result.outcome() == &OperationOutcome::Applied
+                {
+                    changed = true;
+                }
+            } else {
+                pending_operations += 1;
+                outcome.result = ResultClass::AttentionRequired;
+            }
+            if let OperationOutcome::Failed { reason } = result.outcome()
+                && let (Some(code), Some(detail)) = (reason.code(), reason.detail())
+            {
+                outcome =
+                    outcome.with_error(ErrorDetail::new(code.to_string(), detail.to_string()));
+            }
+        }
+        if report.result.outcome() == skilltap_core::domain::ApplyOutcome::Succeeded
+            && outcome.errors.is_empty()
+            && outcome.warnings.is_empty()
+        {
+            outcome.result = ResultClass::Completed;
+        }
+        DaemonNativeExecution {
+            outcome: outcome
+                .with_summary("native_operations", report.result.operations().len() as u64)
+                .with_summary("native_changed", changed),
+            changed,
+            safe_operations,
+            pending_operations,
+            operations,
+        }
+    }
+
+    fn plan_daemon_lifecycle_target(
+        &self,
+        builder: &mut NativeLifecyclePlanBuilder,
+        documents: &StatusDocuments,
+        paths: &PlatformPaths,
+        native_environment: &BTreeMap<OsString, OsString>,
+        process_limits: ProcessLimits,
+        json_limits: JsonLimits,
+        timestamp: Timestamp,
+        kind: NativeLifecycleKind,
+        resource: &DesiredResource,
+        target: &HarnessId,
+        name: &NativeId,
+        dependencies: BTreeSet<OperationDependency>,
+        outcome: &mut Outcome,
+    ) -> Option<OperationId> {
+        let operation_id = lifecycle_operation_id(kind, target, resource.scope(), resource.key());
+        let request = match NativeLifecycleSpec::parse(kind, None, Some(name.as_str())) {
+            Ok(request) => request,
+            Err(_) => {
+                return self.add_daemon_blocked_operation(
+                    builder,
+                    resource,
+                    target,
+                    operation_id,
+                    dependencies,
+                    outcome,
+                );
+            }
+        };
+        if matches!(resource.scope(), Scope::Project(_))
+            && self
+                .registry
+                .adapter(target)
+                .is_some_and(|adapter| adapter.managed_project_lifecycle())
+        {
+            let Scope::Project(project) = resource.scope() else {
+                unreachable!("project scope was checked")
+            };
+            let observed_at = timestamp;
+            match plan_managed_project_lifecycle(
+                self.registry,
+                target,
+                kind,
+                &request,
+                resource,
+                ManagedProjectPlanContext {
+                    project,
+                    documents,
+                    paths,
+                    timestamp: observed_at,
+                    json_limits,
+                    acknowledged: false,
+                    filesystem: self.managed_project_filesystem(),
+                },
+            ) {
+                Ok(planned) => {
+                    let operation = match planned.operation.with_added_dependencies(dependencies) {
+                        Ok(operation) => operation,
+                        Err(_) => {
+                            return self.add_daemon_blocked_operation(
+                                builder,
+                                resource,
+                                target,
+                                operation_id,
+                                BTreeSet::new(),
+                                outcome,
+                            );
+                        }
+                    };
+                    builder.foreign_operations.insert(operation_id.clone());
+                    builder
+                        .managed_entries
+                        .insert(operation_id.clone(), planned.entry);
+                    if let Some(seed) = planned.seed {
+                        builder.seeds.insert(resource.key().clone(), seed);
+                    }
+                    builder.operations.push(operation);
+                    return Some(operation_id);
+                }
+                Err(error) => {
+                    *outcome = outcome
+                        .clone()
+                        .with_warning(Warning::new(error.code, error.summary));
+                    return self.add_daemon_blocked_operation(
+                        builder,
+                        resource,
+                        target,
+                        operation_id,
+                        dependencies,
+                        outcome,
+                    );
+                }
+            }
+        }
+        let profile = configured_native_profile(
+            self.registry,
+            &documents.config,
+            target,
+            NativeProfileRequest {
+                scope: resource.scope(),
+                process_limits,
+                json_limits,
+                search_path: std::env::var_os("PATH"),
+                capability_name: daemon_capability_name(kind),
+            },
+        );
+        let profile = match profile {
+            Ok(Some(profile)) if profile.capability == CapabilitySupport::Supported => profile,
+            Ok(Some(_)) | Ok(None) | Err(_) => {
+                *outcome = outcome.clone().with_warning(
+                    Warning::new(
+                        "daemon_native_update_unavailable",
+                        "The selected native lifecycle update is not mutation-authorized for this target and scope.",
+                    )
+                    .with_context("target", target.as_str())
+                    .with_context("scope", scope_label(resource.scope())),
+                );
+                return self.add_daemon_blocked_operation(
+                    builder,
+                    resource,
+                    target,
+                    operation_id,
+                    dependencies,
+                    outcome,
+                );
+            }
+        };
+        let dispatch = NativeLifecycleDispatch::new(
+            target.clone(),
+            profile.lifecycle,
+            request.native_request(resource.scope().clone()),
+        );
+        let native_arguments = match native_arguments(&dispatch) {
+            Ok(arguments) => arguments,
+            Err(_) => {
+                return self.add_daemon_blocked_operation(
+                    builder,
+                    resource,
+                    target,
+                    operation_id,
+                    dependencies,
+                    outcome,
+                );
+            }
+        };
+        let arguments = match command_arguments(native_arguments) {
+            Ok(arguments) => arguments,
+            Err(_) => {
+                return self.add_daemon_blocked_operation(
+                    builder,
+                    resource,
+                    target,
+                    operation_id,
+                    dependencies,
+                    outcome,
+                );
+            }
+        };
+        let before = observe_native_resource(
+            profile.configured.clone(),
+            std::env::var_os("PATH"),
+            native_environment,
+            &dispatch,
+            process_limits,
+            json_limits,
+        )
+        .unwrap_or(NativeResourceObservation::Indeterminate(
+            NativeObservationFailure::CommandFailed,
+        ));
+        if matches!(&before, NativeResourceObservation::Indeterminate(_)) {
+            *outcome = outcome.clone().with_warning(
+                Warning::new(
+                    "daemon_native_observation_unavailable",
+                    "The daemon could not establish fresh native evidence before updating.",
+                )
+                .with_context("target", target.as_str())
+                .with_context("scope", scope_label(resource.scope())),
+            );
+            return self.add_daemon_blocked_operation(
+                builder,
+                resource,
+                target,
+                operation_id,
+                dependencies,
+                outcome,
+            );
+        }
+        let operation = match native_operation(
+            operation_id.clone(),
+            target.clone(),
+            resource.key().clone(),
+            request.operation_action(),
+            profile.executable.clone(),
+            arguments,
+        )
+        .and_then(|operation| operation.with_added_dependencies(dependencies))
+        {
+            Ok(operation) => operation,
+            Err(_) => {
+                return self.add_daemon_blocked_operation(
+                    builder,
+                    resource,
+                    target,
+                    operation_id,
+                    BTreeSet::new(),
+                    outcome,
+                );
+            }
+        };
+        let native_id = request.native_name.clone();
+        let seed = native_state_seed(resource, target, &native_id, timestamp, &before);
+        builder.seeds.insert(resource.key().clone(), seed);
+        builder.native_bindings.push(NativeLifecycleBinding {
+            operation_id: operation_id.clone(),
+            configured: profile.configured,
+            search_path: std::env::var_os("PATH"),
+            limits: process_limits,
+            dispatch,
+            before: Some(before),
+        });
+        builder.operations.push(operation);
+        Some(operation_id)
+    }
+
+    fn add_daemon_blocked_operation(
+        &self,
+        builder: &mut NativeLifecyclePlanBuilder,
+        resource: &DesiredResource,
+        target: &HarnessId,
+        operation_id: OperationId,
+        dependencies: BTreeSet<OperationDependency>,
+        outcome: &mut Outcome,
+    ) -> Option<OperationId> {
+        let action = match resource.kind() {
+            ResourceKind::Marketplace => OperationAction::MarketplaceUpdate,
+            ResourceKind::Plugin => OperationAction::PluginUpdate,
+            _ => return None,
+        };
+        let operation = skilltap_core::lifecycle_operation::blocked_native_operation(
+            operation_id.clone(),
+            target.clone(),
+            resource.key().clone(),
+            action,
+            EvidenceCode::new("daemon.native_update_blocked")
+                .expect("static daemon evidence code is valid"),
+            EvidenceDetail::new(
+                "The daemon could not establish a safe native lifecycle update for this target.",
+            )
+            .expect("static daemon evidence detail is valid"),
+        )
+        .and_then(|operation| operation.with_added_dependencies(dependencies));
+        match operation {
+            Ok(operation) => {
+                builder.foreign_operations.insert(operation_id.clone());
+                builder.operations.push(operation);
+                Some(operation_id)
+            }
+            Err(_) => {
+                outcome.result = ResultClass::AttentionRequired;
+                *outcome = outcome.clone().with_warning(Warning::new(
+                    "daemon_plan_invalid",
+                    "The daemon blocked lifecycle operation could not be represented safely.",
+                ));
+                None
+            }
+        }
     }
 
     pub(crate) fn execute_lifecycle_preview(
@@ -218,7 +861,7 @@ impl StatusApplication<'_> {
                     name,
                 );
                 let recorded = lifecycle_recorded_state(&documents, kind, concrete_scope, name);
-                let status = match (presence, recorded) {
+                let status = match (presence.clone(), recorded) {
                     (NativeResourceObservation::Present { .. }, true) => "no_change",
                     (NativeResourceObservation::Present { .. }, false)
                     | (NativeResourceObservation::Missing, true)

@@ -7,9 +7,10 @@ use super::*;
 use crate::bootstrap::BootstrapUpdateMode;
 use crate::domain::{
     ComponentGraph, DesiredOrigin, DesiredResource, EvidenceCode, Fingerprint,
-    FingerprintAlgorithm, HarnessId, HarnessSet, NativeId, OperationId, OperationOutcome,
-    OperationResult, Ownership, Provenance, RelativeArtifactPath, ResolvedRevision, ResourceId,
-    ResourceKey, ResourceKind, Scope, Source, SourceKind, SourceLocator, UpdateIntent,
+    FingerprintAlgorithm, HarnessId, HarnessSet, NativeId, OperationAction, OperationId,
+    OperationOutcome, OperationResult, Ownership, Provenance, RelativeArtifactPath,
+    ResolvedRevision, ResourceId, ResourceKey, ResourceKind, Scope, Source, SourceKind,
+    SourceLocator, UpdateIntent,
 };
 
 fn resource(
@@ -802,6 +803,37 @@ fn daemon_run_record_round_trips_and_survives_state_updates() {
     assert_eq!(preserved.daemon_run(), Some(&record));
     let mut invalid = serde_json::to_value(record).unwrap();
     invalid["failure_code"] = serde_json::json!("daemon.raw_secret");
+    assert!(serde_json::from_value::<DaemonRunRecord>(invalid).is_err());
+}
+
+#[test]
+fn daemon_operation_references_round_trip_and_reject_non_update_actions() {
+    let resource = ResourceKey::new(ResourceId::new("plugin:tools").unwrap(), Scope::Global);
+    let reference = DaemonOperationRef::new(
+        OperationId::new("daemon-plugin-update").unwrap(),
+        resource,
+        HarnessId::new("codex").unwrap(),
+        OperationAction::PluginUpdate,
+    )
+    .unwrap();
+    let record = DaemonRunRecord::new(
+        Timestamp::new(4, 0).unwrap(),
+        DaemonRunResult::Pending,
+        1,
+        1,
+        Some(EvidenceCode::new("daemon.update_failed").unwrap()),
+    )
+    .unwrap()
+    .with_operations([reference.clone()])
+    .unwrap();
+    let round_trip: DaemonRunRecord =
+        serde_json::from_value(serde_json::to_value(&record).unwrap()).unwrap();
+    assert_eq!(
+        round_trip.operations(),
+        &std::collections::BTreeSet::from([reference])
+    );
+    let mut invalid = serde_json::to_value(record).unwrap();
+    invalid["operations"][0]["action"] = serde_json::json!("plugin_install");
     assert!(serde_json::from_value::<DaemonRunRecord>(invalid).is_err());
 }
 
