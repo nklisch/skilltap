@@ -4940,3 +4940,125 @@ fn daemon_refresh_failure_is_target_local_and_status_redacts_native_details() {
                 ])
     );
 }
+
+#[test]
+fn daemon_refresh_failure_skips_same_target_plugin_and_persists_status_evidence() {
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+
+    assert_code(
+        &run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                "https://example.invalid/team.git",
+                "--name",
+                "team",
+                "--target",
+                "claude",
+                "--json",
+            ],
+        ),
+        0,
+    );
+    assert_code(
+        &run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "formatter@team",
+                "--target",
+                "claude",
+                "--json",
+            ],
+        ),
+        0,
+    );
+    claude
+        ._fixture
+        .set_plugin_revision("formatter@team", "1")
+        .unwrap();
+    claude
+        ._fixture
+        .set_available_plugin_revision("formatter@team", "2")
+        .unwrap();
+    claude
+        ._fixture
+        .fail_lifecycle(FakeLifecycleAction::MarketplaceUpdate, "team")
+        .unwrap();
+
+    let daemon = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&daemon, 2);
+    let daemon_value = json(&daemon);
+    let operations = daemon_value["operations"].as_array().unwrap();
+    assert!(
+        operations.iter().any(|entry| {
+            entry["fields"]["action"] == "marketplace_refresh"
+                && entry["fields"]["target"] == "claude"
+                && entry["status"] == "failed"
+        }),
+        "marketplace failure was not explicit: {daemon_value}"
+    );
+    assert!(
+        operations.iter().any(|entry| {
+            entry["fields"]["action"] == "plugin_update"
+                && entry["fields"]["resource"] == "plugin:formatter@team [global]"
+                && entry["fields"]["target"] == "claude"
+                && entry["status"] == "skipped_dependency"
+        }),
+        "dependent plugin was not marked skipped: {daemon_value}"
+    );
+    assert!(
+        daemon_value["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["code"] == "native.command_failed"),
+        "refresh failure error was not explicit: {daemon_value}"
+    );
+    assert!(
+        !claude
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .any(|invocation| invocation.arguments()
+                == [
+                    b"plugin".as_slice(),
+                    b"update",
+                    b"formatter@team",
+                    b"--scope",
+                    b"user"
+                ])
+    );
+
+    let status = run(&machine, &["status", "--target", "claude", "--json"]);
+    assert_code(&status, 2);
+    let status_value = json(&status);
+    let resources = status_value["resources"].as_array().unwrap();
+    assert!(
+        resources.iter().any(|entry| {
+            entry["status"] == "skipped_dependency"
+                && entry["fields"]["phase"] == "plugin_update"
+                && entry["fields"]["resource"] == "plugin:formatter@team [global]"
+                && entry["fields"]["target"] == "claude"
+        }),
+        "status omitted dependency skip: {status_value}"
+    );
+    assert!(
+        resources.iter().any(|entry| {
+            entry["fields"]["phase"] == "marketplace_refresh" && entry["status"] == "failed"
+        }),
+        "status omitted refresh failure: {status_value}"
+    );
+}
