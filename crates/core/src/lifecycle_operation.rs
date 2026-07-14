@@ -81,8 +81,18 @@ pub fn blocked_native_operation(
         target.clone(),
         CompatibilityClass::Incompatible,
         TransferFidelity::Blocked,
-        [],
-        [],
+        [CompatibilityEvidence::new(
+            code.clone(),
+            target.clone(),
+            [],
+            detail.clone(),
+        )],
+        [MaterialConsequence::new(
+            ConsequenceCode::new("native.unsupported").expect("static consequence code is valid"),
+            [],
+            ConsequenceSummary::new("The native operation is unavailable.")
+                .expect("static consequence summary is valid"),
+        )],
     )
     .expect("blocked native operations have bounded compatibility evidence");
     let semantics = OperationSemantics::new(

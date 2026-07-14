@@ -8,8 +8,8 @@ use std::{
 use serde_json::Value;
 use skilltap_core::VERSION;
 use skilltap_test_support::{
-    FakeHarnessProfile, FakeNativeMode, FakeNativeProcess, IsolatedMachine, captured_stderr,
-    captured_stdout, compiled_binary,
+    FakeHarnessProfile, FakeLifecycleAction, FakeNativeMode, FakeNativeProcess, IsolatedMachine,
+    captured_stderr, captured_stdout, compiled_binary,
 };
 
 const ENABLED_CONFIG: &str = r#"schema = 1
@@ -4739,4 +4739,204 @@ fn json_and_plain_modes_use_stable_channels_and_exit_classes() {
         assert_eq!(value["schema"], 1);
         assert!(!stdout(&output).contains("\u{1b}["));
     }
+}
+
+#[test]
+fn daemon_refreshes_shared_marketplace_once_before_plugins_and_repeats_cleanly() {
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+    assert_code(
+        &run(
+            &machine,
+            &[
+                "marketplace",
+                "add",
+                "https://example.invalid/team.git",
+                "--name",
+                "team",
+                "--target",
+                "claude",
+                "--json",
+            ],
+        ),
+        0,
+    );
+    for selector in ["formatter@team", "review@team"] {
+        assert_code(
+            &run(
+                &machine,
+                &[
+                    "plugin", "install", selector, "--target", "claude", "--json",
+                ],
+            ),
+            0,
+        );
+        claude._fixture.set_plugin_revision(selector, "1").unwrap();
+        claude
+            ._fixture
+            .set_available_plugin_revision(selector, "2")
+            .unwrap();
+    }
+    let first = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&first, 0);
+    assert_eq!(json(&first)["summary"]["changed"], true);
+    let invocations = claude._fixture.captured_invocations().unwrap();
+    let arguments = invocations
+        .iter()
+        .map(|invocation| {
+            invocation
+                .arguments()
+                .iter()
+                .map(|argument| String::from_utf8_lossy(argument).into_owned())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    let refresh = arguments
+        .iter()
+        .position(|args| args == &["plugin", "marketplace", "update", "team"])
+        .unwrap();
+    assert_eq!(
+        arguments
+            .iter()
+            .filter(|args| args == &&["plugin", "marketplace", "update", "team"])
+            .count(),
+        1
+    );
+    for selector in ["formatter@team", "review@team"] {
+        let index = arguments
+            .iter()
+            .position(|args| args == &["plugin", "update", selector, "--scope", "user"])
+            .unwrap();
+        assert!(refresh < index);
+    }
+    let second = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&second, 0);
+    assert_eq!(json(&second)["summary"]["changed"], false);
+    assert_eq!(
+        claude
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .filter(|invocation| invocation.arguments()
+                == [b"plugin".as_slice(), b"marketplace", b"update", b"team"])
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn daemon_refresh_failure_is_target_local_and_status_redacts_native_details() {
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    fs::create_dir_all(machine.home().join(".codex/plugins")).unwrap();
+    fs::create_dir_all(machine.home().join(".claude/plugins")).unwrap();
+    for target in ["codex", "claude"] {
+        assert_code(
+            &run(
+                &machine,
+                &[
+                    "marketplace",
+                    "add",
+                    "https://example.invalid/team.git",
+                    "--name",
+                    "team",
+                    "--target",
+                    target,
+                    "--json",
+                ],
+            ),
+            0,
+        );
+    }
+    assert_code(
+        &run(
+            &machine,
+            &[
+                "plugin",
+                "install",
+                "formatter@team",
+                "--target",
+                "claude",
+                "--json",
+            ],
+        ),
+        0,
+    );
+    codex
+        ._fixture
+        .fail_lifecycle(FakeLifecycleAction::MarketplaceUpdate, "team")
+        .unwrap();
+    claude
+        ._fixture
+        .set_plugin_revision("formatter@team", "1")
+        .unwrap();
+    claude
+        ._fixture
+        .set_available_plugin_revision("formatter@team", "2")
+        .unwrap();
+    claude
+        ._fixture
+        .indeterminate_lifecycle(FakeLifecycleAction::PluginUpdate, "formatter@team")
+        .unwrap();
+    let daemon = run(&machine, &["daemon", "run", "--json"]);
+    assert_code(&daemon, 2);
+    let value = json(&daemon);
+    assert!(
+        value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["fields"]["action"] == "marketplace_refresh"
+                && entry["fields"]["target"] == "codex"),
+        "{value}"
+    );
+    assert!(
+        value["operations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["fields"]["action"] == "plugin_update"
+                && entry["fields"]["target"] == "claude")
+    );
+    assert!(!stdout(&daemon).contains("plugin marketplace upgrade"));
+    assert!(!stdout(&daemon).contains("> 23"));
+    assert!(
+        codex
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .any(|invocation| invocation.arguments()
+                == [b"plugin".as_slice(), b"marketplace", b"upgrade", b"team"])
+    );
+    assert!(
+        claude
+            ._fixture
+            .captured_invocations()
+            .unwrap()
+            .iter()
+            .any(|invocation| invocation.arguments()
+                == [
+                    b"plugin".as_slice(),
+                    b"update",
+                    b"formatter@team",
+                    b"--scope",
+                    b"user"
+                ])
+    );
 }

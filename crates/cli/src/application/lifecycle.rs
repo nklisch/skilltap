@@ -530,6 +530,7 @@ impl StatusApplication<'_> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn plan_daemon_lifecycle_target(
         &self,
         builder: &mut NativeLifecyclePlanBuilder,

@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     domain::{
-        AbsolutePath, DesiredResource, HarnessId, HarnessSet, NativeId, ResourceId, ResourceKey,
-        ResourceKind, Scope, UpdateIntent,
+        AbsolutePath, DesiredResource, HarnessId, NativeId, ResourceId, ResourceKey, ResourceKind,
+        UpdateIntent,
     },
     foreground_update::ForegroundUpdatePlan,
     marketplace::PluginSelector,
@@ -240,7 +240,7 @@ pub fn plan_daemon_native_updates<'a>(
 
     let mut refreshes =
         BTreeMap::<DaemonMarketplaceRefreshKey, DaemonMarketplaceRefreshTask>::new();
-    for resource in marketplaces.values().copied() {
+    for resource in marketplaces.values() {
         if resource.update() != UpdateIntent::Track {
             continue;
         }
@@ -453,6 +453,7 @@ fn systemd_escape(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::domain::{HarnessSet, Scope};
     use crate::storage::UpdateIntervalUnit;
 
     fn spec(platform: ServicePlatform) -> DaemonServiceSpec {

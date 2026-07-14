@@ -25,7 +25,8 @@ pub use managed_acceptance::{
 };
 #[cfg(unix)]
 pub use native_process::{
-    CapturedInvocation, FakeNativeBuilder, FakeNativeMode, FakeNativeProcess, PipeHolder,
+    CapturedInvocation, FakeLifecycleAction, FakeNativeBuilder, FakeNativeMode, FakeNativeProcess,
+    PipeHolder,
 };
 
 use std::{

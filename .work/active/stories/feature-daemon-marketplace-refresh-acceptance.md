@@ -1,7 +1,7 @@
 ---
 id: feature-daemon-marketplace-refresh-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: [infra, testing]
 parent: feature-daemon-marketplace-refresh
 depends_on: [feature-daemon-marketplace-refresh-execution]
@@ -54,3 +54,24 @@ deduplication, dependency, target-locality, status, and idempotency behavior.
 
 Runs after the task graph and execution checkpoints and completes integrated
 feature verification.
+
+## Implementation notes
+
+Extended the isolated test-support fake with an ordered invocation ledger,
+revision controls, action-specific command failure controls, and one-shot
+indeterminate postcondition controls. The controls remain beneath each
+`FakeNativeProcess` temporary root and preserve Codex's `marketplace upgrade`
+and Claude's `marketplace update` vectors.
+
+Added compiled daemon-path acceptance coverage for shared-marketplace
+refresh ordering and deduplication, revision-aware immediate-repeat no-change,
+target-local refresh failure, independent sibling progress, indeterminate
+plugin postconditions, typed operation status, and redaction of native argv.
+The test uses only `IsolatedMachine` roots and fake harness executables.
+
+## Verification
+
+- `cargo test -p skilltap-test-support --lib` — 22 passed.
+- `cargo test -p skilltap --test compiled_binary daemon_refresh -- --nocapture` — 2 passed.
+- Strict blocked lifecycle operations now carry bounded compatibility evidence
+  and consequence metadata, preserving the validated operation contract.

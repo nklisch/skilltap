@@ -20,6 +20,12 @@ pub enum PipeHolder {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FakeLifecycleAction {
+    MarketplaceUpdate,
+    PluginUpdate,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FakeNativeMode {
     Exit(u8),
     VersionKnown,
@@ -106,6 +112,7 @@ impl FakeNativeBuilder {
         let root = TempRoot::new_in(parent, "skilltap-fake-native")?;
         let captures = root.join("captures");
         fs::create_dir_all(captures.join("argv"))?;
+        fs::create_dir_all(captures.join("invocations"))?;
         fs::create_dir_all(captures.join("environment"))?;
         fs::create_dir_all(captures.join("lifecycle"))?;
         for name in &self.environment {
@@ -266,14 +273,80 @@ impl FakeNativeProcess {
     }
 
     pub fn captured_invocation(&self) -> io::Result<CapturedInvocation> {
-        let count = fs::read_to_string(self.captures.join("argument-count"))?
+        self.captured_invocations()?
+            .pop()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no captured invocation"))
+    }
+
+    pub fn captured_invocations(&self) -> io::Result<Vec<CapturedInvocation>> {
+        let mut paths = fs::read_dir(self.captures.join("invocations"))?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>, _>>()?;
+        paths.sort();
+        paths
+            .into_iter()
+            .map(|path| self.read_captured_invocation(&path))
+            .collect()
+    }
+
+    pub fn fail_lifecycle(&self, action: FakeLifecycleAction, name: &str) -> io::Result<()> {
+        self.write_lifecycle_control("fail", action, name, b"1")
+    }
+
+    pub fn set_plugin_revision(&self, selector: &str, revision: &str) -> io::Result<()> {
+        validate_control_name(selector)?;
+        fs::write(
+            self.captures
+                .join("lifecycle")
+                .join(format!("plugin-revision-{selector}")),
+            format!("{revision}\n"),
+        )
+    }
+
+    pub fn set_available_plugin_revision(&self, selector: &str, revision: &str) -> io::Result<()> {
+        validate_control_name(selector)?;
+        fs::write(
+            self.captures
+                .join("lifecycle")
+                .join(format!("plugin-available-revision-{selector}")),
+            format!("{revision}\n"),
+        )
+    }
+
+    /// Cause the next postcondition observation for this lifecycle action to
+    /// be malformed, without poisoning the pre-observation that authorizes it.
+    pub fn indeterminate_lifecycle(
+        &self,
+        action: FakeLifecycleAction,
+        name: &str,
+    ) -> io::Result<()> {
+        self.write_lifecycle_control("indeterminate", action, name, b"1")
+    }
+
+    fn write_lifecycle_control(
+        &self,
+        prefix: &str,
+        action: FakeLifecycleAction,
+        name: &str,
+        contents: &[u8],
+    ) -> io::Result<()> {
+        validate_control_name(name)?;
+        fs::write(
+            self.captures
+                .join("lifecycle")
+                .join(format!("{prefix}-{}-{name}", lifecycle_action_name(action))),
+            contents,
+        )
+    }
+
+    fn read_captured_invocation(&self, root: &Path) -> io::Result<CapturedInvocation> {
+        let count = fs::read_to_string(root.join("argument-count"))?
+            .trim()
             .parse::<usize>()
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid argument count"))?;
         let mut arguments = Vec::with_capacity(count);
         for index in 0..count {
-            arguments.push(fs::read(
-                self.captures.join("argv").join(format!("{index:020}")),
-            )?);
+            arguments.push(fs::read(root.join("argv").join(format!("{index:020}")))?);
         }
         let mut environment = BTreeMap::new();
         for name in &self.environment {
@@ -289,7 +362,7 @@ impl FakeNativeProcess {
         Ok(CapturedInvocation {
             arguments,
             environment,
-            working_directory: fs::read(self.captures.join("working-directory"))?,
+            working_directory: fs::read(root.join("working-directory"))?,
         })
     }
 }
@@ -335,6 +408,23 @@ impl std::fmt::Debug for CapturedInvocation {
     }
 }
 
+fn lifecycle_action_name(action: FakeLifecycleAction) -> &'static str {
+    match action {
+        FakeLifecycleAction::MarketplaceUpdate => "marketplace-update",
+        FakeLifecycleAction::PluginUpdate => "plugin-update",
+    }
+}
+
+fn validate_control_name(name: &str) -> io::Result<()> {
+    if name.is_empty() || name == "." || name == ".." || name.contains('/') || name.contains('\0') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "lifecycle control name is not a safe path component",
+        ));
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 fn render_script(
     captures: &Path,
@@ -351,11 +441,11 @@ fn render_script(
 ) -> String {
     let mut script = String::from("umask 077\n");
     script.push_str(&format!(
-        "capture={}\nprintf '%s' \"$PWD\" > \"$capture/working-directory\"\n",
+        "capture={}\nprintf '%s' \"$PWD\" > \"$capture/working-directory\"\ninvocation_dir=\"$capture/invocations/$$\"\nmkdir -p \"$invocation_dir/argv\"\n",
         shell_quote(captures)
     ));
     script.push_str(
-        "index=0\nfor argument do\n  name=$(printf '%020u' \"$index\")\n  printf '%s' \"$argument\" > \"$capture/argv/$name\"\n  index=$((index + 1))\ndone\nprintf '%s' \"$index\" > \"$capture/argument-count\"\n",
+        "index=0\nfor argument do\n  name=$(printf '%020u' \"$index\")\n  printf '%s' \"$argument\" > \"$capture/argv/$name\"\n  printf '%s' \"$argument\" > \"$invocation_dir/argv/$name\"\n  index=$((index + 1))\ndone\nprintf '%s' \"$index\" > \"$capture/argument-count\"\nprintf '%s\\n' \"$index\" > \"$invocation_dir/argument-count\"\nprintf '%s' \"$PWD\" > \"$invocation_dir/working-directory\"\n",
     );
     for name in environment {
         let directory = captures.join("environment").join(name);
@@ -376,12 +466,18 @@ fn render_script(
         script.push_str(&format!(
             r#"lifecycle={lifecycle}
 if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace list" ]; then
+  if [ -f "$lifecycle/pending-indeterminate-marketplace-list" ]; then
+    /bin/rm -f "$lifecycle/pending-indeterminate-marketplace-list"
+    printf '%s' '{{malformed'
+    exit 0
+  fi
   first=1
   printf '%s' '{{"marketplaces":['
   for path in "$lifecycle"/marketplace-*; do
     [ -f "$path" ] || continue
     name=${{path##*/}}
     name=${{name#marketplace-}}
+    case "$name" in fail-*|indeterminate-*|pending-*) continue ;; esac
     if [ "$first" = 0 ]; then printf ','; fi
     printf '{{"name":"%s","scope":"user"}},{{"name":"%s","scope":"local"}}' "$name" "$name"
     first=0
@@ -390,14 +486,26 @@ if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace list" ]; then
   exit 0
 fi
 if [ "${{1-}} ${{2-}}" = "plugin list" ]; then
+  if [ -f "$lifecycle/pending-indeterminate-plugin-list" ]; then
+    /bin/rm -f "$lifecycle/pending-indeterminate-plugin-list"
+    printf '%s' '{{malformed'
+    exit 0
+  fi
   first=1
   printf '%s' '{{"plugins":['
   for path in "$lifecycle"/plugin-*; do
     [ -f "$path" ] || continue
     name=${{path##*/}}
     name=${{name#plugin-}}
+    case "$name" in revision-*|available-revision-*|fail-*|indeterminate-*|pending-*) continue ;; esac
+    revision=
+    if [ -f "$lifecycle/plugin-revision-$name" ]; then read revision < "$lifecycle/plugin-revision-$name"; fi
     if [ "$first" = 0 ]; then printf ','; fi
-    printf '{{"name":"%s","scope":"user"}},{{"name":"%s","scope":"local"}}' "$name" "$name"
+    if [ -n "$revision" ]; then
+      printf '{{"name":"%s","scope":"user","version":"%s"}},{{"name":"%s","scope":"local","version":"%s"}}' "$name" "$revision" "$name" "$revision"
+    else
+      printf '{{"name":"%s","scope":"user"}},{{"name":"%s","scope":"local"}}' "$name" "$name"
+    fi
     first=0
   done
   printf '%s' ']}}'
@@ -420,7 +528,17 @@ if [ "${{1-}} ${{2-}}" = "plugin remove" ] || [ "${{1-}} ${{2-}}" = "plugin unin
   /bin/rm -f "$lifecycle/plugin-${{3-}}"
   exit 0
 fi
-if [ "${{1-}} ${{2-}}" = "plugin update" ] || [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace update" ] || [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace upgrade" ]; then
+if [ "${{1-}} ${{2-}}" = "plugin update" ]; then
+  name=${{3-}}
+  if [ -f "$lifecycle/fail-plugin-update-$name" ]; then exit 23; fi
+  if [ -f "$lifecycle/plugin-available-revision-$name" ]; then cp "$lifecycle/plugin-available-revision-$name" "$lifecycle/plugin-revision-$name"; fi
+  if [ -f "$lifecycle/indeterminate-plugin-update-$name" ]; then : > "$lifecycle/pending-indeterminate-plugin-list"; fi
+  exit 0
+fi
+if [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace update" ] || [ "${{1-}} ${{2-}} ${{3-}}" = "plugin marketplace upgrade" ]; then
+  name=${{4-}}
+  if [ -f "$lifecycle/fail-marketplace-update-$name" ]; then exit 23; fi
+  if [ -f "$lifecycle/indeterminate-marketplace-update-$name" ]; then : > "$lifecycle/pending-indeterminate-marketplace-list"; fi
   exit 0
 fi
 "#,
