@@ -1,7 +1,7 @@
 ---
 id: feature-daemon-marketplace-refresh
 kind: feature
-stage: implementing
+stage: review
 tags: [infra]
 parent: null
 depends_on: [epic-safe-update-automation]
@@ -515,6 +515,37 @@ impl FakeNativeProcess {
 - [ ] Immediate repeat is idempotent and reports no resource changes.
 - [ ] Existing foreground lifecycle, postcondition, daemon policy, drift,
       source-failure, and lock-contention regressions remain green.
+
+## Integrated implementation evidence
+
+Implemented the marketplace-first daemon lifecycle across the task graph,
+shared native/managed execution boundary, revision-aware outcomes, journal-linked
+status projection, and isolated acceptance fixtures. The daemon refreshes exact
+marketplace/target bindings once, attaches dependent plugin updates through
+validated operation dependencies, preserves independent branches, and performs
+fresh scheduled attempts on every cycle without daemon acknowledgment.
+
+The acceptance fixture now records ordered bounded argv, supports isolated
+refresh failure and one-shot indeterminate postconditions, and controls plugin
+revision transitions. Compiled end-to-end coverage proves shared refresh
+deduplication and ordering, target-local failure with sibling progress,
+indeterminate dependent postconditions, typed status evidence, native-output
+redaction, and immediate-repeat `summary.changed == false` behavior. The fake
+wrapper no longer inherits `errexit` while sourcing bookkeeping-heavy behavior,
+and the legacy single-capture accessor falls back safely; explicit lifecycle
+failure statuses remain unchanged.
+
+## Integrated verification
+
+- `cargo test -p skilltap --test compiled_binary` — 52 passed.
+- `cargo fmt --all -- --check` — passed.
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` — passed.
+- `cargo test --workspace --all-targets` — 571 passed.
+- Focused core, harness, postcondition, detection, and daemon acceptance tests
+  passed as part of the feature checkpoints.
+
+All parent acceptance criteria are satisfied; the feature is ready for the
+host-owned independent review pass.
 
 ## Implementation Order
 
