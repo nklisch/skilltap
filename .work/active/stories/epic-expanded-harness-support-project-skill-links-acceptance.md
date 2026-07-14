@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links-acceptance
 kind: story
-stage: implementing
+stage: done
 tags: [testing]
 parent: epic-expanded-harness-support-project-skill-links
 depends_on:
@@ -66,3 +66,38 @@ application entry points.
 Runs after lifecycle and observation semantics exist. Green evidence advances
 this child directly to done; independent review remains at the parent feature
 level under the caller's standard review weight.
+
+## Implementation notes
+
+- Execution capability: direct feature-owner acceptance pass, matching the
+  caller's host-owned continuation posture; the compiled binary suite exercises
+  production install, update, remove, status, adoption, and reconciliation
+  entry points inside `IsolatedMachine` roots.
+- The project-scope copy assertion now proves one complete canonical tree plus
+  the exact relative Claude projection while leaving global copied-tree checks
+  unchanged. Added scenarios cover nested paths, canonical no-op behavior,
+  missing/broken/divergent link repair, unmanaged conflict preservation,
+  read-only status, malformed unmanaged candidates, source-less adoption, and
+  the all-desired-target content update gate.
+- Acceptance fixes: unmanaged status observation now uses the selected target
+  set rather than constructing an invalid empty `HarnessSet`; project-skill
+  warnings retain `attention_required` after status observation completes; and
+  the partial shared-content update response reports `changed: false`.
+- Adjacent verification hardening: retained checked Unix link-identity
+  conversions with a platform rationale for strict Clippy, and removed one
+  needless borrow in the existing link-race fixture.
+- Discrepancies from the design: the compiled registry currently exposes only
+  Codex and Claude, so no throwaway third adapter is available in this binary
+  surface; Unix filesystem tests cover the lower-level entry-kind and race
+  matrix. Resource-ID assertions use the stable rendered project-scope form.
+
+## Verification
+
+- `cargo test -p skilltap --test compiled_binary project_skill -- --nocapture` —
+  passed (4 tests).
+- `cargo test -p skilltap --test compiled_binary -- --nocapture` — passed (58
+  tests).
+- `cargo test --workspace --all-targets` — passed (586 tests).
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings` —
+  passed.
+- `cargo fmt --all -- --check` and `git diff --check` — passed.

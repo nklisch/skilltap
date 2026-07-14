@@ -587,6 +587,7 @@ pub(super) fn adopt_project_skills(
 /// Reconcile a desired project skill whose canonical tree is already present.
 /// This is the source-less adoption path: it validates and reads the canonical
 /// tree, then repairs only selected target links without replacing content.
+#[allow(clippy::too_many_arguments)]
 fn execute_project_skill_source_less(
     application: &StatusApplication<'_>,
     command: &'static str,
@@ -939,6 +940,7 @@ fn execute_project_skill_source_less(
 
 /// Execute a project-only skill install, update, or reconciliation. Global
 /// behavior remains in the established lifecycle path.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn execute_project_skill_install(
     application: &StatusApplication<'_>,
     command: &'static str,
@@ -1225,7 +1227,9 @@ pub(super) fn execute_project_skill_install(
                         .with_next_action(NextAction::new(
                             "select_all_project_skill_targets",
                             "Retry with `--target all` or explicitly select every desired target.",
-                        ));
+                        ))
+                        .with_summary("operations", 0_u64)
+                        .with_summary("changed", false);
                 }
             }
             let operation_id = project_canonical_operation_id(&key);
@@ -1910,26 +1914,31 @@ pub(super) fn execute_project_skill_remove(
             .targets()
             .iter()
             .any(|target| !targets.resolved.contains(target));
-        let canonical_owned = state.targets().values().any(|target| {
-            target.provenance() == Provenance::Direct && target.ownership() == Ownership::Skilltap
-        });
-        if !remaining && canonical_owned {
-            if let Some(canonical) = canonical {
-                let operation_id = project_canonical_remove_operation_id(&key);
-                let target = resource
-                    .targets()
-                    .iter()
-                    .next()
-                    .cloned()
-                    .expect("non-empty targets");
-                let dependencies = link_ids.iter().cloned().map(OperationDependency::new);
-                let path = AbsolutePath::new(format!(
-                    "{}/{}",
-                    canonical_root.as_str(),
-                    canonical_destination.as_str()
-                ))
-                .expect("canonical skill path is valid");
-                let operation = match skilltap_core::lifecycle_operation::faithful_file_operation_with_dependencies(
+        let canonical_owned = matches!(resource.origin(), DesiredOrigin::Direct)
+            && state.targets().values().any(|target| {
+                target.provenance() == Provenance::Direct
+                    && target.ownership() == Ownership::Skilltap
+            });
+        if !remaining
+            && canonical_owned
+            && let Some(canonical) = canonical
+        {
+            let operation_id = project_canonical_remove_operation_id(&key);
+            let target = resource
+                .targets()
+                .iter()
+                .next()
+                .cloned()
+                .expect("non-empty targets");
+            let dependencies = link_ids.iter().cloned().map(OperationDependency::new);
+            let path = AbsolutePath::new(format!(
+                "{}/{}",
+                canonical_root.as_str(),
+                canonical_destination.as_str()
+            ))
+            .expect("canonical skill path is valid");
+            let operation =
+                match skilltap_core::lifecycle_operation::faithful_file_operation_with_dependencies(
                     operation_id.clone(),
                     target,
                     key.clone(),
@@ -1946,21 +1955,20 @@ pub(super) fn execute_project_skill_remove(
                         ));
                     }
                 };
-                operations.push(operation);
-                canonical_entries.insert(
-                    operation_id,
-                    ManagedSkillEntry {
-                        root: canonical_root,
-                        destination: canonical_destination,
-                        tree: canonical.tree,
-                        backup_tree: None,
-                        action: ManagedSkillAction::Remove,
-                        expected_identity: Some(canonical.identity),
-                        owner: None,
-                        config_root: None,
-                    },
-                );
-            }
+            operations.push(operation);
+            canonical_entries.insert(
+                operation_id,
+                ManagedSkillEntry {
+                    root: canonical_root,
+                    destination: canonical_destination,
+                    tree: canonical.tree,
+                    backup_tree: None,
+                    action: ManagedSkillAction::Remove,
+                    expected_identity: Some(canonical.identity),
+                    owner: None,
+                    config_root: None,
+                },
+            );
         }
         target_projection_keys.insert(key);
     }

@@ -674,7 +674,7 @@ fn confined_project_link_rejects_ancestor_escape_and_stale_identity() {
         .create_relative_symlink_beneath_no_follow(&project_path, &destination, &first_target)
         .unwrap();
     fs::remove_file(project.join("links/demo")).unwrap();
-    symlink(&second_target.as_path(), project.join("links/demo")).unwrap();
+    symlink(second_target.as_path(), project.join("links/demo")).unwrap();
     let error = filesystem
         .remove_relative_symlink_beneath_no_follow(
             &project_path,

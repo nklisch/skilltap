@@ -1754,12 +1754,653 @@ fn whole_skill_modes_are_normalized_for_global_and_project_codex_and_claude() {
         ],
     );
     assert_code(&install, 0);
-    for destination in [
-        project.join(".agents/skills/project-mode-skill"),
-        project.join(".claude/skills/project-mode-skill"),
-    ] {
-        assert_normalized(&destination);
-    }
+    assert_normalized(&project.join(".agents/skills/project-mode-skill"));
+    let claude_link = project.join(".claude/skills/project-mode-skill");
+    assert!(
+        fs::symlink_metadata(&claude_link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::read_link(&claude_link).unwrap(),
+        PathBuf::from("../../.agents/skills/project-mode-skill")
+    );
+    assert_normalized(&claude_link);
+}
+
+#[cfg(unix)]
+#[test]
+fn project_skill_links_are_canonical_idempotent_and_ownership_safe() {
+    use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    let project = machine.working_directory().join("nested/project");
+    fs::create_dir_all(&project).unwrap();
+    let source = machine.home().join("project-links-source");
+    fs::create_dir_all(source.join("scripts")).unwrap();
+    fs::create_dir_all(source.join("references")).unwrap();
+    fs::create_dir_all(source.join("assets")).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: project-links\ndescription: project link fixture\nmetadata:\n  future: preserved\n---\nbody\n",
+    )
+    .unwrap();
+    fs::write(source.join("scripts/run.sh"), "#!/bin/sh\nexit 0\n").unwrap();
+    fs::write(source.join("references/example.md"), "reference\n").unwrap();
+    fs::write(source.join("assets/data.bin"), [1_u8, 2, 3, 4]).unwrap();
+    #[cfg(unix)]
+    fs::set_permissions(
+        source.join("scripts/run.sh"),
+        fs::Permissions::from_mode(0o755),
+    )
+    .unwrap();
+
+    let source_text = source.to_str().unwrap();
+    let project_text = project.to_str().unwrap();
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    assert_eq!(json(&install)["summary"]["changed"], true);
+
+    let canonical = project.join(".agents/skills/project-links");
+    let claude_link = project.join(".claude/skills/project-links");
+    assert!(canonical.join("SKILL.md").is_file());
+    assert!(canonical.join("scripts/run.sh").is_file());
+    assert_eq!(
+        fs::read(canonical.join("assets/data.bin")).unwrap(),
+        [1, 2, 3, 4]
+    );
+    assert!(
+        fs::symlink_metadata(&claude_link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    assert_eq!(
+        fs::read_link(&claude_link).unwrap(),
+        PathBuf::from("../../.agents/skills/project-links")
+    );
+    let original_link_inode = fs::symlink_metadata(&claude_link).unwrap().ino();
+
+    let repeat = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+    assert_eq!(
+        fs::symlink_metadata(&claude_link).unwrap().ino(),
+        original_link_inode
+    );
+
+    fs::remove_file(&claude_link).unwrap();
+    let repaired = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&repaired, 0);
+    assert!(
+        fs::symlink_metadata(&claude_link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+
+    fs::remove_dir_all(&canonical).unwrap();
+    let restored = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&restored, 0);
+    assert!(canonical.join("SKILL.md").is_file());
+    assert!(
+        fs::symlink_metadata(&claude_link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+
+    fs::remove_file(&claude_link).unwrap();
+    symlink(Path::new("../../elsewhere"), &claude_link).unwrap();
+    let divergent = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&divergent, 0);
+    assert_eq!(
+        fs::read_link(&claude_link).unwrap(),
+        PathBuf::from("../../.agents/skills/project-links")
+    );
+
+    fs::remove_file(&claude_link).unwrap();
+    let conflict_bytes = b"unmanaged conflict\n";
+    fs::write(&claude_link, conflict_bytes).unwrap();
+    let conflict = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&conflict, 2);
+    assert_eq!(json(&conflict)["summary"]["changed"], false);
+    assert_eq!(fs::read(&claude_link).unwrap(), conflict_bytes);
+    assert!(
+        json(&conflict)["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "skill_destination_unmanaged")
+    );
+
+    fs::remove_file(&claude_link).unwrap();
+    let repair = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&repair, 0);
+    let remove_target = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&remove_target, 0);
+    assert!(canonical.join("SKILL.md").is_file());
+    assert!(!claude_link.exists());
+
+    let final_remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "project-links",
+            "--project",
+            project_text,
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&final_remove, 0);
+    assert!(!canonical.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn project_skill_status_exposes_independent_health_and_preserves_read_only_state() {
+    use std::os::unix::fs::symlink;
+
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    let project = machine.working_directory().join("status-project");
+    fs::create_dir_all(project.join(".agents/skills/status-skill")).unwrap();
+    fs::write(
+        project.join(".agents/skills/status-skill/SKILL.md"),
+        "---\nname: status-skill\ndescription: status fixture\n---\nbody\n",
+    )
+    .unwrap();
+    let project_text = project.to_str().unwrap();
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            project
+                .join(".agents/skills/status-skill/SKILL.md")
+                .parent()
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    let link = project.join(".claude/skills/status-skill");
+    fs::remove_file(&link).unwrap();
+    let before = snapshot_native_tree(&config_root(&machine));
+
+    let missing = run(
+        &machine,
+        &[
+            "status",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&missing, 2);
+    let missing_value = json(&missing);
+    assert!(
+        missing_value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "skill.link.missing")
+    );
+    let missing_resource = missing_value["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|resource| {
+            resource["id"].as_str().is_some_and(|id| {
+                id == format!("claude:skill:status-skill [project:{project_text}]")
+            })
+        })
+        .unwrap();
+    assert_eq!(missing_resource["fields"]["conformance"], "conforming");
+    assert_eq!(missing_resource["fields"]["compatibility"], "compatible");
+    assert_eq!(missing_resource["fields"]["loadability"], "loadable");
+    assert_eq!(missing_resource["fields"]["projection"], "missing");
+    assert_eq!(snapshot_native_tree(&config_root(&machine)), before);
+
+    fs::create_dir_all(project.join(".claude/skills")).unwrap();
+    symlink(
+        Path::new("../../.agents/skills/status-skill"),
+        project.join(".claude/skills/status-skill"),
+    )
+    .unwrap();
+    fs::remove_dir_all(project.join(".agents/skills/status-skill")).unwrap();
+    let broken = run(
+        &machine,
+        &[
+            "status",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&broken, 2);
+    assert!(
+        json(&broken)["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "skill.link.broken")
+    );
+
+    fs::create_dir_all(project.join(".agents/skills/status-skill")).unwrap();
+    fs::write(
+        project.join(".agents/skills/status-skill/SKILL.md"),
+        "---\nname: status-skill\ndescription: status fixture\n---\nbody\n",
+    )
+    .unwrap();
+    fs::remove_file(project.join(".claude/skills/status-skill")).unwrap();
+    symlink(
+        Path::new("../../elsewhere"),
+        project.join(".claude/skills/status-skill"),
+    )
+    .unwrap();
+    let divergent = run(
+        &machine,
+        &[
+            "status",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&divergent, 2);
+    assert!(
+        json(&divergent)["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "skill.link.divergent")
+    );
+
+    fs::remove_file(project.join(".claude/skills/status-skill")).unwrap();
+    fs::write(project.join(".claude/skills/status-skill"), b"foreign").unwrap();
+    let conflict = run(
+        &machine,
+        &[
+            "status",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&conflict, 2);
+    assert_eq!(
+        fs::read(project.join(".claude/skills/status-skill")).unwrap(),
+        b"foreign"
+    );
+}
+
+#[test]
+fn source_less_project_adoption_links_without_deleting_adopted_canonical_content() {
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    let project = machine.working_directory().join("adopt-project");
+    let canonical = project.join(".agents/skills/adopted-skill");
+    fs::create_dir_all(&canonical).unwrap();
+    fs::write(
+        canonical.join("SKILL.md"),
+        "---\nname: adopted-skill\ndescription: adopted fixture\n---\nbody\n",
+    )
+    .unwrap();
+    let project_text = project.to_str().unwrap();
+
+    let adopt = run(
+        &machine,
+        &[
+            "adopt",
+            "--from",
+            "claude",
+            "--project",
+            project_text,
+            "--json",
+        ],
+    );
+    assert_code(&adopt, 0);
+    assert!(
+        fs::read_to_string(config_root(&machine).join("inventory.toml"))
+            .unwrap()
+            .contains("skill:adopted-skill")
+    );
+    assert!(!config_root(&machine).join("state.json").exists());
+
+    let sync = run(
+        &machine,
+        &[
+            "sync",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&sync, 0);
+    let link = project.join(".claude/skills/adopted-skill");
+    assert!(
+        fs::symlink_metadata(&link)
+            .unwrap()
+            .file_type()
+            .is_symlink()
+    );
+    let repeat = run(
+        &machine,
+        &[
+            "sync",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&repeat, 0);
+    assert_eq!(json(&repeat)["summary"]["changed"], false);
+
+    let remove = run(
+        &machine,
+        &[
+            "skill",
+            "remove",
+            "adopted-skill",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&remove, 0);
+    assert!(!link.exists());
+    assert!(canonical.join("SKILL.md").is_file());
+}
+
+#[test]
+fn malformed_unmanaged_project_skill_is_reported_without_adoption_or_mutation() {
+    let machine = machine();
+    let codex = fake_harness(&machine, &FakeHarnessProfile::codex());
+    let claude = fake_harness(&machine, &FakeHarnessProfile::claude());
+    write_owned(
+        &machine,
+        "config.toml",
+        &native_config(codex.executable(), claude.executable()),
+    );
+    let project = machine.working_directory().join("malformed-project");
+    let canonical = project.join(".agents/skills/malformed-skill");
+    fs::create_dir_all(&canonical).unwrap();
+    fs::write(
+        canonical.join("SKILL.md"),
+        "---\nname: malformed-skill\n---\nbody\n",
+    )
+    .unwrap();
+    let project_text = project.to_str().unwrap();
+    let status = run(
+        &machine,
+        &[
+            "status",
+            "--project",
+            project_text,
+            "--target",
+            "codex",
+            "--json",
+        ],
+    );
+    assert_code(&status, 2);
+    let value = json(&status);
+    assert!(
+        value["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "skill.format.invalid")
+    );
+    let unmanaged = value["resources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|resource| {
+            resource["id"].as_str().is_some_and(|id| {
+                id == format!("skill:malformed-skill [project:{project_text}]:unmanaged")
+            })
+        })
+        .unwrap();
+    assert_eq!(unmanaged["fields"]["adoptable"], false);
+    assert!(!config_root(&machine).join("inventory.toml").exists());
+}
+
+#[test]
+fn project_skill_content_update_requires_all_desired_targets() {
+    let machine = machine();
+    let source = machine.home().join("shared-project-source");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: shared-project\ndescription: v1\n---\nv1\n",
+    )
+    .unwrap();
+    write_owned(&machine, "config.toml", ENABLED_CONFIG);
+    let project = machine.working_directory().join("shared-project");
+    fs::create_dir_all(&project).unwrap();
+    let source_text = source.to_str().unwrap();
+    let project_text = project.to_str().unwrap();
+    let install = run(
+        &machine,
+        &[
+            "skill",
+            "install",
+            source_text,
+            "--name",
+            "shared-project",
+            "--project",
+            project_text,
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&install, 0);
+    fs::write(
+        source.join("SKILL.md"),
+        "---\nname: shared-project\ndescription: v2\n---\nv2\n",
+    )
+    .unwrap();
+    let blocked = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "shared-project",
+            "--project",
+            project_text,
+            "--target",
+            "claude",
+            "--json",
+        ],
+    );
+    assert_code(&blocked, 2);
+    assert_eq!(json(&blocked)["summary"]["changed"], false);
+    assert_eq!(
+        fs::read_to_string(project.join(".agents/skills/shared-project/SKILL.md")).unwrap(),
+        "---\nname: shared-project\ndescription: v1\n---\nv1\n"
+    );
+    assert!(
+        json(&blocked)["warnings"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|warning| warning["code"] == "project_skill_shared_content_requires_all_targets")
+    );
+
+    let accepted = run(
+        &machine,
+        &[
+            "skill",
+            "update",
+            "shared-project",
+            "--project",
+            project_text,
+            "--target",
+            "all",
+            "--json",
+        ],
+    );
+    assert_code(&accepted, 0);
+    assert_eq!(json(&accepted)["summary"]["changed"], true);
+    assert_eq!(
+        fs::read_to_string(project.join(".agents/skills/shared-project/SKILL.md")).unwrap(),
+        "---\nname: shared-project\ndescription: v2\n---\nv2\n"
+    );
 }
 
 #[test]

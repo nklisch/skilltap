@@ -506,6 +506,10 @@ fn read_relative_target(
 }
 
 #[cfg(unix)]
+// `st_dev` and `st_ino` are narrower than `u64` on some supported Unix
+// targets, so retain the checked conversion even where Linux exposes them as
+// `u64` and Clippy sees a same-type conversion.
+#[allow(clippy::useless_conversion)]
 fn link_identity(metadata: &libc::stat) -> io::Result<LinkIdentity> {
     let device = u64::try_from(metadata.st_dev)
         .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid link device identity"))?;

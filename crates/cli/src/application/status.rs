@@ -511,6 +511,13 @@ impl StatusProjection<'_> {
                 "Inspect the reported native observation warnings before planning changes.",
             ));
         }
+        if outcome
+            .warnings
+            .iter()
+            .any(|warning| warning.code.starts_with("skill."))
+        {
+            outcome.result = ResultClass::AttentionRequired;
+        }
         let desired_resources = self
             .documents
             .inventory
@@ -613,7 +620,7 @@ fn project_skill_status_projection(
                 if let Some(name) = resource.id().as_str().strip_prefix("skill:") {
                     observed_names.insert((resource.scope().clone(), name.to_owned()));
                 }
-                render_project_skill_observation(outcome, &observation);
+                render_project_skill_observation(outcome, &observation, true);
             }
             Err(_) => complete = false,
         }
@@ -673,14 +680,18 @@ fn project_skill_status_projection(
                 limits,
             ) {
                 Ok(observation) => {
-                    render_project_skill_observation(outcome, &observation);
+                    render_project_skill_observation(outcome, &observation, false);
+                    let adoptable = matches!(
+                        &observation.canonical,
+                        super::project_skills::CanonicalProjectSkillObservation::Present { .. }
+                    );
                     *outcome = outcome.clone().with_resource(
                         OutputEntry::new(
                             format!("{}:unmanaged", observation.resource),
                             "unmanaged",
                         )
                         .with_field("managed", false)
-                        .with_field("adoptable", true),
+                        .with_field("adoptable", adoptable),
                     );
                     *outcome = outcome.clone().with_next_action(NextAction::new(
                         "adopt_project_skills",
@@ -697,6 +708,7 @@ fn project_skill_status_projection(
 fn render_project_skill_observation(
     outcome: &mut Outcome,
     observation: &super::project_skills::ProjectSkillObservation,
+    report_projection_warnings: bool,
 ) {
     let (canonical, conformance) = match &observation.canonical {
         super::project_skills::CanonicalProjectSkillObservation::Missing => ("missing", "unknown"),
@@ -719,6 +731,11 @@ fn render_project_skill_observation(
             },
         ),
     };
+    *outcome = outcome.clone().with_resource(
+        OutputEntry::new(format!("{}:canonical", observation.resource), canonical)
+            .with_field("canonical", canonical)
+            .with_field("conformance", conformance),
+    );
     if canonical == "missing" {
         *outcome = outcome.clone().with_warning(Warning::new(
             "skill.canonical.missing",
@@ -794,7 +811,7 @@ fn render_project_skill_observation(
             skilltap_core::project_skill::ProjectSkillLinkHealth::NotRequired
             | skilltap_core::project_skill::ProjectSkillLinkHealth::Healthy => None,
         };
-        if let Some((code, summary)) = warning {
+        if report_projection_warnings && let Some((code, summary)) = warning {
             *outcome = outcome.clone().with_warning(Warning::new(code, summary));
         }
         if target_observation.compatibility.class() == CompatibilityClass::Incompatible {

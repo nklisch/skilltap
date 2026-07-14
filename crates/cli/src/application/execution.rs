@@ -656,6 +656,7 @@ pub(super) enum ManagedSkillAction {
     Remove,
 }
 
+#[allow(clippy::result_large_err)]
 impl ProjectSkillLinkPort<'_> {
     fn revalidate(&self, plan: &Plan) -> Result<(), ExecutionError> {
         for id in &self.foreign_operations {
