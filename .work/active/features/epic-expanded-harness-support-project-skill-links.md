@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links
 kind: feature
-stage: review
+stage: done
 tags: []
 parent: epic-expanded-harness-support
 depends_on: [epic-standalone-skill-lifecycle, epic-expanded-harness-support-registry]
@@ -981,7 +981,30 @@ place as the explicit scope boundary.
   link-race, and target-isolation contracts, but skipped because the delegated
   endpoint explicitly forbids subagents and peeragent. Design review is
   non-blocking under the workflow policy.
-- **Implementation closure:** the feature still requires one independent
-  standard-weight feature review after all child checkpoints verify. Child
-  stories advance directly to done on green evidence and do not become review
-  units.
+- **Implementation closure:** one independent standard-weight cross-model
+  feature review completed after all child checkpoints verified. Child stories
+  advanced directly to done and were not separate review units.
+
+## Review (2026-07-14)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none
+
+**Important**: none
+
+**Nits**: Unterminated-frontmatter tolerance uses a conservative body-line
+heuristic; confined unlink retains a small external-writer TOCTOU window after
+identity re-stat; adoption enumeration silently skips nonconforming direct-child
+directory names. These do not weaken conformance claims, managed-boundary
+ownership, or mutation safety under the supported threat model.
+
+**Rejected**: none
+
+**Notes**: Standard review used exactly one read-only cross-model GLM-5.2 pass.
+All findings were adjudicated as low-risk limitations, so no fix, active item,
+or backlog item was warranted. The reviewer confirmed strict format/loadability
+separation, registry-derived relative paths, descriptor-relative no-follow
+operations, dependency ordering, target-local state preservation,
+status/adoption behavior, global-scope preservation, and the recorded 586-test,
+strict-Clippy, and formatting evidence. No second independent pass ran.
