@@ -1,7 +1,7 @@
 ---
 id: epic-expanded-harness-support-project-skill-links-observation
 kind: story
-stage: implementing
+stage: done
 tags: []
 parent: epic-expanded-harness-support-project-skill-links
 depends_on:
