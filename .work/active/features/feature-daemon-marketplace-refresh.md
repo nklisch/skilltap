@@ -1,7 +1,7 @@
 ---
 id: feature-daemon-marketplace-refresh
 kind: feature
-stage: review
+stage: done
 tags: [infra]
 parent: null
 depends_on: [epic-safe-update-automation]
@@ -617,3 +617,33 @@ correctness checkpoints, not parallel worker assignments.
   and land the planner extraction as the first checkpoint; do not fall back to
   sequential child outcomes, because that would weaken the lock and journal
   guarantees required by the brief.
+
+## Review (2026-07-14)
+
+**Verdict**: Approve with comments
+
+**Blockers**: none — the reviewer identified missing direct end-to-end evidence
+for refresh-failure dependency suppression; the accepted blocker was fixed in
+`5d307644` by exercising the same-target production daemon path and proving the
+plugin command is absent while daemon and status JSON report the failed refresh
+and `skipped_dependency` plugin result.
+
+**Important**: none
+
+**Nits**: `DaemonRunRecord::with_operations` retains an infallible `Result`
+shape; a currently unreachable missing-refresh-id branch uses a permissive
+default; foreground and daemon lifecycle planners remain parallel rather than
+sharing the originally proposed extraction. These are non-material current-cycle
+cleanup observations and create no active or backlog work.
+
+**Rejected**: treating the unreachable missing-refresh-id default as a current
+blocker — task-graph construction currently guarantees the refresh operation id,
+and the new compiled test directly protects the required dependency behavior.
+
+**Notes**: Standard review used exactly one read-only cross-model GLM-5.2 pass.
+The receiver adjudicated all proposals, fixed the one acceptance-evidence
+blocker, and did not run another independent pass. Fix verification passed the
+new exact scenario, all 53 compiled-binary tests, formatting, and strict
+workspace Clippy. The earlier integrated run passed all 571 then-existing
+workspace tests; the added test is included in the subsequent 53-test compiled
+suite.
