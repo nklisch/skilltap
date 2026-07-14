@@ -273,9 +273,16 @@ impl FakeNativeProcess {
     }
 
     pub fn captured_invocation(&self) -> io::Result<CapturedInvocation> {
-        self.captured_invocations()?
-            .pop()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no captured invocation"))
+        match self.captured_invocations() {
+            Ok(mut invocations) => invocations
+                .pop()
+                .map(Ok)
+                .unwrap_or_else(|| self.read_captured_invocation(&self.captures)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                self.read_captured_invocation(&self.captures)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     pub fn captured_invocations(&self) -> io::Result<Vec<CapturedInvocation>> {

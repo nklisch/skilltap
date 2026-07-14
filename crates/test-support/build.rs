@@ -2,7 +2,9 @@
 use std::{env, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command};
 
 const FAKE_NATIVE: &str = r#"#!/bin/sh
-set -eu
+# Behavior scripts return explicit lifecycle statuses; bookkeeping must not
+# turn a successful version probe into a wrapper failure.
+set -u
 case "$0" in
   */*) fixture_directory=${0%/*} ;;
   *) fixture_directory=. ;;
