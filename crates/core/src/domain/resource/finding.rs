@@ -64,6 +64,12 @@ registered_vocabulary!(ObservationFindingCode, "unregistered observation finding
     ConsentRequired => "consent.required",
     ScopeUnsupported => "scope.unsupported",
     UnsafeFilesystemEntry => "filesystem.entry.unsafe",
+    SkillFormatInvalid => "skill.format.invalid",
+    SkillTargetIncompatible => "skill.target.incompatible",
+    SkillLinkMissing => "skill.link.missing",
+    SkillLinkBroken => "skill.link.broken",
+    SkillLinkDivergent => "skill.link.divergent",
+    SkillDestinationUnmanaged => "skill.destination.unmanaged",
 });
 
 registered_vocabulary!(ObservationFieldCode, "unregistered observation field code", {
@@ -105,6 +111,12 @@ pub enum ObservationSummary {
     ConsentRequired,
     ScopeUnsupported,
     UnsafeFilesystemEntry,
+    SkillFormatInvalid,
+    SkillTargetIncompatible,
+    SkillLinkMissing,
+    SkillLinkBroken,
+    SkillLinkDivergent,
+    SkillDestinationUnmanaged,
 }
 
 impl ObservationSummary {
@@ -125,6 +137,16 @@ impl ObservationSummary {
             Self::ConsentRequired => "The harness requires user consent.",
             Self::ScopeUnsupported => "The harness does not support this scope.",
             Self::UnsafeFilesystemEntry => "A native filesystem entry is unsafe to inspect.",
+            Self::SkillFormatInvalid => "A project skill's canonical format is invalid.",
+            Self::SkillTargetIncompatible => {
+                "A project skill is not loadable by the selected target."
+            }
+            Self::SkillLinkMissing => "A project skill target link is missing.",
+            Self::SkillLinkBroken => "A project skill target link is broken.",
+            Self::SkillLinkDivergent => "A project skill target link points elsewhere.",
+            Self::SkillDestinationUnmanaged => {
+                "A project skill destination is occupied by unmanaged content."
+            }
         }
     }
 
@@ -135,7 +157,7 @@ impl ObservationSummary {
     }
 }
 
-const ALL_SUMMARIES: [ObservationSummary; 13] = [
+const ALL_SUMMARIES: [ObservationSummary; 19] = [
     ObservationSummary::MalformedNativeEntry,
     ObservationSummary::NativeStateUnreadable,
     ObservationSummary::NativeShapeUnsupported,
@@ -149,6 +171,12 @@ const ALL_SUMMARIES: [ObservationSummary; 13] = [
     ObservationSummary::ConsentRequired,
     ObservationSummary::ScopeUnsupported,
     ObservationSummary::UnsafeFilesystemEntry,
+    ObservationSummary::SkillFormatInvalid,
+    ObservationSummary::SkillTargetIncompatible,
+    ObservationSummary::SkillLinkMissing,
+    ObservationSummary::SkillLinkBroken,
+    ObservationSummary::SkillLinkDivergent,
+    ObservationSummary::SkillDestinationUnmanaged,
 ];
 
 impl fmt::Display for ObservationSummary {

@@ -416,6 +416,17 @@ pub enum SkillCompatibilityClass {
 }
 
 impl SkillCompatibility {
+    /// Construct conservative blocked evidence when the canonical tree could
+    /// not be validated far enough to inspect its frontmatter.
+    pub fn blocked(target: HarnessId) -> Self {
+        Self {
+            target,
+            class: CompatibilityClass::Incompatible,
+            loadability: SkillLoadability::Blocked,
+            findings: vec![SkillCompatibilityFinding::TargetEvidenceUnavailable],
+        }
+    }
+
     pub fn portable(target: HarnessId, validation: &AgentSkillValidation) -> Self {
         let (class, loadability) = if !validation.loadable_shape {
             (CompatibilityClass::Incompatible, SkillLoadability::Blocked)

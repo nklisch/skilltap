@@ -147,10 +147,6 @@ impl StatusApplication<'_> {
                 }
             };
 
-        if initial_plan.additions.is_empty() {
-            return project_adoption(outcome, &initial_plan, false, observation.failed_targets);
-        }
-
         let paths = match PlatformPaths::resolve(&ProcessEnvironment) {
             Ok(paths) => paths,
             Err(_) => {
@@ -165,6 +161,13 @@ impl StatusApplication<'_> {
                     ));
             }
         };
+        if initial_plan.additions.is_empty() {
+            let outcome =
+                project_adoption(outcome, &initial_plan, false, observation.failed_targets);
+            return super::project_skills::adopt_project_skills(
+                self, &scope, &targets, &paths, outcome,
+            );
+        }
         let lock_path = match AbsolutePath::new(format!(
             "{}/skilltap.lock",
             paths.skilltap_config().as_str()
@@ -197,12 +200,15 @@ impl StatusApplication<'_> {
             },
         );
         match applied {
-            Ok(result) => project_adoption(
-                outcome,
-                &result.plan,
-                result.changed,
-                observation.failed_targets,
-            ),
+            Ok(result) => {
+                let outcome = project_adoption(
+                    outcome,
+                    &result.plan,
+                    result.changed,
+                    observation.failed_targets,
+                );
+                super::project_skills::adopt_project_skills(self, &scope, &targets, &paths, outcome)
+            }
             Err(error) => outcome
                 .with_error(adoption_apply_error(&error))
                 .with_next_action(adoption_next_action(&error)),
@@ -420,6 +426,14 @@ impl StatusProjection<'_> {
         for action in observation.next_actions.iter().cloned() {
             outcome = outcome.with_next_action(action);
         }
+        let project_skill_comparison = project_skill_status_projection(
+            self.documents,
+            self.scope,
+            self.targets,
+            self.registry,
+            PlatformPaths::resolve(&ProcessEnvironment).ok(),
+            &mut outcome,
+        );
         for entry in update_entries {
             outcome = outcome.with_resource(entry);
         }
@@ -507,7 +521,32 @@ impl StatusProjection<'_> {
             .state
             .as_ref()
             .map_or(0, |value| value.resources().len());
-        if observation.failed_targets == 0 && (desired_resources > 0 || recorded_resources > 0) {
+        let only_project_skills = self
+            .documents
+            .inventory
+            .as_ref()
+            .map(|inventory| {
+                inventory.resources().values().all(|resource| {
+                    resource.kind() == ResourceKind::StandaloneSkill
+                        && matches!(resource.scope(), Scope::Project(_))
+                })
+            })
+            .unwrap_or(true)
+            && self
+                .documents
+                .state
+                .as_ref()
+                .map(|state| {
+                    state.resources().values().all(|resource| {
+                        resource.key().id().as_str().starts_with("skill:")
+                            && matches!(resource.key().scope(), Scope::Project(_))
+                    })
+                })
+                .unwrap_or(true);
+        if observation.failed_targets == 0
+            && (desired_resources > 0 || recorded_resources > 0)
+            && (!only_project_skills || !project_skill_comparison)
+        {
             outcome.result = ResultClass::AttentionRequired;
             outcome = outcome.with_warning(Warning::new(
                 "status_comparison_unavailable",
@@ -515,6 +554,263 @@ impl StatusProjection<'_> {
             ));
         }
         outcome
+    }
+}
+
+fn project_skill_status_projection(
+    documents: &StatusDocuments,
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    registry: &skilltap_harnesses::TargetRegistry,
+    paths: Option<PlatformPaths>,
+    outcome: &mut Outcome,
+) -> bool {
+    let Some(paths) = paths else {
+        return false;
+    };
+    let filesystem = SystemFileSystem;
+    let limits = ExternalTreeLimits::new(16, 10_000, 4 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024)
+        .expect("bounded project skill status limits are valid");
+    let mut complete = true;
+    let mut observed_names = BTreeSet::new();
+    for resource in documents
+        .inventory
+        .as_ref()
+        .into_iter()
+        .flat_map(|inventory| inventory.resources().values())
+        .filter(|resource| {
+            resource.kind() == ResourceKind::StandaloneSkill
+                && matches!(resource.scope(), Scope::Project(_))
+                && scope.resolved.contains(resource.scope())
+                && resource
+                    .targets()
+                    .iter()
+                    .any(|target| targets.resolved.contains(target))
+        })
+    {
+        let selected = HarnessSet::new(
+            resource
+                .targets()
+                .iter()
+                .filter(|target| targets.resolved.contains(target))
+                .cloned(),
+        )
+        .expect("selected project skill targets are unique");
+        let state = documents
+            .state
+            .as_ref()
+            .and_then(|state| state.resources().get(resource.key()));
+        match super::project_skills::observe_project_skill(
+            registry,
+            &filesystem,
+            &paths,
+            resource,
+            state,
+            &selected,
+            limits,
+        ) {
+            Ok(observation) => {
+                if let Some(name) = resource.id().as_str().strip_prefix("skill:") {
+                    observed_names.insert((resource.scope().clone(), name.to_owned()));
+                }
+                render_project_skill_observation(outcome, &observation);
+            }
+            Err(_) => complete = false,
+        }
+    }
+
+    for concrete_scope in &scope.resolved {
+        let Scope::Project(project) = concrete_scope else {
+            continue;
+        };
+        let names = match super::project_skills::enumerate_canonical_project_skills(
+            &filesystem,
+            project,
+            limits,
+        ) {
+            Ok(names) => names,
+            Err(_) => {
+                complete = false;
+                continue;
+            }
+        };
+        for name in names {
+            if observed_names.contains(&(concrete_scope.clone(), name.as_str().to_owned())) {
+                continue;
+            }
+            let key = match ResourceId::new(format!("skill:{name}")) {
+                Ok(id) => ResourceKey::new(id, concrete_scope.clone()),
+                Err(_) => {
+                    complete = false;
+                    continue;
+                }
+            };
+            let desired = match DesiredResource::new(
+                key,
+                ResourceKind::StandaloneSkill,
+                targets.resolved.clone(),
+                DesiredOrigin::Direct,
+                None,
+                UpdateIntent::Track,
+                ComponentGraph::new([]).expect("empty skill graph is valid"),
+                BTreeMap::new(),
+                BTreeMap::new(),
+                BTreeSet::new(),
+            ) {
+                Ok(desired) => desired,
+                Err(_) => {
+                    complete = false;
+                    continue;
+                }
+            };
+            match super::project_skills::observe_project_skill(
+                registry,
+                &filesystem,
+                &paths,
+                &desired,
+                None,
+                &targets.resolved,
+                limits,
+            ) {
+                Ok(observation) => {
+                    render_project_skill_observation(outcome, &observation);
+                    *outcome = outcome.clone().with_resource(
+                        OutputEntry::new(
+                            format!("{}:unmanaged", observation.resource),
+                            "unmanaged",
+                        )
+                        .with_field("managed", false)
+                        .with_field("adoptable", true),
+                    );
+                    *outcome = outcome.clone().with_next_action(NextAction::new(
+                        "adopt_project_skills",
+                        "Run `skilltap adopt --project` to manage validated canonical project skills.",
+                    ));
+                }
+                Err(_) => complete = false,
+            }
+        }
+    }
+    complete
+}
+
+fn render_project_skill_observation(
+    outcome: &mut Outcome,
+    observation: &super::project_skills::ProjectSkillObservation,
+) {
+    let (canonical, conformance) = match &observation.canonical {
+        super::project_skills::CanonicalProjectSkillObservation::Missing => ("missing", "unknown"),
+        super::project_skills::CanonicalProjectSkillObservation::Invalid { format, .. } => (
+            "invalid",
+            format.as_ref().map_or("invalid", |format| {
+                if format.is_conforming() {
+                    "conforming"
+                } else {
+                    "nonconforming"
+                }
+            }),
+        ),
+        super::project_skills::CanonicalProjectSkillObservation::Present { format, .. } => (
+            "present",
+            if format.is_conforming() {
+                "conforming"
+            } else {
+                "nonconforming"
+            },
+        ),
+    };
+    if canonical == "missing" {
+        *outcome = outcome.clone().with_warning(Warning::new(
+            "skill.canonical.missing",
+            "The desired project skill canonical tree is missing.",
+        ));
+    } else if canonical == "invalid" {
+        *outcome = outcome.clone().with_warning(Warning::new(
+            "skill.format.invalid",
+            "The canonical project skill is malformed and cannot be projected.",
+        ));
+    }
+    for (target, target_observation) in &observation.targets {
+        let compatibility = match target_observation.compatibility.class() {
+            CompatibilityClass::Compatible => "compatible",
+            CompatibilityClass::TargetSpecific => "target_specific",
+            CompatibilityClass::Unknown => "unknown",
+            CompatibilityClass::Incompatible => "incompatible",
+        };
+        let loadability = match target_observation.compatibility.loadability() {
+            SkillLoadability::Loadable => "loadable",
+            SkillLoadability::Unknown => "unknown",
+            SkillLoadability::Blocked => "blocked",
+        };
+        let projection = match target_observation.projection {
+            skilltap_core::project_skill::ProjectSkillLinkHealth::NotRequired => "not_required",
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Healthy => "linked",
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Missing => "missing",
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Broken => "broken",
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Divergent => "divergent",
+            skilltap_core::project_skill::ProjectSkillLinkHealth::UnmanagedConflict => {
+                "unmanaged_conflict"
+            }
+        };
+        let status = if canonical == "invalid" || compatibility == "incompatible" {
+            "attention"
+        } else if matches!(
+            target_observation.projection,
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Healthy
+                | skilltap_core::project_skill::ProjectSkillLinkHealth::NotRequired
+        ) && compatibility == "compatible"
+        {
+            "healthy"
+        } else {
+            "attention"
+        };
+        *outcome = outcome.clone().with_resource(
+            OutputEntry::new(format!("{}:{}", target, observation.resource), status)
+                .with_field("target", target.as_str())
+                .with_field("conformance", conformance)
+                .with_field("canonical", canonical)
+                .with_field("compatibility", compatibility)
+                .with_field("loadability", loadability)
+                .with_field("projection", projection)
+                .with_field("ownership", ownership_label(target_observation.ownership)),
+        );
+        let warning = match target_observation.projection {
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Missing => Some((
+                "skill.link.missing",
+                "The selected project skill link is missing.",
+            )),
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Broken => Some((
+                "skill.link.broken",
+                "The selected project skill link does not resolve to a healthy canonical tree.",
+            )),
+            skilltap_core::project_skill::ProjectSkillLinkHealth::Divergent => Some((
+                "skill.link.divergent",
+                "The selected project skill link points to a different relative target.",
+            )),
+            skilltap_core::project_skill::ProjectSkillLinkHealth::UnmanagedConflict => Some((
+                "skill.destination.unmanaged",
+                "The selected project skill destination is occupied by unmanaged content.",
+            )),
+            skilltap_core::project_skill::ProjectSkillLinkHealth::NotRequired
+            | skilltap_core::project_skill::ProjectSkillLinkHealth::Healthy => None,
+        };
+        if let Some((code, summary)) = warning {
+            *outcome = outcome.clone().with_warning(Warning::new(code, summary));
+        }
+        if target_observation.compatibility.class() == CompatibilityClass::Incompatible {
+            *outcome = outcome.clone().with_warning(Warning::new(
+                "skill.target.incompatible",
+                "The selected target cannot load the canonical project skill safely.",
+            ));
+        }
+    }
+}
+
+fn ownership_label(ownership: Ownership) -> &'static str {
+    match ownership {
+        Ownership::Unmanaged => "unmanaged",
+        Ownership::Harness => "harness",
+        Ownership::Skilltap => "skilltap",
     }
 }
 

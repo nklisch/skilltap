@@ -77,3 +77,39 @@ path or persist read-only snapshots.
 Depends on lifecycle because status and adoption must describe the exact
 ownership/repair behavior that execution implements. The acceptance checkpoint
 closes both together.
+
+## Implementation notes
+
+- Execution capability: direct feature-owner implementation, matching the
+  caller's sequential continuation posture; observation and source-less
+  reconciliation share the existing project lifecycle port rather than adding a
+  second mutation path.
+- Review weight: standard, caller default; this child stops at `done` and the
+  parent owns the independent feature review.
+- Files changed: `crates/cli/src/application/project_skills.rs`,
+  `crates/cli/src/application/status.rs`,
+  `crates/cli/src/application/reconciliation.rs`,
+  `crates/core/src/runtime/filesystem/directory_tree.rs`,
+  `crates/core/src/skill.rs`, `crates/core/src/skill_compatibility.rs`, and
+  `crates/core/src/domain/resource/finding.rs`.
+- Tests added/removed: no acceptance fixtures were changed in this checkpoint;
+  the existing core and compiled lifecycle suites were rerun. The acceptance
+  checkpoint owns the expanded compiled scenarios.
+- Simplification: project status now uses one canonical observation model and
+  removes the blanket comparison-unavailable result when all compared state is
+  project standalone skills; source-less adoption reuses the existing link
+  execution port.
+- Discrepancies from design: the bounded direct-child listing and validated
+  artifact-tree constructor were added to the existing core runtime/skill
+  boundaries because status cannot safely enumerate canonical children or
+  revalidate an already-loaded tree through CLI-local filesystem code. Finding
+  vocabulary is registered in core while CLI output remains derived from the
+  same stable codes.
+- Adjacent issues parked: none.
+
+## Verification
+
+- `cargo check -p skilltap` — passed.
+- `cargo test -p skilltap-core --all-targets` — 363 passed.
+- `cargo test -p skilltap --test compiled_binary` — 53 passed.
+- `cargo fmt --all` — passed.

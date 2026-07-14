@@ -38,7 +38,7 @@ use tree_io::{read_tree_with, remove_open_tree_with, write_tree_with};
 
 #[cfg(unix)]
 use unix_support::{
-    create_dir_at_verified, lock_exclusive, open_absolute_directory,
+    create_dir_at_verified, directory_names_bounded, lock_exclusive, open_absolute_directory,
     open_absolute_directory_preserve_mode, open_dir_at, open_relative_directory,
     open_relative_parent, require_directory, require_regular, stat_at, stat_identity_at, unlink_at,
     verify_at,
@@ -120,6 +120,20 @@ pub enum ConfinedEntryObservation {
 /// beneath an already canonical root. Every descendant directory is opened
 /// with `O_NOFOLLOW`.
 pub trait ConfinedFileSystem {
+    /// Enumerate only direct child names from a descriptor-confined directory.
+    /// The caller must inspect each final entry separately when it needs kind or
+    /// ownership evidence; this method never follows a child.
+    fn list_direct_entries_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        maximum_entries: u64,
+    ) -> Result<Vec<String>, RuntimeError> {
+        let _ = (root, maximum_entries);
+        Err(RuntimeError::UnsupportedPlatform {
+            platform: std::env::consts::OS.to_owned(),
+        })
+    }
+
     fn inspect_entry_beneath_no_follow(
         &self,
         root: &AbsolutePath,
@@ -191,6 +205,27 @@ pub trait ConfinedFileSystem {
 }
 
 impl ConfinedFileSystem for SystemFileSystem {
+    fn list_direct_entries_beneath_no_follow(
+        &self,
+        root: &AbsolutePath,
+        maximum_entries: u64,
+    ) -> Result<Vec<String>, RuntimeError> {
+        #[cfg(unix)]
+        {
+            let directory = open_absolute_directory(root, false)
+                .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))?;
+            directory_names_bounded(&directory, maximum_entries)
+                .map_err(|source| filesystem_error(FileSystemAction::Read, root, source))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (root, maximum_entries);
+            Err(RuntimeError::UnsupportedPlatform {
+                platform: std::env::consts::OS.to_owned(),
+            })
+        }
+    }
+
     fn inspect_entry_beneath_no_follow(
         &self,
         root: &AbsolutePath,

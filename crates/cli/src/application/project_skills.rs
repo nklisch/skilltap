@@ -15,13 +15,18 @@ use skilltap_core::{
         OperationAction, OperationDependency, OperationId, Ownership, Provenance, ResourceId,
         ResourceKey, ResourceKind, Scope, Source, UpdateIntent,
     },
-    project_skill::{TargetProjectSkillProjection, project_skill_projection},
-    runtime::{
-        ConfinedFileSystem, DirectoryIdentity, DirectoryTreeFileSystem, ExternalTreeLimits,
-        RuntimeError, SystemFileSystem,
+    project_skill::{
+        ProjectSkillLinkHealth, TargetProjectSkillProjection, project_skill_projection,
     },
-    skill::ValidatedSkillTree,
-    skill_compatibility::{AgentSkillName, SkillLoadability, validate_agent_skill},
+    runtime::{
+        ConfigurationLockGuard, ConfinedEntryObservation, ConfinedFileSystem, DirectoryIdentity,
+        DirectoryTreeFileSystem, ExternalTreeLimits, RuntimeError, SystemFileSystem,
+    },
+    skill::{SkillTreeError, ValidatedSkillTree},
+    skill_compatibility::{
+        AgentSkillName, AgentSkillValidation, SkillCompatibility, SkillLoadability,
+        validate_agent_skill,
+    },
     storage::{
         ArtifactTree, DocumentState, InventoryDocument, ResourceState, StateDocument,
         StateRepository, TargetResourceState, Timestamp,
@@ -29,7 +34,7 @@ use skilltap_core::{
 };
 
 use super::{
-    ErrorDetail, NextAction, Outcome, ResultClass, StatusApplication, Warning,
+    ErrorDetail, NextAction, Outcome, OutputEntry, ResultClass, StatusApplication, Warning,
     execution::{
         ManagedSkillAction, ManagedSkillEntry, ManagedSkillPort, ProjectSkillLifecyclePort,
         ProjectSkillLinkAction, ProjectSkillLinkEntry, ProjectSkillLinkPort, StateExecutionJournal,
@@ -37,6 +42,900 @@ use super::{
     scope_label, skill_install_can_complete, stable_hash,
     status::{StatusScope, StatusTargets},
 };
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct ProjectSkillObservation {
+    pub(super) resource: ResourceKey,
+    pub(super) canonical: CanonicalProjectSkillObservation,
+    pub(super) targets: BTreeMap<HarnessId, TargetProjectSkillObservation>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) enum CanonicalProjectSkillObservation {
+    Missing,
+    Invalid {
+        tree_error: Option<SkillTreeError>,
+        format: Option<AgentSkillValidation>,
+    },
+    Present {
+        fingerprint: Fingerprint,
+        format: AgentSkillValidation,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(super) struct TargetProjectSkillObservation {
+    pub(super) compatibility: SkillCompatibility,
+    pub(super) projection: ProjectSkillLinkHealth,
+    pub(super) ownership: Ownership,
+}
+
+impl CanonicalProjectSkillObservation {
+    pub(super) fn fingerprint(&self) -> Option<&Fingerprint> {
+        match self {
+            Self::Present { fingerprint, .. } => Some(fingerprint),
+            Self::Missing | Self::Invalid { .. } => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum ProjectSkillObservationError {
+    InvalidResource,
+    UnsupportedFilesystem,
+}
+
+fn project_skill_paths(
+    project: &AbsolutePath,
+    name: &AgentSkillName,
+) -> (AbsolutePath, skilltap_core::domain::RelativeArtifactPath) {
+    (
+        AbsolutePath::new(format!("{}/.agents", project.as_str()))
+            .expect("project canonical root is valid"),
+        skilltap_core::domain::RelativeArtifactPath::new(format!("skills/{name}"))
+            .expect("validated Agent Skill name is a safe path component"),
+    )
+}
+
+fn canonical_project_skill(
+    filesystem: &dyn ConfinedFileSystem,
+    root: &AbsolutePath,
+    destination: &skilltap_core::domain::RelativeArtifactPath,
+    limits: ExternalTreeLimits,
+) -> Result<
+    (CanonicalProjectSkillObservation, Option<ValidatedSkillTree>),
+    ProjectSkillObservationError,
+> {
+    let (_, files) = match filesystem.load_tree_bounded_no_follow(root, destination, limits) {
+        Ok(value) => value,
+        Err(RuntimeError::FileSystem { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            return Ok((CanonicalProjectSkillObservation::Missing, None));
+        }
+        Err(_) => {
+            return Ok((
+                CanonicalProjectSkillObservation::Invalid {
+                    tree_error: None,
+                    format: None,
+                },
+                None,
+            ));
+        }
+    };
+    let tree = match ArtifactTree::new(
+        files
+            .into_iter()
+            .map(|(path, file)| (path.as_str().to_owned(), file)),
+    ) {
+        Ok(tree) => tree,
+        Err(error) => {
+            return Ok((
+                CanonicalProjectSkillObservation::Invalid {
+                    tree_error: Some(SkillTreeError::Artifact(error)),
+                    format: None,
+                },
+                None,
+            ));
+        }
+    };
+    let skill = match ValidatedSkillTree::from_artifact_tree(tree) {
+        Ok(skill) => skill,
+        Err(error) => {
+            return Ok((
+                CanonicalProjectSkillObservation::Invalid {
+                    tree_error: Some(error),
+                    format: None,
+                },
+                None,
+            ));
+        }
+    };
+    let name = destination
+        .as_str()
+        .strip_prefix("skills/")
+        .ok_or(ProjectSkillObservationError::InvalidResource)?;
+    let directory_name =
+        AgentSkillName::new(name).map_err(|_| ProjectSkillObservationError::InvalidResource)?;
+    let format = validate_agent_skill(&skill, &directory_name);
+    if !format.loadable_shape() {
+        return Ok((
+            CanonicalProjectSkillObservation::Invalid {
+                tree_error: None,
+                format: Some(format),
+            },
+            None,
+        ));
+    }
+    Ok((
+        CanonicalProjectSkillObservation::Present {
+            fingerprint: skill.fingerprint().clone(),
+            format,
+        },
+        Some(skill),
+    ))
+}
+
+pub(super) fn observe_project_skill(
+    registry: &skilltap_harnesses::TargetRegistry,
+    filesystem: &dyn ConfinedFileSystem,
+    paths: &skilltap_core::runtime::PlatformPaths,
+    resource: &DesiredResource,
+    state: Option<&ResourceState>,
+    selected_targets: &HarnessSet,
+    limits: ExternalTreeLimits,
+) -> Result<ProjectSkillObservation, ProjectSkillObservationError> {
+    let Scope::Project(project) = resource.scope() else {
+        return Err(ProjectSkillObservationError::InvalidResource);
+    };
+    let name = resource
+        .id()
+        .as_str()
+        .strip_prefix("skill:")
+        .ok_or(ProjectSkillObservationError::InvalidResource)
+        .and_then(|value| {
+            AgentSkillName::new(value).map_err(|_| ProjectSkillObservationError::InvalidResource)
+        })?;
+    let (canonical_root, canonical_destination) = project_skill_paths(project, &name);
+    let (canonical, skill) =
+        canonical_project_skill(filesystem, &canonical_root, &canonical_destination, limits)?;
+    let validation = match &canonical {
+        CanonicalProjectSkillObservation::Present { format, .. } => Some(format),
+        _ => None,
+    };
+    let canonical_healthy = skill.is_some();
+    let mut observed_targets = BTreeMap::new();
+    for target in selected_targets.iter() {
+        let ownership = state
+            .and_then(|state| state.target(target))
+            .map_or(Ownership::Unmanaged, |binding| binding.ownership());
+        let Some(adapter) = registry.adapter(target) else {
+            return Err(ProjectSkillObservationError::InvalidResource);
+        };
+        let Some(projection_port) = adapter.skill_projection() else {
+            observed_targets.insert(
+                target.clone(),
+                TargetProjectSkillObservation {
+                    compatibility: SkillCompatibility::blocked(target.clone()),
+                    projection: ProjectSkillLinkHealth::UnmanagedConflict,
+                    ownership,
+                },
+            );
+            continue;
+        };
+        let compatibility = match (&skill, validation) {
+            (Some(skill), Some(validation)) => {
+                projection_port.compatibility(target, skill, validation)
+            }
+            _ => SkillCompatibility::blocked(target.clone()),
+        };
+        let projection = match projection_port.destination(paths, resource.scope()) {
+            None => ProjectSkillLinkHealth::UnmanagedConflict,
+            Some(native_root) => match project_skill_projection(project, &native_root, &name) {
+                Ok(TargetProjectSkillProjection::Canonical { .. }) => {
+                    ProjectSkillLinkHealth::NotRequired
+                }
+                Ok(TargetProjectSkillProjection::RelativeLink(spec)) => match filesystem
+                    .inspect_entry_beneath_no_follow(&spec.project_root, &spec.destination)
+                {
+                    Ok(ConfinedEntryObservation::Missing) => ProjectSkillLinkHealth::Missing,
+                    Ok(ConfinedEntryObservation::RelativeSymlink { target, .. })
+                        if target == spec.target && canonical_healthy =>
+                    {
+                        ProjectSkillLinkHealth::Healthy
+                    }
+                    Ok(ConfinedEntryObservation::RelativeSymlink { target, .. })
+                        if target == spec.target =>
+                    {
+                        ProjectSkillLinkHealth::Broken
+                    }
+                    Ok(ConfinedEntryObservation::RelativeSymlink { .. })
+                        if ownership == Ownership::Skilltap =>
+                    {
+                        ProjectSkillLinkHealth::Divergent
+                    }
+                    Ok(_) => ProjectSkillLinkHealth::UnmanagedConflict,
+                    Err(_) => ProjectSkillLinkHealth::Broken,
+                },
+                Err(_) => ProjectSkillLinkHealth::UnmanagedConflict,
+            },
+        };
+        observed_targets.insert(
+            target.clone(),
+            TargetProjectSkillObservation {
+                compatibility,
+                projection,
+                ownership,
+            },
+        );
+    }
+    Ok(ProjectSkillObservation {
+        resource: resource.key().clone(),
+        canonical,
+        targets: observed_targets,
+    })
+}
+
+pub(super) fn enumerate_canonical_project_skills(
+    filesystem: &dyn ConfinedFileSystem,
+    project: &AbsolutePath,
+    limits: ExternalTreeLimits,
+) -> Result<Vec<AgentSkillName>, ProjectSkillObservationError> {
+    let root = AbsolutePath::new(format!("{}/.agents/skills", project.as_str()))
+        .map_err(|_| ProjectSkillObservationError::InvalidResource)?;
+    let names = match filesystem.list_direct_entries_beneath_no_follow(&root, limits.entries()) {
+        Ok(names) => names,
+        Err(RuntimeError::FileSystem { source, .. })
+            if source.kind() == std::io::ErrorKind::NotFound =>
+        {
+            return Ok(Vec::new());
+        }
+        Err(_) => return Err(ProjectSkillObservationError::UnsupportedFilesystem),
+    };
+    let mut result = Vec::new();
+    for value in names {
+        let Ok(name) = AgentSkillName::new(value.clone()) else {
+            continue;
+        };
+        let destination = skilltap_core::domain::RelativeArtifactPath::new(value)
+            .map_err(|_| ProjectSkillObservationError::InvalidResource)?;
+        if matches!(
+            filesystem.inspect_entry_beneath_no_follow(&root, &destination),
+            Ok(ConfinedEntryObservation::Directory)
+        ) {
+            result.push(name);
+        }
+    }
+    Ok(result)
+}
+
+/// Resolve CLI scope/target arguments before entering the source-less project
+/// skill reconciliation path used by `plan` and `sync`.
+pub(super) fn execute_project_skill_source_less_command(
+    application: &StatusApplication<'_>,
+    command: &'static str,
+    requested_scope: &crate::command::ScopeArgs,
+    requested_target: &crate::command::TargetArgs,
+    resource: &DesiredResource,
+    acknowledged: bool,
+) -> Outcome {
+    let (documents, mut outcome) = match application.load_documents(command) {
+        Ok(value) => value,
+        Err(outcome) => return *outcome,
+    };
+    let status_args = crate::command::StatusArgs {
+        target: requested_target.clone(),
+        scope: requested_scope.clone(),
+        output: crate::command::OutputArgs::default(),
+    };
+    let scope = match StatusScope::resolve(application, &status_args, &documents) {
+        Ok(scope) => scope,
+        Err(error) => {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(error);
+        }
+    };
+    let targets = match StatusTargets::resolve(&status_args, &documents) {
+        Ok(targets) => targets,
+        Err(_) => {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "target_not_enabled",
+                "The requested project skill target is not enabled.",
+            ));
+        }
+    };
+    let paths = match skilltap_core::runtime::PlatformPaths::resolve(
+        &skilltap_core::runtime::ProcessEnvironment,
+    ) {
+        Ok(paths) => paths,
+        Err(_) => {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "platform_paths_unavailable",
+                "The skilltap configuration paths could not be resolved.",
+            ));
+        }
+    };
+    outcome.scope = Some(scope.output.clone());
+    execute_project_skill_source_less(
+        application,
+        command,
+        &scope,
+        &targets,
+        resource,
+        acknowledged,
+        paths,
+        outcome,
+    )
+}
+
+#[derive(Clone)]
+struct ProjectSkillAdoptionCandidate {
+    resource: DesiredResource,
+    fingerprint: Fingerprint,
+}
+
+fn collect_project_skill_adoption_candidates(
+    filesystem: &dyn ConfinedFileSystem,
+    project: &AbsolutePath,
+    targets: &HarnessSet,
+    limits: ExternalTreeLimits,
+) -> Result<(Vec<ProjectSkillAdoptionCandidate>, usize), ProjectSkillObservationError> {
+    let names = enumerate_canonical_project_skills(filesystem, project, limits)?;
+    let mut candidates = Vec::new();
+    let mut invalid = 0;
+    for name in names {
+        let (root, destination) = project_skill_paths(project, &name);
+        let (canonical, skill) = canonical_project_skill(filesystem, &root, &destination, limits)?;
+        let Some(skill) = skill else {
+            if !matches!(canonical, CanonicalProjectSkillObservation::Missing) {
+                invalid += 1;
+            }
+            continue;
+        };
+        let key = ResourceKey::new(
+            ResourceId::new(format!("skill:{name}"))
+                .map_err(|_| ProjectSkillObservationError::InvalidResource)?,
+            Scope::Project(project.clone()),
+        );
+        let origin_target = targets
+            .iter()
+            .next()
+            .cloned()
+            .ok_or(ProjectSkillObservationError::InvalidResource)?;
+        let resource = DesiredResource::new(
+            key,
+            ResourceKind::StandaloneSkill,
+            targets.clone(),
+            DesiredOrigin::Adopted(origin_target),
+            None,
+            UpdateIntent::Track,
+            ComponentGraph::new([]).expect("empty skill graph is valid"),
+            BTreeMap::new(),
+            BTreeMap::new(),
+            BTreeSet::new(),
+        )
+        .map_err(|_| ProjectSkillObservationError::InvalidResource)?;
+        candidates.push(ProjectSkillAdoptionCandidate {
+            resource,
+            fingerprint: skill.fingerprint().clone(),
+        });
+    }
+    Ok((candidates, invalid))
+}
+
+/// Adopt validated direct-child canonical project skills without touching native
+/// links, state, or canonical content. A later source-less sync owns links.
+pub(super) fn adopt_project_skills(
+    application: &StatusApplication<'_>,
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    paths: &skilltap_core::runtime::PlatformPaths,
+    mut outcome: Outcome,
+) -> Outcome {
+    let filesystem = SystemFileSystem;
+    let limits = ExternalTreeLimits::new(16, 10_000, 4 * 1024 * 1024, 64 * 1024 * 1024, 64 * 1024)
+        .expect("bounded project skill adoption limits are valid");
+    let selected_targets = targets.resolved.clone();
+    let mut candidates = Vec::new();
+    for concrete_scope in &scope.resolved {
+        let Scope::Project(project) = concrete_scope else {
+            continue;
+        };
+        match collect_project_skill_adoption_candidates(
+            &filesystem,
+            project,
+            &selected_targets,
+            limits,
+        ) {
+            Ok((mut values, invalid)) => {
+                candidates.append(&mut values);
+                if invalid > 0 {
+                    outcome = outcome.with_warning(Warning::new(
+                        "skill.format.invalid",
+                        "One or more direct-child canonical project skills are malformed and were not adopted.",
+                    ));
+                }
+            }
+            Err(_) => {
+                outcome = outcome.with_warning(Warning::new(
+                    "skill_observation_unavailable",
+                    "Canonical project skills could not be enumerated safely; adoption preserved inventory.",
+                ));
+            }
+        }
+    }
+    if candidates.is_empty() {
+        return outcome.with_summary("project_adopted", 0_u64);
+    }
+    let lock_path = match AbsolutePath::new(format!(
+        "{}/skilltap.lock",
+        paths.skilltap_config().as_str()
+    )) {
+        Ok(path) => path,
+        Err(_) => {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "lock_path_invalid",
+                "The skilltap configuration lock path is invalid.",
+            ));
+        }
+    };
+    let lock = skilltap_core::runtime::SystemConfigurationLock;
+    let guard = match skilltap_core::runtime::ConfigurationLock::try_acquire(&lock, &lock_path) {
+        Ok(guard) => guard,
+        Err(_) => {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_warning(Warning::new(
+                "configuration_locked",
+                "Another skilltap mutation holds the configuration lock; project adoption did not write inventory.",
+            ));
+        }
+    };
+    let result = (|| {
+        let mut fresh = Vec::new();
+        for concrete_scope in &scope.resolved {
+            let Scope::Project(project) = concrete_scope else {
+                continue;
+            };
+            let (values, _) = collect_project_skill_adoption_candidates(
+                &filesystem,
+                project,
+                &selected_targets,
+                limits,
+            )
+            .map_err(|_| ())?;
+            fresh.extend(
+                values
+                    .into_iter()
+                    .map(|candidate| (candidate.resource.key().clone(), candidate.fingerprint)),
+            );
+        }
+        let mut expected = candidates
+            .iter()
+            .map(|candidate| {
+                (
+                    candidate.resource.key().clone(),
+                    candidate.fingerprint.clone(),
+                )
+            })
+            .collect::<Vec<_>>();
+        fresh.sort();
+        expected.sort();
+        if fresh != expected {
+            return Err(());
+        }
+        let mut inventory = match application.inventory.load().map_err(|_| ())? {
+            DocumentState::Present(document) => document,
+            DocumentState::Missing => {
+                InventoryDocument::new(skilltap_core::storage::INVENTORY_SCHEMA_VERSION, [], [])
+                    .map_err(|_| ())?
+            }
+        };
+        let mut adopted = 0_u64;
+        for candidate in &candidates {
+            if inventory.resources().contains_key(candidate.resource.key()) {
+                continue;
+            }
+            inventory = inventory
+                .with_resource(candidate.resource.clone())
+                .map_err(|_| ())?;
+            adopted += 1;
+        }
+        let changed = application.inventory.load().ok().is_some_and(|current| {
+            matches!(current, DocumentState::Present(ref document) if document != &inventory)
+                || matches!(current, DocumentState::Missing) && adopted > 0
+        });
+        if changed {
+            application.inventory.replace(&inventory).map_err(|_| ())?;
+        }
+        Ok::<_, ()>((adopted, changed))
+    })();
+    let released = guard.release();
+    let (adopted, changed) = match (result, released) {
+        (Ok(result), Ok(())) => result,
+        _ => {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_warning(Warning::new(
+                "inventory_publish_failed",
+                "Project skill adoption could not publish its desired inventory safely.",
+            ));
+        }
+    };
+    for candidate in candidates {
+        if !outcome
+            .resources
+            .iter()
+            .any(|resource| resource.id == candidate.resource.key().to_string())
+        {
+            outcome = outcome.with_resource(OutputEntry::new(
+                candidate.resource.key().to_string(),
+                if adopted > 0 {
+                    "adopted"
+                } else {
+                    "already_managed"
+                },
+            ));
+        }
+    }
+    outcome
+        .with_summary("project_adopted", adopted)
+        .with_summary("changed", changed)
+}
+
+/// Reconcile a desired project skill whose canonical tree is already present.
+/// This is the source-less adoption path: it validates and reads the canonical
+/// tree, then repairs only selected target links without replacing content.
+fn execute_project_skill_source_less(
+    application: &StatusApplication<'_>,
+    command: &'static str,
+    scope: &StatusScope,
+    targets: &StatusTargets,
+    resource: &DesiredResource,
+    _acknowledged: bool,
+    paths: skilltap_core::runtime::PlatformPaths,
+    mut outcome: Outcome,
+) -> Outcome {
+    let filesystem = SystemFileSystem;
+    let limits =
+        ExternalTreeLimits::new(64, 100_000, 64 * 1024 * 1024, 1024 * 1024 * 1024, 64 * 1024)
+            .expect("bounded project skill limits are valid");
+    let state_document = application
+        .state
+        .load()
+        .ok()
+        .and_then(|document| match document {
+            DocumentState::Present(document) => Some(document),
+            DocumentState::Missing => None,
+        });
+    let mut operations = Vec::new();
+    let mut link_entries = BTreeMap::new();
+    let mut blocked = false;
+    let mut seeds = BTreeMap::new();
+
+    for concrete_scope in &scope.resolved {
+        let Scope::Project(project) = concrete_scope else {
+            continue;
+        };
+        let selected = HarnessSet::new(
+            targets
+                .iter()
+                .filter(|target| resource.targets().contains(target))
+                .cloned(),
+        )
+        .expect("selected project skill targets are unique");
+        let observed = match observe_project_skill(
+            application.registry,
+            &filesystem,
+            &paths,
+            resource,
+            state_document
+                .as_ref()
+                .and_then(|state| state.resources().get(resource.key())),
+            &selected,
+            limits,
+        ) {
+            Ok(observed) => observed,
+            Err(_) => {
+                blocked = true;
+                outcome = outcome.with_warning(Warning::new(
+                    "skill_observation_unavailable",
+                    "The canonical project skill could not be observed safely; no target link was changed.",
+                ));
+                continue;
+            }
+        };
+        let canonical_healthy = matches!(
+            observed.canonical,
+            CanonicalProjectSkillObservation::Present { .. }
+        );
+        if !canonical_healthy {
+            blocked = true;
+            outcome = outcome.with_warning(Warning::new(
+                "skill_canonical_unavailable",
+                "The source-less project skill has no valid canonical tree; no target link was changed.",
+            ));
+            continue;
+        }
+
+        let existing_state = state_document
+            .as_ref()
+            .and_then(|state| state.resources().get(resource.key()));
+        let mut bindings = Vec::new();
+        for target in resource.targets().iter() {
+            if !selected.contains(target) {
+                if let Some(existing) = existing_state.and_then(|state| state.target(target)) {
+                    bindings.push(existing.clone());
+                }
+                continue;
+            }
+            let existing = existing_state.and_then(|state| state.target(target));
+            let (provenance, ownership) = if matches!(resource.origin(), DesiredOrigin::Adopted(_))
+                && observed
+                    .targets
+                    .get(target)
+                    .is_some_and(|target| target.projection == ProjectSkillLinkHealth::NotRequired)
+            {
+                (Provenance::Adopted, Ownership::Harness)
+            } else {
+                (Provenance::Direct, Ownership::Skilltap)
+            };
+            let observed_at = match Timestamp::from_system_time(std::time::SystemTime::now()) {
+                Ok(value) => value,
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "clock_unavailable",
+                        "The project skill state timestamp could not be recorded safely.",
+                    ));
+                }
+            };
+            bindings.push(
+                TargetResourceState::new(
+                    target.clone(),
+                    Some(
+                        NativeId::new(
+                            resource
+                                .id()
+                                .as_str()
+                                .strip_prefix("skill:")
+                                .expect("project skill resource id has a name"),
+                        )
+                        .expect("project skill state native id is valid"),
+                    ),
+                    provenance,
+                    ownership,
+                    None,
+                    None,
+                    observed.canonical.fingerprint().cloned(),
+                    None,
+                    None,
+                    observed_at,
+                    existing.and_then(|target| target.last_apply()).cloned(),
+                )
+                .expect("source-less project skill target state is valid"),
+            );
+        }
+        seeds.insert(
+            resource.key().clone(),
+            ResourceState::new(resource.key().clone(), bindings)
+                .expect("source-less project skill state is valid"),
+        );
+
+        let mut seen_destinations = BTreeSet::new();
+        for target in selected.iter() {
+            let Some(adapter) = application.registry.adapter(target) else {
+                blocked = true;
+                continue;
+            };
+            let Some(projection_port) = adapter.skill_projection() else {
+                blocked = true;
+                continue;
+            };
+            let Some(native_root) = projection_port.destination(&paths, concrete_scope) else {
+                blocked = true;
+                continue;
+            };
+            let name = AgentSkillName::new(
+                resource
+                    .id()
+                    .as_str()
+                    .strip_prefix("skill:")
+                    .expect("project skill resource id has a name"),
+            )
+            .expect("project skill resource id has a valid name");
+            let projection = match project_skill_projection(project, &native_root, &name) {
+                Ok(projection) => projection,
+                Err(_) => {
+                    blocked = true;
+                    outcome = outcome.with_warning(Warning::new(
+                        "skill_destination_invalid",
+                        "The selected project skill destination cannot be represented safely.",
+                    ));
+                    continue;
+                }
+            };
+            let TargetProjectSkillProjection::RelativeLink(spec) = projection else {
+                continue;
+            };
+            let destination_path = spec.destination_path();
+            if !seen_destinations.insert(destination_path.clone()) {
+                continue;
+            }
+            let state_target = state_document
+                .as_ref()
+                .and_then(|state| state.resources().get(resource.key()))
+                .and_then(|state| state.target(target));
+            let observation = match filesystem
+                .inspect_entry_beneath_no_follow(&spec.project_root, &spec.destination)
+            {
+                Ok(observation) => observation,
+                Err(_) => {
+                    blocked = true;
+                    continue;
+                }
+            };
+            let action = match observation {
+                ConfinedEntryObservation::Missing => Some(ProjectSkillLinkAction::Create),
+                ConfinedEntryObservation::RelativeSymlink { target, .. }
+                    if target == spec.target =>
+                {
+                    None
+                }
+                ConfinedEntryObservation::RelativeSymlink {
+                    identity,
+                    target: previous_target,
+                } if state_target.is_some_and(|state| state.ownership() == Ownership::Skilltap) => {
+                    Some(ProjectSkillLinkAction::Replace {
+                        expected_identity: identity,
+                        previous_target,
+                    })
+                }
+                _ => {
+                    blocked = true;
+                    outcome = outcome.with_warning(Warning::new(
+                        "skill_destination_unmanaged",
+                        "The selected project skill destination is unmanaged or divergent; it was preserved.",
+                    ));
+                    None
+                }
+            };
+            let Some(action) = action else {
+                continue;
+            };
+            let operation_id = project_link_operation_id(target, resource.key(), &destination_path);
+            let operation = match skilltap_core::lifecycle_operation::faithful_file_operation(
+                operation_id.clone(),
+                target.clone(),
+                resource.key().clone(),
+                OperationAction::SkillInstall,
+                destination_path,
+            ) {
+                Ok(operation) => operation,
+                Err(_) => {
+                    outcome.result = ResultClass::Invalid;
+                    return outcome.with_error(ErrorDetail::new(
+                        "operation_contract_invalid",
+                        "The source-less project skill link operation was invalid.",
+                    ));
+                }
+            };
+            operations.push(operation);
+            link_entries.insert(
+                operation_id,
+                ProjectSkillLinkEntry {
+                    root: spec.project_root,
+                    destination: spec.destination,
+                    target: spec.target,
+                    action,
+                },
+            );
+        }
+    }
+
+    if blocked {
+        outcome.result = ResultClass::AttentionRequired;
+        return outcome
+            .with_summary("operations", 0_u64)
+            .with_summary("changed", false);
+    }
+    if command == "plan" {
+        for operation in &operations {
+            outcome = outcome.with_operation(
+                crate::OperationOutcome::new(operation.id().to_string(), "planned")
+                    .with_field("target", operation.target().as_str())
+                    .with_field("scope", scope_label(operation.scope())),
+            );
+        }
+        return outcome
+            .with_summary("operations", operations.len() as u64)
+            .with_summary("changed", false);
+    }
+    if operations.is_empty() {
+        if refresh_state_seeds(application.state, &seeds).is_err() {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "state_seed_publish_failed",
+                "The source-less project skill state could not be recorded safely.",
+            ));
+        }
+        return outcome
+            .with_summary("operations", 0_u64)
+            .with_summary("changed", false);
+    }
+    let plan = match skilltap_core::domain::Plan::new(operations) {
+        Ok(plan) => plan,
+        Err(_) => {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "operation_plan_invalid",
+                "The source-less project skill link plan was invalid.",
+            ));
+        }
+    };
+    let port = ProjectSkillLifecyclePort {
+        canonical: ManagedSkillPort {
+            filesystem: &filesystem,
+            entries: BTreeMap::new(),
+        },
+        links: ProjectSkillLinkPort {
+            filesystem: &filesystem,
+            entries: link_entries,
+            foreign_operations: BTreeSet::new(),
+        },
+    };
+    let journal = StateExecutionJournal {
+        plan: &plan,
+        state: application.state,
+        seeds,
+    };
+    let lock_path = match AbsolutePath::new(format!(
+        "{}/skilltap.lock",
+        paths.skilltap_config().as_str()
+    )) {
+        Ok(path) => path,
+        Err(_) => {
+            outcome.result = ResultClass::Invalid;
+            return outcome.with_error(ErrorDetail::new(
+                "lock_path_invalid",
+                "The skilltap configuration lock path is invalid.",
+            ));
+        }
+    };
+    let report = match skilltap_core::executor::execute_plan(
+        &skilltap_core::runtime::SystemConfigurationLock,
+        &lock_path,
+        &port,
+        &journal,
+        &plan,
+    ) {
+        Ok(report) => report,
+        Err(error) => {
+            outcome.result = ResultClass::AttentionRequired;
+            return outcome.with_error(super::native_execution_error(&error));
+        }
+    };
+    for result in report.result.operations().values() {
+        outcome = outcome.with_operation(crate::OperationOutcome::new(
+            result.operation_id().to_string(),
+            super::operation_result_status(result.outcome()),
+        ));
+        if !matches!(
+            result.outcome(),
+            skilltap_core::domain::OperationOutcome::Applied
+                | skilltap_core::domain::OperationOutcome::NoChange
+        ) {
+            outcome.result = ResultClass::AttentionRequired;
+        }
+    }
+    if report.changed && outcome.errors.is_empty() && outcome.warnings.is_empty() {
+        outcome.result = ResultClass::Completed;
+    }
+    outcome
+        .with_summary("operations", report.result.operations().len() as u64)
+        .with_summary("changed", report.changed)
+}
 
 /// Execute a project-only skill install, update, or reconciliation. Global
 /// behavior remains in the established lifecycle path.

@@ -119,9 +119,36 @@ impl StatusApplication<'_> {
                 let child_scope = scope_args_for_scope(resource.scope());
                 let (source, name) = reconciliation_source_and_name(resource);
                 let child = match resource.kind() {
-                    ResourceKind::Marketplace
-                    | ResourceKind::Plugin
-                    | ResourceKind::StandaloneSkill => self.execute_lifecycle_preview(
+                    ResourceKind::Marketplace | ResourceKind::Plugin => self
+                        .execute_lifecycle_preview(
+                            "plan",
+                            &child_scope,
+                            &TargetArgs {
+                                target: Some(skilltap_core::domain::TargetSelection::Only(
+                                    target_id.clone(),
+                                )),
+                            },
+                            resource.kind(),
+                            source,
+                            name,
+                        ),
+                    ResourceKind::StandaloneSkill
+                        if source.is_none() && matches!(resource.scope(), Scope::Project(_)) =>
+                    {
+                        super::project_skills::execute_project_skill_source_less_command(
+                            self,
+                            "plan",
+                            &child_scope,
+                            &TargetArgs {
+                                target: Some(skilltap_core::domain::TargetSelection::Only(
+                                    target_id.clone(),
+                                )),
+                            },
+                            resource,
+                            false,
+                        )
+                    }
+                    ResourceKind::StandaloneSkill => self.execute_lifecycle_preview(
                         "plan",
                         &child_scope,
                         &TargetArgs {
@@ -226,6 +253,16 @@ impl StatusApplication<'_> {
                                 .map(|value| value.as_str()),
                         },
                     ),
+                    None if matches!(resource.scope(), Scope::Project(_)) => {
+                        super::project_skills::execute_project_skill_source_less_command(
+                            self,
+                            "sync",
+                            &child_scope,
+                            &child_target,
+                            resource,
+                            acknowledged,
+                        )
+                    }
                     None => Outcome::new("sync", ResultClass::AttentionRequired).with_warning(
                         Warning::new(
                             "skill_source_unavailable",

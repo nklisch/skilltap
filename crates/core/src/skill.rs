@@ -86,6 +86,18 @@ impl ValidatedSkillTree {
             return Err(SkillTreeError::SkillFileNotRegular);
         }
         let tree = ArtifactTree::new(files)?;
+        Self::from_artifact_tree(tree)
+    }
+
+    /// Rebuild a validated skill from a complete no-follow artifact load.
+    /// `DirectoryTreeFileSystem` has already rejected internal symlinks and
+    /// validated every relative file path, so this constructor only checks the
+    /// skill-specific top-level entry before recomputing its fingerprint.
+    pub fn from_artifact_tree(tree: ArtifactTree) -> Result<Self, SkillTreeError> {
+        let skill_path = RelativeArtifactPath::new("SKILL.md").expect("static skill path is valid");
+        if !tree.files().contains_key(&skill_path) {
+            return Err(SkillTreeError::MissingSkillFile);
+        }
         let fingerprint = fingerprint(&tree)?;
         Ok(Self { tree, fingerprint })
     }
